@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_settings_screen_ex/flutter_settings_screen_ex.dart';
-import 'package:otzaria/md_search_view.dart';
+import 'package:otzaria/text_book_search_view.dart';
 import 'dart:io';
 import 'package:otzaria/toc_viewer.dart';
 import 'dart:math';
@@ -9,26 +9,26 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 
 
-class mdBookViewer extends StatefulWidget {
+class TextBookViewer extends StatefulWidget {
   final File file;
   late Future<String> data;
   late void Function() closelastTab;
   late ItemScrollController scrollController;
   int initalIndex;
 
-  mdBookViewer({Key? key, required this.file,required this.initalIndex , required this.closelastTab,required this.scrollController  }) : super(key: key) {
+  TextBookViewer({Key? key, required this.file,required this.initalIndex , required this.closelastTab,required this.scrollController  }) : super(key: key) {
     data = file.readAsString();
 
 
   }
 
   @override
-  State<mdBookViewer> createState() => _mdBookViewerState();
+  State<TextBookViewer> createState() => _TextBookViewerState();
 }
 
-class _mdBookViewerState extends State<mdBookViewer>
-    with AutomaticKeepAliveClientMixin<mdBookViewer> {
-  double textFontSize =Settings.getValue('key-font-size');
+class _TextBookViewerState extends State<TextBookViewer>
+    with AutomaticKeepAliveClientMixin<TextBookViewer> {
+  double textFontSize = Settings.getValue('key-font-size');
     final showLeftPane = ValueNotifier<bool>(false);    
   ValueNotifier<String> searchQuery = ValueNotifier<String>('');
     

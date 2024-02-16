@@ -21,14 +21,14 @@ ValueNotifier searchQuery;
 class _MarkdownSearchViewState extends State<MarkdownSearchView> with AutomaticKeepAliveClientMixin<MarkdownSearchView> {
   final focusNode = FocusNode();
   final searchTextController = TextEditingController();
-  late final MarkdownSearcher markdownTextSearcher;
+  late final textBookSearcher markdownTextSearcher;
     List<TextSearchResult> searchResults = [];
     late ItemScrollController scrollControler; 
 
   @override
   void initState() {
     super.initState();
-     markdownTextSearcher = MarkdownSearcher(widget.data);
+     markdownTextSearcher = textBookSearcher(widget.data);
     markdownTextSearcher.addListener(_searchResultUpdated);
     searchTextController.addListener(_searchTextUpdated);
     searchTextController.text = widget.searchQuery.value;
@@ -114,14 +114,14 @@ class _MarkdownSearchViewState extends State<MarkdownSearchView> with AutomaticK
                 bool get wantKeepAlive => true;
                 }
 
-class MarkdownSearcher {
+class textBookSearcher {
   final String _markdownData;
   final List<TextSearchResult> searchResults = [];
   int searchSession = 0;
   bool isSearching = false;
   double searchProgress = 0.0;
 
-  MarkdownSearcher(this._markdownData);
+  textBookSearcher(this._markdownData);
 
   void startTextSearch(String query) {
     if (query.isEmpty) {
