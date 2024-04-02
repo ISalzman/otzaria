@@ -6,25 +6,32 @@ import 'dart:io';
 import 'outline_view.dart';
 import 'password_dialog.dart';
 import 'thumbnails_view.dart';
+import 'opened_tabs.dart';
 
-class MyPdfPage extends StatefulWidget {
-  final File file;
-  const MyPdfPage({
-    super.key,
-    required this.file,
-  });
+class PdfBookViewr extends StatefulWidget {
+  final PdfBookTab tab;
+  final PdfViewerController controller;
+  final void Function(
+      {required String ref,
+      required String path,
+      required int index}) addBookmarkCallback;
+  const PdfBookViewr(
+      {super.key,
+      required this.tab,
+      required this.controller,
+      required this.addBookmarkCallback});
 
   @override
-  State<MyPdfPage> createState() => _MyPdfPageState();
+  State<PdfBookViewr> createState() => _PdfBookViewrState();
 }
 
-class _MyPdfPageState extends State<MyPdfPage>
-    with AutomaticKeepAliveClientMixin<MyPdfPage> {
+class _PdfBookViewrState extends State<PdfBookViewr>
+    with AutomaticKeepAliveClientMixin<PdfBookViewr> {
   final documentRef = ValueNotifier<PdfDocumentRef?>(null);
-  final controller = PdfViewerController();
   final showLeftPane = ValueNotifier<bool>(false);
   final outline = ValueNotifier<List<PdfOutlineNode>?>(null);
-  late final textSearcher = PdfTextSearcher(controller)..addListener(_update);
+  late final textSearcher = PdfTextSearcher(widget.controller)
+    ..addListener(_update);
 
   void _update() {
     if (mounted) {
@@ -56,27 +63,36 @@ class _MyPdfPageState extends State<MyPdfPage>
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.bookmark_add),
+            tooltip: 'הוספת סימניה',
+            onPressed: () => widget.addBookmarkCallback(
+                ref:
+                    '${widget.tab.title} עמוד ${widget.controller.pageNumber ?? 1}',
+                path: widget.tab.path,
+                index: widget.controller.pageNumber ?? 1),
+          ),
+          IconButton(
             icon: const Icon(
               Icons.zoom_in,
             ),
             tooltip: 'הגדל',
-            onPressed: () => controller.zoomUp(),
+            onPressed: () => widget.controller.zoomUp(),
           ),
           IconButton(
             icon: const Icon(Icons.zoom_out),
             tooltip: 'הקטן',
-            onPressed: () => controller.zoomDown(),
+            onPressed: () => widget.controller.zoomDown(),
           ),
           IconButton(
             icon: const Icon(Icons.first_page),
             tooltip: 'תחילת הספר',
-            onPressed: () => controller.goToPage(pageNumber: 1),
+            onPressed: () => widget.controller.goToPage(pageNumber: 1),
           ),
           IconButton(
             icon: const Icon(Icons.last_page),
             tooltip: 'סוף הספר',
-            onPressed: () =>
-                controller.goToPage(pageNumber: controller.pages.length),
+            onPressed: () => widget.controller
+                .goToPage(pageNumber: widget.controller.pages.length),
           ),
         ],
       ),
@@ -116,13 +132,14 @@ class _MyPdfPageState extends State<MyPdfPage>
                               valueListenable: outline,
                               builder: (context, outline, child) => OutlineView(
                                 outline: outline,
-                                controller: controller,
+                                controller: widget.controller,
                               ),
                             ),
                             ValueListenableBuilder(
                               valueListenable: documentRef,
                               builder: (context, documentRef, child) => child!,
-                              child: ThumbnailsView(controller: controller),
+                              child:
+                                  ThumbnailsView(controller: widget.controller),
                             ),
                           ],
                         ),
@@ -137,7 +154,8 @@ class _MyPdfPageState extends State<MyPdfPage>
             child: Stack(
               children: [
                 PdfViewer.file(
-                  widget.file.path,
+                  widget.tab.path,
+                  initialPageNumber: widget.tab.pageNumber,
                   // PdfViewer.file(
                   //   r"D:\pdfrx\example\assets\hello.pdf",
                   // PdfViewer.uri(
@@ -149,7 +167,7 @@ class _MyPdfPageState extends State<MyPdfPage>
                   //       : 'https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf'),
                   // Set password provider to show password dialog
                   passwordProvider: () => passwordDialog(context),
-                  controller: controller,
+                  controller: widget.controller,
                   params: PdfViewerParams(
                     enableTextSelection: true,
                     maxScale: 8,
@@ -184,7 +202,7 @@ class _MyPdfPageState extends State<MyPdfPage>
                     viewerOverlayBuilder: (context, size) => [
                       // Show vertical scroll thumb on the right; it has page number on it
                       PdfViewerScrollThumb(
-                        controller: controller,
+                        controller: widget.controller,
                         orientation: ScrollbarOrientation.right,
                         thumbSize: const Size(40, 25),
                         thumbBuilder:
@@ -201,7 +219,7 @@ class _MyPdfPageState extends State<MyPdfPage>
                       ),
                       // Just a simple horizontal scroll thumb on the bottom
                       PdfViewerScrollThumb(
-                        controller: controller,
+                        controller: widget.controller,
                         orientation: ScrollbarOrientation.bottom,
                         thumbSize: const Size(80, 5),
                         thumbBuilder:
@@ -237,7 +255,7 @@ class _MyPdfPageState extends State<MyPdfPage>
                           if (link.url != null) {
                             navigateToUrl(link.url!);
                           } else if (link.dest != null) {
-                            controller.goToDest(link.dest);
+                            widget.controller.goToDest(link.dest);
                           }
                         },
                         hoverColor: Colors.blue.withOpacity(0.2),

@@ -6,14 +6,48 @@ import 'dart:convert';
 import 'links_view.dart';
 import 'dart:isolate';
 import 'package:docx_to_text/docx_to_text.dart';
+import 'package:pdfrx/pdfrx.dart';
 
-class TabWindow {
+class OpenedTab {
   String title;
 
-  TabWindow(this.title);
+  OpenedTab(this.title);
+
+  factory OpenedTab.fromJson(Map<String, dynamic> json) {
+    String type = json['type'];
+    if (type == 'BookTabWindow') {
+      return TextBookTab.fromJson(json);
+    } else if (type == 'SearchingTabWindow') {
+      return SearchingTab.fromJson(json);
+    }
+    return PdfBookTab.fromJson(json);
+  }
 }
 
-class BookTabWindow extends TabWindow {
+class PdfBookTab extends OpenedTab {
+  final String path;
+  final int pageNumber;
+  final PdfViewerController pdfViewerController = PdfViewerController();
+
+  PdfBookTab(this.path, this.pageNumber)
+      : super(path.split(Platform.pathSeparator).last);
+
+  @override
+  factory PdfBookTab.fromJson(Map<String, dynamic> json) {
+    return PdfBookTab(json['path'], json['pageNumber']);
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'path': path,
+      'pageNumber':
+          (pdfViewerController.isReady ? pdfViewerController.pageNumber : 0),
+      'type': 'PdfPageTab'
+    };
+  }
+}
+
+class TextBookTab extends OpenedTab {
   final String path;
   ValueNotifier<List<String>> commentariesNames = ValueNotifier([]);
   late Future<List<Link>> links;
@@ -25,7 +59,7 @@ class BookTabWindow extends TabWindow {
   TextEditingController searchTextController = TextEditingController();
   ItemPositionsListener positionsListener = ItemPositionsListener.create();
 
-  BookTabWindow(this.path, this.initalIndex, {String searchText = ''})
+  TextBookTab(this.path, this.initalIndex, {String searchText = ''})
       : super(path.split(Platform.pathSeparator).last) {
     if (searchText != '') {
       searchTextController.text = searchText;
@@ -37,6 +71,21 @@ class BookTabWindow extends TabWindow {
     });
     data = getBookData(path);
     toc = _parseToc(data);
+  }
+
+  @override
+  factory TextBookTab.fromJson(Map<String, dynamic> json) {
+    return TextBookTab(json['path'], json['initalIndex']);
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'path': path,
+      'initalIndex': positionsListener.itemPositions.value.isNotEmpty
+          ? positionsListener.itemPositions.value.first.index
+          : 0,
+      'type': 'BookTabWindow'
+    };
   }
 
   Future<List<Link>> getAllLinksFromJson(String path) async {
@@ -116,7 +165,7 @@ String stripHtmlIfNeeded(String text) {
   return text.replaceAll(RegExp(r'<[^>]*>|&[^;]+;'), ' ');
 }
 
-class SearchingTabWindow extends TabWindow {
+class SearchingTab extends OpenedTab {
   LibrarySearcher searcher = LibrarySearcher(
     [],
     TextEditingController(),
@@ -124,7 +173,16 @@ class SearchingTabWindow extends TabWindow {
   );
   final ItemScrollController scrollController = ItemScrollController();
 
-  SearchingTabWindow(
+  SearchingTab(
     super.title,
   );
+
+  @override
+  factory SearchingTab.fromJson(Map<String, dynamic> json) {
+    return SearchingTab(json['title']);
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'title': title, 'type': 'SearchingTabWindow'};
+  }
 }
