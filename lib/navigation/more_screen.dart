@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tools/measurement_converter/measurement_converter_screen.dart';
 import 'package:otzaria/settings/settings_repository.dart';
+import 'package:shamor_zachor/shamor_zachor.dart';
 import 'calendar_widget.dart';
 import 'calendar_cubit.dart';
 
@@ -111,7 +112,7 @@ class _MoreScreenState extends State<MoreScreen> {
           child: const CalendarWidget(),
         );
       case 1:
-        return const Center(child: Text('בקרוב...'));
+        return const ShamorZachorWidget();
       case 2:
         return const MeasurementConverterScreen();
       case 3:
