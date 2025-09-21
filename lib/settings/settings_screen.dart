@@ -14,6 +14,7 @@ import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'dart:async';
+import 'package:otzaria/text_book/editing/widgets/editor_settings_widget.dart';
 
 class MySettingsScreen extends StatefulWidget {
   const MySettingsScreen({
@@ -482,6 +483,10 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                     ]),
                   ],
                 ),
+                
+                // Editor Settings
+                const EditorSettingsWidget(),
+                
                 SettingsGroup(
                   title: 'כללי',
                   titleAlignment: Alignment.centerRight,

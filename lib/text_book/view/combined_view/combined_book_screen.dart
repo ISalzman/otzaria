@@ -22,6 +22,7 @@ import 'package:otzaria/notes/notes_system.dart';
 import 'package:otzaria/utils/copy_utils.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 
+
 class CombinedView extends StatefulWidget {
   CombinedView({
     super.key,
@@ -287,6 +288,13 @@ class _CombinedViewState extends State<CombinedView> {
           label: 'העתק את הטקסט המוצג',
           onSelected: _copyVisibleText,
         ),
+        const ctx.MenuDivider(),
+        // Edit paragraph option
+        ctx.MenuItem(
+          label: 'ערוך פסקה זו',
+          icon: Icons.edit,
+          onSelected: () => _editParagraph(paragraphIndex),
+        ),
       ],
     );
   }
@@ -339,19 +347,20 @@ class _CombinedViewState extends State<CombinedView> {
     // קבלת ההגדרות הנוכחיות
     final settingsState = context.read<SettingsBloc>().state;
     final textBookState = context.read<TextBookBloc>().state;
-    
+
     String finalText = text;
     String finalHtmlText = text;
-    
+
     // אם צריך להוסיף כותרות
-    if (settingsState.copyWithHeaders != 'none' && textBookState is TextBookLoaded) {
+    if (settingsState.copyWithHeaders != 'none' &&
+        textBookState is TextBookLoaded) {
       final bookName = CopyUtils.extractBookName(textBookState.book);
       final currentPath = await CopyUtils.extractCurrentPath(
-        textBookState.book, 
+        textBookState.book,
         index,
         bookContent: textBookState.content,
       );
-      
+
       finalText = CopyUtils.formatTextWithHeaders(
         originalText: text,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -359,7 +368,7 @@ class _CombinedViewState extends State<CombinedView> {
         bookName: bookName,
         currentPath: currentPath,
       );
-      
+
       finalHtmlText = CopyUtils.formatTextWithHeaders(
         originalText: text,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -392,22 +401,22 @@ class _CombinedViewState extends State<CombinedView> {
     if (visibleTexts.isEmpty) return;
 
     final combinedText = visibleTexts.join('\n\n');
-    
+
     // קבלת ההגדרות הנוכחיות
     final settingsState = context.read<SettingsBloc>().state;
-    
+
     String finalText = combinedText;
-    
+
     // אם צריך להוסיף כותרות
     if (settingsState.copyWithHeaders != 'none') {
       final bookName = CopyUtils.extractBookName(state.book);
       final firstVisibleIndex = state.visibleIndices.first;
       final currentPath = await CopyUtils.extractCurrentPath(
-        state.book, 
+        state.book,
         firstVisibleIndex,
         bookContent: state.content,
       );
-      
+
       finalText = CopyUtils.formatTextWithHeaders(
         originalText: combinedText,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -416,8 +425,9 @@ class _CombinedViewState extends State<CombinedView> {
         currentPath: currentPath,
       );
     }
-    
-    final combinedHtml = finalText.split('\n\n').map(_formatTextAsHtml).join('<br><br>');
+
+    final combinedHtml =
+        finalText.split('\n\n').map(_formatTextAsHtml).join('<br><br>');
 
     final item = DataWriterItem();
     item.add(Formats.plainText(finalText));
@@ -457,19 +467,20 @@ $textWithBreaks
         // קבלת ההגדרות הנוכחיות
         final settingsState = context.read<SettingsBloc>().state;
         final textBookState = context.read<TextBookBloc>().state;
-        
+
         String finalText = text;
-        
+
         // אם צריך להוסיף כותרות
-        if (settingsState.copyWithHeaders != 'none' && textBookState is TextBookLoaded) {
+        if (settingsState.copyWithHeaders != 'none' &&
+            textBookState is TextBookLoaded) {
           final bookName = CopyUtils.extractBookName(textBookState.book);
           final currentIndex = _currentSelectedIndex ?? 0;
           final currentPath = await CopyUtils.extractCurrentPath(
-            textBookState.book, 
+            textBookState.book,
             currentIndex,
             bookContent: textBookState.content,
           );
-          
+
           finalText = CopyUtils.formatTextWithHeaders(
             originalText: text,
             copyWithHeaders: settingsState.copyWithHeaders,
@@ -550,15 +561,16 @@ $textWithBreaks
 
         // הוספת כותרות אם נדרש
         String finalPlainText = plainText;
-        if (settingsState.copyWithHeaders != 'none' && textBookState is TextBookLoaded) {
+        if (settingsState.copyWithHeaders != 'none' &&
+            textBookState is TextBookLoaded) {
           final bookName = CopyUtils.extractBookName(textBookState.book);
           final currentIndex = _currentSelectedIndex ?? 0;
           final currentPath = await CopyUtils.extractCurrentPath(
-            textBookState.book, 
+            textBookState.book,
             currentIndex,
             bookContent: textBookState.content,
           );
-          
+
           finalPlainText = CopyUtils.formatTextWithHeaders(
             originalText: plainText,
             copyWithHeaders: settingsState.copyWithHeaders,
@@ -566,7 +578,7 @@ $textWithBreaks
             bookName: bookName,
             currentPath: currentPath,
           );
-          
+
           // גם עדכון ה-HTML עם הכותרות
           htmlContentToUse = CopyUtils.formatTextWithHeaders(
             originalText: htmlContentToUse,
@@ -748,35 +760,41 @@ $htmlWithBreaks
         iconColor: Colors.transparent,
         tilePadding: const EdgeInsets.all(0.0),
         collapsedIconColor: Colors.transparent,
-        title: BlocBuilder<SettingsBloc, SettingsState>(
-          builder: (context, settingsState) {
-            String data = widget.data[index];
-            if (!settingsState.showTeamim) {
-              data = utils.removeTeamim(data);
-            }
-            if (settingsState.replaceHolyNames) {
-              data = utils.replaceHolyNames(data);
-            }
-            return HtmlWidget(
-              '''
-              <div style="text-align: justify; direction: rtl;">
-                ${() {
-                String processedData = state.removeNikud
-                    ? utils.highLight(
-                        utils.removeVolwels('$data\n'), state.searchText)
-                    : utils.highLight('$data\n', state.searchText);
-                // החלת עיצוב הסוגריים העגולים
-                return utils.formatTextWithParentheses(processedData);
-              }()}
-              </div>
-              ''',
-              textStyle: TextStyle(
-                fontSize: widget.textSize,
-                fontFamily: settingsState.fontFamily,
-                height: 1.5,
-              ),
-            );
-          },
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            BlocBuilder<SettingsBloc, SettingsState>(
+              builder: (context, settingsState) {
+                String data = widget.data[index];
+                if (!settingsState.showTeamim) {
+                  data = utils.removeTeamim(data);
+                }
+                if (settingsState.replaceHolyNames) {
+                  data = utils.replaceHolyNames(data);
+                }
+                return HtmlWidget(
+                  '''
+                  <div style="text-align: justify; direction: rtl;">
+                    ${() {
+                    String processedData = state.removeNikud
+                        ? utils.highLight(
+                            utils.removeVolwels('$data\n'), state.searchText)
+                        : utils.highLight('$data\n', state.searchText);
+                    // החלת עיצוב הסוגריים העגולים
+                    return utils.formatTextWithParentheses(processedData);
+                  }()}
+                  </div>
+                  ''',
+                  textStyle: TextStyle(
+                    fontSize: widget.textSize,
+                    fontFamily: settingsState.fontFamily,
+                    height: 1.5,
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         children: [
           widget.showSplitedView.value
@@ -826,6 +844,15 @@ $htmlWithBreaks
       },
     );
   }
+
+  /// Opens the text editor for a specific paragraph
+  void _editParagraph(int paragraphIndex) {
+    if (paragraphIndex >= 0 && paragraphIndex < widget.data.length) {
+      context.read<TextBookBloc>().add(OpenEditor(index: paragraphIndex));
+    }
+  }
+
+
 }
 
 /// Widget נפרד לסרגל ההערות כדי למנוע rebuilds מיותרים של הטקסט

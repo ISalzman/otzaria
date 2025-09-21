@@ -54,4 +54,8 @@ class TextBookRepository {
   Future<bool> bookExists(String title) async {
     return await _fileSystem.bookExists(title);
   }
+
+  Future<void> saveBookContent(TextBook book, String content) async {
+    await _fileSystem.saveBookText(book.title, content);
+  }
 }

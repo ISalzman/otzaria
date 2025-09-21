@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
@@ -8,18 +9,27 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/text_book/editing/repository/overrides_repository.dart';
+import 'package:otzaria/text_book/editing/services/overrides_rebase_service.dart';
+import 'package:otzaria/text_book/editing/models/section_identifier.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   final TextBookRepository _repository;
+  final OverridesRepository _overridesRepository;
+  final OverridesRebaseService _rebaseService;
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
 
   TextBookBloc({
     required TextBookRepository repository,
+    required OverridesRepository overridesRepository,
+    required OverridesRebaseService rebaseService,
     required TextBookInitial initialState,
     required this.scrollController,
     required this.positionsListener,
   })  : _repository = repository,
+        _overridesRepository = overridesRepository,
+        _rebaseService = rebaseService,
         super(initialState) {
     on<LoadContent>(_onLoadContent);
     on<UpdateFontSize>(_onUpdateFontSize);
@@ -34,55 +44,82 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<ToggleNotesSidebar>(_onToggleNotesSidebar);
     on<CreateNoteFromToolbar>(_onCreateNoteFromToolbar);
     on<UpdateSelectedTextForNote>(_onUpdateSelectedTextForNote);
+
+    // Editor events
+    on<OpenEditor>(_onOpenEditor);
+    on<OpenFullFileEditor>(_onOpenFullFileEditor);
+    on<SaveEditedSection>(_onSaveEditedSection);
+    on<LoadDraftIfAny>(_onLoadDraftIfAny);
+    on<DiscardDraft>(_onDiscardDraft);
+    on<CloseEditor>(_onCloseEditor);
+    on<UpdateEditorText>(_onUpdateEditorText);
+    on<AutoSaveDraft>(_onAutoSaveDraft);
   }
 
   Future<void> _onLoadContent(
     LoadContent event,
     Emitter<TextBookState> emit,
   ) async {
-    // הגנה כדי לוודא שאנחנו מתחילים רק מהמצב ההתחלתי
-    if (state is! TextBookInitial) {
+    TextBook book;
+    String searchText;
+    int initialIndex;
+    bool showLeftPane;
+    List<String> commentators;
+    List<int>? visibleIndices;
+
+    if (state is TextBookLoaded && event.preserveState) {
+      // Preserve current state when reloading
+      final currentState = state as TextBookLoaded;
+      book = currentState.book;
+      searchText = currentState.searchText;
+      initialIndex = currentState.visibleIndices.isNotEmpty ? currentState.visibleIndices.first : 0;
+      showLeftPane = currentState.showLeftPane;
+      commentators = currentState.activeCommentators;
+      visibleIndices = currentState.visibleIndices;
+    } else if (state is TextBookInitial) {
+      // Normal initial load
+      final initial = state as TextBookInitial;
+      book = initial.book;
+      searchText = initial.searchText;
+      initialIndex = initial.index;
+      showLeftPane = initial.showLeftPane;
+      commentators = initial.commentators;
+      visibleIndices = [initial.index];
+
+      emit(TextBookLoading(book, initial.index, initial.showLeftPane, initial.commentators));
+    } else if (!event.preserveState) {
+      // Not preserving state and not initial, just emit current state
       if (state is TextBookLoaded) {
         emit(state);
       }
       return;
+    } else {
+      return; // Invalid state combination
     }
-    // "הטלה" בטוחה של המצב למשתנה מקומי
-    final initial = state as TextBookInitial;
-    // שמירת הערכים הדרושים במשתנים מקומיים לפני פעולות אסינכרוניות
-    final book = initial.book;
-    final searchText = initial.searchText;
 
-    print('DEBUG: TextBookBloc טוען תוכן עם אינדקס ראשוני: ${initial.index}');
-
-    emit(TextBookLoading(
-        book, initial.index, initial.showLeftPane, initial.commentators));
     try {
       final content = await _repository.getBookContent(book);
       final links = await _repository.getBookLinks(book);
       final tableOfContents = await _repository.getTableOfContents(book);
-      // Pre-compute initial current title (location) so it appears immediately on open
-      String? initialTitle;
-      try {
-        initialTitle = await refFromIndex(
-          initial.index,
-          Future.value(tableOfContents),
-        );
-      } catch (_) {
-        initialTitle = null;
+
+      // Update current title if we're preserving state
+      String? currentTitle;
+      if (visibleIndices != null && visibleIndices.isNotEmpty) {
+        try {
+          currentTitle = await refFromIndex(visibleIndices.first, Future.value(tableOfContents));
+        } catch (_) {
+          currentTitle = null;
+        }
       }
-      final availableCommentators =
-          await _repository.getAvailableCommentators(links);
-      // ממיינים את רשימת המפרשים לקבוצות לפי תקופה
+
+      final availableCommentators = await _repository.getAvailableCommentators(links);
+      //       
       final eras = await utils.splitByEra(availableCommentators);
 
-      final defaultRemoveNikud =
-          Settings.getValue<bool>('key-default-nikud') ?? false;
-      final removeNikudFromTanach =
-          Settings.getValue<bool>('key-remove-nikud-tanach') ?? false;
+      final defaultRemoveNikud = Settings.getValue<bool>('key-default-nikud') ?? false;
+      final removeNikudFromTanach = Settings.getValue<bool>('key-remove-nikud-tanach') ?? false;
       final isTanach = await FileSystemData.instance.isTanachBook(book.title);
-      final removeNikud =
-          defaultRemoveNikud && (removeNikudFromTanach || !isTanach);
+      final removeNikud = defaultRemoveNikud && (removeNikudFromTanach || !isTanach);
 
       // Set up position listener with debouncing to prevent excessive updates
       Timer? debounceTimer;
@@ -92,56 +129,52 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
         // Set new timer with 100ms delay
         debounceTimer = Timer(const Duration(milliseconds: 100), () {
-          final visibleInecies = positionsListener.itemPositions.value
+          final visibleIndicesNow = positionsListener.itemPositions.value
               .map((e) => e.index)
               .toList();
-          if (visibleInecies.isNotEmpty) {
-            add(UpdateVisibleIndecies(visibleInecies));
-            // עדכון המיקום בטאב כדי למנוע בלבול במעבר בין תצוגות
-            if (state is TextBookLoaded) {
-              final currentState = state as TextBookLoaded;
-              // מעדכנים את המיקום בטאב רק אם יש שינוי משמעותי
-              final newIndex = visibleInecies.first;
-              if ((currentState.visibleIndices.isEmpty ||
-                  (currentState.visibleIndices.first - newIndex).abs() > 5)) {
-                // כאן נצטרך לעדכן את הטאב - נעשה זאת בהמשך
-              }
-            }
+          if (visibleIndicesNow.isNotEmpty) {
+            add(UpdateVisibleIndecies(visibleIndicesNow));
           }
         });
       });
 
       emit(TextBookLoaded(
-        book: book, // שימוש במשתנה המקומי
+        book: book,
         content: content.split('\n'),
         links: links,
         availableCommentators: availableCommentators,
         tableOfContents: tableOfContents,
         fontSize: event.fontSize,
-        // הצג את סרגל הצד אם ההגדרה דורשת זאת, או אם הגענו מחיפוש
-        showLeftPane: initial.showLeftPane || initial.searchText.isNotEmpty,
+        showLeftPane: showLeftPane || searchText.isNotEmpty,
         showSplitView: event.showSplitView,
-        activeCommentators: initial.commentators, // שימוש במשתנה המקומי
+        activeCommentators: commentators,
         torahShebichtav: eras['תורה שבכתב'] ?? [],
         chazal: eras['חז"ל'] ?? [],
         rishonim: eras['ראשונים'] ?? [],
         acharonim: eras['אחרונים'] ?? [],
         modernCommentators: eras['מחברי זמננו'] ?? [],
         removeNikud: removeNikud,
-        visibleIndices: [initial.index], // שימוש במשתנה המקומי
+        visibleIndices: visibleIndices ?? [initialIndex],
         pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
         searchText: searchText,
         scrollController: scrollController,
         positionsListener: positionsListener,
-        currentTitle: initialTitle,
-        showNotesSidebar: false,
-        selectedTextForNote: null,
-        selectedTextStart: null,
-        selectedTextEnd: null,
+        currentTitle: currentTitle,
+        showNotesSidebar: state is TextBookLoaded ? (state as TextBookLoaded).showNotesSidebar : false,
+        selectedTextForNote: state is TextBookLoaded ? (state as TextBookLoaded).selectedTextForNote : null,
+        selectedTextStart: state is TextBookLoaded ? (state as TextBookLoaded).selectedTextStart : null,
+        selectedTextEnd: state is TextBookLoaded ? (state as TextBookLoaded).selectedTextEnd : null,
       ));
     } catch (e) {
-      emit(TextBookError(e.toString(), book, initial.index,
-          initial.showLeftPane, initial.commentators));
+      if (state is TextBookInitial) {
+        final initial = state as TextBookInitial;
+        emit(TextBookError(e.toString(), initial.book, initial.index,
+            initial.showLeftPane, initial.commentators));
+      } else if (state is TextBookLoaded && event.preserveState) {
+        final current = state as TextBookLoaded;
+        emit(TextBookError(e.toString(), current.book, current.visibleIndices.isNotEmpty ? current.visibleIndices.first : 0,
+            current.showLeftPane, current.activeCommentators));
+      }
     }
   }
 
@@ -321,6 +354,257 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         selectedTextStart: event.start,
         selectedTextEnd: event.end,
       ));
+    }
+  }
+
+  // Editor event handlers
+  Future<void> _onOpenEditor(
+    OpenEditor event,
+    Emitter<TextBookState> emit,
+  ) async {
+    if (state is! TextBookLoaded) return;
+
+    final currentState = state as TextBookLoaded;
+
+    try {
+      // Generate section identifier
+      final content = currentState.content[event.index];
+      final sectionId = SectionIdentifier.fromContent(
+        content: content,
+        index: event.index,
+      );
+
+      // Check if book has links file
+      final hasLinks =
+          await _overridesRepository.hasLinksFile(currentState.book.title);
+
+      // Load existing override or original content
+      final override = await _overridesRepository.readOverride(
+        currentState.book.title,
+        sectionId.sectionId,
+      );
+
+      final editorText = override?.markdownContent ?? content;
+
+      // Check for draft
+      final hasDraft = await _overridesRepository.hasNewerDraftThanOverride(
+        currentState.book.title,
+        sectionId.sectionId,
+      );
+
+      emit(currentState.copyWith(
+        isEditorOpen: true,
+        editorIndex: event.index,
+        editorSectionId: sectionId.sectionId,
+        editorText: editorText,
+        hasDraft: hasDraft,
+        hasLinksFile: hasLinks,
+      ));
+    } catch (e) {
+      // Handle error - could emit error state or show notification
+    }
+  }
+
+  Future<void> _onOpenFullFileEditor(
+    OpenFullFileEditor event,
+    Emitter<TextBookState> emit,
+  ) async {
+    if (state is! TextBookLoaded) return;
+
+    final currentState = state as TextBookLoaded;
+
+    try {
+      // Combine all content into one string
+      final fullContent = currentState.content.join('\n\n');
+
+      // We don't need section identifier for full file - using fixed ID
+
+      // Check if book has links file
+      final hasLinks =
+          await _overridesRepository.hasLinksFile(currentState.book.title);
+
+      // Load existing override or original content
+      final override = await _overridesRepository.readOverride(
+        currentState.book.title,
+        'full_file',
+      );
+
+      final editorText = override?.markdownContent ?? fullContent;
+
+      // Check for draft
+      final hasDraft = await _overridesRepository.hasNewerDraftThanOverride(
+        currentState.book.title,
+        'full_file',
+      );
+
+      emit(currentState.copyWith(
+        isEditorOpen: true,
+        editorIndex: -1, // Special index for full file
+        editorSectionId: 'full_file',
+        editorText: editorText,
+        hasDraft: hasDraft,
+        hasLinksFile: hasLinks,
+      ));
+    } catch (e) {
+      // Debug: Error in _onOpenFullFileEditor: $e
+      // Handle error - could emit error state or show notification
+    }
+  }
+
+  Future<void> _onSaveEditedSection(
+    SaveEditedSection event,
+    Emitter<TextBookState> emit,
+  ) async {
+    if (state is! TextBookLoaded) return;
+
+    final currentState = state as TextBookLoaded;
+
+    try {
+      // Handle full file editing differently
+      if (event.sectionId == 'full_file' && event.index == -1) {
+        // For full file editing, save the entire content to the original file
+        await _repository.saveBookContent(currentState.book, event.markdown);
+
+        // Split the content back into sections for display
+        final sections = event.markdown.split('\n\n').where((s) => s.trim().isNotEmpty).toList();
+
+        // If we have fewer sections than before, pad with empty strings
+        while (sections.length < currentState.content.length) {
+          sections.add('');
+        }
+
+        // Reload content to ensure we have the latest version
+        add(LoadContent(
+          fontSize: currentState.fontSize,
+          showSplitView: currentState.showSplitView,
+          removeNikud: currentState.removeNikud,
+          preserveState: true,
+        ));
+
+        return;
+      }
+
+      // Regular section editing - update the specific section and save the entire file
+      final updatedContent = List<String>.from(currentState.content);
+      updatedContent[event.index] = event.markdown;
+
+      // Join all sections back together and save to original file
+      final fullContent = updatedContent.join('\n\n');
+      await _repository.saveBookContent(currentState.book, fullContent);
+
+      // Close editor immediately
+      emit(currentState.copyWith(
+        isEditorOpen: false,
+        editorIndex: null,
+        editorSectionId: null,
+        editorText: null,
+        hasDraft: false,
+      ));
+
+      // Reload content to ensure we have the latest version from the file system
+      add(LoadContent(
+        fontSize: currentState.fontSize,
+        showSplitView: currentState.showSplitView,
+        removeNikud: currentState.removeNikud,
+        preserveState: true,
+      ));
+    } catch (e) {
+      // Debug: Error in _onSaveEditedSection: $e
+      // Handle error - could show error message to user
+    }
+  }
+
+  Future<void> _onLoadDraftIfAny(
+    LoadDraftIfAny event,
+    Emitter<TextBookState> emit,
+  ) async {
+    if (state is! TextBookLoaded) return;
+
+    final currentState = state as TextBookLoaded;
+
+    try {
+      final draft = await _overridesRepository.readDraft(
+        currentState.book.title,
+        event.sectionId,
+      );
+
+      if (draft != null) {
+        emit(currentState.copyWith(
+          editorText: draft.markdownContent,
+          hasDraft: false, // Draft is now loaded, so no longer "pending"
+        ));
+      }
+    } catch (e) {
+      // Handle error
+    }
+  }
+
+  Future<void> _onDiscardDraft(
+    DiscardDraft event,
+    Emitter<TextBookState> emit,
+  ) async {
+    if (state is! TextBookLoaded) return;
+
+    final currentState = state as TextBookLoaded;
+
+    try {
+      await _overridesRepository.deleteDraft(
+        currentState.book.title,
+        event.sectionId,
+      );
+
+      emit(currentState.copyWith(hasDraft: false));
+    } catch (e) {
+      // Handle error
+    }
+  }
+
+  Future<void> _onCloseEditor(
+    CloseEditor event,
+    Emitter<TextBookState> emit,
+  ) async {
+    if (state is! TextBookLoaded) return;
+
+    final currentState = state as TextBookLoaded;
+
+    emit(currentState.copyWith(
+      isEditorOpen: false,
+      editorIndex: null,
+      editorSectionId: null,
+      editorText: null,
+      hasDraft: false,
+    ));
+  }
+
+  Future<void> _onUpdateEditorText(
+    UpdateEditorText event,
+    Emitter<TextBookState> emit,
+  ) async {
+    if (state is! TextBookLoaded) return;
+
+    final currentState = state as TextBookLoaded;
+
+    emit(currentState.copyWith(editorText: event.text));
+  }
+
+  Future<void> _onAutoSaveDraft(
+    AutoSaveDraft event,
+    Emitter<TextBookState> emit,
+  ) async {
+    if (state is! TextBookLoaded) return;
+
+    final currentState = state as TextBookLoaded;
+
+    try {
+      await _overridesRepository.writeDraft(
+        currentState.book.title,
+        event.sectionId,
+        event.markdown,
+      );
+
+      // Don't emit state change for auto-save to avoid unnecessary rebuilds
+    } catch (e) {
+      // Handle error silently for auto-save
     }
   }
 }

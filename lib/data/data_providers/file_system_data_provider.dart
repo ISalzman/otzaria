@@ -315,6 +315,122 @@ class FileSystemData {
     }
   }
 
+  /// Saves text content to a book file.
+  ///
+  /// Only supports plain text files (.txt). DOCX files cannot be edited.
+  /// Creates a backup of the original file before saving.
+  Future<void> saveBookText(String title, String content) async {
+    final path = await _getBookPath(title);
+    final file = File(path);
+
+    // Only allow saving to text files, not DOCX
+    if (path.endsWith('.docx')) {
+      throw Exception('Cannot save to DOCX files. Only text files are supported.');
+    }
+
+    // Create backup of original file
+    final backupPath = '$path.backup.${DateTime.now().millisecondsSinceEpoch}';
+    await file.copy(backupPath);
+
+    try {
+      // Save the new content
+      await file.writeAsString(content, encoding: utf8);
+
+      // Clean up old backups after successful save
+      await _cleanupOldBackups(path);
+    } catch (e) {
+      // If save fails, restore from backup
+      final backupFile = File(backupPath);
+      if (await backupFile.exists()) {
+        await backupFile.copy(path);
+      }
+      rethrow;
+    }
+  }
+
+  /// Cleans up old backup files for a given file path.
+  /// Keeps only the most recent 3 backups, deletes older ones.
+  Future<void> _cleanupOldBackups(String originalPath) async {
+    try {
+      final directory = Directory(originalPath).parent;
+      final baseName = originalPath.split(Platform.pathSeparator).last;
+
+      // Find all backup files for this document
+      final backupFiles = <File>[];
+      await for (final entity in directory.list()) {
+        if (entity is File) {
+          final fileName = entity.path.split(Platform.pathSeparator).last;
+          if (fileName.startsWith('$baseName.backup.')) {
+            backupFiles.add(entity as File);
+          }
+        }
+      }
+
+      // Sort by timestamp (newest first)
+      backupFiles.sort((a, b) {
+        final aTime = _getBackupTimestamp(a.path);
+        final bTime = _getBackupTimestamp(b.path);
+        return bTime.compareTo(aTime); // Descending order
+      });
+
+      // Keep only the first 3 (most recent)
+      for (int i = 3; i < backupFiles.length; i++) {
+        try {
+          await backupFiles[i].delete();
+          debugPrint('Deleted old backup: ${backupFiles[i].path}');
+        } catch (e) {
+          debugPrint('Failed to delete backup ${backupFiles[i].path}: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error during backup cleanup: $e');
+    }
+  }
+
+  /// Extracts timestamp from backup filename
+  int _getBackupTimestamp(String backupPath) {
+    try {
+      final fileName = backupPath.split(Platform.pathSeparator).last;
+      final timestampStr = fileName.split('.backup.').last;
+      return int.parse(timestampStr);
+    } catch (e) {
+      return 0; // Return 0 for files that can't be parsed
+    }
+  }
+
+  /// Manual cleanup of old backup files across the entire library
+  Future<int> cleanupAllOldBackups() async {
+    int deletedCount = 0;
+    try {
+      final libraryDir = Directory('$libraryPath${Platform.pathSeparator}אוצריא');
+
+      await for (final entity in libraryDir.list(recursive: true)) {
+        if (entity is File) {
+          final fileName = entity.path.split(Platform.pathSeparator).last;
+          if (fileName.contains('.backup.')) {
+            // Check if this backup is old (older than 7 days)
+            final timestamp = _getBackupTimestamp(entity.path);
+            final backupDate = DateTime.fromMillisecondsSinceEpoch(timestamp);
+            final daysOld = DateTime.now().difference(backupDate).inDays;
+
+            if (daysOld > 7) {
+              try {
+                await entity.delete();
+                deletedCount++;
+              } catch (e) {
+                debugPrint('Failed to delete backup ${entity.path}: $e');
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error during global backup cleanup: $e');
+    }
+
+    return deletedCount;
+  }
+
   /// Retrieves the content of a specific link within a book.
   ///
   /// Reads the file line by line and returns the content at the specified index.

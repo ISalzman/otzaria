@@ -16,6 +16,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/printing/printing_screen.dart';
@@ -28,6 +29,8 @@ import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/ref_helper.dart';
+import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
+import 'package:otzaria/text_book/editing/widgets/editor_settings_widget.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/notes/notes_system.dart';
@@ -58,10 +61,10 @@ class TextBookViewerBloc extends StatefulWidget {
   final TextBookTab tab;
 
   const TextBookViewerBloc({
-    Key? key,
+    super.key,
     required this.openBookCallback,
     required this.tab,
-  }) : super(key: key);
+  });
 
   @override
   State<TextBookViewerBloc> createState() => _TextBookViewerBlocState();
@@ -171,7 +174,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     super.initState();
 
     // וודא שהמיקום הנוכחי נשמר בטאב
-    print('DEBUG: אתחול טקסט טאב - אינדקס התחלתי: ${widget.tab.index}');
 
     // אם יש טקסט חיפוש (searchText), נתחיל בלשונית 'חיפוש' (שנמצאת במקום ה-1)
     // אחרת, נתחיל בלשונית 'ניווט' (שנמצאת במקום ה-0)
@@ -211,8 +213,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
-        return BlocBuilder<TextBookBloc, TextBookState>(
+        return BlocConsumer<TextBookBloc, TextBookState>(
           bloc: context.read<TextBookBloc>(),
+          listener: (context, state) {
+            if (state is TextBookLoaded &&
+                state.isEditorOpen &&
+                state.editorIndex != null) {
+              _openEditorDialog(context, state);
+            }
+          },
           builder: (context, state) {
             if (state is TextBookInitial) {
               context.read<TextBookBloc>().add(
@@ -237,9 +246,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               return LayoutBuilder(
                 builder: (context, constrains) {
                   final wideScreen = (MediaQuery.of(context).size.width >= 600);
-                  return Scaffold(
-                    appBar: _buildAppBar(context, state, wideScreen),
-                    body: _buildBody(context, state, wideScreen),
+                  return KeyboardListener(
+                    focusNode: FocusNode(),
+                    onKeyEvent: (event) =>
+                        _handleGlobalKeyEvent(event, context, state),
+                    child: Scaffold(
+                      appBar: _buildAppBar(context, state, wideScreen),
+                      body: _buildBody(context, state, wideScreen),
+                    ),
                   );
                 },
               );
@@ -363,6 +377,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
         // Print Button
         _buildPrintButton(context, state),
+
+        // Full File Editor Button
+        _buildFullFileEditorButton(context, state),
 
         // Report Bug Button
         _buildReportBugButton(context, state),
@@ -563,6 +580,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         ),
       ),
 
+      // Full File Editor Button
+      ActionButtonData(
+        widget: _buildFullFileEditorButton(context, state),
+        icon: Icons.edit_document,
+        tooltip: 'ערוך את כל הקובץ (Ctrl+Shift+E)',
+        onPressed: () => _handleFullFileEditorPress(context, state),
+      ),
+
       // Report Bug Button
       ActionButtonData(
         widget: _buildReportBugButton(context, state),
@@ -603,7 +628,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _handlePdfButtonPress(context, state),
       ),
 
-      // 2) חיפוש
+      // 3) חיפוש
       ActionButtonData(
         widget: _buildSearchButton(context, state),
         icon: Icons.search,
@@ -615,7 +640,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
-      // 3) הוסף הערות
+      // 3) ערוך את כל הקובץ
+      ActionButtonData(
+        widget: _buildFullFileEditorButton(context, state),
+        icon: Icons.edit_document,
+        tooltip: 'ערוך את כל הקובץ (Ctrl+Shift+E)',
+        onPressed: () => _handleFullFileEditorPress(context, state),
+      ),
+
+      // 4) הוסף הערות
       ActionButtonData(
         widget: _buildAddNoteButton(context, state),
         icon: Icons.note_add,
@@ -623,7 +656,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _handleAddNotePress(context, state),
       ),
 
-      // 4) כפתורי השליטה בספר: הקטע הקודם/הבא, תחילת/סוף הספר
+      // 5) כפתורי השליטה בספר: הקטע הקודם/הבא, תחילת/סוף הספר
       ActionButtonData(
         widget: _buildFirstPageButton(state),
         icon: Icons.first_page,
@@ -2286,4 +2319,94 @@ class _RegularReportTabState extends State<_RegularReportTab> {
       ),
     );
   }
+}
+
+Widget _buildTextEditorButton(BuildContext context, TextBookLoaded state) {
+  final hasCurrentSection =
+      state.positionsListener.itemPositions.value.isNotEmpty;
+
+  return IconButton(
+    onPressed:
+        hasCurrentSection ? () => _handleTextEditorPress(context, state) : null,
+    icon: const Icon(Icons.edit),
+    tooltip: 'עריכת טקסט (Ctrl+E)',
+  );
+}
+
+Widget _buildFullFileEditorButton(BuildContext context, TextBookLoaded state) {
+  return IconButton(
+    onPressed: () => _handleFullFileEditorPress(context, state),
+    icon: const Icon(Icons.edit_document),
+    tooltip: 'ערוך את כל הקובץ (Ctrl+Shift+E)',
+  );
+}
+
+void _handleTextEditorPress(BuildContext context, TextBookLoaded state) {
+  final positions = state.positionsListener.itemPositions.value;
+  if (positions.isEmpty) return;
+
+  final currentIndex = positions.first.index;
+  context.read<TextBookBloc>().add(OpenEditor(index: currentIndex));
+}
+
+void _handleFullFileEditorPress(BuildContext context, TextBookLoaded state) {
+  context.read<TextBookBloc>().add(OpenFullFileEditor());
+}
+
+bool _handleGlobalKeyEvent(
+    KeyEvent event, BuildContext context, TextBookLoaded state) {
+  if (event is KeyDownEvent && HardwareKeyboard.instance.isControlPressed) {
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.keyE:
+        if (!state.isEditorOpen) {
+          if (HardwareKeyboard.instance.isShiftPressed) {
+            _handleFullFileEditorPress(context, state);
+          } else {
+            _handleTextEditorPress(context, state);
+          }
+          return true;
+        }
+        break;
+    }
+  }
+  return false;
+}
+
+void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
+  if (state.editorIndex == null || state.editorSectionId == null) return;
+
+  final settings = EditorSettingsHelper.getSettings();
+
+  // Reload the content from file system to ensure fresh data
+  String freshContent = '';
+  try {
+    // Try to reload content from file system
+    final dataProvider = FileSystemData.instance;
+    freshContent = await dataProvider.getBookText(state.book.title);
+  } catch (e) {
+    debugPrint('Failed to load fresh content: $e');
+    // Fall back to cached content
+    freshContent = state.editorText ?? '';
+  }
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => BlocProvider.value(
+      value: context.read<TextBookBloc>(),
+      child: TextSectionEditorDialog(
+        bookId: state.book.title,
+        sectionIndex: state.editorIndex!,
+        sectionId: state.editorSectionId!,
+        initialContent:
+            freshContent.isNotEmpty ? freshContent : state.editorText ?? '',
+        hasLinksFile: state.hasLinksFile,
+        hasDraft: state.hasDraft,
+        settings: settings,
+      ),
+    ),
+  ).then((_) {
+    // Close editor when dialog is dismissed
+    context.read<TextBookBloc>().add(const CloseEditor());
+  });
 }

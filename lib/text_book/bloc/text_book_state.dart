@@ -69,6 +69,14 @@ class TextBookLoaded extends TextBookState {
   final int? selectedTextStart;
   final int? selectedTextEnd;
 
+  // Editor state
+  final bool isEditorOpen;
+  final int? editorIndex;
+  final String? editorSectionId;
+  final String? editorText;
+  final bool hasDraft;
+  final bool hasLinksFile;
+
   // Controllers
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
@@ -100,6 +108,12 @@ class TextBookLoaded extends TextBookState {
     this.selectedTextForNote,
     this.selectedTextStart,
     this.selectedTextEnd,
+    this.isEditorOpen = false,
+    this.editorIndex,
+    this.editorSectionId,
+    this.editorText,
+    this.hasDraft = false,
+    this.hasLinksFile = false,
   }) : super(book, selectedIndex ?? 0, showLeftPane, activeCommentators);
 
   factory TextBookLoaded.initial({
@@ -134,6 +148,12 @@ class TextBookLoaded extends TextBookState {
       selectedTextForNote: null,
       selectedTextStart: null,
       selectedTextEnd: null,
+      isEditorOpen: false,
+      editorIndex: null,
+      editorSectionId: null,
+      editorText: null,
+      hasDraft: false,
+      hasLinksFile: false,
     );
   }
 
@@ -164,6 +184,12 @@ class TextBookLoaded extends TextBookState {
     String? selectedTextForNote,
     int? selectedTextStart,
     int? selectedTextEnd,
+    bool? isEditorOpen,
+    int? editorIndex,
+    String? editorSectionId,
+    String? editorText,
+    bool? hasDraft,
+    bool? hasLinksFile,
   }) {
     return TextBookLoaded(
       book: book ?? this.book,
@@ -193,6 +219,12 @@ class TextBookLoaded extends TextBookState {
       selectedTextForNote: selectedTextForNote ?? this.selectedTextForNote,
       selectedTextStart: selectedTextStart ?? this.selectedTextStart,
       selectedTextEnd: selectedTextEnd ?? this.selectedTextEnd,
+      isEditorOpen: isEditorOpen ?? this.isEditorOpen,
+      editorIndex: editorIndex ?? this.editorIndex,
+      editorSectionId: editorSectionId ?? this.editorSectionId,
+      editorText: editorText ?? this.editorText,
+      hasDraft: hasDraft ?? this.hasDraft,
+      hasLinksFile: hasLinksFile ?? this.hasLinksFile,
     );
   }
 
@@ -222,5 +254,11 @@ class TextBookLoaded extends TextBookState {
         selectedTextForNote,
         selectedTextStart,
         selectedTextEnd,
+        isEditorOpen,
+        editorIndex,
+        editorSectionId,
+        editorText,
+        hasDraft,
+        hasLinksFile,
       ];
 }
