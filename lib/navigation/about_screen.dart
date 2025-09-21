@@ -189,13 +189,32 @@ class _AboutScreenState extends State<AboutScreen> {
             ],
           ),
 
-          // Lower part with versions
+          // Lower part with versions and donations
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
                 'גרסת תוכנה: ${appVersion ?? 'לא ידוע'}',
                 style: const TextStyle(fontSize: 14),
+              ),
+              InkWell(
+                onTap: () async {
+                  const url =
+                      'https://docs.google.com/forms/d/e/1FAIpQLSeMrkGc0Jm_QMRfHB9c4LAmJtad8miEav6duEKhKqxbHK0pBg/viewform?usp=dialog';
+                  final uri = Uri.parse(url);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri);
+                  }
+                },
+                child: const Text(
+                  'לתרומות והנצחות',
+                  style: TextStyle(
+                    color: Colors.blue,
+                    decoration: TextDecoration.underline,
+                    fontSize: 16,
+                  ),
+                ),
               ),
               Text(
                 'גרסת ספריה: ${libraryVersion ?? 'לא ידוע'}',
