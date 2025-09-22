@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/hebrew_morphology.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
 import 'package:search_engine/search_engine.dart';
@@ -83,12 +84,13 @@ class SearchRepository {
       if (hasAlternativeWords) print('🔄 מילים חילופיות: $alternativeWords');
       if (hasSearchOptions) print('🔄 אפשרויות חיפוש: $searchOptions');
 
-      regexTerms = _buildAdvancedQuery(words, alternativeWords, searchOptions);
+      regexTerms = SearchQueryBuilder.buildAdvancedQuery(
+          words, alternativeWords, searchOptions);
       print('🔄 RegexTerms מתקדם: $regexTerms');
       print(
           '🔄 effectiveSlop will be: ${hasCustomSpacing ? "custom" : (fuzzy ? distance.toString() : "0")}');
       effectiveSlop = hasCustomSpacing
-          ? _getMaxCustomSpacing(customSpacing, words.length)
+          ? SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length)
           : (fuzzy ? distance : 0);
     } else if (fuzzy) {
       // חיפוש מקורב - נשתמש במילים בודדות
@@ -101,7 +103,8 @@ class SearchRepository {
     } else if (hasCustomSpacing) {
       // מרווחים מותאמים אישית
       regexTerms = words;
-      effectiveSlop = _getMaxCustomSpacing(customSpacing, words.length);
+      effectiveSlop =
+          SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length);
     } else {
       // חיפוש מדוייק של כמה מילים
       regexTerms = words;
@@ -109,7 +112,8 @@ class SearchRepository {
     }
 
     // חישוב maxExpansions בהתבסס על סוג החיפוש
-    final int maxExpansions = _calculateMaxExpansions(fuzzy, regexTerms.length,
+    final int maxExpansions = SearchQueryBuilder.calculateMaxExpansions(
+        fuzzy, regexTerms.length,
         searchOptions: searchOptions, words: words);
 
     print('🔍 Final search params:');
@@ -130,157 +134,5 @@ class SearchRepository {
 
     print('✅ Search completed, found ${results.length} results');
     return results;
-  }
-
-  /// מחשב את המרווח המקסימלי מהמרווחים המותאמים אישית
-  int _getMaxCustomSpacing(Map<String, String> customSpacing, int wordCount) {
-    int maxSpacing = 0;
-
-    for (int i = 0; i < wordCount - 1; i++) {
-      final spacingKey = '$i-${i + 1}';
-      final customSpacingValue = customSpacing[spacingKey];
-
-      if (customSpacingValue != null && customSpacingValue.isNotEmpty) {
-        final spacingNum = int.tryParse(customSpacingValue) ?? 0;
-        maxSpacing = maxSpacing > spacingNum ? maxSpacing : spacingNum;
-      }
-    }
-
-    return maxSpacing;
-  }
-
-  /// בונה query מתקדם עם מילים חילופיות ואפשרויות חיפוש
-  List<String> _buildAdvancedQuery(
-      List<String> words,
-      Map<int, List<String>>? alternativeWords,
-      Map<String, Map<String, bool>>? searchOptions) {
-    List<String> regexTerms = [];
-
-    for (int i = 0; i < words.length; i++) {
-      final word = words[i];
-      final wordKey = '${word}_$i';
-
-      // קבלת אפשרויות החיפוש למילה הזו
-      final wordOptions = searchOptions?[wordKey] ?? {};
-      final hasPrefix = wordOptions['קידומות'] == true;
-      final hasSuffix = wordOptions['סיומות'] == true;
-      final hasGrammaticalPrefixes = wordOptions['קידומות דקדוקיות'] == true;
-      final hasGrammaticalSuffixes = wordOptions['סיומות דקדוקיות'] == true;
-      final hasFullPartialSpelling = wordOptions['כתיב מלא/חסר'] == true;
-      final hasPartialWord = wordOptions['חלק ממילה'] == true;
-
-      // קבלת מילים חילופיות
-      final alternatives = alternativeWords?[i];
-
-      // בניית רשימת כל האפשרויות (מילה מקורית + חלופות)
-      final allOptions = [word];
-      if (alternatives != null && alternatives.isNotEmpty) {
-        allOptions.addAll(alternatives);
-      }
-
-      // סינון אפשרויות ריקות
-      final validOptions =
-          allOptions.where((w) => w.trim().isNotEmpty).toList();
-
-      if (validOptions.isNotEmpty) {
-        // בניית רשימת כל האפשרויות לכל מילה
-        final allVariations = <String>{};
-
-        for (final option in validOptions) {
-          // השתמש בפונקציה המשולבת החדשה
-          final pattern = SearchRegexPatterns.createSearchPattern(
-            option,
-            hasPrefix: hasPrefix,
-            hasSuffix: hasSuffix,
-            hasGrammaticalPrefixes: hasGrammaticalPrefixes,
-            hasGrammaticalSuffixes: hasGrammaticalSuffixes,
-            hasPartialWord: hasPartialWord,
-            hasFullPartialSpelling: hasFullPartialSpelling,
-          );
-          allVariations.add(pattern);
-        }
-
-        // הגבלה על מספר הוריאציות הכולל למילה אחת
-        final limitedVariations = allVariations.length > 20
-            ? allVariations.take(20).toList()
-            : allVariations.toList();
-
-        // במקום רגקס מורכב, נוסיף כל וריאציה בנפרד
-        final finalPattern = limitedVariations.length == 1
-            ? limitedVariations.first
-            : '(${limitedVariations.join('|')})';
-
-        regexTerms.add(finalPattern);
-        // הודעת דיבוג עם הסבר על הלוגיקה
-        final searchType = hasPrefix && hasSuffix
-            ? 'קידומות+סיומות (חלק ממילה)'
-            : hasGrammaticalPrefixes && hasGrammaticalSuffixes
-                ? 'קידומות+סיומות דקדוקיות'
-                : hasPrefix
-                    ? 'קידומות'
-                    : hasSuffix
-                        ? 'סיומות'
-                        : hasGrammaticalPrefixes
-                            ? 'קידומות דקדוקיות'
-                            : hasGrammaticalSuffixes
-                                ? 'סיומות דקדוקיות'
-                                : hasPartialWord
-                                    ? 'חלק ממילה'
-                                    : hasFullPartialSpelling
-                                        ? 'כתיב מלא/חסר'
-                                        : 'מדויק';
-
-        print('🔄 מילה $i: $finalPattern (סוג חיפוש: $searchType)');
-      } else {
-        // fallback למילה המקורית
-        regexTerms.add(word);
-      }
-    }
-
-    return regexTerms;
-  }
-
-  /// מחשב את maxExpansions בהתבסס על סוג החיפוש
-  int _calculateMaxExpansions(bool fuzzy, int termCount,
-      {Map<String, Map<String, bool>>? searchOptions, List<String>? words}) {
-    // בדיקה אם יש חיפוש עם סיומות או קידומות ואיזה מילים
-    bool hasSuffixOrPrefix = false;
-    int shortestWordLength = 10; // ערך התחלתי גבוה
-
-    if (searchOptions != null && words != null) {
-      for (int i = 0; i < words.length; i++) {
-        final word = words[i];
-        final wordKey = '${word}_$i';
-        final wordOptions = searchOptions[wordKey] ?? {};
-
-        if (wordOptions['סיומות'] == true ||
-            wordOptions['קידומות'] == true ||
-            wordOptions['קידומות דקדוקיות'] == true ||
-            wordOptions['סיומות דקדוקיות'] == true ||
-            wordOptions['חלק ממילה'] == true) {
-          hasSuffixOrPrefix = true;
-          shortestWordLength = math.min(shortestWordLength, word.length);
-        }
-      }
-    }
-
-    if (fuzzy) {
-      return 50; // חיפוש מקורב
-    } else if (hasSuffixOrPrefix) {
-      // התאמת המגבלה לפי אורך המילה הקצרה ביותר עם אפשרויות מתקדמות
-      if (shortestWordLength <= 1) {
-        return 2000; // מילה של תו אחד - הגבלה קיצונית
-      } else if (shortestWordLength <= 2) {
-        return 3000; // מילה של 2 תווים - הגבלה בינונית
-      } else if (shortestWordLength <= 3) {
-        return 4000; // מילה של 3 תווים - הגבלה קלה
-      } else {
-        return 5000; // מילה ארוכה - הגבלה מלאה
-      }
-    } else if (termCount > 1) {
-      return 100; // חיפוש של כמה מילים - צריך expansions גבוה יותר
-    } else {
-      return 10; // מילה אחת - expansions נמוך
-    }
   }
 }
