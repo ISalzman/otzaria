@@ -1,17 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
-import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
-import 'package:otzaria/navigation/bloc/navigation_event.dart';
-import 'package:otzaria/navigation/bloc/navigation_state.dart';
-import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
-import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/tabs/models/pdf_tab.dart';
-import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/utils/open_book.dart';
 
 void openDafYomiBook(BuildContext context, String tractate, String daf) async {
   _openDafYomiBookInCategory(context, tractate, daf, 'תלמוד בבלי');
@@ -104,27 +98,13 @@ Future<void> _openBook(BuildContext context, Book book, String daf) async {
   if (book is TextBook) {
     final tocEntry = await _findDafInToc(book, 'דף ${daf.trim()}');
     index = tocEntry?.index ?? 0;
-    final tab = TextBookTab(
-      book: book,
-      index: index,
-      openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-          (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-    );
-    BlocProvider.of<TabsBloc>(context).add(AddTab(tab));
   } else if (book is PdfBook) {
     final outline = await getDafYomiOutline(book, 'דף ${daf.trim()}');
     index = outline?.dest?.pageNumber ?? 0;
-    final tab = PdfBookTab(
-      book: book,
-      pageNumber: index,
-      openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-          (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-    );
-    BlocProvider.of<TabsBloc>(context).add(AddTab(tab));
   }
 
-  BlocProvider.of<NavigationBloc>(context)
-      .add(const NavigateToScreen(Screen.reading));
+  // Use the central openBook function
+  openBook(context, book, index, '', ignoreHistory: true);
 }
 
 Future<TocEntry?> _findDafInToc(TextBook book, String daf) async {
@@ -176,13 +156,8 @@ openPdfBookFromRef(String bookname, String ref, BuildContext context) async {
   if (book != null) {
     final outline = await getDafYomiOutline(book, ref);
     if (outline != null) {
-      final tab = PdfBookTab(
-        book: book,
-        pageNumber: outline.dest?.pageNumber ?? 0,
-        openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-            (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-      );
-      BlocProvider.of<TabsBloc>(context).add(AddTab(tab));
+      openBook(context, book, outline.dest?.pageNumber ?? 0, '',
+          ignoreHistory: true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -207,13 +182,7 @@ openTextBookFromRef(String bookname, String ref, BuildContext context) async {
   if (book != null) {
     final tocEntry = await _findDafInToc(book, ref);
     if (tocEntry != null) {
-      final tab = TextBookTab(
-        book: book,
-        index: tocEntry.index,
-        openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-            (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-      );
-      BlocProvider.of<TabsBloc>(context).add(AddTab(tab));
+      openBook(context, book, tocEntry.index, '', ignoreHistory: true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

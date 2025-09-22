@@ -5,6 +5,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:hive/hive.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/search_query_builder.dart';
+import 'package:otzaria/core/app_paths.dart';
 
 /// A singleton class that manages search functionality using Tantivy search engine.
 ///
@@ -44,14 +45,9 @@ class TantivyDataProvider {
     reopenIndex();
   }
 
-  void reopenIndex() {
-    String indexPath = (Settings.getValue('key-library-path') ?? 'C:/אוצריא') +
-        Platform.pathSeparator +
-        'index';
-    String refIndexPath =
-        (Settings.getValue('key-library-path') ?? 'C:/אוצריא') +
-            Platform.pathSeparator +
-            'ref_index';
+  void reopenIndex() async {
+    String indexPath = await AppPaths.getIndexPath();
+    String refIndexPath = await AppPaths.getRefIndexPath();
 
     engine = Future.value(SearchEngine(path: indexPath));
 
@@ -96,11 +92,9 @@ class TantivyDataProvider {
     });
     try {
       booksDone = Hive.box(
-              name: 'books_indexed',
-              directory:
-                  (Settings.getValue('key-library-path') ?? 'C:/אוצריא') +
-                      Platform.pathSeparator +
-                      'index')
+        name: 'books_indexed',
+        directory: await AppPaths.getIndexPath(),
+      )
           .get('key-books-done', defaultValue: [])
           .map<String>((e) => e.toString())
           .toList() as List<String>;
@@ -110,13 +104,11 @@ class TantivyDataProvider {
   }
 
   /// Persists the list of indexed books to disk using Hive storage.
-  saveBooksDoneToDisk() {
+  Future<void> saveBooksDoneToDisk() async {
     Hive.box(
-            name: 'books_indexed',
-            directory: (Settings.getValue('key-library-path') ?? 'C:/אוצריא') +
-                Platform.pathSeparator +
-                'index')
-        .put('key-books-done', booksDone);
+      name: 'books_indexed',
+      directory: await AppPaths.getIndexPath(),
+    ).put('key-books-done', booksDone);
   }
 
   Future<int> countTexts(String query, List<String> books, List<String> facets,
@@ -358,6 +350,6 @@ class TantivyDataProvider {
     final refIndex = refEngine;
     await refIndex.clear();
     booksDone.clear();
-    saveBooksDoneToDisk();
+    await saveBooksDoneToDisk();
   }
 }

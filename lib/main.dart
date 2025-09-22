@@ -43,6 +43,7 @@ import 'package:otzaria/notes/data/database_schema.dart';
 import 'package:otzaria/notes/bloc/notes_bloc.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:search_engine/search_engine.dart';
+import 'package:otzaria/core/app_paths.dart';
 
 /// Application entry point that initializes necessary components and launches the app.
 ///
@@ -186,12 +187,7 @@ Future<void> initialize() async {
 /// - Main library directory ('אוצריא')
 /// - Index directory for search functionality
 Future<void> createDirs() async {
-  createDirectoryIfNotExists(
-      '${Settings.getValue('key-library-path')}${Platform.pathSeparator}אוצריא');
-  createDirectoryIfNotExists(
-      '${Settings.getValue('key-library-path')}${Platform.pathSeparator}index');
-  createDirectoryIfNotExists(
-      '${Settings.getValue('key-library-path')}${Platform.pathSeparator}ref_index');
+  await AppPaths.createNecessaryDirectories();
 }
 
 /// Initializes the library path based on the platform.

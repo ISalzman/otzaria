@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:http/http.dart' as http;
+import 'package:otzaria/core/app_paths.dart';
 
 class FileSyncRepository {
   final String githubOwner;
@@ -21,12 +22,11 @@ class FileSyncRepository {
   int get totalFiles => _totalFiles;
 
   Future<String> get _localManifestPath async {
-    final directory = _localDirectory;
-    return '${await directory}${Platform.pathSeparator}files_manifest.json';
+    return await AppPaths.getManifestPath();
   }
 
   Future<String> get _localDirectory async {
-    return Settings.getValue('key-library-path') ?? 'C:/אוצריא';
+    return await AppPaths.getLibraryPath();
   }
 
   Future<Map<String, dynamic>> _getLocalManifest() async {

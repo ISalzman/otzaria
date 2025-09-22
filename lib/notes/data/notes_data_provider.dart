@@ -28,7 +28,8 @@ class NotesDataProvider {
 
   /// Initialize the database with schema and optimizations
   Future<Database> _initDatabase() async {
-    final newPath = await resolveNotesDbPath(NotesEnvironment.databasePath);
+    final newPath =
+        await AppPaths.resolveNotesDbPath(NotesEnvironment.databasePath);
 
     // Migrate old database file (if it exists)
     final oldBase = await getDatabasesPath();
@@ -395,7 +396,8 @@ class NotesDataProvider {
   /// Reset the database (for testing)
   Future<void> reset() async {
     await close();
-    final path = await resolveNotesDbPath(NotesEnvironment.databasePath);
+    final path =
+        await AppPaths.resolveNotesDbPath(NotesEnvironment.databasePath);
 
     if (await File(path).exists()) {
       await File(path).delete();
