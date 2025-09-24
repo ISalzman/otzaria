@@ -17,6 +17,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/notes/notes_system.dart';
 import 'package:otzaria/utils/copy_utils.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 
 class SimpleBookView extends StatefulWidget {
@@ -292,12 +293,7 @@ class _SimpleBookViewState extends State<SimpleBookView> {
     // נשתמש בבחירה האחרונה שנשמרה, או בבחירה הנוכחית
     final text = _lastSelectedText ?? _selectedText;
     if (text == null || text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט ליצירת הערה אישית'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('אנא בחר טקסט ליצירת הערה אישית');
       return;
     }
 
@@ -316,20 +312,21 @@ class _SimpleBookViewState extends State<SimpleBookView> {
     // קבלת ההגדרות הנוכחיות
     final settingsState = context.read<SettingsBloc>().state;
     final textBookState = context.read<TextBookBloc>().state;
-    
+
     String finalText = text;
     String finalHtmlText = text;
-    
+
     // אם צריך להוסיף כותרות
-    if (settingsState.copyWithHeaders != 'none' && textBookState is TextBookLoaded) {
+    if (settingsState.copyWithHeaders != 'none' &&
+        textBookState is TextBookLoaded) {
       final bookName = CopyUtils.extractBookName(textBookState.book);
       final currentIndex = _currentSelectedIndex!;
       final currentPath = await CopyUtils.extractCurrentPath(
-        textBookState.book, 
+        textBookState.book,
         currentIndex,
         bookContent: textBookState.content,
       );
-      
+
       finalText = CopyUtils.formatTextWithHeaders(
         originalText: text,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -337,7 +334,7 @@ class _SimpleBookViewState extends State<SimpleBookView> {
         bookName: bookName,
         currentPath: currentPath,
       );
-      
+
       finalHtmlText = CopyUtils.formatTextWithHeaders(
         originalText: text,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -372,19 +369,19 @@ class _SimpleBookViewState extends State<SimpleBookView> {
 
     // קבלת ההגדרות הנוכחיות
     final settingsState = context.read<SettingsBloc>().state;
-    
+
     String finalText = text;
     String finalHtmlText = text;
-    
+
     // אם צריך להוסיף כותרות
     if (settingsState.copyWithHeaders != 'none') {
       final bookName = CopyUtils.extractBookName(state.book);
       final currentPath = await CopyUtils.extractCurrentPath(
-        state.book, 
+        state.book,
         indexToCopy,
         bookContent: state.content,
       );
-      
+
       finalText = CopyUtils.formatTextWithHeaders(
         originalText: text,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -392,7 +389,7 @@ class _SimpleBookViewState extends State<SimpleBookView> {
         bookName: bookName,
         currentPath: currentPath,
       );
-      
+
       finalHtmlText = CopyUtils.formatTextWithHeaders(
         originalText: text,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -425,22 +422,22 @@ class _SimpleBookViewState extends State<SimpleBookView> {
     if (visibleTexts.isEmpty) return;
 
     final combinedText = visibleTexts.join('\n\n');
-    
+
     // קבלת ההגדרות הנוכחיות
     final settingsState = context.read<SettingsBloc>().state;
-    
+
     String finalText = combinedText;
-    
+
     // אם צריך להוסיף כותרות
     if (settingsState.copyWithHeaders != 'none') {
       final bookName = CopyUtils.extractBookName(state.book);
       final firstVisibleIndex = state.visibleIndices.first;
       final currentPath = await CopyUtils.extractCurrentPath(
-        state.book, 
+        state.book,
         firstVisibleIndex,
         bookContent: state.content,
       );
-      
+
       finalText = CopyUtils.formatTextWithHeaders(
         originalText: combinedText,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -449,8 +446,9 @@ class _SimpleBookViewState extends State<SimpleBookView> {
         currentPath: currentPath,
       );
     }
-    
-    final combinedHtml = finalText.split('\n\n').map(_formatTextAsHtml).join('<br><br>');
+
+    final combinedHtml =
+        finalText.split('\n\n').map(_formatTextAsHtml).join('<br><br>');
 
     final item = DataWriterItem();
     item.add(Formats.plainText(finalText));
@@ -485,12 +483,7 @@ $textWithBreaks
   Future<void> _copyPlainText() async {
     final text = _lastSelectedText ?? _selectedText;
     if (text == null || text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט להעתקה'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('אנא בחר טקסט להעתקה');
       return;
     }
 
@@ -500,19 +493,20 @@ $textWithBreaks
         // קבלת ההגדרות הנוכחיות
         final settingsState = context.read<SettingsBloc>().state;
         final textBookState = context.read<TextBookBloc>().state;
-        
+
         String finalText = text;
-        
+
         // אם צריך להוסיף כותרות
-        if (settingsState.copyWithHeaders != 'none' && textBookState is TextBookLoaded) {
+        if (settingsState.copyWithHeaders != 'none' &&
+            textBookState is TextBookLoaded) {
           final bookName = CopyUtils.extractBookName(textBookState.book);
           final currentIndex = _currentSelectedIndex ?? 0;
           final currentPath = await CopyUtils.extractCurrentPath(
-            textBookState.book, 
+            textBookState.book,
             currentIndex,
             bookContent: textBookState.content,
           );
-          
+
           finalText = CopyUtils.formatTextWithHeaders(
             originalText: text,
             copyWithHeaders: settingsState.copyWithHeaders,
@@ -527,22 +521,13 @@ $textWithBreaks
         await clipboard.write([item]);
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('הטקסט הועתק ללוח'),
-              duration: Duration(seconds: 1),
-            ),
-          );
+          UiSnack.show('הטקסט הועתק ללוח');
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('שגיאה בהעתקה: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        UiSnack.showError('שגיאה בהעתקה: $e',
+            backgroundColor: Theme.of(context).colorScheme.error);
       }
     }
   }
@@ -551,12 +536,7 @@ $textWithBreaks
   Future<void> _copyFormattedText() async {
     final plainText = _lastSelectedText ?? _selectedText;
     if (plainText == null || plainText.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט להעתקה'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('אנא בחר טקסט להעתקה');
       return;
     }
 
@@ -593,15 +573,16 @@ $textWithBreaks
 
         // הוספת כותרות אם נדרש
         String finalPlainText = plainText;
-        if (settingsState.copyWithHeaders != 'none' && textBookState is TextBookLoaded) {
+        if (settingsState.copyWithHeaders != 'none' &&
+            textBookState is TextBookLoaded) {
           final bookName = CopyUtils.extractBookName(textBookState.book);
           final currentIndex = _currentSelectedIndex ?? 0;
           final currentPath = await CopyUtils.extractCurrentPath(
-            textBookState.book, 
+            textBookState.book,
             currentIndex,
             bookContent: textBookState.content,
           );
-          
+
           finalPlainText = CopyUtils.formatTextWithHeaders(
             originalText: plainText,
             copyWithHeaders: settingsState.copyWithHeaders,
@@ -609,7 +590,7 @@ $textWithBreaks
             bookName: bookName,
             currentPath: currentPath,
           );
-          
+
           // גם עדכון ה-HTML עם הכותרות
           htmlContentToUse = CopyUtils.formatTextWithHeaders(
             originalText: htmlContentToUse,
@@ -636,22 +617,13 @@ $htmlWithBreaks
         await clipboard.write([item]);
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('הטקסט המעוצב הועתק ללוח'),
-              duration: Duration(seconds: 1),
-            ),
-          );
+          UiSnack.show('הטקסט המעוצב הועתק ללוח');
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('שגיאה בהעתקה מעוצבת: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        UiSnack.showError('שגיאה בהעתקה מעוצבת: $e',
+            backgroundColor: Theme.of(context).colorScheme.error);
       }
     }
   }
@@ -691,16 +663,13 @@ $htmlWithBreaks
                   !currentState.showNotesSidebar) {
                 textBookBloc.add(const ToggleNotesSidebar());
               }
-              ScaffoldMessenger.of(originalContext).showSnackBar(
-                const SnackBar(content: Text('ההערה נוצרה והוצגה בסרגל')),
-              );
+              UiSnack.show('ההערה נוצרה והוצגה בסרגל');
             }
           } catch (e) {
             if (mounted) {
               // Dialog is already closed by NoteEditorDialog
-              ScaffoldMessenger.of(originalContext).showSnackBar(
-                SnackBar(content: Text('שגיאה ביצירת הערה: $e')),
-              );
+              UiSnack.showError('שגיאה ביצירת הערה: $e',
+                  backgroundColor: Theme.of(context).colorScheme.error);
             }
           }
         },
@@ -867,11 +836,7 @@ class _NotesSection extends StatelessWidget {
         // ניווט למיקום ההערה בטקסט
         // זה יצריך חישוב של האינדקס המתאים
         // לעת עתה נציג הודעה
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ניווט למיקום $start-$end'),
-          ),
-        );
+        UiSnack.show('ניווט למיקום $start-$end');
       },
     );
   }

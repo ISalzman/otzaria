@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/books.dart';
 import '../../utils/otzar_utils.dart';
+import '../../core/scaffold_messenger.dart';
 
 class OtzarBookDialog extends StatelessWidget {
   final ExternalBook book;
@@ -131,12 +132,8 @@ class OtzarBookDialog extends StatelessWidget {
             if (await OtzarUtils.launchOtzarWeb(book.link)) {
               // Success
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('לא ניתן לפתוח את הקישור בדפדפן'),
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                ),
-              );
+              UiSnack.showError('לא ניתן לפתוח את הקישור בדפדפן',
+                  backgroundColor: Theme.of(context).colorScheme.error);
             }
           },
           style: ElevatedButton.styleFrom(

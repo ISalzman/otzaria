@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'calendar_cubit.dart';
 import 'package:otzaria/daf_yomi/daf_yomi_helper.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 
 // הפכנו את הווידג'ט ל-Stateless כי הוא כבר לא מנהל מצב בעצמו.
 class CalendarWidget extends StatelessWidget {
@@ -1418,12 +1419,9 @@ class CalendarWidget extends StatelessWidget {
                           _parseInputDate(context, dateController.text);
 
                       if (dateToJump == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('לא הצלחנו לפרש את התאריך.'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
+                        UiSnack.showError('לא הצלחנו לפרש את התאריך.',
+                            backgroundColor:
+                                Theme.of(context).colorScheme.error);
                         return;
                       }
                     } else {
@@ -1668,11 +1666,8 @@ class CalendarWidget extends StatelessWidget {
                 ElevatedButton(
                   onPressed: () {
                     if (titleController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('יש למלא כותרת לאירוע.'),
-                            backgroundColor: Colors.red),
-                      );
+                      UiSnack.showError('יש למלא כותרת לאירוע.',
+                          backgroundColor: Theme.of(context).colorScheme.error);
                       return;
                     }
 

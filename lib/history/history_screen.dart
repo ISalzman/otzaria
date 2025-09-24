@@ -5,6 +5,7 @@ import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -112,8 +113,10 @@ class _HistoryViewState extends State<HistoryView> {
         // Filter history based on search query
         final filteredHistory = _searchQuery.isEmpty
             ? state.history
-            : state.history.where((item) =>
-                item.ref.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+            : state.history
+                .where((item) =>
+                    item.ref.toLowerCase().contains(_searchQuery.toLowerCase()))
+                .toList();
 
         return Column(
           children: [
@@ -147,78 +150,78 @@ class _HistoryViewState extends State<HistoryView> {
               child: filteredHistory.isEmpty
                   ? const Center(child: Text('לא נמצאו תוצאות'))
                   : ListView.builder(
-                itemCount: filteredHistory.length,
-                itemBuilder: (context, index) {
-                  final historyItem = filteredHistory[index];
-                  final originalIndex = state.history.indexOf(historyItem);
-                  return ListTile(
-                    leading:
-                        _getLeadingIcon(historyItem.book, historyItem.isSearch),
-                    title: Text(historyItem.ref),
-                    onTap: () {
-                      if (historyItem.isSearch) {
-                        final tabsBloc = context.read<TabsBloc>();
-                        // Always create a new search tab instead of reusing existing one
-                        final searchTab = SearchingTab('חיפוש', null);
-                        tabsBloc.add(AddTab(searchTab));
+                      itemCount: filteredHistory.length,
+                      itemBuilder: (context, index) {
+                        final historyItem = filteredHistory[index];
+                        final originalIndex =
+                            state.history.indexOf(historyItem);
+                        return ListTile(
+                          leading: _getLeadingIcon(
+                              historyItem.book, historyItem.isSearch),
+                          title: Text(historyItem.ref),
+                          onTap: () {
+                            if (historyItem.isSearch) {
+                              final tabsBloc = context.read<TabsBloc>();
+                              // Always create a new search tab instead of reusing existing one
+                              final searchTab = SearchingTab('חיפוש', null);
+                              tabsBloc.add(AddTab(searchTab));
 
-                        // Restore search query and options
-                        searchTab.queryController.text = historyItem.book.title;
-                        searchTab.searchOptions.clear();
-                        searchTab.searchOptions
-                            .addAll(historyItem.searchOptions ?? {});
-                        searchTab.alternativeWords.clear();
-                        searchTab.alternativeWords
-                            .addAll(historyItem.alternativeWords ?? {});
-                        searchTab.spacingValues.clear();
-                        searchTab.spacingValues
-                            .addAll(historyItem.spacingValues ?? {});
+                              // Restore search query and options
+                              searchTab.queryController.text =
+                                  historyItem.book.title;
+                              searchTab.searchOptions.clear();
+                              searchTab.searchOptions
+                                  .addAll(historyItem.searchOptions ?? {});
+                              searchTab.alternativeWords.clear();
+                              searchTab.alternativeWords
+                                  .addAll(historyItem.alternativeWords ?? {});
+                              searchTab.spacingValues.clear();
+                              searchTab.spacingValues
+                                  .addAll(historyItem.spacingValues ?? {});
 
-                        // Trigger search
-                        searchTab.searchBloc.add(UpdateSearchQuery(
-                          searchTab.queryController.text,
-                          customSpacing: searchTab.spacingValues,
-                          alternativeWords: searchTab.alternativeWords,
-                          searchOptions: searchTab.searchOptions,
-                        ));
+                              // Trigger search
+                              searchTab.searchBloc.add(UpdateSearchQuery(
+                                searchTab.queryController.text,
+                                customSpacing: searchTab.spacingValues,
+                                alternativeWords: searchTab.alternativeWords,
+                                searchOptions: searchTab.searchOptions,
+                              ));
 
-                        // Navigate to search screen
-                        context
-                            .read<NavigationBloc>()
-                            .add(const NavigateToScreen(Screen.search));
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
-                        return;
-                      }
-                      _openBook(
-                        context,
-                        historyItem.book,
-                        historyItem.index,
-                        historyItem.commentatorsToShow,
-                      );
-                    },
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_forever),
-                      onPressed: () {
-                        context.read<HistoryBloc>().add(RemoveHistory(originalIndex));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('נמחק בהצלחה')),
+                              // Navigate to search screen
+                              context
+                                  .read<NavigationBloc>()
+                                  .add(const NavigateToScreen(Screen.search));
+                              if (Navigator.of(context).canPop()) {
+                                Navigator.of(context).pop();
+                              }
+                              return;
+                            }
+                            _openBook(
+                              context,
+                              historyItem.book,
+                              historyItem.index,
+                              historyItem.commentatorsToShow,
+                            );
+                          },
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_forever),
+                            onPressed: () {
+                              context
+                                  .read<HistoryBloc>()
+                                  .add(RemoveHistory(originalIndex));
+                              UiSnack.show('נמחק בהצלחה');
+                            },
+                          ),
                         );
                       },
                     ),
-                  );
-                },
-              ),
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: ElevatedButton(
                 onPressed: () {
                   context.read<HistoryBloc>().add(ClearHistory());
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('כל ההיסטוריה נמחקה')),
-                  );
+                  UiSnack.show('כל ההיסטוריה נמחקה');
                 },
                 child: const Text('מחק את כל ההיסטוריה'),
               ),

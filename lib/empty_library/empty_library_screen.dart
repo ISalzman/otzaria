@@ -4,6 +4,7 @@ import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'dart:io' show Platform;
+import 'package:otzaria/core/scaffold_messenger.dart';
 
 class EmptyLibraryScreen extends StatelessWidget {
   final VoidCallback onLibraryLoaded;
@@ -35,9 +36,8 @@ class _EmptyLibraryView extends StatelessWidget {
             onLibraryLoaded();
           }
           if (state is EmptyLibraryError && state.errorMessage != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.errorMessage!)),
-            );
+            UiSnack.showError(state.errorMessage!,
+                backgroundColor: Theme.of(context).colorScheme.error);
           }
         },
         builder: (context, state) {

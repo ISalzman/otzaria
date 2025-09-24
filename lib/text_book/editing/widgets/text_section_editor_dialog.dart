@@ -10,6 +10,7 @@ import '../../bloc/text_book_event.dart';
 import '../services/preview_renderer.dart';
 import '../models/editor_settings.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'markdown_toolbar.dart';
 
 /// Full-screen dialog for editing text sections with split-pane interface
@@ -192,14 +193,8 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
 
     _hasShownNotification = true;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-            'שים לב: השינויים נשמרים מקומית בלבד, ובמקרה של עדכון הספרייה, השינויים ימחקו!'),
-        duration: Duration(seconds: 4),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    UiSnack.showFloating(
+        'שים לב: השינויים נשמרים מקומית בלבד, ובמקרה של עדכון הספרייה, השינויים ימחקו!');
   }
 
   void _save() {
@@ -222,25 +217,11 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
           final freshContent = await dataProvider.getBookText(widget.bookId);
 
           // Show success feedback
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('השינויים נשמרו בהצלחה'),
-              duration: Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: Colors.green,
-            ),
-          );
+          UiSnack.showSuccess(UiSnack.savedSuccessfully);
         } catch (e) {
           debugPrint('Failed to verify save: $e');
           // Still show success feedback even if verification fails
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('השינויים נשמרו בהצלחה'),
-              duration: Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: Colors.green,
-            ),
-          );
+          UiSnack.show(UiSnack.savedSuccessfully);
         }
       }
     });
@@ -284,13 +265,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
 
     if (widget.hasLinksFile && text.contains('\n')) {
       // Prevent line breaks in books with links
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('בספר זה אסור לשנות מבנה שורות כדי לשמור על קישורי פרשנות'),
-          duration: Duration(seconds: 3),
-        ),
-      );
+      UiSnack.show('בספר זה אסור לשנות מבנה שורות כדי לשמור על קישורי פרשנות');
       return;
     }
 
@@ -352,13 +327,8 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
       } else if (event.logicalKey == LogicalKeyboardKey.enter &&
           widget.hasLinksFile) {
         // Prevent Enter in books with links
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'בספר זה אסור לשנות מבנה שורות כדי לשמור על קישורי פרשנות'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        UiSnack.show(
+            'בספר זה אסור לשנות מבנה שורות כדי לשמור על קישורי פרשנות');
         return true;
       }
     }
@@ -507,12 +477,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
       _editorFocusNode.requestFocus();
     } else {
       // Show not found message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('הטקסט לא נמצא'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('הטקסט לא נמצא');
     }
   }
 

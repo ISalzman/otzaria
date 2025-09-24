@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/scaffold_messenger.dart';
 import '../bloc/notes_bloc.dart';
 import '../bloc/notes_event.dart';
 import '../services/notes_telemetry.dart';
@@ -16,7 +17,7 @@ class NotesContextMenuExtension {
     String? bookId,
   ) {
     if (bookId == null || selectedText.trim().isEmpty) return;
-    
+
     _createNoteFromSelection(context, selectedText, start, end);
   }
 
@@ -61,12 +62,8 @@ class NotesContextMenuExtension {
 
     // For now, just show a snackbar
     // In a full implementation, this would add highlighting to the text
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('הודגש: "${selectedText.length > 30 ? '${selectedText.substring(0, 30)}...' : selectedText}"'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    UiSnack.show(
+        'הודגש: "${selectedText.length > 30 ? '${selectedText.substring(0, 30)}...' : selectedText}"');
   }
 
   /// Build simple wrapper with notes support
@@ -153,8 +150,8 @@ class NotesContextMenuButton extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: color ?? Theme.of(context).colorScheme.onSurface,
-                ),
+                      color: color ?? Theme.of(context).colorScheme.onSurface,
+                    ),
               ),
             ],
           ),

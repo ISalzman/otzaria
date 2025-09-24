@@ -20,8 +20,8 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/notes/notes_system.dart';
 import 'package:otzaria/utils/copy_utils.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:super_clipboard/super_clipboard.dart';
-
 
 class CombinedView extends StatefulWidget {
   CombinedView({
@@ -323,12 +323,7 @@ class _CombinedViewState extends State<CombinedView> {
     // נשתמש בבחירה האחרונה שנשמרה, או בבחירה הנוכחית
     final text = _lastSelectedText ?? _selectedText;
     if (text == null || text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט ליצירת הערה אישית'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('אנא בחר טקסט ליצירת הערה אישית');
       return;
     }
 
@@ -452,12 +447,7 @@ $textWithBreaks
   Future<void> _copyPlainText() async {
     final text = _lastSelectedText ?? _selectedText;
     if (text == null || text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט להעתקה'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('אנא בחר טקסט להעתקה');
       return;
     }
 
@@ -495,22 +485,13 @@ $textWithBreaks
         await clipboard.write([item]);
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('הטקסט הועתק ללוח'),
-              duration: Duration(seconds: 1),
-            ),
-          );
+          UiSnack.show(UiSnack.textCopied);
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('שגיאה בהעתקה: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        UiSnack.showError('שגיאה בהעתקה: $e',
+            backgroundColor: Theme.of(context).colorScheme.error);
       }
     }
   }
@@ -519,12 +500,7 @@ $textWithBreaks
   Future<void> _copyFormattedText() async {
     final plainText = _lastSelectedText ?? _selectedText;
     if (plainText == null || plainText.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט להעתקה'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('אנא בחר טקסט להעתקה');
       return;
     }
 
@@ -605,22 +581,13 @@ $htmlWithBreaks
         await clipboard.write([item]);
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('הטקסט המעוצב הועתק ללוח'),
-              duration: Duration(seconds: 1),
-            ),
-          );
+          UiSnack.show('הטקסט המעוצב הועתק ללוח');
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('שגיאה בהעתקה מעוצבת: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        UiSnack.showError('שגיאה בהעתקה מעוצבת: $e',
+            backgroundColor: Theme.of(context).colorScheme.error);
       }
     }
   }
@@ -660,16 +627,12 @@ $htmlWithBreaks
                   !currentState.showNotesSidebar) {
                 textBookBloc.add(const ToggleNotesSidebar());
               }
-              ScaffoldMessenger.of(originalContext).showSnackBar(
-                const SnackBar(content: Text('ההערה נוצרה והוצגה בסרגל')),
-              );
+              UiSnack.show(UiSnack.noteCreated);
             }
           } catch (e) {
             if (mounted) {
               // Dialog is already closed by NoteEditorDialog
-              ScaffoldMessenger.of(originalContext).showSnackBar(
-                SnackBar(content: Text('שגיאה ביצירת הערה: $e')),
-              );
+              UiSnack.showError('שגיאה ביצירת הערה: $e');
             }
           }
         },
@@ -763,7 +726,6 @@ $htmlWithBreaks
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             BlocBuilder<SettingsBloc, SettingsState>(
               builder: (context, settingsState) {
                 String data = widget.data[index];
@@ -851,8 +813,6 @@ $htmlWithBreaks
       context.read<TextBookBloc>().add(OpenEditor(index: paragraphIndex));
     }
   }
-
-
 }
 
 /// Widget נפרד לסרגל ההערות כדי למנוע rebuilds מיותרים של הטקסט
@@ -872,11 +832,7 @@ class _NotesSection extends StatelessWidget {
       onClose: onClose,
       onNavigateToPosition: (start, end) {
         // ניווט למיקום ההערה בטקסט
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ניווט למיקום $start-$end'),
-          ),
-        );
+        UiSnack.show('ניווט למיקום $start-$end');
       },
     );
   }

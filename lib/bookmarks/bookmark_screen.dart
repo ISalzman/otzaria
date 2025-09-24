@@ -10,6 +10,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 
 class BookmarkView extends StatefulWidget {
@@ -52,17 +53,19 @@ class _BookmarkViewState extends State<BookmarkView> {
         ? PdfBookTab(
             book: book,
             pageNumber: index,
-            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
+                    false) ||
                 (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
           )
         : TextBookTab(
             book: book as TextBook,
             index: index,
             commentators: commentators,
-            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
+                    false) ||
                 (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
           );
-          
+
     context.read<TabsBloc>().add(AddTab(tab));
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.reading));
   }
@@ -78,8 +81,11 @@ class _BookmarkViewState extends State<BookmarkView> {
         // Filter bookmarks based on search query
         final filteredBookmarks = _searchQuery.isEmpty
             ? state.bookmarks
-            : state.bookmarks.where((bookmark) =>
-                bookmark.ref.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+            : state.bookmarks
+                .where((bookmark) => bookmark.ref
+                    .toLowerCase()
+                    .contains(_searchQuery.toLowerCase()))
+                .toList();
 
         return Column(
           children: [
@@ -113,51 +119,39 @@ class _BookmarkViewState extends State<BookmarkView> {
               child: filteredBookmarks.isEmpty
                   ? const Center(child: Text('לא נמצאו תוצאות'))
                   : ListView.builder(
-                itemCount: filteredBookmarks.length,
-                itemBuilder: (context, index) {
-                  final bookmark = filteredBookmarks[index];
-                  final originalIndex = state.bookmarks.indexOf(bookmark);
-                  return ListTile(
-                    selected: false,
-                    leading: bookmark.book is PdfBook
-                        ? const Icon(Icons.picture_as_pdf)
-                        : null,
-                    title: Text(bookmark.ref),
-                    onTap: () => _openBook(
-                        context,
-                        bookmark.book,
-                        bookmark.index,
-                        bookmark.commentatorsToShow),
-                    trailing: IconButton(
-                      icon: const Icon(
-                        Icons.delete_forever,
-                      ),
-                      onPressed: () {
-                        context
-                            .read<BookmarkBloc>()
-                            .removeBookmark(originalIndex);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('הסימניה נמחקה'),
+                      itemCount: filteredBookmarks.length,
+                      itemBuilder: (context, index) {
+                        final bookmark = filteredBookmarks[index];
+                        final originalIndex = state.bookmarks.indexOf(bookmark);
+                        return ListTile(
+                          selected: false,
+                          leading: bookmark.book is PdfBook
+                              ? const Icon(Icons.picture_as_pdf)
+                              : null,
+                          title: Text(bookmark.ref),
+                          onTap: () => _openBook(context, bookmark.book,
+                              bookmark.index, bookmark.commentatorsToShow),
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.delete_forever,
+                            ),
+                            onPressed: () {
+                              context
+                                  .read<BookmarkBloc>()
+                                  .removeBookmark(originalIndex);
+                              UiSnack.show('הסימניה נמחקה');
+                            },
                           ),
                         );
                       },
                     ),
-                  );
-                },
-              ),
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: ElevatedButton(
                 onPressed: () {
                   context.read<BookmarkBloc>().clearBookmarks();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('כל הסימניות נמחקו'),
-                      duration: const Duration(milliseconds: 350),
-                    ),
-                  );
+                  UiSnack.show('כל הסימניות נמחקו');
                 },
                 child: const Text('מחק את כל הסימניות'),
               ),

@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/pdf_book/pdf_page_number_dispaly.dart';
@@ -285,14 +286,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                 book: widget.tab.book,
                                 index: index);
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(bookmarkAdded
-                              ? 'הסימניה נוספה בהצלחה'
-                              : 'הסימניה כבר קיימת'),
-                          duration: const Duration(milliseconds: 350),
-                        ),
-                      );
+                      UiSnack.show(bookmarkAdded
+                          ? 'הסימניה נוספה בהצלחה'
+                          : 'הסימניה כבר קיימת');
                     }
                   },
                 ),

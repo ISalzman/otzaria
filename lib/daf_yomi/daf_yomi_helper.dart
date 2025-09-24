@@ -6,6 +6,7 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 
 void openDafYomiBook(BuildContext context, String tractate, String daf) async {
   _openDafYomiBookInCategory(context, tractate, daf, 'תלמוד בבלי');
@@ -51,9 +52,8 @@ void _openDafYomiBookInCategory(BuildContext context, String tractate,
     }
 
     if (book == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('לא נמצאה קטגוריה: $categoryName')),
-      );
+      UiSnack.showError('לא נמצאה קטגוריה: $categoryName',
+          backgroundColor: Theme.of(context).colorScheme.error);
       return;
     } else {
       // נמצא ספר, נמשיך עם הפתיחה
@@ -82,13 +82,9 @@ void _openDafYomiBookInCategory(BuildContext context, String tractate,
     // הצג רשימת ספרים זמינים לדיבוג
     final availableBooks =
         allBooksInCategory.map((b) => b.title).take(5).join(', ');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-            'לא נמצא ספר: $tractate ב$categoryName\nספרים זמינים: $availableBooks...'),
-        duration: const Duration(seconds: 5),
-      ),
-    );
+    UiSnack.showError(
+        'לא נמצא ספר: $tractate ב$categoryName\nספרים זמינים: $availableBooks...',
+        backgroundColor: Theme.of(context).colorScheme.error);
   }
 }
 
@@ -159,18 +155,10 @@ openPdfBookFromRef(String bookname, String ref, BuildContext context) async {
       openBook(context, book, outline.dest?.pageNumber ?? 0, '',
           ignoreHistory: true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Section not found'),
-        ),
-      );
+      UiSnack.showError(UiSnack.sectionNotFound);
     }
   } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('הספר אינו קיים'),
-      ),
-    );
+    UiSnack.showError(UiSnack.bookNotFound);
   }
 }
 
@@ -184,17 +172,9 @@ openTextBookFromRef(String bookname, String ref, BuildContext context) async {
     if (tocEntry != null) {
       openBook(context, book, tocEntry.index, '', ignoreHistory: true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Section not found'),
-        ),
-      );
+      UiSnack.showError(UiSnack.sectionNotFound);
     }
   } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('הספר אינו קיים'),
-      ),
-    );
+    UiSnack.showError(UiSnack.bookNotFound);
   }
 }

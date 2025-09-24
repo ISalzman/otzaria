@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:convert';
 import 'dart:async';
 import 'package:csv/csv.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -845,14 +846,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               commentatorsToShow: state.activeCommentators,
             );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת',
-              ),
-              duration: const Duration(milliseconds: 350),
-            ),
-          );
+          UiSnack.showQuick(
+              bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
         }
       },
       icon: const Icon(Icons.bookmark_add),
@@ -876,12 +871,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       onPressed: () {
         final selectedText = state.selectedTextForNote;
         if (selectedText == null || selectedText.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('אנא בחר טקסט ליצירת הערה אישית'),
-              duration: Duration(milliseconds: 1500),
-            ),
-          );
+          UiSnack.show(UiSnack.noTextSelected);
           return;
         }
 
@@ -933,16 +923,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   !currentState.showNotesSidebar) {
                 textBookBloc.add(const ToggleNotesSidebar());
               }
-              ScaffoldMessenger.of(originalContext).showSnackBar(
-                const SnackBar(content: Text('ההערה נוצרה והוצגה בסרגל')),
-              );
+              UiSnack.show(UiSnack.noteCreated);
             }
           } catch (e) {
             if (originalContext.mounted) {
-              // Dialog is already closed by NoteEditorDialog
-              ScaffoldMessenger.of(originalContext).showSnackBar(
-                SnackBar(content: Text('שגיאה ביצירת הערה: $e')),
-              );
+              UiSnack.showError('שגיאה ביצירת הערה',
+                  backgroundColor: Theme.of(originalContext).colorScheme.error);
             }
           }
         },
@@ -1084,12 +1070,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   void _handleAddNotePress(BuildContext context, TextBookLoaded state) {
     final selectedText = state.selectedTextForNote;
     if (selectedText == null || selectedText.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט ליצירת הערה אישית'),
-          duration: Duration(milliseconds: 1500),
-        ),
-      );
+      UiSnack.show(UiSnack.noTextSelected);
       return;
     }
 
@@ -1113,14 +1094,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           commentatorsToShow: state.activeCommentators,
         );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת',
-          ),
-          duration: const Duration(milliseconds: 350),
-        ),
-      );
+      final successColor = bookmarkAdded
+          ? Theme.of(context).colorScheme.tertiaryContainer
+          : null;
+      UiSnack.showSuccess(
+          bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת',
+          backgroundColor: successColor);
     }
   }
 
@@ -1539,9 +1518,7 @@ $detailsSection
 
   void _showSimpleSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    UiSnack.show(message);
   }
 
   /// SnackBar לאחר שמירה: מציג מונה + פעולה לפתיחת דוא"ל (mailto).
@@ -1553,17 +1530,11 @@ $detailsSection
         "יש לך כבר $count דיווחים!\n"
         "כעת תוכל לשלוח את הקובץ למייל: $_fallbackMail";
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 8),
-        content: Text(message, textDirection: TextDirection.rtl),
-        action: SnackBarAction(
-          label: 'שלח',
-          onPressed: () {
-            _launchMail(_fallbackMail);
-          },
-        ),
-      ),
+    UiSnack.showWithAction(
+      message: message,
+      actionLabel: 'שלח',
+      onAction: () => _launchMail(_fallbackMail),
+      duration: const Duration(seconds: 8),
     );
   }
 
