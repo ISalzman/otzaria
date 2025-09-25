@@ -601,24 +601,13 @@ $textWithBreaks
           );
         }
 
-        // יצירת HTML מעוצב עם הגדרות הגופן והגודל
-        // ממיר \n ל-<br> ב-HTML
-        final htmlWithBreaks = htmlContentToUse.replaceAll('\n', '<br>');
-        final finalHtmlContent = '''
-<div style="font-family: ${settingsState.fontFamily}; font-size: ${widget.textSize}px; text-align: justify; direction: rtl;">
-$htmlWithBreaks
-</div>
-''';
-
-        final item = DataWriterItem();
-        item.add(Formats.plainText(finalPlainText)); // טקסט רגיל כגיבוי
-        item.add(Formats.htmlText(
-            finalHtmlContent)); // טקסט מעוצב עם תגי HTML מקוריים
-        await clipboard.write([item]);
-
-        if (mounted) {
-          UiSnack.show('הטקסט המעוצב הועתק ללוח');
-        }
+        // שימוש בפונקציית העזר החדשה להעתקה
+        await CopyUtils.copyStyledToClipboard(
+          plainText: finalPlainText,
+          htmlText: htmlContentToUse,
+          fontFamily: settingsState.fontFamily,
+          fontSize: widget.textSize,
+        );
       }
     } catch (e) {
       if (mounted) {
