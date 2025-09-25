@@ -1054,8 +1054,9 @@ class CalendarWidget extends StatelessWidget {
         Expanded(
           child: ElevatedButton.icon(
             onPressed: () {
-              openDafYomiYerushalmiBook(context, yerushalmiTractate,
-                  ' ${_formatDafNumber(yerushalmiDaf)}.');
+              openDafYomiBook(context, yerushalmiTractate,
+                  ' ${_formatDafNumber(yerushalmiDaf)}.',
+                  categoryName: 'תלמוד ירושלמי');
             },
             icon: const Icon(Icons.menu_book),
             label: Column(

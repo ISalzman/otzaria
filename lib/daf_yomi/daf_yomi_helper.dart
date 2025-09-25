@@ -4,17 +4,31 @@ import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 
-void openDafYomiBook(BuildContext context, String tractate, String daf) async {
-  _openDafYomiBookInCategory(context, tractate, daf, 'תלמוד בבלי');
+// Generic tree search for outlines
+typedef EntryTextGetter<T> = String Function(T entry);
+typedef ChildrenGetter<T> = Future<List<T>> Function(T entry);
+
+Future<T?> findEntryInTree<T>(Future<List<T>> rootEntries, String daf,
+    EntryTextGetter<T> getText, ChildrenGetter<T> getChildren) async {
+  final entries = await rootEntries;
+  for (var entry in entries) {
+    String ref = getText(entry);
+    if (ref.contains(daf)) {
+      return entry;
+    }
+    T? result =
+        await findEntryInTree(getChildren(entry), daf, getText, getChildren);
+    if (result != null) return result;
+  }
+  return null;
 }
 
-void openDafYomiYerushalmiBook(
-    BuildContext context, String tractate, String daf) async {
-  _openDafYomiBookInCategory(context, tractate, daf, 'תלמוד ירושלמי');
+void openDafYomiBook(BuildContext context, String tractate, String daf,
+    {String categoryName = 'תלמוד בבלי'}) async {
+  _openDafYomiBookInCategory(context, tractate, daf, categoryName);
 }
 
 void _openDafYomiBookInCategory(BuildContext context, String tractate,
@@ -89,88 +103,59 @@ void _openDafYomiBookInCategory(BuildContext context, String tractate,
 }
 
 Future<void> _openBook(BuildContext context, Book book, String daf) async {
-  var index = 0;
-
-  if (book is TextBook) {
-    final tocEntry = await _findDafInToc(book, 'דף ${daf.trim()}');
-    index = tocEntry?.index ?? 0;
-  } else if (book is PdfBook) {
-    final outline = await getDafYomiOutline(book, 'דף ${daf.trim()}');
-    index = outline?.dest?.pageNumber ?? 0;
-  }
-
-  // Use the central openBook function
+  final index = await findReference(book, 'דף ${daf.trim()}') ?? 0;
   openBook(context, book, index, '', ignoreHistory: true);
+}
+
+Future<int?> findReference(Book book, String ref) async {
+  if (book is TextBook) {
+    final tocEntry = await _findDafInToc(book, ref);
+    return tocEntry?.index;
+  } else if (book is PdfBook) {
+    final outline = await getDafYomiOutline(book, ref);
+    return outline?.dest?.pageNumber;
+  }
+  return null;
 }
 
 Future<TocEntry?> _findDafInToc(TextBook book, String daf) async {
   final toc = await book.tableOfContents;
-  TocEntry? findDafInEntries(List<TocEntry> entries) {
-    for (var entry in entries) {
-      String ref = entry.text;
-      if (ref.contains(daf)) {
-        return entry;
-      }
-      // Recursively search in children
-      TocEntry? result = findDafInEntries(entry.children);
-      if (result != null) {
-        return result;
-      }
-    }
-    return null;
-  }
-
-  return findDafInEntries(toc);
+  return await findEntryInTree(
+    Future.value(toc),
+    daf,
+    (entry) => entry.text,
+    (entry) => Future.value(entry.children),
+  );
 }
 
 Future<PdfOutlineNode?> getDafYomiOutline(PdfBook book, String daf) async {
   final outlines = await PdfDocument.openFile(book.path)
       .then((value) => value.loadOutline());
-  PdfOutlineNode? findDafInEntries(List<PdfOutlineNode> entries) {
-    for (var entry in entries) {
-      String ref = entry.title;
-      if (daf.contains(ref)) {
-        return entry;
-      }
-      // Recursively search in children
-      PdfOutlineNode? result = findDafInEntries(entry.children);
-      if (result != null) {
-        return result;
-      }
-    }
-    return null;
-  }
-
-  return findDafInEntries(outlines);
+  return await findEntryInTree(
+    Future.value(outlines),
+    daf,
+    (entry) => entry.title,
+    (entry) => Future.value(entry.children),
+  );
 }
 
 openPdfBookFromRef(String bookname, String ref, BuildContext context) async {
-  final libraryBlocState = BlocProvider.of<LibraryBloc>(context).state;
-  final book =
-      libraryBlocState.library?.findBookByTitle(bookname, PdfBook) as PdfBook?;
-
-  if (book != null) {
-    final outline = await getDafYomiOutline(book, ref);
-    if (outline != null) {
-      openBook(context, book, outline.dest?.pageNumber ?? 0, '',
-          ignoreHistory: true);
-    } else {
-      UiSnack.showError(UiSnack.sectionNotFound);
-    }
-  } else {
-    UiSnack.showError(UiSnack.bookNotFound);
-  }
+  await _openBookFromRefHelper(bookname, ref, context, PdfBook);
 }
 
 openTextBookFromRef(String bookname, String ref, BuildContext context) async {
+  await _openBookFromRefHelper(bookname, ref, context, TextBook);
+}
+
+Future<void> _openBookFromRefHelper(
+    String bookname, String ref, BuildContext context, Type bookType) async {
   final libraryBlocState = BlocProvider.of<LibraryBloc>(context).state;
-  final book = libraryBlocState.library?.findBookByTitle(bookname, TextBook)
-      as TextBook?;
+  final book = libraryBlocState.library?.findBookByTitle(bookname, bookType);
 
   if (book != null) {
-    final tocEntry = await _findDafInToc(book, ref);
-    if (tocEntry != null) {
-      openBook(context, book, tocEntry.index, '', ignoreHistory: true);
+    final index = await findReference(book, ref);
+    if (index != null) {
+      openBook(context, book, index, '', ignoreHistory: true);
     } else {
       UiSnack.showError(UiSnack.sectionNotFound);
     }
