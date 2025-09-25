@@ -165,7 +165,6 @@ Future<void> initialize() async {
 
   await RustLib.init();
   await Settings.init(cacheProvider: HiveCache());
-  await initLibraryPath();
   await initHive();
   await createDirs();
   await loadCerts();
@@ -188,43 +187,6 @@ Future<void> initialize() async {
 /// - Index directory for search functionality
 Future<void> createDirs() async {
   await AppPaths.createNecessaryDirectories();
-}
-
-/// Initializes the library path based on the platform.
-///
-/// For mobile platforms (Android/iOS), uses the application documents directory.
-/// For Windows, defaults to 'C:/אוצריא' if not previously set.
-/// For other platforms, uses the existing settings value.
-Future<void> initLibraryPath() async {
-  if (!Settings.isInitialized) {
-    await Settings.init(cacheProvider: HiveCache());
-  }
-  if (Platform.isIOS) {
-    // Mobile platforms use the app's documents directory
-    await Settings.setValue(
-        'key-library-path', (await getApplicationDocumentsDirectory()).path);
-    return;
-  }
-
-  if (Platform.isAndroid) {
-    // use the external storage directory on android
-    await Settings.setValue(
-        'key-library-path', (await getExternalStorageDirectory())!.path);
-  }
-
-  // Check existing library path setting
-  String? libraryPath = Settings.getValue('key-library-path');
-
-  if (libraryPath == null && (Platform.isLinux || Platform.isMacOS)) {
-    // Use the working directory for Linux and macOS
-    await Settings.setValue('key-library-path', '.');
-  }
-
-  // Set default Windows path if not configured
-  if (Platform.isWindows && libraryPath == null) {
-    libraryPath = 'C:/אוצריא';
-    Settings.setValue('key-library-path', libraryPath);
-  }
 }
 
 /// Creates a directory if it doesn't already exist.

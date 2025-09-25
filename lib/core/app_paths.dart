@@ -10,27 +10,31 @@ class AppPaths {
   /// Gets the main library path from settings. Defaults to 'C:/אוצריא' for Windows if not set.
   static Future<String> getLibraryPath() async {
     // Check existing library path setting
-    String? libraryPath = Settings.getValue('key-library-path');
+    final currentPath = Settings.getValue('key-library-path');
 
-    if (Platform.isIOS || Platform.isAndroid) {
-      if (libraryPath == null) {
-        // Mobile platforms use the app's documents directory
-        libraryPath = (await getApplicationDocumentsDirectory()).path;
-        await Settings.setValue('key-library-path', libraryPath);
-      }
-    } else {
-      // Desktop platforms default to current directory or specified path
-      if (libraryPath == null) {
-        if (Platform.isWindows) {
-          libraryPath = 'C:/אוצריא';
-          await Settings.setValue('key-library-path', libraryPath);
-        } else {
-          // Linux, macOS: use working directory
-          libraryPath = '.';
-        }
-      }
+    if (currentPath != null) {
+      return currentPath;
     }
 
+    // Determine default path based on platform
+    String libraryPath;
+    if (Platform.isIOS) {
+      libraryPath = (await getApplicationDocumentsDirectory()).path;
+    } else if (Platform.isAndroid) {
+      try {
+        libraryPath = (await getExternalStorageDirectory())?.path ??
+            (await getApplicationDocumentsDirectory()).path;
+      } catch (_) {
+        libraryPath = (await getApplicationDocumentsDirectory()).path;
+      }
+    } else if (Platform.isWindows) {
+      libraryPath = 'C:/אוצריא';
+    } else {
+      // Linux, macOS: use application support directory for consistency
+      libraryPath = (await getApplicationSupportDirectory()).path;
+    }
+
+    await Settings.setValue('key-library-path', libraryPath);
     return libraryPath;
   }
 
