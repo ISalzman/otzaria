@@ -1,25 +1,23 @@
-import 'package:hive/hive.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
+import 'package:otzaria/data/repository/hive_list_repository.dart';
 
 class BookmarkRepository {
-  final Box<dynamic> _box = Hive.box(name: 'bookmarks');
+  final HiveListRepository<Bookmark> _repo = HiveListRepository<Bookmark>(
+    boxName: 'bookmarks',
+    key: 'key-bookmarks',
+    fromJson: (json) => Bookmark.fromJson(json),
+    toJson: (bookmark) => bookmark.toJson(),
+  );
 
-  List<Bookmark> loadBookmarks() {
-    try {
-      final List<dynamic> rawBookmarks = _box.get('key-bookmarks') ?? [];
-      return rawBookmarks.map((e) => Bookmark.fromJson(e)).toList();
-    } catch (e) {
-      print('error loading bookmarks from disk: $e');
-      _box.put('key-bookmarks', []);
-      return [];
-    }
+  Future<List<Bookmark>> loadBookmarks() async {
+    return await _repo.load();
   }
 
   Future<void> saveBookmarks(List<Bookmark> bookmarks) async {
-    return _box.put('key-bookmarks', bookmarks);
+    await _repo.save(bookmarks);
   }
 
   Future<void> clearBookmarks() async {
-    return _box.clear();
+    await _repo.clear();
   }
 }
