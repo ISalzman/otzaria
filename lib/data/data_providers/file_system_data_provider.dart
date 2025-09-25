@@ -76,7 +76,7 @@ class FileSystemData {
         try {
           // Verify we can access the entity
           await entity.stat();
-          
+
           if (entity is Directory) {
             // Recursively process subdirectories as categories
             category.subCategories.add(
@@ -92,10 +92,10 @@ class FileSystemData {
                 .toList();
             topics = topics.sublist(0, topics.length - 1);
 
-          // Handle special case where title contains " על "
-          if (getTitleFromPath(entity.path).contains(' על ')) {
-            topics.add(getTitleFromPath(entity.path).split(' על ')[1]);
-          }
+            // Handle special case where title contains " על "
+            if (getTitleFromPath(entity.path).contains(' על ')) {
+              topics.add(getTitleFromPath(entity.path).split(' על ')[1]);
+            }
 
             // Process PDF files
             if (entity.path.toLowerCase().endsWith('.pdf')) {
@@ -168,26 +168,28 @@ class FileSystemData {
     return _getHebrewBooks();
   }
 
+  /// Loads a CSV file from assets and parses it into a table using Isolate.
+  static Future<List<List<dynamic>>> _loadCsvTable(String assetPath,
+      {bool shouldParseNumbers = false}) async {
+    final csvData = await rootBundle.loadString(assetPath);
+    return await Isolate.run(() {
+      // Normalize line endings for cross-platform compatibility
+      final normalizedCsvData =
+          csvData.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+      return CsvToListConverter(
+        fieldDelimiter: ',',
+        textDelimiter: '"',
+        eol: '\n',
+        shouldParseNumbers: shouldParseNumbers,
+      ).convert(normalizedCsvData);
+    });
+  }
+
   /// Internal implementation for loading Otzar HaChochma books from CSV
   static Future<List<ExternalBook>> _getOtzarBooks() async {
     try {
-      final csvData = await rootBundle.loadString('assets/otzar_books.csv');
-
-      final table = await Isolate.run(() {
-        // Normalize line endings for cross-platform compatibility
-        final normalizedCsvData =
-            csvData.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-
-        List<List<dynamic>> csvTable;
-        csvTable = const CsvToListConverter(
-          fieldDelimiter: ',',
-          textDelimiter: '"',
-          eol: '\n',
-          shouldParseNumbers: false,
-        ).convert(normalizedCsvData);
-
-        return csvTable;
-      });
+      final table = await _loadCsvTable('assets/otzar_books.csv',
+          shouldParseNumbers: false);
       return table.skip(1).map((row) {
         return ExternalBook(
           title: row[1],
@@ -207,25 +209,11 @@ class FileSystemData {
   /// Internal implementation for loading HebrewBooks from CSV
   static Future<List<Book>> _getHebrewBooks() async {
     try {
-      final csvData = await rootBundle.loadString('assets/hebrew_books.csv');
       final hebrewBooksPath =
           Settings.getValue<String>('key-hebrew-books-path');
 
-      final table = await Isolate.run(() {
-        // Normalize line endings for cross-platform compatibility
-        final normalizedCsvData =
-            csvData.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-
-        List<List<dynamic>> csvTable;
-        csvTable = const CsvToListConverter(
-          fieldDelimiter: ',',
-          textDelimiter: '"',
-          eol: '\n',
-          shouldParseNumbers: true,
-        ).convert(normalizedCsvData);
-
-        return csvTable;
-      });
+      final table = await _loadCsvTable('assets/hebrew_books.csv',
+          shouldParseNumbers: true);
 
       final books = <Book>[];
       for (final row in table.skip(1)) {
@@ -325,7 +313,8 @@ class FileSystemData {
 
     // Only allow saving to text files, not DOCX
     if (path.endsWith('.docx')) {
-      throw Exception('Cannot save to DOCX files. Only text files are supported.');
+      throw Exception(
+          'Cannot save to DOCX files. Only text files are supported.');
     }
 
     // Create backup of original file
@@ -402,7 +391,8 @@ class FileSystemData {
   Future<int> cleanupAllOldBackups() async {
     int deletedCount = 0;
     try {
-      final libraryDir = Directory('$libraryPath${Platform.pathSeparator}אוצריא');
+      final libraryDir =
+          Directory('$libraryPath${Platform.pathSeparator}אוצריא');
 
       await for (final entity in libraryDir.list(recursive: true)) {
         if (entity is File) {
