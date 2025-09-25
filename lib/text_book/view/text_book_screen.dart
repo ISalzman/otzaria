@@ -1785,7 +1785,7 @@ $detailsSection
       textSize: state.fontSize,
       openBookCallback: widget.openBookCallback,
       openLeftPaneTab: _openLeftPaneTab,
-      showSplitedView: ValueNotifier(state.showSplitView),
+      showCommentaryAsExpansionTiles: true,
       tab: widget.tab,
     );
   }

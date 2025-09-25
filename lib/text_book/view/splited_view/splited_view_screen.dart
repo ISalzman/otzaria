@@ -6,7 +6,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/text_book/view/splited_view/simple_book_view.dart';
+import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/splited_view/commentary_list_for_splited_view.dart';
 
 class SplitedViewScreen extends StatefulWidget {
@@ -156,12 +156,12 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                         : const SizedBox.shrink(),
                   ),
                 ),
-                SimpleBookView(
+                CombinedView(
                   data: widget.content,
                   textSize: state.fontSize,
                   openBookCallback: widget.openBookCallback,
                   openLeftPaneTab: widget.openLeftPaneTab,
-                  showSplitedView: state.showSplitView,
+                  showCommentaryAsExpansionTiles: false,
                   tab: widget.tab,
                 ),
               ],

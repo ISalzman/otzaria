@@ -30,15 +30,15 @@ class CombinedView extends StatefulWidget {
     required this.openBookCallback,
     required this.openLeftPaneTab,
     required this.textSize,
-    required this.showSplitedView,
+    required this.showCommentaryAsExpansionTiles,
     required this.tab,
   });
 
   final List<String> data;
   final Function(OpenedTab) openBookCallback;
   final void Function(int) openLeftPaneTab;
-  final ValueNotifier<bool> showSplitedView;
   final double textSize;
+  final bool showCommentaryAsExpansionTiles;
   final TextBookTab tab;
 
   @override
@@ -748,14 +748,14 @@ $textWithBreaks
           ],
         ),
         children: [
-          widget.showSplitedView.value
-              ? const SizedBox.shrink()
-              : CommentaryListForCombinedView(
+          widget.showCommentaryAsExpansionTiles
+              ? CommentaryListForCombinedView(
                   index: index,
                   fontSize: widget.textSize,
                   openBookCallback: widget.openBookCallback,
                   showSplitView: false,
-                ),
+                )
+              : const SizedBox.shrink(),
         ],
       ),
     );
