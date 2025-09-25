@@ -61,60 +61,12 @@ class SearchRepository {
     print('🔍 hasAlternativeWords: $hasAlternativeWords');
 
     // המרת החיפוש לפורמט המנוע החדש
-    // סינון מחרוזות ריקות שנוצרות כאשר יש רווחים בסוף השאילתה
-    final words = query
-        .trim()
-        .split(SearchRegexPatterns.wordSplitter)
-        .where((word) => word.isNotEmpty)
-        .toList();
-    final List<String> regexTerms;
-    final int effectiveSlop;
-
-    // הודעת דיבוג לבדיקת search options
-    if (searchOptions != null && searchOptions.isNotEmpty) {
-      print('➡️Debug search options:');
-      for (final entry in searchOptions.entries) {
-        print('   ${entry.key}: ${entry.value}');
-      }
-    }
-
-    if (hasAlternativeWords || hasSearchOptions) {
-      // יש מילים חילופיות או אפשרויות חיפוש - נבנה queries מתקדמים
-      print('🔄 בונה query מתקדם');
-      if (hasAlternativeWords) print('🔄 מילים חילופיות: $alternativeWords');
-      if (hasSearchOptions) print('🔄 אפשרויות חיפוש: $searchOptions');
-
-      regexTerms = SearchQueryBuilder.buildAdvancedQuery(
-          words, alternativeWords, searchOptions);
-      print('🔄 RegexTerms מתקדם: $regexTerms');
-      print(
-          '🔄 effectiveSlop will be: ${hasCustomSpacing ? "custom" : (fuzzy ? distance.toString() : "0")}');
-      effectiveSlop = hasCustomSpacing
-          ? SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length)
-          : (fuzzy ? distance : 0);
-    } else if (fuzzy) {
-      // חיפוש מקורב - נשתמש במילים בודדות
-      regexTerms = words;
-      effectiveSlop = distance;
-    } else if (words.length == 1) {
-      // מילה אחת - חיפוש פשוט
-      regexTerms = [query];
-      effectiveSlop = 0;
-    } else if (hasCustomSpacing) {
-      // מרווחים מותאמים אישית
-      regexTerms = words;
-      effectiveSlop =
-          SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length);
-    } else {
-      // חיפוש מדוייק של כמה מילים
-      regexTerms = words;
-      effectiveSlop = distance;
-    }
-
-    // חישוב maxExpansions בהתבסס על סוג החיפוש
-    final int maxExpansions = SearchQueryBuilder.calculateMaxExpansions(
-        fuzzy, regexTerms.length,
-        searchOptions: searchOptions, words: words);
+    print('🔍 Using prepareQueryParams');
+    final params = SearchQueryBuilder.prepareQueryParams(
+        query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
+    final List<String> regexTerms = params['regexTerms'] as List<String>;
+    final int effectiveSlop = params['effectiveSlop'] as int;
+    final int maxExpansions = params['maxExpansions'] as int;
 
     print('🔍 Final search params:');
     print('   regexTerms: $regexTerms');

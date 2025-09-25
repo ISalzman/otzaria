@@ -151,40 +151,11 @@ class TantivyDataProvider {
     final hasSearchOptions = searchOptions != null && searchOptions.isNotEmpty;
 
     // המרת החיפוש לפורמט המנוע החדש - בדיוק כמו ב-SearchRepository!
-    final words = query.trim().split(RegExp(r'\s+'));
-    final List<String> regexTerms;
-    final int effectiveSlop;
-
-    if (hasAlternativeWords || hasSearchOptions) {
-      // יש מילים חילופיות או אפשרויות חיפוש - נבנה queries מתקדמים
-      regexTerms = SearchQueryBuilder.buildAdvancedQuery(
-          words, alternativeWords, searchOptions);
-      effectiveSlop = hasCustomSpacing
-          ? SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length)
-          : (fuzzy ? distance : 0);
-    } else if (fuzzy) {
-      // חיפוש מקורב - נשתמש במילים בודדות
-      regexTerms = words;
-      effectiveSlop = distance;
-    } else if (words.length == 1) {
-      // מילה אחת - חיפוש פשוט
-      regexTerms = [query];
-      effectiveSlop = 0;
-    } else if (hasCustomSpacing) {
-      // מרווחים מותאמים אישית
-      regexTerms = words;
-      effectiveSlop =
-          SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length);
-    } else {
-      // חיפוש מדוייק של כמה מילים
-      regexTerms = words;
-      effectiveSlop = distance;
-    }
-
-    // חישוב maxExpansions בהתבסס על סוג החיפוש
-    final int maxExpansions = SearchQueryBuilder.calculateMaxExpansions(
-        fuzzy, regexTerms.length,
-        searchOptions: searchOptions, words: words);
+    final params = SearchQueryBuilder.prepareQueryParams(
+        query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
+    final List<String> regexTerms = params['regexTerms'] as List<String>;
+    final int effectiveSlop = params['effectiveSlop'] as int;
+    final int maxExpansions = params['maxExpansions'] as int;
 
     try {
       final count = await index.count(
@@ -263,34 +234,11 @@ class TantivyDataProvider {
     final hasSearchOptions = searchOptions != null && searchOptions.isNotEmpty;
 
     // המרת החיפוש לפורמט המנוע החדש - בדיוק כמו ב-countTexts
-    final words = query.trim().split(RegExp(r'\s+'));
-    final List<String> regexTerms;
-    final int effectiveSlop;
-
-    if (hasAlternativeWords || hasSearchOptions) {
-      regexTerms = SearchQueryBuilder.buildAdvancedQuery(
-          words, alternativeWords, searchOptions);
-      effectiveSlop = hasCustomSpacing
-          ? SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length)
-          : (fuzzy ? distance : 0);
-    } else if (fuzzy) {
-      regexTerms = words;
-      effectiveSlop = distance;
-    } else if (words.length == 1) {
-      regexTerms = [query];
-      effectiveSlop = 0;
-    } else if (hasCustomSpacing) {
-      regexTerms = words;
-      effectiveSlop =
-          SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length);
-    } else {
-      regexTerms = words;
-      effectiveSlop = distance;
-    }
-
-    final int maxExpansions = SearchQueryBuilder.calculateMaxExpansions(
-        fuzzy, regexTerms.length,
-        searchOptions: searchOptions, words: words);
+    final params = SearchQueryBuilder.prepareQueryParams(
+        query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
+    final List<String> regexTerms = params['regexTerms'] as List<String>;
+    final int effectiveSlop = params['effectiveSlop'] as int;
+    final int maxExpansions = params['maxExpansions'] as int;
 
     // ביצוע ספירה עבור כל facet - בזה אחר זה (לא במקביל כי זה לא עובד)
     int processedCount = 0;

@@ -98,6 +98,71 @@ class SearchQueryBuilder {
     return regexTerms;
   }
 
+  /// מכין את הפרמטרים לשאילתת חיפוש
+  static Map<String, dynamic> prepareQueryParams(
+      String query,
+      bool fuzzy,
+      int distance,
+      Map<String, String>? customSpacing,
+      Map<int, List<String>>? alternativeWords,
+      Map<String, Map<String, bool>>? searchOptions) {
+    final words = query
+        .trim()
+        .split(SearchRegexPatterns.wordSplitter)
+        .where((w) => w.isNotEmpty)
+        .toList();
+
+    // בדיקה אם יש מרווחים מותאמים אישית, מילים חילופיות או אפשרויות חיפוש
+    final hasCustomSpacing = customSpacing != null && customSpacing.isNotEmpty;
+    final hasAlternativeWords =
+        alternativeWords != null && alternativeWords.isNotEmpty;
+    final hasSearchOptions = searchOptions != null &&
+        searchOptions.isNotEmpty &&
+        searchOptions.values.any((wordOptions) =>
+            wordOptions.values.any((isEnabled) => isEnabled == true));
+
+    // המרת החיפוש לפורמט המנוע החדש
+    final List<String> regexTerms;
+    final int effectiveSlop;
+
+    if (hasAlternativeWords || hasSearchOptions) {
+      // יש מילים חילופיות או אפשרויות חיפוש - נבנה queries מתקדמים
+      regexTerms = SearchQueryBuilder.buildAdvancedQuery(
+          words, alternativeWords, searchOptions);
+      effectiveSlop = hasCustomSpacing
+          ? SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length)
+          : (fuzzy ? distance : 0);
+    } else if (fuzzy) {
+      // חיפוש מקורב - נשתמש במילים בודדות
+      regexTerms = words;
+      effectiveSlop = distance;
+    } else if (words.length == 1) {
+      // מילה אחת - חיפוש פשוט
+      regexTerms = [query];
+      effectiveSlop = 0;
+    } else if (hasCustomSpacing) {
+      // מרווחים מותאמים אישית
+      regexTerms = words;
+      effectiveSlop =
+          SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length);
+    } else {
+      // חיפוש מדוייק של כמה מילים
+      regexTerms = words;
+      effectiveSlop = distance;
+    }
+
+    // חישוב maxExpansions בהתבסס על סוג החיפוש
+    final int maxExpansions = SearchQueryBuilder.calculateMaxExpansions(
+        fuzzy, regexTerms.length,
+        searchOptions: searchOptions, words: words);
+
+    return {
+      'regexTerms': regexTerms,
+      'effectiveSlop': effectiveSlop,
+      'maxExpansions': maxExpansions,
+    };
+  }
+
   /// מחשב את maxExpansions בהתבסס על סוג החיפוש
   static int calculateMaxExpansions(bool fuzzy, int termCount,
       {Map<String, Map<String, bool>>? searchOptions, List<String>? words}) {
