@@ -124,8 +124,8 @@ jobs:
     if: github.event_name != 'release'
     runs-on: ubuntu-latest
     env:
-      RUSTUP_HOME: ${{ runner.temp }}/rustup
-      CARGO_HOME:  ${{ runner.temp }}/cargo
+      RUSTUP_HOME: ${{ github.workspace }}/.rustup
+      CARGO_HOME:  ${{ github.workspace }}/.cargo
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
@@ -150,8 +150,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
+            ${{ env.CARGO_HOME }}/registry
+            ${{ env.CARGO_HOME }}/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
