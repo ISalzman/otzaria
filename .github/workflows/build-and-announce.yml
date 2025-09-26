@@ -123,6 +123,9 @@ jobs:
   build_linux:
     if: github.event_name != 'release'
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_HOME: ${{ runner.temp }}/rustup
+      CARGO_HOME:  ${{ runner.temp }}/cargo
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
@@ -132,18 +135,58 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Install Rust (stable) with rustup
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add cargo to PATH and verify toolchain
+        run: |
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+          rustc -Vv
+          cargo -V
+          rustup show
+
+      - name: Cache cargo registry and git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
       
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y ninja-build libgtk-3-dev libblkid1 liblzma5 clang cmake git pkg-config liblzma-dev libstdc++-12-dev rpm patchelf
+          sudo apt-get install -y \
+            build-essential ninja-build libgtk-3-dev libblkid1 liblzma5 \
+            clang cmake git pkg-config liblzma-dev rpm patchelf curl xz-utils
+          # Fallback אם מסיבה כלשהי cargo לא קיים (למשל כשל זמני ב-rustup)
+          if ! command -v cargo >/dev/null 2>&1; then
+            sudo apt-get install -y rustc cargo
+          fi
       
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
       
-      - name: Build Flutter Linux app
+      - name: Build Flutter Linux app (with retry)
         run: |
-          flutter build linux
+          set -e
+          tries=0
+          until [ $tries -ge 3 ]
+          do
+            if flutter build linux; then
+              break
+            fi
+            tries=$((tries+1))
+            echo "flutter build linux failed. retry $tries/3 after short sleep..."
+            sleep 15
+          done
+          if [ $tries -ge 3 ]; then
+            echo "::error::flutter build linux failed after 3 attempts"
+            exit 1
+          fi
       
       - name: Build and Patch Linux DEB package
         shell: bash
