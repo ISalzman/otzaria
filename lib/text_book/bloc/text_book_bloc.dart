@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
@@ -72,7 +73,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final currentState = state as TextBookLoaded;
       book = currentState.book;
       searchText = currentState.searchText;
-      initialIndex = currentState.visibleIndices.isNotEmpty ? currentState.visibleIndices.first : 0;
+      initialIndex = currentState.visibleIndices.isNotEmpty
+          ? currentState.visibleIndices.first
+          : 0;
       showLeftPane = currentState.showLeftPane;
       commentators = currentState.activeCommentators;
       visibleIndices = currentState.visibleIndices;
@@ -86,7 +89,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       commentators = initial.commentators;
       visibleIndices = [initial.index];
 
-      emit(TextBookLoading(book, initial.index, initial.showLeftPane, initial.commentators));
+      emit(TextBookLoading(
+          book, initial.index, initial.showLeftPane, initial.commentators));
     } else if (!event.preserveState) {
       // Not preserving state and not initial, just emit current state
       if (state is TextBookLoaded) {
@@ -106,20 +110,25 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       String? currentTitle;
       if (visibleIndices != null && visibleIndices.isNotEmpty) {
         try {
-          currentTitle = await refFromIndex(visibleIndices.first, Future.value(tableOfContents));
+          currentTitle = await refFromIndex(
+              visibleIndices.first, Future.value(tableOfContents));
         } catch (_) {
           currentTitle = null;
         }
       }
 
-      final availableCommentators = await _repository.getAvailableCommentators(links);
-      //       
+      final availableCommentators =
+          await _repository.getAvailableCommentators(links);
+      //
       final eras = await utils.splitByEra(availableCommentators);
 
-      final defaultRemoveNikud = Settings.getValue<bool>('key-default-nikud') ?? false;
-      final removeNikudFromTanach = Settings.getValue<bool>('key-remove-nikud-tanach') ?? false;
+      final defaultRemoveNikud =
+          Settings.getValue<bool>('key-default-nikud') ?? false;
+      final removeNikudFromTanach =
+          Settings.getValue<bool>('key-remove-nikud-tanach') ?? false;
       final isTanach = await FileSystemData.instance.isTanachBook(book.title);
-      final removeNikud = defaultRemoveNikud && (removeNikudFromTanach || !isTanach);
+      final removeNikud =
+          defaultRemoveNikud && (removeNikudFromTanach || !isTanach);
 
       // Set up position listener with debouncing to prevent excessive updates
       Timer? debounceTimer;
@@ -148,11 +157,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         showLeftPane: showLeftPane || searchText.isNotEmpty,
         showSplitView: event.showSplitView,
         activeCommentators: commentators,
-        torahShebichtav: eras['תורה שבכתב'] ?? [],
-        chazal: eras['חז"ל'] ?? [],
-        rishonim: eras['ראשונים'] ?? [],
-        acharonim: eras['אחרונים'] ?? [],
-        modernCommentators: eras['מחברי זמננו'] ?? [],
+        commentatorGroups: _buildCommentatorGroups(eras, availableCommentators),
         removeNikud: removeNikud,
         visibleIndices: visibleIndices ?? [initialIndex],
         pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
@@ -160,10 +165,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         scrollController: scrollController,
         positionsListener: positionsListener,
         currentTitle: currentTitle,
-        showNotesSidebar: state is TextBookLoaded ? (state as TextBookLoaded).showNotesSidebar : false,
-        selectedTextForNote: state is TextBookLoaded ? (state as TextBookLoaded).selectedTextForNote : null,
-        selectedTextStart: state is TextBookLoaded ? (state as TextBookLoaded).selectedTextStart : null,
-        selectedTextEnd: state is TextBookLoaded ? (state as TextBookLoaded).selectedTextEnd : null,
+        showNotesSidebar: state is TextBookLoaded
+            ? (state as TextBookLoaded).showNotesSidebar
+            : false,
+        selectedTextForNote: state is TextBookLoaded
+            ? (state as TextBookLoaded).selectedTextForNote
+            : null,
+        selectedTextStart: state is TextBookLoaded
+            ? (state as TextBookLoaded).selectedTextStart
+            : null,
+        selectedTextEnd: state is TextBookLoaded
+            ? (state as TextBookLoaded).selectedTextEnd
+            : null,
       ));
     } catch (e) {
       if (state is TextBookInitial) {
@@ -172,8 +185,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             initial.showLeftPane, initial.commentators));
       } else if (state is TextBookLoaded && event.preserveState) {
         final current = state as TextBookLoaded;
-        emit(TextBookError(e.toString(), current.book, current.visibleIndices.isNotEmpty ? current.visibleIndices.first : 0,
-            current.showLeftPane, current.activeCommentators));
+        emit(TextBookError(
+            e.toString(),
+            current.book,
+            current.visibleIndices.isNotEmpty
+                ? current.visibleIndices.first
+                : 0,
+            current.showLeftPane,
+            current.activeCommentators));
       }
     }
   }
@@ -466,7 +485,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         await _repository.saveBookContent(currentState.book, event.markdown);
 
         // Split the content back into sections for display
-        final sections = event.markdown.split('\n\n').where((s) => s.trim().isNotEmpty).toList();
+        final sections = event.markdown
+            .split('\n\n')
+            .where((s) => s.trim().isNotEmpty)
+            .toList();
 
         // If we have fewer sections than before, pad with empty strings
         while (sections.length < currentState.content.length) {
@@ -606,5 +628,51 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     } catch (e) {
       // Handle error silently for auto-save
     }
+  }
+
+  List<CommentatorGroup> _buildCommentatorGroups(
+      Map<String, List<String>> eras, List<String> availableCommentators) {
+    final known = <String>{
+      ...?eras['תורה שבכתב'],
+      ...?eras['חז"ל'],
+      ...?eras['ראשונים'],
+      ...?eras['אחרונים'],
+      ...?eras['מחברי זמננו'],
+    };
+
+    final others = (eras['מפרשים נוספים'] ?? [])
+        .toSet()
+        .union(availableCommentators
+            .where((c) => !known.contains(c))
+            .toList()
+            .toSet())
+        .toList();
+
+    return [
+      CommentatorGroup(
+        title: 'תורה שבכתב',
+        commentators: eras['תורה שבכתב'] ?? const [],
+      ),
+      CommentatorGroup(
+        title: 'חז"ל',
+        commentators: eras['חז"ל'] ?? const [],
+      ),
+      CommentatorGroup(
+        title: 'ראשונים',
+        commentators: eras['ראשונים'] ?? const [],
+      ),
+      CommentatorGroup(
+        title: 'אחרונים',
+        commentators: eras['אחרונים'] ?? const [],
+      ),
+      CommentatorGroup(
+        title: 'מחברי זמננו',
+        commentators: eras['מחברי זמננו'] ?? const [],
+      ),
+      CommentatorGroup(
+        title: 'שאר מפרשים',
+        commentators: others,
+      ),
+    ];
   }
 }

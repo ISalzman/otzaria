@@ -8,6 +8,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/combined_view/commentary_list_for_combined_view.dart';
 import 'package:otzaria/text_book/view/links_screen.dart';
@@ -140,18 +141,24 @@ class _CombinedViewState extends State<CombinedView> {
     final screenHeight = MediaQuery.of(context).size.height;
 
     // 2. זיהוי פרשנים שכבר שויכו לקבוצה
+    final groups = state.commentatorGroups;
+    final tanachGroup = CommentatorGroup.groupByTitle(groups, 'תורה שבכתב');
+    final chazalGroup = CommentatorGroup.groupByTitle(groups, 'חז"ל');
+    final rishonimGroup = CommentatorGroup.groupByTitle(groups, 'ראשונים');
+    final acharonimGroup = CommentatorGroup.groupByTitle(groups, 'אחרונים');
+    final modernGroup = CommentatorGroup.groupByTitle(groups, 'מחברי זמננו');
+    final ungroupedGroup = CommentatorGroup.groupByTitle(groups, 'שאר מפרשים');
+
     final Set<String> alreadyListed = {
-      ...state.torahShebichtav,
-      ...state.chazal,
-      ...state.rishonim,
-      ...state.acharonim,
-      ...state.modernCommentators,
+      ...tanachGroup.commentators,
+      ...chazalGroup.commentators,
+      ...rishonimGroup.commentators,
+      ...acharonimGroup.commentators,
+      ...modernGroup.commentators,
     };
 
     // 3. יצירת רשימה של פרשנים שלא שויכו לאף קבוצה
-    final List<String> ungrouped = state.availableCommentators
-        .where((c) => !alreadyListed.contains(c))
-        .toList();
+    final List<String> ungrouped = ungroupedGroup.commentators;
 
     return ctx.ContextMenu(
       maxHeight: screenHeight * 0.9,
@@ -182,50 +189,55 @@ class _CombinedViewState extends State<CombinedView> {
               },
             ),
             const ctx.MenuDivider(),
-            ..._buildGroup('תורה שבכתב', state.torahShebichtav, state),
-            if (state.torahShebichtav.isNotEmpty && state.chazal.isNotEmpty)
+            ..._buildGroup(tanachGroup.title, tanachGroup.commentators, state),
+            if (tanachGroup.commentators.isNotEmpty &&
+                chazalGroup.commentators.isNotEmpty)
               const ctx.MenuDivider(),
-            ..._buildGroup('חז\"ל', state.chazal, state),
-            if ((state.chazal.isNotEmpty && state.rishonim.isNotEmpty) ||
-                (state.chazal.isEmpty &&
-                    state.torahShebichtav.isNotEmpty &&
-                    state.rishonim.isNotEmpty))
+            ..._buildGroup(chazalGroup.title, chazalGroup.commentators, state),
+            if ((chazalGroup.commentators.isNotEmpty &&
+                    rishonimGroup.commentators.isNotEmpty) ||
+                (chazalGroup.commentators.isEmpty &&
+                    tanachGroup.commentators.isNotEmpty &&
+                    rishonimGroup.commentators.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup('הראשונים', state.rishonim, state),
-            if ((state.rishonim.isNotEmpty && state.acharonim.isNotEmpty) ||
-                (state.rishonim.isEmpty &&
-                    state.chazal.isNotEmpty &&
-                    state.acharonim.isNotEmpty) ||
-                (state.rishonim.isEmpty &&
-                    state.chazal.isEmpty &&
-                    state.torahShebichtav.isNotEmpty &&
-                    state.acharonim.isNotEmpty))
+            ..._buildGroup(
+                rishonimGroup.title, rishonimGroup.commentators, state),
+            if ((rishonimGroup.commentators.isNotEmpty &&
+                    acharonimGroup.commentators.isNotEmpty) ||
+                (rishonimGroup.commentators.isEmpty &&
+                    chazalGroup.commentators.isNotEmpty &&
+                    acharonimGroup.commentators.isNotEmpty) ||
+                (rishonimGroup.commentators.isEmpty &&
+                    chazalGroup.commentators.isEmpty &&
+                    tanachGroup.commentators.isNotEmpty &&
+                    acharonimGroup.commentators.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup('האחרונים', state.acharonim, state),
-            if ((state.acharonim.isNotEmpty &&
-                    state.modernCommentators.isNotEmpty) ||
-                (state.acharonim.isEmpty &&
-                    state.rishonim.isNotEmpty &&
-                    state.modernCommentators.isNotEmpty) ||
-                (state.acharonim.isEmpty &&
-                    state.rishonim.isEmpty &&
-                    state.chazal.isNotEmpty &&
-                    state.modernCommentators.isNotEmpty) ||
-                (state.acharonim.isEmpty &&
-                    state.rishonim.isEmpty &&
-                    state.chazal.isEmpty &&
-                    state.torahShebichtav.isNotEmpty &&
-                    state.modernCommentators.isNotEmpty))
+            ..._buildGroup(
+                acharonimGroup.title, acharonimGroup.commentators, state),
+            if ((acharonimGroup.commentators.isNotEmpty &&
+                    modernGroup.commentators.isNotEmpty) ||
+                (acharonimGroup.commentators.isEmpty &&
+                    rishonimGroup.commentators.isNotEmpty &&
+                    modernGroup.commentators.isNotEmpty) ||
+                (acharonimGroup.commentators.isEmpty &&
+                    rishonimGroup.commentators.isEmpty &&
+                    chazalGroup.commentators.isNotEmpty &&
+                    modernGroup.commentators.isNotEmpty) ||
+                (acharonimGroup.commentators.isEmpty &&
+                    rishonimGroup.commentators.isEmpty &&
+                    chazalGroup.commentators.isEmpty &&
+                    tanachGroup.commentators.isNotEmpty &&
+                    modernGroup.commentators.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup('מחברי זמננו', state.modernCommentators, state),
-            if ((state.torahShebichtav.isNotEmpty ||
-                    state.chazal.isNotEmpty ||
-                    state.rishonim.isNotEmpty ||
-                    state.acharonim.isNotEmpty ||
-                    state.modernCommentators.isNotEmpty) &&
+            ..._buildGroup(modernGroup.title, modernGroup.commentators, state),
+            if ((tanachGroup.commentators.isNotEmpty ||
+                    chazalGroup.commentators.isNotEmpty ||
+                    rishonimGroup.commentators.isNotEmpty ||
+                    acharonimGroup.commentators.isNotEmpty ||
+                    modernGroup.commentators.isNotEmpty) &&
                 ungrouped.isNotEmpty)
               const ctx.MenuDivider(),
-            ..._buildGroup('שאר המפרשים', ungrouped, state),
+            ..._buildGroup(ungroupedGroup.title, ungrouped, state),
           ],
         ),
         ctx.MenuItem.submenu(
