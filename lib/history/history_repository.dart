@@ -1,34 +1,29 @@
 import 'package:otzaria/bookmarks/models/bookmark.dart';
-import 'package:otzaria/data/repository/hive_list_repository.dart';
+import 'package:otzaria/data/repository/base_list_repository.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 
-class HistoryRepository {
-  final HiveListRepository<Bookmark> _repo = HiveListRepository<Bookmark>(
-    boxName: 'history',
-    key: 'history',
-    fromJson: (json) => Bookmark.fromJson(json),
-    toJson: (bookmark) => bookmark.toJson(),
-  );
+class HistoryRepository extends BaseListRepository<Bookmark> {
+  HistoryRepository()
+      : super(
+          boxName: 'history',
+          key: 'history',
+          fromJson: (json) => Bookmark.fromJson(json),
+          toJson: (bookmark) => bookmark.toJson(),
+        );
 
-  Future<List<Bookmark>> loadHistory() async {
-    return await _repo.load();
-  }
+  Future<List<Bookmark>> loadHistory() async => load();
 
-  Future<void> saveHistory(List<Bookmark> history) async {
-    await _repo.save(history);
-  }
+  Future<void> saveHistory(List<Bookmark> history) async => save(history);
 
-  Future<void> clearHistory() async {
-    await _repo.clear();
-  }
+  Future<void> clearHistory() async => clear();
 
-  Future<void> addHistoryItem(Bookmark bookmark) async {
-    await _repo.addItem(bookmark);
-  }
+  Future<void> addHistoryItem(Bookmark bookmark) async => addItem(bookmark);
+
+  Future<void> removeHistoryItem(int index) async => removeAt(index);
 
   Future<void> addHistoryFromTab(OpenedTab tab) async {
     if (tab is PdfBookTab) {
@@ -50,9 +45,5 @@ class HistoryRepository {
         ));
       }
     }
-  }
-
-  Future<void> removeHistoryItem(int index) async {
-    await _repo.removeAt(index);
   }
 }
