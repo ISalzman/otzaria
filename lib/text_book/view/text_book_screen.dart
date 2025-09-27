@@ -21,10 +21,10 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/printing/printing_screen.dart';
-import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
+import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/links_screen.dart';
-import 'package:otzaria/text_book/view/splited_view/splited_view_screen.dart';
+import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
 import 'package:otzaria/utils/open_book.dart';
@@ -1688,34 +1688,17 @@ $detailsSection
             child: Focus(
               focusNode: FocusNode(),
               autofocus: !Platform.isAndroid,
-              child: _buildSplitedOrCombinedView(state),
+              child: TextBookScaffold(
+                content: state.content,
+                openBookCallback: widget.openBookCallback,
+                openLeftPaneTab: _openLeftPaneTab,
+                searchTextController: TextEditingValue(text: state.searchText),
+                tab: widget.tab,
+              ),
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildSplitedOrCombinedView(TextBookLoaded state) {
-    if (state.showSplitView && state.activeCommentators.isNotEmpty) {
-      return SplitedViewScreen(
-        content: state.content,
-        openBookCallback: widget.openBookCallback,
-        searchTextController: TextEditingValue(text: state.searchText),
-        openLeftPaneTab: _openLeftPaneTab,
-        tab: widget.tab,
-      );
-    }
-
-    return BlocBuilder<SettingsBloc, SettingsState>(
-      builder: (context, settingsState) {
-        return Padding(
-          padding: state.showLeftPane
-              ? EdgeInsets.zero
-              : EdgeInsets.symmetric(horizontal: settingsState.paddingSize),
-          child: _buildCombinedView(state),
-        );
-      },
     );
   }
 

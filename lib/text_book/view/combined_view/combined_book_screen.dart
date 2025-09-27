@@ -10,7 +10,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/text_book/view/combined_view/commentary_list_for_combined_view.dart';
+import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/view/links_screen.dart';
 import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -761,11 +761,11 @@ $textWithBreaks
         ),
         children: [
           widget.showCommentaryAsExpansionTiles
-              ? CommentaryListForCombinedView(
+              ? CommentaryListBase(
                   index: index,
                   fontSize: widget.textSize,
                   openBookCallback: widget.openBookCallback,
-                  showSplitView: false,
+                  showSearch: false,
                 )
               : const SizedBox.shrink(),
         ],

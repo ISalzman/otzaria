@@ -7,7 +7,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
-import 'package:otzaria/text_book/view/splited_view/commentary_list_for_splited_view.dart';
+import 'package:otzaria/text_book/view/commentary_list_base.dart';
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -146,11 +146,11 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                   child: SelectionArea(
                     key: _selectionKey,
                     child: _paneOpen
-                        ? CommentaryList(
+                        ? CommentaryListBase(
                             index: 0,
                             fontSize: state.fontSize,
                             openBookCallback: widget.openBookCallback,
-                            showSplitView: state.showSplitView,
+                            showSearch: true,
                             onClosePane: _togglePane,
                           )
                         : const SizedBox.shrink(),
