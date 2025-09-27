@@ -8,8 +8,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/models/books.dart';
 import "package:flutter_bloc/flutter_bloc.dart";
-import 'package:otzaria/tabs/models/pdf_tab.dart';
-import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/tabs/models/tab.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:collection/collection.dart';
 
@@ -45,23 +44,15 @@ void openBook(BuildContext context, Book book, int index, String searchQuery,
       (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
           (Settings.getValue<bool>('key-default-sidebar-open') ?? false);
 
-  if (book is TextBook) {
-    print('DEBUG: יצירת טאב טקסט עם אינדקס: $initialIndex');
-    context.read<TabsBloc>().add(AddTab(TextBookTab(
-          book: book,
-          index: initialIndex,
-          searchText: searchQuery,
-          commentators: initialCommentators,
-          openLeftPane: shouldOpenLeftPane,
-        )));
-  } else if (book is PdfBook) {
-    print('DEBUG: יצירת טאב PDF עם דף: $initialIndex');
-    context.read<TabsBloc>().add(AddTab(PdfBookTab(
-          book: book,
-          pageNumber: initialIndex,
-          openLeftPane: shouldOpenLeftPane,
-        )));
-  }
+  print('DEBUG: יצירת טאב עם אינדקס: $initialIndex');
+  final tab = OpenedTab.fromBook(
+    book,
+    initialIndex,
+    searchText: searchQuery,
+    commentators: initialCommentators,
+    openLeftPane: shouldOpenLeftPane,
+  );
+  context.read<TabsBloc>().add(AddTab(tab));
 
   context.read<NavigationBloc>().add(const NavigateToScreen(Screen.reading));
 }

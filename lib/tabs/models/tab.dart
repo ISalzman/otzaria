@@ -4,6 +4,7 @@ a tab is either a pdf book or a text book, or a full text search window*/
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/models/books.dart';
 
 abstract class OpenedTab {
   String title;
@@ -28,6 +29,29 @@ abstract class OpenedTab {
       );
     }
     return tab;
+  }
+
+  factory OpenedTab.fromBook(Book book, int index,
+      {String searchText = '',
+      List<String>? commentators,
+      bool openLeftPane = false}) {
+    if (book is PdfBook) {
+      return PdfBookTab(
+        book: book,
+        pageNumber: index,
+        openLeftPane: openLeftPane,
+        searchText: searchText,
+      );
+    } else if (book is TextBook) {
+      return TextBookTab(
+        book: book,
+        index: index,
+        searchText: searchText,
+        commentators: commentators,
+        openLeftPane: openLeftPane,
+      );
+    }
+    throw UnsupportedError("Unsupported book type: ${book.runtimeType}");
   }
 
   factory OpenedTab.fromJson(Map<String, dynamic> json) {

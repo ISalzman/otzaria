@@ -7,8 +7,7 @@ import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
-import 'package:otzaria/tabs/models/pdf_tab.dart';
-import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -19,22 +18,13 @@ class BookmarkView extends StatelessWidget {
 
   void _openBook(
       BuildContext context, Book book, int index, List<String>? commentators) {
-    final tab = book is PdfBook
-        ? PdfBookTab(
-            book: book,
-            pageNumber: index,
-            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                    false) ||
-                (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-          )
-        : TextBookTab(
-            book: book as TextBook,
-            index: index,
-            commentators: commentators,
-            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                    false) ||
-                (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-          );
+    final tab = OpenedTab.fromBook(
+      book,
+      index,
+      commentators: commentators,
+      openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+          (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
+    );
 
     context.read<TabsBloc>().add(AddTab(tab));
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.reading));
