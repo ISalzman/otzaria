@@ -39,7 +39,7 @@ class TantivyDataProvider {
   ValueNotifier<bool> isIndexing = ValueNotifier(false);
 
   /// Maintains a list of processed books to avoid reindexing
-  late List<String> booksDone;
+  late List<String> booksDone = [];
 
   TantivyDataProvider() {
     reopenIndex();
