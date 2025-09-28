@@ -99,6 +99,11 @@ class _CommentaryContentState extends State<CommentaryContent> {
                 },
               );
             }
+            if (snapshot.hasError) {
+              return Center(
+                child: Text('שגיאה בטעינת הפרשן: ${snapshot.error}'),
+              );
+            }
             return const Center(
               child: CircularProgressIndicator(),
             );

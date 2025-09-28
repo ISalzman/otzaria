@@ -425,8 +425,15 @@ class FileSystemData {
   ///
   /// Reads the file line by line and returns the content at the specified index.
   Future<String> getLinkContent(Link link) async {
-    String path = await _getBookPath(getTitleFromPath(link.path2));
-    return await getLineFromFile(path, link.index2);
+    try {
+      String path = await _getBookPath(getTitleFromPath(link.path2));
+      if (path.startsWith('error:')) {
+        return 'שגיאה בטעינת קובץ: ${link.path2}';
+      }
+      return await getLineFromFile(path, link.index2);
+    } catch (e) {
+      return 'שגיאה בטעינת תוכן המפרש: $e';
+    }
   }
 
   /// Returns a list of all book paths in the library directory.
@@ -457,16 +464,14 @@ class FileSystemData {
   /// Uses a stream to read the file line by line until the desired index
   /// is reached, then closes the stream to conserve resources.
   Future<String> getLineFromFile(String path, int index) async {
-    return await Isolate.run(() async {
-      File file = File(path);
-      final lines = file
-          .openRead()
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .take(index)
-          .toList();
-      return (await lines).last;
-    });
+    File file = File(path);
+    final lines = file
+        .openRead()
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .take(index)
+        .toList();
+    return (await lines).last;
   }
 
   /// Updates the mapping of book titles to their file system paths.
