@@ -11,7 +11,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 class CommentaryListBase extends StatefulWidget {
   final Function(TextBookTab) openBookCallback;
   final double fontSize;
-  final int index;
+  final List<int>? indexes;
   final bool showSearch;
   final VoidCallback? onClosePane;
 
@@ -19,7 +19,7 @@ class CommentaryListBase extends StatefulWidget {
     super.key,
     required this.openBookCallback,
     required this.fontSize,
-    required this.index,
+    this.indexes,
     required this.showSearch,
     this.onClosePane,
   });
@@ -230,7 +230,10 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
           Expanded(
             child: FutureBuilder(
               future: getLinksforIndexs(
-                  indexes: [widget.index],
+                  indexes: widget.indexes ??
+                      (state.selectedIndex != null
+                          ? [state.selectedIndex!]
+                          : state.visibleIndices),
                   links: state.links,
                   commentatorsToShow: state.activeCommentators),
               builder: (context, thisLinksSnapshot) {
@@ -250,7 +253,7 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                   child: ScrollablePositionedList.builder(
                     itemScrollController: _itemScrollController,
                     key: PageStorageKey(
-                        'commentary_${widget.index}_${state.activeCommentators.hashCode}'),
+                        'commentary_${widget.indexes?.join(",") ?? "split"}_${state.activeCommentators.hashCode}'),
                     physics: const ClampingScrollPhysics(),
                     scrollOffsetController: scrollController,
                     shrinkWrap: true,

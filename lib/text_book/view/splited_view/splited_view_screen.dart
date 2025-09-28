@@ -147,7 +147,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                     key: _selectionKey,
                     child: _paneOpen
                         ? CommentaryListBase(
-                            index: 0,
                             fontSize: state.fontSize,
                             openBookCallback: widget.openBookCallback,
                             showSearch: true,

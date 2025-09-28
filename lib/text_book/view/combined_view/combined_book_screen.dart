@@ -762,7 +762,7 @@ $textWithBreaks
         children: [
           widget.showCommentaryAsExpansionTiles
               ? CommentaryListBase(
-                  index: index,
+                  indexes: [index],
                   fontSize: widget.textSize,
                   openBookCallback: widget.openBookCallback,
                   showSearch: false,
