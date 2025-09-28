@@ -51,6 +51,39 @@ class _CombinedViewState extends State<CombinedView> {
       GlobalKey<SelectionAreaState>();
   bool _didInitialJump = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // האזנה לשינויים במיקומי הפריטים כדי לאפס את הבחירה בגלילה
+    widget.tab.positionsListener.itemPositions.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  // פונקציה שתשלח אירוע איפוס ל-selectedIndex אם יש גלילה משמעותית
+  void _onScroll() {
+    // אנחנו רוצים את הלוגיקה הזו רק בתצוגה המפוצלת (SimpleBookView לשעבר)
+    // שבה המפרשים מוצגים בפאנל צד (כלומר: לא ExpansionTiles)
+    if (widget.showCommentaryAsExpansionTiles) return;
+
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded) return;
+
+    final currentSelectedIndex = state.selectedIndex;
+
+    if (currentSelectedIndex != null) {
+      // אם האינדקס הנבחר כבר לא נראה (האינדקסים הנראים שונו עקב גלילה)
+      final visibleIndices = state.visibleIndices;
+      if (!visibleIndices.contains(currentSelectedIndex)) {
+        context.read<TextBookBloc>().add(const UpdateSelectedIndex(null));
+      }
+    }
+  }
+
   void _jumpToInitialIndexWhenReady() {
     int attempts = 0;
     void tryJump(Duration _) {
@@ -736,7 +769,9 @@ $textWithBreaks
                 if (settingsState.replaceHolyNames) {
                   data = utils.replaceHolyNames(data);
                 }
-                return HtmlWidget(
+                final isSelected = state.selectedIndex == index;
+
+                final bookContent = HtmlWidget(
                   '''
                   <div style="text-align: justify; direction: rtl;">
                     ${() {
@@ -753,6 +788,20 @@ $textWithBreaks
                     fontSize: widget.textSize,
                     fontFamily: settingsState.fontFamily,
                     height: 1.5,
+                  ),
+                );
+
+                return InkWell(
+                  onTap: () {
+                    context
+                        .read<TextBookBloc>()
+                        .add(UpdateSelectedIndex(index));
+                  },
+                  child: Container(
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                        : null,
+                    child: bookContent,
                   ),
                 );
               },

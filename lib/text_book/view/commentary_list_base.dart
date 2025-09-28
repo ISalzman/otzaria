@@ -245,6 +245,11 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                 }
                 final data = thisLinksSnapshot.data!;
                 _itemCount = data.length;
+                final currentIndexes = widget.indexes ??
+                    (state.selectedIndex != null
+                        ? [state.selectedIndex!]
+                        : state.visibleIndices);
+
                 return ProgressiveScroll(
                   scrollController: scrollController,
                   maxSpeed: 10000.0,
@@ -252,8 +257,7 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                   accelerationFactor: 5,
                   child: ScrollablePositionedList.builder(
                     itemScrollController: _itemScrollController,
-                    key: PageStorageKey(
-                        'commentary_${widget.indexes?.join(",") ?? "split"}_${state.activeCommentators.hashCode}'),
+                    key: ValueKey(currentIndexes.join(',')),
                     physics: const ClampingScrollPhysics(),
                     scrollOffsetController: scrollController,
                     shrinkWrap: true,
