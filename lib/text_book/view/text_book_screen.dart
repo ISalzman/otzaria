@@ -31,7 +31,7 @@ import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
-import 'package:otzaria/text_book/editing/widgets/editor_settings_widget.dart';
+import 'package:otzaria/text_book/editing/helpers/editor_settings_helper.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/notes/notes_system.dart';
