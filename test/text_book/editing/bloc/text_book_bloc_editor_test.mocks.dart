@@ -7,10 +7,12 @@ import 'dart:async' as _i4;
 
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:otzaria/text_book/text_book_repository.dart' as _i2;
-import 'package:otzaria/text_book/editing/repository/overrides_repository.dart' as _i3;
-import 'package:otzaria/text_book/editing/services/overrides_rebase_service.dart' as _i5;
+import 'package:otzaria/text_book/editing/repository/overrides_repository.dart'
+    as _i3;
+import 'package:otzaria/text_book/editing/services/overrides_rebase_service.dart'
+    as _i5;
 import 'package:otzaria/text_book/editing/models/text_override.dart' as _i6;
-import 'package:otzaria/text_book/editing/models/section_identifier.dart' as _i7;
+
 import 'package:otzaria/text_book/editing/models/text_draft.dart' as _i8;
 
 // ignore_for_file: type=lint
@@ -29,14 +31,14 @@ import 'package:otzaria/text_book/editing/models/text_draft.dart' as _i8;
 /// A class which mocks [TextBookRepository].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockTextBookRepository extends _i1.Mock implements _i2.TextBookRepository {
+class MockTextBookRepository extends _i1.Mock
+    implements _i2.TextBookRepository {
   MockTextBookRepository() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i4.Future<bool> bookExists(String title) =>
-      (super.noSuchMethod(
+  _i4.Future<bool> bookExists(String title) => (super.noSuchMethod(
         Invocation.method(
           #bookExists,
           [title],
@@ -48,7 +50,8 @@ class MockTextBookRepository extends _i1.Mock implements _i2.TextBookRepository 
 /// A class which mocks [OverridesRepository].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockOverridesRepository extends _i1.Mock implements _i3.OverridesRepository {
+class MockOverridesRepository extends _i1.Mock
+    implements _i3.OverridesRepository {
   MockOverridesRepository() {
     _i1.throwOnMissingStub(this);
   }
@@ -64,7 +67,8 @@ class MockOverridesRepository extends _i1.Mock implements _i3.OverridesRepositor
       ) as _i4.Future<_i6.TextOverride?>);
 
   @override
-  _i4.Future<void> writeOverride(String bookId, String sectionId, String markdown, String sourceHash) =>
+  _i4.Future<void> writeOverride(String bookId, String sectionId,
+          String markdown, String sourceHash) =>
       (super.noSuchMethod(
         Invocation.method(
           #writeOverride,
@@ -96,7 +100,8 @@ class MockOverridesRepository extends _i1.Mock implements _i3.OverridesRepositor
       ) as _i4.Future<_i8.TextDraft?>);
 
   @override
-  _i4.Future<void> writeDraft(String bookId, String sectionId, String markdown) =>
+  _i4.Future<void> writeDraft(
+          String bookId, String sectionId, String markdown) =>
       (super.noSuchMethod(
         Invocation.method(
           #writeDraft,
@@ -118,8 +123,7 @@ class MockOverridesRepository extends _i1.Mock implements _i3.OverridesRepositor
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<bool> hasLinksFile(String bookId) =>
-      (super.noSuchMethod(
+  _i4.Future<bool> hasLinksFile(String bookId) => (super.noSuchMethod(
         Invocation.method(
           #hasLinksFile,
           [bookId],
@@ -138,8 +142,7 @@ class MockOverridesRepository extends _i1.Mock implements _i3.OverridesRepositor
       ) as _i4.Future<bool>);
 
   @override
-  _i4.Future<List<String>> listOverrides(String bookId) =>
-      (super.noSuchMethod(
+  _i4.Future<List<String>> listOverrides(String bookId) => (super.noSuchMethod(
         Invocation.method(
           #listOverrides,
           [bookId],
@@ -148,8 +151,7 @@ class MockOverridesRepository extends _i1.Mock implements _i3.OverridesRepositor
       ) as _i4.Future<List<String>>);
 
   @override
-  _i4.Future<List<String>> listDrafts(String bookId) =>
-      (super.noSuchMethod(
+  _i4.Future<List<String>> listDrafts(String bookId) => (super.noSuchMethod(
         Invocation.method(
           #listDrafts,
           [bookId],
@@ -158,8 +160,7 @@ class MockOverridesRepository extends _i1.Mock implements _i3.OverridesRepositor
       ) as _i4.Future<List<String>>);
 
   @override
-  _i4.Future<void> cleanupOldDrafts() =>
-      (super.noSuchMethod(
+  _i4.Future<void> cleanupOldDrafts() => (super.noSuchMethod(
         Invocation.method(
           #cleanupOldDrafts,
           [],
@@ -169,8 +170,7 @@ class MockOverridesRepository extends _i1.Mock implements _i3.OverridesRepositor
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<double> getTotalDraftsSizeMB() =>
-      (super.noSuchMethod(
+  _i4.Future<double> getTotalDraftsSizeMB() => (super.noSuchMethod(
         Invocation.method(
           #getTotalDraftsSizeMB,
           [],
@@ -182,7 +182,8 @@ class MockOverridesRepository extends _i1.Mock implements _i3.OverridesRepositor
 /// A class which mocks [OverridesRebaseService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockOverridesRebaseService extends _i1.Mock implements _i5.OverridesRebaseService {
+class MockOverridesRebaseService extends _i1.Mock
+    implements _i5.OverridesRebaseService {
   MockOverridesRebaseService() {
     _i1.throwOnMissingStub(this);
   }
@@ -200,6 +201,7 @@ class MockOverridesRebaseService extends _i1.Mock implements _i5.OverridesRebase
             newSourceContent,
           ],
         ),
-        returnValue: _i4.Future<_i5.RebaseOutcome>.value(_i5.RebaseOutcome.success),
+        returnValue:
+            _i4.Future<_i5.RebaseOutcome>.value(_i5.RebaseOutcome.success),
       ) as _i4.Future<_i5.RebaseOutcome>);
 }
