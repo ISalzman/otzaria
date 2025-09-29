@@ -488,7 +488,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                         .goToDest(link.dest);
                                   }
                                 },
-                                hoverColor: Colors.blue.withOpacity(0.2),
+                                hoverColor: Colors.blue.withValues(alpha: 0.2),
                               ),
                             ),
                             pagePaintCallbacks: [

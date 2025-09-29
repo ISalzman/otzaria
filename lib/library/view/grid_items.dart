@@ -40,7 +40,8 @@ class CategoryGridItem extends StatelessWidget {
       child: InkWell(
         mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(12.0),
-        hoverColor: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+        hoverColor:
+            Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
         hoverDuration: Durations.medium1,
         onTap: () => onCategoryClickCallback(),
         child: Align(
@@ -82,7 +83,7 @@ class CategoryGridItem extends StatelessWidget {
                           color: Theme.of(context)
                               .colorScheme
                               .secondary
-                              .withOpacity(0.6),
+                              .withValues(alpha: 0.6),
                         ),
                       )
               ],
@@ -111,7 +112,8 @@ class BookGridItem extends StatelessWidget {
         child: InkWell(
           mouseCursor: SystemMouseCursors.click,
           borderRadius: BorderRadius.circular(12.0),
-          hoverColor: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+          hoverColor:
+              Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
           onTap: () => onBookClickCallback(),
           hoverDuration: Durations.medium1,
           child: Align(
@@ -125,7 +127,7 @@ class BookGridItem extends StatelessWidget {
                             color: Theme.of(context)
                                 .colorScheme
                                 .secondary
-                                .withOpacity(0.6)),
+                                .withValues(alpha: 0.6)),
                       )
                     : book is ExternalBook
                         ? Padding(
@@ -148,7 +150,7 @@ class BookGridItem extends StatelessWidget {
                                 color: Theme.of(context)
                                     .colorScheme
                                     .secondary
-                                    .withOpacity(0.6)),
+                                    .withValues(alpha: 0.6)),
                           ),
                 Expanded(
                   child: ListTile(
@@ -171,7 +173,7 @@ class BookGridItem extends StatelessWidget {
                                       color: Theme.of(context)
                                           .colorScheme
                                           .primary
-                                          .withOpacity(0.9)),
+                                          .withValues(alpha: 0.9)),
                                 )
                               : const TextSpan()
                         ],
@@ -209,7 +211,7 @@ class BookGridItem extends StatelessWidget {
                           color: Theme.of(context)
                               .colorScheme
                               .secondary
-                              .withOpacity(0.6),
+                              .withValues(alpha: 0.6),
                         ),
                       ),
               ],

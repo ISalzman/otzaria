@@ -87,8 +87,10 @@ class ChoiceChipThemeData with Diagnosticable {
         visualDensity: VisualDensity.adaptivePlatformDensity,
         elevation: 0,
         padding: const EdgeInsets.all(4),
-        selectedBackgroundColor:
-            Theme.of(context).colorScheme.primaryContainer.withOpacity(.2),
+        selectedBackgroundColor: Theme.of(context)
+            .colorScheme
+            .primaryContainer
+            .withValues(alpha: 0.2),
       );
 
   factory ChoiceChipThemeData.dark(BuildContext context) {
@@ -96,7 +98,8 @@ class ChoiceChipThemeData with Diagnosticable {
     final darkTheme = ThemeData.dark();
     return ChoiceChipThemeData(
       backgroundColor: const Color(0xff25272C),
-      side: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.12)),
+      side: BorderSide(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.12)),
       textStyle: const TextStyle(color: Color(0xffb0b0c0)),
       selectedTextStyle: TextStyle(color: darkTheme.colorScheme.primary),
       selectedSide: BorderSide(
@@ -109,7 +112,7 @@ class ChoiceChipThemeData with Diagnosticable {
         borderRadius: BorderRadius.circular(20),
       ),
       selectedBackgroundColor:
-          Theme.of(context).colorScheme.primaryContainer.withOpacity(.2),
+          Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.2),
     );
   }
 

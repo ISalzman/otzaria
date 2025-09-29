@@ -35,7 +35,7 @@ class _MoreScreenState extends State<MoreScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor:
-            Theme.of(context).colorScheme.primary.withOpacity(0.15),
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
         title: Text(
           _getTitle(_selectedIndex),
           style: TextStyle(

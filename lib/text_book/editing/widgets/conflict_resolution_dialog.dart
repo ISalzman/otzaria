@@ -13,7 +13,8 @@ class ConflictResolutionDialog extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<ConflictResolutionDialog> createState() => _ConflictResolutionDialogState();
+  State<ConflictResolutionDialog> createState() =>
+      _ConflictResolutionDialogState();
 }
 
 class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
@@ -34,32 +35,35 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
               style: TextStyle(fontSize: 14),
             ),
             const SizedBox(height: 16),
-            
+
             // Resolution options
             RadioListTile<String>(
               title: const Text('שמור את העריכה שלי'),
               subtitle: const Text('התעלם מהשינויים במקור'),
               value: 'keep_override',
               groupValue: _selectedResolution,
-              onChanged: (value) => setState(() => _selectedResolution = value!),
+              onChanged: (value) =>
+                  setState(() => _selectedResolution = value!),
             ),
             RadioListTile<String>(
               title: const Text('השתמש בגרסה החדשה'),
               subtitle: const Text('בטל את העריכה שלי'),
               value: 'use_new_source',
               groupValue: _selectedResolution,
-              onChanged: (value) => setState(() => _selectedResolution = value!),
+              onChanged: (value) =>
+                  setState(() => _selectedResolution = value!),
             ),
             RadioListTile<String>(
               title: const Text('שמור בנפרד'),
               subtitle: const Text('שמור את העריכה שלי כגרסה נפרדת'),
               value: 'save_separate',
               groupValue: _selectedResolution,
-              onChanged: (value) => setState(() => _selectedResolution = value!),
+              onChanged: (value) =>
+                  setState(() => _selectedResolution = value!),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Three-way diff preview
             Expanded(
               child: Row(
@@ -72,12 +76,14 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.grey.withOpacity(0.1),
-                            border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                            color: Colors.grey.withValues(alpha: 0.1),
+                            border: Border.all(
+                                color: Colors.grey.withValues(alpha: 0.3)),
                           ),
                           child: const Text(
                             'מקור ישן',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -85,7 +91,8 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                              border: Border.all(
+                                  color: Colors.grey.withValues(alpha: 0.3)),
                             ),
                             child: SingleChildScrollView(
                               child: Text(
@@ -99,9 +106,9 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                       ],
                     ),
                   ),
-                  
+
                   const SizedBox(width: 4),
-                  
+
                   // Edited
                   Expanded(
                     child: Column(
@@ -110,12 +117,14 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
-                            border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            border: Border.all(
+                                color: Colors.blue.withValues(alpha: 0.3)),
                           ),
                           child: const Text(
                             'העריכה שלי',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -123,7 +132,8 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                              border: Border.all(
+                                  color: Colors.blue.withValues(alpha: 0.3)),
                             ),
                             child: SingleChildScrollView(
                               child: Text(
@@ -137,9 +147,9 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                       ],
                     ),
                   ),
-                  
+
                   const SizedBox(width: 4),
-                  
+
                   // New source
                   Expanded(
                     child: Column(
@@ -148,12 +158,14 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.1),
-                            border: Border.all(color: Colors.green.withOpacity(0.3)),
+                            color: Colors.green.withValues(alpha: 0.1),
+                            border: Border.all(
+                                color: Colors.green.withValues(alpha: 0.3)),
                           ),
                           child: const Text(
                             'מקור חדש',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -161,7 +173,8 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              border: Border.all(color: Colors.green.withOpacity(0.3)),
+                              border: Border.all(
+                                  color: Colors.green.withValues(alpha: 0.3)),
                             ),
                             child: SingleChildScrollView(
                               child: Text(

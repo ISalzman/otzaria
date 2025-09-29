@@ -2177,7 +2177,7 @@ class _RegularReportTabState extends State<_RegularReportTab> {
                           final highlight = Theme.of(context)
                               .colorScheme
                               .primary
-                              .withOpacity(0.25);
+                              .withValues(alpha: 0.25);
                           return [
                             if (start > 0)
                               TextSpan(text: text.substring(0, start)),

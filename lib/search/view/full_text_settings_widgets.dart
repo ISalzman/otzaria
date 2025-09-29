@@ -570,7 +570,7 @@ class OrderOfResults extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
             child: DropdownButtonFormField<ResultsOrder>(
-              value: state.sortBy,
+              initialValue: state.sortBy,
               decoration: const InputDecoration(
                 labelText: 'מיון',
                 border: OutlineInputBorder(),

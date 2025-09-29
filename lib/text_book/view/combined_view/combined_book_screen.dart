@@ -797,7 +797,10 @@ $textWithBreaks
                   },
                   child: Container(
                     color: isSelected
-                        ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                        ? Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.1)
                         : null,
                     child: bookContent,
                   ),

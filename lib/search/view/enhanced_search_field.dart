@@ -16,7 +16,6 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
 import 'package:otzaria/search/view/search_options_dropdown.dart';
 
-// הווידג'ט החדש לניהול מצבי הכפתור
 class _PlusButton extends StatefulWidget {
   final bool active;
   final VoidCallback onTap;
@@ -30,7 +29,7 @@ class _PlusButton extends StatefulWidget {
   State<_PlusButton> createState() => _PlusButtonState();
 }
 
-// כפתור המרווח שמופיע בריחוף - עגול כמו כפתור ה+
+// כפתור המרווח המופיע בריחוף
 class _SpacingButton extends StatefulWidget {
   final VoidCallback onTap;
 
@@ -144,13 +143,13 @@ class _SpacingField extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onRemove;
   final VoidCallback? onFocusLost;
-  final bool requestFocus; // פרמטר חדש לקביעה אם לבקש פוקוס
+  final bool requestFocus;
 
   const _SpacingField({
     required this.controller,
     required this.onRemove,
     this.onFocusLost,
-    this.requestFocus = true, // ברירת מחדל - כן לבקש פוקוס
+    this.requestFocus = true,
   });
 
   @override
@@ -212,7 +211,7 @@ class _SpacingFieldState extends State<_SpacingField> {
       backgroundColor: theme.scaffoldBackgroundColor,
     );
     final placeholderStyle = TextStyle(
-      color: theme.hintColor.withOpacity(0.8),
+      color: theme.hintColor.withValues(alpha: 0.8),
       fontSize: 12,
     );
 
@@ -235,7 +234,7 @@ class _SpacingFieldState extends State<_SpacingField> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(hasFocus ? 0.15 : 0.08),
+                  color: Colors.black.withValues(alpha: hasFocus ? 0.15 : 0.08),
                   blurRadius: hasFocus ? 6 : 3,
                   offset: const Offset(0, 2),
                 ),
@@ -387,7 +386,7 @@ class _AlternativeFieldState extends State<_AlternativeField> {
       backgroundColor: theme.scaffoldBackgroundColor,
     );
     final placeholderStyle = TextStyle(
-      color: theme.hintColor.withOpacity(0.8),
+      color: theme.hintColor.withValues(alpha: 0.8),
       fontSize: 12,
     );
 
@@ -410,7 +409,7 @@ class _AlternativeFieldState extends State<_AlternativeField> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(hasFocus ? 0.15 : 0.08),
+                  color: Colors.black.withValues(alpha: hasFocus ? 0.15 : 0.08),
                   blurRadius: hasFocus ? 6 : 3,
                   offset: const Offset(0, 2),
                 ),

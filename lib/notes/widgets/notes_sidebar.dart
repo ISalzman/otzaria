@@ -278,7 +278,7 @@ class _NotesSidebarState extends State<NotesSidebar> {
                   Flexible(
                     flex: 3,
                     child: DropdownButtonFormField<NoteSortOption>(
-                      value: _sortOption,
+                      initialValue: _sortOption,
                       onChanged: _onSortChanged,
                       decoration: const InputDecoration(
                         labelText: 'מיון',
@@ -302,7 +302,7 @@ class _NotesSidebarState extends State<NotesSidebar> {
                   Flexible(
                     flex: 2,
                     child: DropdownButtonFormField<NoteStatusFilter>(
-                      value: _statusFilter,
+                      initialValue: _statusFilter,
                       onChanged: _onStatusFilterChanged,
                       decoration: const InputDecoration(
                         labelText: 'סטטוס',

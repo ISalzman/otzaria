@@ -117,7 +117,10 @@ class CalendarWidget extends StatelessWidget {
     final bool isRoshChodesh = jewishCalendar.isRoshChodesh();
 
     if (isShabbat || isYomTov || isTaanis || isRoshChodesh) {
-      return Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.4);
+      return Theme.of(context)
+          .colorScheme
+          .secondaryContainer
+          .withValues(alpha: 0.4);
     }
 
     return null;
@@ -153,7 +156,7 @@ class CalendarWidget extends StatelessWidget {
             foregroundColor:
                 isSelected ? Theme.of(context).colorScheme.primary : null,
             backgroundColor: isSelected
-                ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
+                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)
                 : null,
             side: isSelected
                 ? BorderSide(color: Theme.of(context).colorScheme.primary)
@@ -451,11 +454,11 @@ class CalendarWidget extends StatelessWidget {
                               ? Theme.of(context)
                                   .colorScheme
                                   .primary
-                                  .withOpacity(0.25)
+                                  .withValues(alpha: 0.25)
                               : Theme.of(context)
                                   .colorScheme
                                   .surfaceContainer
-                                  .withOpacity(0.2)),
+                                  .withValues(alpha: 0.2)),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isSelected
@@ -490,7 +493,7 @@ class CalendarWidget extends StatelessWidget {
                               ? Theme.of(context)
                                   .colorScheme
                                   .onPrimaryContainer
-                                  .withOpacity(0.85)
+                                  .withValues(alpha: 0.85)
                               : Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 12,
                         ),
@@ -548,11 +551,11 @@ class CalendarWidget extends StatelessWidget {
                         ? Theme.of(context)
                             .colorScheme
                             .primary
-                            .withOpacity(0.25)
+                            .withValues(alpha: 0.25)
                         : Theme.of(context)
                             .colorScheme
                             .surfaceContainer
-                            .withOpacity(0.2)),
+                            .withValues(alpha: 0.2)),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isSelected
@@ -592,7 +595,7 @@ class CalendarWidget extends StatelessWidget {
                           ? Theme.of(context)
                               .colorScheme
                               .onPrimaryContainer
-                              .withOpacity(0.85)
+                              .withValues(alpha: 0.85)
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 10,
                     ),
@@ -645,11 +648,11 @@ class CalendarWidget extends StatelessWidget {
                         ? Theme.of(context)
                             .colorScheme
                             .primary
-                            .withOpacity(0.25)
+                            .withValues(alpha: 0.25)
                         : Theme.of(context)
                             .colorScheme
                             .surfaceContainer
-                            .withOpacity(0.2)),
+                            .withValues(alpha: 0.2)),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isSelected
@@ -689,7 +692,7 @@ class CalendarWidget extends StatelessWidget {
                           ? Theme.of(context)
                               .colorScheme
                               .onPrimaryContainer
-                              .withOpacity(0.85)
+                              .withValues(alpha: 0.85)
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 10,
                     ),
@@ -961,8 +964,9 @@ class CalendarWidget extends StatelessWidget {
       itemBuilder: (context, index) {
         final timeData = filteredTimesList[index];
         final isSpecialTime = _isSpecialTime(timeData['name']!);
-        final bgColor =
-            isSpecialTime ? scheme.tertiaryContainer : scheme.surfaceVariant;
+        final bgColor = isSpecialTime
+            ? scheme.tertiaryContainer
+            : scheme.surfaceContainerHighest;
         final border =
             isSpecialTime ? Border.all(color: scheme.tertiary, width: 1) : null;
         final titleColor = isSpecialTime
@@ -1592,7 +1596,7 @@ class CalendarWidget extends StatelessWidget {
                           child: Column(
                             children: [
                               DropdownButtonFormField<bool>(
-                                value: useHebrewCalendar,
+                                initialValue: useHebrewCalendar,
                                 decoration: const InputDecoration(
                                   labelText: 'חזור לפי',
                                   border: OutlineInputBorder(),
@@ -1648,7 +1652,7 @@ class CalendarWidget extends StatelessWidget {
                                       ? null
                                       : Theme.of(context)
                                           .disabledColor
-                                          .withOpacity(0.1),
+                                          .withValues(alpha: 0.1),
                                 ),
                               ),
                             ],

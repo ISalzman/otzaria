@@ -180,11 +180,11 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                           ? Theme.of(context)
                               .colorScheme
                               .primary
-                              .withOpacity(0.5)
+                              .withValues(alpha: 0.5)
                           : Theme.of(context)
                               .colorScheme
                               .primary
-                              .withOpacity(0.1),
+                              .withValues(alpha: 0.1),
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(4),
                         topRight: Radius.circular(4),

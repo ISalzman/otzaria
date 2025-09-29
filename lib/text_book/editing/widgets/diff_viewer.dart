@@ -35,9 +35,10 @@ class DiffViewer extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 0.1),
                     border: Border(
-                      bottom: BorderSide(color: Colors.red.withOpacity(0.3)),
+                      bottom:
+                          BorderSide(color: Colors.red.withValues(alpha: 0.3)),
                     ),
                   ),
                   child: const Text(
@@ -63,13 +64,13 @@ class DiffViewer extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Divider
           Container(
             width: 1,
             color: Theme.of(context).dividerColor,
           ),
-          
+
           // Edited content (left side)
           Expanded(
             child: Column(
@@ -78,9 +79,10 @@ class DiffViewer extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 0.1),
                     border: Border(
-                      bottom: BorderSide(color: Colors.green.withOpacity(0.3)),
+                      bottom: BorderSide(
+                          color: Colors.green.withValues(alpha: 0.3)),
                     ),
                   ),
                   child: const Text(
