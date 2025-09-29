@@ -25,6 +25,9 @@ jobs:
   build_windows:
     if: github.event_name != 'release'
     runs-on: windows-2022
+    # env:
+    #   RUSTUP_HOME: ${{ github.workspace }}\.rustup
+    #   CARGO_HOME:  ${{ github.workspace }}\.cargo
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
@@ -34,6 +37,27 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      # - name: Install Rust (stable)
+      #   uses: dtolnay/rust-toolchain@stable
+
+      # - name: Cache cargo registry and git
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: |
+      #       ${{ env.CARGO_HOME }}\registry
+      #       ${{ env.CARGO_HOME }}\git
+      #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-cargo-
+
+      # - name: Add cargo to PATH & verify toolchain
+      #   shell: pwsh
+      #   run: |
+      #     "$env:CARGO_HOME\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+      #     rustc -Vv
+      #     cargo -V
+      #     rustup show
 
       - name: Install Inno Setup (project script + fallback)
         shell: pwsh
@@ -59,10 +83,11 @@ jobs:
           if (-not $iscc) { throw "ISCC.exe not found after installation" }
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "ISCC resolved to: $iscc"
-      
+
       - name: Build Flutter Windows app
         shell: pwsh
         run: |
+          # flutter pub get
           flutter build windows --release
 
       - name: Zip Windows build
