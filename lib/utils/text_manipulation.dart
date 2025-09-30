@@ -182,11 +182,6 @@ String _mapGenerationToCategory(String generation) {
 }
 
 // Matches the Tetragrammaton with any Hebrew diacritics or cantillation marks.
-final RegExp _holyNameRegex = RegExp(
-  r"י([\p{Mn}]*)ה([\p{Mn}]*)ו([\p{Mn}]*)ה([\p{Mn}]*)",
-  unicode: true,
-);
-
 /// מקטין טקסט בתוך סוגריים עגולים
 /// תנאים:
 /// 1. אם יש סוגר פותח נוסף בפנים - מתעלם מהסוגר החיצוני ומקטין רק את הפנימיים

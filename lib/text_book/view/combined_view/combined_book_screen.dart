@@ -180,14 +180,6 @@ class _CombinedViewState extends State<CombinedView> {
     final modernGroup = CommentatorGroup.groupByTitle(groups, 'מחברי זמננו');
     final ungroupedGroup = CommentatorGroup.groupByTitle(groups, 'שאר מפרשים');
 
-    final Set<String> alreadyListed = {
-      ...tanachGroup.commentators,
-      ...chazalGroup.commentators,
-      ...rishonimGroup.commentators,
-      ...acharonimGroup.commentators,
-      ...modernGroup.commentators,
-    };
-
     // 3. יצירת רשימה של פרשנים שלא שויכו לאף קבוצה
     final List<String> ungrouped = ungroupedGroup.commentators;
 
@@ -486,59 +478,6 @@ $textWithBreaks
 ''';
   }
 
-  /// העתקת טקסט רגיל ללוח
-  Future<void> _copyPlainText() async {
-    final text = _lastSelectedText ?? _selectedText;
-    if (text == null || text.trim().isEmpty) {
-      UiSnack.show('אנא בחר טקסט להעתקה');
-      return;
-    }
-
-    try {
-      final clipboard = SystemClipboard.instance;
-      if (clipboard != null) {
-        // קבלת ההגדרות הנוכחיות
-        final settingsState = context.read<SettingsBloc>().state;
-        final textBookState = context.read<TextBookBloc>().state;
-
-        String finalText = text;
-
-        // אם צריך להוסיף כותרות
-        if (settingsState.copyWithHeaders != 'none' &&
-            textBookState is TextBookLoaded) {
-          final bookName = CopyUtils.extractBookName(textBookState.book);
-          final currentIndex = _currentSelectedIndex ?? 0;
-          final currentPath = await CopyUtils.extractCurrentPath(
-            textBookState.book,
-            currentIndex,
-            bookContent: textBookState.content,
-          );
-
-          finalText = CopyUtils.formatTextWithHeaders(
-            originalText: text,
-            copyWithHeaders: settingsState.copyWithHeaders,
-            copyHeaderFormat: settingsState.copyHeaderFormat,
-            bookName: bookName,
-            currentPath: currentPath,
-          );
-        }
-
-        final item = DataWriterItem();
-        item.add(Formats.plainText(finalText));
-        await clipboard.write([item]);
-
-        if (mounted) {
-          UiSnack.show(UiSnack.textCopied);
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        UiSnack.showError('שגיאה בהעתקה: $e',
-            backgroundColor: Theme.of(context).colorScheme.error);
-      }
-    }
-  }
-
   /// העתקת טקסט מעוצב (HTML) ללוח
   Future<void> _copyFormattedText() async {
     final plainText = _lastSelectedText ?? _selectedText;
@@ -626,8 +565,7 @@ $textWithBreaks
 
   /// הצגת עורך ההערות
   void _showNoteEditor(String selectedText, int charStart, int charEnd) {
-    // שמירת ה-context המקורי וה-bloc
-    final originalContext = context;
+    // שמירת ה-bloc לצורך עדכון המצב לאחר סגירת הדיאלוג
     final textBookBloc = context.read<TextBookBloc>();
 
     showDialog(

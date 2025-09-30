@@ -45,7 +45,8 @@ class MarkdownProcessor {
 
       // Clean up cache if too large
       if (_htmlCache.length > _maxCacheSize) {
-        final keysToRemove = _htmlCache.keys.take(_htmlCache.length - _maxCacheSize).toList();
+        final keysToRemove =
+            _htmlCache.keys.take(_htmlCache.length - _maxCacheSize).toList();
         for (final key in keysToRemove) {
           _htmlCache.remove(key);
         }
@@ -76,7 +77,7 @@ class MarkdownProcessor {
       // and sanitize them, instead of trying to sanitize the body tag itself.
       body.nodes.toList().forEach(_sanitizeNode);
 
-      return body.innerHtml ?? '';
+      return body.innerHtml;
     } catch (e) {
       return _escapeHtml(html);
     }
@@ -92,7 +93,8 @@ class MarkdownProcessor {
       }
 
       // Remove any attributes that are not explicitly allowed for the given tag.
-      final allowedAttributes = _getAllowedAttributes()[node.localName] ?? const <String>{};
+      final allowedAttributes =
+          _getAllowedAttributes()[node.localName] ?? const <String>{};
       final attributesToRemove = <dynamic>{};
       node.attributes.forEach((key, value) {
         if (!allowedAttributes.contains(key.toString())) {
@@ -110,9 +112,24 @@ class MarkdownProcessor {
   /// Returns the set of all allowed HTML tags.
   Set<String> _getAllowedTags() {
     return {
-      'p', 'br', 'b', 'strong', 'i', 'em', 'h1', 'h2', 'h3',
-      'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote',
-      'div', 'span',
+      'p',
+      'br',
+      'b',
+      'strong',
+      'i',
+      'em',
+      'h1',
+      'h2',
+      'h3',
+      'ul',
+      'ol',
+      'li',
+      'a',
+      'code',
+      'pre',
+      'blockquote',
+      'div',
+      'span',
     };
   }
 

@@ -949,7 +949,6 @@ class CalendarWidget extends StatelessWidget {
         timesList.where((timeData) => timeData['time'] != null).toList();
 
     final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GridView.builder(
       shrinkWrap: true,
@@ -1236,13 +1235,6 @@ class CalendarWidget extends StatelessWidget {
       }
     }
     return result;
-  }
-
-  String _numberToHebrewWithQuotes(int number) {
-    if (number <= 0) return '';
-    if (number < 10) return _numberToHebrewWithoutQuotes(number);
-    if (number < 100) return '${_numberToHebrewWithoutQuotes(number)}׳';
-    return '${_numberToHebrewWithoutQuotes(number)}״';
   }
 
   String _getGregorianMonthName(int month) {
@@ -1688,7 +1680,7 @@ class CalendarWidget extends StatelessWidget {
                     }
 
                     if (isEditMode) {
-                      final updatedEvent = existingEvent!.copyWith(
+                      final updatedEvent = existingEvent.copyWith(
                         title: titleController.text.trim(),
                         description: descriptionController.text.trim(),
                         recurring: isRecurring,
@@ -2031,7 +2023,7 @@ class _DayExtras extends StatelessWidget {
 
     // הפונקציה formatYomTov מחזירה את שם החג, המועד, התענית או היום המיוחד
     final yomTov = hdf.formatYomTov(jc);
-    if (yomTov != null && yomTov.isNotEmpty) {
+    if (yomTov.isNotEmpty) {
       // הפונקציה יכולה להחזיר מספר אירועים מופרדים בפסיק, למשל "ערב שבת, ערב ראש חודש"
       // לכן אנחנו מפצלים אותם ומוסיפים כל אחד בנפרד
       l.addAll(yomTov.split(',').map((e) => e.trim()));

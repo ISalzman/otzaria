@@ -11,26 +11,22 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/text_book/editing/repository/overrides_repository.dart';
-import 'package:otzaria/text_book/editing/services/overrides_rebase_service.dart';
 import 'package:otzaria/text_book/editing/models/section_identifier.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   final TextBookRepository _repository;
   final OverridesRepository _overridesRepository;
-  final OverridesRebaseService _rebaseService;
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
 
   TextBookBloc({
     required TextBookRepository repository,
     required OverridesRepository overridesRepository,
-    required OverridesRebaseService rebaseService,
     required TextBookInitial initialState,
     required this.scrollController,
     required this.positionsListener,
   })  : _repository = repository,
         _overridesRepository = overridesRepository,
-        _rebaseService = rebaseService,
         super(initialState) {
     on<LoadContent>(_onLoadContent);
     on<UpdateFontSize>(_onUpdateFontSize);
@@ -63,19 +59,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) async {
     TextBook book;
     String searchText;
-    int initialIndex;
     bool showLeftPane;
     List<String> commentators;
-    List<int>? visibleIndices;
+    late final List<int> visibleIndices;
 
     if (state is TextBookLoaded && event.preserveState) {
       // Preserve current state when reloading
       final currentState = state as TextBookLoaded;
       book = currentState.book;
       searchText = currentState.searchText;
-      initialIndex = currentState.visibleIndices.isNotEmpty
-          ? currentState.visibleIndices.first
-          : 0;
       showLeftPane = currentState.showLeftPane;
       commentators = currentState.activeCommentators;
       visibleIndices = currentState.visibleIndices;
@@ -84,7 +76,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final initial = state as TextBookInitial;
       book = initial.book;
       searchText = initial.searchText;
-      initialIndex = initial.index;
       showLeftPane = initial.showLeftPane;
       commentators = initial.commentators;
       visibleIndices = [initial.index];
@@ -108,7 +99,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       // Update current title if we're preserving state
       String? currentTitle;
-      if (visibleIndices != null && visibleIndices.isNotEmpty) {
+      if (visibleIndices.isNotEmpty) {
         try {
           currentTitle = await refFromIndex(
               visibleIndices.first, Future.value(tableOfContents));
@@ -159,7 +150,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         activeCommentators: commentators,
         commentatorGroups: _buildCommentatorGroups(eras, availableCommentators),
         removeNikud: removeNikud,
-        visibleIndices: visibleIndices ?? [initialIndex],
+        visibleIndices: visibleIndices,
         pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
         searchText: searchText,
         scrollController: scrollController,

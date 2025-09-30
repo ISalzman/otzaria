@@ -214,7 +214,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
         try {
           // Force a content reload from file system to ensure refresh
           final dataProvider = FileSystemData.instance;
-          final freshContent = await dataProvider.getBookText(widget.bookId);
+          await dataProvider.getBookText(widget.bookId);
 
           // Show success feedback
           UiSnack.showSuccess(UiSnack.savedSuccessfully);

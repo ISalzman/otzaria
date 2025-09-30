@@ -37,7 +37,6 @@ class MockTextBookRepository extends _i1.Mock
     _i1.throwOnMissingStub(this);
   }
 
-  @override
   _i4.Future<bool> bookExists(String title) => (super.noSuchMethod(
         Invocation.method(
           #bookExists,
@@ -56,7 +55,6 @@ class MockOverridesRepository extends _i1.Mock
     _i1.throwOnMissingStub(this);
   }
 
-  @override
   _i4.Future<_i6.TextOverride?> readOverride(String bookId, String sectionId) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -66,7 +64,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValue: _i4.Future<_i6.TextOverride?>.value(),
       ) as _i4.Future<_i6.TextOverride?>);
 
-  @override
   _i4.Future<void> writeOverride(String bookId, String sectionId,
           String markdown, String sourceHash) =>
       (super.noSuchMethod(
@@ -78,7 +75,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValueForMissingStub: _i4.Future<void>.value(),
       ) as _i4.Future<void>);
 
-  @override
   _i4.Future<void> deleteOverride(String bookId, String sectionId) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -89,7 +85,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValueForMissingStub: _i4.Future<void>.value(),
       ) as _i4.Future<void>);
 
-  @override
   _i4.Future<_i8.TextDraft?> readDraft(String bookId, String sectionId) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -99,7 +94,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValue: _i4.Future<_i8.TextDraft?>.value(),
       ) as _i4.Future<_i8.TextDraft?>);
 
-  @override
   _i4.Future<void> writeDraft(
           String bookId, String sectionId, String markdown) =>
       (super.noSuchMethod(
@@ -111,7 +105,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValueForMissingStub: _i4.Future<void>.value(),
       ) as _i4.Future<void>);
 
-  @override
   _i4.Future<void> deleteDraft(String bookId, String sectionId) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -122,7 +115,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValueForMissingStub: _i4.Future<void>.value(),
       ) as _i4.Future<void>);
 
-  @override
   _i4.Future<bool> hasLinksFile(String bookId) => (super.noSuchMethod(
         Invocation.method(
           #hasLinksFile,
@@ -131,7 +123,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValue: _i4.Future<bool>.value(false),
       ) as _i4.Future<bool>);
 
-  @override
   _i4.Future<bool> hasNewerDraftThanOverride(String bookId, String sectionId) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -141,7 +132,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValue: _i4.Future<bool>.value(false),
       ) as _i4.Future<bool>);
 
-  @override
   _i4.Future<List<String>> listOverrides(String bookId) => (super.noSuchMethod(
         Invocation.method(
           #listOverrides,
@@ -150,7 +140,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValue: _i4.Future<List<String>>.value(<String>[]),
       ) as _i4.Future<List<String>>);
 
-  @override
   _i4.Future<List<String>> listDrafts(String bookId) => (super.noSuchMethod(
         Invocation.method(
           #listDrafts,
@@ -159,7 +148,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValue: _i4.Future<List<String>>.value(<String>[]),
       ) as _i4.Future<List<String>>);
 
-  @override
   _i4.Future<void> cleanupOldDrafts() => (super.noSuchMethod(
         Invocation.method(
           #cleanupOldDrafts,
@@ -169,7 +157,6 @@ class MockOverridesRepository extends _i1.Mock
         returnValueForMissingStub: _i4.Future<void>.value(),
       ) as _i4.Future<void>);
 
-  @override
   _i4.Future<double> getTotalDraftsSizeMB() => (super.noSuchMethod(
         Invocation.method(
           #getTotalDraftsSizeMB,
@@ -188,7 +175,6 @@ class MockOverridesRebaseService extends _i1.Mock
     _i1.throwOnMissingStub(this);
   }
 
-  @override
   _i4.Future<_i5.RebaseOutcome> rebaseOverride(
     _i6.TextOverride? override,
     String? newSourceContent,

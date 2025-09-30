@@ -226,7 +226,10 @@ class _ReadingScreenState extends State<ReadingScreen>
                   // כאשר אין גלילה — מוסיפים placeholder משמאל כדי למרכז באמת ביחס למסך כולו
                   // כאשר יש גלילה — מבטלים אותו כדי לאפשר התפשטות גם לצד שמאל
                   // שומרים תמיד מקום קבוע לימין כדי למנוע שינויי רוחב פתאומיים
-                  actions: const [SizedBox(width: _kAppBarControlsWidth)],
+                  actions: [
+                    if (!_tabsOverflow)
+                      const SizedBox(width: _kAppBarControlsWidth),
+                  ],
                   // centerTitle לא נדרש כאשר הטאבים נמצאים ב-bottom
 
                   // 2. משתמשים באותו קבוע בדיוק עבור ווידג'ט הדמה

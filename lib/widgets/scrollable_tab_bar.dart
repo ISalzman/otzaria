@@ -46,9 +46,9 @@ class _ScrollableTabBarWithArrowsState
   }
 
   void _adoptPositionFrom(BuildContext ctx) {
-    final state = Scrollable.of(ctx);
-    final newPos = state?.position;
-    if (newPos == null) return;
+    final state = Scrollable.maybeOf(ctx);
+    if (state == null) return;
+    final newPos = state.position;
     // וידוא שמדובר בציר אופקי
     final isHorizontal = newPos.axisDirection == AxisDirection.left ||
         newPos.axisDirection == AxisDirection.right;
@@ -143,8 +143,7 @@ class _ScrollableTabBarWithArrowsState
             onNotification: (metricsNotification) {
               final metrics = metricsNotification.metrics;
               if (metrics.axis == Axis.horizontal) {
-                final ctx = metricsNotification.context;
-                if (ctx != null) _adoptPositionFrom(ctx);
+                _adoptPositionFrom(metricsNotification.context);
                 _handleScrollMetrics(metrics);
               }
               return false;

@@ -262,19 +262,19 @@ class FileSystemData {
             ));
           }
         } catch (e) {
-          print('Error loading book: $e');
+          debugPrint('Error loading book: $e');
         }
       }
       return books;
     } catch (e) {
-      print('Error loading hebrewbooks: $e');
+      debugPrint('Error loading hebrewbooks: $e');
       return [];
     }
   }
 
   /// Retrieves all links associated with a specific book.
   ///
-  /// Links are stored in JSON files named '<book_title>_links.json' in the links directory.
+  /// Links are stored in JSON files named '[book_title]_links.json' in the links directory.
   Future<List<Link>> getAllLinksForBook(String title) async {
     try {
       File file = File(_getLinksPath(title));
@@ -350,7 +350,7 @@ class FileSystemData {
         if (entity is File) {
           final fileName = entity.path.split(Platform.pathSeparator).last;
           if (fileName.startsWith('$baseName.backup.')) {
-            backupFiles.add(entity as File);
+            backupFiles.add(entity);
           }
         }
       }
@@ -600,9 +600,9 @@ class FileSystemData {
         .replaceAll('\\', Platform.pathSeparator);
     final tanachBase =
         '${Platform.pathSeparator}אוצריא${Platform.pathSeparator}תנך${Platform.pathSeparator}';
-    final torah = tanachBase + 'תורה';
-    final neviim = tanachBase + 'נביאים';
-    final ktuvim = tanachBase + 'כתובים';
+    final torah = '${tanachBase}תורה';
+    final neviim = '${tanachBase}נביאים';
+    final ktuvim = '${tanachBase}כתובים';
     return normalized.contains(torah) ||
         normalized.contains(neviim) ||
         normalized.contains(ktuvim);

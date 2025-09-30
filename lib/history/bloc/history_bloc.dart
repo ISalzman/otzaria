@@ -35,12 +35,12 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     if (_pendingSnapshots.isNotEmpty) {
       final snapshots = _pendingSnapshots.values.toList();
       _pendingSnapshots.clear();
-      _saveSnapshotsToHistory(snapshots);
+      _updateAndSaveHistory(snapshots);
     }
     return super.close();
   }
 
-  Future<void> _saveSnapshotsToHistory(List<Bookmark> snapshots) async {
+  Future<List<Bookmark>> _updateAndSaveHistory(List<Bookmark> snapshots) async {
     final updatedHistory = List<Bookmark>.from(state.history);
 
     for (final bookmark in snapshots) {
@@ -58,9 +58,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     }
 
     await _repository.saveHistory(updatedHistory);
-    if (!isClosed) {
-      emit(HistoryLoaded(updatedHistory));
-    }
+    return updatedHistory;
   }
 
   Future<Bookmark?> _bookmarkFromTab(OpenedTab tab) async {
@@ -234,7 +232,8 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
       BulkAddHistory event, Emitter<HistoryState> emit) async {
     if (event.snapshots.isEmpty) return;
     try {
-      await _saveSnapshotsToHistory(event.snapshots);
+      final updatedHistory = await _updateAndSaveHistory(event.snapshots);
+      emit(HistoryLoaded(updatedHistory));
     } catch (e) {
       emit(HistoryError(state.history, e.toString()));
     }

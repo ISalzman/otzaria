@@ -34,8 +34,8 @@ class FindRefRepository {
       final refKey = _normalize(r.reference);
 
       // 2. יעד ההפניה (קובץ ספציפי או שם ספר וסוג)
-      final file = (r.filePath ?? '').trim().toLowerCase();
-      final title = (r.title ?? '').trim().toLowerCase();
+      final file = r.filePath.trim().toLowerCase();
+      final title = r.title.trim().toLowerCase();
       final typ = r.isPdf ? 'pdf' : 'txt';
       final dest = file.isNotEmpty ? file : '$title|$typ';
 

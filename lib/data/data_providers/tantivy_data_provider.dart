@@ -27,7 +27,7 @@ class TantivyDataProvider {
 
   /// Clear global cache when starting new search
   static void clearGlobalCache() {
-    print(
+    debugPrint(
         '🧹 Clearing global facet cache (${_globalFacetCache.length} entries)');
     _globalFacetCache.clear();
     _ongoingCounts.clear();
@@ -121,18 +121,19 @@ class TantivyDataProvider {
         '$query|${facets.join(',')}|$fuzzy|$distance|${customSpacing.toString()}|${alternativeWords.toString()}|${searchOptions.toString()}';
 
     if (_lastCachedQuery == query && _globalFacetCache.containsKey(cacheKey)) {
-      print('🎯 GLOBAL CACHE HIT for $facets: ${_globalFacetCache[cacheKey]}');
+      debugPrint(
+          '🎯 GLOBAL CACHE HIT for $facets: ${_globalFacetCache[cacheKey]}');
       return _globalFacetCache[cacheKey]!;
     }
 
     // Check if this count is already in progress
     if (_ongoingCounts.contains(cacheKey)) {
-      print('⏳ Count already in progress for $facets, waiting...');
+      debugPrint('⏳ Count already in progress for $facets, waiting...');
       // Wait for the ongoing count to complete
       while (_ongoingCounts.contains(cacheKey)) {
         await Future.delayed(const Duration(milliseconds: 50));
         if (_globalFacetCache.containsKey(cacheKey)) {
-          print(
+          debugPrint(
               '🎯 DELAYED CACHE HIT for $facets: ${_globalFacetCache[cacheKey]}');
           return _globalFacetCache[cacheKey]!;
         }
@@ -142,12 +143,6 @@ class TantivyDataProvider {
     // Mark this count as in progress
     _ongoingCounts.add(cacheKey);
     final index = await engine;
-
-    // בדיקה אם יש מרווחים מותאמים אישית, מילים חילופיות או אפשרויות חיפוש
-    final hasCustomSpacing = customSpacing != null && customSpacing.isNotEmpty;
-    final hasAlternativeWords =
-        alternativeWords != null && alternativeWords.isNotEmpty;
-    final hasSearchOptions = searchOptions != null && searchOptions.isNotEmpty;
 
     // המרת החיפוש לפורמט המנוע החדש - בדיוק כמו ב-SearchRepository!
     final params = SearchQueryBuilder.prepareQueryParams(
@@ -167,7 +162,7 @@ class TantivyDataProvider {
       _lastCachedQuery = query;
       _globalFacetCache[cacheKey] = count;
       _ongoingCounts.remove(cacheKey); // Mark as completed
-      print('💾 GLOBAL CACHE SAVE for $facets: $count');
+      debugPrint('💾 GLOBAL CACHE SAVE for $facets: $count');
 
       return count;
     } catch (e) {
@@ -219,18 +214,12 @@ class TantivyDataProvider {
       Map<String, String>? customSpacing,
       Map<int, List<String>>? alternativeWords,
       Map<String, Map<String, bool>>? searchOptions}) async {
-    print(
+    debugPrint(
         '🔍 TantivyDataProvider: Starting batch count for ${facets.length} facets');
     final stopwatch = Stopwatch()..start();
 
     final index = await engine;
     final results = <String, int>{};
-
-    // בדיקה אם יש מרווחים מותאמים אישית, מילים חילופיות או אפשרויות חיפוש
-    final hasCustomSpacing = customSpacing != null && customSpacing.isNotEmpty;
-    final hasAlternativeWords =
-        alternativeWords != null && alternativeWords.isNotEmpty;
-    final hasSearchOptions = searchOptions != null && searchOptions.isNotEmpty;
 
     // המרת החיפוש לפורמט המנוע החדש - בדיוק כמו ב-countTexts
     final params = SearchQueryBuilder.prepareQueryParams(
@@ -245,7 +234,7 @@ class TantivyDataProvider {
 
     for (final facet in facets) {
       try {
-        print(
+        debugPrint(
             '🔍 Counting facet: $facet (${processedCount + 1}/${facets.length})');
         final facetStopwatch = Stopwatch()..start();
         final count = await index.count(
@@ -254,7 +243,7 @@ class TantivyDataProvider {
             slop: effectiveSlop,
             maxExpansions: maxExpansions);
         facetStopwatch.stop();
-        print(
+        debugPrint(
             '✅ Facet $facet: $count (${facetStopwatch.elapsedMilliseconds}ms)');
         results[facet] = count;
 
@@ -265,7 +254,7 @@ class TantivyDataProvider {
 
         // אם יש יותר מדי facets עם 0 תוצאות, נפסיק מוקדם
         if (processedCount >= 10 && zeroResultsCount > processedCount * 0.8) {
-          print('⚠️ Too many zero results, stopping early');
+          debugPrint('⚠️ Too many zero results, stopping early');
           // נמלא את השאר עם 0
           for (int i = processedCount; i < facets.length; i++) {
             results[facets[i]] = 0;
@@ -273,7 +262,7 @@ class TantivyDataProvider {
           break;
         }
       } catch (e) {
-        print('❌ Error counting facet $facet: $e');
+        debugPrint('❌ Error counting facet $facet: $e');
         results[facet] = 0;
         processedCount++;
         zeroResultsCount++;
@@ -281,9 +270,9 @@ class TantivyDataProvider {
     }
 
     stopwatch.stop();
-    print(
+    debugPrint(
         '✅ TantivyDataProvider: Batch count completed in ${stopwatch.elapsedMilliseconds}ms');
-    print(
+    debugPrint(
         '📊 Results: ${results.entries.where((e) => e.value > 0).map((e) => '${e.key}: ${e.value}').join(', ')}');
 
     return results;

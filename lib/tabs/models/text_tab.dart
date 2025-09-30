@@ -1,7 +1,6 @@
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/editing/repository/local_overrides_repository.dart';
-import 'package:otzaria/text_book/editing/services/overrides_rebase_service.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -59,7 +58,6 @@ class TextBookTab extends OpenedTab {
         fileSystem: FileSystemData.instance,
       ),
       overridesRepository: LocalOverridesRepository(),
-      rebaseService: DefaultOverridesRebaseService(),
       initialState: TextBookInitial(
         book,
         index,

@@ -83,8 +83,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _searchFieldFocusNode.requestFocus();
   }
 
-  late TabController _tabController;
-  final GlobalKey<State<PdfBookSearchView>> _searchViewKey = GlobalKey();
   int? _lastProcessedSearchSessionId;
 
   void _onTextSearcherUpdated() {
@@ -141,13 +139,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     // -- שאר הקוד של initState נשאר כמעט זהה --
     pdfController.addListener(_onPdfViewerControllerUpdate);
-
-    _tabController = TabController(
-      length: 3,
-      vsync: this,
-      initialIndex: widget.tab.searchText.isNotEmpty ? 1 : 0,
-    );
-
     if (widget.tab.searchText.isNotEmpty) {
       _currentLeftPaneTabIndex = 1;
     } else {

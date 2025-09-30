@@ -50,6 +50,7 @@ class SearchRepository {
     final hasCustomSpacing = customSpacing != null && customSpacing.isNotEmpty;
     final hasAlternativeWords =
         alternativeWords != null && alternativeWords.isNotEmpty;
+    print('🔍 hasCustomSpacing: $hasCustomSpacing');
     final hasSearchOptions = searchOptions != null &&
         searchOptions.isNotEmpty &&
         searchOptions.values.any((wordOptions) =>

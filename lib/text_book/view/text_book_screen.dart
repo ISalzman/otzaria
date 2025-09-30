@@ -22,7 +22,6 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/printing/printing_screen.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
-import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/links_screen.dart';
 import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
@@ -1762,17 +1761,6 @@ $detailsSection
     );
   }
 
-  Widget _buildCombinedView(TextBookLoaded state) {
-    return CombinedView(
-      data: state.content,
-      textSize: state.fontSize,
-      openBookCallback: widget.openBookCallback,
-      openLeftPaneTab: _openLeftPaneTab,
-      showCommentaryAsExpansionTiles: true,
-      tab: widget.tab,
-    );
-  }
-
   Widget _buildTabBar(TextBookLoaded state) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (state.showLeftPane && !Platform.isAndroid && !_isInitialFocusDone) {
@@ -2075,6 +2063,36 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
       );
     }
 
+    if (_dataErrors.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'לא ניתן לטעון את נתוני הדיווח:',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            ..._dataErrors.map((error) => Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    error,
+                    textAlign: TextAlign.center,
+                  ),
+                )),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('סגור'),
+            ),
+          ],
+        ),
+      );
+    }
+
     // --- כאן התיקון המרכזי ---
     return PhoneReportTab(
       visibleText: widget.visibleText,
@@ -2273,18 +2291,6 @@ class _RegularReportTabState extends State<_RegularReportTab> {
       ),
     );
   }
-}
-
-Widget _buildTextEditorButton(BuildContext context, TextBookLoaded state) {
-  final hasCurrentSection =
-      state.positionsListener.itemPositions.value.isNotEmpty;
-
-  return IconButton(
-    onPressed:
-        hasCurrentSection ? () => _handleTextEditorPress(context, state) : null,
-    icon: const Icon(Icons.edit),
-    tooltip: 'עריכת טקסט (Ctrl+E)',
-  );
 }
 
 Widget _buildFullFileEditorButton(BuildContext context, TextBookLoaded state) {

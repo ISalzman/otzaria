@@ -32,7 +32,6 @@ void main() {
       test('As a user, I can select text and create a note', () async {
         // Given: A book with text content
         const bookId = 'user-story-create';
-        const bookText = 'זהו טקסט לדוגמה בעברית עם תוכן מעניין לבדיקה.';
         const selectedText = 'טקסט לדוגמה';
         const noteContent = 'זוהי הערה על הטקסט הנבחר';
 
@@ -62,8 +61,6 @@ void main() {
       test('As a user, I can create notes with Hebrew text and nikud',
           () async {
         const bookId = 'hebrew-nikud-test';
-        const bookText =
-            'בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ';
         const selectedText = 'בְּרֵאשִׁית בָּרָא';
         const noteContent = 'הערה על פסוק הפתיחה';
 
@@ -84,8 +81,6 @@ void main() {
       test('As a user, I can create notes with RTL text and special characters',
           () async {
         const bookId = 'rtl-special-test';
-        const bookText =
-            'טקסט עם "מירכאות" ו־מקף וסימני פיסוק: כמו נקודה, פסיק!';
         const selectedText = '"מירכאות"';
         const noteContent = 'הערה על מירכאות בעברית';
 
@@ -329,7 +324,7 @@ void main() {
     group('User Story: Deleting Notes', () {
       test('As a user, I can delete notes I no longer need', () async {
         const bookId = 'delete-test';
-        const bookText = 'Text for deletion testing.';
+        const bookText = 'טקסט לדוגמה למחיקת הערות';
 
         // Create note
         final note = await integrationService.createNoteFromSelection(
@@ -493,7 +488,6 @@ void main() {
         // and notes need to be re-anchored
 
         const bookId = 'reanchoring-test';
-        const originalText = 'This is the original text with some content.';
         const modifiedText =
             'This is the original text with some additional content.';
 
@@ -541,9 +535,6 @@ void main() {
     group('Accuracy Requirements Validation', () {
       test('should achieve 98% accuracy after 5% text changes', () async {
         const bookId = 'accuracy-test';
-        const originalText =
-            'This is a test document with multiple sentences. Each sentence contains different words and phrases. The document is used for testing note anchoring accuracy.';
-
         // Create multiple notes
         final notes = <Note>[];
         final selections = [
@@ -588,7 +579,6 @@ void main() {
       test('should achieve 100% accuracy for whitespace-only changes',
           () async {
         const bookId = 'whitespace-accuracy-test';
-        const originalText = 'Text with normal spacing between words.';
         const whitespaceModifiedText =
             'Text  with   normal    spacing     between      words.';
 
@@ -609,13 +599,11 @@ void main() {
 
       test('should handle deleted text properly', () async {
         const bookId = 'deletion-test';
-        const originalText =
-            'This text will have a section removed from the middle part.';
         const deletedText =
             'This text will have a section removed.'; // "from the middle part" removed
 
         // Create note on the part that will be deleted
-        final note = await integrationService.createNoteFromSelection(
+        await integrationService.createNoteFromSelection(
             bookId, 'middle part', 45, 56, 'Note on deleted section');
 
         // Load with deleted text

@@ -139,7 +139,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
             controlButtons: const [],
             onApplyButtonClick: (list) {
               selectedTopics = list ?? [];
-              _update(context, state as TextBookLoaded);
+              _update(context, state);
             },
             validateSelectedItem: (list, item) =>
                 list != null && list.contains(item),

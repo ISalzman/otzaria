@@ -1,10 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/notes/services/notes_integration_service.dart';
 import '../test_helpers/test_setup.dart';
-import 'package:otzaria/notes/services/advanced_orphan_manager.dart';
 import 'package:otzaria/notes/services/smart_batch_processor.dart';
 import 'package:otzaria/notes/services/performance_optimizer.dart';
-import 'package:otzaria/notes/services/advanced_search_engine.dart';
 import 'package:otzaria/notes/models/note.dart';
 import 'package:otzaria/notes/models/anchor_models.dart';
 import 'package:otzaria/notes/config/notes_config.dart';
@@ -16,17 +14,13 @@ void main() {
 
   group('Notes Performance Tests', () {
     late NotesIntegrationService integrationService;
-    late AdvancedOrphanManager orphanManager;
     late SmartBatchProcessor batchProcessor;
     late PerformanceOptimizer performanceOptimizer;
-    late AdvancedSearchEngine searchEngine;
 
     setUp(() {
       integrationService = NotesIntegrationService.instance;
-      orphanManager = AdvancedOrphanManager.instance;
       batchProcessor = SmartBatchProcessor.instance;
       performanceOptimizer = PerformanceOptimizer.instance;
-      searchEngine = AdvancedSearchEngine.instance;
 
       // Clear caches
       integrationService.clearCache();
@@ -35,8 +29,6 @@ void main() {
     group('Note Creation Performance', () {
       test('should create single note within performance target', () async {
         const bookId = 'perf-create-single';
-        const bookText = 'Performance test content for single note creation.';
-
         final stopwatch = Stopwatch()..start();
 
         final note = await integrationService.createNoteFromSelection(
@@ -56,8 +48,6 @@ void main() {
 
       test('should create multiple notes efficiently', () async {
         const bookId = 'perf-create-multiple';
-        const bookText =
-            'Performance test content for multiple note creation with various selections.';
         const noteCount = 10;
 
         final stopwatch = Stopwatch()..start();
@@ -459,9 +449,6 @@ void main() {
     group('Performance Regression Tests', () {
       test('should maintain consistent anchoring performance', () async {
         const bookId = 'regression-anchoring';
-        const bookText =
-            'Regression test content for anchoring performance validation.';
-
         // Create notes and measure anchoring time
         final anchoringTimes = <int>[];
 
