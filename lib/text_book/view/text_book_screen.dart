@@ -2009,7 +2009,6 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
 
   @override
   Widget build(BuildContext context) {
-    // קוד זה נשאר זהה
     return Dialog(
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
@@ -2050,7 +2049,6 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
   }
 
   Widget _buildRegularReportTab() {
-    // קוד זה נשאר זהה
     return _RegularReportTab(
       visibleText: widget.visibleText,
       fontSize: widget.fontSize,

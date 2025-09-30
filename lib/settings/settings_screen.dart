@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:window_manager/window_manager.dart';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -27,6 +28,8 @@ class MySettingsScreen extends StatefulWidget {
 
 class _MySettingsScreenState extends State<MySettingsScreen>
     with AutomaticKeepAliveClientMixin {
+  static const double _tileH = 112.0;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -135,7 +138,17 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                   title: 'הגדרות עיצוב',
                   titleTextStyle: const TextStyle(fontSize: 25),
                   children: <Widget>[
-                    _buildColumns(2, [
+                    _buildColumns(3, [
+                      if (!(Platform.isAndroid || Platform.isIOS))
+                        SimpleSettingsTile(
+                          title: 'מסך מלא',
+                          subtitle: 'החלף מצב מסך מלא',
+                          leading: const Icon(Icons.fullscreen),
+                          onTap: () async {
+                            final f = await windowManager.isFullScreen();
+                            await windowManager.setFullScreen(!f);
+                          },
+                        ),
                       SwitchSettingsTile(
                         settingKey: 'key-dark-mode',
                         title: 'מצב כהה',
@@ -160,43 +173,110 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         },
                       ),
                     ]),
-                    SliderSettingsTile(
-                      title: 'גודל גופן התחלתי בספרים',
-                      settingKey: 'key-font-size',
-                      defaultValue: state.fontSize,
-                      min: 15,
-                      max: 60,
-                      step: 1,
-                      leading: const Icon(Icons.format_size),
-                      decimalPrecision: 0,
-                      onChange: (value) {
-                        context.read<SettingsBloc>().add(UpdateFontSize(value));
-                      },
-                    ),
-                    DropDownSettingsTile<String>(
-                      title: 'גופן',
-                      settingKey: 'key-font-family',
-                      values: const <String, String>{
-                        'TaameyDavidCLM': 'דוד',
-                        'FrankRuhlCLM': 'פרנק-רוהל',
-                        'TaameyAshkenaz': 'טעמי אשכנז',
-                        'KeterYG': 'כתר',
-                        'Shofar': 'שופר',
-                        'NotoSerifHebrew': 'נוטו',
-                        'Tinos': 'טינוס',
-                        'NotoRashiHebrew': 'רש"י',
-                        'Candara': 'קנדרה',
-                        'roboto': 'רובוטו',
-                        'Calibri': 'קליברי',
-                        'Arial': 'אריאל',
-                      },
-                      selected: state.fontFamily,
-                      leading: const Icon(Icons.font_download_outlined),
-                      onChange: (value) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(UpdateFontFamily(value));
-                      },
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: SizedBox(
+                        height: _tileH,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              flex: 4,
+                              child: StatefulBuilder(
+                                builder: (context, setState) {
+                                  double currentValue =
+                                      state.fontSize.clamp(15, 60);
+                                  return Column(
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                            top: 8,
+                                            bottom: 4,
+                                            left: 16,
+                                            right: 16),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.format_size),
+                                            const SizedBox(width: 16),
+                                            Expanded(
+                                              child: Text(
+                                                'גודל גופן התחלתי',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleLarge
+                                                    ?.copyWith(fontSize: 16),
+                                              ),
+                                            ),
+                                            Text(
+                                              currentValue.toStringAsFixed(0),
+                                              style: TextStyle(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16.0),
+                                        child: SliderTheme(
+                                          data: SliderTheme.of(context)
+                                              .copyWith(trackHeight: 2),
+                                          child: Slider(
+                                            value: currentValue,
+                                            min: 15,
+                                            max: 60,
+                                            divisions: ((60 - 15) / 1).round(),
+                                            onChanged: (value) {
+                                              setState(
+                                                  () => currentValue = value);
+                                              context
+                                                  .read<SettingsBloc>()
+                                                  .add(UpdateFontSize(value));
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                            const VerticalDivider(width: 16, thickness: 1),
+                            Expanded(
+                              flex: 1,
+                              child: DropDownSettingsTile<String>(
+                                title: 'גופן',
+                                settingKey: 'key-font-family',
+                                values: const {
+                                  'TaameyDavidCLM': 'דוד',
+                                  'FrankRuhlCLM': 'פרנק-רוהל',
+                                  'TaameyAshkenaz': 'טעמי אשכנז',
+                                  'KeterYG': 'כתר',
+                                  'Shofar': 'שופר',
+                                  'NotoSerifHebrew': 'נוטו',
+                                  'Tinos': 'טינוס',
+                                  'NotoRashiHebrew': 'רש"י',
+                                  'Candara': 'קנדרה',
+                                  'roboto': 'רובוטו',
+                                  'Calibri': 'קליברי',
+                                  'Arial': 'אריאל',
+                                },
+                                selected: state.fontFamily,
+                                leading:
+                                    const Icon(Icons.font_download_outlined),
+                                onChange: (value) => context
+                                    .read<SettingsBloc>()
+                                    .add(UpdateFontFamily(value)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     SettingsContainer(
                       children: <Widget>[

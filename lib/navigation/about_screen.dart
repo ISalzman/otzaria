@@ -172,7 +172,7 @@ class _AboutScreenState extends State<AboutScreen> {
                                   ),
                                 ),
                                 TextSpan(
-                                  text: 'יהודה',
+                                  text: 'יהודה ראה',
                                   style: TextStyle(
                                     fontSize: 32,
                                     fontWeight: FontWeight.bold,
