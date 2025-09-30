@@ -17,7 +17,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/widgets/items_list_view.dart';
 
 class HistoryView extends StatelessWidget {
-  const HistoryView({Key? key}) : super(key: key);
+  const HistoryView({super.key});
 
   void _openBook(
       BuildContext context, Book book, int index, List<String>? commentators) {

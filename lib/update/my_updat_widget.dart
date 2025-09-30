@@ -37,7 +37,8 @@ Widget _flatChipAutoHideError({
 }
 
 class MyUpdatWidget extends StatelessWidget {
-  const MyUpdatWidget({Key? key, required this.child}) : super(key: key);
+  const MyUpdatWidget({super.key, required this.child});
+
   final Widget child;
   @override
   Widget build(BuildContext context) => FutureBuilder(

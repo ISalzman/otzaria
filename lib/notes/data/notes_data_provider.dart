@@ -3,7 +3,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/core/app_paths.dart';
 import '../models/note.dart';
-
 import '../config/notes_config.dart';
 import 'database_schema.dart';
 
@@ -102,7 +101,7 @@ class NotesDataProvider {
       } catch (e) {
         // Log but don't fail on PRAGMA errors in testing
         if (NotesEnvironment.performanceLogging) {
-          // print('PRAGMA warning: $pragma failed with $e');
+          // debugPrint('PRAGMA warning: $pragma failed with $e');
         }
       }
     }

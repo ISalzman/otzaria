@@ -48,12 +48,12 @@ class CopyUtils {
       final result = parts.join(', ');
 
       if (kDebugMode) {
-        print('CopyUtils: Final path (TOC strict): "$result"');
+        debugPrint('CopyUtils: Final path (TOC strict): "$result"');
       }
       return result;
     } catch (e, st) {
       if (kDebugMode) {
-        print('CopyUtils: ERROR in extractCurrentPath: $e\n$st');
+        debugPrint('CopyUtils: ERROR in extractCurrentPath: $e\n$st');
       }
       return '';
     }
@@ -196,9 +196,10 @@ $textWithBreaks
 
     final result = parts.join(', ');
     if (kDebugMode) {
-      if (result.isNotEmpty)
-        print(
+      if (result.isNotEmpty) {
+        debugPrint(
             'CopyUtils: Final path from CONTENT (strict, full scan): "$result"');
+      }
     }
     return result;
   }

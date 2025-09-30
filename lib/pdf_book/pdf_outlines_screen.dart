@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/widgets.dart' show ExpansibleController;
 import 'package:pdfrx/pdfrx.dart';
 
 class OutlineView extends StatefulWidget {

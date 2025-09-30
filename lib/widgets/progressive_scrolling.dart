@@ -12,13 +12,13 @@ class ProgressiveScroll extends StatefulWidget {
   final double curve;
 
   const ProgressiveScroll({
-    Key? key,
+    super.key,
     required this.child,
     required this.scrollController,
     this.maxSpeed = 5000.0,
     this.accelerationFactor = 0.1,
     this.curve = 2.0,
-  }) : super(key: key);
+  });
 
   @override
   State<ProgressiveScroll> createState() => _ProgressiveScrollState();
@@ -44,7 +44,7 @@ class _ProgressiveScrollState extends State<ProgressiveScroll> {
         double curvedT = exp(widget.curve * t);
         _scrollSpeed = (curvedT * widget.accelerationFactor * _scrollDirection)
             .clamp(-widget.maxSpeed, widget.maxSpeed);
-        //print('scroll speed: $_scrollSpeed');
+        //debugPrint('scroll speed: $_scrollSpeed');
       } else {
         _scrollSpeed = 0;
         _timePressedInSeconds = 0;

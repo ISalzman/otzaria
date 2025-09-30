@@ -791,16 +791,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     : 0;
                 widget.tab.index = currentIndex;
 
-                final book = await DataRepository.instance.library.then(
-                  (library) =>
-                      library.findBookByTitle(state.book.title, PdfBook),
-                );
+                final library = await DataRepository.instance.library;
+                if (!context.mounted) return;
+
+                final book = library.findBookByTitle(state.book.title, PdfBook);
+                if (book == null) {
+                  return;
+                }
+
                 final index = await textToPdfPage(
                   state.book,
                   currentIndex,
                 );
 
-                openBook(context, book!, index ?? 1, '', ignoreHistory: true);
+                if (!context.mounted) return;
+
+                openBook(context, book, index ?? 1, '', ignoreHistory: true);
               },
             )
           : const SizedBox.shrink(),
@@ -838,16 +844,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         int index = state.positionsListener.itemPositions.value.first.index;
         final toc = state.book.tableOfContents;
         String ref = await refFromIndex(index, toc);
+        if (!mounted || !context.mounted) return;
+
         bool bookmarkAdded = context.read<BookmarkBloc>().addBookmark(
               ref: ref,
               book: state.book,
               index: index,
               commentatorsToShow: state.activeCommentators,
             );
-        if (mounted) {
-          UiSnack.showQuick(
-              bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
-        }
+        UiSnack.showQuick(
+            bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
       },
       icon: const Icon(Icons.bookmark_add),
       tooltip: 'הוספת סימניה',
@@ -1056,14 +1062,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         : 0;
     widget.tab.index = currentIndex;
 
-    final book = await DataRepository.instance.library.then(
-      (library) => library.findBookByTitle(state.book.title, PdfBook),
-    );
+    final library = await DataRepository.instance.library;
+    if (!context.mounted) return;
 
-    if (book != null) {
-      final index = await textToPdfPage(state.book, currentIndex);
-      openBook(context, book, index ?? 1, '', ignoreHistory: true);
+    final book = library.findBookByTitle(state.book.title, PdfBook);
+    if (book == null) {
+      return;
     }
+
+    final index = await textToPdfPage(state.book, currentIndex);
+
+    if (!context.mounted) return;
+
+    openBook(context, book, index ?? 1, '', ignoreHistory: true);
   }
 
   void _handleAddNotePress(BuildContext context, TextBookLoaded state) {
@@ -1083,23 +1094,23 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   void _handleBookmarkPress(BuildContext context, TextBookLoaded state) async {
-    int index = state.positionsListener.itemPositions.value.first.index;
+    final index = state.positionsListener.itemPositions.value.first.index;
     final toc = state.book.tableOfContents;
-    String ref = await refFromIndex(index, toc);
-    bool bookmarkAdded = context.read<BookmarkBloc>().addBookmark(
+    final ref = await refFromIndex(index, toc);
+    if (!mounted || !context.mounted) return;
+
+    final bookmarkAdded = context.read<BookmarkBloc>().addBookmark(
           ref: ref,
           book: state.book,
           index: index,
           commentatorsToShow: state.activeCommentators,
         );
-    if (mounted) {
-      final successColor = bookmarkAdded
-          ? Theme.of(context).colorScheme.tertiaryContainer
-          : null;
-      UiSnack.showSuccess(
-          bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת',
-          backgroundColor: successColor);
-    }
+
+    final successColor =
+        bookmarkAdded ? Theme.of(context).colorScheme.tertiaryContainer : null;
+    UiSnack.showSuccess(
+        bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת',
+        backgroundColor: successColor);
   }
 
   Future<void> _showReportBugDialog(
@@ -1114,7 +1125,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         .map((pos) => utils.stripHtmlIfNeeded(allText[pos.index]))
         .join('\n');
 
-    if (!mounted) return;
+    if (!mounted || !context.mounted) return;
 
     final dynamic result = await _showTabbedReportDialog(
       context,
@@ -1126,13 +1137,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     try {
       if (result == null) return; // בוטל
-      if (!mounted) return;
+      if (!mounted || !context.mounted) return;
 
       // Handle different result types
       if (result is ReportedErrorData) {
         // Regular report - the heavy data should already be loaded by now
         final ReportAction? action =
             await _showConfirmationDialog(context, result);
+
+        if (!mounted || !context.mounted) return;
 
         if (action == null || action == ReportAction.cancel) return;
 
@@ -1314,11 +1327,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   ) {
     final detailsSection = (() {
       final base = errorDetails.isEmpty ? '' : '\n$errorDetails';
-      final extra = '\n\nמספר שורה: ' +
-          lineNumber.toString() +
-          '\nהקשר (4 מילים לפני ואחרי):\n' +
-          contextText;
-      return base + extra;
+      final extra = '''
+      
+    מספר שורה: $lineNumber
+    הקשר (4 מילים לפני ואחרי):
+    $contextText''';
+      return '$base$extra';
     })();
 
     return '''
@@ -1404,9 +1418,12 @@ $detailsSection
 
       final phoneReportService = PhoneReportService();
       final result = await phoneReportService.submitReport(reportData);
+      if (!mounted || !context.mounted) return;
 
       // Hide loading indicator
-      if (mounted) Navigator.of(context).pop();
+      if (context.mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
 
       if (result.isSuccess) {
         _showPhoneReportSuccessDialog();
@@ -1415,7 +1432,9 @@ $detailsSection
       }
     } catch (e) {
       // Hide loading indicator
-      if (mounted) Navigator.of(context).pop();
+      if (mounted && context.mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
 
       debugPrint('Phone report error: $e');
       _showSimpleSnack('שגיאה בשליחת הדיווח: ${e.toString()}');
@@ -1668,6 +1687,7 @@ $detailsSection
             if (!(state.pinLeftPane ||
                 (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
               Future.microtask(() {
+                if (!mounted || !context.mounted) return;
                 context.read<TextBookBloc>().add(const ToggleLeftPane(false));
               });
             }
@@ -2349,7 +2369,9 @@ void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
     freshContent = state.editorText ?? '';
   }
 
-  showDialog(
+  if (!context.mounted) return;
+
+  await showDialog(
     context: context,
     barrierDismissible: false,
     builder: (dialogContext) => BlocProvider.value(
@@ -2365,8 +2387,10 @@ void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
         settings: settings,
       ),
     ),
-  ).then((_) {
-    // Close editor when dialog is dismissed
-    context.read<TextBookBloc>().add(const CloseEditor());
-  });
+  );
+
+  if (!context.mounted) return;
+
+  // Close editor when dialog is dismissed
+  context.read<TextBookBloc>().add(const CloseEditor());
 }

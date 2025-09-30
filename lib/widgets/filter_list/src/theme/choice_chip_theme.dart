@@ -10,10 +10,10 @@ import 'package:flutter/material.dart';
 class ChoiceChipTheme extends InheritedTheme {
   /// Builds a [GifDialogTheme].
   const ChoiceChipTheme({
-    Key? key,
+    super.key,
     required this.data,
-    required Widget child,
-  }) : super(key: key, child: child);
+    required super.child,
+  });
 
   /// The configuration of this theme.
   final ChoiceChipThemeData data;

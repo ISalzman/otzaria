@@ -1,5 +1,3 @@
-library filter_list;
-
 import 'state/filter_state.dart';
 import 'state/provider.dart';
 import 'theme/theme.dart';
@@ -235,7 +233,7 @@ class FilterListDialog {
                 validateRemoveItem: validateRemoveItem,
                 maximumSelectionLength: maximumSelectionLength,
                 controlButtons: controlButtons ??
-                    [ControlButtonType.ALL, ControlButtonType.Reset],
+                    [ControlButtonType.all, ControlButtonType.reset],
               ),
             ),
           ),

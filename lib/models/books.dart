@@ -75,7 +75,7 @@ abstract class Book {
 ///it has also a 'tableOfContents' field that returns a [Future] that resolvs to a list of [TocEntry]s
 class TextBook extends Book {
   TextBook(
-      {required String title,
+      {required super.title,
       super.category,
       super.author,
       super.heShortDesc,
@@ -83,8 +83,7 @@ class TextBook extends Book {
       super.pubPlace,
       super.order = 999,
       super.topics,
-      super.extraTitles})
-      : super(title: title);
+      super.extraTitles});
 
   /// Retrieves the table of contents of the book.
   ///
@@ -166,7 +165,7 @@ class ExternalBook extends Book {
   /// [title] and [id] are required. Other parameters are optional.
   /// [link] is required for online access to the book.
   ExternalBook({
-    required String title,
+    required super.title,
     required this.id,
     super.author,
     super.pubPlace,
@@ -174,7 +173,7 @@ class ExternalBook extends Book {
     super.topics,
     super.heShortDesc,
     required this.link,
-  }) : super(title: title);
+  });
 
   /// Returns the publication date of the book.
   ///
@@ -217,7 +216,7 @@ class ExternalBook extends Book {
 class PdfBook extends Book {
   final String path;
   PdfBook(
-      {required String title,
+      {required super.title,
       super.category,
       required this.path,
       super.topics,
@@ -225,8 +224,7 @@ class PdfBook extends Book {
       super.heShortDesc,
       super.pubDate,
       super.pubPlace,
-      super.order = 999})
-      : super(title: title);
+      super.order = 999});
 
   factory PdfBook.fromJson(Map<String, dynamic> json) {
     return PdfBook(

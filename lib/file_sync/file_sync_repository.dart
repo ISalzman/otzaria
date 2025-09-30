@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:otzaria/core/app_paths.dart';
@@ -37,7 +38,8 @@ class FileSyncRepository {
         // אם הקובץ הראשי לא קיים, בדוק אם נשאר גיבוי מתהליך שנכשל
         final oldFile = File('$path.old');
         if (await oldFile.exists()) {
-          print('Main manifest missing, restoring from .old backup...');
+          developer.log('Main manifest missing, restoring from .old backup...',
+              name: 'FileSyncRepository');
           await oldFile.rename(path); // שחזר את הגיבוי
           // עכשיו הקובץ הראשי קיים, נמשיך כרגיל
         } else {
@@ -47,12 +49,14 @@ class FileSyncRepository {
       final content = await file.readAsString(encoding: utf8);
       return json.decode(content);
     } catch (e) {
-      print('Error reading local manifest: $e');
+      developer.log('Error reading local manifest',
+          name: 'FileSyncRepository', error: e);
       // הלוגיקה שלך לגיבוי מ-.bak הייתה טובה, נתאים אותה ל-.old
       final oldFile = File('$path.old'); // השתמש ב-.old במקום .bak
       if (await oldFile.exists()) {
         try {
-          print('Main manifest is corrupt, restoring from .old backup...');
+          developer.log('Main manifest is corrupt, restoring from .old backup...',
+              name: 'FileSyncRepository', error: e);
           final backupContent = await oldFile.readAsString(encoding: utf8);
           await oldFile.rename(path); // rename בטוח יותר מ-copy
           return json.decode(backupContent);
@@ -79,7 +83,8 @@ class FileSyncRepository {
       }
       throw Exception('Failed to fetch remote manifest');
     } catch (e) {
-      print('Error fetching remote manifest: $e');
+      developer.log('Error fetching remote manifest',
+          name: 'FileSyncRepository', error: e);
       rethrow;
     }
   }
@@ -113,7 +118,8 @@ class FileSyncRepository {
         }
       }
     } catch (e) {
-      print('Error downloading file $filePath: $e');
+      developer.log('Error downloading file $filePath',
+          name: 'FileSyncRepository', error: e);
     }
   }
 
@@ -149,16 +155,19 @@ class FileSyncRepository {
         await oldFile.delete();
       }
     } catch (e) {
-      print('Error writing manifest: $e');
+      developer.log('Error writing manifest',
+          name: 'FileSyncRepository', error: e);
       // במקרה של תקלה (למשל, אחרי ש-file.rename הצליח אבל tempFile.rename נכשל),
       // ננסה לשחזר את המצב לקדמותו כדי למנוע מצב ללא מניפסט.
       try {
         if (await oldFile.exists() && !(await file.exists())) {
-          print('Attempting to restore manifest from .old backup...');
+          developer.log('Attempting to restore manifest from .old backup...',
+              name: 'FileSyncRepository');
           await oldFile.rename(path);
         }
       } catch (restoreError) {
-        print('FATAL: Could not restore manifest from backup: $restoreError');
+        developer.log('FATAL: Could not restore manifest from backup',
+            name: 'FileSyncRepository', error: restoreError);
       }
       rethrow; // זרוק את השגיאה המקורית כדי שהפונקציה שקראה תדע שהעדכון נכשל.
     }
@@ -174,7 +183,8 @@ class FileSyncRepository {
 
       await _writeManifest(localManifest);
     } catch (e) {
-      print('Error updating local manifest for file $filePath: $e');
+      developer.log('Error updating local manifest for file $filePath',
+          name: 'FileSyncRepository', error: e);
     }
   }
 
@@ -195,7 +205,8 @@ class FileSyncRepository {
 
       await _writeManifest(localManifest);
     } catch (e) {
-      print('Error removing file $filePath from local manifest: $e');
+      developer.log('Error removing file $filePath from local manifest',
+          name: 'FileSyncRepository', error: e);
     }
   }
 
@@ -207,7 +218,8 @@ class FileSyncRepository {
       // Bottom-up approach: process deeper directories first
       await _cleanEmptyDirectories(baseDir);
     } catch (e) {
-      print('Error removing empty folders: $e');
+      developer.log('Error removing empty folders',
+          name: 'FileSyncRepository', error: e);
     }
   }
 
@@ -226,7 +238,8 @@ class FileSyncRepository {
     final baseDir = await _localDirectory;
     if (contents.isEmpty && dir.path != baseDir) {
       await dir.delete();
-      print('Removed empty directory: ${dir.path}');
+      developer.log('Removed empty directory: ${dir.path}',
+          name: 'FileSyncRepository');
     }
   }
 

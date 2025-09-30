@@ -11,8 +11,7 @@ class FullTextSearchScreen extends StatelessWidget {
   final void Function(OpenedTab) openBookCallback;
   final SearchingTab tab;
   const FullTextSearchScreen(
-      {Key? key, required this.tab, required this.openBookCallback})
-      : super(key: key);
+      {super.key, required this.tab, required this.openBookCallback});
   @override
   Widget build(BuildContext context) {
     return context.read<SettingsBloc>().state.useFastSearch

@@ -151,7 +151,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   void _handleNavigationChange(
       BuildContext context, NavigationState state) async {
-    if (mounted && pageController.hasClients) {
+    if (!mounted || !context.mounted || !pageController.hasClients) {
+      return;
+    }
+
+    if (pageController.hasClients) {
       final targetPage = state.currentScreen == Screen.search
           ? Screen.reading.index
           : state.currentScreen.index;
@@ -162,7 +166,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
-        if (!mounted) return;
+        if (!mounted || !context.mounted) return;
       }
       if (state.currentScreen == Screen.library) {
         context

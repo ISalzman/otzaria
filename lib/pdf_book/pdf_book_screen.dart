@@ -57,7 +57,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final String query = controller.text.trim();
     if (query.isEmpty) return;
 
-    print('DEBUG: Triggering search by simulating user input for "$query"');
+    debugPrint('DEBUG: Triggering search by simulating user input for "$query"');
 
     // שיטה 1: הוספה והסרה מהירה
     controller.text = '$query '; // הוסף תו זמני
@@ -128,7 +128,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     widget.tab.pdfViewerController = pdfController;
 
     // וודא שהמיקום הנוכחי נשמר בטאב
-    print('DEBUG: אתחול PDF טאב - דף התחלתי: ${widget.tab.pageNumber}');
+    debugPrint('DEBUG: אתחול PDF טאב - דף התחלתי: ${widget.tab.pageNumber}');
 
     _sidebarWidth = ValueNotifier<double>(
         Settings.getValue<double>('key-sidebar-width', defaultValue: 300)!);

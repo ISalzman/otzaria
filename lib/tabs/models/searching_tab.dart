@@ -65,18 +65,18 @@ class SearchingTab extends OpenedTab {
     // קודם נבדוק אם יש ספירה ב-state של ה-bloc (כולל 0)
     final stateCount = searchBloc.getFacetCountFromState(facet);
     if (searchBloc.state.facetCounts.containsKey(facet)) {
-      print('💾 Cache hit for $facet: $stateCount');
+      debugPrint('💾 Cache hit for $facet: $stateCount');
       return stateCount;
     }
 
-    print('🔄 Cache miss for $facet, performing direct count...');
-    print(
+    debugPrint('🔄 Cache miss for $facet, performing direct count...');
+    debugPrint(
         '📍 Stack trace: ${StackTrace.current.toString().split('\n').take(5).join('\n')}');
     final stopwatch = Stopwatch()..start();
     // אם אין ב-state, נבצע ספירה ישירה
     final result = await countForFacet(facet);
     stopwatch.stop();
-    print(
+    debugPrint(
         '⏱️ Direct count for $facet took ${stopwatch.elapsedMilliseconds}ms: $result');
 
     // Update SearchBloc state cache

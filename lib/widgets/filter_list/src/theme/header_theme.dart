@@ -10,10 +10,10 @@ import 'package:flutter/material.dart';
 class HeaderTheme extends InheritedTheme {
   /// Builds a [GifDialogTheme].
   const HeaderTheme({
-    Key? key,
+    super.key,
     required this.data,
-    required Widget child,
-  }) : super(key: key, child: child);
+    required super.child,
+  });
 
   /// The configuration of this theme.
   final HeaderThemeData data;

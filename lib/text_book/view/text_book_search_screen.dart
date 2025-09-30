@@ -28,13 +28,12 @@ class TextBookSearchView extends StatefulWidget {
   final void Function() closeLeftPaneCallback;
 
   const TextBookSearchView(
-      {Key? key,
+      {super.key,
       required this.data,
       required this.scrollControler,
       required this.focusNode,
       required this.closeLeftPaneCallback,
-      required String initialQuery})
-      : super(key: key);
+      required String initialQuery});
 
   @override
   TextBookSearchViewState createState() => TextBookSearchViewState();

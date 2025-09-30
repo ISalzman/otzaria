@@ -7,9 +7,9 @@ class HeaderItem extends StatelessWidget {
   final Category category;
 
   const HeaderItem({
-    Key? key,
+    super.key,
     required this.category,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -29,10 +29,10 @@ class CategoryGridItem extends StatelessWidget {
   final VoidCallback onCategoryClickCallback;
 
   const CategoryGridItem({
-    Key? key,
+    super.key,
     required this.category,
     required this.onCategoryClickCallback,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -99,11 +99,11 @@ class BookGridItem extends StatelessWidget {
   final VoidCallback onBookClickCallback;
 
   const BookGridItem({
-    Key? key,
+    super.key,
     required this.book,
     required this.onBookClickCallback,
     this.showTopics = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -226,7 +226,7 @@ class BookGridItem extends StatelessWidget {
 class MyGridView extends StatelessWidget {
   final Future<List<Widget>> items;
 
-  const MyGridView({Key? key, required this.items}) : super(key: key);
+  const MyGridView({super.key, required this.items});
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(

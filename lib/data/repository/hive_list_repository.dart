@@ -1,7 +1,7 @@
 import 'package:hive/hive.dart';
 
 /// Generic repository for managing lists of objects in Hive.
-/// T must have fromJson(Map<String, dynamic>) and toJson() methods.
+/// T must have `fromJson(Map<String, dynamic>)` and `toJson()` methods.
 class HiveListRepository<T> {
   final String boxName;
   final String key;

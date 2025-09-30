@@ -14,7 +14,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/widgets/items_list_view.dart';
 
 class BookmarkView extends StatelessWidget {
-  const BookmarkView({Key? key}) : super(key: key);
+  const BookmarkView({super.key});
 
   void _openBook(
       BuildContext context, Book book, int index, List<String>? commentators) {

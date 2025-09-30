@@ -2,6 +2,7 @@ import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
 import 'package:search_engine/search_engine.dart';
+import 'package:flutter/foundation.dart';
 
 /// Performs a search operation across indexed texts.
 ///
@@ -26,54 +27,54 @@ class SearchRepository {
       Map<String, String>? customSpacing,
       Map<int, List<String>>? alternativeWords,
       Map<String, Map<String, bool>>? searchOptions}) async {
-    print('🚀 searchTexts called with query: "$query"');
+    debugPrint('🚀 searchTexts called with query: "$query"');
 
     // בדיקת וריאציות כתיב מלא/חסר
-    print('🔍 Testing spelling variations for "ראשית":');
+    debugPrint('🔍 Testing spelling variations for "ראשית":');
     final testVariations =
         SearchRegexPatterns.generateFullPartialSpellingVariations('ראשית');
-    print('   variations: $testVariations');
+    debugPrint('   variations: $testVariations');
 
     // בדיקת createPrefixPattern עבור כל וריאציה
     for (final variation in testVariations) {
       final prefixPattern = SearchRegexPatterns.createPrefixPattern(variation);
-      print('   $variation -> $prefixPattern');
+      debugPrint('   $variation -> $prefixPattern');
     }
 
     // בדיקת createSpellingWithPrefixPattern
     final finalPattern =
         SearchRegexPatterns.createSpellingWithPrefixPattern('ראשית');
-    print('🔍 Final createSpellingWithPrefixPattern result: $finalPattern');
+    debugPrint('🔍 Final createSpellingWithPrefixPattern result: $finalPattern');
     final index = await TantivyDataProvider.instance.engine;
 
     // בדיקה אם יש מרווחים מותאמים אישית, מילים חילופיות או אפשרויות חיפוש
     final hasCustomSpacing = customSpacing != null && customSpacing.isNotEmpty;
     final hasAlternativeWords =
         alternativeWords != null && alternativeWords.isNotEmpty;
-    print('🔍 hasCustomSpacing: $hasCustomSpacing');
+    debugPrint('🔍 hasCustomSpacing: $hasCustomSpacing');
     final hasSearchOptions = searchOptions != null &&
         searchOptions.isNotEmpty &&
         searchOptions.values.any((wordOptions) =>
             wordOptions.values.any((isEnabled) => isEnabled == true));
 
-    print('🔍 hasSearchOptions: $hasSearchOptions');
-    print('🔍 hasAlternativeWords: $hasAlternativeWords');
+    debugPrint('🔍 hasSearchOptions: $hasSearchOptions');
+    debugPrint('🔍 hasAlternativeWords: $hasAlternativeWords');
 
     // המרת החיפוש לפורמט המנוע החדש
-    print('🔍 Using prepareQueryParams');
+    debugPrint('🔍 Using prepareQueryParams');
     final params = SearchQueryBuilder.prepareQueryParams(
         query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
     final List<String> regexTerms = params['regexTerms'] as List<String>;
     final int effectiveSlop = params['effectiveSlop'] as int;
     final int maxExpansions = params['maxExpansions'] as int;
 
-    print('🔍 Final search params:');
-    print('   regexTerms: $regexTerms');
-    print('   facets: $facets');
-    print('   limit: $limit');
-    print('   slop: $effectiveSlop');
-    print('   maxExpansions: $maxExpansions');
-    print('🚀 Calling index.search...');
+    debugPrint('🔍 Final search params:');
+    debugPrint('   regexTerms: $regexTerms');
+    debugPrint('   facets: $facets');
+    debugPrint('   limit: $limit');
+    debugPrint('   slop: $effectiveSlop');
+    debugPrint('   maxExpansions: $maxExpansions');
+    debugPrint('🚀 Calling index.search...');
 
     final results = await index.search(
         regexTerms: regexTerms,
@@ -83,7 +84,7 @@ class SearchRepository {
         maxExpansions: maxExpansions,
         order: order);
 
-    print('✅ Search completed, found ${results.length} results');
+    debugPrint('✅ Search completed, found ${results.length} results');
     return results;
   }
 }

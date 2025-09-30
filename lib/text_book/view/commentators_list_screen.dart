@@ -10,8 +10,8 @@ import 'package:otzaria/widgets/filter_list/src/theme/filter_list_theme.dart';
 
 class CommentatorsListView extends StatefulWidget {
   const CommentatorsListView({
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   State<CommentatorsListView> createState() => CommentatorsListViewState();

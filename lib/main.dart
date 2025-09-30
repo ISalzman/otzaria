@@ -174,7 +174,7 @@ Future<void> initialize() async {
     await DatabaseSchema.initializeDatabase();
   } catch (e) {
     if (kDebugMode) {
-      print('Failed to initialize notes database: $e');
+      debugPrint('Failed to initialize notes database: $e');
     }
     // Continue without notes functionality if database fails
   }

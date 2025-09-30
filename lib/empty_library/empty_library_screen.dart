@@ -9,8 +9,7 @@ import 'package:otzaria/core/scaffold_messenger.dart';
 class EmptyLibraryScreen extends StatelessWidget {
   final VoidCallback onLibraryLoaded;
 
-  const EmptyLibraryScreen({Key? key, required this.onLibraryLoaded})
-      : super(key: key);
+  const EmptyLibraryScreen({super.key, required this.onLibraryLoaded});
 
   @override
   Widget build(BuildContext context) {
@@ -24,8 +23,7 @@ class EmptyLibraryScreen extends StatelessWidget {
 class _EmptyLibraryView extends StatelessWidget {
   final VoidCallback onLibraryLoaded;
 
-  const _EmptyLibraryView({Key? key, required this.onLibraryLoaded})
-      : super(key: key);
+  const _EmptyLibraryView({required this.onLibraryLoaded});
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +111,7 @@ class _EmptyLibraryView extends StatelessWidget {
 class _DownloadProgress extends StatelessWidget {
   final EmptyLibraryState state;
 
-  const _DownloadProgress({Key? key, required this.state}) : super(key: key);
+  const _DownloadProgress({required this.state});
 
   @override
   Widget build(BuildContext context) {

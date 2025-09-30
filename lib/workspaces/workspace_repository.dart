@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:hive/hive.dart';
 import 'package:otzaria/workspaces/workspace.dart';
 
@@ -17,8 +18,9 @@ class WorkspaceRepository {
         ),
         currentWorksapce
       );
-    } catch (e) {
-      print('Error loading workspaces from disk: $e');
+    } catch (e, stackTrace) {
+      developer.log('Error loading workspaces from disk',
+          error: e, stackTrace: stackTrace, name: 'WorkspaceRepository');
       Hive.box(name: 'workspaces').put(_workspacesBoxKey, []);
       return ([], 0);
     }

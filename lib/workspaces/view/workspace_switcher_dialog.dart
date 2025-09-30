@@ -10,7 +10,7 @@ import 'package:otzaria/daf_yomi/calendar.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 
 class WorkspaceSwitcherDialog extends StatefulWidget {
-  const WorkspaceSwitcherDialog({Key? key}) : super(key: key);
+  const WorkspaceSwitcherDialog({super.key});
 
   @override
   State<WorkspaceSwitcherDialog> createState() =>

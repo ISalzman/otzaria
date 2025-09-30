@@ -12,7 +12,7 @@ class ItemsListView extends StatefulWidget {
   final Widget? Function(dynamic item)? leadingIconBuilder;
 
   const ItemsListView({
-    Key? key,
+    super.key,
     required this.items,
     required this.onItemTap,
     required this.onDelete,
@@ -22,7 +22,7 @@ class ItemsListView extends StatefulWidget {
     required this.notFoundText,
     required this.clearAllText,
     this.leadingIconBuilder,
-  }) : super(key: key);
+  });
 
   @override
   State<ItemsListView> createState() => _ItemsListViewState();

@@ -5,14 +5,14 @@ import 'package:flutter/material.dart';
 
 class ChoiceChipWidget<T> extends StatelessWidget {
   const ChoiceChipWidget({
-    Key? key,
+    super.key,
     this.text,
     this.item,
     this.selected,
     this.onSelected,
     this.choiceChipBuilder,
     this.disabled = false,
-  }) : super(key: key);
+  });
 
   final String? text;
   final bool? selected;

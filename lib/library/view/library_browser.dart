@@ -29,7 +29,7 @@ import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/utils/open_book.dart';
 
 class LibraryBrowser extends StatefulWidget {
-  const LibraryBrowser({Key? key}) : super(key: key);
+  const LibraryBrowser({super.key});
 
   @override
   State<LibraryBrowser> createState() => _LibraryBrowserState();

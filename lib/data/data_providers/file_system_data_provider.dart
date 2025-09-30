@@ -600,9 +600,9 @@ class FileSystemData {
         .replaceAll('\\', Platform.pathSeparator);
     final tanachBase =
         '${Platform.pathSeparator}אוצריא${Platform.pathSeparator}תנך${Platform.pathSeparator}';
-    final torah = '${tanachBase}תורה';
-    final neviim = '${tanachBase}נביאים';
-    final ktuvim = '${tanachBase}כתובים';
+    final torah = '$tanachBaseתורה';
+    final neviim = '$tanachBaseנביאים';
+    final ktuvim = '$tanachBaseכתובים';
     return normalized.contains(torah) ||
         normalized.contains(neviim) ||
         normalized.contains(ktuvim);

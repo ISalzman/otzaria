@@ -7,11 +7,11 @@ class DiffViewer extends StatelessWidget {
   final String title;
 
   const DiffViewer({
-    Key? key,
+    super.key,
     required this.originalContent,
     required this.editedContent,
     required this.title,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

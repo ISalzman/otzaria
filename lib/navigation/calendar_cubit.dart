@@ -1,8 +1,9 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/settings/settings_repository.dart';
-import 'dart:convert';
 
 enum CalendarType { hebrew, gregorian, combined }
 
@@ -502,7 +503,7 @@ class CalendarCubit extends Cubit<CalendarState> {
       await _settingsRepository.updateCalendarEvents(eventsJson);
     } catch (e) {
       // במקרה של שגיאה, נדפיס הודעה לקונסול
-      print('שגיאה בשמירת אירועים: $e');
+      debugPrint('שגיאה בשמירת אירועים: $e');
     }
   }
 }

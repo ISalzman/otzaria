@@ -148,9 +148,8 @@ class TextFileSearchScreenState extends State<TextFileSearchScreen>
           ),
           Expanded(
               child: FileTreeViewScreen(
-            libraryRootPath: Settings.getValue('key-library-path') +
-                Platform.pathSeparator +
-                'אוצריא',
+            libraryRootPath:
+                '${Settings.getValue('key-library-path')}${Platform.pathSeparator}אוצריא',
             checkedItems: widget.searcher.booksToSearch,
           )),
         ],

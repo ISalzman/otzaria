@@ -8,10 +8,10 @@ class ConflictResolutionDialog extends StatefulWidget {
   final Function(String resolution) onResolve;
 
   const ConflictResolutionDialog({
-    Key? key,
+    super.key,
     required this.context,
     required this.onResolve,
-  }) : super(key: key);
+  });
 
   @override
   State<ConflictResolutionDialog> createState() =>
@@ -46,18 +46,18 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
 
               // Resolution options
               const RadioListTile<String>(
-                title: const Text('שמור את העריכה שלי'),
-                subtitle: const Text('התעלם מהשינויים במקור'),
+                title: Text('שמור את העריכה שלי'),
+                subtitle: Text('התעלם מהשינויים במקור'),
                 value: 'keep_override',
               ),
               const RadioListTile<String>(
-                title: const Text('השתמש בגרסה החדשה'),
-                subtitle: const Text('בטל את העריכה שלי'),
+                title: Text('השתמש בגרסה החדשה'),
+                subtitle: Text('בטל את העריכה שלי'),
                 value: 'use_new_source',
               ),
               const RadioListTile<String>(
-                title: const Text('שמור בנפרד'),
-                subtitle: const Text('שמור את העריכה שלי כגרסה נפרדת'),
+                title: Text('שמור בנפרד'),
+                subtitle: Text('שמור את העריכה שלי כגרסה נפרדת'),
                 value: 'save_separate',
               ),
 

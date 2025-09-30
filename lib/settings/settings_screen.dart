@@ -18,8 +18,8 @@ import 'package:otzaria/core/scaffold_messenger.dart';
 
 class MySettingsScreen extends StatefulWidget {
   const MySettingsScreen({
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   State<MySettingsScreen> createState() => _MySettingsScreenState();

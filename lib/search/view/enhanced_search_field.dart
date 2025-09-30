@@ -1945,23 +1945,21 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                         },
                         icon: const Icon(Icons.search),
                       ),
-                      // החלף את כל ה-Row הקיים בזה:
                       suffixIcon: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           BlocBuilder<SearchBloc, SearchState>(
                             builder: (context, state) {
-                              if (!state.isAdvancedSearchEnabled)
+                              if (!state.isAdvancedSearchEnabled) {
                                 return const SizedBox.shrink();
+                              }
                               return IconButton(
                                 onPressed: () => _toggleSearchOptions(
                                     !_isSearchOptionsVisible),
                                 icon: const Icon(Icons.keyboard_arrow_down),
                                 focusNode: FocusNode(
-                                  // <-- התוספת המרכזית
-                                  canRequestFocus:
-                                      false, // מונע מהכפתור לבקש פוקוס
-                                  skipTraversal: true, // מדלג עליו בניווט מקלדת
+                                  canRequestFocus: false,
+                                  skipTraversal: true,
                                 ),
                               );
                             },

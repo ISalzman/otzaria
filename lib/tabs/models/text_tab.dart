@@ -7,6 +7,7 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:flutter/foundation.dart';
 
 /// Represents a tab that contains a text book.
 ///
@@ -51,7 +52,7 @@ class TextBookTab extends OpenedTab {
     bool openLeftPane = false,
     bool splitedView = true,
   }) : super(book.title) {
-    print('DEBUG: TextBookTab נוצר עם אינדקס: $index לספר: ${book.title}');
+    debugPrint('DEBUG: TextBookTab נוצר עם אינדקס: $index לספר: ${book.title}');
     // Initialize the bloc with initial state
     bloc = TextBookBloc(
       repository: TextBookRepository(

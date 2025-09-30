@@ -38,11 +38,9 @@ abstract class ListenableState extends Listenable {
 }
 
 class StateProvider<T extends ListenableState> extends StatelessWidget {
-  @override
-  final Key? key;
   final T value;
   final Widget child;
-  const StateProvider({this.key, required this.child, required this.value});
+  const StateProvider({super.key, required this.child, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -97,11 +95,10 @@ class ChangeNotifierProvider<T extends ListenableState>
 class Provider<T extends ListenableState> extends InheritedWidget {
   /// Builds a [Provider].
   Provider({
-    Key? key,
+    super.key,
     required this.state,
-    required Widget child,
-  })  : version = state._version,
-        super(key: key, child: child);
+    required super.child,
+  })  : version = state._version;
 
   final T state;
   final int version;
