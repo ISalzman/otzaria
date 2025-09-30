@@ -104,6 +104,7 @@ void _openDafYomiBookInCategory(BuildContext context, String tractate,
 
 Future<void> _openBook(BuildContext context, Book book, String daf) async {
   final index = await findReference(book, 'דף ${daf.trim()}') ?? 0;
+  if (!context.mounted) return;
   openBook(context, book, index, '', ignoreHistory: true);
 }
 
@@ -154,6 +155,7 @@ Future<void> _openBookFromRefHelper(
 
   if (book != null) {
     final index = await findReference(book, ref);
+    if (!context.mounted) return;
     if (index != null) {
       openBook(context, book, index, '', ignoreHistory: true);
     } else {

@@ -51,8 +51,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
     );
     // Auto start indexing
     if (context.read<SettingsBloc>().state.autoUpdateIndex) {
-      DataRepository.instance.library.then((library) =>
-          context.read<IndexingBloc>().add(StartIndexing(library)));
+      DataRepository.instance.library.then((library) {
+        if (!mounted || !context.mounted) return;
+        context.read<IndexingBloc>().add(StartIndexing(library));
+      });
     }
   }
 
@@ -160,6 +162,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
+        if (!mounted) return;
       }
       if (state.currentScreen == Screen.library) {
         context

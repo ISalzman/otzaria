@@ -587,6 +587,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                             ),
                                           ],
                                         ));
+                                if (!context.mounted) return;
                                 if (result == true) {
                                   context
                                       .read<IndexingBloc>()
@@ -614,6 +615,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                             ),
                                           ],
                                         ));
+                                if (!context.mounted) return;
                                 if (result == true) {
                                   //reset the index
                                   context
@@ -644,10 +646,12 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                               .read<SettingsBloc>()
                               .add(UpdateAutoUpdateIndex(value));
                           if (value) {
-                            final library = DataRepository.instance.library;
+                            final library =
+                                await DataRepository.instance.library;
+                            if (!context.mounted) return;
                             context
                                 .read<IndexingBloc>()
-                                .add(StartIndexing(await library));
+                                .add(StartIndexing(library));
                           }
                         },
                         activeColor: Theme.of(context).cardColor,
@@ -665,6 +669,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                             String? path =
                                 await FilePicker.platform.getDirectoryPath();
                             if (path != null) {
+                              if (!context.mounted) return;
                               context
                                   .read<LibraryBloc>()
                                   .add(UpdateLibraryPath(path));
@@ -683,6 +688,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                               String? path =
                                   await FilePicker.platform.getDirectoryPath();
                               if (path != null) {
+                                if (!context.mounted) return;
                                 context
                                     .read<LibraryBloc>()
                                     .add(UpdateHebrewBooksPath(path));

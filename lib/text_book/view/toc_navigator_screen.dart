@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart' show ExpansibleController;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -29,7 +30,7 @@ class _TocViewerState extends State<TocViewer>
   @override
   bool get wantKeepAlive => true;
 
-  final Map<int, ExpansionTileController> _controllers = {};
+  final Map<int, ExpansibleController> _controllers = {};
   final TextEditingController searchController = TextEditingController();
   final ScrollController _tocScrollController = ScrollController();
   final Map<int, GlobalKey> _tocItemKeys = {};
@@ -223,7 +224,8 @@ class _TocViewerState extends State<TocViewer>
         ),
       );
     } else {
-      final controller = _controllers.putIfAbsent(entry.index, () => ExpansionTileController());
+      final controller =
+          _controllers.putIfAbsent(entry.index, () => ExpansibleController());
       final bool isExpanded = _expanded[entry.index] ?? (entry.level == 1);
 
 if (controller.isExpanded != isExpanded) {

@@ -171,7 +171,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                 size: const Size.fromWidth(350),
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
-                    showValueIndicator: ShowValueIndicator.always,
+                    showValueIndicator: ShowValueIndicator.onDrag,
                   ),
                   child: Column(
                     children: [

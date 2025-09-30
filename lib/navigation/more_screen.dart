@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart' show RadioGroup;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tools/measurement_converter/measurement_converter_screen.dart';
 import 'package:otzaria/settings/settings_repository.dart';
@@ -139,43 +140,31 @@ class _MoreScreenState extends State<MoreScreen> {
           builder: (context, state) {
             return AlertDialog(
               title: const Text('הגדרות לוח שנה'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  RadioListTile<CalendarType>(
-                    title: const Text('לוח עברי'),
-                    value: CalendarType.hebrew,
-                    groupValue: state.calendarType,
-                    onChanged: (value) {
-                      if (value != null) {
-                        _calendarCubit.changeCalendarType(value);
-                      }
-                      Navigator.of(dialogContext).pop();
-                    },
-                  ),
-                  RadioListTile<CalendarType>(
-                    title: const Text('לוח לועזי'),
-                    value: CalendarType.gregorian,
-                    groupValue: state.calendarType,
-                    onChanged: (value) {
-                      if (value != null) {
-                        _calendarCubit.changeCalendarType(value);
-                      }
-                      Navigator.of(dialogContext).pop();
-                    },
-                  ),
-                  RadioListTile<CalendarType>(
-                    title: const Text('לוח משולב'),
-                    value: CalendarType.combined,
-                    groupValue: state.calendarType,
-                    onChanged: (value) {
-                      if (value != null) {
-                        _calendarCubit.changeCalendarType(value);
-                      }
-                      Navigator.of(dialogContext).pop();
-                    },
-                  ),
-                ],
+              content: RadioGroup<CalendarType>(
+                groupValue: state.calendarType,
+                onChanged: (value) {
+                  if (value != null) {
+                    _calendarCubit.changeCalendarType(value);
+                    Navigator.of(dialogContext).pop();
+                  }
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    RadioListTile<CalendarType>(
+                      title: Text('לוח עברי'),
+                      value: CalendarType.hebrew,
+                    ),
+                    RadioListTile<CalendarType>(
+                      title: Text('לוח לועזי'),
+                      value: CalendarType.gregorian,
+                    ),
+                    RadioListTile<CalendarType>(
+                      title: Text('לוח משולב'),
+                      value: CalendarType.combined,
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(

@@ -322,7 +322,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       ? widget.tab.pdfViewerController.goToPage(
                           pageNumber: min(
                               widget.tab.pdfViewerController.pageNumber! + 1,
-                              widget.tab.pdfViewerController.pages.length))
+                              widget.tab.pdfViewerController.pageCount))
                       : null,
                   icon: const Icon(Icons.chevron_right),
                   tooltip: 'הבא',
@@ -332,8 +332,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     icon: const Icon(Icons.last_page),
                     tooltip: 'סוף הספר',
                     onPressed: () => widget.tab.pdfViewerController.goToPage(
-                        pageNumber:
-                            widget.tab.pdfViewerController.pages.length),
+                        pageNumber: widget.tab.pdfViewerController.pageCount),
                   ),
                 IconButton(
                   icon: const Icon(Icons.print),
@@ -661,7 +660,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _goNextPage() {
     if (widget.tab.pdfViewerController.isReady) {
       final nextPage = min(widget.tab.pdfViewerController.pageNumber! + 1,
-          widget.tab.pdfViewerController.pages.length);
+          widget.tab.pdfViewerController.pageCount);
       widget.tab.pdfViewerController.goToPage(pageNumber: nextPage);
     }
   }
@@ -792,6 +791,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
                 final index = await pdfToTextPage(
                     book, currentOutline, currentPage, context);
+
+                if (!context.mounted) return;
 
                 openBook(context, snapshot.data!, index ?? 0, '',
                     ignoreHistory: true);
