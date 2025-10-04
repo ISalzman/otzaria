@@ -134,7 +134,7 @@ class _CombinedViewState extends State<CombinedView> {
 
     return [
       ctx.MenuItem<void>(
-        label: 'הצג את כל ${groupName}',
+        label: 'הצג את כל $groupName',
         icon: groupActive ? Icons.check : null,
         onSelected: () {
           final current = List<String>.from(st.activeCommentators);
@@ -171,7 +171,7 @@ class _CombinedViewState extends State<CombinedView> {
     // 1. קבלת מידע על גודל המסך
     final screenHeight = MediaQuery.of(context).size.height;
 
-    // 2. זיהוי פרשנים שכבר שויכו לקבוצה
+    // 2. זיהוי מפרשים שכבר שויכו לקבוצה
     final groups = state.commentatorGroups;
     final tanachGroup = CommentatorGroup.groupByTitle(groups, 'תורה שבכתב');
     final chazalGroup = CommentatorGroup.groupByTitle(groups, 'חז"ל');
@@ -180,7 +180,7 @@ class _CombinedViewState extends State<CombinedView> {
     final modernGroup = CommentatorGroup.groupByTitle(groups, 'מחברי זמננו');
     final ungroupedGroup = CommentatorGroup.groupByTitle(groups, 'שאר מפרשים');
 
-    // 3. יצירת רשימה של פרשנים שלא שויכו לאף קבוצה
+    // 3. יצירת רשימה של מפרשים שלא שויכו לאף קבוצה
     final List<String> ungrouped = ungroupedGroup.commentators;
 
     return ctx.ContextMenu(

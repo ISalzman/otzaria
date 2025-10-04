@@ -17,12 +17,16 @@ class LinksViewer extends StatefulWidget {
   final Function(OpenedTab tab) openTabcallback;
   final ItemPositionsListener itemPositionsListener;
   final void Function() closeLeftPanelCallback;
+  final void Function() openInSidebarCallback;
+  final bool isSplitViewOpen; // האם החלונית פתוחה
 
   const LinksViewer({
     super.key,
     required this.openTabcallback,
     required this.itemPositionsListener,
     required this.closeLeftPanelCallback,
+    required this.openInSidebarCallback,
+    required this.isSplitViewOpen,
   });
 
   /// Returns the visible links for the provided [state].
@@ -31,13 +35,24 @@ class LinksViewer extends StatefulWidget {
   /// the book name so that callers such as context menus can easily
   /// display them synchronously.
   static List<Link> getLinks(TextBookLoaded state) {
-    final links = state.links
-        .where(
-          (link) =>
-              link.index1 == state.visibleIndices.first + 2 &&
-              link.connectionType != 'commentary',
-        )
-        .toList();
+    // אם יש שורה נבחרת, מציג קישורים עבורה, אחרת עבור השורות הנראות
+    final targetIndices = state.selectedIndex != null
+        ? [state.selectedIndex!]
+        : state.visibleIndices;
+
+    final links = <Link>[];
+
+    for (final index in targetIndices) {
+      final indexLinks = state.links
+          .where(
+            (link) =>
+                link.index1 == index + 1 &&
+                link.connectionType != 'commentary' &&
+                link.connectionType != 'targum',
+          )
+          .toList();
+      links.addAll(indexLinks);
+    }
 
     links.sort(
       (a, b) => a.path2
@@ -70,30 +85,64 @@ class _LinksViewerState extends State<LinksViewer>
           future: Future<List<Link>>.value(LinksViewer.getLinks(state)),
           builder: (context, snapshot) {
             if (snapshot.hasData) {
+              final links = snapshot.data!;
               return ListView.builder(
-                itemCount: snapshot.data!.length,
-                itemBuilder: (context, index) => ListTile(
-                  title: Text(snapshot.data![index].heRef),
-                  onTap: () {
-                    widget.openTabcallback(
-                      TextBookTab(
-                        book: TextBook(
-                          title: utils.getTitleFromPath(
-                            snapshot.data![index].path2,
+                itemCount: links.length + 1, // +1 עבור הלחצן
+                itemBuilder: (context, index) {
+                  // הלחצן "פתח/סגור חלונית צד" בתחילת הרשימה
+                  if (index == 0) {
+                    return Container(
+                      margin: const EdgeInsets.all(8.0),
+                      child: ElevatedButton.icon(
+                        onPressed: widget.openInSidebarCallback,
+                        icon: Icon(widget.isSplitViewOpen
+                            ? Icons.keyboard_arrow_right
+                            : Icons.keyboard_arrow_left),
+                        label: Text(widget.isSplitViewOpen
+                            ? 'סגור חלונית צד'
+                            : 'פתח בחלונית צד'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 12.0,
                           ),
                         ),
-                        index: snapshot.data![index].index2 - 1,
-                        openLeftPane:
-                            (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-                                (Settings.getValue<bool>('key-default-sidebar-open') ??
-                                    false),
                       ),
                     );
-                    if (MediaQuery.of(context).size.width < 600) {
-                      widget.closeLeftPanelCallback();
-                    }
-                  },
-                ),
+                  }
+
+                  // קישורים רגילים
+                  final linkIndex = index - 1;
+                  return ListTile(
+                    key: ValueKey(
+                        '${links[linkIndex].path2}_${links[linkIndex].index2}'),
+                    title: Text(links[linkIndex].heRef),
+                    onTap: () {
+                      void open() => widget.openTabcallback(
+                            TextBookTab(
+                              book: TextBook(
+                                  title: utils.getTitleFromPath(
+                                      links[linkIndex].path2)),
+                              index: links[linkIndex].index2 - 1,
+                              openLeftPane:
+                                  (Settings.getValue<bool>('key-pin-sidebar') ??
+                                          false) ||
+                                      (Settings.getValue<bool>(
+                                              'key-default-sidebar-open') ??
+                                          false),
+                            ),
+                          );
+
+                      if (MediaQuery.of(context).size.width < 600) {
+                        widget.closeLeftPanelCallback();
+                        WidgetsBinding.instance
+                            .addPostFrameCallback((_) => open());
+                      } else {
+                        open();
+                      }
+                    },
+                  );
+                },
               );
             }
             return const Center(child: CircularProgressIndicator());

@@ -77,6 +77,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   late TabController tabController;
   late final ValueNotifier<double> _sidebarWidth;
   late final StreamSubscription<SettingsState> _settingsSub;
+  int? _sidebarTabIndex; // אינדקס הכרטיסייה בסרגל הצדי
   static const String _reportFileName = 'דיווח שגיאות בספרים.txt';
   static const String _reportSeparator = '==============================';
   static const String _reportSeparator2 = '------------------------------';
@@ -221,9 +222,27 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 state.editorIndex != null) {
               _openEditorDialog(context, state);
             }
+
+            // איפוס אינדקס הכרטיסייה כשהחלונית נסגרת
+            if (state is TextBookLoaded &&
+                !state.showSplitView &&
+                _sidebarTabIndex != null) {
+              setState(() {
+                _sidebarTabIndex = null;
+              });
+            }
           },
           builder: (context, state) {
             if (state is TextBookInitial) {
+              // איפוס אינדקס הכרטיסייה כשטוענים ספר חדש
+              if (_sidebarTabIndex != null) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  setState(() {
+                    _sidebarTabIndex = null;
+                  });
+                });
+              }
+
               context.read<TextBookBloc>().add(
                     LoadContent(
                       fontSize: settingsState.fontSize,
@@ -584,7 +603,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       ActionButtonData(
         widget: _buildFullFileEditorButton(context, state),
         icon: Icons.edit_document,
-        tooltip: 'ערוך את כל הקובץ (Ctrl+Shift+E)',
+        tooltip: 'ערוך את הספר (Ctrl+Shift+E)',
         onPressed: () => _handleFullFileEditorPress(context, state),
       ),
 
@@ -640,11 +659,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
-      // 3) ערוך את כל הקובץ
+      // 3) ערוך את הספר
       ActionButtonData(
         widget: _buildFullFileEditorButton(context, state),
         icon: Icons.edit_document,
-        tooltip: 'ערוך את כל הקובץ (Ctrl+Shift+E)',
+        tooltip: 'ערוך את הספר (Ctrl+Shift+E)',
         onPressed: () => _handleFullFileEditorPress(context, state),
       ),
 
@@ -1713,6 +1732,7 @@ $detailsSection
                 openLeftPaneTab: _openLeftPaneTab,
                 searchTextController: TextEditingValue(text: state.searchText),
                 tab: widget.tab,
+                initialSidebarTabIndex: _sidebarTabIndex,
               ),
             ),
           ),
@@ -1920,6 +1940,20 @@ $detailsSection
       itemPositionsListener: state.positionsListener,
       closeLeftPanelCallback: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
+      isSplitViewOpen: state.showSplitView &&
+          (state.activeCommentators.isNotEmpty || _sidebarTabIndex != null),
+      openInSidebarCallback: () {
+        if (state.showSplitView) {
+          // אם החלונית פתוחה - סוגר אותה
+          context.read<TextBookBloc>().add(const ToggleSplitView(false));
+        } else {
+          // אם החלונית סגורה - פותח אותה עם כרטיסיית הקישורים
+          setState(() {
+            _sidebarTabIndex = 1; // כרטיסיית הקישורים
+          });
+          context.read<TextBookBloc>().add(const ToggleSplitView(true));
+        }
+      },
     );
   }
 
@@ -2010,7 +2044,7 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      child: Container(
+      child: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9,
         height: MediaQuery.of(context).size.height * 0.8,
         child: Column(
@@ -2315,7 +2349,7 @@ Widget _buildFullFileEditorButton(BuildContext context, TextBookLoaded state) {
   return IconButton(
     onPressed: () => _handleFullFileEditorPress(context, state),
     icon: const Icon(Icons.edit_document),
-    tooltip: 'ערוך את כל הקובץ (Ctrl+Shift+E)',
+    tooltip: 'ערוך את הספר (Ctrl+Shift+E)',
   );
 }
 

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart' show RadioGroup;
 import '../services/overrides_rebase_service.dart';
 
 /// Dialog for resolving rebase conflicts

@@ -7,7 +7,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
-import 'package:otzaria/text_book/view/commentary_list_base.dart';
+import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -17,6 +17,7 @@ class SplitedViewScreen extends StatefulWidget {
     required this.searchTextController,
     required this.openLeftPaneTab,
     required this.tab,
+    this.initialTabIndex, // אינדקס הכרטיסייה הראשונית
   });
 
   final List<String> content;
@@ -24,6 +25,7 @@ class SplitedViewScreen extends StatefulWidget {
   final TextEditingValue searchTextController;
   final void Function(int) openLeftPaneTab;
   final TextBookTab tab;
+  final int? initialTabIndex;
 
   @override
   State<SplitedViewScreen> createState() => _SplitedViewScreenState();
@@ -33,7 +35,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   late final MultiSplitViewController _controller;
   static final GlobalKey<SelectionAreaState> _selectionKey =
       GlobalKey<SelectionAreaState>();
-
   bool _paneOpen = true;
 
   @override
@@ -146,11 +147,12 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                   child: SelectionArea(
                     key: _selectionKey,
                     child: _paneOpen
-                        ? CommentaryListBase(
+                        ? TabbedCommentaryPanel(
                             fontSize: state.fontSize,
                             openBookCallback: widget.openBookCallback,
                             showSearch: true,
                             onClosePane: _togglePane,
+                            initialTabIndex: widget.initialTabIndex,
                           )
                         : const SizedBox.shrink(),
                   ),

@@ -569,7 +569,7 @@ String replaceParaphrases(String s) {
   return s;
 }
 
-//פונקציה לחלוקת פרשנים לפי תקופה
+//פונקציה לחלוקת מפרשים לפי תקופה
 Future<Map<String, List<String>>> splitByEra(
   List<String> titles,
 ) async {

@@ -15,6 +15,7 @@ class TextBookScaffold extends StatelessWidget {
   final void Function(int) openLeftPaneTab;
   final TextEditingValue searchTextController;
   final TextBookTab tab;
+  final int? initialSidebarTabIndex;
 
   const TextBookScaffold({
     super.key,
@@ -23,6 +24,7 @@ class TextBookScaffold extends StatelessWidget {
     required this.openLeftPaneTab,
     required this.searchTextController,
     required this.tab,
+    this.initialSidebarTabIndex,
   });
 
   @override
@@ -33,8 +35,9 @@ class TextBookScaffold extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final isSplit =
-            state.showSplitView && state.activeCommentators.isNotEmpty;
+        final hasSidebarContent = state.activeCommentators.isNotEmpty ||
+            initialSidebarTabIndex != null;
+        final isSplit = state.showSplitView && hasSidebarContent;
 
         if (isSplit) {
           return SplitedViewScreen(
@@ -43,6 +46,7 @@ class TextBookScaffold extends StatelessWidget {
             searchTextController: searchTextController,
             openLeftPaneTab: openLeftPaneTab,
             tab: tab,
+            initialTabIndex: initialSidebarTabIndex,
           );
         } else {
           return BlocBuilder<SettingsBloc, SettingsState>(

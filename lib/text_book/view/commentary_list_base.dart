@@ -62,7 +62,9 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
   void _scrollToSearchResult() {
     if (_totalSearchResults == 0 ||
         _itemCount == 0 ||
-        !_itemScrollController.isAttached) return;
+        !_itemScrollController.isAttached) {
+      return;
+    }
 
     int cumulativeIndex = 0;
     int targetItemIndex = 0;
@@ -196,33 +198,36 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surface
-                          .withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      iconSize: 18,
-                      padding: const EdgeInsets.all(8),
-                      constraints: const BoxConstraints(
-                        minWidth: 36,
-                        minHeight: 36,
+                  // מציג את לחצן הסגירה רק אם יש callback
+                  if (widget.onClosePane != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surface
+                            .withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      icon: const Icon(Icons.close),
-                      onPressed: widget.onClosePane,
+                      child: IconButton(
+                        iconSize: 18,
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(
+                          minWidth: 36,
+                          minHeight: 36,
+                        ),
+                        icon: const Icon(Icons.close),
+                        onPressed: widget.onClosePane,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -241,7 +246,12 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (thisLinksSnapshot.data!.isEmpty) {
-                  return const Center(child: Text("לא נמצאו מפרשים להצגה"));
+                  // בדיקה אם אין מפרשים פעילים כלל
+                  if (state.activeCommentators.isEmpty) {
+                    return const Center(child: Text("בחר מפרשים להצגה"));
+                  } else {
+                    return const Center(child: Text("לא נמצאו מפרשים להצגה"));
+                  }
                 }
                 final data = thisLinksSnapshot.data!;
                 _itemCount = data.length;
