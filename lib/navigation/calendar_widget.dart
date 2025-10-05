@@ -869,8 +869,15 @@ class CalendarWidget extends StatelessWidget {
           .add({'name': 'הדלקת נרות', 'time': dailyTimes['candleLighting']});
     }
 
-    // הוספת זמני יציאת שבת/חג
-    if (jewishCalendar.getDayOfWeek() == 7 || jewishCalendar.isYomTov()) {
+    // הוספת זמני יציאת שבת/חג (לא להוסיף בימי חול המועד והושענא רבה)
+    final int yomTovIndex = jewishCalendar.getYomTovIndex();
+    final bool isNotExitTimesDay =
+        yomTovIndex == JewishCalendar.CHOL_HAMOED_SUCCOS ||
+            yomTovIndex == JewishCalendar.CHOL_HAMOED_PESACH ||
+            yomTovIndex == JewishCalendar.HOSHANA_RABBA;
+
+    if ((jewishCalendar.getDayOfWeek() == 7 || jewishCalendar.isYomTov()) &&
+        !isNotExitTimesDay) {
       final String exitName;
       final String exitName2;
 
@@ -1016,15 +1023,29 @@ class CalendarWidget extends StatelessWidget {
         JewishCalendar.fromDateTime(state.selectedGregorianDate);
 
     // חישוב דף יומי בבלי
-    final dafYomiBavli = YomiCalculator.getDafYomiBavli(jewishCalendar);
-    final bavliTractate = dafYomiBavli.getMasechta();
-    final bavliDaf = dafYomiBavli.getDaf();
+    String bavliTractate;
+    int bavliDaf;
+    try {
+      final dafYomiBavli = YomiCalculator.getDafYomiBavli(jewishCalendar);
+      bavliTractate = dafYomiBavli.getMasechta();
+      bavliDaf = dafYomiBavli.getDaf();
+    } catch (e) {
+      bavliTractate = 'לא זמין';
+      bavliDaf = 0;
+    }
 
     // חישוב דף יומי ירושלמי
-    final dafYomiYerushalmi =
-        YerushalmiYomiCalculator.getDafYomiYerushalmi(jewishCalendar);
-    final yerushalmiTractate = dafYomiYerushalmi.getMasechta();
-    final yerushalmiDaf = dafYomiYerushalmi.getDaf();
+    String yerushalmiTractate;
+    int yerushalmiDaf;
+    try {
+      final dafYomiYerushalmi =
+          YerushalmiYomiCalculator.getDafYomiYerushalmi(jewishCalendar);
+      yerushalmiTractate = dafYomiYerushalmi.getMasechta();
+      yerushalmiDaf = dafYomiYerushalmi.getDaf();
+    } catch (e) {
+      yerushalmiTractate = 'לא זמין';
+      yerushalmiDaf = 0;
+    }
 
     return Row(
       children: [
@@ -1364,6 +1385,7 @@ class CalendarWidget extends StatelessWidget {
                     TextField(
                       controller: dateController,
                       autofocus: true,
+                      textInputAction: TextInputAction.done,
                       decoration: const InputDecoration(
                         labelText: 'הזן תאריך',
                         hintText: 'דוגמאות: 15/3/2025, כ״ה אדר תשפ״ה',
@@ -1372,12 +1394,32 @@ class CalendarWidget extends StatelessWidget {
                             'ניתן להזין תאריך לועזי (יום/חודש/שנה) או עברי',
                       ),
                       onChanged: (value) => setState(() {}),
+                      onSubmitted: (value) {
+                        DateTime? dateToJump;
+
+                        if (value.isNotEmpty) {
+                          // נסה לפרש את הטקסט שהוזן
+                          dateToJump = _parseInputDate(context, value);
+                          if (dateToJump == null) {
+                            UiSnack.showError('לא הצלחנו לפרש את התאריך.',
+                                backgroundColor:
+                                    Theme.of(context).colorScheme.error);
+                            return;
+                          }
+                        } else {
+                          // אם לא הוזן כלום, השתמש בתאריך שנבחר מהלוח
+                          dateToJump = selectedDate;
+                        }
+
+                        context.read<CalendarCubit>().jumpToDate(dateToJump);
+                        Navigator.of(dialogContext).pop();
+                      },
                     ),
                     const SizedBox(height: 20),
 
                     const Divider(),
                     const Text(
-                      'או בחר מלוח השנה:',
+                      'או בחר בלוח השנה:',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 10),
@@ -2219,27 +2261,32 @@ class _HoverableDayCellState extends State<_HoverableDayCell> {
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
       child: Stack(
-        alignment: Alignment.center,
+        alignment: Alignment.topCenter,
         children: [
           widget.child,
           // כפתור הוספה שמופיע בריחוף
           AnimatedOpacity(
             opacity: _isHovering ? 1.0 : 0.0,
             duration: const Duration(milliseconds: 200),
-            child: IgnorePointer(
-              ignoring: !_isHovering, // מונע מהכפתור לחסום קליקים כשהוא שקוף
-              child: Tooltip(
-                message: 'צור אירוע',
-                child: IconButton.filled(
-                  icon: const Icon(Icons.add),
-                  onPressed: widget.onAdd,
-                  style: IconButton.styleFrom(
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primaryContainer,
-                    foregroundColor:
-                        Theme.of(context).colorScheme.onPrimaryContainer,
-                    visualDensity:
-                        VisualDensity.compact, // הופך אותו לקצת יותר קטן
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: IgnorePointer(
+                ignoring: !_isHovering, // מונע מהכפתור לחסום קליקים כשהוא שקוף
+                child: Tooltip(
+                  message: 'צור אירוע',
+                  verticalOffset: -40.0,
+                  child: IconButton.filled(
+                    icon: const Icon(Icons.add, size: 16),
+                    onPressed: widget.onAdd,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(24, 24),
+                      backgroundColor:
+                          Theme.of(context).colorScheme.primaryContainer,
+                      foregroundColor:
+                          Theme.of(context).colorScheme.onPrimaryContainer,
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ),
               ),
