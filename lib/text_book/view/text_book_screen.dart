@@ -37,6 +37,7 @@ import 'package:otzaria/notes/notes_system.dart';
 import 'package:otzaria/models/phone_report_data.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/services/phone_report_service.dart';
+
 import 'package:otzaria/widgets/phone_report_tab.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 
@@ -1937,13 +1938,16 @@ $detailsSection
   Widget _buildLinkView(BuildContext context, TextBookLoaded state) {
     return LinksViewer(
       openTabcallback: widget.openBookCallback,
-      itemPositionsListener: state.positionsListener,
       closeLeftPanelCallback: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
       isSplitViewOpen: state.showSplitView &&
           (state.activeCommentators.isNotEmpty || _sidebarTabIndex != null),
+      links: state.visibleLinks,
       openInSidebarCallback: () {
-        if (state.showSplitView) {
+        final isSplitOpen = state.showSplitView &&
+            (state.activeCommentators.isNotEmpty || _sidebarTabIndex != null);
+
+        if (isSplitOpen) {
           // אם החלונית פתוחה - סוגר אותה
           context.read<TextBookBloc>().add(const ToggleSplitView(false));
         } else {

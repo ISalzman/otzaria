@@ -9,7 +9,6 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
-import 'package:otzaria/text_book/view/links_screen.dart';
 import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -265,8 +264,8 @@ class _CombinedViewState extends State<CombinedView> {
         ),
         ctx.MenuItem.submenu(
           label: 'קישורים',
-          enabled: LinksViewer.getLinks(state).isNotEmpty,
-          items: LinksViewer.getLinks(state)
+          enabled: state.visibleLinks.isNotEmpty,
+          items: state.visibleLinks
               .map(
                 (link) => ctx.MenuItem(
                   label: link.heRef,

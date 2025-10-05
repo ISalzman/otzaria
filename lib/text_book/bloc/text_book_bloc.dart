@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'dart:io';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -121,6 +123,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final removeNikud =
           defaultRemoveNikud && (removeNikudFromTanach || !isTanach);
 
+      final visibleLinks = _getVisibleLinks(
+        links: links,
+        visibleIndices: visibleIndices,
+        selectedIndex: null,
+      );
+
       // Set up position listener with debouncing to prevent excessive updates
       Timer? debounceTimer;
       positionsListener.itemPositions.addListener(() {
@@ -156,6 +164,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         scrollController: scrollController,
         positionsListener: positionsListener,
         currentTitle: currentTitle,
+        visibleLinks: visibleLinks,
         showNotesSidebar: state is TextBookLoaded
             ? (state as TextBookLoaded).showNotesSidebar
             : false,
@@ -293,11 +302,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (!event.visibleIndecies.contains(index)) {
         index = null;
       }
+      final visibleLinks = _getVisibleLinks(
+        links: currentState.links,
+        visibleIndices: event.visibleIndecies,
+        selectedIndex: index,
+      );
 
       emit(currentState.copyWith(
-          visibleIndices: event.visibleIndecies,
-          currentTitle: newTitle,
-          selectedIndex: index));
+        visibleIndices: event.visibleIndecies,
+        currentTitle: newTitle,
+        selectedIndex: index,
+        visibleLinks: visibleLinks,
+      ));
     }
   }
 
@@ -316,7 +332,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
-      emit(currentState.copyWith(selectedIndex: event.index));
+      final visibleLinks = _getVisibleLinks(
+        links: currentState.links,
+        visibleIndices: currentState.visibleIndices,
+        selectedIndex: event.index,
+      );
+      emit(currentState.copyWith(
+        selectedIndex: event.index,
+        visibleLinks: visibleLinks,
+      ));
     }
   }
 
@@ -378,6 +402,38 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         selectedTextEnd: event.end,
       ));
     }
+  }
+
+  List<Link> _getVisibleLinks({
+    required List<Link> links,
+    required List<int> visibleIndices,
+    int? selectedIndex,
+  }) {
+    final targetIndices =
+        selectedIndex != null ? [selectedIndex] : visibleIndices;
+
+    final visibleLinks = <Link>[];
+
+    for (final index in targetIndices) {
+      final indexLinks = links
+          .where(
+            (link) =>
+                link.index1 == index + 1 &&
+                link.connectionType != 'commentary' &&
+                link.connectionType != 'targum',
+          )
+          .toList();
+      visibleLinks.addAll(indexLinks);
+    }
+
+    visibleLinks.sort(
+      (a, b) => a.path2
+          .split(Platform.pathSeparator)
+          .last
+          .compareTo(b.path2.split(Platform.pathSeparator).last),
+    );
+
+    return visibleLinks;
   }
 
   // Editor event handlers

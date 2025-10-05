@@ -54,6 +54,7 @@ class TextBookLoaded extends TextBookState {
   final List<CommentatorGroup> commentatorGroups;
   final List<String> availableCommentators;
   final List<Link> links;
+  final List<Link> visibleLinks;
   final List<TocEntry> tableOfContents;
   final bool removeNikud;
   final List<int> visibleIndices;
@@ -88,6 +89,7 @@ class TextBookLoaded extends TextBookState {
     required this.commentatorGroups,
     required this.availableCommentators,
     required this.links,
+    this.visibleLinks = const [],
     required this.tableOfContents,
     required this.removeNikud,
     required this.visibleIndices,
@@ -126,6 +128,7 @@ class TextBookLoaded extends TextBookState {
       commentatorGroups: const [],
       availableCommentators: const [],
       links: const [],
+      visibleLinks: const [],
       tableOfContents: const [],
       removeNikud: false,
       pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
@@ -156,6 +159,7 @@ class TextBookLoaded extends TextBookState {
     List<CommentatorGroup>? commentatorGroups,
     List<String>? availableCommentators,
     List<Link>? links,
+    List<Link>? visibleLinks,
     List<TocEntry>? tableOfContents,
     bool? removeNikud,
     int? selectedIndex,
@@ -187,6 +191,7 @@ class TextBookLoaded extends TextBookState {
       availableCommentators:
           availableCommentators ?? this.availableCommentators,
       links: links ?? this.links,
+      visibleLinks: visibleLinks ?? this.visibleLinks,
       tableOfContents: tableOfContents ?? this.tableOfContents,
       removeNikud: removeNikud ?? this.removeNikud,
       visibleIndices: visibleIndices ?? this.visibleIndices,
@@ -220,6 +225,7 @@ class TextBookLoaded extends TextBookState {
         commentatorGroups,
         availableCommentators.length,
         links.length,
+        visibleLinks.length,
         tableOfContents.length,
         removeNikud,
         visibleIndices,

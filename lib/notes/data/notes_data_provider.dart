@@ -53,14 +53,15 @@ class NotesDataProvider {
     } catch (e, st) {
       // Write detailed log next to the DB (what the user can send)
       final logPath = p.join(p.dirname(newPath), 'notes_db_error.log');
-      final log = [
-            'When: ${DateTime.now().toIso8601String()}',
-            'OS: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
-            'Tried path: $newPath',
-            'Error: $e',
-            'Stack:\n$st',
-          ].join('\n') +
-          '\n\n';
+      final log = '''
+      When: ${DateTime.now().toIso8601String()}
+      OS: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}
+      Tried path: $newPath
+      Error: $e
+      Stack:
+      $st
+
+      ''';
       await File(logPath).writeAsString(log, mode: FileMode.append);
 
       rethrow; // rethrow to the upper layers - the UI will show a neat message

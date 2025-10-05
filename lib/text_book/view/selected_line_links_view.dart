@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/text_book/view/links_screen.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 
 /// Widget שמציג את הקישורים של השורה הנבחרת בלבד
@@ -34,21 +34,14 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   final Map<String, Future<String>> _contentCache = {};
   final Map<String, bool> _expanded = {};
   bool _searchInContent = false;
-  List<Link>? _cachedLinks; // מטמון לקישורים
-  String? _lastStateKey; // מפתח למצב הקודם
+  Future<List<Link>>? _filteredLinksFuture;
+  String _lastSearchKey = '';
+  final Set<String> _linksWithSearchResults = {}; // קישורים עם תוצאות חיפוש
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  /// מחזיר את הקישורים עבור השורה הנבחרת או השורות הנראות
-  List<Link> _getLinksForSelectedLine(TextBookLoaded state,
-      {bool showVisibleIfNoSelection = false}) {
-    // תמיד משתמש באותה לוגיקה של LinksViewer.getLinks
-    // זה מבטיח עקביות עם הסרגל הצד
-    return LinksViewer.getLinks(state);
   }
 
   @override
@@ -115,7 +108,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
             ),
             // תוכן הקישורים
             Expanded(
-              child: _buildLinksContent(state),
+              child: _buildLinksList(state),
             ),
           ],
         );
@@ -123,15 +116,38 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
     );
   }
 
-  Widget _buildLinksContent(TextBookLoaded state) {
-    // תמיד מציג קישורים באמצעות אותה לוגיקה של הסרגל הצד
-    // לא מציג יותר הודעות על בחירת קטע
+  Widget _buildLinksList(TextBookLoaded state) {
+    final links = state.visibleLinks;
 
-    // מציג מיד את הקונטיינר ואז טוען את הקישורים
+    if (links.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text(
+            'לא נמצאו קישורים לקטע הנבחר',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // יצירת מפתח ייחודי לחיפוש
+    final searchKey = '${_searchQuery}_${_searchInContent}_${links.length}';
+
+    // יצירת Future חדש רק אם החיפוש השתנה
+    if (_lastSearchKey != searchKey) {
+      _lastSearchKey = searchKey;
+      _filteredLinksFuture = _filterLinksAsync(links);
+    }
+
     return Container(
       color: Theme.of(context).colorScheme.surface,
       child: FutureBuilder<List<Link>>(
-        future: _loadLinksAsync(state),
+        future: _filteredLinksFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
@@ -142,64 +158,13 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
             );
           }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'שגיאה בטעינת הקישורים: ${snapshot.error}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.red,
-                  ),
-                ),
-              ),
-            );
-          }
+          final filteredLinks = snapshot.data ?? links;
 
-          final links = snapshot.data ?? [];
-
-          // אם אין קישורים
-          if (links.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'לא נמצאו קישורים לקטע הנבחר',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                  ),
-                ),
-              ),
-            );
-          }
-
-          // מציג את הקישורים
           return ListView.builder(
-            itemCount: links.length,
+            itemCount: filteredLinks.length,
             itemBuilder: (context, index) {
-              final link = links[index];
-
-              // בדיקת חיפוש בכותרת ושם הספר (ללא טעינת תוכן)
-              if (_searchQuery.isNotEmpty) {
-                final title = link.heRef.toLowerCase();
-                final bookTitle =
-                    utils.getTitleFromPath(link.path2).toLowerCase();
-                final query = _searchQuery.toLowerCase();
-
-                final matchesTitle =
-                    title.contains(query) || bookTitle.contains(query);
-
-                // אם לא מתאים לכותרת - מסתיר
-                if (!matchesTitle) {
-                  return const SizedBox.shrink();
-                }
-              }
-
-              return _buildExpansionTile(link, index);
+              final link = filteredLinks[index];
+              return _buildExpansionTile(link);
             },
           );
         },
@@ -207,31 +172,60 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
     );
   }
 
-  // פונקציה אסינכרונית לטעינת הקישורים
-  Future<List<Link>> _loadLinksAsync(TextBookLoaded state) async {
-    // יצירת מפתח ייחודי למצב הנוכחי (פשוט יותר)
-    final stateKey = '${state.visibleIndices.join(',')}';
+  // פונקציה אסינכרונית לסינון הקישורים עם חיפוש בתוכן
+  Future<List<Link>> _filterLinksAsync(List<Link> links) async {
+    _linksWithSearchResults.clear(); // איפוס רשימת הקישורים עם תוצאות
 
-    // אם המצב לא השתנה, מחזיר את התוצאה הקודמת
-    if (_lastStateKey == stateKey && _cachedLinks != null) {
-      return _cachedLinks!;
+    if (_searchQuery.isEmpty) {
+      return links;
     }
 
-    // מחכה מעט כדי לתת לווידג'ט להיבנות
-    await Future.delayed(const Duration(milliseconds: 10));
+    final query = _searchQuery.toLowerCase();
+    final filteredLinks = <Link>[];
 
-    // מחשב את הקישורים באמצעות אותה לוגיקה של הסרגל הצד
-    final links = _getLinksForSelectedLine(state,
-        showVisibleIfNoSelection: widget.showVisibleLinksIfNoSelection);
+    for (final link in links) {
+      final keyStr = '${link.path2}_${link.index2}';
+      final title = link.heRef.toLowerCase();
+      final bookTitle = utils.getTitleFromPath(link.path2).toLowerCase();
 
-    // שומר במטמון
-    _cachedLinks = links;
-    _lastStateKey = stateKey;
+      // חיפוש בכותרת ושם הספר
+      if (title.contains(query) || bookTitle.contains(query)) {
+        filteredLinks.add(link);
+        continue;
+      }
 
-    return links;
+      // חיפוש בתוכן אם הופעל
+      if (_searchInContent) {
+        try {
+          final content = await link.content;
+          final cleanContent = utils.stripHtmlIfNeeded(content).toLowerCase();
+          if (cleanContent.contains(query)) {
+            filteredLinks.add(link);
+            _linksWithSearchResults.add(keyStr); // מסמן שיש תוצאות בתוכן
+            _contentCache[keyStr] = link.content; // טוען את התוכן למטמון
+
+            // פותח אוטומטית את הקישור הראשון עם תוצאות
+            if (_linksWithSearchResults.length == 1) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _expanded[keyStr] = true;
+                  });
+                }
+              });
+            }
+          }
+        } catch (e) {
+          // אם יש שגיאה בטעינת התוכן, מוסיף בכל זאת אם מתאים לכותרת
+          // (כבר בדקנו את זה למעלה)
+        }
+      }
+    }
+
+    return filteredLinks;
   }
 
-  Widget _buildExpansionTile(Link link, int index) {
+  Widget _buildExpansionTile(Link link) {
     final keyStr = '${link.path2}_${link.index2}';
     return ExpansionTile(
       key: PageStorageKey(keyStr),
@@ -251,15 +245,21 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
         style: TextStyle(
           fontSize: widget.fontSize * 0.65,
           fontFamily: 'FrankRuhlCLM',
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+          color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
         ),
       ),
       onExpansionChanged: (isExpanded) {
-        // הקצאת future לפני setState
-        _contentCache[keyStr] ??= link.content;
-        setState(() {
-          _expanded[keyStr] = isExpanded;
-        });
+        // טוען תוכן רק אם נפתח ועדיין לא נטען
+        if (isExpanded && !_contentCache.containsKey(keyStr)) {
+          _contentCache[keyStr] = link.content;
+        }
+
+        // עדכון מצב ההרחבה עם setState בטוח
+        if (_expanded[keyStr] != isExpanded) {
+          setState(() {
+            _expanded[keyStr] = isExpanded;
+          });
+        }
       },
       children: [
         if (_expanded[keyStr] == true)
@@ -268,14 +268,15 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
                 const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: FutureBuilder<String>(
               future: _contentCache[keyStr],
-              builder: (context, snapshot) => _buildLinkContent(link, snapshot),
+              builder: (context, snapshot) =>
+                  _buildLinkContentWidget(link, snapshot),
             ),
           ),
       ],
     );
   }
 
-  Widget _buildLinkContent(Link link, AsyncSnapshot<String> snapshot) {
+  Widget _buildLinkContentWidget(Link link, AsyncSnapshot<String> snapshot) {
     if (snapshot.connectionState == ConnectionState.waiting) {
       return const Center(
         child: Padding(
@@ -299,7 +300,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
       return Text(
         'אין תוכן זמין',
         style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+          color: Theme.of(context).colorScheme.onSurface.withAlpha(150),
           fontSize: widget.fontSize * 0.9,
         ),
       );
@@ -322,18 +323,44 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12.0),
-        // הסרת המסגרת והרקע הצבעוני
-        child: Text(
-          utils.stripHtmlIfNeeded(snapshot.data!),
-          style: TextStyle(
-            fontSize: widget.fontSize * 0.75,
-            height: 1.5,
-            fontFamily: 'FrankRuhlCLM',
-          ),
-          textAlign: TextAlign.justify,
-          textDirection: TextDirection.rtl,
-        ),
+        child: _buildHighlightedText(snapshot.data!, link),
       ),
     );
+  }
+
+  Widget _buildHighlightedText(String content, Link link) {
+    String cleanContent = utils.stripHtmlIfNeeded(content);
+
+    // אם יש חיפוש בתוכן והקישור הזה מכיל תוצאות, מדגיש
+    if (_searchQuery.isNotEmpty && _searchInContent) {
+      final keyStr = '${link.path2}_${link.index2}';
+      if (_linksWithSearchResults.contains(keyStr)) {
+        cleanContent = utils.highLight(cleanContent, _searchQuery);
+      }
+    }
+
+    // אם יש תגי HTML (הדגשה), משתמש ב-HtmlWidget
+    if (cleanContent.contains('<font color=')) {
+      return HtmlWidget(
+        cleanContent,
+        textStyle: TextStyle(
+          fontSize: widget.fontSize * 0.75,
+          height: 1.5,
+          fontFamily: 'FrankRuhlCLM',
+        ),
+      );
+    } else {
+      // אם אין הדגשה, משתמש ב-Text רגיל
+      return Text(
+        cleanContent,
+        style: TextStyle(
+          fontSize: widget.fontSize * 0.75,
+          height: 1.5,
+          fontFamily: 'FrankRuhlCLM',
+        ),
+        textAlign: TextAlign.justify,
+        textDirection: TextDirection.rtl,
+      );
+    }
   }
 }

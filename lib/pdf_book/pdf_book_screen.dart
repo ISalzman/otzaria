@@ -57,7 +57,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final String query = controller.text.trim();
     if (query.isEmpty) return;
 
-    debugPrint('DEBUG: Triggering search by simulating user input for "$query"');
+    debugPrint(
+        'DEBUG: Triggering search by simulating user input for "$query"');
 
     // שיטה 1: הוספה והסרה מהירה
     controller.text = '$query '; // הוסף תו זמני
@@ -114,20 +115,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
   }
 
+  @override
   void initState() {
     super.initState();
 
-    // 1. צור את הבקר (המכונית) קודם כל.
     pdfController = PdfViewerController();
 
-    // 2. צור את המחפש (השלט) וחבר אותו לבקר שיצרנו הרגע.
     textSearcher = PdfTextSearcher(pdfController)
       ..addListener(_onTextSearcherUpdated);
 
-    // 3. שמור את הבקר בטאב כדי ששאר חלקי האפליקציה יוכלו להשתמש בו.
     widget.tab.pdfViewerController = pdfController;
 
-    // וודא שהמיקום הנוכחי נשמר בטאב
     debugPrint('DEBUG: אתחול PDF טאב - דף התחלתי: ${widget.tab.pageNumber}');
 
     _sidebarWidth = ValueNotifier<double>(
@@ -137,7 +135,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       _sidebarWidth.value = state.sidebarWidth;
     });
 
-    // -- שאר הקוד של initState נשאר כמעט זהה --
     pdfController.addListener(_onPdfViewerControllerUpdate);
     if (widget.tab.searchText.isNotEmpty) {
       _currentLeftPaneTabIndex = 1;
