@@ -2,6 +2,7 @@
 /// The application is a Flutter-based digital library system that supports
 /// RTL (Right-to-Left) languages, particularly Hebrew.
 /// It includes features for dark mode, customizable themes, and local storage management.
+library;
 
 import 'dart:async';
 import 'dart:io';
@@ -45,6 +46,10 @@ import 'package:otzaria/notes/bloc/notes_bloc.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/window_listener.dart';
+
+// Global reference to window listener for cleanup
+AppWindowListener? _appWindowListener;
 
 /// Application entry point that initializes necessary components and launches the app.
 ///
@@ -163,6 +168,21 @@ Future<void> initialize() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
     await windowManager.ensureInitialized();
+
+    // Configure window manager for proper close handling
+    WindowOptions windowOptions = const WindowOptions(
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+    );
+
+    // Add window listener for proper close handling
+    _appWindowListener = AppWindowListener();
+    windowManager.addListener(_appWindowListener!);
+
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
   }
 
   await RustLib.init();
@@ -215,4 +235,9 @@ Future<void> loadCerts() async {
     SecurityContext.defaultContext
         .setTrustedCertificatesBytes(certBytes.buffer.asUint8List());
   }
+}
+
+/// Clean up resources when the app is closing
+void cleanup() {
+  _appWindowListener?.dispose();
 }
