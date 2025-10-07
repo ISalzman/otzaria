@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tools/measurement_converter/measurement_converter_screen.dart';
+import 'package:otzaria/tools/gematria/gematria_search_screen.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'calendar_widget.dart';
 import 'calendar_cubit.dart';
@@ -124,7 +125,7 @@ class _MoreScreenState extends State<MoreScreen> {
       case 2:
         return const MeasurementConverterScreen();
       case 3:
-        return const Center(child: Text('בקרוב...'));
+        return const GematriaSearchScreen();
       default:
         return Container();
     }
