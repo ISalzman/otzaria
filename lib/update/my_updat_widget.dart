@@ -1,15 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:updat/theme/chips/flat.dart';
 import 'package:updat/updat.dart';
 import 'package:updat/updat_window_manager.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'hebrew_updat_widgets.dart';
 
-/// Wraps [flatChip] and automatically dismisses update errors after a short delay.
-Widget _flatChipAutoHideError({
+/// עוטף את [hebrewFlatChip] ומבטל אוטומטית שגיאות עדכון לאחר השהיה קצרה.
+Widget _hebrewFlatChipAutoHideError({
   required BuildContext context,
   required String? latestVersion,
   required String appVersion,
@@ -23,7 +23,7 @@ Widget _flatChipAutoHideError({
   if (status == UpdatStatus.error) {
     Future.delayed(const Duration(seconds: 3), dismissUpdate);
   }
-  return flatChip(
+  return hebrewFlatChip(
     context: context,
     latestVersion: latestVersion,
     appVersion: appVersion,
@@ -175,7 +175,8 @@ class MyUpdatWidget extends StatelessWidget {
             }
           },
           currentVersion: snapshot.data!.version,
-          updateChipBuilder: _flatChipAutoHideError,
+          updateChipBuilder: _hebrewFlatChipAutoHideError,
+          updateDialogBuilder: hebrewDefaultDialog,
 
           callback: (status) {},
           child: child,
