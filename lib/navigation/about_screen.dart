@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/data_collection_service.dart';
@@ -59,6 +61,33 @@ class _AboutScreenState extends State<AboutScreen> {
 
     // Load book count
     bookCount = await dataService.getTotalBookCount();
+  }
+
+  Future<void> _showChangelogDialog(BuildContext context) async {
+    final changelog = await rootBundle.loadString('assets/יומן שינויים.md');
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('יומן שינויים'),
+          content: Container(
+            width: 300,
+            height: 400,
+            child: Markdown(
+              data: changelog,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('סגור'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -196,7 +225,7 @@ class _AboutScreenState extends State<AboutScreen> {
               ],
             ),
 
-            // Lower part with versions and donations
+// Lower part with versions and donations
             Column(
               children: [
                 InkWell(
@@ -221,23 +250,43 @@ class _AboutScreenState extends State<AboutScreen> {
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'גרסת תוכנה: ${appVersion ?? 'לא ידוע'}',
-                      style: const TextStyle(fontSize: 14),
+                    // Right Column (App Version, Changelog Button)
+                    // ב-RTL (עברית), `start` ב-CrossAxisAlignment של Column מיישר את התוכן לימין.
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'גרסת תוכנה: ${appVersion ?? 'לא ידוע'}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: () => _showChangelogDialog(context),
+                          child: const Text('יומן שינויים'),
+                        ),
+                      ],
                     ),
-                    Text(
-                      'גרסת ספריה: ${libraryVersion ?? 'לא ידוע'}',
-                      style: const TextStyle(fontSize: 14),
+                    // Left Column (Library Version, Book Count)
+                    // ב-RTL (עברית), `end` ב-CrossAxisAlignment של Column מיישר את התוכן לשמאל.
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'גרסת ספריה: ${libraryVersion ?? 'לא ידוע'}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(
+                            height:
+                                16), // מרווח גדול יותר כדי להתאים למבנה התמונה
+                        Text(
+                          'מספר הספרים שבמאגר כעת: ${bookCount ?? 'לא ידוע'}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                Center(
-                  child: Text(
-                    'מספר הספרים שבמאגר כעת: ${bookCount ?? 'לא ידוע'}',
-                    style: const TextStyle(fontSize: 14),
-                  ),
                 ),
               ],
             ),
