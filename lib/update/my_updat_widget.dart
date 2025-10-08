@@ -9,6 +9,40 @@ import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'hebrew_updat_widgets.dart';
 
+/// סוג ההתקנה המוגדר בזמן build (אופציונלי)
+/// להגדרה: --dart-define=INSTALL_KIND=msix/exe/zip
+const _kInstallKind =
+    String.fromEnvironment('INSTALL_KIND', defaultValue: 'auto');
+
+/// זיהוי סוג ההתקנה ב-Windows
+/// אם הוגדר INSTALL_KIND בזמן build - משתמש בו
+/// אחרת - מזהה לפי נתיב הקובץ
+String _preferredWindowsFormat() {
+  if (!Platform.isWindows) return 'unknown';
+
+  // אם הוגדר סוג התקנה בזמן build - משתמש בו
+  if (_kInstallKind != 'auto') return _kInstallKind; // 'msix' | 'exe' | 'zip'
+
+  try {
+    // זיהוי אוטומטי לפי נתיב הקובץ
+    final executablePath = Platform.resolvedExecutable.toLowerCase();
+
+    if (executablePath.contains('\\windowsapps\\')) {
+      return 'msix'; // התקנת MSIX
+    }
+
+    if (executablePath.contains('\\program files\\') ||
+        executablePath.contains('\\program files (x86)\\')) {
+      return 'exe'; // התקנה תקנית
+    }
+
+    return 'zip'; // גרסה ניידת/ידנית
+  } catch (e) {
+    // במקרה של שגיאה, ברירת מחדל היא EXE
+    return 'exe';
+  }
+}
+
 /// עוטף את [hebrewFlatChip] ומבטל אוטומטית שגיאות עדכון לאחר השהיה קצרה.
 Widget _hebrewFlatChipAutoHideError({
   required BuildContext context,
@@ -96,91 +130,142 @@ class MyUpdatWidget extends StatelessWidget {
               }
             },
             getBinaryUrl: (version) async {
-              // Get the release info to find the correct asset
-              final isDevChannelForBinary =
-                  Settings.getValue<bool>('key-dev-channel') ?? false;
-              final repo = isDevChannelForBinary ? "Y-PLONI" : "sivan22";
+              final isDev = Settings.getValue<bool>('key-dev-channel') ?? false;
+              final repo = isDev ? "Y-PLONI" : "sivan22";
 
-              // For dev channel, we need to find the release by normalized version
-              // since the version passed here is already normalized (without build number)
+              // קבלת פרטי ה-release
               dynamic release;
-              if (isDevChannelForBinary) {
+              if (isDev) {
+                // ערוץ dev - חיפוש לפי התחלת גרסה
                 final data = await http.get(Uri.parse(
-                  "https://api.github.com/repos/$repo/otzaria/releases",
-                ));
+                    "https://api.github.com/repos/$repo/otzaria/releases"));
                 final releases = jsonDecode(data.body) as List;
-                // Find the first release whose tag_name starts with the version
                 final versionStr = version ?? '';
                 release = releases.firstWhere(
                   (r) => r["tag_name"].toString().startsWith(versionStr),
                   orElse: () => releases.first,
                 );
               } else {
-                final data = await http.get(Uri.parse(
-                  "https://api.github.com/repos/$repo/otzaria/releases/tags/$version",
-                ));
-                release = jsonDecode(data.body);
+                // ערוץ stable - ניסיון עם/בלי קידומת v
+                var resp = await http.get(Uri.parse(
+                    "https://api.github.com/repos/$repo/otzaria/releases/tags/$version"));
+                if (resp.statusCode == 404) {
+                  resp = await http.get(Uri.parse(
+                      "https://api.github.com/repos/$repo/otzaria/releases/tags/v$version"));
+                }
+                release = jsonDecode(resp.body);
               }
 
-              final assets = release["assets"] as List;
-
-              // Find the appropriate asset for the current platform
-              final platformName = Platform.operatingSystem;
-              final isDevChannel =
-                  Settings.getValue<bool>('key-dev-channel') ?? false;
+              final assets =
+                  (release["assets"] as List).cast<Map<String, dynamic>>();
+              final platform = Platform.operatingSystem.toLowerCase();
 
               String? assetUrl;
 
-              for (final asset in assets) {
-                final name = asset["name"] as String;
-                final downloadUrl = asset["browser_download_url"] as String;
+              // פונקציה לבחירת קובץ Windows לפי סדר עדיפות
+              String? pickWindows(List<String> extsInOrder) {
+                String? foundZip;
+                for (final a in assets) {
+                  final name = (a["name"] as String).toLowerCase();
+                  final url = a["browser_download_url"] as String;
+                  final isWin = name.contains('win') ||
+                      name.contains('windows') ||
+                      name.endsWith('.exe') ||
+                      name.endsWith('.msix') ||
+                      name.endsWith('.msixbundle') ||
+                      name.endsWith('.appinstaller');
+                  if (!isWin) continue;
 
-                switch (platformName) {
-                  case 'windows':
-                    // For dev channel prefer MSIX, otherwise EXE
-                    if (isDevChannel && name.endsWith('.exe')) {
-                      assetUrl = downloadUrl;
-                      break;
-                    } else if (name.endsWith('.exe')) {
-                      assetUrl = downloadUrl;
-                      break;
-                    }
-                    // Fallback: Windows ZIP
-                    if (name.contains('windows') &&
-                        name.endsWith('.zip') &&
-                        assetUrl == null) {
-                      assetUrl = downloadUrl;
-                    }
-                    break;
+                  for (final ext in extsInOrder) {
+                    if (name.endsWith(ext)) return url;
+                  }
+                  if (name.endsWith('.zip') && foundZip == null) foundZip = url;
+                }
+                return foundZip;
+              }
 
-                  case 'macos':
-                    // Look for macOS zip file (workflow creates otzaria-macos.zip)
-                    if (name.contains('macos') && name.endsWith('.zip')) {
-                      assetUrl = downloadUrl;
+              if (platform == 'windows') {
+                // בחירת סדר עדיפות לפי סוג ההתקנה
+                final pref = _preferredWindowsFormat();
+                final order = switch (pref) {
+                  'msix' => [
+                      '.msixbundle',
+                      '.msix',
+                      '.appinstaller',
+                      '.exe',
+                      '.zip'
+                    ],
+                  'exe' => [
+                      '.exe',
+                      '.msixbundle',
+                      '.msix',
+                      '.appinstaller',
+                      '.zip'
+                    ],
+                  'zip' => [
+                      '.zip',
+                      '.exe',
+                      '.msixbundle',
+                      '.msix',
+                      '.appinstaller'
+                    ],
+                  _ => [
+                      '.exe',
+                      '.msixbundle',
+                      '.msix',
+                      '.appinstaller',
+                      '.zip'
+                    ],
+                };
+                assetUrl = pickWindows(order);
+              } else if (platform == 'macos') {
+                // macOS - חיפוש קובץ zip
+                for (final a in assets) {
+                  final n = (a["name"] as String).toLowerCase();
+                  if ((n.contains('macos') ||
+                          n.contains('darwin') ||
+                          n.contains('mac')) &&
+                      n.endsWith('.zip')) {
+                    assetUrl = a["browser_download_url"] as String;
+                    break;
+                  }
+                }
+              } else if (platform == 'linux') {
+                // Linux - עדיפות: DEB -> RPM -> ZIP
+                for (final a in assets) {
+                  final n = (a["name"] as String).toLowerCase();
+                  final u = a["browser_download_url"] as String;
+                  if (n.endsWith('.deb')) {
+                    assetUrl = u;
+                    break;
+                  }
+                }
+                if (assetUrl == null) {
+                  for (final a in assets) {
+                    final n = (a["name"] as String).toLowerCase();
+                    final u = a["browser_download_url"] as String;
+                    if (n.endsWith('.rpm')) {
+                      assetUrl = u;
                       break;
                     }
-                    break;
-
-                  case 'linux':
-                    // Prefer DEB, then RPM, then raw zip (workflow creates otzaria-linux-raw.zip)
-                    if (name.endsWith('.deb')) {
-                      assetUrl = downloadUrl;
+                  }
+                }
+                if (assetUrl == null) {
+                  for (final a in assets) {
+                    final n = (a["name"] as String).toLowerCase();
+                    final u = a["browser_download_url"] as String;
+                    if ((n.contains('linux') || n.contains('gnu')) &&
+                        n.endsWith('.zip')) {
+                      assetUrl = u;
                       break;
-                    } else if (name.endsWith('.rpm') && assetUrl == null) {
-                      assetUrl = downloadUrl;
-                    } else if (name.contains('linux') &&
-                        name.endsWith('.zip') &&
-                        assetUrl == null) {
-                      assetUrl = downloadUrl;
                     }
-                    break;
+                  }
                 }
               }
 
               if (assetUrl == null) {
-                throw Exception('No suitable binary found for $platformName');
+                throw Exception('No suitable binary found for $platform');
               }
-
               return assetUrl;
             },
             appName: "otzaria", // This is used to name the downloaded files.
