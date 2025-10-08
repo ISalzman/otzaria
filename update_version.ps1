@@ -69,5 +69,25 @@ for ($i = 0; $i -lt $issContent.Length; $i++) {
 $issContent | Set-Content "installer/otzaria.iss" -Encoding $Utf8Bom
 Write-Host "Updated installer/otzaria.iss"
 
+# Update assets/יומן שינויים.md (Add new version as first item)
+$changelogFile = "assets/יומן שינויים.md"
+# 1. REMOVE the leading `n` from the version line itself
+$changelogVersionLine = "* **$newVersion**" # The version line in Markdown format (NO leading newline)
+
+if (Test-Path $changelogFile) {
+    # Read existing content
+    $existingContent = Get-Content $changelogFile -Raw -Encoding $Utf8NoBom
+
+    # 2. Add the NEW version line (no leading newline)
+    #    THEN add TWO newlines (one to end the first line, one to separate from the next entry)
+    $newChangelogContent = $changelogVersionLine + "`n`n" + $existingContent
+
+    # 3. Write back to the file
+    $newChangelogContent | Set-Content $changelogFile -Encoding $Utf8NoBom
+    Write-Host "Updated $changelogFile with new version: $newVersion"
+} else {
+    Write-Warning "Changelog file '$changelogFile' not found! Skipping changelog update."
+}
+
 Write-Host "Version update completed successfully!"
 Write-Host "All files have been updated to version: $newVersion"
