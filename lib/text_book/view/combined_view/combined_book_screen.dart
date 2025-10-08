@@ -46,19 +46,30 @@ class CombinedView extends StatefulWidget {
 class _CombinedViewState extends State<CombinedView> {
   final GlobalKey<SelectionAreaState> _selectionKey =
       GlobalKey<SelectionAreaState>();
-  bool _didInitialJump = false;
 
   @override
   void initState() {
     super.initState();
     // האזנה לשינויים במיקומי הפריטים כדי לאפס את הבחירה בגלילה
     widget.tab.positionsListener.itemPositions.addListener(_onScroll);
+    // עדכון האינדקס ב-tab בזמן אמת
+    widget.tab.positionsListener.itemPositions.addListener(_updateTabIndex);
   }
 
   @override
   void dispose() {
     widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
+    widget.tab.positionsListener.itemPositions.removeListener(_updateTabIndex);
     super.dispose();
+  }
+
+  // עדכון האינדקס הנוכחי ב-tab
+  void _updateTabIndex() {
+    final positions = widget.tab.positionsListener.itemPositions.value;
+    if (positions.isNotEmpty) {
+      // שומר את האינדקס של הפריט הראשון הנראה
+      widget.tab.index = positions.first.index;
+    }
   }
 
   // פונקציה שתשלח אירוע איפוס ל-selectedIndex אם יש גלילה משמעותית
@@ -78,30 +89,6 @@ class _CombinedViewState extends State<CombinedView> {
       if (!visibleIndices.contains(currentSelectedIndex)) {
         context.read<TextBookBloc>().add(const UpdateSelectedIndex(null));
       }
-    }
-  }
-
-  void _jumpToInitialIndexWhenReady() {
-    int attempts = 0;
-    void tryJump(Duration _) {
-      if (!mounted) return;
-      final ctrl = widget.tab.scrollController;
-      if (ctrl.isAttached) {
-        ctrl.jumpTo(index: widget.tab.index);
-      } else if (attempts++ < 5) {
-        WidgetsBinding.instance.addPostFrameCallback(tryJump);
-      }
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback(tryJump);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_didInitialJump) {
-      _didInitialJump = true;
-      _jumpToInitialIndexWhenReady();
     }
   }
 
@@ -666,6 +653,7 @@ $textWithBreaks
   Widget buildOuterList(TextBookLoaded state) {
     return ScrollablePositionedList.builder(
       key: ValueKey('combined-${widget.tab.book.title}'),
+      initialScrollIndex: widget.tab.index,
       itemPositionsListener: widget.tab.positionsListener,
       itemScrollController: widget.tab.scrollController,
       scrollOffsetController: widget.tab.mainOffsetController,

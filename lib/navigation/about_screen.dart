@@ -66,13 +66,14 @@ class _AboutScreenState extends State<AboutScreen> {
   Future<void> _showChangelogDialog(BuildContext context) async {
     final changelog = await rootBundle.loadString('assets/יומן שינויים.md');
 
+    if (!context.mounted) return;
     showDialog(
       context: context,
       builder: (dialogContext) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           title: const Text('יומן שינויים'),
-          content: Container(
+          content: SizedBox(
             width: 300,
             height: 400,
             child: Markdown(

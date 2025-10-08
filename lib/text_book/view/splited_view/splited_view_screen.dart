@@ -109,8 +109,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
       buildWhen: (previous, current) {
         if (previous is TextBookLoaded && current is TextBookLoaded) {
           return previous.fontSize != current.fontSize ||
-              previous.showSplitView != current.showSplitView ||
-              previous.activeCommentators != current.activeCommentators;
+              previous.showSplitView != current.showSplitView;
         }
         return true;
       },
