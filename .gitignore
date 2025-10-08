@@ -60,7 +60,7 @@ android/
 build/
 fonts/
 
-installer/otzaria-0.9.60-windows.exe
-installer/otzaria-0.9.60-windows-full.exe
+installer/otzaria-0.9.61-windows.exe
+installer/otzaria-0.9.61-windows-full.exe
 pubspec.lock
 flutter/
