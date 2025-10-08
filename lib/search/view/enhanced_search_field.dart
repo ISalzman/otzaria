@@ -2016,11 +2016,11 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                 ),
               ),
             );
-          }).toList(),
+          }),
           // כפתורי ה+ (רק בחיפוש מתקדם)
           ..._wordPositions.asMap().entries.map((entry) {
             return _buildPlusButton(entry.key, entry.value);
-          }).toList(),
+          }),
           // כפתורי המרווח (רק בחיפוש מתקדם)
           ..._buildSpacingButtons(),
         ],
