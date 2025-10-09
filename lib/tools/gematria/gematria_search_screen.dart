@@ -36,13 +36,26 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
       // קבלת נתיב הספרייה מההגדרות
       final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
 
-      // ביצוע החיפוש
-      final results = await GimatriaSearch.searchInFiles(
-        libraryPath,
-        targetGimatria,
-        maxPhraseWords: 8,
-        fileLimit: 100,
-      );
+      // חיפוש בתיקיות ספציפיות בלבד: תנך/תורה, תנך/נביאים, תנך/כתובים
+      final searchPaths = [
+        '$libraryPath/אוצריא/תנך/תורה',
+        '$libraryPath/אוצריא/תנך/נביאים',
+        '$libraryPath/אוצריא/תנך/כתובים',
+      ];
+
+      final List<SearchResult> allResults = [];
+      for (final path in searchPaths) {
+        final results = await GimatriaSearch.searchInFiles(
+          path,
+          targetGimatria,
+          maxPhraseWords: 8,
+          fileLimit: 100,
+        );
+        allResults.addAll(results);
+        if (allResults.length >= 100) break;
+      }
+
+      final results = allResults.take(100).toList();
 
       // המרת התוצאות לפורמט של המסך
       setState(() {
@@ -256,66 +269,38 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // כותרת הקובץ
-                    Text(
-                      result.bookTitle,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      textAlign: TextAlign.right,
-                    ),
-                    const SizedBox(height: 6),
-                    // נתיב פנימי
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.location_on_outlined,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            result.internalPath,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                            textAlign: TextAlign.right,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
+                    // המילים שנמצאו - בולטות
                     if (result.preview.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      // תצוגה מקדימה של התוכן
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest
-                              .withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(6),
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           result.preview,
                           style: TextStyle(
-                            fontSize: 13,
-                            color: Theme.of(context).colorScheme.onSurface,
-                            height: 1.4,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
+                            height: 1.5,
                           ),
                           textAlign: TextAlign.right,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      const SizedBox(height: 8),
                     ],
+                    // כותרת הקובץ - משנית
+                    Text(
+                      result.bookTitle,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      textAlign: TextAlign.right,
+                    ),
                   ],
                 ),
               ),
