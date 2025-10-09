@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
-import 'package:kosher_dart/kosher_dart.dart';
 
 import '../providers/shamor_zachor_data_provider.dart';
 import '../providers/shamor_zachor_progress_provider.dart';
@@ -9,7 +8,7 @@ import '../widgets/book_card_widget.dart';
 import '../models/book_model.dart';
 import '../models/progress_model.dart';
 
-enum TrackingFilter { inProgress, completed }
+enum TrackingFilter { all, inProgress, completed }
 
 /// Screen for tracking learning progress
 class TrackingScreen extends StatefulWidget {
@@ -26,7 +25,7 @@ class _TrackingScreenState extends State<TrackingScreen>
   @override
   bool get wantKeepAlive => true;
 
-  TrackingFilter _selectedFilter = TrackingFilter.inProgress;
+  TrackingFilter _selectedFilter = TrackingFilter.all;
 
   @override
   void initState() {
@@ -94,15 +93,27 @@ class _TrackingScreenState extends State<TrackingScreen>
           progressProvider,
         );
 
+        final List<Map<String, dynamic>> itemsToShow;
+        switch (_selectedFilter) {
+          case TrackingFilter.inProgress:
+            itemsToShow = inProgressItems;
+            break;
+          case TrackingFilter.completed:
+            itemsToShow = completedItems;
+            break;
+          case TrackingFilter.all:
+            // Combine in progress and completed, sort by completion date (newest first) for completed, then in progress by progress
+            final allItems = [...completedItems, ...inProgressItems];
+            // Already sorted individually, no need to re-sort combined
+            itemsToShow = allItems;
+            break;
+        }
+
         return Column(
           children: [
             _buildFilterSegments(),
             Expanded(
-              child: _buildBooksList(
-                _selectedFilter == TrackingFilter.inProgress
-                    ? inProgressItems
-                    : completedItems,
-              ),
+              child: _buildBooksList(itemsToShow),
             ),
           ],
         );
@@ -116,6 +127,11 @@ class _TrackingScreenState extends State<TrackingScreen>
       padding: const EdgeInsets.all(16.0),
       child: SegmentedButton<TrackingFilter>(
         segments: const [
+          ButtonSegment<TrackingFilter>(
+            value: TrackingFilter.all,
+            label: Text('הכל'),
+            icon: Icon(Icons.library_books),
+          ),
           ButtonSegment<TrackingFilter>(
             value: TrackingFilter.inProgress,
             label: Text('בתהליך'),
@@ -143,14 +159,34 @@ class _TrackingScreenState extends State<TrackingScreen>
   /// Build the books list based on current filter
   Widget _buildBooksList(List<Map<String, dynamic>> itemsData) {
     if (itemsData.isEmpty) {
+      IconData icon;
+      String title;
+      String subtitle;
+
+      switch (_selectedFilter) {
+        case TrackingFilter.inProgress:
+          icon = Icons.hourglass_empty;
+          title = 'אין ספרים בתהליך כעת';
+          subtitle = 'התחל ללמוד ספר כדי לראות אותו כאן';
+          break;
+        case TrackingFilter.completed:
+          icon = Icons.check_circle_outline;
+          title = 'עדיין לא סיימת ספרים';
+          subtitle = 'סיים ספר כדי לראות אותו כאן';
+          break;
+        case TrackingFilter.all:
+          icon = Icons.library_books;
+          title = 'אין ספרים במעקב';
+          subtitle = 'התחל ללמוד ספר כדי לראות אותו כאן';
+          break;
+      }
+
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              _selectedFilter == TrackingFilter.inProgress
-                  ? Icons.hourglass_empty
-                  : Icons.check_circle_outline,
+              icon,
               size: 64,
               color: Theme.of(context)
                   .colorScheme
@@ -159,9 +195,7 @@ class _TrackingScreenState extends State<TrackingScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              _selectedFilter == TrackingFilter.inProgress
-                  ? 'אין ספרים בתהליך כעת'
-                  : 'עדיין לא סיימת ספרים',
+              title,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     fontStyle: FontStyle.italic,
                     color: Theme.of(context)
@@ -172,9 +206,7 @@ class _TrackingScreenState extends State<TrackingScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              _selectedFilter == TrackingFilter.inProgress
-                  ? 'התחל ללמוד ספר כדי לראות אותו כאן'
-                  : 'סיים ספר כדי לראות אותו כאן',
+              subtitle,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context)
                         .colorScheme
@@ -190,7 +222,6 @@ class _TrackingScreenState extends State<TrackingScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         const double desiredCardWidth = 350;
-        const double minCardHeight = 120;
 
         int crossAxisCount = (constraints.maxWidth / desiredCardWidth).floor();
         if (crossAxisCount < 1) crossAxisCount = 1;
@@ -209,10 +240,6 @@ class _TrackingScreenState extends State<TrackingScreen>
         }
 
         // Use grid view for wider screens
-        final childWidth =
-            (constraints.maxWidth - (16 * (crossAxisCount + 1))) /
-                crossAxisCount;
-        final aspectRatio = childWidth / minCardHeight;
 
         return GridView.builder(
           key: PageStorageKey('tracking_grid_${_selectedFilter.name}'),
@@ -338,17 +365,5 @@ class _TrackingScreenState extends State<TrackingScreen>
     });
 
     return (inProgressItems, completedItems);
-  }
-
-  /// Format Hebrew date for display
-  String _formatHebrewDate(String isoDate) {
-    try {
-      final date = DateTime.parse(isoDate);
-      final hebrewDate = JewishDate.fromDateTime(date);
-      return hebrewDate.toString(); // This will give Hebrew date format
-    } catch (e) {
-      _logger.warning('Failed to format Hebrew date: $isoDate');
-      return isoDate; // Fallback to original date
-    }
   }
 }

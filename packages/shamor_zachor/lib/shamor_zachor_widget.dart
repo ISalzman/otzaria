@@ -14,9 +14,13 @@ class ShamorZachorWidget extends StatefulWidget {
   /// Optional configuration for customizing behavior
   final ShamorZachorConfig config;
 
+  /// Callback when the screen changes, providing the new title
+  final ValueChanged<String>? onTitleChanged;
+
   const ShamorZachorWidget({
     super.key,
     this.config = ShamorZachorConfig.defaultConfig,
+    this.onTitleChanged,
   });
 
   @override
@@ -25,9 +29,8 @@ class ShamorZachorWidget extends StatefulWidget {
 
 class _ShamorZachorWidgetState extends State<ShamorZachorWidget>
     with AutomaticKeepAliveClientMixin {
-  
   static final Logger _logger = Logger('ShamorZachorWidget');
-  
+
   @override
   bool get wantKeepAlive => true;
 
@@ -45,9 +48,9 @@ class _ShamorZachorWidgetState extends State<ShamorZachorWidget>
 
     // Inherit theme from host app or use provided config
     final theme = widget.config.themeData ?? Theme.of(context);
-    final textDirection = widget.config.textDirection ?? 
-        Directionality.of(context);
-    
+    final textDirection =
+        widget.config.textDirection ?? Directionality.of(context);
+
     return Theme(
       data: theme,
       child: Directionality(
@@ -65,7 +68,6 @@ class _ShamorZachorWidgetState extends State<ShamorZachorWidget>
             key: _navigatorKey,
             initialRoute: '/',
             onGenerateRoute: _generateRoute,
-            onPopPage: _onPopPage,
           ),
         ),
       ),
@@ -75,14 +77,14 @@ class _ShamorZachorWidgetState extends State<ShamorZachorWidget>
   /// Handle route generation for internal navigation
   Route<dynamic>? _generateRoute(RouteSettings settings) {
     _logger.fine('Generating route for: ${settings.name}');
-    
+
     switch (settings.name) {
       case '/':
         return MaterialPageRoute(
           builder: (context) => const ShamorZachorMainScreen(),
           settings: settings,
         );
-      
+
       case '/book_detail':
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
@@ -93,7 +95,7 @@ class _ShamorZachorWidgetState extends State<ShamorZachorWidget>
           ),
           settings: settings,
         );
-      
+
       default:
         _logger.warning('Unknown route: ${settings.name}');
         return MaterialPageRoute(
@@ -105,20 +107,6 @@ class _ShamorZachorWidgetState extends State<ShamorZachorWidget>
           settings: settings,
         );
     }
-  }
-
-  /// Handle page removal behavior
-  bool _onPopPage(Route<dynamic> route, dynamic result) {
-    if (!route.didPop(result)) {
-      return false;
-    }
-    
-    // If we're at the root route, don't pop - let the host app handle it
-    if (route.settings.name == '/') {
-      return false;
-    }
-    
-    return true;
   }
 
   @override

@@ -16,8 +16,11 @@ class BookSearchResult {
   final BookDetails bookDetails;
   final String categoryName;
   final BookCategory category;
+  final String bookName;
+  final String topLevelCategoryName;
 
-  const BookSearchResult(this.bookDetails, this.categoryName, this.category);
+  const BookSearchResult(this.bookDetails, this.categoryName, this.category,
+      this.bookName, this.topLevelCategoryName);
 }
 
 /// Represents a category of books (e.g., Tanach, Shas, etc.)
@@ -45,14 +48,14 @@ class BookCategory {
   });
 
   factory BookCategory.fromJson(
-    Map<String, dynamic> json, 
+    Map<String, dynamic> json,
     String sourceFile, {
-    bool isCustom = false, 
+    bool isCustom = false,
     String? parentCategoryName,
   }) {
     // Check schema version for future migrations
     final schemaVersion = _asInt(json['schemaVersion'] ?? 1);
-    
+
     Map<String, dynamic> rawData = _asMap(json['books'] ?? json['data']);
     Map<String, BookDetails> parsedBooks = {};
 
@@ -96,7 +99,8 @@ class BookCategory {
   /// Recursively search for a book by name
   BookSearchResult? findBookRecursive(String bookNameToFind) {
     if (books.containsKey(bookNameToFind)) {
-      return BookSearchResult(books[bookNameToFind]!, name, this);
+      return BookSearchResult(
+          books[bookNameToFind]!, name, this, bookNameToFind, name);
     }
     if (subcategories != null) {
       for (final subCategory in subcategories!) {

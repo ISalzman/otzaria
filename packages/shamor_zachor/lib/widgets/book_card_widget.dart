@@ -1,4 +1,3 @@
-// הדבק את כל הקוד הזה בקובץ הריק
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
@@ -7,6 +6,23 @@ import 'package:kosher_dart/kosher_dart.dart';
 import '../models/book_model.dart';
 import '../models/progress_model.dart';
 import '../providers/shamor_zachor_progress_provider.dart';
+
+const List<String> hebrewMonths = [
+  'ניסן',
+  'אייר',
+  'סיון',
+  'תמוז',
+  'אב',
+  'אלול',
+  'תשרי',
+  'חשון',
+  'כסלו',
+  'טבת',
+  'שבט',
+  'אדר',
+  'אדר א\'',
+  'אדר ב\''
+];
 
 class BookCardWidget extends StatefulWidget {
   static final Logger _logger = Logger('BookCardWidget');
@@ -340,10 +356,95 @@ class _BookCardWidgetState extends State<BookCardWidget> {
       final date = DateTime.parse(isoDate);
       final jewish = JewishDate.fromDateTime(date);
       final formatter = HebrewDateFormatter();
-      return formatter.format(jewish);
+      formatter.hebrewFormat = true;
+
+      final hebrewMonthName = hebrewMonths[jewish.getJewishMonth() - 1];
+      final hebrewDay =
+          _numberToHebrewWithoutQuotes(jewish.getJewishDayOfMonth());
+      final hebrewYear = _formatHebrewYear(jewish.getJewishYear());
+
+      return '$hebrewDay $hebrewMonthName, $hebrewYear';
     } catch (e) {
       _logger.warning('Failed to format Hebrew date: $isoDate', e);
       return isoDate;
     }
+  }
+
+  String _numberToHebrewWithoutQuotes(int number) {
+    if (number <= 0) return '';
+    String result = '';
+    int num = number;
+    if (num >= 100) {
+      int hundreds = (num ~/ 100) * 100;
+      if (hundreds == 900) {
+        result += 'תתק';
+      } else if (hundreds == 800) {
+        result += 'תת';
+      } else if (hundreds == 700) {
+        result += 'תש';
+      } else if (hundreds == 600) {
+        result += 'תר';
+      } else if (hundreds == 500) {
+        result += 'תק';
+      } else if (hundreds == 400) {
+        result += 'ת';
+      } else if (hundreds == 300) {
+        result += 'ש';
+      } else if (hundreds == 200) {
+        result += 'ר';
+      } else if (hundreds == 100) {
+        result += 'ק';
+      }
+      num %= 100;
+    }
+    const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+    const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+    if (num == 15) {
+      result += 'טו';
+    } else if (num == 16) {
+      result += 'טז';
+    } else {
+      if (num >= 10) {
+        result += tens[num ~/ 10];
+        num %= 10;
+      }
+      if (num > 0) {
+        result += ones[num];
+      }
+    }
+    return result;
+  }
+
+  // Removed unused method
+
+  String _formatHebrewYear(int year) {
+    final hdf = HebrewDateFormatter();
+    hdf.hebrewFormat = true;
+
+    final thousands = year ~/ 1000;
+    final remainder = year % 1000;
+
+    String remainderStr = hdf.formatHebrewNumber(remainder);
+
+    String cleanRemainderStr = remainderStr
+        .replaceAll('"', '')
+        .replaceAll("'", "")
+        .replaceAll('׳', '')
+        .replaceAll('״', '');
+
+    String formattedRemainder;
+    if (cleanRemainderStr.length > 1) {
+      formattedRemainder =
+          '${cleanRemainderStr.substring(0, cleanRemainderStr.length - 1)}״${cleanRemainderStr.substring(cleanRemainderStr.length - 1)}';
+    } else if (cleanRemainderStr.length == 1) {
+      formattedRemainder = '$cleanRemainderStr׳';
+    } else {
+      formattedRemainder = cleanRemainderStr;
+    }
+    if (thousands == 5) {
+      return 'ה׳$formattedRemainder';
+    }
+
+    return formattedRemainder;
   }
 }

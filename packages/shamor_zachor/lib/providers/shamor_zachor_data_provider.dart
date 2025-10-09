@@ -9,7 +9,7 @@ import '../services/data_loader_service.dart';
 /// This provider is scoped locally within the ShamorZachorWidget
 class ShamorZachorDataProvider with ChangeNotifier {
   static final Logger _logger = Logger('ShamorZachorDataProvider');
-  
+
   final DataLoaderService _dataLoaderService;
   Map<String, BookCategory> _allBookData = {};
   bool _isLoading = false;
@@ -17,20 +17,20 @@ class ShamorZachorDataProvider with ChangeNotifier {
 
   /// Get all book data
   Map<String, BookCategory> get allBookData => _allBookData;
-  
+
   /// Check if data is currently loading
   bool get isLoading => _isLoading;
-  
+
   /// Get current error, if any
   ShamorZachorError? get error => _error;
-  
+
   /// Check if data has been loaded
   bool get hasData => _allBookData.isNotEmpty;
 
   ShamorZachorDataProvider({DataLoaderService? dataLoaderService})
-      : _dataLoaderService = dataLoaderService ?? DataLoaderService(
-          assetsBasePath: 'packages/shamor_zachor/assets/data/'
-        ) {
+      : _dataLoaderService = dataLoaderService ??
+            DataLoaderService(
+                assetsBasePath: 'packages/shamor_zachor/assets/data/') {
     _loadInitialData();
   }
 
@@ -42,32 +42,38 @@ class ShamorZachorDataProvider with ChangeNotifier {
   /// Load all book categories and data
   Future<void> loadAllData() async {
     if (_isLoading) return; // Prevent concurrent loads
-    
+
     _logger.info('Starting to load all data...');
     _dataLoaderService.clearCache();
     _isLoading = true;
     _error = null;
     notifyListeners();
-    
+
     try {
       _logger.info('Calling dataLoaderService.loadData()...');
       _allBookData = await _dataLoaderService.loadData();
-      _logger.info('Data loaded successfully. Categories: ${_allBookData.keys.toList()}');
+      _logger.info(
+          'Data loaded successfully. Categories: ${_allBookData.keys.toList()}');
       _logger.info('Successfully loaded ${_allBookData.length} categories');
-      
+
       // Log category structure for debugging
       if (kDebugMode) {
         _allBookData.forEach((key, category) {
           _logger.fine('Category: ${category.name}');
-          _logger.fine('  Has subcategories: ${category.subcategories?.isNotEmpty ?? false}');
+          _logger.fine(
+              '  Has subcategories: ${category.subcategories?.isNotEmpty ?? false}');
           _logger.fine('  Direct books count: ${category.books.length}');
-          
-          if (category.subcategories != null && category.subcategories!.isNotEmpty) {
+
+          if (category.subcategories != null &&
+              category.subcategories!.isNotEmpty) {
             for (var subCat in category.subcategories!) {
-              _logger.fine('    SubCategory: ${subCat.name}, Books: ${subCat.books.length}');
-              if (subCat.subcategories != null && subCat.subcategories!.isNotEmpty) {
+              _logger.fine(
+                  '    SubCategory: ${subCat.name}, Books: ${subCat.books.length}');
+              if (subCat.subcategories != null &&
+                  subCat.subcategories!.isNotEmpty) {
                 for (var deepSubCat in subCat.subcategories!) {
-                  _logger.fine('      DeepSubCategory: ${deepSubCat.name}, Books: ${deepSubCat.books.length}');
+                  _logger.fine(
+                      '      DeepSubCategory: ${deepSubCat.name}, Books: ${deepSubCat.books.length}');
                 }
               }
             }
@@ -86,7 +92,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
       }
       _logger.severe('Error loading data: ${_error!.message}', e, stackTrace);
     }
-    
+
     _isLoading = false;
     notifyListeners();
   }
@@ -100,12 +106,12 @@ class ShamorZachorDataProvider with ChangeNotifier {
   BookDetails? getBookDetails(String categoryName, String bookName) {
     final category = _allBookData[categoryName];
     if (category == null) return null;
-    
+
     // First check direct books
     if (category.books.containsKey(bookName)) {
       return category.books[bookName];
     }
-    
+
     // Then search in subcategories
     final searchResult = category.findBookRecursive(bookName);
     return searchResult?.bookDetails;
@@ -114,42 +120,46 @@ class ShamorZachorDataProvider with ChangeNotifier {
   /// Search for books across all categories
   List<BookSearchResult> searchBooks(String query) {
     if (query.isEmpty) return [];
-    
+
     final results = <BookSearchResult>[];
     final queryLower = query.toLowerCase();
-    
-    for (final category in _allBookData.values) {
+
+    _allBookData.forEach((topLevelName, category) {
       // Search in direct books
       for (final entry in category.books.entries) {
         if (entry.key.toLowerCase().contains(queryLower)) {
-          results.add(BookSearchResult(entry.value, category.name, category));
+          results.add(BookSearchResult(
+              entry.value, category.name, category, entry.key, topLevelName));
         }
       }
-      
+
       // Search in subcategories
       if (category.subcategories != null) {
         for (final subCategory in category.subcategories!) {
-          _searchInCategory(subCategory, queryLower, results);
+          _searchInSubCategory(subCategory, queryLower, results, topLevelName);
         }
       }
-    }
-    
+    });
+
     return results;
   }
 
-  /// Helper method to search recursively in categories
-  void _searchInCategory(BookCategory category, String queryLower, List<BookSearchResult> results) {
+  /// Helper method to search recursively in subcategories
+  void _searchInSubCategory(BookCategory category, String queryLower,
+      List<BookSearchResult> results, String topLevelCategoryName) {
     // Search in direct books
     for (final entry in category.books.entries) {
       if (entry.key.toLowerCase().contains(queryLower)) {
-        results.add(BookSearchResult(entry.value, category.name, category));
+        results.add(BookSearchResult(entry.value, category.name, category,
+            entry.key, topLevelCategoryName));
       }
     }
-    
+
     // Search in subcategories
     if (category.subcategories != null) {
       for (final subCategory in category.subcategories!) {
-        _searchInCategory(subCategory, queryLower, results);
+        _searchInSubCategory(
+            subCategory, queryLower, results, topLevelCategoryName);
       }
     }
   }
@@ -163,7 +173,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
   Map<String, BookDetails> getAllBooksFromCategory(String categoryName) {
     final category = _allBookData[categoryName];
     if (category == null) return {};
-    
+
     return category.getAllBooksRecursive();
   }
 
@@ -185,7 +195,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
     int totalCategories = _allBookData.length;
     int totalBooks = 0;
     int totalSubcategories = 0;
-    
+
     for (final category in _allBookData.values) {
       totalBooks += category.books.length;
       if (category.subcategories != null) {
@@ -195,7 +205,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
         }
       }
     }
-    
+
     return {
       'categories': totalCategories,
       'subcategories': totalSubcategories,

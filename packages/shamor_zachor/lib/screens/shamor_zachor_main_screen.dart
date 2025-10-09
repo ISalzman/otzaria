@@ -5,6 +5,7 @@ import 'package:logging/logging.dart';
 import '../providers/shamor_zachor_data_provider.dart';
 import '../providers/shamor_zachor_progress_provider.dart';
 import '../widgets/error_boundary.dart';
+import '../shamor_zachor_widget.dart';
 import 'tracking_screen.dart';
 import 'books_screen.dart';
 
@@ -26,8 +27,6 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
   int _selectedIndex = 0;
   late final PageController _pageController;
   late final List<Widget> _screens;
-  final GlobalKey<State<BooksScreen>> _booksScreenKey =
-      GlobalKey<State<BooksScreen>>();
 
   @override
   void initState() {
@@ -35,9 +34,16 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
     _pageController = PageController(initialPage: _selectedIndex);
     _screens = [
       const TrackingScreen(),
-      BooksScreen(key: _booksScreenKey),
+      const BooksScreen(),
     ];
     _logger.info('Initialized ShamorZachorMainScreen');
+
+    // Notify initial title state
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _notifyTitleChange(_selectedIndex);
+      }
+    });
   }
 
   @override
@@ -59,6 +65,8 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
           curve: Curves.easeInOut,
         );
       }
+      // Notify parent about title change
+      _notifyTitleChange(index);
     }
   }
 
@@ -67,33 +75,6 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
     super.build(context); // Required for AutomaticKeepAliveClientMixin
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Current screen title
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.menu_book,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _getTitle(_selectedIndex),
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ],
-            ),
-          ],
-        ),
-        centerTitle: true,
-        automaticallyImplyLeading: false, // Remove back button
-        actions: _getActions(context, _selectedIndex),
-        toolbarHeight: 105, // Increase height to accommodate both titles
-      ),
       body: ErrorBoundary(
         child: Column(
           children: [
@@ -161,6 +142,8 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
                         setState(() {
                           _selectedIndex = index;
                         });
+                        // Notify parent about title change when swiping
+                        _notifyTitleChange(index);
                       }
                     },
                     children: _screens,
@@ -202,47 +185,21 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
     }
   }
 
-  List<Widget>? _getActions(BuildContext context, int index) {
-    switch (index) {
-      case 0: // Tracking screen
-        return [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              context.read<ShamorZachorProgressProvider>().clearError();
-              context.read<ShamorZachorDataProvider>().loadAllData();
-            },
-            tooltip: 'רענן נתונים',
-          ),
-        ];
-      case 1: // Books screen
-        return [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              // Switch to books screen and focus search
-              if (_selectedIndex != 1) {
-                _onItemTapped(1);
-              }
-              // Focus search field after a short delay
-              Future.delayed(const Duration(milliseconds: 100), () {
-                final state = _booksScreenKey.currentState;
-                if (state != null && state.mounted) {
-                  // Call focusSearchField if the state has this method
-                  try {
-                    (state as dynamic).focusSearchField();
-                  } catch (e) {
-                    // Ignore if method doesn't exist
-                  }
-                }
-              });
-              _logger.info('Search button pressed');
-            },
-            tooltip: 'חיפוש',
-          ),
-        ];
-      default:
-        return null;
-    }
+  /// Notify parent about title change
+  void _notifyTitleChange(int index) {
+    // Use post-frame callback to find ancestor widget
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final newTitle = _getTitle(index);
+        final fullTitle = 'זכור ושמור - $newTitle';
+
+        // Find the ShamorZachorWidget ancestor
+        final ancestorWidget =
+            context.findAncestorWidgetOfExactType<ShamorZachorWidget>();
+        if (ancestorWidget != null && ancestorWidget.onTitleChanged != null) {
+          ancestorWidget.onTitleChanged!(fullTitle);
+        }
+      }
+    });
   }
 }

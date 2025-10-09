@@ -50,6 +50,12 @@ class _BooksScreenState extends State<BooksScreen>
 
     final dataProvider = context.read<ShamorZachorDataProvider>();
     final results = dataProvider.searchBooks(query);
+    _logger.fine('Search for "$query" returned ${results.length} results');
+
+    if (results.isNotEmpty) {
+      _logger.info(
+          'First result: ${results[0].bookName} in ${results[0].topLevelCategoryName}');
+    }
 
     setState(() {
       _searchResults = results;
@@ -137,7 +143,7 @@ class _BooksScreenState extends State<BooksScreen>
               // The rest of the screen is either search results or tabs, and it needs to fill the remaining space
               Expanded(
                 child: _isSearching
-                    ? _buildSearchResults() // This widget already returns an Expanded
+                    ? _buildSearchResults() // This widget returns what should be in the Expanded
                     : Column(
                         children: [
                           TabBar(
@@ -173,7 +179,7 @@ class _BooksScreenState extends State<BooksScreen>
         controller: _searchController,
         textDirection: TextDirection.rtl,
         decoration: InputDecoration(
-          hintText: 'חיפוש ספר או קטגוריה...',
+          hintText: 'חפש ספר...',
           prefixIcon: const Icon(Icons.search),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
@@ -195,10 +201,10 @@ class _BooksScreenState extends State<BooksScreen>
     );
   }
 
-  /// Build search results
+  /// Build search results - returns the widget that should go in the Expanded in build()
   Widget _buildSearchResults() {
-    return Expanded(
-      child: _searchResults.isEmpty
+    try {
+      return _searchResults.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -234,8 +240,21 @@ class _BooksScreenState extends State<BooksScreen>
                 ],
               ),
             )
-          : _buildSearchResultsGrid(),
-    );
+          : _buildSearchResultsGrid();
+    } catch (e) {
+      _logger.severe('Error building search results: $e');
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            Text('שגיאה בבניית תוצאות חיפוש'),
+            Text('Error: $e'),
+          ],
+        ),
+      );
+    }
   }
 
   /// Build search results grid
@@ -253,19 +272,29 @@ class _BooksScreenState extends State<BooksScreen>
           ),
           itemCount: _searchResults.length,
           itemBuilder: (context, index) {
-            final result = _searchResults[index];
-            final bookProgress = progressProvider.getProgressForBook(
-              result.categoryName,
-              result.bookDetails.toString(), // This is a temporary fix
-            );
+            try {
+              final result = _searchResults[index];
+              final bookProgress = progressProvider.getProgressForBook(
+                result.categoryName,
+                result.bookName,
+              );
 
-            return BookCardWidget(
-              topLevelCategoryKey: result.categoryName,
-              categoryName: result.categoryName,
-              bookName: 'Search Result', // This needs proper implementation
-              bookDetails: result.bookDetails,
-              bookProgressData: bookProgress,
-            );
+              return BookCardWidget(
+                topLevelCategoryKey: result.topLevelCategoryName,
+                categoryName: result.categoryName,
+                bookName: result.bookName,
+                bookDetails: result.bookDetails,
+                bookProgressData: bookProgress,
+              );
+            } catch (e) {
+              _logger.severe('Error building book card at index $index: $e');
+              return Card(
+                child: ListTile(
+                  title: Text('Error at index $index'),
+                  subtitle: Text(e.toString()),
+                ),
+              );
+            }
           },
         );
       },
@@ -386,15 +415,6 @@ class _BooksScreenState extends State<BooksScreen>
       },
     );
   }
-
-  /// Focus the search field
-  void focusSearchField() {
-    // Focus the search field if it exists
-    if (mounted) {
-      // This will be handled by the search field's focus node if implemented
-      _logger.info('Focusing search field');
-    }
-  }
 }
 
 /// Helper class for book items
@@ -409,15 +429,5 @@ class _BookItem {
     required this.categoryName,
     required this.bookName,
     required this.bookDetails,
-  });
-}
-
-/// Helper class for search book items
-class _SearchBookItem extends _BookItem {
-  const _SearchBookItem({
-    required super.topLevelCategoryKey,
-    required super.categoryName,
-    required super.bookName,
-    required super.bookDetails,
   });
 }

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:logging/logging.dart';
@@ -30,39 +29,18 @@ class DataLoaderService {
     }
 
     try {
-      // --- אבחון באמצעות PRINT ---
-      debugPrint("--- STARTING ASSET DIAGNOSTICS WITH PRINT() ---");
-      debugPrint("Searching for assets with base path: '$_assetsBasePath'");
-
       final manifestContent = await rootBundle.loadString('AssetManifest.json');
       final Map<String, dynamic> manifestMap = json.decode(manifestContent);
-
-      // --- הדפסת כל המפתחות הרלוונטיים מהמניפסט ---
-      final relevantKeys = manifestMap.keys
-          .where((key) => key.toString().contains('shamor_zachor'))
-          .toList();
-      debugPrint(
-          "All keys in AssetManifest.json containing 'shamor_zachor': $relevantKeys");
 
       final List<String> jsonFilesPaths = manifestMap.keys
           .where((String key) =>
               key.startsWith(_assetsBasePath) && key.endsWith('.json'))
           .toList();
 
-      // --- הדפסת הנתיבים שנמצאו לאחר סינון ---
-      debugPrint(
-          "Filtered paths (the files we actually found): $jsonFilesPaths");
-
       if (jsonFilesPaths.isEmpty) {
-        debugPrint(
-            "CRITICAL: No JSON files were found using the path '$_assetsBasePath'.");
-        // הדפסת כל המפתחות כדי שנוכל לראות מה באמת קיים
-        debugPrint(
-            "Full list of available keys in manifest: ${manifestMap.keys.toList()}");
         throw ShamorZachorError(
           type: ShamorZachorErrorType.missingAsset,
-          message:
-              'No JSON data files found in $_assetsBasePath. Please check the console output for available keys.',
+          message: 'No JSON data files found in $_assetsBasePath.',
         );
       }
 
@@ -75,7 +53,8 @@ class DataLoaderService {
             combinedData[category.name] = category;
           }
         } catch (e, stackTrace) {
-          debugPrint('Error loading category from $path: $e\n$stackTrace');
+          _logger.warning(
+              'Error loading category from $path: $e', e, stackTrace);
         }
       }
 
@@ -87,8 +66,7 @@ class DataLoaderService {
       }
 
       _cachedData = combinedData;
-      debugPrint("--- ASSET DIAGNOSTICS COMPLETE ---");
-      debugPrint("Successfully loaded ${combinedData.length} categories");
+      _logger.info('Successfully loaded ${combinedData.length} categories');
       return combinedData;
     } catch (e, stackTrace) {
       if (e is ShamorZachorError) {

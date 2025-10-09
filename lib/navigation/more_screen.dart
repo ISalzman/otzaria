@@ -18,6 +18,16 @@ class _MoreScreenState extends State<MoreScreen> {
   late final CalendarCubit _calendarCubit;
   late final SettingsRepository _settingsRepository;
 
+  // Title for the ShamorZachor section (dynamic from the package)
+  String _shamorZachorTitle = 'זכור ושמור';
+
+  /// Update the ShamorZachor title
+  void _updateShamorZachorTitle(String title) {
+    setState(() {
+      _shamorZachorTitle = title;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -91,7 +101,7 @@ class _MoreScreenState extends State<MoreScreen> {
       case 0:
         return 'לוח שנה';
       case 1:
-        return 'זכור ושמור';
+        return _shamorZachorTitle;
       case 2:
         return 'ממיר מידות תורני';
       case 3:
@@ -121,7 +131,9 @@ class _MoreScreenState extends State<MoreScreen> {
           child: const CalendarWidget(),
         );
       case 1:
-        return const ShamorZachorWidget();
+        return ShamorZachorWidget(
+          onTitleChanged: _updateShamorZachorTitle,
+        );
       case 2:
         return const MeasurementConverterScreen();
       case 3:
