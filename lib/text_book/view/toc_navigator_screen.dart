@@ -29,7 +29,7 @@ class _TocViewerState extends State<TocViewer>
   @override
   bool get wantKeepAlive => true;
 
-  final Map<int, ExpansionTileController> _controllers = {};
+  final Map<int, ExpansibleController> _controllers = {};
   final TextEditingController searchController = TextEditingController();
   final ScrollController _tocScrollController = ScrollController();
   final Map<int, GlobalKey> _tocItemKeys = {};
@@ -47,7 +47,7 @@ class _TocViewerState extends State<TocViewer>
   void _ensureParentsOpen(List<TocEntry> entries, int targetIndex) {
     final path = _findPath(entries, targetIndex);
     if (path.isEmpty) return;
-    
+
     for (final entry in path) {
       if (entry.children.isNotEmpty && _expanded[entry.index] != true) {
         _expanded[entry.index] = true;
@@ -61,7 +61,7 @@ class _TocViewerState extends State<TocViewer>
       if (entry.index == targetIndex) {
         return [entry];
       }
-      
+
       final subPath = _findPath(entry.children, targetIndex);
       if (subPath.isNotEmpty) {
         return [entry, ...subPath];
@@ -69,8 +69,6 @@ class _TocViewerState extends State<TocViewer>
     }
     return [];
   }
-
-
 
   void _scrollToActiveItem(TextBookLoaded state) {
     if (_isManuallyScrolling) return;
@@ -98,7 +96,8 @@ class _TocViewerState extends State<TocViewer>
         final itemRenderObject = itemContext.findRenderObject();
         if (itemRenderObject is! RenderBox) return;
 
-        final scrollableBox = _tocScrollController.position.context.storageContext
+        final scrollableBox = _tocScrollController
+            .position.context.storageContext
             .findRenderObject() as RenderBox;
 
         final itemOffset = itemRenderObject
@@ -223,17 +222,18 @@ class _TocViewerState extends State<TocViewer>
         ),
       );
     } else {
-      final controller = _controllers.putIfAbsent(entry.index, () => ExpansionTileController());
+      final controller =
+          _controllers.putIfAbsent(entry.index, () => ExpansibleController());
       final bool isExpanded = _expanded[entry.index] ?? (entry.level == 1);
 
-if (controller.isExpanded != isExpanded) {
-  if (isExpanded) {
-    controller.expand();
-  } else {
-    controller.collapse();
-  }
-}
-      
+      if (controller.isExpanded != isExpanded) {
+        if (isExpanded) {
+          controller.expand();
+        } else {
+          controller.collapse();
+        }
+      }
+
       return Padding(
         key: itemKey,
         padding: EdgeInsets.fromLTRB(0, 0, 10 * entry.level.toDouble(), 0),

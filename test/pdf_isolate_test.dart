@@ -17,6 +17,7 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as fl;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart';
@@ -75,9 +76,9 @@ void main() {
       return await pdf.save();
     });
 
-    print('Generated a ${data.length} bytes PDF');
+    debugPrint('Generated a ${data.length} bytes PDF');
     final file = File('isolate.pdf');
     await file.writeAsBytes(data);
-    print('File saved');
+    debugPrint('File saved');
   });
 }

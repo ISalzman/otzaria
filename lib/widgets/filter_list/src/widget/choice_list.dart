@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 
 class ChoiceList<T> extends StatelessWidget {
   const ChoiceList({
-    Key? key,
+    super.key,
     required this.validateSelectedItem,
     this.choiceChipBuilder,
     this.choiceChipLabel,
@@ -16,7 +16,7 @@ class ChoiceList<T> extends StatelessWidget {
     this.validateRemoveItem,
     this.maximumSelectionLength,
     this.onChoiseMade,
-  }) : super(key: key);
+  });
   final ValidateSelectedItem<T> validateSelectedItem;
   final OnApplyButtonClick<T>? onChoiseMade;
   final ChoiceChipBuilder? choiceChipBuilder;

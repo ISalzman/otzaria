@@ -117,6 +117,57 @@ class DataCollectionService {
     }
   }
 
+  /// Get total number of books in SourcesBooks.csv
+  /// Returns the number of data rows (excluding header)
+  Future<int> getTotalBookCount() async {
+    try {
+      final libraryPath = Settings.getValue('key-library-path');
+      if (libraryPath == null || libraryPath.isEmpty) {
+        debugPrint('Library path not set');
+        return 0;
+      }
+
+      final csvFile =
+          File('$libraryPath${Platform.pathSeparator}$_sourceBooksPath');
+
+      if (!await csvFile.exists()) {
+        debugPrint('SourcesBooks.csv file not found: ${csvFile.path}');
+        return 0;
+      }
+
+      final inputStream = csvFile.openRead();
+      final converter = const CsvToListConverter();
+
+      int bookCount = 0;
+      bool isFirstLine = true;
+
+      await for (final line in inputStream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())) {
+        // Skip header line
+        if (isFirstLine) {
+          isFirstLine = false;
+          continue;
+        }
+
+        try {
+          final row = converter.convert(line).first;
+          if (row.isNotEmpty) {
+            bookCount++;
+          }
+        } catch (e) {
+          debugPrint('Error parsing CSV line for count: $line, Error: $e');
+          continue;
+        }
+      }
+
+      return bookCount;
+    } catch (e) {
+      debugPrint('Error counting books in SourcesBooks.csv: $e');
+      return 0;
+    }
+  }
+
   /// Check if all required data is available for phone reporting
   /// Returns a map with availability status and error messages
   Future<Map<String, dynamic>> checkDataAvailability(String bookTitle) async {

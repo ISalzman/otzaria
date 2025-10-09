@@ -83,17 +83,25 @@ class _CommentaryContentState extends State<CommentaryContent> {
 
               text = utils.highLight(text, widget.searchQuery,
                   currentIndex: widget.currentSearchIndex);
+
+              // החלת עיצוב הסוגריים העגולים
+              text = utils.formatTextWithParentheses(text);
+
               return BlocBuilder<SettingsBloc, SettingsState>(
                 builder: (context, settingsState) {
-                  return DefaultTextStyle.merge(
-                    textAlign: TextAlign.justify,
-                    style: TextStyle(
+                  return HtmlWidget(
+                    '<div style="text-align: justify; direction: rtl;">$text</div>',
+                    textStyle: TextStyle(
                       fontSize: widget.fontSize / 1.2,
                       fontFamily: settingsState.fontFamily,
                     ),
-                    child: HtmlWidget(text),
                   );
                 },
+              );
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Text('שגיאה בטעינת הפרשן: ${snapshot.error}'),
               );
             }
             return const Center(

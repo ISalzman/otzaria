@@ -15,7 +15,7 @@ import 'package:provider/provider.dart';
 class KeyboardShortcuts extends StatelessWidget {
   final Widget child;
 
-  KeyboardShortcuts({Key? key, required this.child}) : super(key: key);
+  KeyboardShortcuts({super.key, required this.child});
 
   final Map<String, LogicalKeySet> shortcuts = {
     'ctrl+a':

@@ -16,7 +16,7 @@ import 'package:otzaria/widgets/resizable_facet_filtering.dart';
 
 class TantivyFullTextSearch extends StatefulWidget {
   final SearchingTab tab;
-  const TantivyFullTextSearch({Key? key, required this.tab}) : super(key: key);
+  const TantivyFullTextSearch({super.key, required this.tab});
   @override
   State<TantivyFullTextSearch> createState() => _TantivyFullTextSearchState();
 }
@@ -266,7 +266,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                     child: Center(
                       child: Text(
                         state.results.isEmpty && state.searchQuery.isEmpty
-                            ? 'עוד לא בוצע חיפוש'
+                            ? 'לא בוצע חיפוש'
                             : '${state.results.length} מתוך ${state.totalResults}',
                         style: const TextStyle(fontSize: 14),
                       ),
@@ -307,7 +307,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
           const SizedBox(width: 8),
           const Expanded(
             child: Text(
-              'אינדקס החיפוש בתהליך עידכון. חלק מהספרים עלולים להיות חסרים בתוצאות החיפוש.',
+              'אינדקס החיפוש בתהליך עדכון. יתכן שחלק מהספרים לא יוצגו בתוצאות החיפוש.',
               textAlign: TextAlign.right,
               style: TextStyle(color: Colors.black87),
             ),

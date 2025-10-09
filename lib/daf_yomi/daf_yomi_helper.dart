@@ -1,25 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
-import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
-import 'package:otzaria/navigation/bloc/navigation_event.dart';
-import 'package:otzaria/navigation/bloc/navigation_state.dart';
-import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
-import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/tabs/models/pdf_tab.dart';
-import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 
-void openDafYomiBook(BuildContext context, String tractate, String daf) async {
-  _openDafYomiBookInCategory(context, tractate, daf, 'תלמוד בבלי');
+// Generic tree search for outlines
+typedef EntryTextGetter<T> = String Function(T entry);
+typedef ChildrenGetter<T> = Future<List<T>> Function(T entry);
+
+Future<T?> findEntryInTree<T>(Future<List<T>> rootEntries, String daf,
+    EntryTextGetter<T> getText, ChildrenGetter<T> getChildren) async {
+  final entries = await rootEntries;
+  for (var entry in entries) {
+    String ref = getText(entry);
+    if (ref.contains(daf)) {
+      return entry;
+    }
+    T? result =
+        await findEntryInTree(getChildren(entry), daf, getText, getChildren);
+    if (result != null) return result;
+  }
+  return null;
 }
 
-void openDafYomiYerushalmiBook(
-    BuildContext context, String tractate, String daf) async {
-  _openDafYomiBookInCategory(context, tractate, daf, 'תלמוד ירושלמי');
+void openDafYomiBook(BuildContext context, String tractate, String daf,
+    {String categoryName = 'תלמוד בבלי'}) async {
+  _openDafYomiBookInCategory(context, tractate, daf, categoryName);
 }
 
 void _openDafYomiBookInCategory(BuildContext context, String tractate,
@@ -57,9 +66,8 @@ void _openDafYomiBookInCategory(BuildContext context, String tractate,
     }
 
     if (book == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('לא נמצאה קטגוריה: $categoryName')),
-      );
+      UiSnack.showError('לא נמצאה קטגוריה: $categoryName',
+          backgroundColor: Theme.of(context).colorScheme.error);
       return;
     } else {
       // נמצא ספר, נמשיך עם הפתיחה
@@ -88,144 +96,72 @@ void _openDafYomiBookInCategory(BuildContext context, String tractate,
     // הצג רשימת ספרים זמינים לדיבוג
     final availableBooks =
         allBooksInCategory.map((b) => b.title).take(5).join(', ');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-            'לא נמצא ספר: $tractate ב$categoryName\nספרים זמינים: $availableBooks...'),
-        duration: const Duration(seconds: 5),
-      ),
-    );
+    UiSnack.showError(
+        'לא נמצא ספר: $tractate ב$categoryName\nספרים זמינים: $availableBooks...',
+        backgroundColor: Theme.of(context).colorScheme.error);
   }
 }
 
 Future<void> _openBook(BuildContext context, Book book, String daf) async {
-  var index = 0;
+  final index = await findReference(book, 'דף ${daf.trim()}') ?? 0;
+  if (!context.mounted) return;
+  openBook(context, book, index, '', ignoreHistory: true);
+}
 
+Future<int?> findReference(Book book, String ref) async {
   if (book is TextBook) {
-    final tocEntry = await _findDafInToc(book, 'דף ${daf.trim()}');
-    index = tocEntry?.index ?? 0;
-    final tab = TextBookTab(
-      book: book,
-      index: index,
-      openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-          (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-    );
-    BlocProvider.of<TabsBloc>(context).add(AddTab(tab));
+    final tocEntry = await _findDafInToc(book, ref);
+    return tocEntry?.index;
   } else if (book is PdfBook) {
-    final outline = await getDafYomiOutline(book, 'דף ${daf.trim()}');
-    index = outline?.dest?.pageNumber ?? 0;
-    final tab = PdfBookTab(
-      book: book,
-      pageNumber: index,
-      openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-          (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-    );
-    BlocProvider.of<TabsBloc>(context).add(AddTab(tab));
+    final outline = await getDafYomiOutline(book, ref);
+    return outline?.dest?.pageNumber;
   }
-
-  BlocProvider.of<NavigationBloc>(context)
-      .add(const NavigateToScreen(Screen.reading));
+  return null;
 }
 
 Future<TocEntry?> _findDafInToc(TextBook book, String daf) async {
   final toc = await book.tableOfContents;
-  TocEntry? findDafInEntries(List<TocEntry> entries) {
-    for (var entry in entries) {
-      String ref = entry.text;
-      if (ref.contains(daf)) {
-        return entry;
-      }
-      // Recursively search in children
-      TocEntry? result = findDafInEntries(entry.children);
-      if (result != null) {
-        return result;
-      }
-    }
-    return null;
-  }
-
-  return findDafInEntries(toc);
+  return await findEntryInTree(
+    Future.value(toc),
+    daf,
+    (entry) => entry.text,
+    (entry) => Future.value(entry.children),
+  );
 }
 
 Future<PdfOutlineNode?> getDafYomiOutline(PdfBook book, String daf) async {
   final outlines = await PdfDocument.openFile(book.path)
       .then((value) => value.loadOutline());
-  PdfOutlineNode? findDafInEntries(List<PdfOutlineNode> entries) {
-    for (var entry in entries) {
-      String ref = entry.title;
-      if (daf.contains(ref)) {
-        return entry;
-      }
-      // Recursively search in children
-      PdfOutlineNode? result = findDafInEntries(entry.children);
-      if (result != null) {
-        return result;
-      }
-    }
-    return null;
-  }
-
-  return findDafInEntries(outlines);
+  return await findEntryInTree(
+    Future.value(outlines),
+    daf,
+    (entry) => entry.title,
+    (entry) => Future.value(entry.children),
+  );
 }
 
 openPdfBookFromRef(String bookname, String ref, BuildContext context) async {
-  final libraryBlocState = BlocProvider.of<LibraryBloc>(context).state;
-  final book =
-      libraryBlocState.library?.findBookByTitle(bookname, PdfBook) as PdfBook?;
-
-  if (book != null) {
-    final outline = await getDafYomiOutline(book, ref);
-    if (outline != null) {
-      final tab = PdfBookTab(
-        book: book,
-        pageNumber: outline.dest?.pageNumber ?? 0,
-        openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-            (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-      );
-      BlocProvider.of<TabsBloc>(context).add(AddTab(tab));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Section not found'),
-        ),
-      );
-    }
-  } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('הספר אינו קיים'),
-      ),
-    );
-  }
+  await _openBookFromRefHelper(bookname, ref, context, PdfBook);
 }
 
 openTextBookFromRef(String bookname, String ref, BuildContext context) async {
+  await _openBookFromRefHelper(bookname, ref, context, TextBook);
+}
+
+Future<void> _openBookFromRefHelper(
+    String bookname, String ref, BuildContext context, Type bookType) async {
   final libraryBlocState = BlocProvider.of<LibraryBloc>(context).state;
-  final book = libraryBlocState.library?.findBookByTitle(bookname, TextBook)
-      as TextBook?;
+  final book = libraryBlocState.library?.findBookByTitle(bookname, bookType);
 
   if (book != null) {
-    final tocEntry = await _findDafInToc(book, ref);
-    if (tocEntry != null) {
-      final tab = TextBookTab(
-        book: book,
-        index: tocEntry.index,
-        openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-            (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-      );
-      BlocProvider.of<TabsBloc>(context).add(AddTab(tab));
+    final index = await findReference(book, ref);
+    if (!context.mounted) return;
+    if (index != null) {
+      openBook(context, book, index, '', ignoreHistory: true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Section not found'),
-        ),
-      );
+      UiSnack.showError(UiSnack.sectionNotFound);
     }
   } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('הספר אינו קיים'),
-      ),
-    );
+    UiSnack.showError(UiSnack.bookNotFound);
   }
 }

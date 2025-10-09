@@ -5,37 +5,29 @@ import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
-import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
-import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/widgets/items_list_view.dart';
 
 class HistoryView extends StatelessWidget {
-  const HistoryView({Key? key}) : super(key: key);
+  const HistoryView({super.key});
+
   void _openBook(
       BuildContext context, Book book, int index, List<String>? commentators) {
-    final tab = book is PdfBook
-        ? PdfBookTab(
-            book: book,
-            pageNumber: index,
-            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                    false) ||
-                (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-          )
-        : TextBookTab(
-            book: book as TextBook,
-            index: index,
-            commentators: commentators,
-            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                    false) ||
-                (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-          );
+    final tab = OpenedTab.fromBook(
+      book,
+      index,
+      commentators: commentators,
+      openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+          (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
+    );
 
     context.read<TabsBloc>().add(AddTab(tab));
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.reading));
@@ -73,90 +65,57 @@ class HistoryView extends StatelessWidget {
           return Center(child: Text('Error: ${state.message}'));
         }
 
-        if (state.history.isEmpty) {
-          return const Center(child: Text('אין היסטוריה'));
-        }
+        return ItemsListView(
+          items: state.history,
+          onItemTap: (ctx, item, originalIndex) {
+            if (item.isSearch) {
+              final tabsBloc = ctx.read<TabsBloc>();
+              // Always create a new search tab instead of reusing existing one
+              final searchTab = SearchingTab('חיפוש', null);
+              tabsBloc.add(AddTab(searchTab));
 
-        return Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                itemCount: state.history.length,
-                itemBuilder: (context, index) {
-                  final historyItem = state.history[index];
-                  return ListTile(
-                    leading:
-                        _getLeadingIcon(historyItem.book, historyItem.isSearch),
-                    title: Text(historyItem.ref),
-                    onTap: () {
-                      if (historyItem.isSearch) {
-                        final tabsBloc = context.read<TabsBloc>();
-                        // Always create a new search tab instead of reusing existing one
-                        final searchTab = SearchingTab('חיפוש', null);
-                        tabsBloc.add(AddTab(searchTab));
+              // Restore search query and options
+              searchTab.queryController.text = item.book.title;
+              searchTab.searchOptions.clear();
+              searchTab.searchOptions.addAll(item.searchOptions ?? {});
+              searchTab.alternativeWords.clear();
+              searchTab.alternativeWords.addAll(item.alternativeWords ?? {});
+              searchTab.spacingValues.clear();
+              searchTab.spacingValues.addAll(item.spacingValues ?? {});
 
-                        // Restore search query and options
-                        searchTab.queryController.text = historyItem.book.title;
-                        searchTab.searchOptions.clear();
-                        searchTab.searchOptions
-                            .addAll(historyItem.searchOptions ?? {});
-                        searchTab.alternativeWords.clear();
-                        searchTab.alternativeWords
-                            .addAll(historyItem.alternativeWords ?? {});
-                        searchTab.spacingValues.clear();
-                        searchTab.spacingValues
-                            .addAll(historyItem.spacingValues ?? {});
+              // Trigger search
+              searchTab.searchBloc.add(UpdateSearchQuery(
+                searchTab.queryController.text,
+                customSpacing: searchTab.spacingValues,
+                alternativeWords: searchTab.alternativeWords,
+                searchOptions: searchTab.searchOptions,
+              ));
 
-                        // Trigger search
-                        searchTab.searchBloc.add(UpdateSearchQuery(
-                          searchTab.queryController.text,
-                          customSpacing: searchTab.spacingValues,
-                          alternativeWords: searchTab.alternativeWords,
-                          searchOptions: searchTab.searchOptions,
-                        ));
-
-                        // Navigate to search screen
-                        context
-                            .read<NavigationBloc>()
-                            .add(const NavigateToScreen(Screen.search));
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
-                        return;
-                      }
-                      _openBook(
-                        context,
-                        historyItem.book,
-                        historyItem.index,
-                        historyItem.commentatorsToShow,
-                      );
-                    },
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_forever),
-                      onPressed: () {
-                        context.read<HistoryBloc>().add(RemoveHistory(index));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('נמחק בהצלחה')),
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: ElevatedButton(
-                onPressed: () {
-                  context.read<HistoryBloc>().add(ClearHistory());
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('כל ההיסטוריה נמחקה')),
-                  );
-                },
-                child: const Text('מחק את כל ההיסטוריה'),
-              ),
-            ),
-          ],
+              // Navigate to search screen
+              ctx
+                  .read<NavigationBloc>()
+                  .add(const NavigateToScreen(Screen.search));
+              if (Navigator.of(ctx).canPop()) {
+                Navigator.of(ctx).pop();
+              }
+              return;
+            }
+            _openBook(ctx, item.book, item.index, item.commentatorsToShow);
+          },
+          onDelete: (ctx, originalIndex) {
+            ctx.read<HistoryBloc>().add(RemoveHistory(originalIndex));
+            UiSnack.show('נמחק בהצלחה');
+          },
+          onClearAll: (ctx) {
+            ctx.read<HistoryBloc>().add(ClearHistory());
+            UiSnack.show('כל ההיסטוריה נמחקה');
+          },
+          hintText: 'חפש בהיסטוריה...',
+          emptyText: 'אין היסטוריה',
+          notFoundText: 'לא נמצאו תוצאות',
+          clearAllText: 'מחק את כל ההיסטוריה',
+          leadingIconBuilder: (item) =>
+              _getLeadingIcon(item.book, item.isSearch),
         );
       },
     );

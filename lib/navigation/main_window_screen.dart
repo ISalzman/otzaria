@@ -7,7 +7,6 @@ import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
-
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -19,6 +18,7 @@ import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/tabs/reading_screen.dart';
 import 'package:otzaria/settings/settings_screen.dart';
 import 'package:otzaria/navigation/more_screen.dart';
+import 'package:otzaria/navigation/about_dialog.dart';
 import 'package:otzaria/widgets/keyboard_shortcuts.dart';
 import 'package:otzaria/update/my_updat_widget.dart';
 
@@ -51,8 +51,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
     );
     // Auto start indexing
     if (context.read<SettingsBloc>().state.autoUpdateIndex) {
-      DataRepository.instance.library.then((library) =>
-          context.read<IndexingBloc>().add(StartIndexing(library)));
+      DataRepository.instance.library.then((library) {
+        if (!mounted || !context.mounted) return;
+        context.read<IndexingBloc>().add(StartIndexing(library));
+      });
     }
   }
 
@@ -132,20 +134,28 @@ class MainWindowScreenState extends State<MainWindowScreen>
         ),
         label: 'חיפוש',
       ),
-      const NavigationDestination(
+      NavigationDestination(
         icon: Icon(Icons.more_horiz),
         label: 'עוד',
       ),
-      const NavigationDestination(
+      NavigationDestination(
         icon: Icon(Icons.settings),
         label: 'הגדרות',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.info_outline),
+        label: 'אודות',
       ),
     ];
   }
 
   void _handleNavigationChange(
       BuildContext context, NavigationState state) async {
-    if (mounted && pageController.hasClients) {
+    if (!mounted || !context.mounted || !pageController.hasClients) {
+      return;
+    }
+
+    if (pageController.hasClients) {
       final targetPage = state.currentScreen == Screen.search
           ? Screen.reading.index
           : state.currentScreen.index;
@@ -156,6 +166,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
+        if (!mounted || !context.mounted) return;
       }
       if (state.currentScreen == Screen.library) {
         context
@@ -225,7 +236,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                         padding: destination.label == 'הגדרות'
                                             ? EdgeInsets.only(
                                                 top:
-                                                    constraints.maxHeight - 410)
+                                                    constraints.maxHeight - 470)
                                             : null,
                                       ),
                                   ],
@@ -233,6 +244,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                   onDestinationSelected: (index) {
                                     if (index == Screen.search.index) {
                                       _handleSearchTabOpen(context);
+                                    } else if (index == Screen.about.index) {
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) =>
+                                            const AboutDialogWidget(),
+                                      );
                                     } else {
                                       context.read<NavigationBloc>().add(
                                           NavigateToScreen(
@@ -254,6 +271,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                 ),
                               ),
                             ),
+                            const VerticalDivider(thickness: 1, width: 1),
                             Expanded(child: pageView),
                           ],
                         );
@@ -267,6 +285,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                               onDestinationSelected: (index) {
                                 if (index == Screen.search.index) {
                                   _handleSearchTabOpen(context);
+                                } else if (index == Screen.about.index) {
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) =>
+                                        const AboutDialogWidget(),
+                                  );
                                 } else {
                                   context.read<NavigationBloc>().add(
                                       NavigateToScreen(Screen.values[index]));

@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:flutter/foundation.dart';
 
 class TabsRepository {
   static const String _tabsBoxKey = 'key-tabs';
@@ -13,7 +14,7 @@ class TabsRepository {
         rawTabs.map((e) => OpenedTab.fromJson(e)).toList(),
       );
     } catch (e) {
-      print('Error loading tabs from disk: $e');
+      debugPrint('Error loading tabs from disk: $e');
       Hive.box(name: 'tabs').put(_tabsBoxKey, []);
       return [];
     }

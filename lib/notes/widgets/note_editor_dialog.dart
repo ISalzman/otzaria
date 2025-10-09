@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../core/scaffold_messenger.dart';
 import '../models/note.dart';
 import '../repository/notes_repository.dart';
 
@@ -38,7 +39,7 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize controller with existing note data or defaults
     _contentController = TextEditingController(
       text: widget.existingNote?.contentMarkdown ?? '',
@@ -55,7 +56,8 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
   bool get _isEditing => widget.existingNote != null;
 
   /// Get dialog title
-  String get _dialogTitle => _isEditing ? 'עריכת הערה אישית' : 'הערה אישית חדשה';
+  String get _dialogTitle =>
+      _isEditing ? 'עריכת הערה אישית' : 'הערה אישית חדשה';
 
   /// Handle save operation
   Future<void> _handleSave() async {
@@ -73,11 +75,13 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
           privacy: NotePrivacy.private, // Always private
           tags: [], // No tags
         );
-        
+
         widget.onUpdate?.call(widget.existingNote!.id, request);
       } else {
         // Create new note
-        if (widget.bookId == null || widget.charStart == null || widget.charEnd == null) {
+        if (widget.bookId == null ||
+            widget.charStart == null ||
+            widget.charEnd == null) {
           throw Exception('Missing required data for creating note');
         }
 
@@ -90,7 +94,7 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
           privacy: NotePrivacy.private, // Always private
           tags: [], // No tags
         );
-        
+
         widget.onSave?.call(request);
       }
 
@@ -100,12 +104,8 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('שגיאה בשמירת הערה: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        UiSnack.showError('שגיאה בשמירת הערה: ${e.toString()}',
+            backgroundColor: Theme.of(context).colorScheme.error);
       }
     } finally {
       if (mounted) {
@@ -178,15 +178,16 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Selected text preview (for new notes)
               if (!_isEditing && widget.selectedText != null) ...[
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
@@ -208,7 +209,7 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
                 ),
                 const SizedBox(height: 16),
               ],
-              
+
               // Content input - adaptive height
               ConstrainedBox(
                 constraints: const BoxConstraints(
@@ -237,9 +238,9 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Action buttons
               Row(
                 children: [
@@ -255,14 +256,12 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
                     const Spacer(),
                   ] else
                     const Spacer(),
-                  
                   TextButton(
-                    onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                    onPressed:
+                        _isLoading ? null : () => Navigator.of(context).pop(),
                     child: const Text('ביטול'),
                   ),
-                  
                   const SizedBox(width: 8),
-                  
                   FilledButton(
                     onPressed: _isLoading ? null : _handleSave,
                     child: _isLoading

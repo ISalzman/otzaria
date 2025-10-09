@@ -8,9 +8,9 @@ class WorkspaceIconButton extends StatefulWidget {
   final VoidCallback onPressed;
   
   const WorkspaceIconButton({
-    Key? key,
+    super.key,
     required this.onPressed,
-  }) : super(key: key);
+  });
 
   @override
   State<WorkspaceIconButton> createState() => _WorkspaceIconButtonState();

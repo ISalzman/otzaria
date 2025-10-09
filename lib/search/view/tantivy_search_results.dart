@@ -20,9 +20,9 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 class TantivySearchResults extends StatefulWidget {
   final SearchingTab tab;
   const TantivySearchResults({
-    Key? key,
+    super.key,
     required this.tab,
-  }) : super(key: key);
+  });
 
   @override
   State<TantivySearchResults> createState() => _TantivySearchResultsState();

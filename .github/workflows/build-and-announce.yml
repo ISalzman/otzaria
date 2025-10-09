@@ -1,0 +1,715 @@
+name: "Build, Release and Announce"
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - dev_dev2
+      - n-search2
+      - ns2new
+      - n-search2.1
+
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+  # טריגר לפרסום בלבד
+  release:
+    types: [published]
+
+jobs:
+  build_windows:
+    if: github.event_name != 'release'
+    runs-on: windows-2022
+    # env:
+    #   RUSTUP_HOME: ${{ github.workspace }}\.rustup
+    #   CARGO_HOME:  ${{ github.workspace }}\.cargo
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # - name: Install Rust (stable)
+      #   uses: dtolnay/rust-toolchain@stable
+
+      # - name: Cache cargo registry and git
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: |
+      #       ${{ env.CARGO_HOME }}\registry
+      #       ${{ env.CARGO_HOME }}\git
+      #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-cargo-
+
+      # - name: Add cargo to PATH & verify toolchain
+      #   shell: pwsh
+      #   run: |
+      #     "$env:CARGO_HOME\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+      #     rustc -Vv
+      #     cargo -V
+      #     rustup show
+
+      - name: Install Inno Setup (project script + fallback)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path .\installer\install_inno_setup.ps1) {
+            Write-Host "Running local installer script..."
+            .\installer\install_inno_setup.ps1
+          } else {
+            Write-Host "Local installer script not found, skipping."
+          }
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            if (Get-Command winget -ErrorAction SilentlyContinue) {
+              Write-Host "Installing Inno Setup via winget..."
+              winget install -e --id JRSoftware.InnoSetup --silent --accept-package-agreements --accept-source-agreements
+            } else {
+              Write-Host "winget not found, installing via Chocolatey..."
+              choco install innosetup -y --no-progress
+            }
+          }
+          $iscc = (Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" -Recurse -ErrorAction SilentlyContinue |
+                   Select-Object -First 1 -ExpandProperty FullName)
+          if (-not $iscc) { throw "ISCC.exe not found after installation" }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "ISCC resolved to: $iscc"
+
+      - name: Build Flutter Windows app
+        shell: pwsh
+        run: |
+          # flutter pub get
+          flutter build windows --release
+
+      - name: Zip Windows build
+        shell: pwsh
+        run: |
+          $relDir = Get-ChildItem -Directory build\windows |
+                    Where-Object { Test-Path "$($_.FullName)\runner\Release" } |
+                    Select-Object -First 1 -ExpandProperty FullName
+          if (-not $relDir) { throw 'Release directory not found' }
+          Compress-Archive -Path "$relDir\runner\Release\*" -DestinationPath otzaria-windows.zip
+
+      - name: Build MSIX package
+        shell: pwsh
+        run: |
+          dart run msix:create --install-certificate false
+
+      - name: Download library for full installer (main branch only)
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          Write-Host "Downloading library for full installer..."
+          Invoke-WebRequest -Uri "https://github.com/zevisvei/otzaria-library/releases/download/latest/otzaria_latest.zip" -OutFile "otzaria_library.zip"
+          Write-Host "Extracting library to otzaria-library directory..."
+          Expand-Archive -Path "otzaria_library.zip" -DestinationPath "otzaria-library" -Force
+          Write-Host "Library downloaded and extracted successfully to otzaria-library/"
+          Write-Host "Library contents:"
+          Get-ChildItem -Path "otzaria-library" -Recurse | Select-Object -First 10
+
+      - name: Build Inno Setup installer
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}" -eq "refs/heads/main") {
+            Write-Host "Building full installer with library for main branch..."
+            & "$env:ISCC" installer\otzaria_full.iss
+          } else {
+            Write-Host "Building regular installer for non-main branch..."
+            & "$env:ISCC" installer\otzaria.iss
+          }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: otzaria-windows-installer
+          path: installer/otzaria-*-windows.exe
+
+      - name: Upload Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: otzaria-windows-zip
+          path: otzaria-windows.zip
+
+      - name: Upload Windows MSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: otzaria.msix
+          path: build/windows/x64/runner/release/*.msix
+
+  build_linux:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_HOME: ${{ github.workspace }}/.rustup
+      CARGO_HOME:  ${{ github.workspace }}/.cargo
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Rust (stable) with rustup
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add cargo to PATH and verify toolchain
+        run: |
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+          rustc -Vv
+          cargo -V
+          rustup show
+
+      - name: Cache cargo registry and git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/registry
+            ${{ env.CARGO_HOME }}/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            build-essential ninja-build libgtk-3-dev libblkid1 liblzma5 \
+            clang cmake git pkg-config liblzma-dev rpm patchelf curl xz-utils
+          # Fallback אם מסיבה כלשהי cargo לא קיים (למשל כשל זמני ב-rustup)
+          if ! command -v cargo >/dev/null 2>&1; then
+            sudo apt-get install -y rustc cargo
+          fi
+      
+      - name: Install flutter_distributor
+        run: dart pub global activate flutter_distributor
+      
+      - name: Build Flutter Linux app (with retry)
+        run: |
+          set -e
+          tries=0
+          until [ $tries -ge 3 ]
+          do
+            if flutter build linux; then
+              break
+            fi
+            tries=$((tries+1))
+            echo "flutter build linux failed. retry $tries/3 after short sleep..."
+            sleep 15
+          done
+          if [ $tries -ge 3 ]; then
+            echo "::error::flutter build linux failed after 3 attempts"
+            exit 1
+          fi
+      
+      - name: Build and Patch Linux DEB package
+        shell: bash
+        run: |
+          set -e
+
+          # 1. הרץ את פקודת הבנייה, אבל תפוס את הכישלון כדי שנוכל לתקן אחריו
+          echo "Attempting to build with flutter_distributor, it might fail..."
+          flutter_distributor release --name=production --jobs=release-linux-deb || true
+
+          # 2. מצא את קובץ ה-control שנוצר. אם לא נמצא, זה כישלון אמיתי
+          CONTROL_FILE=$(find dist -type f -name "control" | head -n 1)
+          if [ -z "$CONTROL_FILE" ]; then
+            echo "::error::Fatal: Could not find the DEBIAN/control file. The distributor failed before creating it."
+            exit 1
+          fi
+
+          echo "Found control file to patch at: $CONTROL_FILE"
+          echo "--- Control file BEFORE fix ---"
+          cat "$CONTROL_FILE"
+
+          # 3. תקן את כל הבעיות האפשריות בקובץ
+          # המרת סיומות שורה (CRLF -> LF)
+          sed -i 's/\r$//' "$CONTROL_FILE"
+          # הסרת שורת Depends ריקה
+          sed -i '/^Depends:\s*$/d' "$CONTROL_FILE"
+          # ודא שיש שורת סיום (newline) בסוף הקובץ
+          if [ -n "$(tail -c1 "$CONTROL_FILE")" ]; then
+            echo >> "$CONTROL_FILE"
+          fi
+
+          echo "--- Control file AFTER fix ---"
+          cat "$CONTROL_FILE"
+
+          # 4. בנה את חבילת ה-deb מחדש מהקבצים המתוקנים
+          DEB_DIR=$(dirname "$CONTROL_FILE" | xargs dirname)
+          DEB_OUTPUT_FILE="dist/$(basename "$DEB_DIR" | sed 's/-linux_deb$//')-linux.deb"
+          
+          echo "Re-packaging from directory: $DEB_DIR into $DEB_OUTPUT_FILE"
+          dpkg-deb --build --root-owner-group "$DEB_DIR" "$DEB_OUTPUT_FILE"
+
+          echo "Successfully patched and rebuilt the .deb package."
+        
+      - name: Build and Patch Linux RPM package
+        shell: bash
+        run: |
+          set -e
+
+          # 1. הרץ את פקודת הבנייה הבעייתית, ותפוס את הכישלון
+          echo "Attempting to build with flutter_distributor, expecting it to fail..."
+          flutter_distributor release --name=production --jobs=release-linux-rpm || true
+
+          # 2. מצא את קובץ ה-spec הפגום שהכלי יצר
+          SPEC_FILE=$(find dist -type f -name "*.spec" | head -n 1)
+          if [ -z "$SPEC_FILE" ]; then
+            echo "::error::Fatal: Could not find the .spec file to patch."
+            exit 1
+          fi
+
+          echo "Found spec file to patch at: $SPEC_FILE"
+          echo "--- Spec file BEFORE fix ---"
+          cat "$SPEC_FILE"
+
+          # 3. תקן את הקובץ: מחק את שורת ה-Requires הריקה
+          sed -i '/^Requires:\s*$/d' "$SPEC_FILE"
+
+          echo "--- Spec file AFTER fix ---"
+          cat "$SPEC_FILE"
+
+          # 4. בנה את חבילת ה-rpm מחדש, תוך שימוש בנתיב מוחלט
+          RPM_TOP_DIR_REL=$(dirname "$SPEC_FILE" | xargs dirname)
+          RPM_TOP_DIR_ABS="$(pwd)/$RPM_TOP_DIR_REL"
+          
+          echo "Re-packaging using absolute top directory: $RPM_TOP_DIR_ABS"
+          rpmbuild --define "_topdir $RPM_TOP_DIR_ABS" -bb "$SPEC_FILE"
+
+          echo "Successfully patched and rebuilt the .rpm package."
+      
+      - name: Find and prepare Linux packages
+        id: find_packages
+        run: |
+          DEB_FILE=$(find dist -maxdepth 1 -name "*-linux.deb" | head -n 1)
+          if [ -n "$DEB_FILE" ]; then
+            echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
+            echo "deb_name=$(basename $DEB_FILE)" >> $GITHUB_OUTPUT
+          fi
+          RPM_FILE=$(find dist -type f -name "*.rpm" | head -n 1)
+          if [ -n "$RPM_FILE" ]; then
+            echo "rpm_file=$RPM_FILE" >> $GITHUB_OUTPUT
+            echo "rpm_name=$(basename $RPM_FILE)" >> $GITHUB_OUTPUT
+          fi
+          mkdir -p linux-build
+          cp -r build/linux/x64/release/bundle/* linux-build/
+      
+      - name: Upload Linux DEB package
+        if: steps.find_packages.outputs.deb_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: otzaria-linux-deb
+          path: ${{ steps.find_packages.outputs.deb_file }}
+          
+      - name: Upload Linux RPM package
+        if: steps.find_packages.outputs.rpm_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: otzaria-linux-rpm
+          path: ${{ steps.find_packages.outputs.rpm_file }}
+       
+      - name: Upload linux build (raw)
+        uses: actions/upload-artifact@v4
+        with:
+          name: otzaria-linux-raw
+          path: linux-build/*
+
+  build_android:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      
+      - run: sudo apt install ninja-build
+      
+      - name: Build Android APK
+        run: |
+          flutter pub get
+          flutter build apk
+      
+      - name: Upload apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: otzaria-android.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  build_macos:
+    if: github.event_name != 'release'
+    runs-on: macos-latest
+    env:
+      # אחסון יציב בתוך ה-workspace כדי למנוע תקלות rename של rustup
+      RUSTUP_HOME: ${{ github.workspace }}/.rustup
+      CARGO_HOME:  ${{ github.workspace }}/.cargo
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # התקנת Rust יציבה לפני flutter build
+      - name: Install Rust (stable)
+      # מחליף את ההתקנה האוטומטית של cargokit
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add cargo to PATH & verify toolchain
+        run: |
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+          rustc -Vv
+          cargo -V
+          rustup show
+
+      # (רשות אבל מומלץ) קאשינג לספריות cargo כדי לזרז בניות
+      - name: Cache cargo registry and git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/registry
+            ${{ env.CARGO_HOME }}/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build Flutter macOS app
+        run: |
+          flutter build macos
+
+      - name: Upload macos build
+        uses: actions/upload-artifact@v4
+        with:
+          name: otzaria-macos.app
+          path: build/macos/Build/Products/Release
+
+  create_release:
+    if: github.event_name != 'release'
+    needs: [build_windows, build_linux, build_android, build_macos]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Get version from pubspec.yaml
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Validate semver format
+          if ! echo "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
+            echo "::error::Version '$VERSION' is not valid semver format"
+            exit 1
+          fi
+          
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "tag=$VERSION" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "title=Otzaria $VERSION" >> $GITHUB_OUTPUT
+          else
+            # Use proper semver pre-release format with dots instead of hyphens
+            BRANCH_NAME="${{ github.ref_name }}"
+            # Replace any invalid characters in branch name for semver
+            CLEAN_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^A-Za-z0-9.-]/-/g')
+            echo "tag=$VERSION+${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "title=Otzaria $VERSION (Preview from ${{ github.ref_name }})" >> $GITHUB_OUTPUT
+          fi
+
+
+      - name: Get commit message
+        id: commit
+        run: echo "message=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
+
+      - name: Organize release files
+        run: |
+          mkdir -p release-files
+          
+          # Windows installer
+          if [ -d "artifacts/otzaria-windows-installer" ]; then
+            cp artifacts/otzaria-windows-installer/*.exe release-files/ || true
+          fi
+          
+          # Windows ZIP
+          if [ -d "artifacts/otzaria-windows-zip" ]; then
+            cp artifacts/otzaria-windows-zip/*.zip release-files/ || true
+          fi
+
+          # Windows MSIX
+          if [ -d "artifacts/otzaria.msix" ]; then
+            cp artifacts/otzaria.msix/*.msix release-files/ || true
+          fi
+
+          # Linux DEB package
+          if [ -d "artifacts/otzaria-linux-deb" ]; then
+            cp artifacts/otzaria-linux-deb/*.deb release-files/ || true
+          fi
+          
+          # Linux RPM package  
+          if [ -d "artifacts/otzaria-linux-rpm" ]; then
+            cp artifacts/otzaria-linux-rpm/*.rpm release-files/ || true
+          fi
+          
+          # Linux raw build (fallback)
+          if [ -d "artifacts/otzaria-linux-raw" ] && [ ! -f release-files/*.deb ]; then
+            cd artifacts/otzaria-linux-raw
+            zip -r ../../release-files/otzaria-linux-raw.zip *
+            cd ../..
+          fi
+          
+          # Android APK
+          if [ -d "artifacts/otzaria-android.apk" ]; then
+            cp artifacts/otzaria-android.apk/*.apk release-files/ || true
+          fi
+          
+          # macOS app 
+          if [ -d "artifacts/otzaria-macos.app" ]; then
+          cd artifacts/otzaria-macos.app
+          zip -r ../../release-files/otzaria-macos.zip *
+          cd ../..
+          fi
+          
+          # List files for debugging
+          echo "Release files:"
+          ls -la release-files/
+      
+      - name: Create Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.title }}
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          files: release-files/*
+          body: |
+            ## Changes in this release
+            Built from commit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
+            Branch: ${{ github.ref_name }}
+            
+            ### Downloads:
+            - **Windows**: Download the `.exe` installer
+            - **Windows (.msix)**: Download the `.msix` package
+            - **Windows (.zip)**: Download the `.zip` archive
+            - **Linux (Debian/Ubuntu)**: Download the `.deb` package and install with `sudo dpkg -i <filename>.deb`
+            - **Linux (Fedora/RHEL)**: Download the `.rpm` package and install with `sudo dnf localinstall <filename>.rpm`
+            - **Linux (Generic)**: Download the `.zip` file and extract
+            - **Android**: Install the `.apk` file
+            - **macOS**: Download and extract the `.zip` file
+            
+            ${{ github.ref_name == 'dev' && '⚠️ **This is a development build** - Use at your own risk!' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+  create_pr_prerelease:
+    if: github.event_name == 'pull_request' 
+    needs: [build_windows, build_linux, build_android, build_macos]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Get version from pubspec.yaml
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Validate semver format
+          if ! echo "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
+            echo "::error::Version '$VERSION' is not valid semver format"
+            exit 1
+          fi
+          
+          # Use proper semver pre-release format with dots instead of hyphens for PR builds
+          echo "tag=$VERSION+${{ github.event.number }}.${{ github.run_number }}" >> $GITHUB_OUTPUT
+          echo "title=Otzaria $VERSION - PR #${{ github.event.number }} Preview" >> $GITHUB_OUTPUT
+
+      - name: Get commit message
+        id: commit
+        run: echo "message=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
+
+      - name: Organize release files
+        run: |
+          mkdir -p release-files
+          
+          # Windows installer
+          if [ -d "artifacts/otzaria-windows-installer" ]; then
+            cp artifacts/otzaria-windows-installer/*.exe release-files/ || true
+          fi
+          
+          # Linux DEB package
+          if [ -d "artifacts/otzaria-linux-deb" ]; then
+            cp artifacts/otzaria-linux-deb/*.deb release-files/ || true
+          fi
+          
+          # Linux RPM package  
+          if [ -d "artifacts/otzaria-linux-rpm" ]; then
+            cp artifacts/otzaria-linux-rpm/*.rpm release-files/ || true
+          fi
+          
+          # Linux raw build (fallback)
+          if [ -d "artifacts/otzaria-linux-raw" ] && [ ! -f release-files/*.deb ]; then
+            cd artifacts/otzaria-linux-raw
+            zip -r ../../release-files/otzaria-linux-raw.zip *
+            cd ../..
+          fi
+          
+          # Android APK
+          if [ -d "artifacts/otzaria-android.apk" ]; then
+            cp artifacts/otzaria-android.apk/*.apk release-files/ || true
+          fi
+          
+          # macOS app 
+          if [ -d "artifacts/otzaria-macos.app" ]; then
+          cd artifacts/otzaria-macos.app
+          zip -r ../../release-files/otzaria-macos.zip *
+          cd ../..
+          fi
+          
+          # List files for debugging
+          echo "Release files:"
+          ls -la release-files/
+      
+      - name: Create PR Pre-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.title }}
+          prerelease: true
+          files: release-files/*
+          body: |
+            ## 🔄 PR Preview Build #${{ github.event.number }}
+            **This is a preview build for testing PR changes before merge.**
+            
+            ### PR Information:
+            - **PR Title**: ${{ github.event.pull_request.title }}
+            - **PR Author**: @${{ github.event.pull_request.user.login }}
+            - **PR Number**: #${{ github.event.number }}
+            - **Branch**: `${{ github.head_ref }}` → `${{ github.base_ref }}`
+            
+            ### PR Description:
+            ${{ github.event.pull_request.body }}
+            
+            ---
+            Built from commit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
+            
+            ### Downloads:
+            - **Windows**: Download the `.exe` installer
+            - **Windows (.msix)**: Download the `.msix` package
+            - **Windows (.zip)**: Download the `.zip` archive
+            - **Linux (Debian/Ubuntu)**: Download the `.deb` package and install with `sudo dpkg -i <filename>.deb`
+            - **Linux (Fedora/RHEL)**: Download the `.rpm` package and install with `sudo dnf localinstall <filename>.rpm`
+            - **Linux (Generic)**: Download the `.zip` file and extract
+            - **Android**: Install the `.apk` file
+            - **macOS**: Download and extract the `.zip` file
+            
+            ⚠️ **This is a preview build for testing purposes** - Use at your own risk!
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # --- הכרזה על גרסה שפורסמה ---
+  announce_release:
+    # תנאי לריצה רק כשיש אירוע של פרסום release
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history + tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # חובה כדי לאפשר גישה לכל ההיסטוריה והתגים
+          fetch-tags: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies for webhook script
+        run: pip install bs4 requests pyluach
+
+      - name: Build commit list since previous release
+        id: changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="${{ github.event.release.tag_name }}"
+          git fetch --tags --force
+          
+          # מצא את התג הקודם (הכי עדכני שהוא לא התג הנוכחי)
+          PREV_TAG=$(git for-each-ref --sort=-creatordate --format '%(refname:strip=2)' refs/tags | grep -v "^$CURRENT_TAG$" | head -n1 || true)
+
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="$PREV_TAG..$CURRENT_TAG"
+            # צור רשימה של כותרות הקומיטים בטווח
+            COMMITS=$(git log --pretty=format:'- %s' "$RANGE" || true)
+          else
+            # אם אין תג קודם, קח רק את הקומיט של התג הנוכחי
+            SHA=$(git rev-list -n 1 "$CURRENT_TAG")
+            COMMITS=$(git log --pretty=format:'- %s' "${SHA}^..${SHA}" || true)
+          fi
+
+          if [ -z "${COMMITS// /}" ]; then
+            COMMITS="(לא נמצאו כותרות קומיטים חדשות להצגה)"
+          fi
+
+          # העבר את רשימת הקומיטים והתג הקודם לשלבים הבאים
+          {
+            echo "prev_tag=${PREV_TAG}"
+            echo "commits<<EOF"
+            echo "$COMMITS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run announcement script (Mitmachim + Yemot)
+        env:
+          # פרטי ה-Release נלקחים מאירוע ה-Webhook של GitHub
+          RELEASE_TAG:  ${{ github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_URL:  ${{ github.event.release.html_url }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }} # חיוני כדי שהסקריפט ימצא את קבצי ההורדה
+
+          # הרכבת גוף ההודעה: התיאור מה-Release + רשימת הקומיטים שיצרנו
+          RELEASE_BODY: |
+            ${{ github.event.release.body }}
+
+            השינויים מאז הגרסה הקודמת${{ steps.changelog.outputs.prev_tag && format(' ({0})', steps.changelog.outputs.prev_tag) || '' }}:
+            ${{ steps.changelog.outputs.commits }}
+
+          # סודות להתחברות לשירותים החיצוניים
+          USER_NAME:  ${{ secrets.USER_NAME }}
+          PASSWORD:   ${{ secrets.PASSWORD }}
+          TOKEN_YEMOT: ${{ secrets.TOKEN_YEMOT }}
+        run: |
+          python webhooks/main.py

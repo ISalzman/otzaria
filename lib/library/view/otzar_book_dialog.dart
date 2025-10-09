@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../models/books.dart';
 import '../../utils/otzar_utils.dart';
+import '../../core/scaffold_messenger.dart';
 
 class OtzarBookDialog extends StatelessWidget {
   final ExternalBook book;
 
-  const OtzarBookDialog({Key? key, required this.book}) : super(key: key);
+  const OtzarBookDialog({super.key, required this.book});
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +31,8 @@ class OtzarBookDialog extends StatelessWidget {
             return Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Theme.of(context).dialogBackgroundColor,
+                color: Theme.of(context).dialogTheme.backgroundColor ??
+                    Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: const [
                   BoxShadow(
@@ -127,16 +129,13 @@ class OtzarBookDialog extends StatelessWidget {
           icon: const Icon(Icons.open_in_new),
           label: const Text('פתח באתר'),
           onPressed: () async {
+            final errorColor = Theme.of(context).colorScheme.error;
             Navigator.of(context).pop();
             if (await OtzarUtils.launchOtzarWeb(book.link)) {
               // Success
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('לא ניתן לפתוח את הקישור בדפדפן'),
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                ),
-              );
+              UiSnack.showError('לא ניתן לפתוח את הקישור בדפדפן',
+                  backgroundColor: errorColor);
             }
           },
           style: ElevatedButton.styleFrom(

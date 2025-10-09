@@ -108,7 +108,7 @@ class DatabaseSchema {
   static Future<void> initializeDatabase() async {
     // This is a placeholder - actual implementation would use SQLite
     // For now, we'll just log that initialization was attempted
-    // print('Notes database initialization attempted');
+    // debugPrint('Notes database initialization attempted');
     
     // In a real implementation, this would:
     // 1. Open/create the database file

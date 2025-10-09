@@ -5,14 +5,14 @@ import 'package:flutter/material.dart';
 
 class Header extends StatelessWidget {
   const Header({
-    Key? key,
+    super.key,
     required this.onSearch,
     this.headlineText,
     this.hideCloseIcon = false,
     this.headerCloseIcon,
     this.hideSearchField = false,
     this.onCloseWidgetPress,
-  }) : super(key: key);
+  });
 
   final String? headlineText;
   final bool hideCloseIcon;

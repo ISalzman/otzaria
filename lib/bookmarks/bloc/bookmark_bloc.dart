@@ -7,7 +7,18 @@ import 'package:otzaria/models/books.dart';
 class BookmarkBloc extends Cubit<BookmarkState> {
   final BookmarkRepository _repository;
 
-  BookmarkBloc(this._repository) : super(BookmarkState.initial(_repository));
+  BookmarkBloc(this._repository) : super(BookmarkState.initial()) {
+    _loadBookmarks();
+  }
+
+  void _loadBookmarks() async {
+    try {
+      final bookmarks = await _repository.loadBookmarks();
+      emit(state.copyWith(bookmarks: bookmarks));
+    } catch (e) {
+      // handle error if needed
+    }
+  }
 
   bool addBookmark(
       {required String ref,

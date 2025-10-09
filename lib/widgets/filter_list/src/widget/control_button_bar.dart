@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 /// {@endtemplate}
 class ControlButtonBar<T> extends StatelessWidget {
   const ControlButtonBar({
-    Key? key,
+    super.key,
     this.enableOnlySingleSelection = false,
     this.allButtonText,
     this.resetButtonText,
@@ -22,7 +22,7 @@ class ControlButtonBar<T> extends StatelessWidget {
     this.onApplyButtonClick,
     this.maximumSelectionLength,
     required this.controlButtons,
-  }) : super(key: key);
+  });
   final bool enableOnlySingleSelection;
   final String? allButtonText;
   final String? resetButtonText;
@@ -59,7 +59,7 @@ class ControlButtonBar<T> extends StatelessWidget {
                     /* All Button */
                     if (maximumSelectionLength == null &&
                         !enableOnlySingleSelection &&
-                        controlButtons.contains(ControlButtonType.ALL)) ...[
+                        controlButtons.contains(ControlButtonType.all)) ...[
                       ControlButton(
                         choiceChipLabel: '$allButtonText',
                         onPressed: () {
@@ -74,7 +74,7 @@ class ControlButtonBar<T> extends StatelessWidget {
 
                       /* Reset Button */
                     ],
-                    if (controlButtons.contains(ControlButtonType.Reset)) ...[
+                    if (controlButtons.contains(ControlButtonType.reset)) ...[
                       ControlButton(
                         choiceChipLabel: '$resetButtonText',
                         onPressed: () {

@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -41,6 +42,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   void _onAddTab(AddTab event, Emitter<TabsState> emit) {
+    debugPrint('DEBUG: הוספת טאב חדש - ${event.tab.title}');
     final newTabs = List<OpenedTab>.from(state.tabs);
     final newIndex = min(state.currentTabIndex + 1, newTabs.length);
     newTabs.insert(newIndex, event.tab);
@@ -67,6 +69,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   void _onSetCurrentTab(SetCurrentTab event, Emitter<TabsState> emit) {
     if (event.index >= 0 && event.index < state.tabs.length) {
+      debugPrint(
+          'DEBUG: מעבר לטאב ${event.index} - ${state.tabs[event.index].title}');
       _repository.saveTabs(state.tabs, event.index);
       emit(state.copyWith(currentTabIndex: event.index));
     }

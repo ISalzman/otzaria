@@ -67,7 +67,7 @@ const Map<String, Map<String, double>> lengthConversionFactors = {
 };
 
 const Map<String, Map<String, double>> modernLengthFactors = {
-  'מדות ושיעורי תורה, בדעת הרמב"ם': {
+  'רמב"ם': {
     'אצבע': 1.9, // cm
     'טפח': 7.6, // cm
     'זרת': 22.8, // cm
@@ -184,7 +184,7 @@ const Map<String, double> areaInSquareAmot = {
 };
 
 const Map<String, Map<String, double>> modernAreaFactors = {
-  'מדות ושיעורי תורה, בדעת הרמב"ם': {
+  'רמב"ם': {
     'בית רובע': 21 + 2 / 3, // m^2
     'בית קב': 86 + 2 / 3, // m^2
     'בית סאה': 520, // m^2
@@ -337,7 +337,7 @@ const Map<String, Map<String, double>> volumeConversionFactors = {
 };
 
 const Map<String, Map<String, double>> modernVolumeFactors = {
-  'מדות ושיעורי תורה, בדעת הרמב"ם': {
+  'רמב"ם': {
     'רביעית': 76.4, // cm^3
     'לוג': 305.6, // cm^3
     'קב': 1.22, // L
@@ -405,7 +405,47 @@ const Map<String, Map<String, double>> modernVolumeFactors = {
   },
 };
 
+// Ancient time units conversion factors (between ancient units)
 const Map<String, Map<String, double>> timeConversionFactors = {
+  'הילוך ארבע אמות': {
+    'הילוך ארבע אמות': 1,
+    'הילוך מאה אמה': 1 / 25,
+    'הילוך שלושה רבעי מיל': 1 / 375,
+    'הילוך מיל': 1 / 500,
+    'הילוך ארבעה מילים': 1 / 2000,
+  },
+  'הילוך מאה אמה': {
+    'הילוך ארבע אמות': 25,
+    'הילוך מאה אמה': 1,
+    'הילוך שלושה רבעי מיל': 1 / 15,
+    'הילוך מיל': 1 / 20,
+    'הילוך ארבעה מילים': 1 / 80,
+  },
+  'הילוך שלושה רבעי מיל': {
+    'הילוך ארבע אמות': 375,
+    'הילוך מאה אמה': 15,
+    'הילוך שלושה רבעי מיל': 1,
+    'הילוך מיל': 1 / (1 + 1/3),
+    'הילוך ארבעה מילים': 1 / (5 + 1/3),
+  },
+  'הילוך מיל': {
+    'הילוך ארבע אמות': 500,
+    'הילוך מאה אמה': 20,
+    'הילוך שלושה רבעי מיל': 1 + 1/3,
+    'הילוך מיל': 1,
+    'הילוך ארבעה מילים': 1 / 4,
+  },
+  'הילוך ארבעה מילים': {
+    'הילוך ארבע אמות': 2000,
+    'הילוך מאה אמה': 80,
+    'הילוך שלושה רבעי מיל': 5 + 1/3,
+    'הילוך מיל': 4,
+    'הילוך ארבעה מילים': 1,
+  },
+};
+
+// Modern time conversion factors (ancient units to modern units)
+const Map<String, Map<String, double>> modernTimeFactors = {
   'שולחן ערוך': {
     'הילוך ארבע אמות': 2.16, // seconds
     'הילוך מאה אמה': 54, // seconds
@@ -496,7 +536,7 @@ const Map<String, Map<String, double>> weightConversionFactors = {
 };
 
 const Map<String, Map<String, double>> modernWeightFactors = {
-  'מדות ושיעורי תורה, בדעת רש"י': {
+  'רש"י': {
     'דינר': 3.54, // g
     'שקל': 7.08, // g
     'סלע': 14.16, // g
@@ -523,7 +563,7 @@ const Map<String, Map<String, double>> modernWeightFactors = {
     'כיכר': 23.7, // kg
     'קנטר': 39.5, // kg
   },
-  'מדות ושיעורי תורה, בדעת הגאונים והרמב"ם': {
+  'גאונים ורמב"ם': {
     'דינר': 4.25, // g
     'שקל': 8.5, // g
     'סלע': 17, // g

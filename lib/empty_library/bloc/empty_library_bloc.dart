@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:bloc/bloc.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_archive/flutter_archive.dart' as flutter_archive;
 import 'package:flutter_document_picker/flutter_document_picker.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -41,7 +42,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       try {
         await _tempFile!.delete();
       } catch (e) {
-        print('Error cleaning up temp file: $e');
+        debugPrint('Error cleaning up temp file: $e');
       }
     }
   }
@@ -160,7 +161,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       final request = http.Request(
         'GET',
         Uri.parse(
-            'https://github.com/Sivan22/otzaria-library/releases/download/latest/otzaria_latest.zip'),
+            'https://github.com/zevisvei/otzaria-library/releases/download/latest/otzaria_latest.zip'),
       );
       final response = await http.Client().send(request);
 
@@ -247,7 +248,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
                     }
                     extractedFiles++;
                   } catch (e) {
-                    print('Error extracting $filename: $e');
+                    debugPrint('Error extracting $filename: $e');
                     throw Exception('שגיאה בחילוץ הקובץ $filename: $e');
                   }
                 }
@@ -270,7 +271,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
                       return flutter_archive.ZipFileOperation.includeItem;
                     });
               } catch (e) {
-                print(e);
+                debugPrint('$e');
                 throw Exception('שגיאה בחילוץ הקובץ: $e');
               }
             }

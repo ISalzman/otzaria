@@ -49,7 +49,7 @@ class _PageNumberDisplayState extends State<PageNumberDisplay> {
     final page = int.tryParse(value);
     if (page != null) {
       widget.controller.goToPage(
-        pageNumber: page.clamp(1, widget.controller.pages.length),
+        pageNumber: page.clamp(1, widget.controller.pageCount),
       );
     }
     setState(() {
@@ -64,7 +64,7 @@ class _PageNumberDisplayState extends State<PageNumberDisplay> {
     }
 
     final pageNumber = widget.controller.pageNumber ?? 1;
-    final pageCount = widget.controller.pages.length;
+    final pageCount = widget.controller.pageCount;
 
     return Center(
       child: _isEditing

@@ -31,6 +31,9 @@ class SearchingTab extends OpenedTab {
   // notifier לעדכון התצוגה כשמשתמש משנה מרווחים
   final ValueNotifier<int> spacingValuesChanged = ValueNotifier(0);
 
+  // מטמון של בקשות ספירה פעילות כדי למנוע קריאות כפולות
+  final Map<String, Future<int>> _inflight = {};
+
   SearchingTab(
     super.title,
     String? searchText,
@@ -39,6 +42,29 @@ class SearchingTab extends OpenedTab {
       queryController.text = searchText;
       searchBloc.add(UpdateSearchQuery(searchText.trim()));
     }
+  }
+
+  String _normalizeFacet(String s) =>
+      s.trim().replaceAll(RegExp(r'/+'), '/'); // אחידות סלאשים + רווחים
+
+  String _optionsHash() {
+    String normMap(Map m) => Map.fromEntries(m.entries.toList()
+          ..sort((a, b) => a.key.toString().compareTo(b.key.toString())))
+        .toString();
+    return [
+      normMap(searchOptions),
+      normMap(spacingValues),
+      Map.fromEntries(alternativeWords.entries.toList()
+            ..sort((a, b) => a.key.compareTo(b.key)))
+          .toString(),
+    ].join('|');
+  }
+
+  String _cacheKey(String facet) {
+    final f = _normalizeFacet(facet);
+    final q = (searchBloc.state.searchQuery).trim();
+    final bVer = searchBloc.state.booksToSearch.length.toString(); // מספר ספרים
+    return '$f|q=$q|o=${_optionsHash()}|b=$bVer';
   }
 
   Future<int> countForFacet(String facet) {
@@ -62,32 +88,46 @@ class SearchingTab extends OpenedTab {
 
   /// ספירה חכמה - מחזירה תוצאות מהירות מה-state או מבצעת ספירה
   Future<int> countForFacetCached(String facet) async {
-    // קודם נבדוק אם יש ספירה ב-state של ה-bloc (כולל 0)
-    final stateCount = searchBloc.getFacetCountFromState(facet);
-    if (searchBloc.state.facetCounts.containsKey(facet)) {
-      print('💾 Cache hit for $facet: $stateCount');
-      return stateCount;
+    final f = _normalizeFacet(facet);
+
+    // 0) אם יש ב-state (כולל 0) — החזר מיד
+    if (searchBloc.state.facetCounts.containsKey(f)) {
+      final v = searchBloc.getFacetCountFromState(f);
+      debugPrint('💾 Cache hit for $f: $v');
+      return v;
     }
 
-    print('🔄 Cache miss for $facet, performing direct count...');
-    print(
-        '📍 Stack trace: ${StackTrace.current.toString().split('\n').take(5).join('\n')}');
-    final stopwatch = Stopwatch()..start();
-    // אם אין ב-state, נבצע ספירה ישירה
-    final result = await countForFacet(facet);
-    stopwatch.stop();
-    print(
-        '⏱️ Direct count for $facet took ${stopwatch.elapsedMilliseconds}ms: $result');
+    // 1) מפתח קאש כולל query/אפשרויות/גרסת ספרים
+    final key = _cacheKey(facet);
 
-    // Update SearchBloc state cache
-    searchBloc.add(UpdateFacetCounts({facet: result}));
+    // 2) אם ספירה פעילה — הצמד אליה
+    final existing = _inflight[key];
+    if (existing != null) {
+      debugPrint('⏳ Count in progress for [$key], waiting...');
+      return existing;
+    }
 
-    return result;
+    debugPrint('🔄 Cache miss for $key, direct count...');
+    final sw = Stopwatch()..start();
+
+    final fut = countForFacet(f).then((result) {
+      sw.stop();
+      debugPrint(
+          '⏱️ Direct count for $key took ${sw.elapsedMilliseconds}ms: $result');
+      searchBloc.add(UpdateFacetCounts({f: result}));
+      return result;
+    }).whenComplete(() {
+      // תמיד מנקים, גם בשגיאה
+      _inflight.remove(key);
+    });
+
+    _inflight[key] = fut;
+    return fut;
   }
 
   /// מחזיר ספירה סינכרונית מה-state (אם קיימת)
   int getFacetCountFromState(String facet) {
-    return searchBloc.getFacetCountFromState(facet);
+    return searchBloc.getFacetCountFromState(_normalizeFacet(facet));
   }
 
   @override
@@ -96,6 +136,8 @@ class SearchingTab extends OpenedTab {
     searchOptionsChanged.dispose();
     alternativeWordsChanged.dispose();
     spacingValuesChanged.dispose();
+    // סגירת ה-bloc כדי למנוע דליפה
+    searchBloc.close();
     super.dispose();
   }
 

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 
 /// Widget that displays reporting numbers with copy functionality
 class ReportingNumbersWidget extends StatelessWidget {
@@ -216,27 +217,12 @@ class ReportingNumbersWidget extends StatelessWidget {
     try {
       await Clipboard.setData(ClipboardData(text: text));
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'הועתק ללוח: $text',
-              textDirection: TextDirection.rtl,
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        UiSnack.show('הועתק ללוח: $text');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'שגיאה בהעתקה ללוח',
-              textDirection: TextDirection.rtl,
-            ),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        UiSnack.showError('שגיאה בהעתקה ללוח',
+            backgroundColor: Theme.of(context).colorScheme.error);
       }
     }
   }
@@ -248,28 +234,14 @@ class ReportingNumbersWidget extends StatelessWidget {
         await launchUrl(phoneUri);
       } else {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'לא ניתן לפתוח את אפליקציית הטלפון',
-                textDirection: TextDirection.rtl,
-              ),
-              duration: Duration(seconds: 3),
-            ),
-          );
+          UiSnack.showError('לא ניתן לפתוח את אפליקציית הטלפון',
+              backgroundColor: Theme.of(context).colorScheme.error);
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'שגיאה בפתיחת אפליקציית הטלפון',
-              textDirection: TextDirection.rtl,
-            ),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        UiSnack.showError('שגיאה בפתיחת אפליקציית הטלפון',
+            backgroundColor: Theme.of(context).colorScheme.error);
       }
     }
   }

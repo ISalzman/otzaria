@@ -21,17 +21,21 @@ import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:otzaria/history/history_dialog.dart';
 import 'package:otzaria/bookmarks/bookmarks_dialog.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/widgets/workspace_icon_button.dart';
+import 'package:otzaria/widgets/scrollable_tab_bar.dart';
 
 class ReadingScreen extends StatefulWidget {
-  const ReadingScreen({Key? key}) : super(key: key);
+  const ReadingScreen({super.key});
 
   @override
   State<ReadingScreen> createState() => _ReadingScreenState();
 }
 
+const double _kAppBarControlsWidth = 125.0;
+
 class _ReadingScreenState extends State<ReadingScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  // האם יש אוברפלואו בטאבים (גלילה)? משמש לקביעת placeholder לדינמיות מרכוז/התפרשות
+  bool _tabsOverflow = false;
   @override
   void initState() {
     super.initState();
@@ -146,28 +150,22 @@ class _ReadingScreenState extends State<ReadingScreen>
               controller.addListener(() {
                 if (controller.indexIsChanging &&
                     state.currentTabIndex < state.tabs.length) {
+                  // שמירת המצב הנוכחי לפני המעבר לטאב אחר
+                  debugPrint(
+                      'DEBUG: מעבר בין טאבים - שמירת מצב טאב ${state.currentTabIndex}');
                   context.read<HistoryBloc>().add(CaptureStateForHistory(
                       state.tabs[state.currentTabIndex]));
                 }
                 if (controller.index != state.currentTabIndex) {
+                  debugPrint('DEBUG: עדכון טאב נוכחי ל-${controller.index}');
                   context.read<TabsBloc>().add(SetCurrentTab(controller.index));
                 }
               });
 
               return Scaffold(
                 appBar: AppBar(
-                  title: Container(
-                    constraints: const BoxConstraints(maxHeight: 50),
-                    child: TabBar(
-                      controller: controller,
-                      isScrollable: true,
-                      tabAlignment: TabAlignment.center,
-                      tabs: state.tabs
-                          .map((tab) => _buildTab(context, tab, state))
-                          .toList(),
-                    ),
-                  ),
-                  leadingWidth: 280,
+                  // 1. משתמשים בקבוע שהגדרנו עבור הרוחב
+                  leadingWidth: _kAppBarControlsWidth,
                   leading: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -190,14 +188,51 @@ class _ReadingScreenState extends State<ReadingScreen>
                         margin: const EdgeInsets.symmetric(horizontal: 2),
                       ),
                       // קבוצת שולחן עבודה עם אנימציה
-                      SizedBox(
-                        width: 180, // רוחב קבוע למניעת הזזת הטאבים
-                        child: WorkspaceIconButton(
-                          onPressed: () => _showSaveWorkspaceDialog(context),
-                        ),
+                      IconButton(
+                        icon: const Icon(Icons.add_to_queue),
+                        tooltip: 'החלף שולחן עבודה',
+                        onPressed: () => _showSaveWorkspaceDialog(context),
                       ),
                     ],
                   ),
+                  titleSpacing: 0,
+                  centerTitle: true,
+                  title: Container(
+                    constraints: const BoxConstraints(maxHeight: 50),
+                    child: ScrollableTabBarWithArrows(
+                      controller: controller,
+                      tabAlignment: TabAlignment.center,
+                      onOverflowChanged: (overflow) {
+                        if (mounted) {
+                          setState(() => _tabsOverflow = overflow);
+                        }
+                      },
+                      tabs: state.tabs
+                          .map((tab) => _buildTab(context, tab, state))
+                          .toList(),
+                    ),
+                  ),
+                  flexibleSpace: Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // כאשר אין גלילה — מוסיפים placeholder משמאל כדי למרכז באמת ביחס למסך כולו
+                  // כאשר יש גלילה — מבטלים אותו כדי לאפשר התפשטות גם לצד שמאל
+                  // שומרים תמיד מקום קבוע לימין כדי למנוע שינויי רוחב פתאומיים
+                  actions: [
+                    if (!_tabsOverflow)
+                      const SizedBox(width: _kAppBarControlsWidth),
+                  ],
+                  // centerTitle לא נדרש כאשר הטאבים נמצאים ב-bottom
+
+                  // 2. משתמשים באותו קבוע בדיוק עבור ווידג'ט הדמה
+                  // הוסר הרווח המלאכותי מצד שמאל כדי לאפשר לטאבים לתפוס רוחב מלא בעת הצורך
                 ),
                 body: SizedBox.fromSize(
                   size: MediaQuery.of(context).size,
