@@ -269,38 +269,29 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // המילים שנמצאו - בולטות
-                    if (result.preview.isNotEmpty) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          result.preview,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            height: 1.5,
-                          ),
-                          textAlign: TextAlign.right,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    // כותרת הקובץ - משנית
+                    // כותרת הקובץ
                     Text(
                       result.bookTitle,
                       style: TextStyle(
                         fontSize: 14,
+                        fontWeight: FontWeight.w500,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.right,
                     ),
+                    const SizedBox(height: 8),
+                    // המילים שנמצאו - בולטות
+                    if (result.preview.isNotEmpty)
+                      Text(
+                        result.preview,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.right,
+                      ),
                   ],
                 ),
               ),
