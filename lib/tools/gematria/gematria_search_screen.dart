@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'gematria_search.dart';
 
 class GematriaSearchScreen extends StatefulWidget {
   const GematriaSearchScreen({super.key});
@@ -18,24 +20,60 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
     super.dispose();
   }
 
-  void _performSearch() {
-    // כאן תכניס את פונקציית החיפוש שלך
+  Future<void> _performSearch() async {
+    final searchText = _searchController.text.trim();
+    if (searchText.isEmpty) return;
+
     setState(() {
       _isSearching = true;
+      _searchResults = [];
     });
 
-    // דוגמה לתוצאות - תחליף בפונקציה האמיתית
-    Future.delayed(const Duration(milliseconds: 500), () {
+    try {
+      // חישוב הגימטריה של הטקסט שהוזן
+      final targetGimatria = GimatriaSearch.gimatria(searchText);
+
+      // קבלת נתיב הספרייה מההגדרות
+      final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+
+      // ביצוע החיפוש
+      final results = await GimatriaSearch.searchInFiles(
+        libraryPath,
+        targetGimatria,
+        maxPhraseWords: 8,
+        fileLimit: 100,
+      );
+
+      // המרת התוצאות לפורמט של המסך
       setState(() {
-        _searchResults = _getDummyResults();
+        _searchResults = results.map((result) {
+          // חילוץ שם הקובץ והנתיב היחסי
+          final relativePath =
+              result.file.replaceFirst(libraryPath, '').replaceAll('\\', '/');
+          final fileName = relativePath.split('/').last.replaceAll('.txt', '');
+          final folderPath =
+              relativePath.substring(0, relativePath.lastIndexOf('/'));
+
+          return GematriaSearchResult(
+            bookTitle: fileName,
+            internalPath: 'שורה ${result.line}$folderPath',
+            preview: result.text,
+            data: result,
+          );
+        }).toList();
         _isSearching = false;
       });
-    });
-  }
-
-  List<GematriaSearchResult> _getDummyResults() {
-    // דוגמה בלבד - תחליף בתוצאות אמיתיות
-    return [];
+    } catch (e) {
+      setState(() {
+        _isSearching = false;
+        _searchResults = [];
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('שגיאה בחיפוש: $e')),
+        );
+      }
+    }
   }
 
   @override
