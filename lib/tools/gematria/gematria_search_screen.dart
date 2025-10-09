@@ -60,16 +60,15 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
       // המרת התוצאות לפורמט של המסך
       setState(() {
         _searchResults = results.map((result) {
-          // חילוץ שם הקובץ והנתיב היחסי
+          // חילוץ שם הקובץ
           final relativePath =
               result.file.replaceFirst(libraryPath, '').replaceAll('\\', '/');
           final fileName = relativePath.split('/').last.replaceAll('.txt', '');
-          final folderPath =
-              relativePath.substring(0, relativePath.lastIndexOf('/'));
 
           return GematriaSearchResult(
             bookTitle: fileName,
-            internalPath: 'שורה ${result.line}$folderPath',
+            internalPath:
+                result.path.isNotEmpty ? result.path : 'שורה ${result.line}',
             preview: result.text,
             data: result,
           );
@@ -279,6 +278,38 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
                       ),
                       textAlign: TextAlign.right,
                     ),
+                    // נתיב פנימי (כותרות)
+                    if (result.internalPath.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.subdirectory_arrow_left,
+                            size: 14,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant
+                                .withOpacity(0.7),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              result.internalPath,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant
+                                    .withOpacity(0.7),
+                              ),
+                              textAlign: TextAlign.right,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     // המילים שנמצאו - בולטות
                     if (result.preview.isNotEmpty)
