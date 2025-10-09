@@ -23,9 +23,9 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
-OutputDir=installer
+OutputDir=.
 OutputBaseFilename=otzaria-{#MyAppVersion}-windows-full
-SetupIconFile=installer\white_sketch128x128.ico
+SetupIconFile=white_sketch128x128.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
