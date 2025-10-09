@@ -54,7 +54,7 @@ class _BookCardWidgetState extends State<BookCardWidget> {
       _progressProvider?.removeListener(_recomputeFromProvider);
       _progressProvider = newProvider;
       _progressProvider?.addListener(_recomputeFromProvider);
-      
+
       if (!_isInitialized) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -79,11 +79,13 @@ class _BookCardWidgetState extends State<BookCardWidget> {
 
     try {
       final pp = _progressProvider!;
-      final newLearnProgress = pp.getLearnProgressPercentage(
-        widget.topLevelCategoryKey,
-        widget.bookName,
-        widget.bookDetails,
-      ).clamp(0.0, 1.0);
+      final newLearnProgress = pp
+          .getLearnProgressPercentage(
+            widget.topLevelCategoryKey,
+            widget.bookName,
+            widget.bookDetails,
+          )
+          .clamp(0.0, 1.0);
 
       final newIsCompleted = pp.isBookCompleted(
         widget.topLevelCategoryKey,
@@ -96,8 +98,10 @@ class _BookCardWidgetState extends State<BookCardWidget> {
         widget.bookName,
         widget.bookDetails,
       );
-      
-      if (newLearnProgress != _learnProgress || newIsCompleted != _isCompleted || newCompletedCycles != _completedCycles) {
+
+      if (newLearnProgress != _learnProgress ||
+          newIsCompleted != _isCompleted ||
+          newCompletedCycles != _completedCycles) {
         setState(() {
           _learnProgress = newLearnProgress;
           _isCompleted = newIsCompleted;
@@ -112,7 +116,12 @@ class _BookCardWidgetState extends State<BookCardWidget> {
   @override
   Widget build(BuildContext context) {
     if (!_isInitialized) {
-      return const Card(child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.0))));
+      return const Card(
+          child: Center(
+              child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.0))));
     }
 
     return Card(
@@ -138,16 +147,23 @@ class _BookCardWidgetState extends State<BookCardWidget> {
                       children: [
                         Text(
                           widget.bookName,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           widget.categoryName,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                          ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.7),
+                                  ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -156,14 +172,16 @@ class _BookCardWidgetState extends State<BookCardWidget> {
                   ),
                   if (_isCompleted) ...[
                     const SizedBox(width: 8),
-                    const Icon(Icons.check_circle, color: Colors.green, size: 24),
+                    const Icon(Icons.check_circle,
+                        color: Colors.green, size: 24),
                   ],
                 ],
               ),
               const SizedBox(height: 12),
               // Progress / Completion info
               (_isCompleted && widget.completionDateOverride != null)
-                  ? _buildCompletionInfo(context, widget.completionDateOverride!)
+                  ? _buildCompletionInfo(
+                      context, widget.completionDateOverride!)
                   : _buildProgressInfo(context, _learnProgress),
               const SizedBox(height: 12),
               // Additional info
@@ -172,25 +190,32 @@ class _BookCardWidgetState extends State<BookCardWidget> {
                   Icon(
                     widget.bookDetails.isDafType ? Icons.book : Icons.article,
                     size: 16,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
                   ),
                   const SizedBox(width: 4),
                   Text(
                     '${widget.bookDetails.totalLearnableItems} ${widget.bookDetails.contentType}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                    ),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.6),
+                        ),
                   ),
                   const Spacer(),
                   if (_completedCycles > 0) ...[
-                    Icon(Icons.repeat, size: 16, color: Theme.of(context).colorScheme.primary),
+                    Icon(Icons.repeat,
+                        size: 16, color: Theme.of(context).colorScheme.primary),
                     const SizedBox(width: 4),
                     Text(
                       '$_completedCycles מחזורים',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
                     ),
                   ],
                 ],
@@ -218,9 +243,10 @@ class _BookCardWidgetState extends State<BookCardWidget> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.1),
+        color: Colors.green.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
+        border:
+            Border.all(color: Colors.green.withValues(alpha: 0.3), width: 1),
       ),
       child: Row(children: [
         const Icon(Icons.celebration, color: Colors.green, size: 20),
@@ -229,8 +255,15 @@ class _BookCardWidgetState extends State<BookCardWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('הושלם בהצלחה!', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.w600)),
-              Text(hebrewDate, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.green.shade600)),
+              Text('הושלם בהצלחה!',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.green.shade700,
+                      fontWeight: FontWeight.w600)),
+              Text(hebrewDate,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Colors.green.shade600)),
             ],
           ),
         ),
@@ -252,21 +285,35 @@ class _BookCardWidgetState extends State<BookCardWidget> {
               child: LinearProgressIndicator(
                 minHeight: 8,
                 value: learnProgress.isFinite ? learnProgress : 0.0,
-                backgroundColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.08),
+                backgroundColor: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.08),
               ),
             ),
           ),
           const SizedBox(width: 12),
-          Text('$progressPercentage%', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+          Text('$progressPercentage%',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(fontWeight: FontWeight.w600)),
         ]),
         const SizedBox(height: 8),
         Row(children: [
-          Text('$completedItems מתוך $totalItems', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7))),
+          Text('$completedItems מתוך $totalItems',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.7))),
           const Spacer(),
           if (learnProgress > 0)
             Text(
               _getProgressStatusText(learnProgress),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w500),
             ),
         ]),
       ],
@@ -276,7 +323,8 @@ class _BookCardWidgetState extends State<BookCardWidget> {
   String _getProgressStatusText(double learnProgress) {
     try {
       if (_progressProvider == null) return 'לימוד פעיל';
-      final inActive = _progressProvider!.isBookInActiveReview(widget.topLevelCategoryKey, widget.bookName, widget.bookDetails);
+      final inActive = _progressProvider!.isBookInActiveReview(
+          widget.topLevelCategoryKey, widget.bookName, widget.bookDetails);
       if (inActive) return 'בחזרה';
     } catch (e, st) {
       _logger.warning('isBookInActiveReview failed', e, st);

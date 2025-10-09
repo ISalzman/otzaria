@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:logging/logging.dart';
@@ -9,12 +10,13 @@ import '../models/error_model.dart';
 /// Service for loading book data from JSON assets
 class DataLoaderService {
   static final Logger _logger = Logger('DataLoaderService');
-  
+
   Map<String, BookCategory>? _cachedData;
   final String _assetsBasePath;
 
-  DataLoaderService({String? assetsBasePath}) 
-     : _assetsBasePath = assetsBasePath ?? 'packages/shamor_zachor/assets/data/';
+  DataLoaderService({String? assetsBasePath})
+      : _assetsBasePath =
+            assetsBasePath ?? 'packages/shamor_zachor/assets/data/';
 
   /// Clear the cached data
   void clearCache() {
@@ -29,8 +31,8 @@ class DataLoaderService {
 
     try {
       // --- אבחון באמצעות PRINT ---
-      print("--- STARTING ASSET DIAGNOSTICS WITH PRINT() ---");
-      print("Searching for assets with base path: '$_assetsBasePath'");
+      debugPrint("--- STARTING ASSET DIAGNOSTICS WITH PRINT() ---");
+      debugPrint("Searching for assets with base path: '$_assetsBasePath'");
 
       final manifestContent = await rootBundle.loadString('AssetManifest.json');
       final Map<String, dynamic> manifestMap = json.decode(manifestContent);
@@ -39,7 +41,8 @@ class DataLoaderService {
       final relevantKeys = manifestMap.keys
           .where((key) => key.toString().contains('shamor_zachor'))
           .toList();
-      print("All keys in AssetManifest.json containing 'shamor_zachor': $relevantKeys");
+      debugPrint(
+          "All keys in AssetManifest.json containing 'shamor_zachor': $relevantKeys");
 
       final List<String> jsonFilesPaths = manifestMap.keys
           .where((String key) =>
@@ -47,15 +50,19 @@ class DataLoaderService {
           .toList();
 
       // --- הדפסת הנתיבים שנמצאו לאחר סינון ---
-      print("Filtered paths (the files we actually found): $jsonFilesPaths");
+      debugPrint(
+          "Filtered paths (the files we actually found): $jsonFilesPaths");
 
       if (jsonFilesPaths.isEmpty) {
-        print("CRITICAL: No JSON files were found using the path '$_assetsBasePath'.");
+        debugPrint(
+            "CRITICAL: No JSON files were found using the path '$_assetsBasePath'.");
         // הדפסת כל המפתחות כדי שנוכל לראות מה באמת קיים
-        print("Full list of available keys in manifest: ${manifestMap.keys.toList()}");
+        debugPrint(
+            "Full list of available keys in manifest: ${manifestMap.keys.toList()}");
         throw ShamorZachorError(
           type: ShamorZachorErrorType.missingAsset,
-          message: 'No JSON data files found in $_assetsBasePath. Please check the console output for available keys.',
+          message:
+              'No JSON data files found in $_assetsBasePath. Please check the console output for available keys.',
         );
       }
 
@@ -68,7 +75,7 @@ class DataLoaderService {
             combinedData[category.name] = category;
           }
         } catch (e, stackTrace) {
-          print('Error loading category from $path: $e');
+          debugPrint('Error loading category from $path: $e\n$stackTrace');
         }
       }
 
@@ -80,8 +87,8 @@ class DataLoaderService {
       }
 
       _cachedData = combinedData;
-      print("--- ASSET DIAGNOSTICS COMPLETE ---");
-      print("Successfully loaded ${combinedData.length} categories");
+      debugPrint("--- ASSET DIAGNOSTICS COMPLETE ---");
+      debugPrint("Successfully loaded ${combinedData.length} categories");
       return combinedData;
     } catch (e, stackTrace) {
       if (e is ShamorZachorError) {
@@ -126,17 +133,21 @@ class DataLoaderService {
     }
   }
 
-  /// Validate JSON structure for a category
   bool _isValidCategoryJson(Map<String, dynamic> json) {
     // Check required fields
-    if (json['name'] == null || json['name'] is! String) return false;
-    if (json['content_type'] == null || json['content_type'] is! String) return false;
-    
+    if (json['name'] == null || json['name'] is! String) {
+      return false;
+    }
+    if (json['content_type'] == null || json['content_type'] is! String) {
+      return false;
+    }
+
     // Must have at least one of: data, books, or subcategories
     final hasData = json['data'] != null && json['data'] is Map;
     final hasBooks = json['books'] != null && json['books'] is Map;
-    final hasSubcategories = json['subcategories'] != null && json['subcategories'] is List;
-    
+    final hasSubcategories =
+        json['subcategories'] != null && json['subcategories'] is List;
+
     return hasData || hasBooks || hasSubcategories;
   }
 

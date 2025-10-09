@@ -21,9 +21,8 @@ class TrackingScreen extends StatefulWidget {
 
 class _TrackingScreenState extends State<TrackingScreen>
     with AutomaticKeepAliveClientMixin {
-  
   static final Logger _logger = Logger('TrackingScreen');
-  
+
   @override
   bool get wantKeepAlive => true;
 
@@ -153,7 +152,10 @@ class _TrackingScreenState extends State<TrackingScreen>
                   ? Icons.hourglass_empty
                   : Icons.check_circle_outline,
               size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
@@ -161,9 +163,12 @@ class _TrackingScreenState extends State<TrackingScreen>
                   ? 'אין ספרים בתהליך כעת'
                   : 'עדיין לא סיימת ספרים',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                fontStyle: FontStyle.italic,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
+                    fontStyle: FontStyle.italic,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -171,8 +176,11 @@ class _TrackingScreenState extends State<TrackingScreen>
                   ? 'התחל ללמוד ספר כדי לראות אותו כאן'
                   : 'סיים ספר כדי לראות אותו כאן',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
+                  ),
             ),
           ],
         ),
@@ -183,15 +191,16 @@ class _TrackingScreenState extends State<TrackingScreen>
       builder: (context, constraints) {
         const double desiredCardWidth = 350;
         const double minCardHeight = 120;
-        
+
         int crossAxisCount = (constraints.maxWidth / desiredCardWidth).floor();
         if (crossAxisCount < 1) crossAxisCount = 1;
-        
+
         // Use list view for narrow screens
         if (constraints.maxWidth < 500 || crossAxisCount == 1) {
           return ListView.builder(
             key: PageStorageKey('tracking_list_${_selectedFilter.name}'),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             itemCount: itemsData.length,
             itemBuilder: (context, index) {
               return _buildBookCard(itemsData[index]);
@@ -200,7 +209,9 @@ class _TrackingScreenState extends State<TrackingScreen>
         }
 
         // Use grid view for wider screens
-        final childWidth = (constraints.maxWidth - (16 * (crossAxisCount + 1))) / crossAxisCount;
+        final childWidth =
+            (constraints.maxWidth - (16 * (crossAxisCount + 1))) /
+                crossAxisCount;
         final aspectRatio = childWidth / minCardHeight;
 
         return GridView.builder(
@@ -236,7 +247,8 @@ class _TrackingScreenState extends State<TrackingScreen>
   }
 
   /// Categorize tracked items into in-progress and completed
-  (List<Map<String, dynamic>>, List<Map<String, dynamic>>) _categorizeTrackedItems(
+  (List<Map<String, dynamic>>, List<Map<String, dynamic>>)
+      _categorizeTrackedItems(
     List<Map<String, dynamic>> trackedItems,
     ShamorZachorProgressProvider progressProvider,
   ) {
@@ -248,7 +260,8 @@ class _TrackingScreenState extends State<TrackingScreen>
       final topLevelCategoryKey = item['topLevelCategoryKey'] as String;
       final bookName = item['bookName'] as String;
       final bookDetails = item['bookDetails'] as BookDetails;
-      final bookProgressData = item['progressData'] as Map<String, PageProgress>;
+      final bookProgressData =
+          item['progressData'] as Map<String, PageProgress>;
 
       // Create unique key to avoid duplicates
       final uniqueKey = '$topLevelCategoryKey:$bookName';
@@ -294,11 +307,11 @@ class _TrackingScreenState extends State<TrackingScreen>
     completedItems.sort((a, b) {
       final dateA = a['completionDateOverride'] as String?;
       final dateB = b['completionDateOverride'] as String?;
-      
+
       if (dateA == null && dateB == null) return 0;
       if (dateA == null) return 1;
       if (dateB == null) return -1;
-      
+
       try {
         final parsedA = DateTime.parse(dateA);
         final parsedB = DateTime.parse(dateB);

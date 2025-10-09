@@ -36,7 +36,7 @@ class CompletionEvent {
 /// This provider is scoped locally within the ShamorZachorWidget
 class ShamorZachorProgressProvider with ChangeNotifier {
   static final Logger _logger = Logger('ShamorZachorProgressProvider');
-  
+
   final ProgressService _progressService;
   FullProgressMap _fullProgress = {};
   CompletionDatesMap _completionDates = {};
@@ -56,15 +56,17 @@ class ShamorZachorProgressProvider with ChangeNotifier {
   ];
 
   // Stream for completion events
-  final _completionEventController = StreamController<CompletionEvent>.broadcast();
-  Stream<CompletionEvent> get completionEvents => _completionEventController.stream;
+  final _completionEventController =
+      StreamController<CompletionEvent>.broadcast();
+  Stream<CompletionEvent> get completionEvents =>
+      _completionEventController.stream;
 
   /// Check if data is currently loading
   bool get isLoading => _isLoading;
-  
+
   /// Get current error, if any
   ShamorZachorError? get error => _error;
-  
+
   /// Check if progress data has been loaded
   bool get hasData => _fullProgress.isNotEmpty;
 
@@ -82,7 +84,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     try {
       _fullProgress = await _progressService.loadFullProgressData();
       _completionDates = await _progressService.loadCompletionDates();
-      _logger.info('Successfully loaded progress for ${_fullProgress.length} categories');
+      _logger.info(
+          'Successfully loaded progress for ${_fullProgress.length} categories');
     } catch (e, stackTrace) {
       if (e is ShamorZachorError) {
         _error = e;
@@ -93,7 +96,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
           customMessage: 'Failed to load progress data',
         );
       }
-      _logger.severe('Error loading progress: ${_error!.message}', e, stackTrace);
+      _logger.severe(
+          'Error loading progress: ${_error!.message}', e, stackTrace);
     }
 
     _isLoading = false;
@@ -101,13 +105,16 @@ class ShamorZachorProgressProvider with ChangeNotifier {
   }
 
   /// Get progress data for a specific book
-  Map<String, PageProgress> getProgressForBook(String categoryName, String bookName) {
+  Map<String, PageProgress> getProgressForBook(
+      String categoryName, String bookName) {
     return _fullProgress[categoryName]?[bookName] ?? {};
   }
 
   /// Get progress for a specific item
-  PageProgress getProgressForItem(String categoryName, String bookName, int absoluteIndex) {
-    return _fullProgress[categoryName]?[bookName]?[absoluteIndex.toString()] ?? PageProgress();
+  PageProgress getProgressForItem(
+      String categoryName, String bookName, int absoluteIndex) {
+    return _fullProgress[categoryName]?[bookName]?[absoluteIndex.toString()] ??
+        PageProgress();
   }
 
   /// Update progress for a single item
@@ -122,7 +129,7 @@ class ShamorZachorProgressProvider with ChangeNotifier {
   }) async {
     try {
       final itemIndexKey = absoluteIndex.toString();
-      
+
       // Save to storage (with debouncing)
       await _progressService.saveProgress(
         categoryName,
@@ -138,7 +145,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
       _fullProgress[categoryName]![bookName]!
           .putIfAbsent(itemIndexKey, () => PageProgress());
 
-      final pageProgress = _fullProgress[categoryName]![bookName]![itemIndexKey]!;
+      final pageProgress =
+          _fullProgress[categoryName]![bookName]![itemIndexKey]!;
       pageProgress.setProperty(columnName, value);
 
       // Clean up empty entries
@@ -154,7 +162,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
 
       // Handle completion events (only for non-bulk updates)
       if (value && !isBulkUpdate) {
-        await _handleCompletionEvents(categoryName, bookName, columnName, bookDetails);
+        await _handleCompletionEvents(
+            categoryName, bookName, columnName, bookDetails);
       }
 
       notifyListeners();
@@ -164,7 +173,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
         stackTrace: stackTrace,
         customMessage: 'Failed to update progress',
       );
-      _logger.severe('Error updating progress: ${_error!.message}', e, stackTrace);
+      _logger.severe(
+          'Error updating progress: ${_error!.message}', e, stackTrace);
       notifyListeners();
     }
   }
@@ -177,13 +187,15 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     BookDetails bookDetails,
   ) async {
     if (columnName == learnColumn) {
-      final wasAlreadyCompleted = getCompletionDateSync(categoryName, bookName) != null;
-      final isNowComplete = isBookCompleted(categoryName, bookName, bookDetails);
+      final wasAlreadyCompleted =
+          getCompletionDateSync(categoryName, bookName) != null;
+      final isNowComplete =
+          isBookCompleted(categoryName, bookName, bookDetails);
 
       if (isNowComplete && !wasAlreadyCompleted) {
         await _progressService.saveCompletionDate(categoryName, bookName);
         _completionDates = await _progressService.loadCompletionDates();
-        
+
         _completionEventController.add(CompletionEvent(
           CompletionEventType.bookCompleted,
           bookName: bookName,
@@ -238,8 +250,9 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     }
 
     try {
-      _logger.info('Bulk ${select ? 'selecting' : 'deselecting'} $columnName for $bookName');
-      
+      _logger.info(
+          'Bulk ${select ? 'selecting' : 'deselecting'} $columnName for $bookName');
+
       // Update all items
       for (final item in bookDetails.learnableItems) {
         await updateProgress(
@@ -255,9 +268,11 @@ class ShamorZachorProgressProvider with ChangeNotifier {
 
       // Handle completion for learn column
       if (select && columnName == learnColumn) {
-        final wasAlreadyCompleted = getCompletionDateSync(categoryName, bookName) != null;
-        final isNowComplete = isBookCompleted(categoryName, bookName, bookDetails);
-        
+        final wasAlreadyCompleted =
+            getCompletionDateSync(categoryName, bookName) != null;
+        final isNowComplete =
+            isBookCompleted(categoryName, bookName, bookDetails);
+
         if (isNowComplete && !wasAlreadyCompleted) {
           await _progressService.saveCompletionDate(categoryName, bookName);
           _completionDates = await _progressService.loadCompletionDates();
@@ -282,12 +297,14 @@ class ShamorZachorProgressProvider with ChangeNotifier {
   }
 
   /// Check if a book is completed (all items learned)
-  bool isBookCompleted(String categoryName, String bookName, BookDetails bookDetails) {
+  bool isBookCompleted(
+      String categoryName, String bookName, BookDetails bookDetails) {
     final bookProgress = getProgressForBook(categoryName, bookName);
     final totalTargetItems = bookDetails.totalLearnableItems;
     if (totalTargetItems == 0) return false;
 
-    final learnedItemsCount = ProgressService.getCompletedPagesCount(bookProgress);
+    final learnedItemsCount =
+        ProgressService.getCompletedPagesCount(bookProgress);
     return learnedItemsCount >= totalTargetItems;
   }
 
@@ -327,7 +344,7 @@ class ShamorZachorProgressProvider with ChangeNotifier {
 
     final bookProgress = _fullProgress[categoryName]?[bookName];
     final totalItems = bookDetails.totalLearnableItems;
-    
+
     if (totalItems == 0) {
       columnStates.updateAll((key, value) => false);
       return columnStates;
@@ -352,17 +369,19 @@ class ShamorZachorProgressProvider with ChangeNotifier {
         columnStates[currentColumnName] = null; // Partial selection
       }
     }
-    
+
     return columnStates;
   }
 
   /// Get progress percentage for learning
-  double getLearnProgressPercentage(String categoryName, String bookName, BookDetails bookDetails) {
+  double getLearnProgressPercentage(
+      String categoryName, String bookName, BookDetails bookDetails) {
     final bookProgress = getProgressForBook(categoryName, bookName);
     final totalTargetItems = bookDetails.totalLearnableItems;
     if (totalTargetItems == 0) return 0.0;
 
-    final learnedPagesCount = ProgressService.getCompletedPagesCount(bookProgress);
+    final learnedPagesCount =
+        ProgressService.getCompletedPagesCount(bookProgress);
     return learnedPagesCount / totalTargetItems;
   }
 
@@ -385,55 +404,66 @@ class ShamorZachorProgressProvider with ChangeNotifier {
   }
 
   /// Get number of completed cycles (learn + reviews)
-  int getNumberOfCompletedCycles(String categoryName, String bookName, BookDetails bookDetails) {
+  int getNumberOfCompletedCycles(
+      String categoryName, String bookName, BookDetails bookDetails) {
     final bookProgress = getProgressForBook(categoryName, bookName);
     final totalTargetItems = bookDetails.totalLearnableItems;
     if (totalTargetItems == 0) return 0;
 
     int cycles = 0;
-    
-    if (ProgressService.getCompletedPagesCount(bookProgress) >= totalTargetItems) {
+
+    if (ProgressService.getCompletedPagesCount(bookProgress) >=
+        totalTargetItems) {
       cycles++;
     }
     for (int i = 1; i <= 3; i++) {
-      if (ProgressService.getReviewCompletedPagesCount(bookProgress, i) >= totalTargetItems) {
+      if (ProgressService.getReviewCompletedPagesCount(bookProgress, i) >=
+          totalTargetItems) {
         cycles++;
       }
     }
-    
+
     return cycles;
   }
 
   /// Check if book is in active review (completed but not all reviews done)
-  bool isBookInActiveReview(String categoryName, String bookName, BookDetails bookDetails) {
+  bool isBookInActiveReview(
+      String categoryName, String bookName, BookDetails bookDetails) {
     if (!isBookCompleted(categoryName, bookName, bookDetails)) {
       return false;
     }
 
-    final r1Prog = getReviewProgressPercentage(categoryName, bookName, bookDetails, 1);
-    final r2Prog = getReviewProgressPercentage(categoryName, bookName, bookDetails, 2);
-    final r3Prog = getReviewProgressPercentage(categoryName, bookName, bookDetails, 3);
+    final r1Prog =
+        getReviewProgressPercentage(categoryName, bookName, bookDetails, 1);
+    final r2Prog =
+        getReviewProgressPercentage(categoryName, bookName, bookDetails, 2);
+    final r3Prog =
+        getReviewProgressPercentage(categoryName, bookName, bookDetails, 3);
 
     final r1Active = r1Prog > 0 && r1Prog < 1.0;
     final r2Active = r1Prog == 1.0 && r2Prog > 0 && r2Prog < 1.0;
-    final r3Active = r1Prog == 1.0 && r2Prog == 1.0 && r3Prog > 0 && r3Prog < 1.0;
+    final r3Active =
+        r1Prog == 1.0 && r2Prog == 1.0 && r3Prog > 0 && r3Prog < 1.0;
 
     return r1Active || r2Active || r3Active;
   }
 
   /// Check if book is considered in progress
-  bool isBookConsideredInProgress(String categoryName, String bookName, BookDetails bookDetails) {
+  bool isBookConsideredInProgress(
+      String categoryName, String bookName, BookDetails bookDetails) {
     final bookProgressData = getProgressForBook(categoryName, bookName);
     if (bookProgressData.isEmpty) {
       return false;
     }
 
-    final learnProgress = getLearnProgressPercentage(categoryName, bookName, bookDetails);
+    final learnProgress =
+        getLearnProgressPercentage(categoryName, bookName, bookDetails);
     if (learnProgress > 0 && learnProgress < 1.0) return true;
 
     // Check review progress
     for (int i = 1; i <= 3; i++) {
-      final reviewProgress = getReviewProgressPercentage(categoryName, bookName, bookDetails, i);
+      final reviewProgress =
+          getReviewProgressPercentage(categoryName, bookName, bookDetails, i);
       if (reviewProgress > 0 && reviewProgress < 1.0) return true;
     }
 
@@ -453,15 +483,19 @@ class ShamorZachorProgressProvider with ChangeNotifier {
         bookDetails,
       );
     } catch (e, stackTrace) {
-      _logger.warning('Failed to get progress summary for $categoryName/$bookName: $e');
-      
+      _logger.warning(
+        'Failed to get progress summary for $categoryName/$bookName: $e\n$stackTrace',
+      );
+
       // Fallback to local calculation
       final bookProgress = getProgressForBook(categoryName, bookName);
       final totalItems = bookDetails.totalLearnableItems;
-      final completedItems = ProgressService.getCompletedPagesCount(bookProgress);
-      final inProgressItems = bookProgress.values.where((p) => !p.isEmpty && !p.isComplete).length;
+      final completedItems =
+          ProgressService.getCompletedPagesCount(bookProgress);
+      final inProgressItems =
+          bookProgress.values.where((p) => !p.isEmpty && !p.isComplete).length;
       final completionDate = getCompletionDateSync(categoryName, bookName);
-      
+
       return BookProgressSummary(
         categoryName: categoryName,
         bookName: bookName,
@@ -474,7 +508,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
   }
 
   /// Get all tracked books with progress
-  List<Map<String, dynamic>> getTrackedBooks(Map<String, BookCategory> allBookData) {
+  List<Map<String, dynamic>> getTrackedBooks(
+      Map<String, BookCategory> allBookData) {
     final tracked = <Map<String, dynamic>>[];
     final processedBookKeys = <String>{};
 
@@ -484,9 +519,11 @@ class ShamorZachorProgressProvider with ChangeNotifier {
       if (topLevelCategoryObject == null) return;
 
       booksProgressMap.forEach((bookNameFromProgress, progressDataForBook) {
-        final searchResult = topLevelCategoryObject.findBookRecursive(bookNameFromProgress);
+        final searchResult =
+            topLevelCategoryObject.findBookRecursive(bookNameFromProgress);
         if (searchResult != null) {
-          final uniqueKey = '$topLevelCategoryKey-${searchResult.categoryName}-$bookNameFromProgress';
+          final uniqueKey =
+              '$topLevelCategoryKey-${searchResult.categoryName}-$bookNameFromProgress';
           if (!processedBookKeys.contains(uniqueKey)) {
             tracked.add({
               'topLevelCategoryKey': topLevelCategoryKey,
@@ -507,9 +544,11 @@ class ShamorZachorProgressProvider with ChangeNotifier {
       if (topLevelCategoryObject == null) return;
 
       booksCompletionMap.forEach((bookNameFromCompletion, completionDate) {
-        final searchResult = topLevelCategoryObject.findBookRecursive(bookNameFromCompletion);
+        final searchResult =
+            topLevelCategoryObject.findBookRecursive(bookNameFromCompletion);
         if (searchResult != null) {
-          final uniqueKey = '$topLevelCategoryKey-${searchResult.categoryName}-$bookNameFromCompletion';
+          final uniqueKey =
+              '$topLevelCategoryKey-${searchResult.categoryName}-$bookNameFromCompletion';
 
           if (!processedBookKeys.contains(uniqueKey)) {
             tracked.add({
@@ -517,7 +556,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
               'displayCategoryName': searchResult.categoryName,
               'bookName': bookNameFromCompletion,
               'bookDetails': searchResult.bookDetails,
-              'progressData': getProgressForBook(topLevelCategoryKey, bookNameFromCompletion),
+              'progressData': getProgressForBook(
+                  topLevelCategoryKey, bookNameFromCompletion),
               'completionDate': completionDate,
             });
             processedBookKeys.add(uniqueKey);
@@ -546,7 +586,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
         stackTrace: stackTrace,
         customMessage: 'Failed to export progress data',
       );
-      _logger.severe('Error exporting progress: ${_error!.message}', e, stackTrace);
+      _logger.severe(
+          'Error exporting progress: ${_error!.message}', e, stackTrace);
       notifyListeners();
       return null;
     }
@@ -566,7 +607,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
         stackTrace: stackTrace,
         customMessage: 'Failed to import progress data',
       );
-      _logger.severe('Error importing progress: ${_error!.message}', e, stackTrace);
+      _logger.severe(
+          'Error importing progress: ${_error!.message}', e, stackTrace);
       notifyListeners();
       return false;
     }
@@ -585,7 +627,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
         stackTrace: stackTrace,
         customMessage: 'Failed to clear progress data',
       );
-      _logger.severe('Error clearing progress: ${_error!.message}', e, stackTrace);
+      _logger.severe(
+          'Error clearing progress: ${_error!.message}', e, stackTrace);
       notifyListeners();
     }
   }

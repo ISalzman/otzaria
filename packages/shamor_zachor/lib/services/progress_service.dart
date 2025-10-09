@@ -10,24 +10,24 @@ import '../models/error_model.dart';
 /// Service for managing user progress data with optimized storage
 class ProgressService {
   static final Logger _logger = Logger('ProgressService');
-  
+
   // Storage key prefix to avoid conflicts with main app
   static const String _keyPrefix = 'sz:';
   static const String _progressDataKey = '${_keyPrefix}progress_data';
   static const String _completionDatesKey = '${_keyPrefix}completion_dates';
   static const String _lastAccessedKey = '${_keyPrefix}last_accessed';
-  
+
   // Debouncing for batch saves
   Timer? _saveTimer;
   final Duration _saveDelay = const Duration(milliseconds: 500);
   final Map<String, dynamic> _pendingChanges = {};
-  
+
   SharedPreferences? _prefs;
 
   /// Get SharedPreferences instance with error handling
   Future<SharedPreferences> _getPrefs() async {
     if (_prefs != null) return _prefs!;
-    
+
     try {
       _prefs = await SharedPreferences.getInstance();
       return _prefs!;
@@ -46,14 +46,14 @@ class ProgressService {
     try {
       final prefs = await _getPrefs();
       final jsonString = prefs.getString(_progressDataKey);
-      
+
       if (jsonString == null || jsonString.isEmpty) {
         return {};
       }
 
       final Map<String, dynamic> decodedOuter = json.decode(jsonString);
       final FullProgressMap progressMap = {};
-      
+
       decodedOuter.forEach((categoryKey, categoryValue) {
         if (categoryValue is Map) {
           progressMap[categoryKey] = {};
@@ -67,7 +67,8 @@ class ProgressService {
                         PageProgress.fromJson(
                             Map<String, dynamic>.from(itemProgressValue));
                   } catch (e) {
-                    _logger.warning('Invalid progress data for $categoryKey/$bookKey/$itemIndexKey: $e');
+                    _logger.warning(
+                        'Invalid progress data for $categoryKey/$bookKey/$itemIndexKey: $e');
                   }
                 }
               });
@@ -75,12 +76,12 @@ class ProgressService {
           });
         }
       });
-      
+
       _logger.fine('Loaded progress data for ${progressMap.length} categories');
       return progressMap;
     } catch (e, stackTrace) {
       if (e is ShamorZachorError) rethrow;
-      
+
       _logger.severe('Failed to load progress data: $e');
       throw ShamorZachorError.fromException(
         e,
@@ -160,7 +161,8 @@ class ProgressService {
         fullData[categoryName]![bookName]!
             .putIfAbsent(itemIndexKey, () => PageProgress());
 
-        final currentItemProgress = fullData[categoryName]![bookName]![itemIndexKey]!;
+        final currentItemProgress =
+            fullData[categoryName]![bookName]![itemIndexKey]!;
         currentItemProgress.setProperty(columnName, value);
 
         // Clean up empty entries
@@ -193,7 +195,7 @@ class ProgressService {
     try {
       // Force process any pending changes first
       await _processPendingChanges();
-      
+
       final fullData = await loadFullProgressData();
 
       if (!markAsLearned) {
@@ -223,7 +225,8 @@ class ProgressService {
 
       await _saveFullProgressData(fullData);
       await _updateLastAccessed();
-      _logger.info('Bulk updated $bookName in $categoryName (learned: $markAsLearned)');
+      _logger.info(
+          'Bulk updated $bookName in $categoryName (learned: $markAsLearned)');
     } catch (e, stackTrace) {
       throw ShamorZachorError.fromException(
         e,
@@ -238,23 +241,23 @@ class ProgressService {
     try {
       final prefs = await _getPrefs();
       final jsonString = prefs.getString(_completionDatesKey);
-      
+
       if (jsonString == null || jsonString.isEmpty) return {};
-      
+
       final Map<String, dynamic> decoded = json.decode(jsonString);
       final CompletionDatesMap datesMap = {};
-      
+
       decoded.forEach((categoryKey, categoryValue) {
         if (categoryValue is Map) {
           datesMap[categoryKey] = Map<String, String>.from(categoryValue
               .map((key, value) => MapEntry(key.toString(), value.toString())));
         }
       });
-      
+
       return datesMap;
     } catch (e, stackTrace) {
-      _logger.warning('Failed to load completion dates: $e');
-      return {}; // Return empty map on error, don't throw
+      _logger.warning('Failed to load completion dates: $e\n$stackTrace');
+      return {};
     }
   }
 
@@ -278,24 +281,27 @@ class ProgressService {
     try {
       final allDates = await loadCompletionDates();
       allDates.putIfAbsent(categoryName, () => {});
-      
+
       if (!allDates[categoryName]!.containsKey(bookName)) {
         allDates[categoryName]![bookName] = DateTime.now().toIso8601String();
         await _saveCompletionDates(allDates);
       }
     } catch (e) {
-      _logger.warning('Failed to save completion date for $categoryName/$bookName: $e');
+      _logger.warning(
+          'Failed to save completion date for $categoryName/$bookName: $e');
       // Don't throw - completion dates are not critical
     }
   }
 
   /// Get completion date for a book
-  Future<String?> getCompletionDate(String categoryName, String bookName) async {
+  Future<String?> getCompletionDate(
+      String categoryName, String bookName) async {
     try {
       final allDates = await loadCompletionDates();
       return allDates[categoryName]?[bookName];
     } catch (e) {
-      _logger.warning('Failed to get completion date for $categoryName/$bookName: $e');
+      _logger.warning(
+          'Failed to get completion date for $categoryName/$bookName: $e');
       return null;
     }
   }
@@ -321,20 +327,23 @@ class ProgressService {
       final fullData = await loadFullProgressData();
       final bookProgress = fullData[categoryName]?[bookName] ?? {};
       final totalItems = bookDetails.totalLearnableItems;
-      
+
       int completedItems = 0;
       int inProgressItems = 0;
-      
+
       for (final progress in bookProgress.values) {
-        if (progress.learn && progress.review1 && progress.review2 && progress.review3) {
+        if (progress.learn &&
+            progress.review1 &&
+            progress.review2 &&
+            progress.review3) {
           completedItems++;
         } else if (!progress.isEmpty) {
           inProgressItems++;
         }
       }
-      
+
       final completionDate = await getCompletionDate(categoryName, bookName);
-      
+
       return BookProgressSummary(
         categoryName: categoryName,
         bookName: bookName,
@@ -403,8 +412,10 @@ class ProgressService {
       final prefs = await _getPrefs();
       final Map<String, dynamic> decodedData = json.decode(jsonData);
 
-      final String? progressDataString = decodedData['progress_data'] as String?;
-      final String? completionDatesString = decodedData['completion_dates'] as String?;
+      final String? progressDataString =
+          decodedData['progress_data'] as String?;
+      final String? completionDatesString =
+          decodedData['completion_dates'] as String?;
 
       await prefs.setString(_progressDataKey, progressDataString ?? '{}');
       await prefs.setString(_completionDatesKey, completionDatesString ?? '{}');
@@ -412,17 +423,18 @@ class ProgressService {
       _logger.info('Successfully imported progress data');
       return true;
     } catch (e, stackTrace) {
-      _logger.severe('Failed to import progress data: $e');
-      
+      _logger.severe('Failed to import progress data: $e\n$stackTrace');
+
       // Reset to empty state on import failure
       try {
         final prefs = await _getPrefs();
         await prefs.setString(_progressDataKey, '{}');
         await prefs.setString(_completionDatesKey, '{}');
       } catch (resetError) {
-        _logger.severe('Failed to reset progress data after import failure: $resetError');
+        _logger.severe(
+            'Failed to reset progress data after import failure: $resetError');
       }
-      
+
       return false;
     }
   }
@@ -434,10 +446,10 @@ class ProgressService {
       await prefs.remove(_progressDataKey);
       await prefs.remove(_completionDatesKey);
       await prefs.remove(_lastAccessedKey);
-      
+
       _pendingChanges.clear();
       _saveTimer?.cancel();
-      
+
       _logger.info('Cleared all progress data');
     } catch (e, stackTrace) {
       throw ShamorZachorError.fromException(

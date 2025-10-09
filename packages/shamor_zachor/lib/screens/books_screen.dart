@@ -17,13 +17,11 @@ class BooksScreen extends StatefulWidget {
 
 class _BooksScreenState extends State<BooksScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
-  
   static final Logger _logger = Logger('BooksScreen');
-  
+
   @override
   bool get wantKeepAlive => true;
 
-  
   final TextEditingController _searchController = TextEditingController();
   List<BookSearchResult> _searchResults = [];
   bool _isSearching = false;
@@ -33,7 +31,6 @@ class _BooksScreenState extends State<BooksScreen>
     super.initState();
     _logger.fine('Initialized BooksScreen');
   }
-
 
   @override
   void dispose() {
@@ -53,105 +50,108 @@ class _BooksScreenState extends State<BooksScreen>
 
     final dataProvider = context.read<ShamorZachorDataProvider>();
     final results = dataProvider.searchBooks(query);
-    
+
     setState(() {
       _searchResults = results;
       _isSearching = true;
     });
   }
 
-@override
-Widget build(BuildContext context) {
-  super.build(context); // Required for AutomaticKeepAliveClientMixin
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
 
-  return Consumer<ShamorZachorDataProvider>(
-    builder: (context, dataProvider, child) {
-      if (dataProvider.isLoading) {
-        return const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('טוען ספרים...'),
-            ],
-          ),
-        );
-      }
-
-      if (dataProvider.error != null) {
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Colors.red,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'שגיאה בטעינת ספרים',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                dataProvider.error!.userFriendlyMessage,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => dataProvider.retry(),
-                child: const Text('נסה שוב'),
-              ),
-            ],
-          ),
-        );
-      }
-
-      if (!dataProvider.hasData) {
-        return const Center(
-          child: Text('אין נתונים להצגה'),
-        );
-      }
-
-      final categories = dataProvider.getCategoryNames()..sort();
-      
-      return DefaultTabController(
-        length: categories.length,
-        child: Column(
-          children: [
-            // Search field remains outside the scrolling/tab view
-            _buildSearchField(),
-
-            // The rest of the screen is either search results or tabs, and it needs to fill the remaining space
-            Expanded(
-              child: _isSearching
-                  ? _buildSearchResults() // This widget already returns an Expanded
-                  : Column(
-                      children: [
-                        TabBar(
-                          isScrollable: true,
-                          tabAlignment: TabAlignment.start,
-                          tabs: categories.map((name) => Tab(text: name)).toList(),
-                        ),
-                        Expanded(
-                          child: TabBarView(
-                            children: categories.map((categoryName) {
-                              return _buildCategoryView(dataProvider, categoryName);
-                            }).toList(),
-                          ),
-                        ),
-                      ],
-                    ),
+    return Consumer<ShamorZachorDataProvider>(
+      builder: (context, dataProvider, child) {
+        if (dataProvider.isLoading) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('טוען ספרים...'),
+              ],
             ),
-          ],
-        ),
-      );
-    },
-  );
-}
+          );
+        }
+
+        if (dataProvider.error != null) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: Colors.red,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'שגיאה בטעינת ספרים',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  dataProvider.error!.userFriendlyMessage,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => dataProvider.retry(),
+                  child: const Text('נסה שוב'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (!dataProvider.hasData) {
+          return const Center(
+            child: Text('אין נתונים להצגה'),
+          );
+        }
+
+        final categories = dataProvider.getCategoryNames()..sort();
+
+        return DefaultTabController(
+          length: categories.length,
+          child: Column(
+            children: [
+              // Search field remains outside the scrolling/tab view
+              _buildSearchField(),
+
+              // The rest of the screen is either search results or tabs, and it needs to fill the remaining space
+              Expanded(
+                child: _isSearching
+                    ? _buildSearchResults() // This widget already returns an Expanded
+                    : Column(
+                        children: [
+                          TabBar(
+                            isScrollable: true,
+                            tabAlignment: TabAlignment.start,
+                            tabs: categories
+                                .map((name) => Tab(text: name))
+                                .toList(),
+                          ),
+                          Expanded(
+                            child: TabBarView(
+                              children: categories.map((categoryName) {
+                                return _buildCategoryView(
+                                    dataProvider, categoryName);
+                              }).toList(),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   /// Build search field
   Widget _buildSearchField() {
@@ -194,21 +194,30 @@ Widget build(BuildContext context) {
                   Icon(
                     Icons.search_off,
                     size: 64,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'לא נמצאו תוצאות',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                    ),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.6),
+                        ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'נסה מילות חיפוש אחרות',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                    ),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.5),
+                        ),
                   ),
                 ],
               ),
@@ -237,7 +246,7 @@ Widget build(BuildContext context) {
               result.categoryName,
               result.bookDetails.toString(), // This is a temporary fix
             );
-            
+
             return BookCardWidget(
               topLevelCategoryKey: result.categoryName,
               categoryName: result.categoryName,
@@ -252,14 +261,15 @@ Widget build(BuildContext context) {
   }
 
   /// Build view for a specific category
-  Widget _buildCategoryView(ShamorZachorDataProvider dataProvider, String categoryName) {
+  Widget _buildCategoryView(
+      ShamorZachorDataProvider dataProvider, String categoryName) {
     final category = dataProvider.getCategory(categoryName);
     if (category == null) {
       return const Center(child: Text('קטגוריה לא נמצאה'));
     }
 
     final items = <_BookItem>[];
-    
+
     // Add direct books
     category.books.forEach((bookName, bookDetails) {
       items.add(_BookItem(
@@ -292,14 +302,20 @@ Widget build(BuildContext context) {
             Icon(
               Icons.book_outlined,
               size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
               'אין ספרים בקטגוריה זו',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
+                  ),
             ),
           ],
         ),
@@ -326,7 +342,8 @@ Widget build(BuildContext context) {
         return Consumer<ShamorZachorProgressProvider>(
           builder: (context, progressProvider, child) {
             return GridView.builder(
-              key: PageStorageKey('books_grid_${items.isNotEmpty ? items.first.topLevelCategoryKey : 'empty'}'),
+              key: PageStorageKey(
+                  'books_grid_${items.isNotEmpty ? items.first.topLevelCategoryKey : 'empty'}'),
               padding: const EdgeInsets.all(16.0),
               // משתמשים ב-Delegate היציב והנכון
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -342,7 +359,7 @@ Widget build(BuildContext context) {
                   item.topLevelCategoryKey,
                   item.bookName,
                 );
-                
+
                 return BookCardWidget(
                   topLevelCategoryKey: item.topLevelCategoryKey,
                   categoryName: item.categoryName,

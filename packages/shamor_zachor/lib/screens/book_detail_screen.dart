@@ -9,7 +9,6 @@ import '../widgets/hebrew_utils.dart';
 import '../widgets/completion_animation_overlay.dart';
 import '../widgets/error_boundary.dart';
 
-
 /// Screen for displaying and managing progress for a specific book
 class BookDetailScreen extends StatefulWidget {
   final String topLevelCategoryKey;
@@ -29,9 +28,8 @@ class BookDetailScreen extends StatefulWidget {
 
 class _BookDetailScreenState extends State<BookDetailScreen>
     with AutomaticKeepAliveClientMixin {
-  
   static final Logger _logger = Logger('BookDetailScreen');
-  
+
   @override
   bool get wantKeepAlive => true;
 
@@ -48,21 +46,17 @@ class _BookDetailScreenState extends State<BookDetailScreen>
   void initState() {
     super.initState();
     _logger.info('Initializing BookDetailScreen for ${widget.bookName}');
-    
+
     final progressProvider = context.read<ShamorZachorProgressProvider>();
     _completionSubscription = progressProvider.completionEvents.listen((event) {
       if (!mounted) return;
-      
+
       if (event.type == CompletionEventType.bookCompleted) {
         CompletionAnimationOverlay.show(
-          context, 
-          "אשריך! תזכה ללמוד ספרים אחרים ולסיימם!"
-        );
+            context, "אשריך! תזכה ללמוד ספרים אחרים ולסיימם!");
       } else if (event.type == CompletionEventType.reviewCycleCompleted) {
         CompletionAnimationOverlay.show(
-          context, 
-          "מזל טוב! הלומד וחוזר כזורע וקוצר!"
-        );
+            context, "מזל טוב! הלומד וחוזר כזורע וקוצר!");
       }
     });
   }
@@ -80,7 +74,8 @@ class _BookDetailScreenState extends State<BookDetailScreen>
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text("אזהרה"),
-          content: const Text("פעולה זו תשנה את כל הסימונים בעמודה זו. האם להמשיך?"),
+          content:
+              const Text("פעולה זו תשנה את כל הסימונים בעמודה זו. האם להמשיך?"),
           actions: <Widget>[
             TextButton(
               child: const Text("לא"),
@@ -100,7 +95,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
-    
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -114,22 +109,25 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                   widget.topLevelCategoryKey,
                   widget.bookName,
                 );
-                
+
                 if (bookDetails == null) return const SizedBox.shrink();
-                
+
                 final isCompleted = progressProvider.isBookCompleted(
                   widget.topLevelCategoryKey,
                   widget.bookName,
                   bookDetails,
                 );
-                
+
                 return Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Icon(
                     isCompleted ? Icons.check_circle : Icons.circle_outlined,
-                    color: isCompleted 
+                    color: isCompleted
                         ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                        : Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.5),
                   ),
                 );
               },
@@ -137,7 +135,8 @@ class _BookDetailScreenState extends State<BookDetailScreen>
           ],
         ),
         body: ErrorBoundary(
-          child: Consumer2<ShamorZachorDataProvider, ShamorZachorProgressProvider>(
+          child:
+              Consumer2<ShamorZachorDataProvider, ShamorZachorProgressProvider>(
             builder: (context, dataProvider, progressProvider, child) {
               // Show loading state
               if (dataProvider.isLoading || progressProvider.isLoading) {
@@ -227,9 +226,8 @@ class _BookDetailScreenState extends State<BookDetailScreen>
     dynamic bookDetails,
     ShamorZachorProgressProvider progressProvider,
   ) {
-    final theme = Theme.of(context);
     final learnableItems = bookDetails.learnableItems ?? [];
-    
+
     if (learnableItems.isEmpty) {
       return const Center(
         child: Text('אין פריטים ללימוד בספר זה'),
@@ -245,7 +243,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
             child: _buildHeader(context, bookDetails, progressProvider),
           ),
         ),
-        
+
         // Sliver 2: הרשימה עצמה, עטופה ב-Padding.
         SliverPadding(
           padding: const EdgeInsets.all(12.0),
@@ -351,7 +349,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
   ) {
     final theme = Theme.of(context);
     final learnableItems = bookDetails.learnableItems ?? [];
-    
+
     return SliverList(
       delegate: SliverChildBuilderDelegate(
         (ctx, index) {
@@ -361,12 +359,14 @@ class _BookDetailScreenState extends State<BookDetailScreen>
           final partName = item.partName ?? '';
 
           bool showHeader = bookDetails.hasMultipleParts == true &&
-              (index == 0 || partName != (learnableItems[index - 1].partName ?? ''));
+              (index == 0 ||
+                  partName != (learnableItems[index - 1].partName ?? ''));
 
           String rowLabel;
           if (bookDetails.isDafType == true) {
             final amudSymbol = (item.amudKey == "b") ? ":" : ".";
-            rowLabel = "${HebrewUtils.intToGematria(item.pageNumber ?? 1)}$amudSymbol";
+            rowLabel =
+                "${HebrewUtils.intToGematria(item.pageNumber ?? 1)}$amudSymbol";
           } else {
             rowLabel = HebrewUtils.intToGematria(item.pageNumber ?? index + 1);
           }
@@ -377,10 +377,11 @@ class _BookDetailScreenState extends State<BookDetailScreen>
             absoluteIndex,
           );
 
-          final rowBackgroundColor = index % (bookDetails.isDafType == true ? 4 : 2) <
-                  (bookDetails.isDafType == true ? 2 : 1)
-              ? Colors.transparent
-              : theme.colorScheme.primaryContainer.withValues(alpha: 0.15);
+          final rowBackgroundColor =
+              index % (bookDetails.isDafType == true ? 4 : 2) <
+                      (bookDetails.isDafType == true ? 2 : 1)
+                  ? Colors.transparent
+                  : theme.colorScheme.primaryContainer.withValues(alpha: 0.15);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,7 +389,8 @@ class _BookDetailScreenState extends State<BookDetailScreen>
               if (showHeader && partName.isNotEmpty)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   margin: const EdgeInsets.only(top: 16.0, bottom: 4.0),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.primaryContainer,
@@ -430,7 +432,8 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                               child: Checkbox(
                                 visualDensity: VisualDensity.compact,
                                 value: pageProgress.getProperty(columnName),
-                                onChanged: (val) => progressProvider.updateProgress(
+                                onChanged: (val) =>
+                                    progressProvider.updateProgress(
                                   widget.topLevelCategoryKey,
                                   widget.bookName,
                                   absoluteIndex,
@@ -450,7 +453,8 @@ class _BookDetailScreenState extends State<BookDetailScreen>
             ],
           );
         },
-        childCount: learnableItems.length, // חשוב להגיד ל-SliverList כמה פריטים יש
+        childCount:
+            learnableItems.length, // חשוב להגיד ל-SliverList כמה פריטים יש
       ),
     );
   }
