@@ -113,7 +113,19 @@ class _BooksScreenState extends State<BooksScreen>
           );
         }
 
-        final categories = dataProvider.getCategoryNames()..sort();
+        final allCategories = dataProvider.getCategoryNames();
+        final customOrder = [
+          'תנ"ך',
+          'משנה',
+          'תלמוד בבלי',
+          'תלמוד ירושלמי',
+          'רמב"ם',
+          'הלכה'
+        ];
+        final categories =
+            customOrder.where((c) => allCategories.contains(c)).toList();
+        // Add any categories not in custom order at the end
+        categories.addAll(allCategories.where((c) => !customOrder.contains(c)));
 
         return DefaultTabController(
           length: categories.length,

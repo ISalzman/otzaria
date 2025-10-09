@@ -18,16 +18,16 @@ class ShamorZachorMainScreen extends StatefulWidget {
 
 class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
-  
   static final Logger _logger = Logger('ShamorZachorMainScreen');
-  
+
   @override
   bool get wantKeepAlive => true;
 
   int _selectedIndex = 0;
   late final PageController _pageController;
   late final List<Widget> _screens;
-  final GlobalKey<State<BooksScreen>> _booksScreenKey = GlobalKey<State<BooksScreen>>();
+  final GlobalKey<State<BooksScreen>> _booksScreenKey =
+      GlobalKey<State<BooksScreen>>();
 
   @override
   void initState() {
@@ -38,7 +38,7 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
       BooksScreen(key: _booksScreenKey),
     ];
     _logger.info('Initialized ShamorZachorMainScreen');
-      }
+  }
 
   @override
   void dispose() {
@@ -98,7 +98,8 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
         child: Column(
           children: [
             Expanded(
-              child: Consumer2<ShamorZachorDataProvider, ShamorZachorProgressProvider>(
+              child: Consumer2<ShamorZachorDataProvider,
+                  ShamorZachorProgressProvider>(
                 builder: (context, dataProvider, progressProvider, child) {
                   // Show loading state
                   if (dataProvider.isLoading || progressProvider.isLoading) {
@@ -128,7 +129,8 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
                           const Text(
                             'שגיאה בטעינת נתוני התקדמות',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -172,6 +174,7 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: _onItemTapped,
+        height: 60,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.timeline_outlined),

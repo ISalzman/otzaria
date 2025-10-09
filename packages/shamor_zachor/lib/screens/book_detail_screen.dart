@@ -36,7 +36,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
   StreamSubscription<CompletionEvent>? _completionSubscription;
 
   final List<Map<String, String>> _columnData = [
-    {'id': 'learned', 'label': 'לימוד'},
+    {'id': 'learn', 'label': 'לימוד'},
     {'id': 'review1', 'label': 'חזרה 1'},
     {'id': 'review2', 'label': 'חזרה 2'},
     {'id': 'review3', 'label': 'חזרה 3'},
