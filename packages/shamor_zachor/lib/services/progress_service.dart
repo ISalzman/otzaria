@@ -326,30 +326,13 @@ class ProgressService {
     try {
       final fullData = await loadFullProgressData();
       final bookProgress = fullData[categoryName]?[bookName] ?? {};
-      final totalItems = bookDetails.totalLearnableItems;
-
-      int completedItems = 0;
-      int inProgressItems = 0;
-
-      for (final progress in bookProgress.values) {
-        if (progress.learn &&
-            progress.review1 &&
-            progress.review2 &&
-            progress.review3) {
-          completedItems++;
-        } else if (!progress.isEmpty) {
-          inProgressItems++;
-        }
-      }
-
       final completionDate = await getCompletionDate(categoryName, bookName);
 
-      return BookProgressSummary(
-        categoryName: categoryName,
-        bookName: bookName,
-        totalItems: totalItems,
-        completedItems: completedItems,
-        inProgressItems: inProgressItems,
+      return buildBookProgressSummary(
+        categoryName,
+        bookName,
+        bookDetails,
+        bookProgress,
         completionDate: completionDate,
       );
     } catch (e, stackTrace) {
@@ -359,6 +342,63 @@ class ProgressService {
         customMessage: 'Failed to get book progress summary',
       );
     }
+  }
+
+  /// Build a book progress summary from in-memory progress data.
+  BookProgressSummary buildBookProgressSummary(
+    String categoryName,
+    String bookName,
+    BookDetails bookDetails,
+    Map<String, PageProgress> bookProgress, {
+    String? completionDate,
+    DateTime? lastAccessed,
+  }) {
+    final totalItems = bookDetails.totalLearnableItems;
+    int completedItems = 0;
+    int inProgressItems = 0;
+
+    for (final progress in bookProgress.values) {
+      if (progress.learn &&
+          progress.review1 &&
+          progress.review2 &&
+          progress.review3) {
+        completedItems++;
+      } else if (!progress.isEmpty) {
+        inProgressItems++;
+      }
+    }
+
+    bool isActiveReview = false;
+    if (totalItems > 0 && completedItems == totalItems) {
+      final review1Progress =
+          getReviewCompletedPagesCount(bookProgress, 1) / totalItems;
+      final review2Progress =
+          getReviewCompletedPagesCount(bookProgress, 2) / totalItems;
+      final review3Progress =
+          getReviewCompletedPagesCount(bookProgress, 3) / totalItems;
+
+      final review1Active = review1Progress > 0 && review1Progress < 1.0;
+      final review2Active = review1Progress == 1.0 &&
+          review2Progress > 0 &&
+          review2Progress < 1.0;
+      final review3Active = review1Progress == 1.0 &&
+          review2Progress == 1.0 &&
+          review3Progress > 0 &&
+          review3Progress < 1.0;
+
+      isActiveReview = review1Active || review2Active || review3Active;
+    }
+
+    return BookProgressSummary(
+      categoryName: categoryName,
+      bookName: bookName,
+      totalItems: totalItems,
+      completedItems: completedItems,
+      inProgressItems: inProgressItems,
+      completionDate: completionDate,
+      lastAccessed: lastAccessed,
+      isActiveReview: isActiveReview,
+    );
   }
 
   /// Static helper methods for progress calculations

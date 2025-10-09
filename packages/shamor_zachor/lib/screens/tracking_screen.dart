@@ -5,8 +5,6 @@ import 'package:logging/logging.dart';
 import '../providers/shamor_zachor_data_provider.dart';
 import '../providers/shamor_zachor_progress_provider.dart';
 import '../widgets/book_card_widget.dart';
-import '../models/book_model.dart';
-import '../models/progress_model.dart';
 
 enum TrackingFilter { all, inProgress, completed }
 
@@ -86,12 +84,8 @@ class _TrackingScreenState extends State<TrackingScreen>
         }
 
         final allBookData = dataProvider.allBookData;
-        final trackedItems = progressProvider.getTrackedBooks(allBookData);
-
-        final (inProgressItems, completedItems) = _categorizeTrackedItems(
-          trackedItems,
-          progressProvider,
-        );
+        final (inProgressItems, completedItems) =
+            progressProvider.getCategorizedTrackedBooks(allBookData);
 
         final List<Map<String, dynamic>> itemsToShow;
         switch (_selectedFilter) {
@@ -268,102 +262,8 @@ class _TrackingScreenState extends State<TrackingScreen>
       bookDetails: itemData['bookDetails'],
       bookProgressData: itemData['bookProgressData'],
       isFromTrackingScreen: true,
-      completionDateOverride: itemData['completionDateOverride'],
+      completionDate: itemData['completionDate'],
       isInCompletedListContext: _selectedFilter == TrackingFilter.completed,
     );
-  }
-
-  /// Categorize tracked items into in-progress and completed
-  (List<Map<String, dynamic>>, List<Map<String, dynamic>>)
-      _categorizeTrackedItems(
-    List<Map<String, dynamic>> trackedItems,
-    ShamorZachorProgressProvider progressProvider,
-  ) {
-    final inProgressItems = <Map<String, dynamic>>[];
-    final completedItems = <Map<String, dynamic>>[];
-    final processedBooks = <String>{};
-
-    for (final item in trackedItems) {
-      final topLevelCategoryKey = item['topLevelCategoryKey'] as String;
-      final bookName = item['bookName'] as String;
-      final bookDetails = item['bookDetails'] as BookDetails;
-      final bookProgressData =
-          item['progressData'] as Map<String, PageProgress>;
-
-      // Create unique key to avoid duplicates
-      final uniqueKey = '$topLevelCategoryKey:$bookName';
-      if (processedBooks.contains(uniqueKey)) {
-        continue;
-      }
-      processedBooks.add(uniqueKey);
-
-      final completionDate = progressProvider.getCompletionDateSync(
-        topLevelCategoryKey,
-        bookName,
-      );
-
-      final cardData = {
-        'topLevelCategoryKey': topLevelCategoryKey,
-        'displayCategoryName': item['displayCategoryName'],
-        'bookName': bookName,
-        'bookDetails': bookDetails,
-        'bookProgressData': bookProgressData,
-        'completionDateOverride': completionDate,
-      };
-
-      final isCompleted = progressProvider.isBookCompleted(
-        topLevelCategoryKey,
-        bookName,
-        bookDetails,
-      );
-
-      final isInProgress = progressProvider.isBookConsideredInProgress(
-        topLevelCategoryKey,
-        bookName,
-        bookDetails,
-      );
-
-      if (isCompleted) {
-        completedItems.add(cardData);
-      } else if (isInProgress) {
-        inProgressItems.add(cardData);
-      }
-    }
-
-    // Sort completed items by completion date (newest first)
-    completedItems.sort((a, b) {
-      final dateA = a['completionDateOverride'] as String?;
-      final dateB = b['completionDateOverride'] as String?;
-
-      if (dateA == null && dateB == null) return 0;
-      if (dateA == null) return 1;
-      if (dateB == null) return -1;
-
-      try {
-        final parsedA = DateTime.parse(dateA);
-        final parsedB = DateTime.parse(dateB);
-        return parsedB.compareTo(parsedA); // Newest first
-      } catch (e) {
-        _logger.warning('Failed to parse completion dates: $dateA, $dateB');
-        return dateB.compareTo(dateA); // Fallback to string comparison
-      }
-    });
-
-    // Sort in-progress items by progress percentage (highest first)
-    inProgressItems.sort((a, b) {
-      final progressA = progressProvider.getLearnProgressPercentage(
-        a['topLevelCategoryKey'],
-        a['bookName'],
-        a['bookDetails'],
-      );
-      final progressB = progressProvider.getLearnProgressPercentage(
-        b['topLevelCategoryKey'],
-        b['bookName'],
-        b['bookDetails'],
-      );
-      return progressB.compareTo(progressA); // Highest progress first
-    });
-
-    return (inProgressItems, completedItems);
   }
 }

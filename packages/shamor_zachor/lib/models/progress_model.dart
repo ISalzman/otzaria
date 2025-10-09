@@ -113,10 +113,7 @@ class PageProgress {
 
   @override
   int get hashCode =>
-      learn.hashCode ^
-      review1.hashCode ^
-      review2.hashCode ^
-      review3.hashCode;
+      learn.hashCode ^ review1.hashCode ^ review2.hashCode ^ review3.hashCode;
 
   @override
   String toString() {
@@ -141,6 +138,7 @@ class BookProgressSummary {
   final int inProgressItems;
   final String? completionDate;
   final DateTime? lastAccessed;
+  final bool isActiveReview;
 
   const BookProgressSummary({
     required this.categoryName,
@@ -150,10 +148,11 @@ class BookProgressSummary {
     required this.inProgressItems,
     this.completionDate,
     this.lastAccessed,
+    this.isActiveReview = false,
   });
 
   /// Get progress as a percentage (0.0 to 1.0)
-  double get progressPercentage => 
+  double get progressPercentage =>
       totalItems > 0 ? completedItems / totalItems : 0.0;
 
   /// Check if the book is completed
@@ -164,9 +163,45 @@ class BookProgressSummary {
 
   /// Get status text for display
   String get statusText {
-    if (isCompleted) return 'הושלם';
-    if (hasProgress) return 'בתהליך';
+    if (totalItems <= 0) {
+      return 'לימוד פעיל';
+    }
+    if (isActiveReview) return 'בחזרה';
+    final progress = progressPercentage;
+    if (progress >= 1.0) {
+      return 'מוכן לחזרה';
+    }
+    if (progress > 0.8) {
+      return 'כמעט סיום';
+    }
+    if (progress > 0.5) {
+      return 'באמצע הדרך';
+    }
+    if (progress > 0) {
+      return 'בתחילת הדרך';
+    }
     return 'לא התחיל';
+  }
+
+  /// Create a modified copy of this summary.
+  BookProgressSummary copyWith({
+    int? totalItems,
+    int? completedItems,
+    int? inProgressItems,
+    String? completionDate,
+    DateTime? lastAccessed,
+    bool? isActiveReview,
+  }) {
+    return BookProgressSummary(
+      categoryName: categoryName,
+      bookName: bookName,
+      totalItems: totalItems ?? this.totalItems,
+      completedItems: completedItems ?? this.completedItems,
+      inProgressItems: inProgressItems ?? this.inProgressItems,
+      completionDate: completionDate ?? this.completionDate,
+      lastAccessed: lastAccessed ?? this.lastAccessed,
+      isActiveReview: isActiveReview ?? this.isActiveReview,
+    );
   }
 
   @override
@@ -180,7 +215,8 @@ class BookProgressSummary {
           completedItems == other.completedItems &&
           inProgressItems == other.inProgressItems &&
           completionDate == other.completionDate &&
-          lastAccessed == other.lastAccessed;
+          lastAccessed == other.lastAccessed &&
+          isActiveReview == other.isActiveReview;
 
   @override
   int get hashCode =>
@@ -190,11 +226,13 @@ class BookProgressSummary {
       completedItems.hashCode ^
       inProgressItems.hashCode ^
       completionDate.hashCode ^
-      lastAccessed.hashCode;
+      lastAccessed.hashCode ^
+      isActiveReview.hashCode;
 
   @override
   String toString() {
     return 'BookProgressSummary(categoryName: $categoryName, bookName: $bookName, '
-           'progress: $completedItems/$totalItems, status: $statusText)';
+        'progress: $completedItems/$totalItems, activeReview: $isActiveReview, '
+        'status: $statusText)';
   }
 }

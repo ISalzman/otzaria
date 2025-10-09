@@ -1,15 +1,4 @@
-/// Utility functions for safe type conversion from JSON
-String _asString(dynamic value) => value is String ? value : '';
-int _asInt(dynamic value) =>
-    value is int ? value : (value is String ? (int.tryParse(value) ?? 0) : 0);
-num _asNum(dynamic value) {
-  if (value is num) return value;
-  if (value is String) return num.tryParse(value) ?? 0;
-  return 0;
-}
-
-Map<String, dynamic> _asMap(dynamic value) =>
-    value is Map ? Map<String, dynamic>.from(value) : {};
+import '../utils/json_utils.dart';
 
 /// Result of a book search operation
 class BookSearchResult {
@@ -54,18 +43,20 @@ class BookCategory {
     String? parentCategoryName,
   }) {
     // Check schema version for future migrations
-    final schemaVersion = _asInt(json['schemaVersion'] ?? 1);
+    final schemaVersion = JsonUtils.asInt(json['schemaVersion'] ?? 1);
 
-    Map<String, dynamic> rawData = _asMap(json['books'] ?? json['data']);
+    Map<String, dynamic> rawData =
+        JsonUtils.asMap(json['books'] ?? json['data']);
     Map<String, BookDetails> parsedBooks = {};
 
-    int defaultStartPage = _asString(json['content_type']) == "דף" ? 2 : 1;
+    int defaultStartPage =
+        JsonUtils.asString(json['content_type']) == "דף" ? 2 : 1;
 
     rawData.forEach((key, value) {
       if (value is Map<String, dynamic>) {
         parsedBooks[key] = BookDetails.fromJson(
           value,
-          contentType: _asString(json['content_type']),
+          contentType: JsonUtils.asString(json['content_type']),
           isCustom: isCustom,
         );
       }
@@ -75,17 +66,17 @@ class BookCategory {
     if (json['subcategories'] is List) {
       subcategories = (json['subcategories'] as List)
           .map((subJson) => BookCategory.fromJson(
-                _asMap(subJson),
+                JsonUtils.asMap(subJson),
                 sourceFile,
                 isCustom: isCustom,
-                parentCategoryName: _asString(json['name']),
+                parentCategoryName: JsonUtils.asString(json['name']),
               ))
           .toList();
     }
 
     return BookCategory(
-      name: _asString(json['name']),
-      contentType: _asString(json['content_type']),
+      name: JsonUtils.asString(json['name']),
+      contentType: JsonUtils.asString(json['content_type']),
       books: parsedBooks,
       defaultStartPage: defaultStartPage,
       isCustom: isCustom,
@@ -175,12 +166,13 @@ class BookPart {
 
   factory BookPart.fromJson(Map<String, dynamic> json) {
     return BookPart(
-      name: _asString(json['name']),
-      startPage: _asInt(json['start']),
-      endPage: _asInt(json['end']),
-      excludedPages:
-          (json['exclude'] as List<dynamic>?)?.map((e) => _asInt(e)).toList() ??
-              [],
+      name: JsonUtils.asString(json['name']),
+      startPage: JsonUtils.asInt(json['start']),
+      endPage: JsonUtils.asInt(json['end']),
+      excludedPages: (json['exclude'] as List<dynamic>?)
+              ?.map((e) => JsonUtils.asInt(e))
+              .toList() ??
+          [],
     );
   }
 
@@ -221,12 +213,12 @@ class BookDetails {
 
     if (json['parts'] is List) {
       parts = (json['parts'] as List)
-          .map((partJson) => BookPart.fromJson(_asMap(partJson)))
+          .map((partJson) => BookPart.fromJson(JsonUtils.asMap(partJson)))
           .toList();
     } else if (json.containsKey('pages')) {
-      pageCount = _asNum(json['pages']);
+      pageCount = JsonUtils.asNum(json['pages']);
       int startPage =
-          _asInt(json['startPage'] ?? (contentType == "דף" ? 2 : 1));
+          JsonUtils.asInt(json['startPage'] ?? (contentType == "דף" ? 2 : 1));
 
       int endPage;
       bool lastPageIsHalf = false;

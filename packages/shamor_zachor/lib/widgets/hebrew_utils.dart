@@ -1,87 +1,188 @@
-/// Utility class for Hebrew text formatting and conversions
+import 'package:kosher_dart/kosher_dart.dart';
+
+/// Utility class for Hebrew text formatting and conversions.
 class HebrewUtils {
-  /// Convert integer to Hebrew gematria
+  HebrewUtils._();
+
+  /// Month names according to the Hebrew calendar (non-leap year order).
+  static const List<String> hebrewMonths = [
+    'ניסן',
+    'אייר',
+    'סיון',
+    'תמוז',
+    'אב',
+    'אלול',
+    'תשרי',
+    'חשוון',
+    'כסלו',
+    'טבת',
+    'שבט',
+    'אדר',
+  ];
+
+  /// Convert integer to Hebrew gematria with the standard geresh/gershayim marks.
   static String intToGematria(int number) {
-    if (number <= 0) return '';
-    
-    const Map<int, String> gematriaMap = {
-      1: 'א', 2: 'ב', 3: 'ג', 4: 'ד', 5: 'ה', 6: 'ו', 7: 'ז', 8: 'ח', 9: 'ט',
-      10: 'י', 20: 'כ', 30: 'ל', 40: 'מ', 50: 'נ', 60: 'ס', 70: 'ע', 80: 'פ', 90: 'צ',
-      100: 'ק', 200: 'ר', 300: 'ש', 400: 'ת'
-    };
-    
-    if (number <= 400 && gematriaMap.containsKey(number)) {
-      return gematriaMap[number]!;
+    final base = intToHebrewWithoutQuotes(number);
+    if (base.isEmpty) {
+      return '';
     }
-    
-    String result = '';
-    int remaining = number;
-    
-    // Handle hundreds
-    while (remaining >= 100) {
-      if (remaining >= 400) {
-        result += 'ת';
-        remaining -= 400;
-      } else if (remaining >= 300) {
-        result += 'ש';
-        remaining -= 300;
-      } else if (remaining >= 200) {
-        result += 'ר';
-        remaining -= 200;
-      } else {
-        result += 'ק';
-        remaining -= 100;
-      }
-    }
-    
-    // Handle tens
-    while (remaining >= 10) {
-      if (remaining >= 90) {
-        result += 'צ';
-        remaining -= 90;
-      } else if (remaining >= 80) {
-        result += 'פ';
-        remaining -= 80;
-      } else if (remaining >= 70) {
-        result += 'ע';
-        remaining -= 70;
-      } else if (remaining >= 60) {
-        result += 'ס';
-        remaining -= 60;
-      } else if (remaining >= 50) {
-        result += 'נ';
-        remaining -= 50;
-      } else if (remaining >= 40) {
-        result += 'מ';
-        remaining -= 40;
-      } else if (remaining >= 30) {
-        result += 'ל';
-        remaining -= 30;
-      } else if (remaining >= 20) {
-        result += 'כ';
-        remaining -= 20;
-      } else {
-        result += 'י';
-        remaining -= 10;
-      }
-    }
-    
-    // Handle units
-    if (remaining > 0 && gematriaMap.containsKey(remaining)) {
-      result += gematriaMap[remaining]!;
-    }
-    
-    return result;
+    return _addGershayim(base);
   }
-  
-  /// Format Hebrew date
-  static String formatHebrewDate(DateTime date) {
-    // Simple Hebrew date formatting - can be enhanced with proper Hebrew calendar
-    const months = [
-      'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-      'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
-    ];
-    
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
+
+  /// Convert integer to Hebrew letters without quotation marks.
+  static String intToHebrewWithoutQuotes(int number) {
+    if (number <= 0) {
+      return '';
+    }
+
+    int remainder = number;
+    final buffer = StringBuffer();
+
+    const hundredsMap = <int, String>{
+      900: 'תתק',
+      800: 'תת',
+      700: 'תש',
+      600: 'תר',
+      500: 'תק',
+      400: 'ת',
+      300: 'ש',
+      200: 'ר',
+      100: 'ק',
+    };
+
+    for (final entry in hundredsMap.entries) {
+      while (remainder >= entry.key) {
+        buffer.write(entry.value);
+        remainder -= entry.key;
+      }
+    }
+
+    if (remainder == 15) {
+      buffer.write('טו');
+      return buffer.toString();
+    }
+    if (remainder == 16) {
+      buffer.write('טז');
+      return buffer.toString();
+    }
+
+    const tensMap = <int, String>{
+      90: 'צ',
+      80: 'פ',
+      70: 'ע',
+      60: 'ס',
+      50: 'נ',
+      40: 'מ',
+      30: 'ל',
+      20: 'כ',
+      10: 'י',
+    };
+
+    for (final entry in tensMap.entries) {
+      if (remainder >= entry.key) {
+        buffer.write(entry.value);
+        remainder -= entry.key;
+      }
+    }
+
+    const unitsMap = <int, String>{
+      9: 'ט',
+      8: 'ח',
+      7: 'ז',
+      6: 'ו',
+      5: 'ה',
+      4: 'ד',
+      3: 'ג',
+      2: 'ב',
+      1: 'א',
+    };
+
+    if (remainder > 0 && unitsMap.containsKey(remainder)) {
+      buffer.write(unitsMap[remainder]);
+    }
+
+    return buffer.toString();
+  }
+
+  /// Format a Hebrew year with geresh/gershayim, supporting thousands.
+  static String formatHebrewYear(int year) {
+    final thousands = year ~/ 1000;
+    final remainder = year % 1000;
+
+    final formatter = HebrewDateFormatter()..hebrewFormat = true;
+    final formattedRemainder = remainder == 0
+        ? ''
+        : formatter
+            .formatHebrewNumber(remainder)
+            .replaceAll('"', '')
+            .replaceAll('״', '')
+            .replaceAll("'", '')
+            .replaceAll('׳', '');
+
+    final remainderWithMarks =
+        formattedRemainder.isEmpty ? '' : _addGershayim(formattedRemainder);
+
+    if (thousands > 0) {
+      final thousandsPart = '${intToHebrewWithoutQuotes(thousands)}׳';
+      if (remainderWithMarks.isEmpty) {
+        return thousandsPart;
+      }
+      return '$thousandsPart$remainderWithMarks';
+    }
+
+    return remainderWithMarks;
+  }
+
+  /// Format an ISO date string or DateTime into a readable Hebrew date.
+  static String formatHebrewDate(dynamic dateInput) {
+    DateTime? date;
+    if (dateInput is DateTime) {
+      date = dateInput;
+    } else if (dateInput is String && dateInput.isNotEmpty) {
+      date = DateTime.tryParse(dateInput);
+    }
+
+    if (date == null) {
+      if (dateInput is String) {
+        return dateInput;
+      }
+      return '';
+    }
+
+    try {
+      final jewishDate = JewishDate.fromDateTime(date);
+      final isLeapYear = jewishDate.isJewishLeapYear();
+      final jewishMonth = jewishDate.getJewishMonth();
+
+      String monthName;
+      if (isLeapYear && jewishMonth == 12) {
+        monthName = 'אדר א׳';
+      } else if (isLeapYear && jewishMonth == 13) {
+        monthName = 'אדר ב׳';
+      } else {
+        final index = jewishMonth - 1;
+        final safeIndex = index.clamp(0, hebrewMonths.length - 1).toInt();
+        monthName = hebrewMonths[safeIndex];
+      }
+
+      final day = intToHebrewWithoutQuotes(jewishDate.getJewishDayOfMonth());
+      final year = formatHebrewYear(jewishDate.getJewishYear());
+
+      return '$day $monthName, $year';
+    } catch (_) {
+      return dateInput is String ? dateInput : date.toIso8601String();
+    }
+  }
+
+  static String _addGershayim(String value) {
+    if (value.isEmpty) {
+      return '';
+    }
+
+    if (value.length == 1) {
+      return '$value׳';
+    }
+
+    return '${value.substring(0, value.length - 1)}״${value.substring(value.length - 1)}';
   }
 }

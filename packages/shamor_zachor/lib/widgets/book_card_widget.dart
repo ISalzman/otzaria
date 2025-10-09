@@ -1,28 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
-import 'package:kosher_dart/kosher_dart.dart';
-
 import '../models/book_model.dart';
 import '../models/progress_model.dart';
 import '../providers/shamor_zachor_progress_provider.dart';
-
-const List<String> hebrewMonths = [
-  'ניסן',
-  'אייר',
-  'סיון',
-  'תמוז',
-  'אב',
-  'אלול',
-  'תשרי',
-  'חשון',
-  'כסלו',
-  'טבת',
-  'שבט',
-  'אדר',
-  'אדר א\'',
-  'אדר ב\''
-];
+import 'hebrew_utils.dart';
 
 class BookCardWidget extends StatefulWidget {
   static final Logger _logger = Logger('BookCardWidget');
@@ -33,7 +15,7 @@ class BookCardWidget extends StatefulWidget {
   final BookDetails bookDetails;
   final Map<String, PageProgress> bookProgressData;
   final bool isFromTrackingScreen;
-  final String? completionDateOverride;
+  final String? completionDate;
   final bool isInCompletedListContext;
 
   const BookCardWidget({
@@ -44,7 +26,7 @@ class BookCardWidget extends StatefulWidget {
     required this.bookDetails,
     required this.bookProgressData,
     this.isFromTrackingScreen = false,
-    this.completionDateOverride,
+    this.completionDate,
     this.isInCompletedListContext = false,
   });
 
@@ -195,9 +177,8 @@ class _BookCardWidgetState extends State<BookCardWidget> {
               ),
               const SizedBox(height: 12),
               // Progress / Completion info
-              (_isCompleted && widget.completionDateOverride != null)
-                  ? _buildCompletionInfo(
-                      context, widget.completionDateOverride!)
+              (_isCompleted && widget.completionDate != null)
+                  ? _buildCompletionInfo(context, widget.completionDate!)
                   : _buildProgressInfo(context, _learnProgress),
               const SizedBox(height: 12),
               // Additional info
@@ -255,7 +236,7 @@ class _BookCardWidgetState extends State<BookCardWidget> {
   }
 
   Widget _buildCompletionInfo(BuildContext context, String isoDate) {
-    final hebrewDate = _formatHebrewDate(isoDate);
+    final hebrewDate = HebrewUtils.formatHebrewDate(isoDate);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -326,7 +307,7 @@ class _BookCardWidgetState extends State<BookCardWidget> {
           const Spacer(),
           if (learnProgress > 0)
             Text(
-              _getProgressStatusText(learnProgress),
+              _getProgressStatusText(),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.w500),
@@ -336,115 +317,20 @@ class _BookCardWidgetState extends State<BookCardWidget> {
     );
   }
 
-  String _getProgressStatusText(double learnProgress) {
+  String _getProgressStatusText() {
     try {
-      if (_progressProvider == null) return 'לימוד פעיל';
-      final inActive = _progressProvider!.isBookInActiveReview(
-          widget.topLevelCategoryKey, widget.bookName, widget.bookDetails);
-      if (inActive) return 'בחזרה';
+      if (_progressProvider == null) {
+        return 'לימוד פעיל';
+      }
+      final summary = _progressProvider!.getBookProgressSummarySync(
+        widget.topLevelCategoryKey,
+        widget.bookName,
+        widget.bookDetails,
+      );
+      return summary.statusText;
     } catch (e, st) {
-      _logger.warning('isBookInActiveReview failed', e, st);
+      _logger.warning('getBookProgressSummarySync failed', e, st);
+      return 'לימוד פעיל';
     }
-    if (learnProgress >= 1.0) return 'מוכן לחזרה';
-    if (learnProgress > 0.8) return 'כמעט סיום';
-    if (learnProgress > 0.5) return 'באמצע הדרך';
-    return 'בתחילת הדרך';
-  }
-
-  String _formatHebrewDate(String isoDate) {
-    try {
-      final date = DateTime.parse(isoDate);
-      final jewish = JewishDate.fromDateTime(date);
-      final formatter = HebrewDateFormatter();
-      formatter.hebrewFormat = true;
-
-      final hebrewMonthName = hebrewMonths[jewish.getJewishMonth() - 1];
-      final hebrewDay =
-          _numberToHebrewWithoutQuotes(jewish.getJewishDayOfMonth());
-      final hebrewYear = _formatHebrewYear(jewish.getJewishYear());
-
-      return '$hebrewDay $hebrewMonthName, $hebrewYear';
-    } catch (e) {
-      _logger.warning('Failed to format Hebrew date: $isoDate', e);
-      return isoDate;
-    }
-  }
-
-  String _numberToHebrewWithoutQuotes(int number) {
-    if (number <= 0) return '';
-    String result = '';
-    int num = number;
-    if (num >= 100) {
-      int hundreds = (num ~/ 100) * 100;
-      if (hundreds == 900) {
-        result += 'תתק';
-      } else if (hundreds == 800) {
-        result += 'תת';
-      } else if (hundreds == 700) {
-        result += 'תש';
-      } else if (hundreds == 600) {
-        result += 'תר';
-      } else if (hundreds == 500) {
-        result += 'תק';
-      } else if (hundreds == 400) {
-        result += 'ת';
-      } else if (hundreds == 300) {
-        result += 'ש';
-      } else if (hundreds == 200) {
-        result += 'ר';
-      } else if (hundreds == 100) {
-        result += 'ק';
-      }
-      num %= 100;
-    }
-    const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
-    const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
-    if (num == 15) {
-      result += 'טו';
-    } else if (num == 16) {
-      result += 'טז';
-    } else {
-      if (num >= 10) {
-        result += tens[num ~/ 10];
-        num %= 10;
-      }
-      if (num > 0) {
-        result += ones[num];
-      }
-    }
-    return result;
-  }
-
-  // Removed unused method
-
-  String _formatHebrewYear(int year) {
-    final hdf = HebrewDateFormatter();
-    hdf.hebrewFormat = true;
-
-    final thousands = year ~/ 1000;
-    final remainder = year % 1000;
-
-    String remainderStr = hdf.formatHebrewNumber(remainder);
-
-    String cleanRemainderStr = remainderStr
-        .replaceAll('"', '')
-        .replaceAll("'", "")
-        .replaceAll('׳', '')
-        .replaceAll('״', '');
-
-    String formattedRemainder;
-    if (cleanRemainderStr.length > 1) {
-      formattedRemainder =
-          '${cleanRemainderStr.substring(0, cleanRemainderStr.length - 1)}״${cleanRemainderStr.substring(cleanRemainderStr.length - 1)}';
-    } else if (cleanRemainderStr.length == 1) {
-      formattedRemainder = '$cleanRemainderStr׳';
-    } else {
-      formattedRemainder = cleanRemainderStr;
-    }
-    if (thousands == 5) {
-      return 'ה׳$formattedRemainder';
-    }
-
-    return formattedRemainder;
   }
 }

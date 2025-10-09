@@ -40,6 +40,7 @@ class ShamorZachorProgressProvider with ChangeNotifier {
   final ProgressService _progressService;
   FullProgressMap _fullProgress = {};
   CompletionDatesMap _completionDates = {};
+  final Map<String, BookProgressSummary> _progressSummaryCache = {};
   bool _isLoading = false;
   ShamorZachorError? _error;
 
@@ -69,6 +70,23 @@ class ShamorZachorProgressProvider with ChangeNotifier {
 
   /// Check if progress data has been loaded
   bool get hasData => _fullProgress.isNotEmpty;
+
+  String _summaryCacheKey(
+    String categoryName,
+    String bookName,
+    int totalItems,
+  ) =>
+      '$categoryName::$bookName::$totalItems';
+
+  void _invalidateSummaryCache(
+      String categoryName, String bookName, int totalItems) {
+    _progressSummaryCache
+        .remove(_summaryCacheKey(categoryName, bookName, totalItems));
+  }
+
+  void _clearSummaryCache() {
+    _progressSummaryCache.clear();
+  }
 
   ShamorZachorProgressProvider({ProgressService? progressService})
       : _progressService = progressService ?? ProgressService() {
@@ -100,6 +118,7 @@ class ShamorZachorProgressProvider with ChangeNotifier {
           'Error loading progress: ${_error!.message}', e, stackTrace);
     }
 
+    _clearSummaryCache();
     _isLoading = false;
     notifyListeners();
   }
@@ -160,6 +179,9 @@ class ShamorZachorProgressProvider with ChangeNotifier {
         }
       }
 
+      _invalidateSummaryCache(
+          categoryName, bookName, bookDetails.totalLearnableItems);
+
       // Handle completion events (only for non-bulk updates)
       if (value && !isBulkUpdate) {
         await _handleCompletionEvents(
@@ -186,6 +208,9 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     String columnName,
     BookDetails bookDetails,
   ) async {
+    _invalidateSummaryCache(
+        categoryName, bookName, bookDetails.totalLearnableItems);
+
     if (columnName == learnColumn) {
       final wasAlreadyCompleted =
           getCompletionDateSync(categoryName, bookName) != null;
@@ -195,6 +220,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
       if (isNowComplete && !wasAlreadyCompleted) {
         await _progressService.saveCompletionDate(categoryName, bookName);
         _completionDates = await _progressService.loadCompletionDates();
+        _invalidateSummaryCache(
+            categoryName, bookName, bookDetails.totalLearnableItems);
 
         _completionEventController.add(CompletionEvent(
           CompletionEventType.bookCompleted,
@@ -225,6 +252,8 @@ class ShamorZachorProgressProvider with ChangeNotifier {
         );
 
         if (cycleJustCompleted) {
+          _invalidateSummaryCache(
+              categoryName, bookName, bookDetails.totalLearnableItems);
           _completionEventController.add(CompletionEvent(
             CompletionEventType.reviewCycleCompleted,
             bookName: bookName,
@@ -427,27 +456,6 @@ class ShamorZachorProgressProvider with ChangeNotifier {
   }
 
   /// Check if book is in active review (completed but not all reviews done)
-  bool isBookInActiveReview(
-      String categoryName, String bookName, BookDetails bookDetails) {
-    if (!isBookCompleted(categoryName, bookName, bookDetails)) {
-      return false;
-    }
-
-    final r1Prog =
-        getReviewProgressPercentage(categoryName, bookName, bookDetails, 1);
-    final r2Prog =
-        getReviewProgressPercentage(categoryName, bookName, bookDetails, 2);
-    final r3Prog =
-        getReviewProgressPercentage(categoryName, bookName, bookDetails, 3);
-
-    final r1Active = r1Prog > 0 && r1Prog < 1.0;
-    final r2Active = r1Prog == 1.0 && r2Prog > 0 && r2Prog < 1.0;
-    final r3Active =
-        r1Prog == 1.0 && r2Prog == 1.0 && r3Prog > 0 && r3Prog < 1.0;
-
-    return r1Active || r2Active || r3Active;
-  }
-
   /// Check if book is considered in progress
   bool isBookConsideredInProgress(
       String categoryName, String bookName, BookDetails bookDetails) {
@@ -470,40 +478,71 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     return false;
   }
 
+  /// Get book progress summary (synchronous)
+  BookProgressSummary getBookProgressSummarySync(
+    String categoryName,
+    String bookName,
+    BookDetails bookDetails,
+  ) {
+    final totalItems = bookDetails.totalLearnableItems;
+    final cacheKey = _summaryCacheKey(categoryName, bookName, totalItems);
+    final cached = _progressSummaryCache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+
+    final bookProgress = getProgressForBook(categoryName, bookName);
+    final completionDate = getCompletionDateSync(categoryName, bookName);
+    final summary = _progressService.buildBookProgressSummary(
+      categoryName,
+      bookName,
+      bookDetails,
+      bookProgress,
+      completionDate: completionDate,
+    );
+    _progressSummaryCache[cacheKey] = summary;
+    return summary;
+  }
+
   /// Get book progress summary
   Future<BookProgressSummary> getBookProgressSummary(
     String categoryName,
     String bookName,
     BookDetails bookDetails,
   ) async {
+    final totalItems = bookDetails.totalLearnableItems;
+    final cacheKey = _summaryCacheKey(categoryName, bookName, totalItems);
+
     try {
-      return await _progressService.getBookProgressSummary(
+      final serviceSummary = await _progressService.getBookProgressSummary(
         categoryName,
         bookName,
         bookDetails,
       );
+      final localSummary =
+          getBookProgressSummarySync(categoryName, bookName, bookDetails);
+      final mergedSummary = serviceSummary.copyWith(
+        totalItems: localSummary.totalItems,
+        completedItems: localSummary.completedItems,
+        inProgressItems: localSummary.inProgressItems,
+        completionDate: localSummary.completionDate,
+        isActiveReview: localSummary.isActiveReview,
+      );
+      _progressSummaryCache[cacheKey] = mergedSummary;
+      return mergedSummary;
     } catch (e, stackTrace) {
       _logger.warning(
         'Failed to get progress summary for $categoryName/$bookName: $e\n$stackTrace',
       );
 
       // Fallback to local calculation
-      final bookProgress = getProgressForBook(categoryName, bookName);
-      final totalItems = bookDetails.totalLearnableItems;
-      final completedItems =
-          ProgressService.getCompletedPagesCount(bookProgress);
-      final inProgressItems =
-          bookProgress.values.where((p) => !p.isEmpty && !p.isComplete).length;
-      final completionDate = getCompletionDateSync(categoryName, bookName);
-
-      return BookProgressSummary(
-        categoryName: categoryName,
-        bookName: bookName,
-        totalItems: totalItems,
-        completedItems: completedItems,
-        inProgressItems: inProgressItems,
-        completionDate: completionDate,
+      final summary = getBookProgressSummarySync(
+        categoryName,
+        bookName,
+        bookDetails,
       );
+      _progressSummaryCache[cacheKey] = summary;
+      return summary;
     }
   }
 
@@ -525,13 +564,23 @@ class ShamorZachorProgressProvider with ChangeNotifier {
           final uniqueKey =
               '$topLevelCategoryKey-${searchResult.categoryName}-$bookNameFromProgress';
           if (!processedBookKeys.contains(uniqueKey)) {
-            tracked.add({
+            final entry = <String, dynamic>{
               'topLevelCategoryKey': topLevelCategoryKey,
               'displayCategoryName': searchResult.categoryName,
               'bookName': bookNameFromProgress,
               'bookDetails': searchResult.bookDetails,
-              'progressData': progressDataForBook,
-            });
+              'bookProgressData': progressDataForBook,
+            };
+
+            final completionDate = getCompletionDateSync(
+              topLevelCategoryKey,
+              bookNameFromProgress,
+            );
+            if (completionDate != null) {
+              entry['completionDate'] = completionDate;
+            }
+
+            tracked.add(entry);
             processedBookKeys.add(uniqueKey);
           }
         }
@@ -556,7 +605,7 @@ class ShamorZachorProgressProvider with ChangeNotifier {
               'displayCategoryName': searchResult.categoryName,
               'bookName': bookNameFromCompletion,
               'bookDetails': searchResult.bookDetails,
-              'progressData': getProgressForBook(
+              'bookProgressData': getProgressForBook(
                   topLevelCategoryKey, bookNameFromCompletion),
               'completionDate': completionDate,
             });
@@ -574,6 +623,107 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     });
 
     return tracked;
+  }
+
+  (List<Map<String, dynamic>>, List<Map<String, dynamic>>)
+      getCategorizedTrackedBooks(
+    Map<String, BookCategory> allBookData,
+  ) {
+    final trackedItems = getTrackedBooks(allBookData);
+    return _categorizeTrackedItems(trackedItems);
+  }
+
+  (List<Map<String, dynamic>>, List<Map<String, dynamic>>)
+      _categorizeTrackedItems(
+    List<Map<String, dynamic>> trackedItems,
+  ) {
+    final inProgressItems = <Map<String, dynamic>>[];
+    final completedItems = <Map<String, dynamic>>[];
+    final processedBooks = <String>{};
+
+    for (final item in trackedItems) {
+      final topLevelCategoryKey = item['topLevelCategoryKey'] as String;
+      final bookName = item['bookName'] as String;
+      final bookDetails = item['bookDetails'] as BookDetails;
+
+      final uniqueKey = '$topLevelCategoryKey:$bookName';
+      if (!processedBooks.add(uniqueKey)) {
+        continue;
+      }
+
+      final bookProgressData =
+          (item['bookProgressData'] as Map<String, PageProgress>?) ??
+              getProgressForBook(topLevelCategoryKey, bookName);
+
+      final cardData = <String, dynamic>{
+        'topLevelCategoryKey': topLevelCategoryKey,
+        'displayCategoryName': item['displayCategoryName'],
+        'bookName': bookName,
+        'bookDetails': bookDetails,
+        'bookProgressData': bookProgressData,
+        'completionDate': item['completionDate'],
+      };
+
+      final isCompleted = isBookCompleted(
+        topLevelCategoryKey,
+        bookName,
+        bookDetails,
+      );
+
+      final isInProgress = isBookConsideredInProgress(
+        topLevelCategoryKey,
+        bookName,
+        bookDetails,
+      );
+
+      if (isCompleted) {
+        completedItems.add(cardData);
+      } else if (isInProgress) {
+        inProgressItems.add(cardData);
+      }
+    }
+
+    completedItems.sort((a, b) {
+      final dateA = a['completionDate'] as String?;
+      final dateB = b['completionDate'] as String?;
+
+      if (dateA == null && dateB == null) return 0;
+      if (dateA == null) return 1;
+      if (dateB == null) return -1;
+
+      final parsedA = DateTime.tryParse(dateA);
+      final parsedB = DateTime.tryParse(dateB);
+
+      if (parsedA == null && parsedB == null) {
+        _logger.warning('Failed to parse completion dates: $dateA, $dateB');
+        return dateB.compareTo(dateA);
+      }
+      if (parsedA == null) {
+        _logger.warning('Failed to parse completion date: $dateA');
+        return 1;
+      }
+      if (parsedB == null) {
+        _logger.warning('Failed to parse completion date: $dateB');
+        return -1;
+      }
+      return parsedB.compareTo(parsedA);
+    });
+
+    inProgressItems.sort((a, b) {
+      final progressA = getLearnProgressPercentage(
+        a['topLevelCategoryKey'] as String,
+        a['bookName'] as String,
+        a['bookDetails'] as BookDetails,
+      );
+      final progressB = getLearnProgressPercentage(
+        b['topLevelCategoryKey'] as String,
+        b['bookName'] as String,
+        b['bookDetails'] as BookDetails,
+      );
+      return progressB.compareTo(progressA);
+    });
+
+    return (inProgressItems, completedItems);
   }
 
   /// Export progress data
@@ -620,6 +770,7 @@ class ShamorZachorProgressProvider with ChangeNotifier {
       await _progressService.clearAllProgress();
       _fullProgress.clear();
       _completionDates.clear();
+      _clearSummaryCache();
       notifyListeners();
     } catch (e, stackTrace) {
       _error = ShamorZachorError.fromException(
