@@ -65,10 +65,18 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
               result.file.replaceFirst(libraryPath, '').replaceAll('\\', '/');
           final fileName = relativePath.split('/').last.replaceAll('.txt', '');
 
+          // בניית הנתיב עם מספר הפסוק
+          String displayPath = result.path.isNotEmpty ? result.path : fileName;
+
+          if (result.verseNumber.isNotEmpty) {
+            displayPath = '$displayPath, פסוק ${result.verseNumber}';
+          } else if (result.path.isEmpty) {
+            displayPath = '$displayPath, שורה ${result.line}';
+          }
+
           return GematriaSearchResult(
             bookTitle: fileName,
-            internalPath:
-                result.path.isNotEmpty ? result.path : 'שורה ${result.line}',
+            internalPath: displayPath,
             preview: result.text,
             data: result,
           );

@@ -6,11 +6,13 @@ class SearchResult {
   final int line;
   final String text;
   final String path; // הנתיב ההיררכי (כותרות)
+  final String verseNumber; // מספר הפסוק
   const SearchResult({
     required this.file,
     required this.line,
     required this.text,
     this.path = '',
+    this.verseNumber = '',
   });
 }
 
@@ -85,7 +87,15 @@ class GimatriaSearch {
 
         for (int i = 0; i < lines.length; i++) {
           final line = lines[i];
-          final words = line
+
+          // חילוץ מספר הפסוק מהסוגריים בתחילת השורה
+          final verseMatch = RegExp(r'^\(([^\)]+)\)').firstMatch(line);
+          final verseNumber = verseMatch?.group(1) ?? '';
+
+          // הסרת הסוגריים עם מספר הפסוק מהשורה
+          final cleanLine = line.replaceFirst(RegExp(r'^\([^\)]+\)\s*'), '');
+
+          final words = cleanLine
               .split(RegExp(r'\s+'))
               .where((w) => w.trim().isNotEmpty)
               .toList();
@@ -102,7 +112,11 @@ class GimatriaSearch {
                     words.sublist(start, start + offset + 1).join(' ');
                 final path = _extractPathFromLines(lines, i);
                 found.add(SearchResult(
-                    file: file.path, line: i + 1, text: phrase, path: path));
+                    file: file.path,
+                    line: i + 1,
+                    text: phrase,
+                    path: path,
+                    verseNumber: verseNumber));
                 if (found.length >= fileLimit) return found;
               } else if (acc > targetGimatria) {
                 break;
@@ -158,7 +172,7 @@ class GimatriaSearch {
       parts.add(lastHeaderByLevel[level]!);
     }
 
-    return parts.join(' > ');
+    return parts.join(', ');
   }
 
   /// ניקוי תגיות HTML
