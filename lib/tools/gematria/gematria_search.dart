@@ -88,12 +88,20 @@ class GimatriaSearch {
         for (int i = 0; i < lines.length; i++) {
           final line = lines[i];
 
+          // דילוג על שורות כותרות (h1-h6)
+          if (RegExp(r'<h[1-6][^>]*>').hasMatch(line)) {
+            continue;
+          }
+
           // חילוץ מספר הפסוק מהסוגריים בתחילת השורה
           final verseMatch = RegExp(r'^\(([^\)]+)\)').firstMatch(line);
           final verseNumber = verseMatch?.group(1) ?? '';
 
           // הסרת הסוגריים עם מספר הפסוק מהשורה
-          final cleanLine = line.replaceFirst(RegExp(r'^\([^\)]+\)\s*'), '');
+          var cleanLine = line.replaceFirst(RegExp(r'^\([^\)]+\)\s*'), '');
+
+          // הסרת סוגריים מסולסלות עם תוכן
+          cleanLine = cleanLine.replaceAll(RegExp(r'\{[^\}]*\}'), '');
 
           // ניקוי תגיות HTML מהשורה
           final lineWithoutHtml = _cleanHtml(cleanLine);
