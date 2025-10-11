@@ -13,6 +13,7 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<GematriaSearchResult> _searchResults = [];
   bool _isSearching = false;
+  int _maxResults = 100; // ברירת מחדל
 
   @override
   void dispose() {
@@ -49,13 +50,13 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
           path,
           targetGimatria,
           maxPhraseWords: 8,
-          fileLimit: 100,
+          fileLimit: _maxResults,
         );
         allResults.addAll(results);
-        if (allResults.length >= 100) break;
+        if (allResults.length >= _maxResults) break;
       }
 
-      final results = allResults.take(100).toList();
+      final results = allResults.take(_maxResults).toList();
 
       // המרת התוצאות לפורמט של המסך
       setState(() {
@@ -104,6 +105,52 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
           _buildSearchBar(),
           Expanded(
             child: _buildResultsList(),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        mini: true,
+        onPressed: () => _showSettingsDialog(context),
+        child: const Icon(Icons.settings),
+      ),
+    );
+  }
+
+  void _showSettingsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('הגדרות חיפוש', textAlign: TextAlign.right),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Text('מספר תוצאות מקסימלי:', textAlign: TextAlign.right),
+            const SizedBox(height: 8),
+            DropdownButton<int>(
+              value: _maxResults,
+              isExpanded: true,
+              items: [50, 100, 200, 500, 1000].map((value) {
+                return DropdownMenuItem<int>(
+                  value: value,
+                  child: Text('$value תוצאות', textAlign: TextAlign.right),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _maxResults = value;
+                  });
+                  Navigator.of(context).pop();
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('סגור'),
           ),
         ],
       ),
