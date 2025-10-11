@@ -268,48 +268,20 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // כותרת הקובץ
+                    // נתיב (כותרות) - אם קיים, אחרת שם הקובץ
                     Text(
-                      result.bookTitle,
+                      result.internalPath.isNotEmpty
+                          ? result.internalPath
+                          : result.bookTitle,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    // נתיב פנימי (כותרות)
-                    if (result.internalPath.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.subdirectory_arrow_left,
-                            size: 14,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant
-                                .withOpacity(0.7),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              result.internalPath,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant
-                                    .withOpacity(0.7),
-                              ),
-                              textAlign: TextAlign.right,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
                     const SizedBox(height: 8),
                     // המילים שנמצאו - בולטות
                     if (result.preview.isNotEmpty)
