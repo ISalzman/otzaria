@@ -95,7 +95,10 @@ class GimatriaSearch {
           // הסרת הסוגריים עם מספר הפסוק מהשורה
           final cleanLine = line.replaceFirst(RegExp(r'^\([^\)]+\)\s*'), '');
 
-          final words = cleanLine
+          // ניקוי תגיות HTML מהשורה
+          final lineWithoutHtml = _cleanHtml(cleanLine);
+
+          final words = lineWithoutHtml
               .split(RegExp(r'\s+'))
               .where((w) => w.trim().isNotEmpty)
               .toList();
@@ -111,10 +114,12 @@ class GimatriaSearch {
                 final phrase =
                     words.sublist(start, start + offset + 1).join(' ');
                 final path = _extractPathFromLines(lines, i);
+                // ניקוי תגיות HTML מהטקסט
+                final cleanPhrase = _cleanHtml(phrase);
                 found.add(SearchResult(
                     file: file.path,
                     line: i + 1,
-                    text: phrase,
+                    text: cleanPhrase,
                     path: path,
                     verseNumber: verseNumber));
                 if (found.length >= fileLimit) return found;
