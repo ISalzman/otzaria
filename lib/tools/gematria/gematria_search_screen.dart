@@ -207,17 +207,10 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 8),
               CheckboxListTile(
                 title: const Text(
                   'סינון תוצאות כפולות',
                   textAlign: TextAlign.right,
-                ),
-                subtitle: const Text(
-                  'הצג כל תוצאה רק פעם אחת',
-                  textAlign: TextAlign.right,
-                  style: TextStyle(fontSize: 12),
                 ),
                 value: _filterDuplicates,
                 onChanged: (value) {
@@ -233,11 +226,6 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
                 title: const Text(
                   'חיפוש פסוק שלם בלבד',
                   textAlign: TextAlign.right,
-                ),
-                subtitle: const Text(
-                  'הצג רק תוצאות של פסוק שלם',
-                  textAlign: TextAlign.right,
-                  style: TextStyle(fontSize: 12),
                 ),
                 value: _wholeVerseOnly,
                 onChanged: (value) {
