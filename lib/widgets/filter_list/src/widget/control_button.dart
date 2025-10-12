@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 
 class ControlButton extends StatelessWidget {
   const ControlButton({
-    Key? key,
+    super.key,
     required this.choiceChipLabel,
     this.onPressed,
     this.primaryButton = false,
-  }) : super(key: key);
+  });
   final String choiceChipLabel;
   final VoidCallback? onPressed;
   final bool primaryButton;

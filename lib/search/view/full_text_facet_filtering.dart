@@ -35,9 +35,9 @@ class SearchFacetFiltering extends StatefulWidget {
   final SearchingTab tab;
 
   const SearchFacetFiltering({
-    Key? key,
+    super.key,
     required this.tab,
-  }) : super(key: key);
+  });
 
   @override
   State<SearchFacetFiltering> createState() => _SearchFacetFilteringState();

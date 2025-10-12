@@ -10,11 +10,11 @@ class SyncIconButton extends StatefulWidget {
   final VoidCallback? onCompleted;
 
   const SyncIconButton({
-    Key? key,
+    super.key,
     this.size = 24.0,
     this.color,
     this.onCompleted,
-  }) : super(key: key);
+  });
 
   @override
   State<SyncIconButton> createState() => _SyncIconButtonState();

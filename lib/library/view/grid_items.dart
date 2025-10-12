@@ -7,9 +7,9 @@ class HeaderItem extends StatelessWidget {
   final Category category;
 
   const HeaderItem({
-    Key? key,
+    super.key,
     required this.category,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -29,10 +29,10 @@ class CategoryGridItem extends StatelessWidget {
   final VoidCallback onCategoryClickCallback;
 
   const CategoryGridItem({
-    Key? key,
+    super.key,
     required this.category,
     required this.onCategoryClickCallback,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +40,8 @@ class CategoryGridItem extends StatelessWidget {
       child: InkWell(
         mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(12.0),
-        hoverColor: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+        hoverColor:
+            Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
         hoverDuration: Durations.medium1,
         onTap: () => onCategoryClickCallback(),
         child: Align(
@@ -82,7 +83,7 @@ class CategoryGridItem extends StatelessWidget {
                           color: Theme.of(context)
                               .colorScheme
                               .secondary
-                              .withOpacity(0.6),
+                              .withValues(alpha: 0.6),
                         ),
                       )
               ],
@@ -98,11 +99,11 @@ class BookGridItem extends StatelessWidget {
   final VoidCallback onBookClickCallback;
 
   const BookGridItem({
-    Key? key,
+    super.key,
     required this.book,
     required this.onBookClickCallback,
     this.showTopics = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +112,8 @@ class BookGridItem extends StatelessWidget {
         child: InkWell(
           mouseCursor: SystemMouseCursors.click,
           borderRadius: BorderRadius.circular(12.0),
-          hoverColor: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+          hoverColor:
+              Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
           onTap: () => onBookClickCallback(),
           hoverDuration: Durations.medium1,
           child: Align(
@@ -125,7 +127,7 @@ class BookGridItem extends StatelessWidget {
                             color: Theme.of(context)
                                 .colorScheme
                                 .secondary
-                                .withOpacity(0.6)),
+                                .withValues(alpha: 0.6)),
                       )
                     : book is ExternalBook
                         ? Padding(
@@ -148,7 +150,7 @@ class BookGridItem extends StatelessWidget {
                                 color: Theme.of(context)
                                     .colorScheme
                                     .secondary
-                                    .withOpacity(0.6)),
+                                    .withValues(alpha: 0.6)),
                           ),
                 Expanded(
                   child: ListTile(
@@ -171,7 +173,7 @@ class BookGridItem extends StatelessWidget {
                                       color: Theme.of(context)
                                           .colorScheme
                                           .primary
-                                          .withOpacity(0.9)),
+                                          .withValues(alpha: 0.9)),
                                 )
                               : const TextSpan()
                         ],
@@ -209,7 +211,7 @@ class BookGridItem extends StatelessWidget {
                           color: Theme.of(context)
                               .colorScheme
                               .secondary
-                              .withOpacity(0.6),
+                              .withValues(alpha: 0.6),
                         ),
                       ),
               ],
@@ -224,7 +226,7 @@ class BookGridItem extends StatelessWidget {
 class MyGridView extends StatelessWidget {
   final Future<List<Widget>> items;
 
-  const MyGridView({Key? key, required this.items}) : super(key: key);
+  const MyGridView({super.key, required this.items});
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(

@@ -1,34 +1,29 @@
-import 'package:hive/hive.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
+import 'package:otzaria/data/repository/base_list_repository.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 
-class HistoryRepository {
-  final Box<dynamic> _box = Hive.box(name: 'history');
+class HistoryRepository extends BaseListRepository<Bookmark> {
+  HistoryRepository()
+      : super(
+          boxName: 'history',
+          key: 'history',
+          fromJson: (json) => Bookmark.fromJson(json),
+          toJson: (bookmark) => bookmark.toJson(),
+        );
 
-  Future<void> saveHistory(List<Bookmark> history) async {
-    _box.put('history', history.map((b) => b.toJson()).toList());
-  }
+  Future<List<Bookmark>> loadHistory() async => load();
 
-  Future<List<Bookmark>> loadHistory() async {
-    final historyJson = _box.get('history', defaultValue: []) as List;
-    return historyJson
-        .map((json) => Bookmark.fromJson(Map<String, dynamic>.from(json)))
-        .toList();
-  }
+  Future<void> saveHistory(List<Bookmark> history) async => save(history);
 
-  Future<void> clearHistory() async {
-    _box.delete('history');
-  }
+  Future<void> clearHistory() async => clear();
 
-  Future<void> addHistoryItem(Bookmark bookmark) async {
-    final history = await loadHistory();
-    history.insert(0, bookmark);
-    await saveHistory(history);
-  }
+  Future<void> addHistoryItem(Bookmark bookmark) async => addItem(bookmark);
+
+  Future<void> removeHistoryItem(int index) async => removeAt(index);
 
   Future<void> addHistoryFromTab(OpenedTab tab) async {
     if (tab is PdfBookTab) {
@@ -50,11 +45,5 @@ class HistoryRepository {
         ));
       }
     }
-  }
-
-  Future<void> removeHistoryItem(int index) async {
-    final history = await loadHistory();
-    history.removeAt(index);
-    await saveHistory(history);
   }
 }

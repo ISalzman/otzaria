@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'calendar_cubit.dart';
 import 'package:otzaria/daf_yomi/daf_yomi_helper.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 
 // הפכנו את הווידג'ט ל-Stateless כי הוא כבר לא מנהל מצב בעצמו.
 class CalendarWidget extends StatelessWidget {
@@ -116,7 +117,10 @@ class CalendarWidget extends StatelessWidget {
     final bool isRoshChodesh = jewishCalendar.isRoshChodesh();
 
     if (isShabbat || isYomTov || isTaanis || isRoshChodesh) {
-      return Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.4);
+      return Theme.of(context)
+          .colorScheme
+          .secondaryContainer
+          .withValues(alpha: 0.4);
     }
 
     return null;
@@ -152,7 +156,7 @@ class CalendarWidget extends StatelessWidget {
             foregroundColor:
                 isSelected ? Theme.of(context).colorScheme.primary : null,
             backgroundColor: isSelected
-                ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
+                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)
                 : null,
             side: isSelected
                 ? BorderSide(color: Theme.of(context).colorScheme.primary)
@@ -450,11 +454,11 @@ class CalendarWidget extends StatelessWidget {
                               ? Theme.of(context)
                                   .colorScheme
                                   .primary
-                                  .withOpacity(0.25)
+                                  .withValues(alpha: 0.25)
                               : Theme.of(context)
                                   .colorScheme
                                   .surfaceContainer
-                                  .withOpacity(0.2)),
+                                  .withValues(alpha: 0.2)),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isSelected
@@ -489,7 +493,7 @@ class CalendarWidget extends StatelessWidget {
                               ? Theme.of(context)
                                   .colorScheme
                                   .onPrimaryContainer
-                                  .withOpacity(0.85)
+                                  .withValues(alpha: 0.85)
                               : Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 12,
                         ),
@@ -547,11 +551,11 @@ class CalendarWidget extends StatelessWidget {
                         ? Theme.of(context)
                             .colorScheme
                             .primary
-                            .withOpacity(0.25)
+                            .withValues(alpha: 0.25)
                         : Theme.of(context)
                             .colorScheme
                             .surfaceContainer
-                            .withOpacity(0.2)),
+                            .withValues(alpha: 0.2)),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isSelected
@@ -591,7 +595,7 @@ class CalendarWidget extends StatelessWidget {
                           ? Theme.of(context)
                               .colorScheme
                               .onPrimaryContainer
-                              .withOpacity(0.85)
+                              .withValues(alpha: 0.85)
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 10,
                     ),
@@ -644,11 +648,11 @@ class CalendarWidget extends StatelessWidget {
                         ? Theme.of(context)
                             .colorScheme
                             .primary
-                            .withOpacity(0.25)
+                            .withValues(alpha: 0.25)
                         : Theme.of(context)
                             .colorScheme
                             .surfaceContainer
-                            .withOpacity(0.2)),
+                            .withValues(alpha: 0.2)),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isSelected
@@ -688,7 +692,7 @@ class CalendarWidget extends StatelessWidget {
                           ? Theme.of(context)
                               .colorScheme
                               .onPrimaryContainer
-                              .withOpacity(0.85)
+                              .withValues(alpha: 0.85)
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 10,
                     ),
@@ -865,8 +869,15 @@ class CalendarWidget extends StatelessWidget {
           .add({'name': 'הדלקת נרות', 'time': dailyTimes['candleLighting']});
     }
 
-    // הוספת זמני יציאת שבת/חג
-    if (jewishCalendar.getDayOfWeek() == 7 || jewishCalendar.isYomTov()) {
+    // הוספת זמני יציאת שבת/חג (לא להוסיף בימי חול המועד והושענא רבה)
+    final int yomTovIndex = jewishCalendar.getYomTovIndex();
+    final bool isNotExitTimesDay =
+        yomTovIndex == JewishCalendar.CHOL_HAMOED_SUCCOS ||
+            yomTovIndex == JewishCalendar.CHOL_HAMOED_PESACH ||
+            yomTovIndex == JewishCalendar.HOSHANA_RABBA;
+
+    if ((jewishCalendar.getDayOfWeek() == 7 || jewishCalendar.isYomTov()) &&
+        !isNotExitTimesDay) {
       final String exitName;
       final String exitName2;
 
@@ -945,7 +956,6 @@ class CalendarWidget extends StatelessWidget {
         timesList.where((timeData) => timeData['time'] != null).toList();
 
     final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GridView.builder(
       shrinkWrap: true,
@@ -960,8 +970,9 @@ class CalendarWidget extends StatelessWidget {
       itemBuilder: (context, index) {
         final timeData = filteredTimesList[index];
         final isSpecialTime = _isSpecialTime(timeData['name']!);
-        final bgColor =
-            isSpecialTime ? scheme.tertiaryContainer : scheme.surfaceVariant;
+        final bgColor = isSpecialTime
+            ? scheme.tertiaryContainer
+            : scheme.surfaceContainerHighest;
         final border =
             isSpecialTime ? Border.all(color: scheme.tertiary, width: 1) : null;
         final titleColor = isSpecialTime
@@ -1012,15 +1023,29 @@ class CalendarWidget extends StatelessWidget {
         JewishCalendar.fromDateTime(state.selectedGregorianDate);
 
     // חישוב דף יומי בבלי
-    final dafYomiBavli = YomiCalculator.getDafYomiBavli(jewishCalendar);
-    final bavliTractate = dafYomiBavli.getMasechta();
-    final bavliDaf = dafYomiBavli.getDaf();
+    String bavliTractate;
+    int bavliDaf;
+    try {
+      final dafYomiBavli = YomiCalculator.getDafYomiBavli(jewishCalendar);
+      bavliTractate = dafYomiBavli.getMasechta();
+      bavliDaf = dafYomiBavli.getDaf();
+    } catch (e) {
+      bavliTractate = 'לא זמין';
+      bavliDaf = 0;
+    }
 
     // חישוב דף יומי ירושלמי
-    final dafYomiYerushalmi =
-        YerushalmiYomiCalculator.getDafYomiYerushalmi(jewishCalendar);
-    final yerushalmiTractate = dafYomiYerushalmi.getMasechta();
-    final yerushalmiDaf = dafYomiYerushalmi.getDaf();
+    String yerushalmiTractate;
+    int yerushalmiDaf;
+    try {
+      final dafYomiYerushalmi =
+          YerushalmiYomiCalculator.getDafYomiYerushalmi(jewishCalendar);
+      yerushalmiTractate = dafYomiYerushalmi.getMasechta();
+      yerushalmiDaf = dafYomiYerushalmi.getDaf();
+    } catch (e) {
+      yerushalmiTractate = 'לא זמין';
+      yerushalmiDaf = 0;
+    }
 
     return Row(
       children: [
@@ -1053,8 +1078,9 @@ class CalendarWidget extends StatelessWidget {
         Expanded(
           child: ElevatedButton.icon(
             onPressed: () {
-              openDafYomiYerushalmiBook(context, yerushalmiTractate,
-                  ' ${_formatDafNumber(yerushalmiDaf)}.');
+              openDafYomiBook(context, yerushalmiTractate,
+                  ' ${_formatDafNumber(yerushalmiDaf)}.',
+                  categoryName: 'תלמוד ירושלמי');
             },
             icon: const Icon(Icons.menu_book),
             label: Column(
@@ -1232,13 +1258,6 @@ class CalendarWidget extends StatelessWidget {
     return result;
   }
 
-  String _numberToHebrewWithQuotes(int number) {
-    if (number <= 0) return '';
-    if (number < 10) return _numberToHebrewWithoutQuotes(number);
-    if (number < 100) return '${_numberToHebrewWithoutQuotes(number)}׳';
-    return '${_numberToHebrewWithoutQuotes(number)}״';
-  }
-
   String _getGregorianMonthName(int month) {
     const months = [
       'ינואר',
@@ -1366,6 +1385,7 @@ class CalendarWidget extends StatelessWidget {
                     TextField(
                       controller: dateController,
                       autofocus: true,
+                      textInputAction: TextInputAction.done,
                       decoration: const InputDecoration(
                         labelText: 'הזן תאריך',
                         hintText: 'דוגמאות: 15/3/2025, כ״ה אדר תשפ״ה',
@@ -1374,12 +1394,32 @@ class CalendarWidget extends StatelessWidget {
                             'ניתן להזין תאריך לועזי (יום/חודש/שנה) או עברי',
                       ),
                       onChanged: (value) => setState(() {}),
+                      onSubmitted: (value) {
+                        DateTime? dateToJump;
+
+                        if (value.isNotEmpty) {
+                          // נסה לפרש את הטקסט שהוזן
+                          dateToJump = _parseInputDate(context, value);
+                          if (dateToJump == null) {
+                            UiSnack.showError('לא הצלחנו לפרש את התאריך.',
+                                backgroundColor:
+                                    Theme.of(context).colorScheme.error);
+                            return;
+                          }
+                        } else {
+                          // אם לא הוזן כלום, השתמש בתאריך שנבחר מהלוח
+                          dateToJump = selectedDate;
+                        }
+
+                        context.read<CalendarCubit>().jumpToDate(dateToJump);
+                        Navigator.of(dialogContext).pop();
+                      },
                     ),
                     const SizedBox(height: 20),
 
                     const Divider(),
                     const Text(
-                      'או בחר מלוח השנה:',
+                      'או בחר בלוח השנה:',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 10),
@@ -1418,12 +1458,9 @@ class CalendarWidget extends StatelessWidget {
                           _parseInputDate(context, dateController.text);
 
                       if (dateToJump == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('לא הצלחנו לפרש את התאריך.'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
+                        UiSnack.showError('לא הצלחנו לפרש את התאריך.',
+                            backgroundColor:
+                                Theme.of(context).colorScheme.error);
                         return;
                       }
                     } else {
@@ -1593,7 +1630,7 @@ class CalendarWidget extends StatelessWidget {
                           child: Column(
                             children: [
                               DropdownButtonFormField<bool>(
-                                value: useHebrewCalendar,
+                                initialValue: useHebrewCalendar,
                                 decoration: const InputDecoration(
                                   labelText: 'חזור לפי',
                                   border: OutlineInputBorder(),
@@ -1649,7 +1686,7 @@ class CalendarWidget extends StatelessWidget {
                                       ? null
                                       : Theme.of(context)
                                           .disabledColor
-                                          .withOpacity(0.1),
+                                          .withValues(alpha: 0.1),
                                 ),
                               ),
                             ],
@@ -1668,11 +1705,8 @@ class CalendarWidget extends StatelessWidget {
                 ElevatedButton(
                   onPressed: () {
                     if (titleController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('יש למלא כותרת לאירוע.'),
-                            backgroundColor: Colors.red),
-                      );
+                      UiSnack.showError('יש למלא כותרת לאירוע.',
+                          backgroundColor: Theme.of(context).colorScheme.error);
                       return;
                     }
 
@@ -1688,7 +1722,7 @@ class CalendarWidget extends StatelessWidget {
                     }
 
                     if (isEditMode) {
-                      final updatedEvent = existingEvent!.copyWith(
+                      final updatedEvent = existingEvent.copyWith(
                         title: titleController.text.trim(),
                         description: descriptionController.text.trim(),
                         recurring: isRecurring,
@@ -2031,7 +2065,7 @@ class _DayExtras extends StatelessWidget {
 
     // הפונקציה formatYomTov מחזירה את שם החג, המועד, התענית או היום המיוחד
     final yomTov = hdf.formatYomTov(jc);
-    if (yomTov != null && yomTov.isNotEmpty) {
+    if (yomTov.isNotEmpty) {
       // הפונקציה יכולה להחזיר מספר אירועים מופרדים בפסיק, למשל "ערב שבת, ערב ראש חודש"
       // לכן אנחנו מפצלים אותם ומוסיפים כל אחד בנפרד
       l.addAll(yomTov.split(',').map((e) => e.trim()));
@@ -2227,27 +2261,32 @@ class _HoverableDayCellState extends State<_HoverableDayCell> {
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
       child: Stack(
-        alignment: Alignment.center,
+        alignment: Alignment.topCenter,
         children: [
           widget.child,
           // כפתור הוספה שמופיע בריחוף
           AnimatedOpacity(
             opacity: _isHovering ? 1.0 : 0.0,
             duration: const Duration(milliseconds: 200),
-            child: IgnorePointer(
-              ignoring: !_isHovering, // מונע מהכפתור לחסום קליקים כשהוא שקוף
-              child: Tooltip(
-                message: 'צור אירוע',
-                child: IconButton.filled(
-                  icon: const Icon(Icons.add),
-                  onPressed: widget.onAdd,
-                  style: IconButton.styleFrom(
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primaryContainer,
-                    foregroundColor:
-                        Theme.of(context).colorScheme.onPrimaryContainer,
-                    visualDensity:
-                        VisualDensity.compact, // הופך אותו לקצת יותר קטן
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: IgnorePointer(
+                ignoring: !_isHovering, // מונע מהכפתור לחסום קליקים כשהוא שקוף
+                child: Tooltip(
+                  message: 'צור אירוע',
+                  verticalOffset: -40.0,
+                  child: IconButton.filled(
+                    icon: const Icon(Icons.add, size: 16),
+                    onPressed: widget.onAdd,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(24, 24),
+                      backgroundColor:
+                          Theme.of(context).colorScheme.primaryContainer,
+                      foregroundColor:
+                          Theme.of(context).colorScheme.onPrimaryContainer,
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ),
               ),

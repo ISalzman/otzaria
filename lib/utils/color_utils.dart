@@ -15,6 +15,6 @@ class ColorUtils {
   }
 
   static String colorToString(Color color) {
-    return color.value.toRadixString(16);
+    return color.toARGB32().toRadixString(16);
   }
 }

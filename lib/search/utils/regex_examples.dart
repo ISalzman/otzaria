@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print
 
 import 'package:otzaria/search/utils/regex_patterns.dart';
+import 'package:flutter/foundation.dart';
 
 /// דוגמאות שימוש ברגקסים המרכזיים
 /// 
@@ -18,15 +19,15 @@ class RegexExamples {
     
     // פיצול למילים
     final words = text.split(SearchRegexPatterns.wordSplitter);
-    print('מילים: $words'); // ['שלום', 'עולם!', 'איך', 'הולך?']
+    debugPrint('מילים: $words'); // ['שלום', 'עולם!', 'איך', 'הולך?']
     
     // ניקוי טקסט
     final cleanText = SearchRegexPatterns.cleanText(text);
-    print('טקסט נקי: $cleanText'); // 'שלום עולם איך הולך'
+    debugPrint('טקסט נקי: $cleanText'); // 'שלום עולם איך הולך'
     
     // בדיקת שפה
-    print('עברית: ${SearchRegexPatterns.isHebrew(text)}'); // true
-    print('אנגלית: ${SearchRegexPatterns.isEnglish(text)}'); // false
+    debugPrint('עברית: ${SearchRegexPatterns.isHebrew(text)}'); // true
+    debugPrint('אנגלית: ${SearchRegexPatterns.isEnglish(text)}'); // false
   }
   
   /// דוגמאות להסרת HTML וניקוד
@@ -35,11 +36,11 @@ class RegexExamples {
     
     // הסרת HTML
     final withoutHtml = htmlText.replaceAll(SearchRegexPatterns.htmlStripper, '');
-    print('ללא HTML: $withoutHtml'); // 'שָׁלוֹם עוֹלָם'
+    debugPrint('ללא HTML: $withoutHtml'); // 'שָׁלוֹם עוֹלָם'
     
     // הסרת ניקוד
     final withoutVowels = withoutHtml.replaceAll(SearchRegexPatterns.vowelsAndCantillation, '');
-    print('ללא ניקוד: $withoutVowels'); // 'שלום עולם'
+    debugPrint('ללא ניקוד: $withoutVowels'); // 'שלום עולם'
   }
   
   /// דוגמאות למורפולוגיה עברית
@@ -47,22 +48,22 @@ class RegexExamples {
     const word = 'ובספרים';
     
     // בדיקת קידומות וסיומות
-    print('יש קידומת: ${SearchRegexPatterns.hasGrammaticalPrefix(word)}'); // true
-    print('יש סיומת: ${SearchRegexPatterns.hasGrammaticalSuffix(word)}'); // true
+    debugPrint('יש קידומת: ${SearchRegexPatterns.hasGrammaticalPrefix(word)}'); // true
+    debugPrint('יש סיומת: ${SearchRegexPatterns.hasGrammaticalSuffix(word)}'); // true
     
     // חילוץ שורש
     final root = SearchRegexPatterns.extractRoot(word);
-    print('שורש: $root'); // 'ספר'
+    debugPrint('שורש: $root'); // 'ספר'
     
     // יצירת דפוסי חיפוש
     final prefixPattern = SearchRegexPatterns.createPrefixPattern('ספר');
-    print('דפוס קידומות: $prefixPattern');
+    debugPrint('דפוס קידומות: $prefixPattern');
     
     final suffixPattern = SearchRegexPatterns.createSuffixPattern('ספר');
-    print('דפוס סיומות: $suffixPattern');
+    debugPrint('דפוס סיומות: $suffixPattern');
     
     final fullPattern = SearchRegexPatterns.createFullMorphologicalPattern('ספר');
-    print('דפוס מלא: $fullPattern');
+    debugPrint('דפוס מלא: $fullPattern');
   }
   
   /// דוגמאות לחיפוש מתקדם
@@ -71,20 +72,20 @@ class RegexExamples {
     
     // חיפוש עם קידומות רגילות
     final prefixSearch = SearchRegexPatterns.createPrefixSearchPattern(word);
-    print('חיפוש קידומות: $prefixSearch');
+    debugPrint('חיפוש קידומות: $prefixSearch');
     
     // חיפוש עם סיומות רגילות
     final suffixSearch = SearchRegexPatterns.createSuffixSearchPattern(word);
-    print('חיפוש סיומות: $suffixSearch');
+    debugPrint('חיפוש סיומות: $suffixSearch');
     
     // חיפוש חלק ממילה (משמש גם לקידומות+סיומות יחד)
     final partialSearch = SearchRegexPatterns.createPartialWordPattern(word);
-    print('חיפוש חלקי (או קידומות+סיומות): $partialSearch');
-    print('דוגמה: "$word" ימצא "בראשית" כי "ראשי" נמצא בתוך המילה');
+    debugPrint('חיפוש חלקי (או קידומות+סיומות): $partialSearch');
+    debugPrint('דוגמה: "$word" ימצא "בראשית" כי "ראשי" נמצא בתוך המילה');
     
     // כתיב מלא/חסר
     final spellingVariations = SearchRegexPatterns.generateFullPartialSpellingVariations(word);
-    print('וריאציות כתיב: $spellingVariations');
+    debugPrint('וריאציות כתיב: $spellingVariations');
   }
   
   /// דוגמאות לזיהוי תבניות מיוחדות
@@ -93,19 +94,19 @@ class RegexExamples {
     
     // זיהוי קיצורים
     final abbreviations = SearchRegexPatterns.abbreviations.allMatches(text);
-    print('קיצורים: ${abbreviations.map((m) => m.group(0)).toList()}'); // ['רמב"ם']
+    debugPrint('קיצורים: ${abbreviations.map((m) => m.group(0)).toList()}'); // ['רמב"ם']
     
     // זיהוי מספרים עבריים
     final hebrewNums = SearchRegexPatterns.hebrewNumbers.allMatches(text);
-    print('מספרים עבריים: ${hebrewNums.map((m) => m.group(0)).toList()}'); // ['א\'', 'כ"ג']
+    debugPrint('מספרים עבריים: ${hebrewNums.map((m) => m.group(0)).toList()}'); // ['א\'', 'כ"ג']
     
     // זיהוי מספרים לועזיים
     final latinNums = SearchRegexPatterns.latinNumbers.allMatches(text);
-    print('מספרים לועזיים: ${latinNums.map((m) => m.group(0)).toList()}'); // ['123']
+    debugPrint('מספרים לועזיים: ${latinNums.map((m) => m.group(0)).toList()}'); // ['123']
     
     // זיהוי ציטוטים
     final quotes = SearchRegexPatterns.quotations.allMatches(text);
-    print('ציטוטים: ${quotes.map((m) => m.group(0)).toList()}'); // ['"זה ציטוט"']
+    debugPrint('ציטוטים: ${quotes.map((m) => m.group(0)).toList()}'); // ['"זה ציטוט"']
   }
   
   /// דוגמה מקיפה לעיבוד טקסט חיפוש
@@ -149,54 +150,54 @@ class RegexExamples {
   static void smartSearchPattern() {
     const word = 'ראשי';
     
-    print('=== דוגמאות לפונקציה החכמה ===');
+    debugPrint('=== דוגמאות לפונקציה החכמה ===');
     
     // רק קידומות
     final prefixOnly = SearchRegexPatterns.createSearchPattern(word, hasPrefix: true);
-    print('רק קידומות: $prefixOnly');
+    debugPrint('רק קידומות: $prefixOnly');
     
     // רק סיומות
     final suffixOnly = SearchRegexPatterns.createSearchPattern(word, hasSuffix: true);
-    print('רק סיומות: $suffixOnly');
+    debugPrint('רק סיומות: $suffixOnly');
     
     // קידומות + סיומות (יהפוך לחלק ממילה!)
     final prefixAndSuffix = SearchRegexPatterns.createSearchPattern(word, 
         hasPrefix: true, hasSuffix: true);
-    print('קידומות + סיומות (חלק ממילה): $prefixAndSuffix');
-    print('זה ימצא "בראשית" כי "ראשי" נמצא בתוך המילה');
+    debugPrint('קידומות + סיומות (חלק ממילה): $prefixAndSuffix');
+    debugPrint('זה ימצא "בראשית" כי "ראשי" נמצא בתוך המילה');
     
     // קידומות דקדוקיות + סיומות דקדוקיות
     final grammatical = SearchRegexPatterns.createSearchPattern(word,
         hasGrammaticalPrefixes: true, hasGrammaticalSuffixes: true);
-    print('קידומות + סיומות דקדוקיות: $grammatical');
+    debugPrint('קידומות + סיומות דקדוקיות: $grammatical');
     
     // חיפוש מדויק
     final exact = SearchRegexPatterns.createSearchPattern(word);
-    print('חיפוש מדויק: $exact');
+    debugPrint('חיפוש מדויק: $exact');
   }
 
   /// הרצת כל הדוגמאות
   static void runAllExamples() {
-    print('=== עיבוד טקסט בסיסי ===');
+    debugPrint('=== עיבוד טקסט בסיסי ===');
     basicTextProcessing();
     
-    print('\n=== הסרת HTML וניקוד ===');
+    debugPrint('\n=== הסרת HTML וניקוד ===');
     htmlAndVowelProcessing();
     
-    print('\n=== מורפולוגיה עברית ===');
+    debugPrint('\n=== מורפולוגיה עברית ===');
     hebrewMorphology();
     
-    print('\n=== חיפוש מתקדם ===');
+    debugPrint('\n=== חיפוש מתקדם ===');
     advancedSearch();
     
-    print('\n=== תבניות מיוחדות ===');
+    debugPrint('\n=== תבניות מיוחדות ===');
     specialPatterns();
     
-    print('\n=== פונקציה חכמה לבחירת סוג חיפוש ===');
+    debugPrint('\n=== פונקציה חכמה לבחירת סוג חיפוש ===');
     smartSearchPattern();
     
-    print('\n=== עיבוד שאילתת חיפוש ===');
+    debugPrint('\n=== עיבוד שאילתת חיפוש ===');
     final analysis = processSearchQuery('ובספרים הקדושים');
-    print('ניתוח: $analysis');
+    debugPrint('ניתוח: $analysis');
   }
 }

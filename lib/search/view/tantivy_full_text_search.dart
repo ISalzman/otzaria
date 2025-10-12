@@ -16,7 +16,7 @@ import 'package:otzaria/widgets/resizable_facet_filtering.dart';
 
 class TantivyFullTextSearch extends StatefulWidget {
   final SearchingTab tab;
-  const TantivyFullTextSearch({Key? key, required this.tab}) : super(key: key);
+  const TantivyFullTextSearch({super.key, required this.tab});
   @override
   State<TantivyFullTextSearch> createState() => _TantivyFullTextSearchState();
 }

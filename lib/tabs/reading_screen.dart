@@ -21,11 +21,10 @@ import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:otzaria/history/history_dialog.dart';
 import 'package:otzaria/bookmarks/bookmarks_dialog.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-// הוסר: WorkspaceIconButton (עברנו ל-IconButton פשוט)
 import 'package:otzaria/widgets/scrollable_tab_bar.dart';
 
 class ReadingScreen extends StatefulWidget {
-  const ReadingScreen({Key? key}) : super(key: key);
+  const ReadingScreen({super.key});
 
   @override
   State<ReadingScreen> createState() => _ReadingScreenState();
@@ -152,13 +151,13 @@ class _ReadingScreenState extends State<ReadingScreen>
                 if (controller.indexIsChanging &&
                     state.currentTabIndex < state.tabs.length) {
                   // שמירת המצב הנוכחי לפני המעבר לטאב אחר
-                  print(
+                  debugPrint(
                       'DEBUG: מעבר בין טאבים - שמירת מצב טאב ${state.currentTabIndex}');
                   context.read<HistoryBloc>().add(CaptureStateForHistory(
                       state.tabs[state.currentTabIndex]));
                 }
                 if (controller.index != state.currentTabIndex) {
-                  print('DEBUG: עדכון טאב נוכחי ל-${controller.index}');
+                  debugPrint('DEBUG: עדכון טאב נוכחי ל-${controller.index}');
                   context.read<TabsBloc>().add(SetCurrentTab(controller.index));
                 }
               });
@@ -226,7 +225,10 @@ class _ReadingScreenState extends State<ReadingScreen>
                   // כאשר אין גלילה — מוסיפים placeholder משמאל כדי למרכז באמת ביחס למסך כולו
                   // כאשר יש גלילה — מבטלים אותו כדי לאפשר התפשטות גם לצד שמאל
                   // שומרים תמיד מקום קבוע לימין כדי למנוע שינויי רוחב פתאומיים
-                  actions: const [SizedBox(width: _kAppBarControlsWidth)],
+                  actions: [
+                    if (!_tabsOverflow)
+                      const SizedBox(width: _kAppBarControlsWidth),
+                  ],
                   // centerTitle לא נדרש כאשר הטאבים נמצאים ב-bottom
 
                   // 2. משתמשים באותו קבוע בדיוק עבור ווידג'ט הדמה

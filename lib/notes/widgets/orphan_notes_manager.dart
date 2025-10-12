@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import '../bloc/notes_bloc.dart';
 import '../bloc/notes_event.dart';
 import '../bloc/notes_state.dart';
@@ -7,7 +8,6 @@ import '../models/note.dart';
 import '../models/anchor_models.dart';
 import '../repository/notes_repository.dart';
 import '../services/notes_telemetry.dart';
-
 
 /// Widget for managing orphaned notes and helping re-anchor them
 class OrphanNotesManager extends StatefulWidget {
@@ -67,7 +67,9 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
       status: NoteStatus.shifted, // Mark as shifted since it's re-anchored
     );
 
-    context.read<NotesBloc>().add(UpdateNoteEvent(_selectedOrphan!.id, updateRequest));
+    context
+        .read<NotesBloc>()
+        .add(UpdateNoteEvent(_selectedOrphan!.id, updateRequest));
 
     // Clear selection
     setState(() {
@@ -77,12 +79,7 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
     });
 
     // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('הערה עוגנה מחדש בהצלחה'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    UiSnack.show('הערה עוגנה מחדש בהצלחה');
   }
 
   void _rejectCandidate() {
@@ -98,7 +95,8 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('מחק הערה יתומה'),
-        content: const Text('האם אתה בטוח שברצונך למחוק הערה זו? פעולה זו לא ניתנת לביטול.'),
+        content: const Text(
+            'האם אתה בטוח שברצונך למחוק הערה זו? פעולה זו לא ניתנת לביטול.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -108,7 +106,7 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
             onPressed: () {
               Navigator.of(context).pop();
               context.read<NotesBloc>().add(DeleteNoteEvent(orphan.id));
-              
+
               NotesTelemetry.trackUserAction('orphan_deleted', {
                 'note_count': 1,
               });
@@ -144,28 +142,29 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
                   child: Text(
                     'ניהול הערות יתומות',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                 ),
                 IconButton(
-                  onPressed: widget.onClose ?? () => Navigator.of(context).pop(),
+                  onPressed:
+                      widget.onClose ?? () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close),
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             Text(
               'הערות יתומות הן הערות שלא ניתן למצוא עבורן מיקום מתאים בגרסה הנוכחית של הטקסט.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,9 +174,9 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
                     flex: 1,
                     child: _buildOrphansList(),
                   ),
-                  
+
                   const SizedBox(width: 24),
-                  
+
                   // Candidates panel
                   Expanded(
                     flex: 2,
@@ -199,12 +198,10 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
         Text(
           'הערות יתומות',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+                fontWeight: FontWeight.bold,
+              ),
         ),
-        
         const SizedBox(height: 12),
-        
         Expanded(
           child: BlocBuilder<NotesBloc, NotesState>(
             builder: (context, state) {
@@ -232,7 +229,9 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
 
               List<Note> orphans = [];
               if (state is NotesLoaded) {
-                orphans = state.notes.where((note) => note.status == NoteStatus.orphan).toList();
+                orphans = state.notes
+                    .where((note) => note.status == NoteStatus.orphan)
+                    .toList();
               }
 
               if (orphans.isEmpty) {
@@ -240,7 +239,8 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.check_circle_outline, size: 48, color: Colors.green),
+                      Icon(Icons.check_circle_outline,
+                          size: 48, color: Colors.green),
                       SizedBox(height: 16),
                       Text('אין הערות יתומות!'),
                       SizedBox(height: 8),
@@ -255,9 +255,9 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
                 itemBuilder: (context, index) {
                   final orphan = orphans[index];
                   final isSelected = _selectedOrphan?.id == orphan.id;
-                  
+
                   return Card(
-                    color: isSelected 
+                    color: isSelected
                         ? Theme.of(context).colorScheme.primaryContainer
                         : null,
                     child: ListTile(
@@ -323,12 +323,10 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
         Text(
           'מועמדים לעיגון מחדש',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+                fontWeight: FontWeight.bold,
+              ),
         ),
-        
         const SizedBox(height: 12),
-        
         Expanded(
           child: _selectedOrphan == null
               ? const Center(
@@ -390,23 +388,23 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
                 Text(
                   _selectedOrphan!.contentMarkdown,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'טקסט מקורי: "${_selectedOrphan!.selectedTextNormalized}"',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontStyle: FontStyle.italic,
-                  ),
+                        fontStyle: FontStyle.italic,
+                      ),
                 ),
               ],
             ),
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Candidates list
         Expanded(
           child: ListView.builder(
@@ -416,7 +414,8 @@ class _OrphanNotesManagerState extends State<OrphanNotesManager> {
               return _CandidateItem(
                 candidate: candidate,
                 onAccept: () => _acceptCandidate(candidate),
-                onReject: index == _candidates.length - 1 ? _rejectCandidate : null,
+                onReject:
+                    index == _candidates.length - 1 ? _rejectCandidate : null,
               );
             },
           ),
@@ -457,7 +456,8 @@ class _CandidateItem extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: scoreColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -488,9 +488,9 @@ class _CandidateItem extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Preview text (would be extracted from document)
             Container(
               padding: const EdgeInsets.all(12),
@@ -503,9 +503,9 @@ class _CandidateItem extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Action buttons
             Row(
               children: [

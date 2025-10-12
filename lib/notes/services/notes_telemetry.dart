@@ -1,5 +1,6 @@
 import '../config/notes_config.dart';
 import '../models/note.dart';
+import 'package:flutter/foundation.dart';
 
 /// Service for tracking notes performance and usage metrics
 class NotesTelemetry {
@@ -25,7 +26,7 @@ class NotesTelemetry {
     
     // Log performance metrics without sensitive content
     if (NotesEnvironment.performanceLogging) {
-      print('Anchoring: $requestId, status: ${status.name}, '
+      debugPrint('Anchoring: $requestId, status: ${status.name}, '
             'strategy: $strategy, duration: ${duration.inMilliseconds}ms');
     }
     
@@ -47,7 +48,7 @@ class NotesTelemetry {
     final successRate = successCount / noteCount;
     
     if (NotesEnvironment.performanceLogging) {
-      print('Batch reanchoring: $requestId, notes: $noteCount, '
+      debugPrint('Batch reanchoring: $requestId, notes: $noteCount, '
             'success: $successCount, rate: ${(successRate * 100).toStringAsFixed(1)}%, '
             'avg: ${avgDuration.toStringAsFixed(1)}ms');
     }
@@ -65,7 +66,7 @@ class NotesTelemetry {
     if (!NotesConfig.telemetryEnabled || !NotesEnvironment.telemetryEnabled) return;
     
     if (NotesEnvironment.performanceLogging) {
-      print('Search: query_length=${query.length}, results=$resultCount, '
+      debugPrint('Search: query_length=${query.length}, results=$resultCount, '
             'duration=${duration.inMilliseconds}ms');
     }
     
@@ -77,7 +78,7 @@ class NotesTelemetry {
   static void trackPerformanceMetric(String operation, Duration duration) {
     if (!NotesEnvironment.performanceLogging) return;
     
-    print('Performance: $operation took ${duration.inMilliseconds}ms');
+    debugPrint('Performance: $operation took ${duration.inMilliseconds}ms');
     instance._recordMetric(operation, duration.inMilliseconds);
   }
 
@@ -102,7 +103,7 @@ class NotesTelemetry {
     }
     
     if (NotesEnvironment.performanceLogging) {
-      print('User action: $action, context: $safeContext');
+      debugPrint('User action: $action, context: $safeContext');
     }
   }
 

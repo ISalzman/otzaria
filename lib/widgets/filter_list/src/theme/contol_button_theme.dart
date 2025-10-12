@@ -12,10 +12,10 @@ import 'control_button_bar_theme.dart';
 class ControlButtonTheme extends InheritedTheme {
   /// Builds a [GifDialogTheme].
   const ControlButtonTheme({
-    Key? key,
+    super.key,
     required this.data,
-    required Widget child,
-  }) : super(key: key, child: child);
+    required super.child,
+  });
 
   /// The configuration of this theme.
   final ControlButtonThemeData data;
@@ -91,8 +91,10 @@ class ControlButtonThemeData with Diagnosticable {
         elevation: 0,
         textStyle:
             TextStyle(color: Theme.of(context).primaryColor, fontSize: 16),
-        primaryButtonBackgroundColor:
-            Theme.of(context).colorScheme.primaryContainer.withOpacity(.2),
+        primaryButtonBackgroundColor: Theme.of(context)
+            .colorScheme
+            .primaryContainer
+            .withValues(alpha: 0.2),
       );
   factory ControlButtonThemeData.dark(BuildContext context) =>
       ControlButtonThemeData(

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/navigation/about_screen.dart';
 
 class AboutDialogWidget extends StatelessWidget {
-  const AboutDialogWidget({Key? key}) : super(key: key);
+  const AboutDialogWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +19,7 @@ class AboutDialogWidget extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'אודות',
+                  'אודות התוכנה',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,

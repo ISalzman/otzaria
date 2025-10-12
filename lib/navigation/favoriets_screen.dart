@@ -5,7 +5,7 @@ import 'package:otzaria/history/history_screen.dart';
 import 'package:otzaria/bookmarks/bookmark_screen.dart';
 
 class FavouritesScreen extends StatefulWidget {
-  const FavouritesScreen({Key? key}) : super(key: key);
+  const FavouritesScreen({super.key});
 
   @override
   State<FavouritesScreen> createState() => _FavouritesScreenState();

@@ -205,7 +205,7 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15), // צל מעודן יותר
+                color: Colors.black.withValues(alpha: 0.15), // צל מעודן יותר
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),

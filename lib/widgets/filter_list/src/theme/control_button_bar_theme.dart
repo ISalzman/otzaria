@@ -9,10 +9,10 @@ import 'package:flutter/material.dart';
 ///  * [ControlButtonBarThemeData], which is used to configure this theme.
 class ControlButtonBarTheme extends InheritedWidget {
   const ControlButtonBarTheme({
-    Key? key,
+    super.key,
     required this.data,
-    required Widget child,
-  }) : super(key: key, child: child);
+    required super.child,
+  });
 
   /// The configuration of this theme.
   final ControlButtonBarThemeData data;

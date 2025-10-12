@@ -16,7 +16,6 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
 import 'package:otzaria/search/view/search_options_dropdown.dart';
 
-// הווידג'ט החדש לניהול מצבי הכפתור
 class _PlusButton extends StatefulWidget {
   final bool active;
   final VoidCallback onTap;
@@ -30,7 +29,7 @@ class _PlusButton extends StatefulWidget {
   State<_PlusButton> createState() => _PlusButtonState();
 }
 
-// כפתור המרווח שמופיע בריחוף - עגול כמו כפתור ה+
+// כפתור המרווח המופיע בריחוף
 class _SpacingButton extends StatefulWidget {
   final VoidCallback onTap;
 
@@ -144,13 +143,13 @@ class _SpacingField extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onRemove;
   final VoidCallback? onFocusLost;
-  final bool requestFocus; // פרמטר חדש לקביעה אם לבקש פוקוס
+  final bool requestFocus;
 
   const _SpacingField({
     required this.controller,
     required this.onRemove,
     this.onFocusLost,
-    this.requestFocus = true, // ברירת מחדל - כן לבקש פוקוס
+    this.requestFocus = true,
   });
 
   @override
@@ -212,7 +211,7 @@ class _SpacingFieldState extends State<_SpacingField> {
       backgroundColor: theme.scaffoldBackgroundColor,
     );
     final placeholderStyle = TextStyle(
-      color: theme.hintColor.withOpacity(0.8),
+      color: theme.hintColor.withValues(alpha: 0.8),
       fontSize: 12,
     );
 
@@ -235,7 +234,7 @@ class _SpacingFieldState extends State<_SpacingField> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(hasFocus ? 0.15 : 0.08),
+                  color: Colors.black.withValues(alpha: hasFocus ? 0.15 : 0.08),
                   blurRadius: hasFocus ? 6 : 3,
                   offset: const Offset(0, 2),
                 ),
@@ -387,7 +386,7 @@ class _AlternativeFieldState extends State<_AlternativeField> {
       backgroundColor: theme.scaffoldBackgroundColor,
     );
     final placeholderStyle = TextStyle(
-      color: theme.hintColor.withOpacity(0.8),
+      color: theme.hintColor.withValues(alpha: 0.8),
       fontSize: 12,
     );
 
@@ -410,7 +409,7 @@ class _AlternativeFieldState extends State<_AlternativeField> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(hasFocus ? 0.15 : 0.08),
+                  color: Colors.black.withValues(alpha: hasFocus ? 0.15 : 0.08),
                   blurRadius: hasFocus ? 6 : 3,
                   offset: const Offset(0, 2),
                 ),
@@ -1946,23 +1945,21 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                         },
                         icon: const Icon(Icons.search),
                       ),
-                      // החלף את כל ה-Row הקיים בזה:
                       suffixIcon: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           BlocBuilder<SearchBloc, SearchState>(
                             builder: (context, state) {
-                              if (!state.isAdvancedSearchEnabled)
+                              if (!state.isAdvancedSearchEnabled) {
                                 return const SizedBox.shrink();
+                              }
                               return IconButton(
                                 onPressed: () => _toggleSearchOptions(
                                     !_isSearchOptionsVisible),
                                 icon: const Icon(Icons.keyboard_arrow_down),
                                 focusNode: FocusNode(
-                                  // <-- התוספת המרכזית
-                                  canRequestFocus:
-                                      false, // מונע מהכפתור לבקש פוקוס
-                                  skipTraversal: true, // מדלג עליו בניווט מקלדת
+                                  canRequestFocus: false,
+                                  skipTraversal: true,
                                 ),
                               );
                             },
@@ -2019,217 +2016,15 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                 ),
               ),
             );
-          }).toList(),
+          }),
           // כפתורי ה+ (רק בחיפוש מתקדם)
           ..._wordPositions.asMap().entries.map((entry) {
             return _buildPlusButton(entry.key, entry.value);
-          }).toList(),
+          }),
           // כפתורי המרווח (רק בחיפוש מתקדם)
           ..._buildSpacingButtons(),
         ],
       ),
-    );
-  }
-}
-
-class _SearchOptionsContent extends StatefulWidget {
-  final String currentWord;
-  final int wordIndex;
-  final Map<String, Map<String, bool>> wordOptions;
-  final VoidCallback? onOptionsChanged;
-
-  const _SearchOptionsContent({
-    super.key,
-    required this.currentWord,
-    required this.wordIndex,
-    required this.wordOptions,
-    this.onOptionsChanged,
-  });
-
-  @override
-  State<_SearchOptionsContent> createState() => _SearchOptionsContentState();
-}
-
-class _SearchOptionsContentState extends State<_SearchOptionsContent> {
-  // רשימת האפשרויות הזמינות
-  static const List<String> _availableOptions = [
-    'קידומות',
-    'סיומות',
-    'קידומות דקדוקיות',
-    'סיומות דקדוקיות',
-    'כתיב מלא/חסר',
-    'חלק ממילה',
-  ];
-
-  String get _wordKey => '${widget.currentWord}_${widget.wordIndex}';
-
-  Map<String, bool> _getCurrentWordOptions() {
-    // אם אין אפשרויות למילה הזו, ניצור אותן
-    if (!widget.wordOptions.containsKey(_wordKey)) {
-      widget.wordOptions[_wordKey] =
-          Map.fromIterable(_availableOptions, value: (_) => false);
-    }
-
-    return widget.wordOptions[_wordKey]!;
-  }
-
-  Widget _buildCheckbox(String option) {
-    final currentOptions = _getCurrentWordOptions();
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTapDown: (details) {
-          setState(() {
-            currentOptions[option] = !currentOptions[option]!;
-          });
-          // עדכון מיידי של התצוגה
-          widget.onOptionsChanged?.call();
-        },
-        borderRadius: BorderRadius.circular(4),
-        canRequestFocus: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: currentOptions[option]!
-                        ? Theme.of(context).primaryColor
-                        : Colors.grey.shade600,
-                    width: 2,
-                  ),
-                  borderRadius: BorderRadius.circular(3),
-                  color: currentOptions[option]!
-                      ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-                      : Colors.transparent,
-                ),
-                child: currentOptions[option]!
-                    ? Icon(
-                        Icons.check,
-                        size: 14,
-                        color: Theme.of(context).primaryColor,
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 6),
-              Align(
-                alignment: Alignment.center,
-                child: Text(
-                  option,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                    height: 1.0,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // נקודות ההכרעה לתצוגות שונות
-    const double singleRowThreshold = 650.0; // רוחב מינימלי לשורה אחת
-    const double threeColumnsThreshold = 450.0; // רוחב מינימלי ל-3 טורים
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final availableWidth = constraints.maxWidth;
-
-        // 1. אם המסך רחב מספיק - נשתמש ב-Wrap (שיראה כמו שורה אחת)
-        if (availableWidth >= singleRowThreshold) {
-          return Wrap(
-            spacing: 16.0,
-            runSpacing: 8.0,
-            alignment: WrapAlignment.center,
-            children: _availableOptions
-                .map((option) => _buildCheckbox(option))
-                .toList(),
-          );
-        }
-        // 2. אם יש מקום ל-3 טורים - נחלק ל-3
-        else if (availableWidth >= threeColumnsThreshold) {
-          // מחלקים את רשימת האפשרויות לשלושה טורים
-          final int itemsPerColumn = (_availableOptions.length / 3).ceil();
-          final List<String> column1Options =
-              _availableOptions.take(itemsPerColumn).toList();
-          final List<String> column2Options = _availableOptions
-              .skip(itemsPerColumn)
-              .take(itemsPerColumn)
-              .toList();
-          final List<String> column3Options =
-              _availableOptions.skip(itemsPerColumn * 2).toList();
-
-          // פונקציית עזר לבניית עמודה
-          Widget buildColumn(List<String> options) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: options
-                  .map((option) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2.0),
-                        child: _buildCheckbox(option),
-                      ))
-                  .toList(),
-            );
-          }
-
-          // מחזירים שורה שמכילה את שלושת הטורים
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              buildColumn(column1Options),
-              buildColumn(column2Options),
-              buildColumn(column3Options),
-            ],
-          );
-        }
-        // 3. אם המסך צר מדי - נעבור לתצוגת 2 טורים
-        else {
-          // מחלקים את רשימת האפשרויות לשתי עמודות
-          final int middle = (_availableOptions.length / 2).ceil();
-          final List<String> column1Options =
-              _availableOptions.sublist(0, middle);
-          final List<String> column2Options = _availableOptions.sublist(middle);
-
-          // פונקציית עזר לבניית עמודה
-          Widget buildColumn(List<String> options) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: options
-                  .map((option) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2.0),
-                        child: _buildCheckbox(option),
-                      ))
-                  .toList(),
-            );
-          }
-
-          // מחזירים שורה שמכילה את שתי העמודות
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              buildColumn(column1Options),
-              buildColumn(column2Options),
-            ],
-          );
-        }
-      },
     );
   }
 }

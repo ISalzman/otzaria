@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -17,11 +16,10 @@ class PrintingScreen extends StatefulWidget {
   final bool removeNikud;
   final int startLine;
   const PrintingScreen(
-      {Key? key,
+      {super.key,
       required this.data,
       this.startLine = 0,
-      this.removeNikud = false})
-      : super(key: key);
+      this.removeNikud = false});
   @override
   State<PrintingScreen> createState() => _PrintingScreenState();
 }
@@ -171,7 +169,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                 size: const Size.fromWidth(350),
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
-                    showValueIndicator: ShowValueIndicator.always,
+                    showValueIndicator: ShowValueIndicator.onDrag,
                   ),
                   child: Column(
                     children: [

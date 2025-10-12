@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
-import 'package:otzaria/models/books.dart';
 
 void main() {
   test('Bookmark.fromJson handles missing commentators field', () {

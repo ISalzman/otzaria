@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/pdf_book/pdf_page_number_dispaly.dart';
@@ -56,7 +57,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final String query = controller.text.trim();
     if (query.isEmpty) return;
 
-    print('DEBUG: Triggering search by simulating user input for "$query"');
+    debugPrint(
+        'DEBUG: Triggering search by simulating user input for "$query"');
 
     // שיטה 1: הוספה והסרה מהירה
     controller.text = '$query '; // הוסף תו זמני
@@ -82,8 +84,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _searchFieldFocusNode.requestFocus();
   }
 
-  late TabController _tabController;
-  final GlobalKey<State<PdfBookSearchView>> _searchViewKey = GlobalKey();
   int? _lastProcessedSearchSessionId;
 
   void _onTextSearcherUpdated() {
@@ -115,21 +115,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
   }
 
+  @override
   void initState() {
     super.initState();
 
-    // 1. צור את הבקר (המכונית) קודם כל.
     pdfController = PdfViewerController();
 
-    // 2. צור את המחפש (השלט) וחבר אותו לבקר שיצרנו הרגע.
     textSearcher = PdfTextSearcher(pdfController)
       ..addListener(_onTextSearcherUpdated);
 
-    // 3. שמור את הבקר בטאב כדי ששאר חלקי האפליקציה יוכלו להשתמש בו.
     widget.tab.pdfViewerController = pdfController;
 
-    // וודא שהמיקום הנוכחי נשמר בטאב
-    print('DEBUG: אתחול PDF טאב - דף התחלתי: ${widget.tab.pageNumber}');
+    debugPrint('DEBUG: אתחול PDF טאב - דף התחלתי: ${widget.tab.pageNumber}');
 
     _sidebarWidth = ValueNotifier<double>(
         Settings.getValue<double>('key-sidebar-width', defaultValue: 300)!);
@@ -138,15 +135,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       _sidebarWidth.value = state.sidebarWidth;
     });
 
-    // -- שאר הקוד של initState נשאר כמעט זהה --
     pdfController.addListener(_onPdfViewerControllerUpdate);
-
-    _tabController = TabController(
-      length: 3,
-      vsync: this,
-      initialIndex: widget.tab.searchText.isNotEmpty ? 1 : 0,
-    );
-
     if (widget.tab.searchText.isNotEmpty) {
       _currentLeftPaneTabIndex = 1;
     } else {
@@ -285,14 +274,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                 book: widget.tab.book,
                                 index: index);
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(bookmarkAdded
-                              ? 'הסימניה נוספה בהצלחה'
-                              : 'הסימניה כבר קיימת'),
-                          duration: const Duration(milliseconds: 350),
-                        ),
-                      );
+                      UiSnack.show(bookmarkAdded
+                          ? 'הסימניה נוספה בהצלחה'
+                          : 'הסימניה כבר קיימת');
                     }
                   },
                 ),
@@ -335,7 +319,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       ? widget.tab.pdfViewerController.goToPage(
                           pageNumber: min(
                               widget.tab.pdfViewerController.pageNumber! + 1,
-                              widget.tab.pdfViewerController.pages.length))
+                              widget.tab.pdfViewerController.pageCount))
                       : null,
                   icon: const Icon(Icons.chevron_right),
                   tooltip: 'הבא',
@@ -345,8 +329,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     icon: const Icon(Icons.last_page),
                     tooltip: 'סוף הספר',
                     onPressed: () => widget.tab.pdfViewerController.goToPage(
-                        pageNumber:
-                            widget.tab.pdfViewerController.pages.length),
+                        pageNumber: widget.tab.pdfViewerController.pageCount),
                   ),
                 IconButton(
                   icon: const Icon(Icons.print),
@@ -492,7 +475,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                         .goToDest(link.dest);
                                   }
                                 },
-                                hoverColor: Colors.blue.withOpacity(0.2),
+                                hoverColor: Colors.blue.withValues(alpha: 0.2),
                               ),
                             ),
                             pagePaintCallbacks: [
@@ -674,7 +657,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _goNextPage() {
     if (widget.tab.pdfViewerController.isReady) {
       final nextPage = min(widget.tab.pdfViewerController.pageNumber! + 1,
-          widget.tab.pdfViewerController.pages.length);
+          widget.tab.pdfViewerController.pageCount);
       widget.tab.pdfViewerController.goToPage(pageNumber: nextPage);
     }
   }
@@ -805,6 +788,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
                 final index = await pdfToTextPage(
                     book, currentOutline, currentPage, context);
+
+                if (!context.mounted) return;
 
                 openBook(context, snapshot.data!, index ?? 0, '',
                     ignoreHistory: true);

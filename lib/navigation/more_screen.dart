@@ -3,11 +3,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tools/measurement_converter/measurement_converter_screen.dart';
 import 'package:otzaria/tools/gematria/gematria_search_screen.dart';
 import 'package:otzaria/settings/settings_repository.dart';
+import 'package:shamor_zachor/shamor_zachor.dart';
 import 'calendar_widget.dart';
 import 'calendar_cubit.dart';
 
 class MoreScreen extends StatefulWidget {
-  const MoreScreen({Key? key}) : super(key: key);
+  const MoreScreen({super.key});
 
   @override
   State<MoreScreen> createState() => _MoreScreenState();
@@ -17,6 +18,16 @@ class _MoreScreenState extends State<MoreScreen> {
   int _selectedIndex = 0;
   late final CalendarCubit _calendarCubit;
   late final SettingsRepository _settingsRepository;
+
+  // Title for the ShamorZachor section (dynamic from the package)
+  String _shamorZachorTitle = 'זכור ושמור';
+
+  /// Update the ShamorZachor title
+  void _updateShamorZachorTitle(String title) {
+    setState(() {
+      _shamorZachorTitle = title;
+    });
+  }
 
   @override
   void initState() {
@@ -36,7 +47,7 @@ class _MoreScreenState extends State<MoreScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor:
-            Theme.of(context).colorScheme.primary.withOpacity(0.15),
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
         title: Text(
           _getTitle(_selectedIndex),
           style: TextStyle(
@@ -91,7 +102,7 @@ class _MoreScreenState extends State<MoreScreen> {
       case 0:
         return 'לוח שנה';
       case 1:
-        return 'זכור ושמור';
+        return _shamorZachorTitle;
       case 2:
         return 'ממיר מידות תורני';
       case 3:
@@ -121,7 +132,9 @@ class _MoreScreenState extends State<MoreScreen> {
           child: const CalendarWidget(),
         );
       case 1:
-        return const Center(child: Text('בקרוב...'));
+        return ShamorZachorWidget(
+          onTitleChanged: _updateShamorZachorTitle,
+        );
       case 2:
         return const MeasurementConverterScreen();
       case 3:
@@ -140,43 +153,31 @@ class _MoreScreenState extends State<MoreScreen> {
           builder: (context, state) {
             return AlertDialog(
               title: const Text('הגדרות לוח שנה'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  RadioListTile<CalendarType>(
-                    title: const Text('לוח עברי'),
-                    value: CalendarType.hebrew,
-                    groupValue: state.calendarType,
-                    onChanged: (value) {
-                      if (value != null) {
-                        _calendarCubit.changeCalendarType(value);
-                      }
-                      Navigator.of(dialogContext).pop();
-                    },
-                  ),
-                  RadioListTile<CalendarType>(
-                    title: const Text('לוח לועזי'),
-                    value: CalendarType.gregorian,
-                    groupValue: state.calendarType,
-                    onChanged: (value) {
-                      if (value != null) {
-                        _calendarCubit.changeCalendarType(value);
-                      }
-                      Navigator.of(dialogContext).pop();
-                    },
-                  ),
-                  RadioListTile<CalendarType>(
-                    title: const Text('לוח משולב'),
-                    value: CalendarType.combined,
-                    groupValue: state.calendarType,
-                    onChanged: (value) {
-                      if (value != null) {
-                        _calendarCubit.changeCalendarType(value);
-                      }
-                      Navigator.of(dialogContext).pop();
-                    },
-                  ),
-                ],
+              content: RadioGroup<CalendarType>(
+                groupValue: state.calendarType,
+                onChanged: (value) {
+                  if (value != null) {
+                    _calendarCubit.changeCalendarType(value);
+                    Navigator.of(dialogContext).pop();
+                  }
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    RadioListTile<CalendarType>(
+                      title: Text('לוח עברי'),
+                      value: CalendarType.hebrew,
+                    ),
+                    RadioListTile<CalendarType>(
+                      title: Text('לוח לועזי'),
+                      value: CalendarType.gregorian,
+                    ),
+                    RadioListTile<CalendarType>(
+                      title: Text('לוח משולב'),
+                      value: CalendarType.combined,
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(

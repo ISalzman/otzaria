@@ -3,6 +3,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 
 abstract class TextBookState extends Equatable {
   final TextBook book;
@@ -50,13 +51,10 @@ class TextBookLoaded extends TextBookState {
   final double fontSize;
   final bool showSplitView;
   final List<String> activeCommentators;
-  final List<String> torahShebichtav;
-  final List<String> chazal;
-  final List<String> rishonim;
-  final List<String> acharonim;
-  final List<String> modernCommentators;
+  final List<CommentatorGroup> commentatorGroups;
   final List<String> availableCommentators;
   final List<Link> links;
+  final List<Link> visibleLinks;
   final List<TocEntry> tableOfContents;
   final bool removeNikud;
   final List<int> visibleIndices;
@@ -69,6 +67,14 @@ class TextBookLoaded extends TextBookState {
   final int? selectedTextStart;
   final int? selectedTextEnd;
 
+  // Editor state
+  final bool isEditorOpen;
+  final int? editorIndex;
+  final String? editorSectionId;
+  final String? editorText;
+  final bool hasDraft;
+  final bool hasLinksFile;
+
   // Controllers
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
@@ -80,13 +86,10 @@ class TextBookLoaded extends TextBookState {
     required this.fontSize,
     required this.showSplitView,
     required this.activeCommentators,
-    required this.torahShebichtav,
-    required this.chazal,
-    required this.rishonim,
-    required this.acharonim,
-    required this.modernCommentators,
+    required this.commentatorGroups,
     required this.availableCommentators,
     required this.links,
+    this.visibleLinks = const [],
     required this.tableOfContents,
     required this.removeNikud,
     required this.visibleIndices,
@@ -100,6 +103,12 @@ class TextBookLoaded extends TextBookState {
     this.selectedTextForNote,
     this.selectedTextStart,
     this.selectedTextEnd,
+    this.isEditorOpen = false,
+    this.editorIndex,
+    this.editorSectionId,
+    this.editorText,
+    this.hasDraft = false,
+    this.hasLinksFile = false,
   }) : super(book, selectedIndex ?? 0, showLeftPane, activeCommentators);
 
   factory TextBookLoaded.initial({
@@ -116,13 +125,10 @@ class TextBookLoaded extends TextBookState {
       showLeftPane: showLeftPane,
       showSplitView: splitView,
       activeCommentators: commentators ?? const [],
-      torahShebichtav: const [],
-      chazal: const [],
-      rishonim: const [],
-      acharonim: const [],
-      modernCommentators: const [],
+      commentatorGroups: const [],
       availableCommentators: const [],
       links: const [],
+      visibleLinks: const [],
       tableOfContents: const [],
       removeNikud: false,
       pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
@@ -134,6 +140,12 @@ class TextBookLoaded extends TextBookState {
       selectedTextForNote: null,
       selectedTextStart: null,
       selectedTextEnd: null,
+      isEditorOpen: false,
+      editorIndex: null,
+      editorSectionId: null,
+      editorText: null,
+      hasDraft: false,
+      hasLinksFile: false,
     );
   }
 
@@ -144,13 +156,10 @@ class TextBookLoaded extends TextBookState {
     bool? showLeftPane,
     bool? showSplitView,
     List<String>? activeCommentators,
-    List<String>? torahShebichtav,
-    List<String>? chazal,
-    List<String>? rishonim,
-    List<String>? acharonim,
-    List<String>? modernCommentators,
+    List<CommentatorGroup>? commentatorGroups,
     List<String>? availableCommentators,
     List<Link>? links,
+    List<Link>? visibleLinks,
     List<TocEntry>? tableOfContents,
     bool? removeNikud,
     int? selectedIndex,
@@ -164,6 +173,12 @@ class TextBookLoaded extends TextBookState {
     String? selectedTextForNote,
     int? selectedTextStart,
     int? selectedTextEnd,
+    bool? isEditorOpen,
+    int? editorIndex,
+    String? editorSectionId,
+    String? editorText,
+    bool? hasDraft,
+    bool? hasLinksFile,
   }) {
     return TextBookLoaded(
       book: book ?? this.book,
@@ -172,14 +187,11 @@ class TextBookLoaded extends TextBookState {
       showLeftPane: showLeftPane ?? this.showLeftPane,
       showSplitView: showSplitView ?? this.showSplitView,
       activeCommentators: activeCommentators ?? this.activeCommentators,
-      torahShebichtav: torahShebichtav ?? this.torahShebichtav,
-      chazal: chazal ?? this.chazal,
-      rishonim: rishonim ?? this.rishonim,
-      acharonim: acharonim ?? this.acharonim,
-      modernCommentators: modernCommentators ?? this.modernCommentators,
+      commentatorGroups: commentatorGroups ?? this.commentatorGroups,
       availableCommentators:
           availableCommentators ?? this.availableCommentators,
       links: links ?? this.links,
+      visibleLinks: visibleLinks ?? this.visibleLinks,
       tableOfContents: tableOfContents ?? this.tableOfContents,
       removeNikud: removeNikud ?? this.removeNikud,
       visibleIndices: visibleIndices ?? this.visibleIndices,
@@ -193,6 +205,12 @@ class TextBookLoaded extends TextBookState {
       selectedTextForNote: selectedTextForNote ?? this.selectedTextForNote,
       selectedTextStart: selectedTextStart ?? this.selectedTextStart,
       selectedTextEnd: selectedTextEnd ?? this.selectedTextEnd,
+      isEditorOpen: isEditorOpen ?? this.isEditorOpen,
+      editorIndex: editorIndex ?? this.editorIndex,
+      editorSectionId: editorSectionId ?? this.editorSectionId,
+      editorText: editorText ?? this.editorText,
+      hasDraft: hasDraft ?? this.hasDraft,
+      hasLinksFile: hasLinksFile ?? this.hasLinksFile,
     );
   }
 
@@ -204,13 +222,10 @@ class TextBookLoaded extends TextBookState {
         showLeftPane,
         showSplitView,
         activeCommentators.length,
-        torahShebichtav,
-        chazal,
-        rishonim,
-        acharonim,
-        modernCommentators,
+        commentatorGroups,
         availableCommentators.length,
         links.length,
+        visibleLinks.length,
         tableOfContents.length,
         removeNikud,
         visibleIndices,
@@ -222,5 +237,11 @@ class TextBookLoaded extends TextBookState {
         selectedTextForNote,
         selectedTextStart,
         selectedTextEnd,
+        isEditorOpen,
+        editorIndex,
+        editorSectionId,
+        editorText,
+        hasDraft,
+        hasLinksFile,
       ];
 }

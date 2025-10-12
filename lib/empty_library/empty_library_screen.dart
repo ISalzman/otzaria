@@ -4,12 +4,12 @@ import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'dart:io' show Platform;
+import 'package:otzaria/core/scaffold_messenger.dart';
 
 class EmptyLibraryScreen extends StatelessWidget {
   final VoidCallback onLibraryLoaded;
 
-  const EmptyLibraryScreen({Key? key, required this.onLibraryLoaded})
-      : super(key: key);
+  const EmptyLibraryScreen({super.key, required this.onLibraryLoaded});
 
   @override
   Widget build(BuildContext context) {
@@ -23,8 +23,7 @@ class EmptyLibraryScreen extends StatelessWidget {
 class _EmptyLibraryView extends StatelessWidget {
   final VoidCallback onLibraryLoaded;
 
-  const _EmptyLibraryView({Key? key, required this.onLibraryLoaded})
-      : super(key: key);
+  const _EmptyLibraryView({required this.onLibraryLoaded});
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +34,8 @@ class _EmptyLibraryView extends StatelessWidget {
             onLibraryLoaded();
           }
           if (state is EmptyLibraryError && state.errorMessage != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.errorMessage!)),
-            );
+            UiSnack.showError(state.errorMessage!,
+                backgroundColor: Theme.of(context).colorScheme.error);
           }
         },
         builder: (context, state) {
@@ -113,7 +111,7 @@ class _EmptyLibraryView extends StatelessWidget {
 class _DownloadProgress extends StatelessWidget {
   final EmptyLibraryState state;
 
-  const _DownloadProgress({Key? key, required this.state}) : super(key: key);
+  const _DownloadProgress({required this.state});
 
   @override
   Widget build(BuildContext context) {

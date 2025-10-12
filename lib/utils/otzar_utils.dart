@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 
 import 'package:path/path.dart' as path;
 import 'package:url_launcher/url_launcher_string.dart';
@@ -57,7 +58,7 @@ class OtzarUtils {
         continue;
       }
     }
-    print('Book $bookId not found in any "<drive>" <book> folder');
+    debugPrint('Book $bookId not found in any "<drive>" <book> folder');
     return false;
   }
 

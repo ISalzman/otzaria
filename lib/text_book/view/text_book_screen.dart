@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:convert';
 import 'dart:async';
 import 'package:csv/csv.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -16,26 +17,32 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/printing/printing_screen.dart';
-import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/text_book/view/links_screen.dart';
-import 'package:otzaria/text_book/view/splited_view/splited_view_screen.dart';
+import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/ref_helper.dart';
+import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
+import 'package:otzaria/text_book/editing/helpers/editor_settings_helper.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/notes/notes_system.dart';
 import 'package:otzaria/models/phone_report_data.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/services/phone_report_service.dart';
+
 import 'package:otzaria/widgets/phone_report_tab.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
+import 'package:shamor_zachor/providers/shamor_zachor_data_provider.dart';
+import 'package:shamor_zachor/providers/shamor_zachor_progress_provider.dart';
+import 'package:shamor_zachor/models/book_model.dart';
 
 /// נתוני הדיווח שנאספו מתיבת סימון הטקסט + פירוט הטעות שהמשתמש הקליד.
 class ReportedErrorData {
@@ -58,10 +65,10 @@ class TextBookViewerBloc extends StatefulWidget {
   final TextBookTab tab;
 
   const TextBookViewerBloc({
-    Key? key,
+    super.key,
     required this.openBookCallback,
     required this.tab,
-  }) : super(key: key);
+  });
 
   @override
   State<TextBookViewerBloc> createState() => _TextBookViewerBlocState();
@@ -74,6 +81,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   late TabController tabController;
   late final ValueNotifier<double> _sidebarWidth;
   late final StreamSubscription<SettingsState> _settingsSub;
+  int? _sidebarTabIndex; // אינדקס הכרטיסייה בסרגל הצדי
   static const String _reportFileName = 'דיווח שגיאות בספרים.txt';
   static const String _reportSeparator = '==============================';
   static const String _reportSeparator2 = '------------------------------';
@@ -91,6 +99,418 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}',
         )
         .join('&');
+  }
+
+  /// בדיקה אם הספר נתמך על ידי שמור וזכור
+  bool _isBookSupportedByShamorZachor(String bookTitle) {
+    try {
+      final dataProvider = context.read<ShamorZachorDataProvider>();
+      if (!dataProvider.hasData) {
+        debugPrint('Shamor Zachor data not loaded yet');
+        return false;
+      }
+
+      // לא להציג בתלמוד ירושלמי
+      if (bookTitle.contains('ירושלמי')) {
+        debugPrint('Book $bookTitle is Yerushalmi - not supported');
+        return false;
+      }
+
+      // חיפוש הספר בכל הקטגוריות - חיפוש מדויק יותר
+      final searchResults = dataProvider.searchBooks(bookTitle);
+      debugPrint(
+          'Searching for book: $bookTitle, found ${searchResults.length} results');
+
+      // בדיקה מדויקת יותר - גם שם מלא וגם חלקי
+      final isSupported = searchResults.any((result) =>
+          result.bookName == bookTitle ||
+          result.bookName.contains(bookTitle) ||
+          bookTitle.contains(result.bookName));
+
+      debugPrint(
+          'Book $bookTitle is ${isSupported ? 'supported' : 'not supported'} by Shamor Zachor');
+      return isSupported;
+    } catch (e) {
+      // אם אין provider או שגיאה אחרת, הספר לא נתמך
+      debugPrint('Error checking Shamor Zachor support: $e');
+      return false;
+    }
+  }
+
+  /// סימון V בשמור וזכור
+  Future<void> _markShamorZachorProgress(String bookTitle) async {
+    try {
+      final dataProvider = context.read<ShamorZachorDataProvider>();
+      final progressProvider = context.read<ShamorZachorProgressProvider>();
+      final state = context.read<TextBookBloc>().state as TextBookLoaded;
+
+      if (!dataProvider.hasData) {
+        UiSnack.showError('נתוני שמור וזכור לא נטענו');
+        return;
+      }
+
+      // חיפוש הספר - נחפש גם לפי שם קצר
+      final searchResults = dataProvider.searchBooks(bookTitle);
+
+      // זיהוי קטגוריה לפי נתיב הספר
+      String searchName = bookTitle;
+      String? detectedCategory;
+
+      try {
+        // קבלת נתיב הספר
+        final titleToPath = await state.book.data.titleToPath;
+        final bookPath = titleToPath[bookTitle];
+
+        if (bookPath != null) {
+          debugPrint('Book path: $bookPath');
+
+          // זיהוי קטגוריה לפי הנתיב
+          if (bookPath.contains('תלמוד בבלי')) {
+            detectedCategory = 'תלמוד בבלי';
+          } else if (bookPath.contains('תנך') || bookPath.contains('תנ"ך')) {
+            detectedCategory = 'תנ"ך';
+          } else if (bookPath.contains('משנה')) {
+            detectedCategory = 'משנה';
+          } else if (bookPath.contains('הלכה')) {
+            detectedCategory = 'הלכה';
+          } else if (bookPath.contains('ירושלמי')) {
+            detectedCategory = 'תלמוד ירושלמי';
+          } else if (bookPath.contains('רמב"ם') || bookPath.contains('רמבם')) {
+            detectedCategory = 'רמב"ם';
+          }
+
+          debugPrint('Detected category from path: $detectedCategory');
+        }
+      } catch (e) {
+        debugPrint('Error getting book path: $e');
+      }
+
+      // הכנת שם החיפוש
+      searchName = bookTitle;
+      if (bookTitle.contains(' - ')) {
+        final parts = bookTitle.split(' - ');
+        searchName = parts.last.trim();
+        debugPrint('Extracted book name from title: $searchName');
+      }
+
+      // חיפוש הספר המתאים לפי הקטגוריה המזוהה
+      BookSearchResult? bookResult;
+
+      if (detectedCategory != null) {
+        // חיפוש בקטגוריה הספציפית שזוהתה מהנתיב
+        try {
+          bookResult = searchResults.firstWhere(
+            (result) =>
+                (result.bookName == searchName ||
+                    result.bookName.contains(searchName)) &&
+                result.topLevelCategoryName == detectedCategory,
+          );
+          debugPrint(
+              'Found in detected category "$detectedCategory": ${bookResult.bookName}');
+        } catch (e) {
+          debugPrint(
+              'Not found in detected category "$detectedCategory", trying general search');
+          bookResult = null;
+        }
+      }
+
+      // אם לא מצאנו בקטגוריה הספציפית, נחפש רגיל
+      if (bookResult == null) {
+        try {
+          bookResult = searchResults.firstWhere(
+            (result) =>
+                result.bookName == bookTitle ||
+                result.bookName == searchName ||
+                result.bookName.contains(searchName) ||
+                bookTitle.contains(result.bookName),
+          );
+          debugPrint(
+              'Found in general search: ${bookResult.bookName} in ${bookResult.topLevelCategoryName}');
+        } catch (e) {
+          throw Exception('ספר לא נמצא');
+        }
+      }
+
+      final categoryName = bookResult.topLevelCategoryName;
+      final bookName = bookResult.bookName;
+      final bookDetails = bookResult.bookDetails;
+
+      debugPrint('Selected book: $bookName in category: $categoryName');
+      debugPrint('Book content type: ${bookDetails.contentType}');
+
+      // קבלת הפרק הנוכחי
+      final currentIndex =
+          state.positionsListener.itemPositions.value.isNotEmpty
+              ? state.positionsListener.itemPositions.value.first.index
+              : 0;
+
+      // קבלת הכותרת הנוכחית
+      String currentRef =
+          await refFromIndex(currentIndex, state.book.tableOfContents);
+
+      // אם הכותרת היא רק שם הספר (H1), נחפש את H2 הבאה
+      if (currentRef == state.book.title || currentRef.split(',').length == 1) {
+        debugPrint('Current ref is H1 (book title), looking for next H2...');
+        final toc = await state.book.tableOfContents;
+
+        // חיפוש הכותרת הבאה שגדולה מהאינדקס הנוכחי
+        for (final entry in toc) {
+          if (entry.index > currentIndex) {
+            currentRef = entry.text;
+            debugPrint('Found next H2: $currentRef');
+            break;
+          }
+          // חיפוש גם בכותרות המשנה
+          for (final child in entry.children) {
+            if (child.index > currentIndex) {
+              currentRef = '${entry.text}, ${child.text}';
+              debugPrint('Found next H2 child: $currentRef');
+              break;
+            }
+          }
+          if (currentRef !=
+              await refFromIndex(currentIndex, state.book.tableOfContents)) {
+            break;
+          }
+        }
+      }
+
+      debugPrint('Current ref: $currentRef');
+
+      // חילוץ מספר הפרק מהפניה
+      int? chapterNumber = _extractChapterNumber(currentRef);
+      String? chapterName = _extractChapterName(currentRef);
+      String? amudKey = _extractAmudKey(currentRef);
+
+      if (chapterNumber == null) {
+        UiSnack.showError('לא הצלחתי לזהות את הפרק הנוכחי');
+        return;
+      }
+
+      debugPrint('Chapter number: $chapterNumber');
+      debugPrint('Chapter name: $chapterName');
+      debugPrint('Amud key: $amudKey');
+      debugPrint('Book content type: ${bookDetails.contentType}');
+      debugPrint('Book is daf type: ${bookDetails.isDafType}');
+      debugPrint('Total learnable items: ${bookDetails.learnableItems.length}');
+
+      // מציאת הפריט הרלוונטי בשמור וזכור
+      final learnableItems = bookDetails.learnableItems;
+
+      // חיפוש הפריט המתאים - בתלמוד לפי דף ועמוד, אחרת לפי פרק
+      LearnableItem? targetItem;
+
+      if (bookDetails.isDafType || amudKey != null) {
+        // זה תלמוד - חפש לפי דף ועמוד
+        final targetAmud = amudKey ?? 'a'; // ברירת מחדל עמוד א'
+        try {
+          targetItem = learnableItems.firstWhere(
+            (item) =>
+                item.pageNumber == chapterNumber && item.amudKey == targetAmud,
+          );
+        } catch (e) {
+          targetItem = null;
+        }
+      } else {
+        // זה לא תלמוד - חפש לפי מספר פרק
+        try {
+          targetItem = learnableItems.firstWhere(
+            (item) => item.pageNumber == chapterNumber,
+          );
+        } catch (e) {
+          targetItem = null;
+        }
+      }
+
+      if (targetItem == null) {
+        throw Exception('${chapterName ?? chapterNumber} לא נמצא בשמור וזכור');
+      }
+
+      debugPrint(
+          'Target item: ${targetItem.pageNumber}${targetItem.amudKey}, absoluteIndex: ${targetItem.absoluteIndex}');
+
+      // בדיקת מצב העמודות עבור הפרק הספציפי
+      final itemProgress = progressProvider.getProgressForItem(
+          categoryName, bookName, targetItem.absoluteIndex);
+
+      // מציאת העמודה הראשונה שלא מסומנת
+      String? columnToMark;
+      const columns = ['learn', 'review1', 'review2', 'review3'];
+
+      for (final column in columns) {
+        if (!itemProgress.getProperty(column)) {
+          columnToMark = column;
+          break;
+        }
+      }
+
+      if (columnToMark == null) {
+        UiSnack.show(
+            'אין מקום פנוי ב${chapterName ?? chapterNumber}, למדת הרבה!');
+        return;
+      }
+
+      // סימון הפרק הספציפי
+      await progressProvider.updateProgress(
+        categoryName,
+        bookName,
+        targetItem.absoluteIndex,
+        columnToMark,
+        true,
+        bookDetails,
+      );
+
+      final columnName = _getColumnDisplayName(columnToMark);
+      // השתמש בשם המקורי מהכותרת
+      final displayName = chapterName ?? 'פרק $chapterNumber';
+      UiSnack.showSuccess('$displayName סומן כ$columnName בהצלחה!');
+    } catch (e) {
+      debugPrint('Error in _markShamorZachorProgress: $e');
+      UiSnack.showError('שגיאה בסימון: ${e.toString()}');
+    }
+  }
+
+  /// חילוץ מספר הפרק מהפניה
+  int? _extractChapterNumber(String ref) {
+    // דוגמאות לפניות: "בראשית, פרק א", "שמות, פרק ב", "בראשית א", "שמות ב"
+
+    // חיפוש מספרים עבריים
+    final hebrewNumbers = {
+      'א': 1,
+      'ב': 2,
+      'ג': 3,
+      'ד': 4,
+      'ה': 5,
+      'ו': 6,
+      'ז': 7,
+      'ח': 8,
+      'ט': 9,
+      'י': 10,
+      'יא': 11,
+      'יב': 12,
+      'יג': 13,
+      'יד': 14,
+      'טו': 15,
+      'טז': 16,
+      'יז': 17,
+      'יח': 18,
+      'יט': 19,
+      'כ': 20,
+      'כא': 21,
+      'כב': 22,
+      'כג': 23,
+      'כד': 24,
+      'כה': 25,
+      'כו': 26,
+      'כז': 27,
+      'כח': 28,
+      'כט': 29,
+      'ל': 30,
+      'לא': 31,
+      'לב': 32,
+      'לג': 33,
+      'לד': 34,
+      'לה': 35,
+      'לו': 36,
+      'לז': 37,
+      'לח': 38,
+      'לט': 39,
+      'מ': 40,
+      'מא': 41,
+      'מב': 42,
+      'מג': 43,
+      'מד': 44,
+      'מה': 45,
+      'מו': 46,
+      'מז': 47,
+      'מח': 48,
+      'מט': 49,
+      'נ': 50
+    };
+
+    // חיפוש דפוסים שונים - פרק, דף, או רק מספר
+    final patterns = [
+      RegExp(r'פרק\s+([א-ת]+)'),
+      RegExp(r'דף\s+([א-ת]+)\.?'), // תמיכה ב"דף ו." או "דף ו"
+      RegExp(r',\s*([א-ת]+)\.?$'), // תמיכה ב", ו." או ", ו"
+      RegExp(r'\s+([א-ת]+)\.?$'), // תמיכה ב" ו." או " ו"
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(ref);
+      if (match != null) {
+        final hebrewNum = match.group(1);
+        if (hebrewNum != null && hebrewNumbers.containsKey(hebrewNum)) {
+          return hebrewNumbers[hebrewNum];
+        }
+      }
+    }
+
+    // חיפוש מספרים רגילים
+    final numberPattern = RegExp(r'(\d+)');
+    final numberMatch = numberPattern.firstMatch(ref);
+    if (numberMatch != null) {
+      return int.tryParse(numberMatch.group(1)!);
+    }
+
+    return null;
+  }
+
+  /// חילוץ עמוד (א'/ב') מהפניה
+  String? _extractAmudKey(String ref) {
+    // דוגמאות: "חגיגה, דף ג:" -> "b", "ברכות, דף ו." -> "a"
+
+    if (ref.contains(':')) {
+      return 'b'; // נקודתיים מציינים עמוד ב'
+    } else if (ref.contains('.')) {
+      return 'a'; // נקודה מציינת עמוד א'
+    }
+
+    return null; // לא תלמוד
+  }
+
+  /// חילוץ שם הפרק/דף מהפניה (לתצוגה)
+  String? _extractChapterName(String ref) {
+    // דוגמאות: "בראשית, פרק א" -> "פרק א", "ברכות, דף ו." -> "דף ו"
+
+    final patterns = [
+      RegExp(r'(פרק\s+[א-ת]+)'),
+      RegExp(r'(דף\s+[א-ת]+[.:]?)'), // שמירת הנקודה או הנקודתיים
+      RegExp(r',\s*([א-ת]+[.:]?)$'), // אם זה רק האות בסוף עם הסימן
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(ref);
+      if (match != null) {
+        String result = match.group(1) ?? '';
+        return result;
+      }
+    }
+
+    // אם לא מצאנו דפוס מיוחד, ננסה לחלץ רק את החלק האחרון
+    final parts = ref.split(',');
+    if (parts.length > 1) {
+      String lastPart = parts.last.trim();
+      return lastPart; // שמירת הסימן המקורי
+    }
+
+    return null;
+  }
+
+  /// קבלת שם העמודה להצגה
+  String _getColumnDisplayName(String column) {
+    switch (column) {
+      case 'learn':
+        return 'נלמד';
+      case 'review1':
+        return 'חזרה ראשונה';
+      case 'review2':
+        return 'חזרה שנייה';
+      case 'review3':
+        return 'חזרה שלישית';
+      default:
+        return column;
+    }
   }
 
   int _getCurrentLineNumber() {
@@ -171,7 +591,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     super.initState();
 
     // וודא שהמיקום הנוכחי נשמר בטאב
-    print('DEBUG: אתחול טקסט טאב - אינדקס התחלתי: ${widget.tab.index}');
 
     // אם יש טקסט חיפוש (searchText), נתחיל בלשונית 'חיפוש' (שנמצאת במקום ה-1)
     // אחרת, נתחיל בלשונית 'ניווט' (שנמצאת במקום ה-0)
@@ -211,10 +630,35 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
-        return BlocBuilder<TextBookBloc, TextBookState>(
+        return BlocConsumer<TextBookBloc, TextBookState>(
           bloc: context.read<TextBookBloc>(),
+          listener: (context, state) {
+            if (state is TextBookLoaded &&
+                state.isEditorOpen &&
+                state.editorIndex != null) {
+              _openEditorDialog(context, state);
+            }
+
+            // איפוס אינדקס הכרטיסייה כשהחלונית נסגרת
+            if (state is TextBookLoaded &&
+                !state.showSplitView &&
+                _sidebarTabIndex != null) {
+              setState(() {
+                _sidebarTabIndex = null;
+              });
+            }
+          },
           builder: (context, state) {
             if (state is TextBookInitial) {
+              // איפוס אינדקס הכרטיסייה כשטוענים ספר חדש
+              if (_sidebarTabIndex != null) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  setState(() {
+                    _sidebarTabIndex = null;
+                  });
+                });
+              }
+
               context.read<TextBookBloc>().add(
                     LoadContent(
                       fontSize: settingsState.fontSize,
@@ -237,9 +681,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               return LayoutBuilder(
                 builder: (context, constrains) {
                   final wideScreen = (MediaQuery.of(context).size.width >= 600);
-                  return Scaffold(
-                    appBar: _buildAppBar(context, state, wideScreen),
-                    body: _buildBody(context, state, wideScreen),
+                  return KeyboardListener(
+                    focusNode: FocusNode(),
+                    onKeyEvent: (event) =>
+                        _handleGlobalKeyEvent(event, context, state),
+                    child: Scaffold(
+                      appBar: _buildAppBar(context, state, wideScreen),
+                      body: _buildBody(context, state, wideScreen),
+                    ),
                   );
                 },
               );
@@ -364,8 +813,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         // Print Button
         _buildPrintButton(context, state),
 
+        // Full File Editor Button
+        _buildFullFileEditorButton(context, state),
+
         // Report Bug Button
         _buildReportBugButton(context, state),
+
+        // Shamor Zachor Button
+        _buildShamorZachorButton(context, state),
       ];
     }
 
@@ -563,12 +1018,28 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         ),
       ),
 
+      // Full File Editor Button
+      ActionButtonData(
+        widget: _buildFullFileEditorButton(context, state),
+        icon: Icons.edit_document,
+        tooltip: 'ערוך את הספר (Ctrl+Shift+E)',
+        onPressed: () => _handleFullFileEditorPress(context, state),
+      ),
+
       // Report Bug Button
       ActionButtonData(
         widget: _buildReportBugButton(context, state),
         icon: Icons.error_outline,
         tooltip: 'דווח על טעות בספר',
         onPressed: () => _showReportBugDialog(context, state),
+      ),
+
+      // Shamor Zachor Button
+      ActionButtonData(
+        widget: _buildShamorZachorButton(context, state),
+        icon: Icons.check_circle,
+        tooltip: 'סמן כנלמד בשמור וזכור',
+        onPressed: () => _markShamorZachorProgress(state.book.title),
       ),
     ];
   }
@@ -603,7 +1074,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _handlePdfButtonPress(context, state),
       ),
 
-      // 2) חיפוש
+      // 3) חיפוש
       ActionButtonData(
         widget: _buildSearchButton(context, state),
         icon: Icons.search,
@@ -615,7 +1086,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
-      // 3) הוסף הערות
+      // 3) ערוך את הספר
+      ActionButtonData(
+        widget: _buildFullFileEditorButton(context, state),
+        icon: Icons.edit_document,
+        tooltip: 'ערוך את הספר (Ctrl+Shift+E)',
+        onPressed: () => _handleFullFileEditorPress(context, state),
+      ),
+
+      // 4) הוסף הערות
       ActionButtonData(
         widget: _buildAddNoteButton(context, state),
         icon: Icons.note_add,
@@ -623,7 +1102,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _handleAddNotePress(context, state),
       ),
 
-      // 4) כפתורי השליטה בספר: הקטע הקודם/הבא, תחילת/סוף הספר
+      // 5) כפתורי השליטה בספר: הקטע הקודם/הבא, תחילת/סוף הספר
       ActionButtonData(
         widget: _buildFirstPageButton(state),
         icon: Icons.first_page,
@@ -739,6 +1218,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ),
         ),
       ),
+
+      // 11) כפתור שמור וזכור
+      ActionButtonData(
+        widget: _buildShamorZachorButton(context, state),
+        icon: Icons.check_circle,
+        tooltip: 'סמן כנלמד בשמור וזכור',
+        onPressed: () => _markShamorZachorProgress(state.book.title),
+      ),
     ];
   }
 
@@ -758,16 +1245,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     : 0;
                 widget.tab.index = currentIndex;
 
-                final book = await DataRepository.instance.library.then(
-                  (library) =>
-                      library.findBookByTitle(state.book.title, PdfBook),
-                );
+                final library = await DataRepository.instance.library;
+                if (!context.mounted) return;
+
+                final book = library.findBookByTitle(state.book.title, PdfBook);
+                if (book == null) {
+                  return;
+                }
+
                 final index = await textToPdfPage(
                   state.book,
                   currentIndex,
                 );
 
-                openBook(context, book!, index ?? 1, '', ignoreHistory: true);
+                if (!context.mounted) return;
+
+                openBook(context, book, index ?? 1, '', ignoreHistory: true);
               },
             )
           : const SizedBox.shrink(),
@@ -805,22 +1298,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         int index = state.positionsListener.itemPositions.value.first.index;
         final toc = state.book.tableOfContents;
         String ref = await refFromIndex(index, toc);
+        if (!mounted || !context.mounted) return;
+
         bool bookmarkAdded = context.read<BookmarkBloc>().addBookmark(
               ref: ref,
               book: state.book,
               index: index,
               commentatorsToShow: state.activeCommentators,
             );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת',
-              ),
-              duration: const Duration(milliseconds: 350),
-            ),
-          );
-        }
+        UiSnack.showQuick(
+            bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
       },
       icon: const Icon(Icons.bookmark_add),
       tooltip: 'הוספת סימניה',
@@ -843,12 +1330,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       onPressed: () {
         final selectedText = state.selectedTextForNote;
         if (selectedText == null || selectedText.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('אנא בחר טקסט ליצירת הערה אישית'),
-              duration: Duration(milliseconds: 1500),
-            ),
-          );
+          UiSnack.show(UiSnack.noTextSelected);
           return;
         }
 
@@ -900,16 +1382,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   !currentState.showNotesSidebar) {
                 textBookBloc.add(const ToggleNotesSidebar());
               }
-              ScaffoldMessenger.of(originalContext).showSnackBar(
-                const SnackBar(content: Text('ההערה נוצרה והוצגה בסרגל')),
-              );
+              UiSnack.show(UiSnack.noteCreated);
             }
           } catch (e) {
             if (originalContext.mounted) {
-              // Dialog is already closed by NoteEditorDialog
-              ScaffoldMessenger.of(originalContext).showSnackBar(
-                SnackBar(content: Text('שגיאה ביצירת הערה: $e')),
-              );
+              UiSnack.showError('שגיאה ביצירת הערה',
+                  backgroundColor: Theme.of(originalContext).colorScheme.error);
             }
           }
         },
@@ -1031,6 +1509,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
+  Widget _buildShamorZachorButton(BuildContext context, TextBookLoaded state) {
+    if (!_isBookSupportedByShamorZachor(state.book.title)) {
+      return const SizedBox.shrink();
+    }
+
+    return IconButton(
+      onPressed: () => _markShamorZachorProgress(state.book.title),
+      icon: Image.asset(
+        'assets/icon/shamor_zachor_with_v.png',
+        width: 24,
+        height: 24,
+      ),
+      tooltip: 'סמן כנלמד בשמור וזכור',
+    );
+  }
+
   /// פונקציות עזר לטיפול בלחיצות על כפתורים בתפריט הנפתח
   void _handlePdfButtonPress(BuildContext context, TextBookLoaded state) async {
     final currentIndex = state.positionsListener.itemPositions.value.isNotEmpty
@@ -1038,25 +1532,25 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         : 0;
     widget.tab.index = currentIndex;
 
-    final book = await DataRepository.instance.library.then(
-      (library) => library.findBookByTitle(state.book.title, PdfBook),
-    );
+    final library = await DataRepository.instance.library;
+    if (!context.mounted) return;
 
-    if (book != null) {
-      final index = await textToPdfPage(state.book, currentIndex);
-      openBook(context, book, index ?? 1, '', ignoreHistory: true);
+    final book = library.findBookByTitle(state.book.title, PdfBook);
+    if (book == null) {
+      return;
     }
+
+    final index = await textToPdfPage(state.book, currentIndex);
+
+    if (!context.mounted) return;
+
+    openBook(context, book, index ?? 1, '', ignoreHistory: true);
   }
 
   void _handleAddNotePress(BuildContext context, TextBookLoaded state) {
     final selectedText = state.selectedTextForNote;
     if (selectedText == null || selectedText.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט ליצירת הערה אישית'),
-          duration: Duration(milliseconds: 1500),
-        ),
-      );
+      UiSnack.show(UiSnack.noTextSelected);
       return;
     }
 
@@ -1070,25 +1564,23 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   void _handleBookmarkPress(BuildContext context, TextBookLoaded state) async {
-    int index = state.positionsListener.itemPositions.value.first.index;
+    final index = state.positionsListener.itemPositions.value.first.index;
     final toc = state.book.tableOfContents;
-    String ref = await refFromIndex(index, toc);
-    bool bookmarkAdded = context.read<BookmarkBloc>().addBookmark(
+    final ref = await refFromIndex(index, toc);
+    if (!mounted || !context.mounted) return;
+
+    final bookmarkAdded = context.read<BookmarkBloc>().addBookmark(
           ref: ref,
           book: state.book,
           index: index,
           commentatorsToShow: state.activeCommentators,
         );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת',
-          ),
-          duration: const Duration(milliseconds: 350),
-        ),
-      );
-    }
+
+    final successColor =
+        bookmarkAdded ? Theme.of(context).colorScheme.tertiaryContainer : null;
+    UiSnack.showSuccess(
+        bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת',
+        backgroundColor: successColor);
   }
 
   Future<void> _showReportBugDialog(
@@ -1103,7 +1595,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         .map((pos) => utils.stripHtmlIfNeeded(allText[pos.index]))
         .join('\n');
 
-    if (!mounted) return;
+    if (!mounted || !context.mounted) return;
 
     final dynamic result = await _showTabbedReportDialog(
       context,
@@ -1115,13 +1607,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     try {
       if (result == null) return; // בוטל
-      if (!mounted) return;
+      if (!mounted || !context.mounted) return;
 
       // Handle different result types
       if (result is ReportedErrorData) {
         // Regular report - the heavy data should already be loaded by now
         final ReportAction? action =
             await _showConfirmationDialog(context, result);
+
+        if (!mounted || !context.mounted) return;
 
         if (action == null || action == ReportAction.cancel) return;
 
@@ -1303,11 +1797,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   ) {
     final detailsSection = (() {
       final base = errorDetails.isEmpty ? '' : '\n$errorDetails';
-      final extra = '\n\nמספר שורה: ' +
-          lineNumber.toString() +
-          '\nהקשר (4 מילים לפני ואחרי):\n' +
-          contextText;
-      return base + extra;
+      final extra = '''
+      
+    מספר שורה: $lineNumber
+    הקשר (4 מילים לפני ואחרי):
+    $contextText''';
+      return '$base$extra';
     })();
 
     return '''
@@ -1393,9 +1888,12 @@ $detailsSection
 
       final phoneReportService = PhoneReportService();
       final result = await phoneReportService.submitReport(reportData);
+      if (!mounted || !context.mounted) return;
 
       // Hide loading indicator
-      if (mounted) Navigator.of(context).pop();
+      if (context.mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
 
       if (result.isSuccess) {
         _showPhoneReportSuccessDialog();
@@ -1404,7 +1902,9 @@ $detailsSection
       }
     } catch (e) {
       // Hide loading indicator
-      if (mounted) Navigator.of(context).pop();
+      if (mounted && context.mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
 
       debugPrint('Phone report error: $e');
       _showSimpleSnack('שגיאה בשליחת הדיווח: ${e.toString()}');
@@ -1506,9 +2006,7 @@ $detailsSection
 
   void _showSimpleSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    UiSnack.show(message);
   }
 
   /// SnackBar לאחר שמירה: מציג מונה + פעולה לפתיחת דוא"ל (mailto).
@@ -1520,17 +2018,11 @@ $detailsSection
         "יש לך כבר $count דיווחים!\n"
         "כעת תוכל לשלוח את הקובץ למייל: $_fallbackMail";
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 8),
-        content: Text(message, textDirection: TextDirection.rtl),
-        action: SnackBarAction(
-          label: 'שלח',
-          onPressed: () {
-            _launchMail(_fallbackMail);
-          },
-        ),
-      ),
+    UiSnack.showWithAction(
+      message: message,
+      actionLabel: 'שלח',
+      onAction: () => _launchMail(_fallbackMail),
+      duration: const Duration(seconds: 8),
     );
   }
 
@@ -1665,6 +2157,7 @@ $detailsSection
             if (!(state.pinLeftPane ||
                 (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
               Future.microtask(() {
+                if (!mounted || !context.mounted) return;
                 context.read<TextBookBloc>().add(const ToggleLeftPane(false));
               });
             }
@@ -1684,34 +2177,18 @@ $detailsSection
             child: Focus(
               focusNode: FocusNode(),
               autofocus: !Platform.isAndroid,
-              child: _buildSplitedOrCombinedView(state),
+              child: TextBookScaffold(
+                content: state.content,
+                openBookCallback: widget.openBookCallback,
+                openLeftPaneTab: _openLeftPaneTab,
+                searchTextController: TextEditingValue(text: state.searchText),
+                tab: widget.tab,
+                initialSidebarTabIndex: _sidebarTabIndex,
+              ),
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildSplitedOrCombinedView(TextBookLoaded state) {
-    if (state.showSplitView && state.activeCommentators.isNotEmpty) {
-      return SplitedViewScreen(
-        content: state.content,
-        openBookCallback: widget.openBookCallback,
-        searchTextController: TextEditingValue(text: state.searchText),
-        openLeftPaneTab: _openLeftPaneTab,
-        tab: widget.tab,
-      );
-    }
-
-    return BlocBuilder<SettingsBloc, SettingsState>(
-      builder: (context, settingsState) {
-        return Padding(
-          padding: state.showLeftPane
-              ? EdgeInsets.zero
-              : EdgeInsets.symmetric(horizontal: settingsState.paddingSize),
-          child: _buildCombinedView(state),
-        );
-      },
     );
   }
 
@@ -1772,17 +2249,6 @@ $detailsSection
           ),
         );
       },
-    );
-  }
-
-  Widget _buildCombinedView(TextBookLoaded state) {
-    return CombinedView(
-      data: state.content,
-      textSize: state.fontSize,
-      openBookCallback: widget.openBookCallback,
-      openLeftPaneTab: _openLeftPaneTab,
-      showSplitedView: ValueNotifier(state.showSplitView),
-      tab: widget.tab,
     );
   }
 
@@ -1922,9 +2388,26 @@ $detailsSection
   Widget _buildLinkView(BuildContext context, TextBookLoaded state) {
     return LinksViewer(
       openTabcallback: widget.openBookCallback,
-      itemPositionsListener: state.positionsListener,
       closeLeftPanelCallback: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
+      isSplitViewOpen: state.showSplitView &&
+          (state.activeCommentators.isNotEmpty || _sidebarTabIndex != null),
+      links: state.visibleLinks,
+      openInSidebarCallback: () {
+        final isSplitOpen = state.showSplitView &&
+            (state.activeCommentators.isNotEmpty || _sidebarTabIndex != null);
+
+        if (isSplitOpen) {
+          // אם החלונית פתוחה - סוגר אותה
+          context.read<TextBookBloc>().add(const ToggleSplitView(false));
+        } else {
+          // אם החלונית סגורה - פותח אותה עם כרטיסיית הקישורים
+          setState(() {
+            _sidebarTabIndex = 1; // כרטיסיית הקישורים
+          });
+          context.read<TextBookBloc>().add(const ToggleSplitView(true));
+        }
+      },
     );
   }
 
@@ -2014,9 +2497,8 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
 
   @override
   Widget build(BuildContext context) {
-    // קוד זה נשאר זהה
     return Dialog(
-      child: Container(
+      child: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9,
         height: MediaQuery.of(context).size.height * 0.8,
         child: Column(
@@ -2055,7 +2537,6 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
   }
 
   Widget _buildRegularReportTab() {
-    // קוד זה נשאר זהה
     return _RegularReportTab(
       visibleText: widget.visibleText,
       fontSize: widget.fontSize,
@@ -2083,6 +2564,36 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
             CircularProgressIndicator(),
             SizedBox(height: 16),
             Text('טוען נתוני דיווח...'),
+          ],
+        ),
+      );
+    }
+
+    if (_dataErrors.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'לא ניתן לטעון את נתוני הדיווח:',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            ..._dataErrors.map((error) => Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    error,
+                    textAlign: TextAlign.center,
+                  ),
+                )),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('סגור'),
+            ),
           ],
         ),
       );
@@ -2190,7 +2701,7 @@ class _RegularReportTabState extends State<_RegularReportTab> {
                           final highlight = Theme.of(context)
                               .colorScheme
                               .primary
-                              .withOpacity(0.25);
+                              .withValues(alpha: 0.25);
                           return [
                             if (start > 0)
                               TextSpan(text: text.substring(0, start)),
@@ -2286,4 +2797,86 @@ class _RegularReportTabState extends State<_RegularReportTab> {
       ),
     );
   }
+}
+
+Widget _buildFullFileEditorButton(BuildContext context, TextBookLoaded state) {
+  return IconButton(
+    onPressed: () => _handleFullFileEditorPress(context, state),
+    icon: const Icon(Icons.edit_document),
+    tooltip: 'ערוך את הספר (Ctrl+Shift+E)',
+  );
+}
+
+void _handleTextEditorPress(BuildContext context, TextBookLoaded state) {
+  final positions = state.positionsListener.itemPositions.value;
+  if (positions.isEmpty) return;
+
+  final currentIndex = positions.first.index;
+  context.read<TextBookBloc>().add(OpenEditor(index: currentIndex));
+}
+
+void _handleFullFileEditorPress(BuildContext context, TextBookLoaded state) {
+  context.read<TextBookBloc>().add(OpenFullFileEditor());
+}
+
+bool _handleGlobalKeyEvent(
+    KeyEvent event, BuildContext context, TextBookLoaded state) {
+  if (event is KeyDownEvent && HardwareKeyboard.instance.isControlPressed) {
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.keyE:
+        if (!state.isEditorOpen) {
+          if (HardwareKeyboard.instance.isShiftPressed) {
+            _handleFullFileEditorPress(context, state);
+          } else {
+            _handleTextEditorPress(context, state);
+          }
+          return true;
+        }
+        break;
+    }
+  }
+  return false;
+}
+
+void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
+  if (state.editorIndex == null || state.editorSectionId == null) return;
+
+  final settings = EditorSettingsHelper.getSettings();
+
+  // Reload the content from file system to ensure fresh data
+  String freshContent = '';
+  try {
+    // Try to reload content from file system
+    final dataProvider = FileSystemData.instance;
+    freshContent = await dataProvider.getBookText(state.book.title);
+  } catch (e) {
+    debugPrint('Failed to load fresh content: $e');
+    // Fall back to cached content
+    freshContent = state.editorText ?? '';
+  }
+
+  if (!context.mounted) return;
+
+  await showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => BlocProvider.value(
+      value: context.read<TextBookBloc>(),
+      child: TextSectionEditorDialog(
+        bookId: state.book.title,
+        sectionIndex: state.editorIndex!,
+        sectionId: state.editorSectionId!,
+        initialContent:
+            freshContent.isNotEmpty ? freshContent : state.editorText ?? '',
+        hasLinksFile: state.hasLinksFile,
+        hasDraft: state.hasDraft,
+        settings: settings,
+      ),
+    ),
+  );
+
+  if (!context.mounted) return;
+
+  // Close editor when dialog is dismissed
+  context.read<TextBookBloc>().add(const CloseEditor());
 }

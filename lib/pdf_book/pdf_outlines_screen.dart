@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:pdfrx/pdfrx.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 class OutlineView extends StatefulWidget {
   const OutlineView({
@@ -27,7 +27,7 @@ class _OutlineViewState extends State<OutlineView>
   bool _isManuallyScrolling = false;
   int? _lastScrolledPage;
   final Map<PdfOutlineNode, bool> _expanded = {};
-  final Map<PdfOutlineNode, ExpansionTileController> _controllers = {};
+  final Map<PdfOutlineNode, ExpansibleController> _controllers = {};
 
   @override
   bool get wantKeepAlive => true;
@@ -319,7 +319,7 @@ class _OutlineViewState extends State<OutlineView>
 
     if (node.children.isNotEmpty) {
       final controller =
-          _controllers.putIfAbsent(node, () => ExpansionTileController());
+          _controllers.putIfAbsent(node, () => ExpansibleController());
       final bool isExpanded = _expanded[node] ?? (level == 0);
 
       if (controller.isExpanded != isExpanded) {
@@ -359,7 +359,7 @@ class _OutlineViewState extends State<OutlineView>
                 child: ExpansionTile(
                   key: PageStorageKey(node),
                   controller: _controllers.putIfAbsent(
-                      node, () => ExpansionTileController()),
+                      node, () => ExpansibleController()),
                   initiallyExpanded: _expanded[node] ?? (level == 0),
                   onExpansionChanged: (val) {
                     setState(() {

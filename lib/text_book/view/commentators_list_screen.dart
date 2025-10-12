@@ -3,14 +3,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/widgets/filter_list/src/filter_list_dialog.dart';
 import 'package:otzaria/widgets/filter_list/src/theme/filter_list_theme.dart';
 
 class CommentatorsListView extends StatefulWidget {
   const CommentatorsListView({
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   State<CommentatorsListView> createState() => CommentatorsListViewState();
@@ -62,23 +63,19 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
 
   Future<void> _update(BuildContext context, TextBookLoaded state) async {
     // סינון הקבוצות הידועות
-    final torahShebichtav = await filterGroup(state.torahShebichtav);
-    final chazal = await filterGroup(state.chazal);
-    final rishonim = await filterGroup(state.rishonim);
-    final acharonim = await filterGroup(state.acharonim);
-    final modern = await filterGroup(state.modernCommentators);
-
-    final Set<String> alreadyListed = {
-      ...torahShebichtav,
-      ...chazal,
-      ...rishonim,
-      ...acharonim,
-      ...modern,
-    };
-    final ungroupedRaw = state.availableCommentators
-        .where((c) => !alreadyListed.contains(c))
-        .toList();
-    final ungrouped = await filterGroup(ungroupedRaw);
+    final groups = state.commentatorGroups;
+    final torahShebichtav = await filterGroup(
+        CommentatorGroup.groupByTitle(groups, 'תורה שבכתב').commentators);
+    final chazal = await filterGroup(
+        CommentatorGroup.groupByTitle(groups, 'חז"ל').commentators);
+    final rishonim = await filterGroup(
+        CommentatorGroup.groupByTitle(groups, 'ראשונים').commentators);
+    final acharonim = await filterGroup(
+        CommentatorGroup.groupByTitle(groups, 'אחרונים').commentators);
+    final modern = await filterGroup(
+        CommentatorGroup.groupByTitle(groups, 'מחברי זמננו').commentators);
+    final ungrouped = await filterGroup(
+        CommentatorGroup.groupByTitle(groups, 'שאר מפרשים').commentators);
 
     _torahShebichtav = torahShebichtav;
     _chazal = chazal;
@@ -142,7 +139,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
             controlButtons: const [],
             onApplyButtonClick: (list) {
               selectedTopics = list ?? [];
-              _update(context, state as TextBookLoaded);
+              _update(context, state);
             },
             validateSelectedItem: (list, item) =>
                 list != null && list.contains(item),
@@ -411,7 +408,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
                                     color: Theme.of(context)
                                         .colorScheme
                                         .primary
-                                        .withOpacity(0.8),
+                                        .withValues(alpha: 0.8),
                                   ),
                                 ),
                               ),

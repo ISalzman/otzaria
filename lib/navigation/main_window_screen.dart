@@ -51,8 +51,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
     );
     // Auto start indexing
     if (context.read<SettingsBloc>().state.autoUpdateIndex) {
-      DataRepository.instance.library.then((library) =>
-          context.read<IndexingBloc>().add(StartIndexing(library)));
+      DataRepository.instance.library.then((library) {
+        if (!mounted || !context.mounted) return;
+        context.read<IndexingBloc>().add(StartIndexing(library));
+      });
     }
   }
 
@@ -149,7 +151,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   void _handleNavigationChange(
       BuildContext context, NavigationState state) async {
-    if (mounted && pageController.hasClients) {
+    if (!mounted || !context.mounted || !pageController.hasClients) {
+      return;
+    }
+
+    if (pageController.hasClients) {
       final targetPage = state.currentScreen == Screen.search
           ? Screen.reading.index
           : state.currentScreen.index;
@@ -160,6 +166,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
+        if (!mounted || !context.mounted) return;
       }
       if (state.currentScreen == Screen.library) {
         context

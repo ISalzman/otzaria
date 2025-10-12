@@ -172,26 +172,29 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
                       final text = widget.visibleText;
                       final start = _selectionStart ?? -1;
                       final end = _selectionEnd ?? -1;
-                      final hasSel = start >= 0 && end > start && end <= text.length;
+                      final hasSel =
+                          start >= 0 && end > start && end <= text.length;
                       if (!hasSel) {
                         return [TextSpan(text: text)];
                       }
                       final highlight = Theme.of(context)
                           .colorScheme
                           .primary
-                          .withOpacity(0.25);
+                          .withValues(alpha: 0.25);
                       return [
                         if (start > 0) TextSpan(text: text.substring(0, start)),
                         TextSpan(
                           text: text.substring(start, end),
                           style: TextStyle(backgroundColor: highlight),
                         ),
-                        if (end < text.length) TextSpan(text: text.substring(end)),
+                        if (end < text.length)
+                          TextSpan(text: text.substring(end)),
                       ];
                     }(),
                     style: TextStyle(
                       fontSize: widget.fontSize,
-                      fontFamily: Settings.getValue('key-font-family') ?? 'candara',
+                      fontFamily:
+                          Settings.getValue('key-font-family') ?? 'candara',
                     ),
                   ),
                   textAlign: TextAlign.right,
@@ -203,12 +206,12 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
                         selection.end,
                       );
 
-                  // חישוב מספר השורה על בסיס הטקסט הנבחר
-                  final textBeforeSelection =
-                      widget.visibleText.substring(0, selection.start);
-                  final lineOffset =
-                      '\n'.allMatches(textBeforeSelection).length;
-                  final newLineNumber = widget.lineNumber + lineOffset;
+                      // חישוב מספר השורה על בסיס הטקסט הנבחר
+                      final textBeforeSelection =
+                          widget.visibleText.substring(0, selection.start);
+                      final lineOffset =
+                          '\n'.allMatches(textBeforeSelection).length;
+                      final newLineNumber = widget.lineNumber + lineOffset;
 
                       if (selectedText.isNotEmpty) {
                         setState(() {
@@ -218,14 +221,14 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
                           _updatedLineNumber = newLineNumber;
                         });
                       }
-                }
+                    }
                   },
                   contextMenuBuilder: (context, editableTextState) {
                     return const SizedBox.shrink();
                   },
                 ),
+              ),
             ),
-          ),
           ),
         ),
         if (_selectedText != null && _selectedText!.isNotEmpty) ...[
@@ -273,7 +276,7 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<ErrorType>(
-          value: _selectedErrorType,
+          initialValue: _selectedErrorType,
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
             hintText: 'בחר סוג שגיאה...',

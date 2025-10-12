@@ -6,15 +6,8 @@ import 'package:otzaria/find_ref/find_ref_state.dart';
 import 'package:otzaria/focus/focus_repository.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
-import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
-import 'package:otzaria/navigation/bloc/navigation_event.dart';
-import 'package:otzaria/navigation/bloc/navigation_state.dart';
-import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
-import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/tabs/models/pdf_tab.dart';
-import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/utils/open_book.dart';
 
 class FindRefScreen extends StatefulWidget {
   const FindRefScreen({super.key});
@@ -33,7 +26,6 @@ class _FindRefScreenState extends State<FindRefScreen> {
       showIndexWarning = true;
     }
   }
-
 
   Widget _buildIndexingWarning() {
     if (showIndexWarning) {
@@ -128,37 +120,12 @@ class _FindRefScreenState extends State<FindRefScreen> {
                                 : null,
                             title: Text(state.refs[index].reference),
                             onTap: () {
-                              TabsBloc tabsBloc = context.read<TabsBloc>();
-                              NavigationBloc navigationBloc =
-                                  context.read<NavigationBloc>();
-                              if (state.refs[index].isPdf) {
-                                tabsBloc.add(AddTab(PdfBookTab(
-                                    book: PdfBook(
-                                        title: state.refs[index].title,
-                                        path: state.refs[index].filePath),
-                                    pageNumber:
-                                        state.refs[index].segment.toInt(),
-                                    openLeftPane:
-                                        (Settings.getValue<bool>('key-pin-sidebar') ??
-                                                false) ||
-                                            (Settings.getValue<bool>(
-                                                    'key-default-sidebar-open') ??
-                                                false))));
-                              } else {
-                                tabsBloc.add(AddTab(TextBookTab(
-                                    book: TextBook(
-                                      title: state.refs[index].title,
-                                    ),
-                                    index: state.refs[index].segment.toInt(),
-                                    openLeftPane:
-                                        (Settings.getValue<bool>('key-pin-sidebar') ??
-                                                false) ||
-                                            (Settings.getValue<bool>(
-                                                    'key-default-sidebar-open') ??
-                                                false))));
-                              }
-                              navigationBloc
-                                  .add(const NavigateToScreen(Screen.reading));
+                              final ref = state.refs[index];
+                              final book = ref.isPdf
+                                  ? PdfBook(
+                                      title: ref.title, path: ref.filePath)
+                                  : TextBook(title: ref.title);
+                              openBook(context, book, ref.segment.toInt(), '');
                             });
                       },
                     );

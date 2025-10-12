@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -65,7 +66,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       } catch (e) {
         // אם יש בעיה עם פתיחת האינדקס מחדש, נמשיך בלי זה
         // הספרייה עדיין תתרענן אבל החיפוש עלול לא לעבוד עד להפעלה מחדש
-        print('Warning: Could not reopen search index: $e');
+        developer.log('Warning: Could not reopen search index', name: 'LibraryBloc', error: e);
       }
       
       // חזרה לאותה תיקייה שהיתה פתוחה קודם

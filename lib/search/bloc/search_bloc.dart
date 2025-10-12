@@ -5,6 +5,7 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:flutter/foundation.dart';
 
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final SearchRepository _repository = SearchRepository();
@@ -272,9 +273,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
 
     // אם אין, נבצע ספירה ישירה (fallback)
-    print('🔢 Counting texts for facet: $facet');
-    print('🔢 Query: ${state.searchQuery}');
-    print(
+    debugPrint('🔢 Counting texts for facet: $facet');
+    debugPrint('🔢 Query: ${state.searchQuery}');
+    debugPrint(
         '🔢 Books to search: ${state.booksToSearch.map((e) => e.title).toList()}');
     final result = await TantivyDataProvider.instance.countTexts(
       state.searchQuery.replaceAll('"', '\\"'),
@@ -286,7 +287,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       alternativeWords: alternativeWords,
       searchOptions: searchOptions,
     );
-    print('🔢 Count result for $facet: $result');
+    debugPrint('🔢 Count result for $facet: $result');
     return result;
   }
 
@@ -335,7 +336,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   /// מחזיר ספירה סינכרונית מה-state (אם קיימת)
   int getFacetCountFromState(String facet) {
     final result = state.facetCounts[facet] ?? 0;
-    print(
+    debugPrint(
         '🔍 getFacetCountFromState($facet) = $result, cache has ${state.facetCounts.length} entries');
     return result;
   }
@@ -392,7 +393,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     UpdateFacetCounts event,
     Emitter<SearchState> emit,
   ) {
-    print(
+    debugPrint(
         '📝 Updating facet counts: ${event.facetCounts.entries.where((e) => e.value > 0).map((e) => '${e.key}: ${e.value}').join(', ')}');
     final newFacetCounts = event.facetCounts.isEmpty
         ? <String, int>{} // אם מעבירים מפה ריקה, מנקים הכל
@@ -400,12 +401,12 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     emit(state.copyWith(
       facetCounts: newFacetCounts,
     ));
-    print('📊 Total facets in state: ${newFacetCounts.length}');
+    debugPrint('📊 Total facets in state: ${newFacetCounts.length}');
     if (newFacetCounts.isNotEmpty) {
-      print(
+      debugPrint(
           '📋 All cached facets: ${newFacetCounts.keys.take(10).join(', ')}...');
     } else {
-      print('🧹 Facet counts cleared');
+      debugPrint('🧹 Facet counts cleared');
     }
   }
 }

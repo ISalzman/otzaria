@@ -7,9 +7,10 @@ import 'package:otzaria/workspaces/workspace.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/daf_yomi/calendar.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 
 class WorkspaceSwitcherDialog extends StatefulWidget {
-  const WorkspaceSwitcherDialog({Key? key}) : super(key: key);
+  const WorkspaceSwitcherDialog({super.key});
 
   @override
   State<WorkspaceSwitcherDialog> createState() =>
@@ -35,7 +36,7 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
   String _generateUniqueWorkspaceName(List<Workspace> existingWorkspaces) {
     final existingNames = existingWorkspaces.map((w) => w.name).toSet();
     int counter = existingWorkspaces.length + 1;
-    
+
     while (true) {
       final candidateName = "שולחן עבודה $counter";
       if (!existingNames.contains(candidateName)) {
@@ -122,11 +123,10 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
           child: InkWell(
             onTap: () {
               final workspaceBloc = context.read<WorkspaceBloc>();
-              final newWorkspaceName = _generateUniqueWorkspaceName(workspaceBloc.state.workspaces);
+              final newWorkspaceName =
+                  _generateUniqueWorkspaceName(workspaceBloc.state.workspaces);
               workspaceBloc.add(AddWorkspace(
-                  name: newWorkspaceName,
-                  tabs: const [],
-                  currentTabIndex: 0));
+                  name: newWorkspaceName, tabs: const [], currentTabIndex: 0));
             },
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -180,11 +180,11 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                           ? Theme.of(context)
                               .colorScheme
                               .primary
-                              .withOpacity(0.5)
+                              .withValues(alpha: 0.5)
                           : Theme.of(context)
                               .colorScheme
                               .primary
-                              .withOpacity(0.1),
+                              .withValues(alpha: 0.1),
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(4),
                         topRight: Radius.circular(4),
@@ -202,11 +202,11 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                       return isEditing
                           ? TextField(
                               controller: editController,
-                                  autofocus: true,
-                                  decoration: const InputDecoration(
-                                    border: OutlineInputBorder(),
-                                    isDense: true,
-                                  ),
+                              autofocus: true,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
                               onSubmitted: (newName) {
                                 if (newName.trim().isNotEmpty) {
                                   context.read<WorkspaceBloc>().add(
@@ -242,10 +242,13 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                                     icon: const Icon(Icons.edit),
                                     onPressed: () {
                                       setState(() {
-                                        editController = TextEditingController(text: workspace.name);
+                                        editController = TextEditingController(
+                                            text: workspace.name);
                                         // Set cursor position to end of text
-                                        editController.selection = TextSelection.fromPosition(
-                                          TextPosition(offset: workspace.name.length),
+                                        editController.selection =
+                                            TextSelection.fromPosition(
+                                          TextPosition(
+                                              offset: workspace.name.length),
                                         );
                                         isEditing = true;
                                       });
@@ -266,14 +269,12 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
               onPressed: () {
                 // Remove the workspace
                 if (isActive) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('לא ניתן למחוק שולחן עבודה פעיל')));
+                  UiSnack.showError('לא ניתן למחוק שולחן עבודה פעיל',
+                      backgroundColor: Theme.of(context).colorScheme.error);
                   return;
                 }
                 context.read<WorkspaceBloc>().add(RemoveWorkspace(workspace));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('שולחן העבודה נמחק')),
-                );
+                UiSnack.show('שולחן העבודה נמחק');
               },
             ),
           ),

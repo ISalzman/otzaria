@@ -4,13 +4,11 @@ import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
-import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
-import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/text_book/view/combined_view/commentary_list_for_combined_view.dart';
-import 'package:otzaria/text_book/view/links_screen.dart';
+import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -20,6 +18,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/notes/notes_system.dart';
 import 'package:otzaria/utils/copy_utils.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 
 class CombinedView extends StatefulWidget {
@@ -29,15 +28,15 @@ class CombinedView extends StatefulWidget {
     required this.openBookCallback,
     required this.openLeftPaneTab,
     required this.textSize,
-    required this.showSplitedView,
+    required this.showCommentaryAsExpansionTiles,
     required this.tab,
   });
 
   final List<String> data;
   final Function(OpenedTab) openBookCallback;
   final void Function(int) openLeftPaneTab;
-  final ValueNotifier<bool> showSplitedView;
   final double textSize;
+  final bool showCommentaryAsExpansionTiles;
   final TextBookTab tab;
 
   @override
@@ -47,29 +46,55 @@ class CombinedView extends StatefulWidget {
 class _CombinedViewState extends State<CombinedView> {
   final GlobalKey<SelectionAreaState> _selectionKey =
       GlobalKey<SelectionAreaState>();
-  bool _didInitialJump = false;
 
-  void _jumpToInitialIndexWhenReady() {
-    int attempts = 0;
-    void tryJump(Duration _) {
-      if (!mounted) return;
-      final ctrl = widget.tab.scrollController;
-      if (ctrl.isAttached) {
-        ctrl.jumpTo(index: widget.tab.index);
-      } else if (attempts++ < 5) {
-        WidgetsBinding.instance.addPostFrameCallback(tryJump);
-      }
-    }
+  // שמירת reference ל-BLoC לשימוש ב-listeners
+  late final TextBookBloc _textBookBloc;
 
-    WidgetsBinding.instance.addPostFrameCallback(tryJump);
+  @override
+  void initState() {
+    super.initState();
+    // שמירת ה-BLoC מראש
+    _textBookBloc = context.read<TextBookBloc>();
+
+    // האזנה לשינויים במיקומי הפריטים כדי לאפס את הבחירה בגלילה
+    widget.tab.positionsListener.itemPositions.addListener(_onScroll);
+    // עדכון האינדקס ב-tab בזמן אמת
+    widget.tab.positionsListener.itemPositions.addListener(_updateTabIndex);
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_didInitialJump) {
-      _didInitialJump = true;
-      _jumpToInitialIndexWhenReady();
+  void dispose() {
+    widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
+    widget.tab.positionsListener.itemPositions.removeListener(_updateTabIndex);
+    super.dispose();
+  }
+
+  // עדכון האינדקס הנוכחי ב-tab
+  void _updateTabIndex() {
+    final positions = widget.tab.positionsListener.itemPositions.value;
+    if (positions.isNotEmpty) {
+      // שומר את האינדקס של הפריט הראשון הנראה
+      widget.tab.index = positions.first.index;
+    }
+  }
+
+  // פונקציה שתשלח אירוע איפוס ל-selectedIndex אם יש גלילה משמעותית
+  void _onScroll() {
+    // אנחנו רוצים את הלוגיקה הזו רק בתצוגה המפוצלת (SimpleBookView לשעבר)
+    // שבה המפרשים מוצגים בפאנל צד (כלומר: לא ExpansionTiles)
+    if (widget.showCommentaryAsExpansionTiles) return;
+
+    final state = _textBookBloc.state;
+    if (state is! TextBookLoaded) return;
+
+    final currentSelectedIndex = state.selectedIndex;
+
+    if (currentSelectedIndex != null) {
+      // אם האינדקס הנבחר כבר לא נראה (האינדקסים הנראים שונו עקב גלילה)
+      final visibleIndices = state.visibleIndices;
+      if (!visibleIndices.contains(currentSelectedIndex)) {
+        _textBookBloc.add(const UpdateSelectedIndex(null));
+      }
     }
   }
 
@@ -101,7 +126,7 @@ class _CombinedViewState extends State<CombinedView> {
 
     return [
       ctx.MenuItem<void>(
-        label: 'הצג את כל ${groupName}',
+        label: 'הצג את כל $groupName',
         icon: groupActive ? Icons.check : null,
         onSelected: () {
           final current = List<String>.from(st.activeCommentators);
@@ -138,19 +163,17 @@ class _CombinedViewState extends State<CombinedView> {
     // 1. קבלת מידע על גודל המסך
     final screenHeight = MediaQuery.of(context).size.height;
 
-    // 2. זיהוי פרשנים שכבר שויכו לקבוצה
-    final Set<String> alreadyListed = {
-      ...state.torahShebichtav,
-      ...state.chazal,
-      ...state.rishonim,
-      ...state.acharonim,
-      ...state.modernCommentators,
-    };
+    // 2. זיהוי מפרשים שכבר שויכו לקבוצה
+    final groups = state.commentatorGroups;
+    final tanachGroup = CommentatorGroup.groupByTitle(groups, 'תורה שבכתב');
+    final chazalGroup = CommentatorGroup.groupByTitle(groups, 'חז"ל');
+    final rishonimGroup = CommentatorGroup.groupByTitle(groups, 'ראשונים');
+    final acharonimGroup = CommentatorGroup.groupByTitle(groups, 'אחרונים');
+    final modernGroup = CommentatorGroup.groupByTitle(groups, 'מחברי זמננו');
+    final ungroupedGroup = CommentatorGroup.groupByTitle(groups, 'שאר מפרשים');
 
-    // 3. יצירת רשימה של פרשנים שלא שויכו לאף קבוצה
-    final List<String> ungrouped = state.availableCommentators
-        .where((c) => !alreadyListed.contains(c))
-        .toList();
+    // 3. יצירת רשימה של מפרשים שלא שויכו לאף קבוצה
+    final List<String> ungrouped = ungroupedGroup.commentators;
 
     return ctx.ContextMenu(
       maxHeight: screenHeight * 0.9,
@@ -181,56 +204,61 @@ class _CombinedViewState extends State<CombinedView> {
               },
             ),
             const ctx.MenuDivider(),
-            ..._buildGroup('תורה שבכתב', state.torahShebichtav, state),
-            if (state.torahShebichtav.isNotEmpty && state.chazal.isNotEmpty)
+            ..._buildGroup(tanachGroup.title, tanachGroup.commentators, state),
+            if (tanachGroup.commentators.isNotEmpty &&
+                chazalGroup.commentators.isNotEmpty)
               const ctx.MenuDivider(),
-            ..._buildGroup('חז\"ל', state.chazal, state),
-            if ((state.chazal.isNotEmpty && state.rishonim.isNotEmpty) ||
-                (state.chazal.isEmpty &&
-                    state.torahShebichtav.isNotEmpty &&
-                    state.rishonim.isNotEmpty))
+            ..._buildGroup(chazalGroup.title, chazalGroup.commentators, state),
+            if ((chazalGroup.commentators.isNotEmpty &&
+                    rishonimGroup.commentators.isNotEmpty) ||
+                (chazalGroup.commentators.isEmpty &&
+                    tanachGroup.commentators.isNotEmpty &&
+                    rishonimGroup.commentators.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup('הראשונים', state.rishonim, state),
-            if ((state.rishonim.isNotEmpty && state.acharonim.isNotEmpty) ||
-                (state.rishonim.isEmpty &&
-                    state.chazal.isNotEmpty &&
-                    state.acharonim.isNotEmpty) ||
-                (state.rishonim.isEmpty &&
-                    state.chazal.isEmpty &&
-                    state.torahShebichtav.isNotEmpty &&
-                    state.acharonim.isNotEmpty))
+            ..._buildGroup(
+                rishonimGroup.title, rishonimGroup.commentators, state),
+            if ((rishonimGroup.commentators.isNotEmpty &&
+                    acharonimGroup.commentators.isNotEmpty) ||
+                (rishonimGroup.commentators.isEmpty &&
+                    chazalGroup.commentators.isNotEmpty &&
+                    acharonimGroup.commentators.isNotEmpty) ||
+                (rishonimGroup.commentators.isEmpty &&
+                    chazalGroup.commentators.isEmpty &&
+                    tanachGroup.commentators.isNotEmpty &&
+                    acharonimGroup.commentators.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup('האחרונים', state.acharonim, state),
-            if ((state.acharonim.isNotEmpty &&
-                    state.modernCommentators.isNotEmpty) ||
-                (state.acharonim.isEmpty &&
-                    state.rishonim.isNotEmpty &&
-                    state.modernCommentators.isNotEmpty) ||
-                (state.acharonim.isEmpty &&
-                    state.rishonim.isEmpty &&
-                    state.chazal.isNotEmpty &&
-                    state.modernCommentators.isNotEmpty) ||
-                (state.acharonim.isEmpty &&
-                    state.rishonim.isEmpty &&
-                    state.chazal.isEmpty &&
-                    state.torahShebichtav.isNotEmpty &&
-                    state.modernCommentators.isNotEmpty))
+            ..._buildGroup(
+                acharonimGroup.title, acharonimGroup.commentators, state),
+            if ((acharonimGroup.commentators.isNotEmpty &&
+                    modernGroup.commentators.isNotEmpty) ||
+                (acharonimGroup.commentators.isEmpty &&
+                    rishonimGroup.commentators.isNotEmpty &&
+                    modernGroup.commentators.isNotEmpty) ||
+                (acharonimGroup.commentators.isEmpty &&
+                    rishonimGroup.commentators.isEmpty &&
+                    chazalGroup.commentators.isNotEmpty &&
+                    modernGroup.commentators.isNotEmpty) ||
+                (acharonimGroup.commentators.isEmpty &&
+                    rishonimGroup.commentators.isEmpty &&
+                    chazalGroup.commentators.isEmpty &&
+                    tanachGroup.commentators.isNotEmpty &&
+                    modernGroup.commentators.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup('מחברי זמננו', state.modernCommentators, state),
-            if ((state.torahShebichtav.isNotEmpty ||
-                    state.chazal.isNotEmpty ||
-                    state.rishonim.isNotEmpty ||
-                    state.acharonim.isNotEmpty ||
-                    state.modernCommentators.isNotEmpty) &&
+            ..._buildGroup(modernGroup.title, modernGroup.commentators, state),
+            if ((tanachGroup.commentators.isNotEmpty ||
+                    chazalGroup.commentators.isNotEmpty ||
+                    rishonimGroup.commentators.isNotEmpty ||
+                    acharonimGroup.commentators.isNotEmpty ||
+                    modernGroup.commentators.isNotEmpty) &&
                 ungrouped.isNotEmpty)
               const ctx.MenuDivider(),
-            ..._buildGroup('שאר המפרשים', ungrouped, state),
+            ..._buildGroup(ungroupedGroup.title, ungrouped, state),
           ],
         ),
         ctx.MenuItem.submenu(
           label: 'קישורים',
-          enabled: LinksViewer.getLinks(state).isNotEmpty,
-          items: LinksViewer.getLinks(state)
+          enabled: state.visibleLinks.isNotEmpty,
+          items: state.visibleLinks
               .map(
                 (link) => ctx.MenuItem(
                   label: link.heRef,
@@ -287,6 +315,13 @@ class _CombinedViewState extends State<CombinedView> {
           label: 'העתק את הטקסט המוצג',
           onSelected: _copyVisibleText,
         ),
+        const ctx.MenuDivider(),
+        // Edit paragraph option
+        ctx.MenuItem(
+          label: 'ערוך פסקה זו',
+          icon: Icons.edit,
+          onSelected: () => _editParagraph(paragraphIndex),
+        ),
       ],
     );
   }
@@ -315,12 +350,7 @@ class _CombinedViewState extends State<CombinedView> {
     // נשתמש בבחירה האחרונה שנשמרה, או בבחירה הנוכחית
     final text = _lastSelectedText ?? _selectedText;
     if (text == null || text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט ליצירת הערה אישית'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('אנא בחר טקסט ליצירת הערה אישית');
       return;
     }
 
@@ -339,19 +369,20 @@ class _CombinedViewState extends State<CombinedView> {
     // קבלת ההגדרות הנוכחיות
     final settingsState = context.read<SettingsBloc>().state;
     final textBookState = context.read<TextBookBloc>().state;
-    
+
     String finalText = text;
     String finalHtmlText = text;
-    
+
     // אם צריך להוסיף כותרות
-    if (settingsState.copyWithHeaders != 'none' && textBookState is TextBookLoaded) {
+    if (settingsState.copyWithHeaders != 'none' &&
+        textBookState is TextBookLoaded) {
       final bookName = CopyUtils.extractBookName(textBookState.book);
       final currentPath = await CopyUtils.extractCurrentPath(
-        textBookState.book, 
+        textBookState.book,
         index,
         bookContent: textBookState.content,
       );
-      
+
       finalText = CopyUtils.formatTextWithHeaders(
         originalText: text,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -359,7 +390,7 @@ class _CombinedViewState extends State<CombinedView> {
         bookName: bookName,
         currentPath: currentPath,
       );
-      
+
       finalHtmlText = CopyUtils.formatTextWithHeaders(
         originalText: text,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -392,22 +423,22 @@ class _CombinedViewState extends State<CombinedView> {
     if (visibleTexts.isEmpty) return;
 
     final combinedText = visibleTexts.join('\n\n');
-    
+
     // קבלת ההגדרות הנוכחיות
     final settingsState = context.read<SettingsBloc>().state;
-    
+
     String finalText = combinedText;
-    
+
     // אם צריך להוסיף כותרות
     if (settingsState.copyWithHeaders != 'none') {
       final bookName = CopyUtils.extractBookName(state.book);
       final firstVisibleIndex = state.visibleIndices.first;
       final currentPath = await CopyUtils.extractCurrentPath(
-        state.book, 
+        state.book,
         firstVisibleIndex,
         bookContent: state.content,
       );
-      
+
       finalText = CopyUtils.formatTextWithHeaders(
         originalText: combinedText,
         copyWithHeaders: settingsState.copyWithHeaders,
@@ -416,8 +447,9 @@ class _CombinedViewState extends State<CombinedView> {
         currentPath: currentPath,
       );
     }
-    
-    final combinedHtml = finalText.split('\n\n').map(_formatTextAsHtml).join('<br><br>');
+
+    final combinedHtml =
+        finalText.split('\n\n').map(_formatTextAsHtml).join('<br><br>');
 
     final item = DataWriterItem();
     item.add(Formats.plainText(finalText));
@@ -438,82 +470,11 @@ $textWithBreaks
 ''';
   }
 
-  /// העתקת טקסט רגיל ללוח
-  Future<void> _copyPlainText() async {
-    final text = _lastSelectedText ?? _selectedText;
-    if (text == null || text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט להעתקה'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    try {
-      final clipboard = SystemClipboard.instance;
-      if (clipboard != null) {
-        // קבלת ההגדרות הנוכחיות
-        final settingsState = context.read<SettingsBloc>().state;
-        final textBookState = context.read<TextBookBloc>().state;
-        
-        String finalText = text;
-        
-        // אם צריך להוסיף כותרות
-        if (settingsState.copyWithHeaders != 'none' && textBookState is TextBookLoaded) {
-          final bookName = CopyUtils.extractBookName(textBookState.book);
-          final currentIndex = _currentSelectedIndex ?? 0;
-          final currentPath = await CopyUtils.extractCurrentPath(
-            textBookState.book, 
-            currentIndex,
-            bookContent: textBookState.content,
-          );
-          
-          finalText = CopyUtils.formatTextWithHeaders(
-            originalText: text,
-            copyWithHeaders: settingsState.copyWithHeaders,
-            copyHeaderFormat: settingsState.copyHeaderFormat,
-            bookName: bookName,
-            currentPath: currentPath,
-          );
-        }
-
-        final item = DataWriterItem();
-        item.add(Formats.plainText(finalText));
-        await clipboard.write([item]);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('הטקסט הועתק ללוח'),
-              duration: Duration(seconds: 1),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('שגיאה בהעתקה: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    }
-  }
-
   /// העתקת טקסט מעוצב (HTML) ללוח
   Future<void> _copyFormattedText() async {
     final plainText = _lastSelectedText ?? _selectedText;
     if (plainText == null || plainText.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('אנא בחר טקסט להעתקה'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('אנא בחר טקסט להעתקה');
       return;
     }
 
@@ -550,15 +511,16 @@ $textWithBreaks
 
         // הוספת כותרות אם נדרש
         String finalPlainText = plainText;
-        if (settingsState.copyWithHeaders != 'none' && textBookState is TextBookLoaded) {
+        if (settingsState.copyWithHeaders != 'none' &&
+            textBookState is TextBookLoaded) {
           final bookName = CopyUtils.extractBookName(textBookState.book);
           final currentIndex = _currentSelectedIndex ?? 0;
           final currentPath = await CopyUtils.extractCurrentPath(
-            textBookState.book, 
+            textBookState.book,
             currentIndex,
             bookContent: textBookState.content,
           );
-          
+
           finalPlainText = CopyUtils.formatTextWithHeaders(
             originalText: plainText,
             copyWithHeaders: settingsState.copyWithHeaders,
@@ -566,7 +528,7 @@ $textWithBreaks
             bookName: bookName,
             currentPath: currentPath,
           );
-          
+
           // גם עדכון ה-HTML עם הכותרות
           htmlContentToUse = CopyUtils.formatTextWithHeaders(
             originalText: htmlContentToUse,
@@ -577,46 +539,25 @@ $textWithBreaks
           );
         }
 
-        // יצירת HTML מעוצב עם הגדרות הגופן והגודל
-        // ממיר \n ל-<br> ב-HTML
-        final htmlWithBreaks = htmlContentToUse.replaceAll('\n', '<br>');
-        final finalHtmlContent = '''
-<div style="font-family: ${settingsState.fontFamily}; font-size: ${widget.textSize}px; text-align: justify; direction: rtl;">
-$htmlWithBreaks
-</div>
-''';
-
-        final item = DataWriterItem();
-        item.add(Formats.plainText(finalPlainText)); // טקסט רגיל כגיבוי
-        item.add(Formats.htmlText(
-            finalHtmlContent)); // טקסט מעוצב עם תגי HTML מקוריים
-        await clipboard.write([item]);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('הטקסט המעוצב הועתק ללוח'),
-              duration: Duration(seconds: 1),
-            ),
-          );
-        }
+        // שימוש בפונקציית העזר החדשה להעתקה
+        await CopyUtils.copyStyledToClipboard(
+          plainText: finalPlainText,
+          htmlText: htmlContentToUse,
+          fontFamily: settingsState.fontFamily,
+          fontSize: widget.textSize,
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('שגיאה בהעתקה מעוצבת: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        UiSnack.showError('שגיאה בהעתקה מעוצבת: $e',
+            backgroundColor: Theme.of(context).colorScheme.error);
       }
     }
   }
 
   /// הצגת עורך ההערות
   void _showNoteEditor(String selectedText, int charStart, int charEnd) {
-    // שמירת ה-context המקורי וה-bloc
-    final originalContext = context;
+    // שמירת ה-bloc לצורך עדכון המצב לאחר סגירת הדיאלוג
     final textBookBloc = context.read<TextBookBloc>();
 
     showDialog(
@@ -648,16 +589,12 @@ $htmlWithBreaks
                   !currentState.showNotesSidebar) {
                 textBookBloc.add(const ToggleNotesSidebar());
               }
-              ScaffoldMessenger.of(originalContext).showSnackBar(
-                const SnackBar(content: Text('ההערה נוצרה והוצגה בסרגל')),
-              );
+              UiSnack.show(UiSnack.noteCreated);
             }
           } catch (e) {
             if (mounted) {
               // Dialog is already closed by NoteEditorDialog
-              ScaffoldMessenger.of(originalContext).showSnackBar(
-                SnackBar(content: Text('שגיאה ביצירת הערה: $e')),
-              );
+              UiSnack.showError('שגיאה ביצירת הערה: $e');
             }
           }
         },
@@ -722,6 +659,7 @@ $htmlWithBreaks
   Widget buildOuterList(TextBookLoaded state) {
     return ScrollablePositionedList.builder(
       key: ValueKey('combined-${widget.tab.book.title}'),
+      initialScrollIndex: widget.tab.index,
       itemPositionsListener: widget.tab.positionsListener,
       itemScrollController: widget.tab.scrollController,
       scrollOffsetController: widget.tab.mainOffsetController,
@@ -738,56 +676,108 @@ $htmlWithBreaks
     int index,
     TextBookLoaded state,
   ) {
+    final isSelected = state.selectedIndex == index;
+
+    // סנכרון ה-controller עם המצב - אם צריך להיות פתוח אבל סגור, פותחים אותו
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isSelected && !controller.isExpanded) {
+        controller.expand();
+      } else if (!isSelected && controller.isExpanded) {
+        controller.collapse();
+      }
+    });
+
     // עוטפים את כל ה־ExpansionTile בתפריט קונטקסט ספציפי לאינדקס הנוכחי:
     return ctx.ContextMenuRegion(
       contextMenu: _buildContextMenuForIndex(state, index),
-      child: ExpansionTile(
-        shape: const Border(),
-        controller: controller,
-        key: PageStorageKey(widget.data[index]),
-        iconColor: Colors.transparent,
-        tilePadding: const EdgeInsets.all(0.0),
-        collapsedIconColor: Colors.transparent,
-        title: BlocBuilder<SettingsBloc, SettingsState>(
-          builder: (context, settingsState) {
-            String data = widget.data[index];
-            if (!settingsState.showTeamim) {
-              data = utils.removeTeamim(data);
-            }
-            if (settingsState.replaceHolyNames) {
-              data = utils.replaceHolyNames(data);
-            }
-            return HtmlWidget(
-              '''
-              <div style="text-align: justify; direction: rtl;">
-                ${() {
-                String processedData = state.removeNikud
-                    ? utils.highLight(
-                        utils.removeVolwels('$data\n'), state.searchText)
-                    : utils.highLight('$data\n', state.searchText);
-                // החלת עיצוב הסוגריים העגולים
-                return utils.formatTextWithParentheses(processedData);
-              }()}
-              </div>
-              ''',
-              textStyle: TextStyle(
-                fontSize: widget.textSize,
-                fontFamily: settingsState.fontFamily,
-                height: 1.5,
+      child: Container(
+        // רקע אחיד לשורה כולה - בלי שכבות מרובות
+        decoration: isSelected
+            ? BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.08),
+              )
+            : null,
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            hoverColor: Colors.transparent,
+          ),
+          child: ExpansionTile(
+            shape: const Border(),
+            controller: controller,
+            key: PageStorageKey(widget.data[index]),
+            iconColor: Colors.transparent,
+            tilePadding: const EdgeInsets.all(0.0),
+            collapsedIconColor: Colors.transparent,
+            // הסרת כל הצבעים והאפקטים מה-ExpansionTile - נשתמש רק ב-Container למעלה
+            backgroundColor: Colors.transparent,
+            collapsedBackgroundColor: Colors.transparent,
+            // ביטול אפקטי hover ו-splash
+            visualDensity: VisualDensity.compact,
+            onExpansionChanged: (expanded) {
+              // עדכון המצב בהתאם למצב החדש של ה-ExpansionTile
+              if (expanded) {
+                _textBookBloc.add(UpdateSelectedIndex(index));
+              } else {
+                _textBookBloc.add(const UpdateSelectedIndex(null));
+              }
+            },
+            title: Padding(
+              // padding קטן לעיצוב
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  BlocBuilder<SettingsBloc, SettingsState>(
+                    builder: (context, settingsState) {
+                      String data = widget.data[index];
+                      if (!settingsState.showTeamim) {
+                        data = utils.removeTeamim(data);
+                      }
+                      if (settingsState.replaceHolyNames) {
+                        data = utils.replaceHolyNames(data);
+                      }
+
+                      return HtmlWidget(
+                        '''
+                        <div style="text-align: justify; direction: rtl;">
+                          ${() {
+                          String processedData = state.removeNikud
+                              ? utils.highLight(utils.removeVolwels('$data\n'),
+                                  state.searchText)
+                              : utils.highLight('$data\n', state.searchText);
+                          // החלת עיצוב הסוגריים העגולים
+                          return utils.formatTextWithParentheses(processedData);
+                        }()}
+                        </div>
+                        ''',
+                        textStyle: TextStyle(
+                          fontSize: widget.textSize,
+                          fontFamily: settingsState.fontFamily,
+                          height: 1.5,
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
-            );
-          },
+            ),
+            children: [
+              widget.showCommentaryAsExpansionTiles
+                  ? CommentaryListBase(
+                      indexes: [index],
+                      fontSize: widget.textSize,
+                      openBookCallback: widget.openBookCallback,
+                      showSearch: false,
+                    )
+                  : const SizedBox.shrink(),
+            ],
+          ),
         ),
-        children: [
-          widget.showSplitedView.value
-              ? const SizedBox.shrink()
-              : CommentaryListForCombinedView(
-                  index: index,
-                  fontSize: widget.textSize,
-                  openBookCallback: widget.openBookCallback,
-                  showSplitView: false,
-                ),
-        ],
       ),
     );
   }
@@ -826,6 +816,13 @@ $htmlWithBreaks
       },
     );
   }
+
+  /// Opens the text editor for a specific paragraph
+  void _editParagraph(int paragraphIndex) {
+    if (paragraphIndex >= 0 && paragraphIndex < widget.data.length) {
+      context.read<TextBookBloc>().add(OpenEditor(index: paragraphIndex));
+    }
+  }
 }
 
 /// Widget נפרד לסרגל ההערות כדי למנוע rebuilds מיותרים של הטקסט
@@ -845,11 +842,7 @@ class _NotesSection extends StatelessWidget {
       onClose: onClose,
       onNavigateToPosition: (start, end) {
         // ניווט למיקום ההערה בטקסט
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ניווט למיקום $start-$end'),
-          ),
-        );
+        UiSnack.show('ניווט למיקום $start-$end');
       },
     );
   }

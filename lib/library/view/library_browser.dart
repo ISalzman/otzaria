@@ -4,23 +4,15 @@ import 'package:otzaria/focus/focus_repository.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
-import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
-import 'package:otzaria/navigation/bloc/navigation_event.dart';
-import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
-import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
-import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
-import 'package:otzaria/tabs/models/pdf_tab.dart';
-import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/daf_yomi/daf_yomi_helper.dart';
 import 'package:otzaria/file_sync/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/file_sync_repository.dart';
 import 'package:otzaria/file_sync/file_sync_state.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/daf_yomi/daf_yomi.dart';
 import 'package:otzaria/file_sync/file_sync_widget.dart';
 import 'package:otzaria/widgets/filter_list/src/filter_list_dialog.dart';
@@ -34,9 +26,10 @@ import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/bookmarks/bookmarks_dialog.dart';
 import 'package:otzaria/widgets/workspace_icon_button.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
+import 'package:otzaria/utils/open_book.dart';
 
 class LibraryBrowser extends StatefulWidget {
-  const LibraryBrowser({Key? key}) : super(key: key);
+  const LibraryBrowser({super.key});
 
   @override
   State<LibraryBrowser> createState() => _LibraryBrowserState();
@@ -377,34 +370,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   void _openBook(Book book) {
-    if (book is PdfBook) {
-      context.read<TabsBloc>().add(
-            AddTab(
-              PdfBookTab(
-                book: book,
-                pageNumber: 1,
-                openLeftPane:
-                    (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-                        (Settings.getValue<bool>('key-default-sidebar-open') ??
-                            false),
-              ),
-            ),
-          );
-    } else if (book is TextBook) {
-      context.read<TabsBloc>().add(
-            AddTab(
-              TextBookTab(
-                book: book,
-                index: 0,
-                openLeftPane:
-                    (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-                        (Settings.getValue<bool>('key-default-sidebar-open') ??
-                            false),
-              ),
-            ),
-          );
-    }
-    context.read<NavigationBloc>().add(const NavigateToScreen(Screen.reading));
+    final index = book is PdfBook ? 1 : 0;
+    openBook(context, book, index, '');
   }
 
   void _openCategory(Category category) {

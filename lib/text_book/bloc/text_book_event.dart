@@ -11,15 +11,17 @@ class LoadContent extends TextBookEvent {
   final double fontSize;
   final bool showSplitView;
   final bool removeNikud;
+  final bool preserveState; // Whether to preserve current state during reload
 
   const LoadContent({
     required this.fontSize,
     required this.showSplitView,
     required this.removeNikud,
+    this.preserveState = false, // Default to false for backward compatibility
   });
 
   @override
-  List<Object?> get props => [fontSize, showSplitView, removeNikud];
+  List<Object?> get props => [fontSize, showSplitView, removeNikud, preserveState];
 }
 
 class UpdateFontSize extends TextBookEvent {
@@ -126,4 +128,87 @@ class UpdateSelectedTextForNote extends TextBookEvent {
 
   @override
   List<Object?> get props => [text, start, end];
+}
+
+// Editor Events
+class OpenEditor extends TextBookEvent {
+  final int index;
+
+  const OpenEditor({required this.index});
+
+  @override
+  List<Object?> get props => [index];
+}
+
+class SaveEditedSection extends TextBookEvent {
+  final int index;
+  final String sectionId;
+  final String markdown;
+
+  const SaveEditedSection({
+    required this.index,
+    required this.sectionId,
+    required this.markdown,
+  });
+
+  @override
+  List<Object?> get props => [index, sectionId, markdown];
+}
+
+class LoadDraftIfAny extends TextBookEvent {
+  final int index;
+  final String sectionId;
+
+  const LoadDraftIfAny({required this.index, required this.sectionId});
+
+  @override
+  List<Object?> get props => [index, sectionId];
+}
+
+class DiscardDraft extends TextBookEvent {
+  final int index;
+  final String sectionId;
+
+  const DiscardDraft({required this.index, required this.sectionId});
+
+  @override
+  List<Object?> get props => [index, sectionId];
+}
+
+class CloseEditor extends TextBookEvent {
+  const CloseEditor();
+
+  @override
+  List<Object?> get props => [];
+}
+
+class UpdateEditorText extends TextBookEvent {
+  final String text;
+
+  const UpdateEditorText(this.text);
+
+  @override
+  List<Object?> get props => [text];
+}
+
+class AutoSaveDraft extends TextBookEvent {
+  final int index;
+  final String sectionId;
+  final String markdown;
+
+  const AutoSaveDraft({
+    required this.index,
+    required this.sectionId,
+    required this.markdown,
+  });
+
+  @override
+  List<Object?> get props => [index, sectionId, markdown];
+}
+
+class OpenFullFileEditor extends TextBookEvent {
+  const OpenFullFileEditor();
+
+  @override
+  List<Object?> get props => [];
 }

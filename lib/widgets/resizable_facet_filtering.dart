@@ -14,11 +14,11 @@ class ResizableFacetFiltering extends StatefulWidget {
   final double maxWidth;
 
   const ResizableFacetFiltering({
-    Key? key,
+    super.key,
     required this.tab,
     this.minWidth = 150,
     this.maxWidth = 500,
-  }) : super(key: key);
+  });
 
   @override
   State<ResizableFacetFiltering> createState() =>

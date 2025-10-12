@@ -2,6 +2,7 @@
 /// The application is a Flutter-based digital library system that supports
 /// RTL (Right-to-Left) languages, particularly Hebrew.
 /// It includes features for dark mode, customizable themes, and local storage management.
+library;
 
 import 'dart:async';
 import 'dart:io';
@@ -9,7 +10,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_single_instance/flutter_single_instance.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 import 'package:hive/hive.dart';
 import 'package:otzaria/app.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
@@ -43,6 +46,13 @@ import 'package:otzaria/notes/data/database_schema.dart';
 import 'package:otzaria/notes/bloc/notes_bloc.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:search_engine/search_engine.dart';
+import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/window_listener.dart';
+import 'package:shamor_zachor/providers/shamor_zachor_data_provider.dart';
+import 'package:shamor_zachor/providers/shamor_zachor_progress_provider.dart';
+
+// Global reference to window listener for cleanup
+AppWindowListener? _appWindowListener;
 
 /// Application entry point that initializes necessary components and launches the app.
 ///
@@ -140,6 +150,12 @@ void main() async {
               tabsBloc: context.read<TabsBloc>(),
             )..add(LoadWorkspaces()),
           ),
+          ChangeNotifierProvider<ShamorZachorDataProvider>(
+            create: (context) => ShamorZachorDataProvider(),
+          ),
+          ChangeNotifierProvider<ShamorZachorProgressProvider>(
+            create: (context) => ShamorZachorProgressProvider(),
+          ),
         ],
         child: const App(),
       ),
@@ -160,11 +176,26 @@ Future<void> initialize() async {
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+    await windowManager.ensureInitialized();
+
+    // Configure window manager for proper close handling
+    WindowOptions windowOptions = const WindowOptions(
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+    );
+
+    // Add window listener for proper close handling
+    _appWindowListener = AppWindowListener();
+    windowManager.addListener(_appWindowListener!);
+
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
   }
 
   await RustLib.init();
   await Settings.init(cacheProvider: HiveCache());
-  await initLibraryPath();
   await initHive();
   await createDirs();
   await loadCerts();
@@ -174,7 +205,7 @@ Future<void> initialize() async {
     await DatabaseSchema.initializeDatabase();
   } catch (e) {
     if (kDebugMode) {
-      print('Failed to initialize notes database: $e');
+      debugPrint('Failed to initialize notes database: $e');
     }
     // Continue without notes functionality if database fails
   }
@@ -186,49 +217,7 @@ Future<void> initialize() async {
 /// - Main library directory ('אוצריא')
 /// - Index directory for search functionality
 Future<void> createDirs() async {
-  createDirectoryIfNotExists(
-      '${Settings.getValue('key-library-path')}${Platform.pathSeparator}אוצריא');
-  createDirectoryIfNotExists(
-      '${Settings.getValue('key-library-path')}${Platform.pathSeparator}index');
-  createDirectoryIfNotExists(
-      '${Settings.getValue('key-library-path')}${Platform.pathSeparator}ref_index');
-}
-
-/// Initializes the library path based on the platform.
-///
-/// For mobile platforms (Android/iOS), uses the application documents directory.
-/// For Windows, defaults to 'C:/אוצריא' if not previously set.
-/// For other platforms, uses the existing settings value.
-Future<void> initLibraryPath() async {
-  if (!Settings.isInitialized) {
-    await Settings.init(cacheProvider: HiveCache());
-  }
-  if (Platform.isIOS) {
-    // Mobile platforms use the app's documents directory
-    await Settings.setValue(
-        'key-library-path', (await getApplicationDocumentsDirectory()).path);
-    return;
-  }
-
-  if (Platform.isAndroid) {
-    // use the external storage directory on android
-    await Settings.setValue(
-        'key-library-path', (await getExternalStorageDirectory())!.path);
-  }
-
-  // Check existing library path setting
-  String? libraryPath = Settings.getValue('key-library-path');
-
-  if (libraryPath == null && (Platform.isLinux || Platform.isMacOS)) {
-    // Use the working directory for Linux and macOS
-    await Settings.setValue('key-library-path', '.');
-  }
-
-  // Set default Windows path if not configured
-  if (Platform.isWindows && libraryPath == null) {
-    libraryPath = 'C:/אוצריא';
-    Settings.setValue('key-library-path', libraryPath);
-  }
+  await AppPaths.createNecessaryDirectories();
 }
 
 /// Creates a directory if it doesn't already exist.
@@ -255,4 +244,9 @@ Future<void> loadCerts() async {
     SecurityContext.defaultContext
         .setTrustedCertificatesBytes(certBytes.buffer.asUint8List());
   }
+}
+
+/// Clean up resources when the app is closing
+void cleanup() {
+  _appWindowListener?.dispose();
 }

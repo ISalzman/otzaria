@@ -3,7 +3,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/core/app_paths.dart';
 import '../models/note.dart';
-
 import '../config/notes_config.dart';
 import 'database_schema.dart';
 
@@ -28,7 +27,8 @@ class NotesDataProvider {
 
   /// Initialize the database with schema and optimizations
   Future<Database> _initDatabase() async {
-    final newPath = await resolveNotesDbPath(NotesEnvironment.databasePath);
+    final newPath =
+        await AppPaths.resolveNotesDbPath(NotesEnvironment.databasePath);
 
     // Migrate old database file (if it exists)
     final oldBase = await getDatabasesPath();
@@ -53,14 +53,15 @@ class NotesDataProvider {
     } catch (e, st) {
       // Write detailed log next to the DB (what the user can send)
       final logPath = p.join(p.dirname(newPath), 'notes_db_error.log');
-      final log = [
-            'When: ${DateTime.now().toIso8601String()}',
-            'OS: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
-            'Tried path: $newPath',
-            'Error: $e',
-            'Stack:\n$st',
-          ].join('\n') +
-          '\n\n';
+      final log = '''
+      When: ${DateTime.now().toIso8601String()}
+      OS: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}
+      Tried path: $newPath
+      Error: $e
+      Stack:
+      $st
+
+      ''';
       await File(logPath).writeAsString(log, mode: FileMode.append);
 
       rethrow; // rethrow to the upper layers - the UI will show a neat message
@@ -101,7 +102,7 @@ class NotesDataProvider {
       } catch (e) {
         // Log but don't fail on PRAGMA errors in testing
         if (NotesEnvironment.performanceLogging) {
-          // print('PRAGMA warning: $pragma failed with $e');
+          // debugPrint('PRAGMA warning: $pragma failed with $e');
         }
       }
     }
@@ -395,7 +396,8 @@ class NotesDataProvider {
   /// Reset the database (for testing)
   Future<void> reset() async {
     await close();
-    final path = await resolveNotesDbPath(NotesEnvironment.databasePath);
+    final path =
+        await AppPaths.resolveNotesDbPath(NotesEnvironment.databasePath);
 
     if (await File(path).exists()) {
       await File(path).delete();

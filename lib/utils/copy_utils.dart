@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:super_clipboard/super_clipboard.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 
 class CopyUtils {
   /// מחלץ את שם הספר
@@ -46,12 +48,12 @@ class CopyUtils {
       final result = parts.join(', ');
 
       if (kDebugMode) {
-        print('CopyUtils: Final path (TOC strict): "$result"');
+        debugPrint('CopyUtils: Final path (TOC strict): "$result"');
       }
       return result;
     } catch (e, st) {
       if (kDebugMode) {
-        print('CopyUtils: ERROR in extractCurrentPath: $e\n$st');
+        debugPrint('CopyUtils: ERROR in extractCurrentPath: $e\n$st');
       }
       return '';
     }
@@ -110,6 +112,40 @@ class CopyUtils {
     return result;
   }
 
+  /// העתקת טקסט מעוצב ללוח עם HTML
+  /// מטפל בהמרת \n ל-<br>, עיצוב HTML עם גופן וגודל, וכתיבה ללוח עם חיווי באפליקציה
+  static Future<void> copyStyledToClipboard({
+    required String plainText,
+    required String htmlText,
+    required String fontFamily,
+    required double fontSize,
+  }) async {
+    try {
+      final clipboard = SystemClipboard.instance;
+      if (clipboard == null) {
+        UiSnack.show('לא ניתן לגשת ללוח');
+        return;
+      }
+
+      // המרת \n ל-<br> והוספת עיצוב HTML
+      final textWithBreaks = htmlText.replaceAll('\n', '<br>');
+      final htmlContent = '''
+<div style="font-family: $fontFamily; font-size: ${fontSize}px; text-align: justify; direction: rtl;">
+$textWithBreaks
+</div>
+''';
+
+      final item = DataWriterItem();
+      item.add(Formats.plainText(plainText)); // טקסט רגיל כגיבוי
+      item.add(Formats.htmlText(htmlContent)); // טקסט עם עיצוב
+
+      await clipboard.write([item]);
+      UiSnack.show('הטקסט המעוצב הועתק ללוח');
+    } catch (e) {
+      UiSnack.showError('שגיאה בהעתקה: $e');
+    }
+  }
+
   // ------------------------------------------------------------
   //                 HELPERS - STRICT CONTENT PARSING
   // ------------------------------------------------------------
@@ -160,9 +196,10 @@ class CopyUtils {
 
     final result = parts.join(', ');
     if (kDebugMode) {
-      if (result.isNotEmpty)
-        print(
+      if (result.isNotEmpty) {
+        debugPrint(
             'CopyUtils: Final path from CONTENT (strict, full scan): "$result"');
+      }
     }
     return result;
   }

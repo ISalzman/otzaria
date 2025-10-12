@@ -161,13 +161,11 @@ class CustomSearchConfiguration {
 
 /// דוגמה לשמירה וטעינה של הגדרות
 class SearchConfigurationManager {
-  static const String _configKey = 'search_configuration';
-
   /// שמירת הגדרות (דוגמה - צריך להתאים לשיטת השמירה בפרויקט)
   static Future<void> saveConfiguration(SearchConfiguration config) async {
     // כאן תהיה השמירה ב-SharedPreferences או במקום אחר
     final configMap = config.toMap();
-    print('שמירת הגדרות: $configMap');
+    debugPrint('שמירת הגדרות: $configMap');
   }
 
   /// טעינת הגדרות (דוגמה - צריך להתאים לשיטת הטעינה בפרויקט)

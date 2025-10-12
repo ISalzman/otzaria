@@ -8,8 +8,7 @@ class FileTreeViewScreen extends StatefulWidget {
   final List<String> checkedItems;
 
   const FileTreeViewScreen(
-      {Key? key, required this.checkedItems, required this.libraryRootPath})
-      : super(key: key);
+      {super.key, required this.checkedItems, required this.libraryRootPath});
 
   @override
   FileTreeViewScreenState createState() => FileTreeViewScreenState();

@@ -8,10 +8,10 @@ import 'package:flutter/material.dart';
 class FilterListTheme extends InheritedWidget {
   /// Builds a [FilterListTheme].
   const FilterListTheme({
-    Key? key,
+    super.key,
     required this.theme,
-    required Widget child,
-  }) : super(key: key, child: child);
+    required super.child,
+  });
 
   /// The [FilterListThemeData] styling for this theme.
   final FilterListThemeData theme;
