@@ -14,6 +14,7 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
   List<GematriaSearchResult> _searchResults = [];
   bool _isSearching = false;
   int _maxResults = 100; // ברירת מחדל
+  int? _lastGematriaValue; // ערך הגימטריה האחרון שחיפשנו
 
   @override
   void dispose() {
@@ -33,6 +34,7 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
     try {
       // חישוב הגימטריה של הטקסט שהוזן
       final targetGimatria = GimatriaSearch.gimatria(searchText);
+      _lastGematriaValue = targetGimatria;
 
       // קבלת נתיב הספרייה מההגדרות
       final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
@@ -103,6 +105,7 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
       body: Column(
         children: [
           _buildSearchBar(),
+          if (_lastGematriaValue != null) _buildStatusBar(),
           Expanded(
             child: _buildResultsList(),
           ),
@@ -116,6 +119,41 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
     );
   }
 
+  Widget _buildStatusBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'נמצאו ${_searchResults.length} תוצאות',
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Text(
+            'ערך גימטריה: $_lastGematriaValue',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showSettingsDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -125,15 +163,20 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            const Text('מספר תוצאות מקסימלי:', textAlign: TextAlign.right),
+            const Align(
+              alignment: Alignment.centerRight,
+              child: Text('מספר תוצאות מקסימלי:'),
+            ),
             const SizedBox(height: 8),
             DropdownButton<int>(
               value: _maxResults,
               isExpanded: true,
+              alignment: AlignmentDirectional.centerEnd,
               items: [50, 100, 200, 500, 1000].map((value) {
                 return DropdownMenuItem<int>(
                   value: value,
-                  child: Text('$value תוצאות', textAlign: TextAlign.right),
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Text('$value'),
                 );
               }).toList(),
               onChanged: (value) {
