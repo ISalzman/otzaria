@@ -106,6 +106,7 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
     return BlocBuilder<TextBookBloc, TextBookState>(builder: (context, state) {
       if (state is! TextBookLoaded) return const Center();
       return Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (widget.showSearch) ...[
             Padding(
@@ -232,7 +233,8 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
               ),
             ),
           ],
-          Expanded(
+          Flexible(
+            fit: FlexFit.loose,
             child: FutureBuilder(
               future: getLinksforIndexs(
                   indexes: widget.indexes ??
@@ -255,10 +257,6 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                 }
                 final data = thisLinksSnapshot.data!;
                 _itemCount = data.length;
-                final currentIndexes = widget.indexes ??
-                    (state.selectedIndex != null
-                        ? [state.selectedIndex!]
-                        : state.visibleIndices);
 
                 return ProgressiveScroll(
                   scrollController: scrollController,
@@ -267,7 +265,8 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                   accelerationFactor: 5,
                   child: ScrollablePositionedList.builder(
                     itemScrollController: _itemScrollController,
-                    key: ValueKey(currentIndexes.join(',')),
+                    key: PageStorageKey(
+                        'commentary_${widget.indexes?.join(",") ?? "split"}_${state.activeCommentators.hashCode}'),
                     physics: const ClampingScrollPhysics(),
                     scrollOffsetController: scrollController,
                     shrinkWrap: true,
