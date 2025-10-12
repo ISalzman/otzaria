@@ -64,6 +64,7 @@ class GimatriaSearch {
       String folder, int targetGimatria,
       {int maxPhraseWords = 8,
       int fileLimit = 1000,
+      bool wholeVerseOnly = false,
       bool debug = false}) async {
     final List<SearchResult> found = [];
     final dir = Directory(folder);
@@ -111,28 +112,48 @@ class GimatriaSearch {
               .where((w) => w.trim().isNotEmpty)
               .toList();
           if (words.isEmpty) continue;
-          final wordValues = words.map((w) => gimatria(w)).toList();
-          for (int start = 0; start < words.length; start++) {
-            int acc = 0;
-            for (int offset = 0;
-                offset < maxPhraseWords && start + offset < words.length;
-                offset++) {
-              acc += wordValues[start + offset];
-              if (acc == targetGimatria) {
-                final phrase =
-                    words.sublist(start, start + offset + 1).join(' ');
-                final path = _extractPathFromLines(lines, i);
-                // ניקוי תגיות HTML מהטקסט
-                final cleanPhrase = _cleanHtml(phrase);
-                found.add(SearchResult(
-                    file: file.path,
-                    line: i + 1,
-                    text: cleanPhrase,
-                    path: path,
-                    verseNumber: verseNumber));
-                if (found.length >= fileLimit) return found;
-              } else if (acc > targetGimatria) {
-                break;
+
+          // אם מחפשים פסוק שלם, בדוק את כל השורה
+          if (wholeVerseOnly) {
+            final totalValue =
+                words.map((w) => gimatria(w)).fold(0, (a, b) => a + b);
+            if (totalValue == targetGimatria) {
+              final phrase = words.join(' ');
+              final path = _extractPathFromLines(lines, i);
+              final cleanPhrase = _cleanHtml(phrase);
+              found.add(SearchResult(
+                  file: file.path,
+                  line: i + 1,
+                  text: cleanPhrase,
+                  path: path,
+                  verseNumber: verseNumber));
+              if (found.length >= fileLimit) return found;
+            }
+          } else {
+            // חיפוש רגיל - כל קטע
+            final wordValues = words.map((w) => gimatria(w)).toList();
+            for (int start = 0; start < words.length; start++) {
+              int acc = 0;
+              for (int offset = 0;
+                  offset < maxPhraseWords && start + offset < words.length;
+                  offset++) {
+                acc += wordValues[start + offset];
+                if (acc == targetGimatria) {
+                  final phrase =
+                      words.sublist(start, start + offset + 1).join(' ');
+                  final path = _extractPathFromLines(lines, i);
+                  // ניקוי תגיות HTML מהטקסט
+                  final cleanPhrase = _cleanHtml(phrase);
+                  found.add(SearchResult(
+                      file: file.path,
+                      line: i + 1,
+                      text: cleanPhrase,
+                      path: path,
+                      verseNumber: verseNumber));
+                  if (found.length >= fileLimit) return found;
+                } else if (acc > targetGimatria) {
+                  break;
+                }
               }
             }
           }

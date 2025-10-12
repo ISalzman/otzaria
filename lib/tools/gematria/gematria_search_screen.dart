@@ -15,6 +15,8 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
   bool _isSearching = false;
   int _maxResults = 100; // ברירת מחדל
   int? _lastGematriaValue; // ערך הגימטריה האחרון שחיפשנו
+  bool _filterDuplicates = false; // סינון תוצאות כפולות
+  bool _wholeVerseOnly = false; // חיפוש פסוק שלם בלבד
 
   @override
   void dispose() {
@@ -53,12 +55,26 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
           targetGimatria,
           maxPhraseWords: 8,
           fileLimit: _maxResults,
+          wholeVerseOnly: _wholeVerseOnly,
         );
         allResults.addAll(results);
         if (allResults.length >= _maxResults) break;
       }
 
-      final results = allResults.take(_maxResults).toList();
+      var results = allResults.take(_maxResults).toList();
+
+      // סינון כפילויות אם נדרש
+      if (_filterDuplicates) {
+        final seen = <String>{};
+        results = results.where((result) {
+          final key = result.text;
+          if (seen.contains(key)) {
+            return false;
+          }
+          seen.add(key);
+          return true;
+        }).toList();
+      }
 
       // המרת התוצאות לפורמט של המסך
       setState(() {
@@ -157,45 +173,91 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
   void _showSettingsDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('הגדרות חיפוש', textAlign: TextAlign.right),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            const Align(
-              alignment: Alignment.centerRight,
-              child: Text('מספר תוצאות מקסימלי:'),
-            ),
-            const SizedBox(height: 8),
-            DropdownButton<int>(
-              value: _maxResults,
-              isExpanded: true,
-              alignment: AlignmentDirectional.centerEnd,
-              items: [50, 100, 200, 500, 1000].map((value) {
-                return DropdownMenuItem<int>(
-                  value: value,
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: Text('$value'),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('הגדרות חיפוש', textAlign: TextAlign.right),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Text('מספר תוצאות מקסימלי:'),
+              ),
+              const SizedBox(height: 8),
+              DropdownButton<int>(
+                value: _maxResults,
+                isExpanded: true,
+                items: [50, 100, 200, 500, 1000].map((value) {
+                  return DropdownMenuItem<int>(
+                    value: value,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text('$value'),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _maxResults = value;
+                    });
+                    setDialogState(() {});
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                title: const Text(
+                  'סינון תוצאות כפולות',
+                  textAlign: TextAlign.right,
+                ),
+                subtitle: const Text(
+                  'הצג כל תוצאה רק פעם אחת',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(fontSize: 12),
+                ),
+                value: _filterDuplicates,
+                onChanged: (value) {
                   setState(() {
-                    _maxResults = value;
+                    _filterDuplicates = value ?? false;
                   });
-                  Navigator.of(context).pop();
-                }
-              },
+                  setDialogState(() {});
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+              CheckboxListTile(
+                title: const Text(
+                  'חיפוש פסוק שלם בלבד',
+                  textAlign: TextAlign.right,
+                ),
+                subtitle: const Text(
+                  'הצג רק תוצאות של פסוק שלם',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(fontSize: 12),
+                ),
+                value: _wholeVerseOnly,
+                onChanged: (value) {
+                  setState(() {
+                    _wholeVerseOnly = value ?? false;
+                  });
+                  setDialogState(() {});
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('סגור'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('סגור'),
-          ),
-        ],
       ),
     );
   }
