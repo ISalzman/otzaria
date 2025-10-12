@@ -8,10 +8,6 @@ on:
     branches:
       - main
       - dev
-      - dev_dev2
-      - n-search2
-      - ns2new
-      - n-search2.1
 
   pull_request:
     types: [opened, synchronize, reopened]
@@ -19,7 +15,7 @@ on:
 
   # טריגר לפרסום בלבד
   release:
-    types: [published]
+    types: [published, prereleased]
 
 jobs:
   build_windows:
@@ -503,6 +499,7 @@ jobs:
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v1
         with:
+          token: ${{ secrets.GH_RELEASE_TOKEN }}
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.title }}
           prerelease: ${{ steps.version.outputs.prerelease }}
@@ -605,6 +602,7 @@ jobs:
       - name: Create PR Pre-release
         uses: softprops/action-gh-release@v1
         with:
+          token: ${{ secrets.GH_RELEASE_TOKEN }}
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.title }}
           prerelease: true

@@ -217,11 +217,14 @@ Project Link: [https://github.com/sivan22/otzaria](https://github.com/sivan22/ot
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
 
+תוכנה זו נוצרה והוקדשה על ידי: [sivan22](https://github.com/Sivan22), [Y.PL.](https://github.com/Y-PLONI), [YOSEFTT](https://github.com/YOSEFTT), [zevisvei](https://github.com/zevisvei), [NHLOCAL (פיתוח "זכור ושמור")](https://github.com/NHLOCAL/Shamor-Zachor)
+<br>
+<br>
+
+
 The project was possible because of Sefaria's amazing project. 
 <br>
 and Dicta association, by which many important books were added.
-<br>
-תוכנה זו נוצרה והוקדשה על ידי: [sivan22](https://github.com/Sivan22), [Y.PL.](https://github.com/Y-PLONI), [YOSEFTT](https://github.com/YOSEFTT), [zevisvei](https://github.com/zevisvei), [NHLOCAL (פיתוח "זכור ושמור")](https://github.com/NHLOCAL/Shamor-Zachor)
 <br>
 <br>
 <a href="https://www.sefaria.org/texts" title="ספריא" target="_blank"><img src="images/safria logo.png" alt="ספריא" width="154" height="80"/></a>
