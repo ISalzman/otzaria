@@ -146,6 +146,9 @@ class _AboutScreenState extends State<AboutScreen> {
                     const Text(', '),
                     _buildContributor(
                         'zevisvei', 'https://github.com/zevisvei'),
+                    const Text(', '),
+                    _buildContributor('NHLOCAL (פיתוח "זכור ושמור")',
+                        'https://github.com/NHLOCAL/Shamor-Zachor'),
                   ],
                 ),
                 const SizedBox(height: 16),

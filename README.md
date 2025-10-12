@@ -221,6 +221,8 @@ The project was possible because of Sefaria's amazing project.
 <br>
 and Dicta association, by which many important books were added.
 <br>
+תוכנה זו נוצרה והוקדשה על ידי: [sivan22](https://github.com/Sivan22), [Y.PL.](https://github.com/Y-PLONI), [YOSEFTT](https://github.com/YOSEFTT), [zevisvei](https://github.com/zevisvei), [NHLOCAL (פיתוח "זכור ושמור")](https://github.com/NHLOCAL/Shamor-Zachor)
+<br>
 <br>
 <a href="https://www.sefaria.org/texts" title="ספריא" target="_blank"><img src="images/safria logo.png" alt="ספריא" width="154" height="80"/></a>
 <a href="https://github.com/Dicta-Israel-Center-for-Text-Analysis/Dicta-Library-Download" title="דיקטה" target="_blank"><img src="images/dicta_logo.jpg" alt="דיקטה" width="154" height="80"/></a>
@@ -267,4 +269,4 @@ For automatic updates, I used [updat](https://pub.dev/packages/updat).
 [Bootstrap.com]: https://img.shields.io/badge/Bootstrap-563D7C?style=for-the-badge&logo=bootstrap&logoColor=white
 [Bootstrap-url]: https://getbootstrap.com
 [JQuery.com]: https://img.shields.io/badge/jQuery-0769AD?style=for-the-badge&logo=jquery&logoColor=white
-[JQuery-url]: https://jquery.com 
+[JQuery-url]: https://jquery.com
