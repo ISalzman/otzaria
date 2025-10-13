@@ -217,7 +217,7 @@ Project Link: [https://github.com/sivan22/otzaria](https://github.com/sivan22/ot
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
 
-תוכנה זו נוצרה והוקדשה על ידי: [sivan22](https://github.com/Sivan22), [Y.PL.](https://github.com/Y-PLONI), [YOSEFTT](https://github.com/YOSEFTT), [zevisvei](https://github.com/zevisvei), [NHLOCAL (פיתוח "זכור ושמור")](https://github.com/NHLOCAL/Shamor-Zachor)
+תוכנה זו נוצרה והוקדשה על ידי: [sivan22](https://github.com/Sivan22), [Y.PL.](https://github.com/Y-PLONI), [YOSEFTT](https://github.com/YOSEFTT), [zevisvei](https://github.com/zevisvei), [NHLOCAL (פיתוח "זכור ושמור")](https://github.com/NHLOCAL/Shamor-Zachor), [evel-avalim (פיתוח הגימטריות)](https://github.com/evel-avalim).
 <br>
 <br>
 
