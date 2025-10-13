@@ -34,14 +34,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
   late final PageController pageController;
   Orientation? _previousOrientation;
 
-  final List<Widget> _pages = const [
-    KeepAlivePage(child: LibraryBrowser()),
-    KeepAlivePage(child: FindRefScreen()),
-    KeepAlivePage(child: ReadingScreen()),
-    KeepAlivePage(child: SizedBox.shrink()),
-    KeepAlivePage(child: MoreScreen()),
-    KeepAlivePage(child: MySettingsScreen()),
-  ];
+  // Keep the pages list as templates; the actual first page (library)
+  // will be built dynamically in build() to allow showing the
+  // EmptyLibraryScreen inside the library tab while keeping the
+  // rest of the application UI available.
+  List<Widget> _pages = [];
 
   @override
   void initState() {
@@ -188,13 +185,24 @@ class MainWindowScreenState extends State<MainWindowScreen>
       listener: _handleNavigationChange,
       child: BlocBuilder<NavigationBloc, NavigationState>(
         builder: (context, state) {
-          if (state.isLibraryEmpty) {
-            return EmptyLibraryScreen(
-              onLibraryLoaded: () {
-                context.read<NavigationBloc>().refreshLibrary();
-              },
-            );
-          }
+          // Build the pages list here so we can inject the EmptyLibraryScreen
+          // into the library page while keeping the rest of the app visible.
+          _pages = [
+            KeepAlivePage(
+              child: state.isLibraryEmpty
+                  ? EmptyLibraryScreen(
+                      onLibraryLoaded: () {
+                        context.read<NavigationBloc>().refreshLibrary();
+                      },
+                    )
+                  : const LibraryBrowser(),
+            ),
+            const KeepAlivePage(child: FindRefScreen()),
+            const KeepAlivePage(child: ReadingScreen()),
+            const KeepAlivePage(child: SizedBox.shrink()),
+            const KeepAlivePage(child: MoreScreen()),
+            const KeepAlivePage(child: MySettingsScreen()),
+          ];
 
           return SafeArea(
             child: KeyboardShortcuts(
