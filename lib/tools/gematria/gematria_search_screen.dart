@@ -257,7 +257,7 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
         color: Theme.of(context).colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -272,8 +272,10 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
               decoration: InputDecoration(
                 hintText: 'חפש גימטריה...',
                 hintStyle: TextStyle(
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.5),
                 ),
                 filled: true,
                 fillColor:
@@ -327,14 +329,20 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
             Icon(
               Icons.search_off,
               size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
               'לא נמצאו תוצאות',
               style: TextStyle(
                 fontSize: 18,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.6),
               ),
             ),
           ],
@@ -350,14 +358,20 @@ class _GematriaSearchScreenState extends State<GematriaSearchScreen> {
             Icon(
               Icons.calculate_outlined,
               size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
               'הזן ערך לחיפוש גימטריה',
               style: TextStyle(
                 fontSize: 18,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.6),
               ),
             ),
           ],

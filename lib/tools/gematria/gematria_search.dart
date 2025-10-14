@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 class SearchResult {
   final String file;
@@ -83,7 +84,7 @@ class GimatriaSearch {
 
         if (debug) {
           // הדפס קובץ ונקודות בדיקה מהירות
-          print('Scanning file: ${file.path} (lines: ${lines.length})');
+          debugPrint('Scanning file: ${file.path} (lines: ${lines.length})');
         }
 
         for (int i = 0; i < lines.length; i++) {
@@ -159,7 +160,9 @@ class GimatriaSearch {
           }
         }
       } catch (e) {
-        if (debug) print('Skipped file ${file.path} due to read error: $e');
+        if (debug) {
+          debugPrint('Skipped file ${file.path} due to read error: $e');
+        }
         continue;
       }
       if (found.length >= fileLimit) break;
