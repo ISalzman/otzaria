@@ -18,6 +18,8 @@ class _MoreScreenState extends State<MoreScreen> {
   int _selectedIndex = 0;
   late final CalendarCubit _calendarCubit;
   late final SettingsRepository _settingsRepository;
+  final GlobalKey<GematriaSearchScreenState> _gematriaKey =
+      GlobalKey<GematriaSearchScreenState>();
 
   // Title for the ShamorZachor section (dynamic from the package)
   String _shamorZachorTitle = 'זכור ושמור';
@@ -113,15 +115,36 @@ class _MoreScreenState extends State<MoreScreen> {
   }
 
   List<Widget>? _getActions(BuildContext context, int index) {
-    if (index == 0) {
-      return [
-        IconButton(
-          icon: const Icon(Icons.settings),
-          onPressed: () => _showSettingsDialog(context),
+    Widget buildSettingsButton(VoidCallback onPressed) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: IconButton(
+          icon: const Icon(Icons.settings_outlined),
+          tooltip: 'הגדרות',
+          onPressed: onPressed,
+          style: IconButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            backgroundColor:
+                Theme.of(context).colorScheme.surfaceContainerHighest,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
         ),
-      ];
+      );
     }
-    return null;
+
+    switch (index) {
+      case 0:
+        return [buildSettingsButton(() => _showSettingsDialog(context))];
+      case 3:
+        return [
+          buildSettingsButton(
+              () => _gematriaKey.currentState?.showSettingsDialog())
+        ];
+      default:
+        return null;
+    }
   }
 
   Widget _buildCurrentWidget(int index) {
@@ -138,7 +161,7 @@ class _MoreScreenState extends State<MoreScreen> {
       case 2:
         return const MeasurementConverterScreen();
       case 3:
-        return const GematriaSearchScreen();
+        return GematriaSearchScreen(key: _gematriaKey);
       default:
         return Container();
     }

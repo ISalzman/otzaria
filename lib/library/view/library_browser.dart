@@ -151,7 +151,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                         _update(context, state, settingsState);
                         _refocusSearchBar();
                       },
-                      icon: const Icon(Icons.cancel),
+                      icon: const Icon(Icons.clear),
                     ),
                     border: const OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(8.0)),

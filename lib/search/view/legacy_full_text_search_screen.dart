@@ -88,7 +88,7 @@ class TextFileSearchScreenState extends State<TextFileSearchScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.cancel),
+                  icon: const Icon(Icons.clear),
                   onPressed: () {
                     setState(() {
                       widget.searcher.queryController.clear();
