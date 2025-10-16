@@ -848,6 +848,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     return [
       ResponsiveActionBar(
+        key: ValueKey('responsive_actions_$screenWidth'),
         actions: _buildPrioritizedActions(context, state),
         originalOrder: _buildOriginalOrderActions(context, state),
         maxVisibleButtons: maxButtons,

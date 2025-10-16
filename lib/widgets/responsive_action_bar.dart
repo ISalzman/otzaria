@@ -101,30 +101,38 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
         .where((action) => hiddenActions.contains(action))
         .toList();
 
-    return PopupMenuButton<ActionButtonData>(
-      icon: const Icon(Icons.more_horiz),
-      tooltip: 'עוד פעולות',
-      // הוספת offset כדי למקם את התפריט מתחת לכפתור
-      offset: const Offset(0, 40.0),
-      onSelected: (action) {
-        action.onPressed?.call();
-      },
-      itemBuilder: (context) {
-        return orderedHiddenActions.map((action) {
-          return PopupMenuItem<ActionButtonData>(
-            value: action,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (action.icon != null) ...[
-                  Icon(action.icon),
-                  const SizedBox(width: 8),
-                ],
-                Text(action.tooltip ?? ''),
-              ],
-            ),
-          );
-        }).toList();
+    // יצירת key ייחודי על סמך הכפתורים הנסתרים כדי למנוע בעיות context
+    final uniqueKey = 'overflow_${orderedHiddenActions.map((a) => a.tooltip).join('_')}';
+
+    return Builder(
+      key: ValueKey(uniqueKey),
+      builder: (context) {
+        return PopupMenuButton<ActionButtonData>(
+          icon: const Icon(Icons.more_horiz),
+          tooltip: 'עוד פעולות',
+          // הוספת offset כדי למקם את התפריט מתחת לכפתור
+          offset: const Offset(0, 40.0),
+          onSelected: (action) {
+            action.onPressed?.call();
+          },
+          itemBuilder: (context) {
+            return orderedHiddenActions.map((action) {
+              return PopupMenuItem<ActionButtonData>(
+                value: action,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (action.icon != null) ...[
+                      Icon(action.icon),
+                      const SizedBox(width: 8),
+                    ],
+                    Text(action.tooltip ?? ''),
+                  ],
+                ),
+              );
+            }).toList();
+          },
+        );
       },
     );
   }
