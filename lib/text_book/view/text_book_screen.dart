@@ -797,7 +797,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     } else if (screenWidth < 1100) {
       maxButtons = 14; // 14 כפתורים + "..." במסכים גדולים יותר
     } else {
-      maxButtons = 999; // כל הכפתורים החיצוניים במסכים רחבים מאוד (ה-5 הקבועים תמיד בתפריט)
+      maxButtons =
+          999; // כל הכפתורים החיצוניים במסכים רחבים מאוד (ה-5 הקבועים תמיד בתפריט)
     }
 
     return [
@@ -1621,9 +1622,12 @@ $detailsSection
     );
 
     if (action == ReportAction.sendEmail) {
-      final emailAddress =
-          bookDetails['תיקיית המקור']?.contains('sefaria') == true
-              ? 'corrections@sefaria.org'
+      final String? sourceFolder = bookDetails['תיקיית המקור'];
+      final emailAddress = sourceFolder?.contains('sefaria') == true ||
+              sourceFolder?.contains('sefariaToOtzaria') == true
+          ? 'corrections@sefaria.org'
+          : sourceFolder?.contains('wiki_jewish_books') == true
+              ? 'WikiJewishBooks@gmail.com'
               : _fallbackMail;
 
       final emailUri = Uri(
