@@ -25,6 +25,7 @@ import 'package:printing/printing.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:flutter/gestures.dart';
+import 'package:otzaria/widgets/responsive_action_bar.dart';
 
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
@@ -257,93 +258,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       !widget.tab.showLeftPane.value;
                 },
               ),
-              actions: [
-                _buildTextButton(
-                    context, widget.tab.book, widget.tab.pdfViewerController),
-                IconButton(
-                  icon: const Icon(Icons.bookmark_add),
-                  tooltip: 'הוספת סימניה',
-                  onPressed: () {
-                    int index = widget.tab.pdfViewerController.isReady
-                        ? widget.tab.pdfViewerController.pageNumber!
-                        : 1;
-                    bool bookmarkAdded =
-                        Provider.of<BookmarkBloc>(context, listen: false)
-                            .addBookmark(
-                                ref: '${widget.tab.title} עמוד $index',
-                                book: widget.tab.book,
-                                index: index);
-                    if (mounted) {
-                      UiSnack.show(bookmarkAdded
-                          ? 'הסימניה נוספה בהצלחה'
-                          : 'הסימניה כבר קיימת');
-                    }
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.zoom_in),
-                  tooltip: 'הגדל',
-                  onPressed: () => widget.tab.pdfViewerController.zoomUp(),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.zoom_out),
-                  tooltip: 'הקטן',
-                  onPressed: () => widget.tab.pdfViewerController.zoomDown(),
-                ),
-                if (wideScreen)
-                  IconButton(
-                    icon: const Icon(Icons.search),
-                    tooltip: 'חיפוש',
-                    onPressed: _ensureSearchTabIsActive,
-                  ),
-                if (wideScreen)
-                  IconButton(
-                    icon: const Icon(Icons.first_page),
-                    tooltip: 'תחילת הספר',
-                    onPressed: () =>
-                        widget.tab.pdfViewerController.goToPage(pageNumber: 1),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  tooltip: 'הקודם',
-                  onPressed: () => widget.tab.pdfViewerController.isReady
-                      ? widget.tab.pdfViewerController.goToPage(
-                          pageNumber: max(
-                              widget.tab.pdfViewerController.pageNumber! - 1,
-                              1))
-                      : null,
-                ),
-                PageNumberDisplay(controller: widget.tab.pdfViewerController),
-                IconButton(
-                  onPressed: () => widget.tab.pdfViewerController.isReady
-                      ? widget.tab.pdfViewerController.goToPage(
-                          pageNumber: min(
-                              widget.tab.pdfViewerController.pageNumber! + 1,
-                              widget.tab.pdfViewerController.pageCount))
-                      : null,
-                  icon: const Icon(Icons.chevron_right),
-                  tooltip: 'הבא',
-                ),
-                if (wideScreen)
-                  IconButton(
-                    icon: const Icon(Icons.last_page),
-                    tooltip: 'סוף הספר',
-                    onPressed: () => widget.tab.pdfViewerController.goToPage(
-                        pageNumber: widget.tab.pdfViewerController.pageCount),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.print),
-                  tooltip: 'הדפס',
-                  onPressed: () async {
-                    final file = File(widget.tab.book.path);
-                    final fileName = file.uri.pathSegments.last;
-                    await Printing.sharePdf(
-                      bytes: await file.readAsBytes(),
-                      filename: fileName,
-                    );
-                  },
-                ),
-              ],
+              actions: _buildPdfActions(context, wideScreen),
             ),
             body: Row(
               children: [
@@ -767,6 +682,237 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           ),
         );
       },
+    );
+  }
+
+  /// בניית כפתורי ה-AppBar עבור PDF
+  List<Widget> _buildPdfActions(BuildContext context, bool wideScreen) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // נקבע כמה כפתורים להציג בהתאם לרוחב המסך
+    int maxButtons;
+
+    if (screenWidth < 400) {
+      maxButtons = 2; // 2 כפתורים + "..." במסכים קטנים מאוד
+    } else if (screenWidth < 500) {
+      maxButtons = 4; // 4 כפתורים + "..." במסכים קטנים
+    } else if (screenWidth < 600) {
+      maxButtons = 6; // 6 כפתורים + "..." במסכים בינוניים קטנים
+    } else if (screenWidth < 700) {
+      maxButtons = 8; // 8 כפתורים + "..." במסכים בינוניים
+    } else if (screenWidth < 900) {
+      maxButtons = 10; // 10 כפתורים + "..." במסכים גדולים
+    } else {
+      maxButtons = 999; // כל הכפתורים החיצוניים במסכים רחבים (ההדפסה תמיד בתפריט)
+    }
+
+    return [
+      ResponsiveActionBar(
+        key: ValueKey('pdf_actions_$screenWidth'),
+        actions: _buildDisplayOrderPdfActions(context),
+        alwaysInMenu: _buildAlwaysInMenuPdfActions(context),
+        maxVisibleButtons: maxButtons,
+      ),
+    ];
+  }
+
+  /// בניית רשימת כפתורים בסדר ההצגה (מימין לשמאל ב-RTL)
+  List<ActionButtonData> _buildDisplayOrderPdfActions(BuildContext context) {
+    return [
+      // 1) Text Button (ראשון מימין - יעלם אחרון!)
+      ActionButtonData(
+        widget: _buildTextButton(
+            context, widget.tab.book, widget.tab.pdfViewerController),
+        icon: Icons.article,
+        tooltip: 'פתח טקסט',
+        onPressed: () => _handleTextButtonPress(context),
+      ),
+
+      // 2) Bookmark Button
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.bookmark_add),
+          tooltip: 'הוספת סימניה',
+          onPressed: () => _handleBookmarkPress(context),
+        ),
+        icon: Icons.bookmark_add,
+        tooltip: 'הוספת סימניה',
+        onPressed: () => _handleBookmarkPress(context),
+      ),
+
+      // 3) Zoom In Button
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.zoom_in),
+          tooltip: 'הגדל',
+          onPressed: () => widget.tab.pdfViewerController.zoomUp(),
+        ),
+        icon: Icons.zoom_in,
+        tooltip: 'הגדל',
+        onPressed: () => widget.tab.pdfViewerController.zoomUp(),
+      ),
+
+      // 4) Zoom Out Button
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.zoom_out),
+          tooltip: 'הקטן',
+          onPressed: () => widget.tab.pdfViewerController.zoomDown(),
+        ),
+        icon: Icons.zoom_out,
+        tooltip: 'הקטן',
+        onPressed: () => widget.tab.pdfViewerController.zoomDown(),
+      ),
+
+      // 5) Search Button
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.search),
+          tooltip: 'חיפוש',
+          onPressed: _ensureSearchTabIsActive,
+        ),
+        icon: Icons.search,
+        tooltip: 'חיפוש',
+        onPressed: _ensureSearchTabIsActive,
+      ),
+
+      // 6) First Page Button
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.first_page),
+          tooltip: 'תחילת הספר',
+          onPressed: () =>
+              widget.tab.pdfViewerController.goToPage(pageNumber: 1),
+        ),
+        icon: Icons.first_page,
+        tooltip: 'תחילת הספר',
+        onPressed: () => widget.tab.pdfViewerController.goToPage(pageNumber: 1),
+      ),
+
+      // 7) Previous Page Button
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.chevron_left),
+          tooltip: 'הקודם',
+          onPressed: () => widget.tab.pdfViewerController.isReady
+              ? widget.tab.pdfViewerController.goToPage(
+                  pageNumber: max(
+                      widget.tab.pdfViewerController.pageNumber! - 1, 1))
+              : null,
+        ),
+        icon: Icons.chevron_left,
+        tooltip: 'הקודם',
+        onPressed: () => widget.tab.pdfViewerController.isReady
+            ? widget.tab.pdfViewerController.goToPage(
+                pageNumber:
+                    max(widget.tab.pdfViewerController.pageNumber! - 1, 1))
+            : null,
+      ),
+
+      // 8) Page Number Display - תמיד מוצג!
+      ActionButtonData(
+        widget: PageNumberDisplay(controller: widget.tab.pdfViewerController),
+        icon: Icons.text_fields,
+        tooltip: 'מספר עמוד',
+        onPressed: null, // לא ניתן ללחיצה
+      ),
+
+      // 9) Next Page Button
+      ActionButtonData(
+        widget: IconButton(
+          onPressed: () => widget.tab.pdfViewerController.isReady
+              ? widget.tab.pdfViewerController.goToPage(
+                  pageNumber: min(widget.tab.pdfViewerController.pageNumber! + 1,
+                      widget.tab.pdfViewerController.pageCount))
+              : null,
+          icon: const Icon(Icons.chevron_right),
+          tooltip: 'הבא',
+        ),
+        icon: Icons.chevron_right,
+        tooltip: 'הבא',
+        onPressed: () => widget.tab.pdfViewerController.isReady
+            ? widget.tab.pdfViewerController.goToPage(
+                pageNumber: min(widget.tab.pdfViewerController.pageNumber! + 1,
+                    widget.tab.pdfViewerController.pageCount))
+            : null,
+      ),
+
+      // 10) Last Page Button
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.last_page),
+          tooltip: 'סוף הספר',
+          onPressed: () => widget.tab.pdfViewerController
+              .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
+        ),
+        icon: Icons.last_page,
+        tooltip: 'סוף הספר',
+        onPressed: () => widget.tab.pdfViewerController
+            .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
+      ),
+    ];
+  }
+
+  /// כפתורים שתמיד יהיו בתפריט "..." (רק הדפסה)
+  List<ActionButtonData> _buildAlwaysInMenuPdfActions(BuildContext context) {
+    return [
+      // הדפסה - תמיד בתפריט
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.print),
+          tooltip: 'הדפס',
+          onPressed: () => _handlePrintPress(context),
+        ),
+        icon: Icons.print,
+        tooltip: 'הדפס',
+        onPressed: () => _handlePrintPress(context),
+      ),
+    ];
+  }
+
+  /// טיפול בלחיצה על כפתור הטקסט
+  Future<void> _handleTextButtonPress(BuildContext context) async {
+    final currentPage = widget.tab.pdfViewerController.isReady
+        ? widget.tab.pdfViewerController.pageNumber ?? 1
+        : widget.tab.pageNumber;
+    widget.tab.pageNumber = currentPage;
+    final currentOutline = widget.tab.outline.value ?? [];
+
+    final library = await DataRepository.instance.library;
+    final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
+    if (textBook == null) return;
+
+    final index = await pdfToTextPage(
+        widget.tab.book, currentOutline, currentPage, context);
+
+    if (!context.mounted) return;
+
+    openBook(context, textBook, index ?? 0, '', ignoreHistory: true);
+  }
+
+  /// טיפול בלחיצה על כפתור הסימניה
+  void _handleBookmarkPress(BuildContext context) {
+    int index = widget.tab.pdfViewerController.isReady
+        ? widget.tab.pdfViewerController.pageNumber!
+        : 1;
+    bool bookmarkAdded = Provider.of<BookmarkBloc>(context, listen: false)
+        .addBookmark(
+            ref: '${widget.tab.title} עמוד $index',
+            book: widget.tab.book,
+            index: index);
+    if (mounted) {
+      UiSnack.show(
+          bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
+    }
+  }
+
+  /// טיפול בלחיצה על כפתור ההדפסה
+  Future<void> _handlePrintPress(BuildContext context) async {
+    final file = File(widget.tab.book.path);
+    final fileName = file.uri.pathSegments.last;
+    await Printing.sharePdf(
+      bytes: await file.readAsBytes(),
+      filename: fileName,
     );
   }
 

@@ -778,91 +778,46 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   ) {
     final screenWidth = MediaQuery.of(context).size.width;
 
-    // במסכים רחבים מאוד (יותר מ-1200), נציג את כל הכפתורים כרגיל
-    if (screenWidth >= 1200) {
-      return [
-        // PDF Button
-        _buildPdfButton(context, state),
-
-        // Split View Button
-        _buildSplitViewButton(context, state),
-
-        // Nikud Button
-        _buildNikudButton(context, state),
-
-        // Bookmark Button
-        _buildBookmarkButton(context, state),
-
-        // Notes Buttons
-        _buildShowNotesButton(context, state),
-        _buildAddNoteButton(context, state),
-
-        // Search Button
-        _buildSearchButton(context, state),
-
-        // Zoom Buttons
-        _buildZoomInButton(context, state),
-        _buildZoomOutButton(context, state),
-
-        // Navigation Buttons
-        _buildFirstPageButton(state),
-        _buildPreviousPageButton(state),
-        _buildNextPageButton(state),
-        _buildLastPageButton(state),
-
-        // Print Button
-        _buildPrintButton(context, state),
-
-        // Full File Editor Button
-        _buildFullFileEditorButton(context, state),
-
-        // Report Bug Button
-        _buildReportBugButton(context, state),
-
-        // Shamor Zachor Button
-        _buildShamorZachorButton(context, state),
-      ];
-    }
-
-    // במסכים צרים, נשתמש ברכיב הרספונסיבי
     // נקבע כמה כפתורים להציג בהתאם לרוחב המסך
+    // שים לב: הכפתורים יוסתרו בסדר ההצגה (מימין לשמאל, כך שהימני ביותר יעלם אחרון)
     int maxButtons;
 
     if (screenWidth < 400) {
-      maxButtons = 2; // 2 כפתורים חשובים + "..." במסכים קטנים מאוד
+      maxButtons = 2; // 2 כפתורים + "..." במסכים קטנים מאוד
     } else if (screenWidth < 500) {
-      maxButtons = 4; // 4 כפתורים חשובים + "..." במסכים קטנים
+      maxButtons = 4; // 4 כפתורים + "..." במסכים קטנים
     } else if (screenWidth < 600) {
-      maxButtons = 6; // 6 כפתורים חשובים + "..." במסכים בינוניים קטנים
+      maxButtons = 6; // 6 כפתורים + "..." במסכים בינוניים קטנים
     } else if (screenWidth < 700) {
-      maxButtons = 8; // 8 כפתורים חשובים + "..." במסכים בינוניים
+      maxButtons = 8; // 8 כפתורים + "..." במסכים בינוניים
     } else if (screenWidth < 800) {
-      maxButtons = 10; // 10 כפתורים חשובים + "..." במסכים בינוניים גדולים
+      maxButtons = 10; // 10 כפתורים + "..." במסכים בינוניים גדולים
     } else if (screenWidth < 900) {
-      maxButtons = 12; // 12 כפתורים חשובים + "..." במסכים גדולים
+      maxButtons = 12; // 12 כפתורים + "..." במסכים גדולים
     } else if (screenWidth < 1100) {
-      maxButtons = 14; // 14 כפתורים חשובים + "..." במסכים גדולים יותר
+      maxButtons = 14; // 14 כפתורים + "..." במסכים גדולים יותר
     } else {
-      maxButtons = 15; // כמעט כל הכפתורים במסכים רחבים מאוד
+      maxButtons = 999; // כל הכפתורים החיצוניים במסכים רחבים מאוד (ה-5 הקבועים תמיד בתפריט)
     }
 
     return [
       ResponsiveActionBar(
         key: ValueKey('responsive_actions_$screenWidth'),
-        actions: _buildPrioritizedActions(context, state),
-        originalOrder: _buildOriginalOrderActions(context, state),
+        actions: _buildDisplayOrderActions(context, state),
+        alwaysInMenu: _buildAlwaysInMenuActions(context, state),
         maxVisibleButtons: maxButtons,
       ),
     ];
   }
 
-  /// בניית רשימת כפתורים בסדר המקורי (כמו במסך הרחב)
-  List<ActionButtonData> _buildOriginalOrderActions(
+  /// בניית רשימת כפתורים בסדר ההצגה (מימין לשמאל ב-RTL)
+  /// הכפתורים יוסתרו מהסוף לתחילה, כך שהכפתור הימני ביותר (ראשון ברשימה) יעלם אחרון
+  List<ActionButtonData> _buildDisplayOrderActions(
     BuildContext context,
     TextBookLoaded state,
   ) {
     return [
-      // PDF Button (ראשון במסך הרחב)
+      // 1) PDF Button (ראשון מימין - יעלם אחרון!)
       ActionButtonData(
         widget: _buildPdfButton(context, state),
         icon: Icons.picture_as_pdf,
@@ -870,7 +825,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _handlePdfButtonPress(context, state),
       ),
 
-      // Split View Button
+      // 2) Split View Button
       ActionButtonData(
         widget: _buildSplitViewButton(context, state),
         icon: !state.showSplitView
@@ -884,7 +839,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ),
       ),
 
-      // Nikud Button
+      // 3) Nikud Button
       ActionButtonData(
         widget: _buildNikudButton(context, state),
         icon: Icons.format_overline,
@@ -893,7 +848,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             context.read<TextBookBloc>().add(ToggleNikud(!state.removeNikud)),
       ),
 
-      // Bookmark Button
+      // 4) Bookmark Button
       ActionButtonData(
         widget: _buildBookmarkButton(context, state),
         icon: Icons.bookmark_add,
@@ -901,17 +856,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _handleBookmarkPress(context, state),
       ),
 
-      // Show Notes Button
-      ActionButtonData(
-        widget: _buildShowNotesButton(context, state),
-        icon: Icons.notes,
-        tooltip: 'הצג הערות',
-        onPressed: () {
-          context.read<TextBookBloc>().add(const ToggleNotesSidebar());
-        },
-      ),
-
-      // Add Note Button
+      // 5) Add Note Button
       ActionButtonData(
         widget: _buildAddNoteButton(context, state),
         icon: Icons.note_add,
@@ -919,7 +864,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _handleAddNotePress(context, state),
       ),
 
-      // Search Button
+      // 6) Search Button
       ActionButtonData(
         widget: _buildSearchButton(context, state),
         icon: Icons.search,
@@ -931,7 +876,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
-      // Zoom In Button
+      // 7) Zoom In Button
       ActionButtonData(
         widget: _buildZoomInButton(context, state),
         icon: Icons.zoom_in,
@@ -941,7 +886,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ),
       ),
 
-      // Zoom Out Button
+      // 8) Zoom Out Button
       ActionButtonData(
         widget: _buildZoomOutButton(context, state),
         icon: Icons.zoom_out,
@@ -951,7 +896,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ),
       ),
 
-      // Navigation Buttons
+      // 9) Navigation Buttons
       ActionButtonData(
         widget: _buildFirstPageButton(state),
         icon: Icons.first_page,
@@ -1002,201 +947,43 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           );
         },
       ),
-
-      // Print Button
-      ActionButtonData(
-        widget: _buildPrintButton(context, state),
-        icon: Icons.print,
-        tooltip: 'הדפסה',
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => PrintingScreen(
-              data: Future.value(state.content.join('\n')),
-              startLine: state.visibleIndices.first,
-              removeNikud: state.removeNikud,
-            ),
-          ),
-        ),
-      ),
-
-      // Full File Editor Button
-      ActionButtonData(
-        widget: _buildFullFileEditorButton(context, state),
-        icon: Icons.edit_document,
-        tooltip: 'ערוך את הספר (Ctrl+Shift+E)',
-        onPressed: () => _handleFullFileEditorPress(context, state),
-      ),
-
-      // Report Bug Button
-      ActionButtonData(
-        widget: _buildReportBugButton(context, state),
-        icon: Icons.error_outline,
-        tooltip: 'דווח על טעות בספר',
-        onPressed: () => _showReportBugDialog(context, state),
-      ),
-
-      // Shamor Zachor Button
-      ActionButtonData(
-        widget: _buildShamorZachorButton(context, state),
-        icon: Icons.check_circle,
-        tooltip: 'סמן כנלמד בשמור וזכור',
-        onPressed: () => _markShamorZachorProgress(state.book.title),
-      ),
     ];
   }
 
-  /// בניית רשימת כפתורים לפי סדר עדיפות (החשוב ביותר ראשון)
-  List<ActionButtonData> _buildPrioritizedActions(
+  /// כפתורים שתמיד יהיו בתפריט "..." (בסדר הרצוי)
+  List<ActionButtonData> _buildAlwaysInMenuActions(
     BuildContext context,
     TextBookLoaded state,
   ) {
     return [
-      // 1) כפתורי הגדל/הקטן, וכפתורי ההחלפה בין טקסט לPDF
+      // 1) הצג הערות
       ActionButtonData(
-        widget: _buildZoomInButton(context, state),
-        icon: Icons.zoom_in,
-        tooltip: 'הגדלת טקסט',
-        onPressed: () => context.read<TextBookBloc>().add(
-              UpdateFontSize(min(50.0, state.fontSize + 3)),
-            ),
-      ),
-      ActionButtonData(
-        widget: _buildZoomOutButton(context, state),
-        icon: Icons.zoom_out,
-        tooltip: 'הקטנת טקסט',
-        onPressed: () => context.read<TextBookBloc>().add(
-              UpdateFontSize(max(15.0, state.fontSize - 3)),
-            ),
-      ),
-      ActionButtonData(
-        widget: _buildPdfButton(context, state),
-        icon: Icons.picture_as_pdf,
-        tooltip: 'פתח ספר במהדורה מודפסת',
-        onPressed: () => _handlePdfButtonPress(context, state),
-      ),
-
-      // 3) חיפוש
-      ActionButtonData(
-        widget: _buildSearchButton(context, state),
-        icon: Icons.search,
-        tooltip: 'חיפוש',
+        widget: _buildShowNotesButton(context, state),
+        icon: Icons.notes,
+        tooltip: 'הצג הערות',
         onPressed: () {
-          context.read<TextBookBloc>().add(const ToggleLeftPane(true));
-          tabController.index = 1;
-          textSearchFocusNode.requestFocus();
+          context.read<TextBookBloc>().add(const ToggleNotesSidebar());
         },
       ),
+
+      // 2) סמן כנלמד בשמור וזכור
+      if (_isBookSupportedByShamorZachor(state.book.title))
+        ActionButtonData(
+          widget: _buildShamorZachorButton(context, state),
+          icon: Icons.check_circle,
+          tooltip: 'סמן כנלמד בשמור וזכור',
+          onPressed: () => _markShamorZachorProgress(state.book.title),
+        ),
 
       // 3) ערוך את הספר
       ActionButtonData(
         widget: _buildFullFileEditorButton(context, state),
         icon: Icons.edit_document,
-        tooltip: 'ערוך את הספר (Ctrl+Shift+E)',
+        tooltip: 'ערוך את הספר',
         onPressed: () => _handleFullFileEditorPress(context, state),
       ),
 
-      // 4) הוסף הערות
-      ActionButtonData(
-        widget: _buildAddNoteButton(context, state),
-        icon: Icons.note_add,
-        tooltip: 'הוסף הערה אישית',
-        onPressed: () => _handleAddNotePress(context, state),
-      ),
-
-      // 5) כפתורי השליטה בספר: הקטע הקודם/הבא, תחילת/סוף הספר
-      ActionButtonData(
-        widget: _buildFirstPageButton(state),
-        icon: Icons.first_page,
-        tooltip: 'תחילת הספר',
-        onPressed: () {
-          state.scrollController.scrollTo(
-            index: 0,
-            duration: const Duration(milliseconds: 300),
-          );
-        },
-      ),
-      ActionButtonData(
-        widget: _buildPreviousPageButton(state),
-        icon: Icons.navigate_before,
-        tooltip: 'הקטע הקודם',
-        onPressed: () {
-          state.scrollController.scrollTo(
-            duration: const Duration(milliseconds: 300),
-            index: max(
-              0,
-              state.positionsListener.itemPositions.value.first.index - 1,
-            ),
-          );
-        },
-      ),
-      ActionButtonData(
-        widget: _buildNextPageButton(state),
-        icon: Icons.navigate_next,
-        tooltip: 'הקטע הבא',
-        onPressed: () {
-          state.scrollController.scrollTo(
-            index: max(
-              state.positionsListener.itemPositions.value.first.index + 1,
-              state.positionsListener.itemPositions.value.length - 1,
-            ),
-            duration: const Duration(milliseconds: 300),
-          );
-        },
-      ),
-      ActionButtonData(
-        widget: _buildLastPageButton(state),
-        icon: Icons.last_page,
-        tooltip: 'סוף הספר',
-        onPressed: () {
-          state.scrollController.scrollTo(
-            index: state.content.length,
-            duration: const Duration(milliseconds: 300),
-          );
-        },
-      ),
-
-      // 5) הצג הערות
-      ActionButtonData(
-        widget: _buildShowNotesButton(context, state),
-        icon: Icons.notes,
-        tooltip: 'הצג הערות',
-        onPressed: () {
-          context.read<TextBookBloc>().add(const ToggleNotesSidebar());
-        },
-      ),
-
-      // 6) הוספת סימניה
-      ActionButtonData(
-        widget: _buildBookmarkButton(context, state),
-        icon: Icons.bookmark_add,
-        tooltip: 'הוספת סימניה',
-        onPressed: () => _handleBookmarkPress(context, state),
-      ),
-
-      // 7) הצגת מפרשים בצד/מתחת הטקסט
-      ActionButtonData(
-        widget: _buildSplitViewButton(context, state),
-        icon: !state.showSplitView
-            ? Icons.vertical_split_outlined
-            : Icons.horizontal_split_outlined,
-        tooltip: !state.showSplitView
-            ? 'הצגת מפרשים בצד הטקסט'
-            : 'הצגת מפרשים מתחת הטקסט',
-        onPressed: () => context.read<TextBookBloc>().add(
-              ToggleSplitView(!state.showSplitView),
-            ),
-      ),
-
-      // 8) הצג/הסתר ניקוד
-      ActionButtonData(
-        widget: _buildNikudButton(context, state),
-        icon: Icons.format_overline,
-        tooltip: 'הצג או הסתר ניקוד',
-        onPressed: () =>
-            context.read<TextBookBloc>().add(ToggleNikud(!state.removeNikud)),
-      ),
-
-      // 9) כפתורי הדיווח על טעות
+      // 4) דווח על טעות בספר
       ActionButtonData(
         widget: _buildReportBugButton(context, state),
         icon: Icons.error_outline,
@@ -1204,7 +991,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _showReportBugDialog(context, state),
       ),
 
-      // 10) כפתור הדפסה
+      // 5) הדפסה
       ActionButtonData(
         widget: _buildPrintButton(context, state),
         icon: Icons.print,
@@ -1218,14 +1005,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ),
           ),
         ),
-      ),
-
-      // 11) כפתור שמור וזכור
-      ActionButtonData(
-        widget: _buildShamorZachorButton(context, state),
-        icon: Icons.check_circle,
-        tooltip: 'סמן כנלמד בשמור וזכור',
-        onPressed: () => _markShamorZachorProgress(state.book.title),
       ),
     ];
   }
