@@ -2241,7 +2241,7 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
 
-    // טען נתוני דיווח טלפוני רק אחרי שהדיאלוג נפתח
+    // טען נתוני דיווח טלפוני תמיד
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _loadPhoneReportData();
@@ -2296,7 +2296,7 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
                 textDirection: TextDirection.rtl,
               ),
             ),
-            // Tab bar
+            // Tab bar - תמיד מציג שתי כרטיסיות
             TabBar(
               controller: _tabController,
               tabs: const [
@@ -2325,6 +2325,7 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
       visibleText: widget.visibleText,
       fontSize: widget.fontSize,
       initialSelectedText: _selectedText,
+      state: widget.state, // העבר את ה-state כדי לגשת לפרטי הספר
       onTextSelected: (text) {
         setState(() {
           _selectedText = text;
@@ -2332,6 +2333,9 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
       },
       onSubmit: (reportData) {
         Navigator.of(context).pop(reportData);
+      },
+      onPhoneSubmit: (phoneReportData) {
+        Navigator.of(context).pop(phoneReportData);
       },
       onCancel: () {
         Navigator.of(context).pop();
@@ -2383,7 +2387,6 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
       );
     }
 
-    // --- כאן התיקון המרכזי ---
     return PhoneReportTab(
       visibleText: widget.visibleText,
       fontSize: widget.fontSize,
@@ -2415,16 +2418,20 @@ class _RegularReportTab extends StatefulWidget {
   final String visibleText;
   final double fontSize;
   final String? initialSelectedText;
+  final TextBookLoaded state;
   final Function(String) onTextSelected;
   final Function(ReportedErrorData) onSubmit;
+  final Function(PhoneReportData) onPhoneSubmit;
   final VoidCallback onCancel;
 
   const _RegularReportTab({
     required this.visibleText,
     required this.fontSize,
     this.initialSelectedText,
+    required this.state,
     required this.onTextSelected,
     required this.onSubmit,
+    required this.onPhoneSubmit,
     required this.onCancel,
   });
 
@@ -2437,11 +2444,112 @@ class _RegularReportTabState extends State<_RegularReportTab> {
   final TextEditingController _detailsController = TextEditingController();
   int? _selectionStart;
   int? _selectionEnd;
+  final DataCollectionService _dataService = DataCollectionService();
+
+  // נתונים לדיווח טלפוני
+  String _libraryVersion = 'unknown';
+  int? _bookId;
+  bool _isLoadingPhoneData = false;
 
   @override
   void initState() {
     super.initState();
     _selectedContent = widget.initialSelectedText;
+    _loadPhoneReportData();
+  }
+
+  /// טעינת נתוני דיווח טלפוני
+  Future<void> _loadPhoneReportData() async {
+    setState(() {
+      _isLoadingPhoneData = true;
+    });
+
+    try {
+      final availability =
+          await _dataService.checkDataAvailability(widget.state.book.title);
+
+      if (mounted) {
+        setState(() {
+          _libraryVersion = availability['libraryVersion'] ?? 'unknown';
+          _bookId = availability['bookId'];
+          _isLoadingPhoneData = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading phone report data: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingPhoneData = false;
+        });
+      }
+    }
+  }
+
+  /// בדיקה אם כפתור "שלח דיווח" צריך להיות מושבת בדיווח הרגיל
+  Future<bool> _isPhoneReportDisabled() async {
+    try {
+      final bookDetails = await _getBookDetails(widget.state.book.title);
+      final sourceFolder = bookDetails['תיקיית המקור'];
+
+      if (sourceFolder != null) {
+        return sourceFolder.contains('sefariaToOtzaria') ||
+            sourceFolder.contains('wiki_jewish_books');
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Error checking phone report availability: $e');
+      return false;
+    }
+  }
+
+  /// קבלת פרטי הספר מה-CSV
+  Future<Map<String, String>> _getBookDetails(String bookTitle) async {
+    try {
+      final libraryPath = Settings.getValue('key-library-path');
+      if (libraryPath == null || libraryPath.isEmpty) {
+        return _getDefaultBookDetails();
+      }
+
+      final csvPath =
+          '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}SourcesBooks.csv';
+      final file = File(csvPath);
+
+      if (!await file.exists()) {
+        return _getDefaultBookDetails();
+      }
+
+      final csvContent = await file.readAsString(encoding: utf8);
+      final rows = const CsvToListConverter().convert(csvContent);
+
+      if (rows.isEmpty) {
+        return _getDefaultBookDetails();
+      }
+
+      for (final row in rows.skip(1)) {
+        if (row.isNotEmpty && row[0].toString() == bookTitle) {
+          final fileNameRaw = row[0].toString();
+          return {
+            'שם הקובץ': fileNameRaw,
+            'נתיב הקובץ': row[1].toString(),
+            'תיקיית המקור': row[2].toString(),
+          };
+        }
+      }
+
+      return _getDefaultBookDetails();
+    } catch (e) {
+      debugPrint('Error reading book details: $e');
+      return _getDefaultBookDetails();
+    }
+  }
+
+  Map<String, String> _getDefaultBookDetails() {
+    return {
+      'שם הקובץ': 'לא ניתן למצוא את הספר',
+      'נתיב הקובץ': 'לא ניתן למצוא את הספר',
+      'תיקיית המקור': 'לא ניתן למצוא את הספר',
+    };
   }
 
   @override
@@ -2554,32 +2662,95 @@ class _RegularReportTabState extends State<_RegularReportTab> {
             textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: widget.onCancel,
-                child: const Text('ביטול'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _selectedContent == null || _selectedContent!.isEmpty
-                    ? null
-                    : () {
-                        widget.onSubmit(
-                          ReportedErrorData(
-                            selectedText: _selectedContent!,
-                            errorDetails: _detailsController.text.trim(),
-                          ),
-                        );
-                      },
-                child: const Text('המשך'),
-              ),
-            ],
+          FutureBuilder<bool>(
+            future: _isPhoneReportDisabled(),
+            builder: (context, snapshot) {
+              final isPhoneDisabled = snapshot.data ?? false;
+              final canSubmitRegular =
+                  _selectedContent != null && _selectedContent!.isNotEmpty;
+              final canSubmitPhone = canSubmitRegular &&
+                  !_isLoadingPhoneData &&
+                  _bookId != null &&
+                  _libraryVersion != 'unknown' &&
+                  !isPhoneDisabled;
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: widget.onCancel,
+                    child: const Text('ביטול'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: canSubmitRegular
+                        ? () {
+                            widget.onSubmit(
+                              ReportedErrorData(
+                                selectedText: _selectedContent!,
+                                errorDetails: _detailsController.text.trim(),
+                              ),
+                            );
+                          }
+                        : null,
+                    child: const Text('שליחת דוא"ל'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: canSubmitPhone
+                        ? () async {
+                            // חישוב מספר השורה
+                            final lineNumber = _calculateLineNumber();
+
+                            final phoneReportData = PhoneReportData(
+                              selectedText: _selectedContent!,
+                              errorId: 6, // "אחר" כברירת מחדל
+                              moreInfo: _detailsController.text.trim().isEmpty
+                                  ? 'more_info'
+                                  : _detailsController.text.trim(),
+                              libraryVersion: _libraryVersion,
+                              bookId: _bookId!,
+                              lineNumber: lineNumber,
+                            );
+
+                            widget.onPhoneSubmit(phoneReportData);
+                          }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isPhoneDisabled
+                          ? Theme.of(context).disabledColor
+                          : null,
+                    ),
+                    child: _isLoadingPhoneData
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(isPhoneDisabled ? 'דיווח לא זמין' : 'שלח דיווח'),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
     );
+  }
+
+  /// חישוב מספר השורה על בסיס הטקסט הנבחר
+  int _calculateLineNumber() {
+    if (_selectionStart == null) return 1;
+
+    final textBeforeSelection =
+        widget.visibleText.substring(0, _selectionStart!);
+    final lineOffset = '\n'.allMatches(textBeforeSelection).length;
+
+    // קבלת מספר השורה הנוכחי מה-state
+    final positions = widget.state.positionsListener.itemPositions.value;
+    final currentIndex = positions.isNotEmpty ? positions.first.index : 0;
+
+    return currentIndex + lineOffset + 1;
   }
 }
 
