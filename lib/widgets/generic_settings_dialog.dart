@@ -49,7 +49,7 @@ class GenericSettingsDialog extends StatelessWidget {
             title: Text(item.title),
             subtitle: item.subtitle != null ? Text(item.subtitle!) : null,
             value: item.value,
-            onChanged: item.onChanged,
+            onChanged: item.enabled ?? true ? item.onChanged : null,
           ),
           // Show dependent items only when master switch is enabled
           if (item.value && item.dependentItems != null)
@@ -68,7 +68,7 @@ class GenericSettingsDialog extends StatelessWidget {
         title: Text(item.title),
         subtitle: item.subtitle != null ? Text(item.subtitle!) : null,
         value: item.value,
-        onChanged: item.onChanged,
+        onChanged: item.enabled ?? true ? item.onChanged : null,
       );
     } else {
       return const SizedBox.shrink();
@@ -92,6 +92,7 @@ class SwitchSettingsItem extends SettingsItem {
   final bool value;
   final ValueChanged<bool> onChanged;
   final List<SettingsItem>? dependentItems;
+  final bool? enabled;
 
   const SwitchSettingsItem({
     required super.title,
@@ -99,6 +100,7 @@ class SwitchSettingsItem extends SettingsItem {
     required this.value,
     required this.onChanged,
     this.dependentItems,
+    this.enabled,
   });
 }
 
@@ -106,11 +108,13 @@ class SwitchSettingsItem extends SettingsItem {
 class CheckboxSettingsItem extends SettingsItem {
   final bool value;
   final ValueChanged<bool?> onChanged;
+  final bool? enabled;
 
   const CheckboxSettingsItem({
     required super.title,
     super.subtitle,
     required this.value,
     required this.onChanged,
+    this.enabled,
   });
 }

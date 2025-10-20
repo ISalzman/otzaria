@@ -22,6 +22,9 @@ import 'package:otzaria/history/history_dialog.dart';
 import 'package:otzaria/bookmarks/bookmarks_dialog.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/widgets/scrollable_tab_bar.dart';
+import 'package:otzaria/settings/settings_bloc.dart';
+import 'package:otzaria/settings/settings_event.dart';
+import 'package:otzaria/settings/settings_state.dart';
 
 class ReadingScreen extends StatefulWidget {
   const ReadingScreen({super.key});
@@ -226,8 +229,25 @@ class _ReadingScreenState extends State<ReadingScreen>
                   // כאשר יש גלילה — מבטלים אותו כדי לאפשר התפשטות גם לצד שמאל
                   // שומרים תמיד מקום קבוע לימין כדי למנוע שינויי רוחב פתאומיים
                   actions: [
+                    // רווח למרכוז (רק כאשר אין גלילה)
                     if (!_tabsOverflow)
-                      const SizedBox(width: _kAppBarControlsWidth),
+                      const SizedBox(width: _kAppBarControlsWidth - 56), // מפחיתים את רוחב כפתור ההגדרות
+                    // כפתור הגדרות בצד שמאל של שורת הטאבים (צמוד לשמאל לחלוטין)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: IconButton(
+                        icon: const Icon(Icons.settings_outlined),
+                        tooltip: 'הגדרות תצוגת הספרים',
+                        onPressed: () => _showReadingSettingsDialog(context, state),
+                        style: IconButton.styleFrom(
+                          foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                   // centerTitle לא נדרש כאשר הטאבים נמצאים ב-bottom
 
@@ -451,6 +471,320 @@ class _ReadingScreenState extends State<ReadingScreen>
     showDialog(
       context: context,
       builder: (context) => const BookmarksDialog(),
+    );
+  }
+
+  void _showReadingSettingsDialog(BuildContext context, TabsState tabsState) {
+    showDialog(
+      context: context,
+      builder: (context) => BlocBuilder<SettingsBloc, SettingsState>(
+        builder: (context, settingsState) {
+          return AlertDialog(
+            title: const Text(
+              'הגדרות תצוגת הספרים',
+              style: TextStyle(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            content: SizedBox(
+              width: 650,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // כותרת: הסרת ניקוד וטעמים
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text(
+                        'הסרת ניקוד וטעמים',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const Divider(thickness: 2),
+                    
+                    // הצגת טעמי המקרא
+                    SwitchListTile(
+                      title: const Text('הצגת טעמי המקרא'),
+                      subtitle: Text(settingsState.showTeamim
+                          ? 'המקרא יוצג עם טעמים'
+                          : 'המקרא יוצג ללא טעמים'),
+                      value: settingsState.showTeamim,
+                      onChanged: (value) {
+                        context.read<SettingsBloc>().add(UpdateShowTeamim(value));
+                      },
+                    ),
+                    const Divider(),
+                    
+                    // הסרת ניקוד כברירת מחדל
+                    SwitchListTile(
+                      title: const Text('הסרת ניקוד כברירת מחדל'),
+                      subtitle: Text(settingsState.defaultRemoveNikud
+                          ? 'הניקוד יוסר כברירת מחדל'
+                          : 'הניקוד יוצג כברירת מחדל'),
+                      value: settingsState.defaultRemoveNikud,
+                      onChanged: (value) {
+                        context.read<SettingsBloc>().add(UpdateDefaultRemoveNikud(value));
+                      },
+                    ),
+                    if (settingsState.defaultRemoveNikud)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 32.0),
+                        child: CheckboxListTile(
+                          title: const Text('הסרת ניקוד מספרי התנ"ך'),
+                          subtitle: const Text('גם ספרי התנ"ך יוצגו ללא ניקוד'),
+                          value: settingsState.removeNikudFromTanach,
+                          onChanged: (bool? value) {
+                            if (value != null) {
+                              context.read<SettingsBloc>().add(
+                                    UpdateRemoveNikudFromTanach(value),
+                                  );
+                            }
+                          },
+                        ),
+                      ),
+                    
+                    // כותרת: התנהגות סרגל צד
+                    const Divider(thickness: 2),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text(
+                        'התנהגות סרגל צד',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const Divider(thickness: 2),
+                    
+                    // הצמדת סרגל צד
+                    SwitchListTile(
+                      title: const Text('הצמדת סרגל צד'),
+                      subtitle: Text(settingsState.pinSidebar
+                          ? 'סרגל הצד יוצמד תמיד'
+                          : 'סרגל הצד יפעל כרגיל'),
+                      value: settingsState.pinSidebar,
+                      onChanged: (value) {
+                        context.read<SettingsBloc>().add(UpdatePinSidebar(value));
+                        if (value) {
+                          context.read<SettingsBloc>().add(const UpdateDefaultSidebarOpen(true));
+                        }
+                      },
+                    ),
+                    const Divider(),
+                    
+                    // פתיחת סרגל צד
+                    SwitchListTile(
+                      title: const Text('פתיחת סרגל צד כברירת מחדל'),
+                      subtitle: Text(settingsState.defaultSidebarOpen
+                          ? 'סרגל הצד יפתח אוטומטית'
+                          : 'סרגל הצד ישאר סגור'),
+                      value: settingsState.defaultSidebarOpen,
+                      onChanged: settingsState.pinSidebar
+                          ? null
+                          : (value) {
+                              context.read<SettingsBloc>().add(UpdateDefaultSidebarOpen(value));
+                            },
+                    ),
+                    const Divider(),
+                    
+                    // ברירת מחדל להצגת מפרשים
+                    StatefulBuilder(
+                      builder: (context, setState) {
+                        final splitedView = Settings.getValue<bool>('key-splited-view') ?? false;
+                        return SwitchListTile(
+                          title: const Text('ברירת המחדל להצגת המפרשים'),
+                          subtitle: Text(splitedView
+                              ? 'המפרשים יוצגו לצד הטקסט'
+                              : 'המפרשים יוצגו מתחת הטקסט'),
+                          value: splitedView,
+                          onChanged: (value) {
+                            setState(() {
+                              Settings.setValue<bool>('key-splited-view', value);
+                            });
+                          },
+                        );
+                      },
+                    ),
+                    
+                    // הגדרות העתקה
+                    const Divider(thickness: 2),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text(
+                        'הגדרות העתקה',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    
+                    StatefulBuilder(
+                      builder: (context, setState) {
+                        return Column(
+                          children: [
+                            ListTile(
+                              title: const Text('העתקה עם כותרות'),
+                              subtitle: DropdownButton<String>(
+                                isExpanded: true,
+                                value: settingsState.copyWithHeaders,
+                                items: const [
+                                  DropdownMenuItem(value: 'none', child: Text('ללא')),
+                                  DropdownMenuItem(
+                                      value: 'book_name',
+                                      child: Text('העתקה עם שם הספר בלבד')),
+                                  DropdownMenuItem(
+                                      value: 'book_and_path',
+                                      child: Text('העתקה עם שם הספר+הנתיב')),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    context.read<SettingsBloc>().add(UpdateCopyWithHeaders(value));
+                                    setState(() {});
+                                  }
+                                },
+                              ),
+                            ),
+                            const Divider(),
+                            ListTile(
+                              title: const Text('עיצוב ההעתקה'),
+                              subtitle: DropdownButton<String>(
+                                isExpanded: true,
+                                value: settingsState.copyHeaderFormat,
+                                items: const [
+                                  DropdownMenuItem(
+                                      value: 'same_line_after_brackets',
+                                      child: Text('באותה שורה אחרי הכיתוב (עם סוגריים)')),
+                                  DropdownMenuItem(
+                                      value: 'same_line_after_no_brackets',
+                                      child: Text('באותה שורה אחרי הכיתוב (בלי סוגריים)')),
+                                  DropdownMenuItem(
+                                      value: 'same_line_before_brackets',
+                                      child: Text('באותה שורה לפני הכיתוב (עם סוגריים)')),
+                                  DropdownMenuItem(
+                                      value: 'same_line_before_no_brackets',
+                                      child: Text('באותה שורה לפני הכיתוב (בלי סוגריים)')),
+                                  DropdownMenuItem(
+                                      value: 'separate_line_after',
+                                      child: Text('בפסקה בפני עצמה אחרי הכיתוב')),
+                                  DropdownMenuItem(
+                                      value: 'separate_line_before',
+                                      child: Text('בפסקה בפני עצמה לפני הכיתוב')),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    context.read<SettingsBloc>().add(UpdateCopyHeaderFormat(value));
+                                    setState(() {});
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    
+                    // הגדרות עורך טקסטים
+                    const Divider(thickness: 2),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text(
+                        'הגדרות עורך טקסטים',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    
+                    StatefulBuilder(
+                      builder: (context, setState) {
+                        double previewDebounce = Settings.getValue<double>(
+                                'key-editor-preview-debounce') ??
+                            150.0;
+                        double cleanupDays = Settings.getValue<double>(
+                                'key-editor-draft-cleanup-days') ??
+                            30.0;
+                        double draftsQuota =
+                            Settings.getValue<double>('key-editor-drafts-quota') ?? 100.0;
+
+                        return Column(
+                          children: [
+                            ListTile(
+                              title: const Text('עיכוב תצוגה מקדימה'),
+                              subtitle: Column(
+                                children: [
+                                  Text('זמן עיכוב במילישניות: ${previewDebounce.toInt()}'),
+                                  Slider(
+                                    value: previewDebounce,
+                                    min: 50,
+                                    max: 300,
+                                    divisions: 5,
+                                    label: previewDebounce.toInt().toString(),
+                                    onChanged: (value) {
+                                      setState(() => previewDebounce = value);
+                                      Settings.setValue<double>(
+                                          'key-editor-preview-debounce', value);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Divider(),
+                            ListTile(
+                              title: const Text('ניקוי טיוטות ישנות'),
+                              subtitle: Column(
+                                children: [
+                                  Text('מחק טיוטות מעל ${cleanupDays.toInt()} ימים'),
+                                  Slider(
+                                    value: cleanupDays,
+                                    min: 7,
+                                    max: 90,
+                                    divisions: 12,
+                                    label: cleanupDays.toInt().toString(),
+                                    onChanged: (value) {
+                                      setState(() => cleanupDays = value);
+                                      Settings.setValue<double>(
+                                          'key-editor-draft-cleanup-days', value);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Divider(),
+                            ListTile(
+                              title: const Text('מכסת טיוטות'),
+                              subtitle: Column(
+                                children: [
+                                  Text('גודל מקסימלי: ${draftsQuota.toInt()} MB'),
+                                  Slider(
+                                    value: draftsQuota,
+                                    min: 50,
+                                    max: 100,
+                                    divisions: 5,
+                                    label: draftsQuota.toInt().toString(),
+                                    onChanged: (value) {
+                                      setState(() => draftsQuota = value);
+                                      Settings.setValue<double>(
+                                          'key-editor-drafts-quota', value);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('סגור'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
