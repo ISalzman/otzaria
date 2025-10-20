@@ -258,6 +258,13 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                 final data = thisLinksSnapshot.data!;
                 _itemCount = data.length;
 
+                // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+                final currentIndexes = widget.indexes ??
+                    (state.selectedIndex != null
+                        ? [state.selectedIndex!]
+                        : state.visibleIndices);
+                final indexesKey = currentIndexes.join(',');
+
                 return ProgressiveScroll(
                   scrollController: scrollController,
                   maxSpeed: 10000.0,
@@ -266,7 +273,7 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                   child: ScrollablePositionedList.builder(
                     itemScrollController: _itemScrollController,
                     key: PageStorageKey(
-                        'commentary_${widget.indexes?.join(",") ?? "split"}_${state.activeCommentators.hashCode}'),
+                        'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
                     physics: const ClampingScrollPhysics(),
                     scrollOffsetController: scrollController,
                     shrinkWrap: true,
@@ -274,6 +281,7 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                     itemBuilder: (context, index1) => ListTile(
                       title: Text(thisLinksSnapshot.data![index1].heRef),
                       subtitle: CommentaryContent(
+                        key: ValueKey('${thisLinksSnapshot.data![index1].path2}_${thisLinksSnapshot.data![index1].index2}_$indexesKey'),
                         link: thisLinksSnapshot.data![index1],
                         fontSize: widget.fontSize,
                         openBookCallback: widget.openBookCallback,

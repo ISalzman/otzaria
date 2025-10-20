@@ -41,6 +41,18 @@ class _CommentaryContentState extends State<CommentaryContent> {
     content = widget.link.content;
   }
 
+  @override
+  void didUpdateWidget(CommentaryContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // עדכון תוכן הפירוש כאשר הקישור משתנה
+    // בודקים אם הקישור השתנה על ידי השוואת המאפיינים המזהים שלו
+    if (oldWidget.link.path2 != widget.link.path2 ||
+        oldWidget.link.index2 != widget.link.index2 ||
+        oldWidget.link.heRef != widget.link.heRef) {
+      content = widget.link.content;
+    }
+  }
+
   int _countSearchMatches(String text, String searchQuery) {
     if (searchQuery.isEmpty) return 0;
 

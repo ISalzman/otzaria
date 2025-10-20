@@ -225,7 +225,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
                     },
                   ),
 
-                // --- רשימת הפרשנים ---
+                // --- רשימת המפרשים ---
                 Expanded(
                   child: ListView.builder(
                     itemCount: commentatorsList.length,

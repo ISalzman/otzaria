@@ -52,7 +52,7 @@ class _CommentaryListForCombinedViewState
                     curve: 10.0,
                     accelerationFactor: 5,
                     child: ScrollablePositionedList.builder(
-                      key: PageStorageKey(thisLinksSnapshot.data![0].heRef),
+                      key: PageStorageKey('${thisLinksSnapshot.data![0].heRef}_${widget.index}'),
                       physics: const ClampingScrollPhysics(),
                       scrollOffsetController: scrollController,
                       shrinkWrap: true,
@@ -62,6 +62,7 @@ class _CommentaryListForCombinedViewState
                           focusNode: FocusNode(),
                           title: Text(thisLinksSnapshot.data![index1].heRef),
                           subtitle: CommentaryContent(
+                            key: ValueKey('${thisLinksSnapshot.data![index1].path2}_${thisLinksSnapshot.data![index1].index2}_${widget.index}'),
                             link: thisLinksSnapshot.data![index1],
                             fontSize: widget.fontSize,
                             openBookCallback: widget.openBookCallback,

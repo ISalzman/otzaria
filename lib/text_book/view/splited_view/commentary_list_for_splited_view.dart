@@ -242,13 +242,17 @@ class _CommentaryListState extends State<CommentaryList> {
                 if (thisLinksSnapshot.data!.isEmpty) {
                   return const Center(child: Text("לא נמצאו מפרשים להצגה"));
                 }
+                
+                // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+                final indexesKey = indexes.join(',');
+                
                 return ProgressiveScroll(
                   scrollController: scrollController,
                   maxSpeed: 10000.0,
                   curve: 10.0,
                   accelerationFactor: 5,
                   child: ScrollablePositionedList.builder(
-                    key: PageStorageKey(thisLinksSnapshot.data![0].heRef),
+                    key: PageStorageKey('${thisLinksSnapshot.data![0].heRef}_$indexesKey'),
                     physics: const ClampingScrollPhysics(),
                     scrollOffsetController: scrollController,
                     shrinkWrap: true,
@@ -256,6 +260,7 @@ class _CommentaryListState extends State<CommentaryList> {
                     itemBuilder: (context, index1) => ListTile(
                       title: Text(thisLinksSnapshot.data![index1].heRef),
                       subtitle: CommentaryContent(
+                        key: ValueKey('${thisLinksSnapshot.data![index1].path2}_${thisLinksSnapshot.data![index1].index2}_$indexesKey'),
                         link: thisLinksSnapshot.data![index1],
                         fontSize: widget.fontSize,
                         openBookCallback: widget.openBookCallback,
