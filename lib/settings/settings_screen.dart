@@ -27,8 +27,6 @@ class MySettingsScreen extends StatefulWidget {
 
 class _MySettingsScreenState extends State<MySettingsScreen>
     with AutomaticKeepAliveClientMixin {
-  static const double _tileH = 112.0;
-
   @override
   bool get wantKeepAlive => true;
 
@@ -172,151 +170,6 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         },
                       ),
                     ]),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: SizedBox(
-                        height: _tileH,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              flex: 4,
-                              child: StatefulBuilder(
-                                builder: (context, setState) {
-                                  double currentValue =
-                                      state.fontSize.clamp(15, 60);
-                                  return Column(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                            top: 8,
-                                            bottom: 4,
-                                            left: 16,
-                                            right: 16),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.format_size),
-                                            const SizedBox(width: 16),
-                                            Expanded(
-                                              child: Text(
-                                                'גודל גופן התחלתי',
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .titleLarge
-                                                    ?.copyWith(fontSize: 16),
-                                              ),
-                                            ),
-                                            Text(
-                                              currentValue.toStringAsFixed(0),
-                                              style: TextStyle(
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 16.0),
-                                        child: SliderTheme(
-                                          data: SliderTheme.of(context)
-                                              .copyWith(trackHeight: 2),
-                                          child: Slider(
-                                            value: currentValue,
-                                            min: 15,
-                                            max: 60,
-                                            divisions: ((60 - 15) / 1).round(),
-                                            onChanged: (value) {
-                                              setState(
-                                                  () => currentValue = value);
-                                              context
-                                                  .read<SettingsBloc>()
-                                                  .add(UpdateFontSize(value));
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            ),
-                            const VerticalDivider(width: 16, thickness: 1),
-                            Expanded(
-                              flex: 1,
-                              child: DropDownSettingsTile<String>(
-                                title: 'גופן',
-                                settingKey: 'key-font-family',
-                                values: const {
-                                  'TaameyDavidCLM': 'דוד',
-                                  'FrankRuhlCLM': 'פרנק-רוהל',
-                                  'TaameyAshkenaz': 'טעמי אשכנז',
-                                  'KeterYG': 'כתר',
-                                  'Shofar': 'שופר',
-                                  'NotoSerifHebrew': 'נוטו',
-                                  'Tinos': 'טינוס',
-                                  'NotoRashiHebrew': 'רש"י',
-                                  'Candara': 'קנדרה',
-                                  'roboto': 'רובוטו',
-                                  'Calibri': 'קליברי',
-                                  'Arial': 'אריאל',
-                                },
-                                selected: state.fontFamily,
-                                leading:
-                                    const Icon(Icons.font_download_outlined),
-                                onChange: (value) => context
-                                    .read<SettingsBloc>()
-                                    .add(UpdateFontFamily(value)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SettingsContainer(
-                      children: <Widget>[
-                        Padding(
-                          padding: const EdgeInsets.only(
-                              top: 8, bottom: 4, left: 16, right: 16),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.horizontal_distribute),
-                              const SizedBox(width: 16),
-                              Text(
-                                'רוחב השוליים בצידי הטקסט',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleLarge
-                                    ?.copyWith(fontSize: 16),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: MarginSliderPreview(
-                            initial: Settings.getValue<double>(
-                                'key-padding-size',
-                                defaultValue: state.paddingSize)!,
-                            min: 0,
-                            max: 500,
-                            step: 2,
-                            onChanged: (v) {
-                              // הלוגיקה לשמירת הערך נשארת זהה ומדויקת
-                              Settings.setValue<double>('key-padding-size', v);
-                              context
-                                  .read<SettingsBloc>()
-                                  .add(UpdatePaddingSize(v));
-                              setState(() {});
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
                 Platform.isAndroid
@@ -377,36 +230,20 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                   titleAlignment: Alignment.centerRight,
                   titleTextStyle: const TextStyle(fontSize: 25),
                   children: [
-                    _buildColumns(2, [
-                      SwitchSettingsTile(
-                        settingKey: 'key-replace-holy-names',
-                        title: 'הסתרת שמות הקודש',
-                        enabledLabel: 'השמות הקדושים יוחלפו מפאת קדושתם',
-                        disabledLabel: 'השמות הקדושים יוצגו ככתיבתם',
-                        leading: const Icon(Icons.password),
-                        defaultValue: state.replaceHolyNames,
-                        onChange: (value) {
-                          context
-                              .read<SettingsBloc>()
-                              .add(UpdateReplaceHolyNames(value));
-                        },
-                        activeColor: Theme.of(context).cardColor,
-                      ),
-                      SwitchSettingsTile(
-                        settingKey: 'key-use-fast-search',
-                        title: 'חיפוש מהיר באמצעות אינדקס',
-                        enabledLabel: 'חיפוש מהיר יותר, נדרש ליצור אינדקס',
-                        disabledLabel: 'חיפוש איטי יותר, לא נדרש אינדקס',
-                        leading: const Icon(Icons.search),
-                        defaultValue: state.useFastSearch,
-                        onChange: (value) {
-                          context
-                              .read<SettingsBloc>()
-                              .add(UpdateUseFastSearch(value));
-                        },
-                        activeColor: Theme.of(context).cardColor,
-                      ),
-                    ]),
+                    SwitchSettingsTile(
+                      settingKey: 'key-replace-holy-names',
+                      title: 'הסתרת שמות הקודש',
+                      enabledLabel: 'השמות הקדושים יוחלפו מפאת קדושתם',
+                      disabledLabel: 'השמות הקדושים יוצגו ככתיבתם',
+                      leading: const Icon(Icons.password),
+                      defaultValue: state.replaceHolyNames,
+                      onChange: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateReplaceHolyNames(value));
+                      },
+                      activeColor: Theme.of(context).cardColor,
+                    ),
                   ],
                 ),
                 SettingsGroup(
@@ -422,6 +259,20 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                       enabledLabel:
                           'מאגר הספרים המובנה יתעדכן אוטומטית מאתר אוצריא',
                       disabledLabel: 'מאגר הספרים לא יתעדכן אוטומטית.',
+                      activeColor: Theme.of(context).cardColor,
+                    ),
+                    SwitchSettingsTile(
+                      settingKey: 'key-use-fast-search',
+                      title: 'חיפוש מהיר באמצעות אינדקס',
+                      enabledLabel: 'חיפוש מהיר יותר, נדרש ליצור אינדקס',
+                      disabledLabel: 'חיפוש איטי יותר, לא נדרש אינדקס',
+                      leading: const Icon(Icons.search),
+                      defaultValue: state.useFastSearch,
+                      onChange: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateUseFastSearch(value));
+                      },
                       activeColor: Theme.of(context).cardColor,
                     ),
                     _buildColumns(2, [

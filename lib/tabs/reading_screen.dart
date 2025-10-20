@@ -492,16 +492,187 @@ class _ReadingScreenState extends State<ReadingScreen>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // כותרת: הסרת ניקוד וטעמים
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(
-                        'הסרת ניקוד וטעמים',
+                    // כותרת: הגדרות גופן ועיצוב
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
+                      child: const Text(
+                        'הגדרות גופן ועיצוב',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        textAlign: TextAlign.center,
+                        textAlign: TextAlign.start,
                       ),
                     ),
-                    const Divider(thickness: 2),
+                    
+                    // גודל גופן והגופן בשורה אחת
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // גודל גופן - 3/4
+                          Expanded(
+                            flex: 3,
+                            child: StatefulBuilder(
+                              builder: (context, setState) {
+                                double currentFontSize = settingsState.fontSize.clamp(15, 60);
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.format_size),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            'גודל גופן התחלתי',
+                                            style: Theme.of(context).textTheme.titleMedium,
+                                          ),
+                                        ),
+                                        Text(
+                                          currentFontSize.toStringAsFixed(0),
+                                          style: TextStyle(
+                                            color: Theme.of(context).colorScheme.primary,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Slider(
+                                      value: currentFontSize,
+                                      min: 15,
+                                      max: 60,
+                                      divisions: 45,
+                                      label: currentFontSize.toStringAsFixed(0),
+                                      onChanged: (value) {
+                                        setState(() {});
+                                        context.read<SettingsBloc>().add(UpdateFontSize(value));
+                                      },
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+                          // גופן - 1/4
+                          Expanded(
+                            flex: 1,
+                            child: StatefulBuilder(
+                              builder: (context, setState) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.font_download_outlined),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'גופן',
+                                            style: Theme.of(context).textTheme.titleMedium,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    DropdownButtonFormField<String>(
+                                      value: settingsState.fontFamily,
+                                      decoration: InputDecoration(
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      dropdownColor: Theme.of(context).colorScheme.surface,
+                                      isExpanded: true,
+                                      items: const [
+                                        DropdownMenuItem(value: 'TaameyDavidCLM', child: Text('דוד')),
+                                        DropdownMenuItem(value: 'FrankRuhlCLM', child: Text('פרנק-רוהל')),
+                                        DropdownMenuItem(value: 'TaameyAshkenaz', child: Text('טעמי אשכנז')),
+                                        DropdownMenuItem(value: 'KeterYG', child: Text('כתר')),
+                                        DropdownMenuItem(value: 'Shofar', child: Text('שופר')),
+                                        DropdownMenuItem(value: 'NotoSerifHebrew', child: Text('נוטו')),
+                                        DropdownMenuItem(value: 'Tinos', child: Text('טינוס')),
+                                        DropdownMenuItem(value: 'NotoRashiHebrew', child: Text('רש"י')),
+                                        DropdownMenuItem(value: 'Candara', child: Text('קנדרה')),
+                                        DropdownMenuItem(value: 'roboto', child: Text('רובוטו')),
+                                        DropdownMenuItem(value: 'Calibri', child: Text('קליברי')),
+                                        DropdownMenuItem(value: 'Arial', child: Text('אריאל')),
+                                      ],
+                                      onChanged: (value) {
+                                        if (value != null) {
+                                          context.read<SettingsBloc>().add(UpdateFontFamily(value));
+                                          setState(() {});
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(),
+                    
+                    // רוחב השוליים בצידי הטקסט
+                    StatefulBuilder(
+                      builder: (context, setState) {
+                        double currentPadding = settingsState.paddingSize;
+                        return Column(
+                          children: [
+                            ListTile(
+                              leading: const Icon(Icons.horizontal_distribute),
+                              title: const Text('רוחב השוליים בצידי הטקסט'),
+                              trailing: Text(
+                                currentPadding.toStringAsFixed(0),
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: Slider(
+                                value: currentPadding,
+                                min: 0,
+                                max: 500,
+                                divisions: 250,
+                                label: currentPadding.toStringAsFixed(0),
+                                onChanged: (value) {
+                                  setState(() {});
+                                  context.read<SettingsBloc>().add(UpdatePaddingSize(value));
+                                },
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    
+                    // כותרת: הסרת ניקוד וטעמים
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
+                      child: const Text(
+                        'הסרת ניקוד וטעמים',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        textAlign: TextAlign.start,
+                      ),
+                    ),
                     
                     // הצגת טעמי המקרא
                     SwitchListTile(
@@ -545,16 +716,18 @@ class _ReadingScreenState extends State<ReadingScreen>
                       ),
                     
                     // כותרת: התנהגות סרגל צד
-                    const Divider(thickness: 2),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
+                      child: const Text(
                         'התנהגות סרגל צד',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        textAlign: TextAlign.center,
+                        textAlign: TextAlign.start,
                       ),
                     ),
-                    const Divider(thickness: 2),
                     
                     // הצמדת סרגל צד
                     SwitchListTile(
@@ -607,89 +780,156 @@ class _ReadingScreenState extends State<ReadingScreen>
                     ),
                     
                     // הגדרות העתקה
-                    const Divider(thickness: 2),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
+                      child: const Text(
                         'הגדרות העתקה',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        textAlign: TextAlign.center,
+                        textAlign: TextAlign.start,
                       ),
                     ),
                     
-                    StatefulBuilder(
-                      builder: (context, setState) {
-                        return Column(
-                          children: [
-                            ListTile(
-                              title: const Text('העתקה עם כותרות'),
-                              subtitle: DropdownButton<String>(
-                                isExpanded: true,
-                                value: settingsState.copyWithHeaders,
-                                items: const [
-                                  DropdownMenuItem(value: 'none', child: Text('ללא')),
-                                  DropdownMenuItem(
-                                      value: 'book_name',
-                                      child: Text('העתקה עם שם הספר בלבד')),
-                                  DropdownMenuItem(
-                                      value: 'book_and_path',
-                                      child: Text('העתקה עם שם הספר+הנתיב')),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    context.read<SettingsBloc>().add(UpdateCopyWithHeaders(value));
-                                    setState(() {});
-                                  }
-                                },
+                    // העתקה עם כותרות ועיצוב בשורה אחת
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: StatefulBuilder(
+                        builder: (context, setState) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // העתקה עם כותרות - 1/2
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.content_copy),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'העתקה עם כותרות',
+                                            style: Theme.of(context).textTheme.titleMedium,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    DropdownButtonFormField<String>(
+                                      value: settingsState.copyWithHeaders,
+                                      decoration: InputDecoration(
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      dropdownColor: Theme.of(context).colorScheme.surface,
+                                      isExpanded: true,
+                                      items: const [
+                                        DropdownMenuItem(value: 'none', child: Text('ללא')),
+                                        DropdownMenuItem(
+                                            value: 'book_name',
+                                            child: Text('שם הספר בלבד')),
+                                        DropdownMenuItem(
+                                            value: 'book_and_path',
+                                            child: Text('שם הספר+נתיב')),
+                                      ],
+                                      onChanged: (value) {
+                                        if (value != null) {
+                                          context.read<SettingsBloc>().add(UpdateCopyWithHeaders(value));
+                                          setState(() {});
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const Divider(),
-                            ListTile(
-                              title: const Text('עיצוב ההעתקה'),
-                              subtitle: DropdownButton<String>(
-                                isExpanded: true,
-                                value: settingsState.copyHeaderFormat,
-                                items: const [
-                                  DropdownMenuItem(
-                                      value: 'same_line_after_brackets',
-                                      child: Text('באותה שורה אחרי הכיתוב (עם סוגריים)')),
-                                  DropdownMenuItem(
-                                      value: 'same_line_after_no_brackets',
-                                      child: Text('באותה שורה אחרי הכיתוב (בלי סוגריים)')),
-                                  DropdownMenuItem(
-                                      value: 'same_line_before_brackets',
-                                      child: Text('באותה שורה לפני הכיתוב (עם סוגריים)')),
-                                  DropdownMenuItem(
-                                      value: 'same_line_before_no_brackets',
-                                      child: Text('באותה שורה לפני הכיתוב (בלי סוגריים)')),
-                                  DropdownMenuItem(
-                                      value: 'separate_line_after',
-                                      child: Text('בפסקה בפני עצמה אחרי הכיתוב')),
-                                  DropdownMenuItem(
-                                      value: 'separate_line_before',
-                                      child: Text('בפסקה בפני עצמה לפני הכיתוב')),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    context.read<SettingsBloc>().add(UpdateCopyHeaderFormat(value));
-                                    setState(() {});
-                                  }
-                                },
+                              const SizedBox(width: 24),
+                              // עיצוב העתקה - 1/2
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.format_align_right),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'עיצוב העתקה',
+                                            style: Theme.of(context).textTheme.titleMedium,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    DropdownButtonFormField<String>(
+                                      value: settingsState.copyHeaderFormat,
+                                      decoration: InputDecoration(
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      dropdownColor: Theme.of(context).colorScheme.surface,
+                                      isExpanded: true,
+                                      items: const [
+                                        DropdownMenuItem(
+                                            value: 'same_line_after_brackets',
+                                            child: Text('אותה שורה אחרי (עם סוגריים)')),
+                                        DropdownMenuItem(
+                                            value: 'same_line_after_no_brackets',
+                                            child: Text('אותה שורה אחרי (בלי סוגריים)')),
+                                        DropdownMenuItem(
+                                            value: 'same_line_before_brackets',
+                                            child: Text('אותה שורה לפני (עם סוגריים)')),
+                                        DropdownMenuItem(
+                                            value: 'same_line_before_no_brackets',
+                                            child: Text('אותה שורה לפני (בלי סוגריים)')),
+                                        DropdownMenuItem(
+                                            value: 'separate_line_after',
+                                            child: Text('פסקה נפרדת אחרי')),
+                                        DropdownMenuItem(
+                                            value: 'separate_line_before',
+                                            child: Text('פסקה נפרדת לפני')),
+                                      ],
+                                      onChanged: (value) {
+                                        if (value != null) {
+                                          context.read<SettingsBloc>().add(UpdateCopyHeaderFormat(value));
+                                          setState(() {});
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        );
-                      },
+                            ],
+                          );
+                        },
+                      ),
                     ),
                     
                     // הגדרות עורך טקסטים
-                    const Divider(thickness: 2),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
+                      child: const Text(
                         'הגדרות עורך טקסטים',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        textAlign: TextAlign.center,
+                        textAlign: TextAlign.start,
                       ),
                     ),
                     
@@ -704,13 +944,35 @@ class _ReadingScreenState extends State<ReadingScreen>
                         double draftsQuota =
                             Settings.getValue<double>('key-editor-drafts-quota') ?? 100.0;
 
-                        return Column(
-                          children: [
-                            ListTile(
-                              title: const Text('עיכוב תצוגה מקדימה'),
-                              subtitle: Column(
+                        return Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // עיכוב תצוגה מקדימה
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('זמן עיכוב במילישניות: ${previewDebounce.toInt()}'),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.timer_outlined),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'זמן עיכוב במילישניות',
+                                          style: Theme.of(context).textTheme.titleMedium,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${previewDebounce.toInt()}',
+                                        style: TextStyle(
+                                          color: Theme.of(context).colorScheme.primary,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                   Slider(
                                     value: previewDebounce,
                                     min: 50,
@@ -725,13 +987,32 @@ class _ReadingScreenState extends State<ReadingScreen>
                                   ),
                                 ],
                               ),
-                            ),
-                            const Divider(),
-                            ListTile(
-                              title: const Text('ניקוי טיוטות ישנות'),
-                              subtitle: Column(
+                              const Divider(),
+                              
+                              // ניקוי טיוטות ישנות
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('מחק טיוטות מעל ${cleanupDays.toInt()} ימים'),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.delete_sweep_outlined),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'ניקוי טיוטות ישנות (ימים)',
+                                          style: Theme.of(context).textTheme.titleMedium,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${cleanupDays.toInt()}',
+                                        style: TextStyle(
+                                          color: Theme.of(context).colorScheme.primary,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                   Slider(
                                     value: cleanupDays,
                                     min: 7,
@@ -746,13 +1027,32 @@ class _ReadingScreenState extends State<ReadingScreen>
                                   ),
                                 ],
                               ),
-                            ),
-                            const Divider(),
-                            ListTile(
-                              title: const Text('מכסת טיוטות'),
-                              subtitle: Column(
+                              const Divider(),
+                              
+                              // מכסת טיוטות
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('גודל מקסימלי: ${draftsQuota.toInt()} MB'),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.storage_outlined),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'מכסת טיוטות (MB)',
+                                          style: Theme.of(context).textTheme.titleMedium,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${draftsQuota.toInt()}',
+                                        style: TextStyle(
+                                          color: Theme.of(context).colorScheme.primary,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                   Slider(
                                     value: draftsQuota,
                                     min: 50,
@@ -767,8 +1067,8 @@ class _ReadingScreenState extends State<ReadingScreen>
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         );
                       },
                     ),
