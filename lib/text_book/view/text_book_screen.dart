@@ -849,23 +849,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             context.read<TextBookBloc>().add(ToggleNikud(!state.removeNikud)),
       ),
 
-      // 4) Bookmark Button
-      ActionButtonData(
-        widget: _buildBookmarkButton(context, state),
-        icon: Icons.bookmark_add,
-        tooltip: 'הוספת סימניה',
-        onPressed: () => _handleBookmarkPress(context, state),
-      ),
-
-      // 5) Add Note Button
-      ActionButtonData(
-        widget: _buildAddNoteButton(context, state),
-        icon: Icons.note_add,
-        tooltip: 'הוסף הערה אישית',
-        onPressed: () => _handleAddNotePress(context, state),
-      ),
-
-      // 6) Search Button
+      // 4) Search Button
       ActionButtonData(
         widget: _buildSearchButton(context, state),
         icon: Icons.search,
@@ -877,7 +861,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
-      // 7) Zoom In Button
+      // 5) Zoom In Button
       ActionButtonData(
         widget: _buildZoomInButton(context, state),
         icon: Icons.zoom_in,
@@ -887,7 +871,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ),
       ),
 
-      // 8) Zoom Out Button
+      // 6) Zoom Out Button
       ActionButtonData(
         widget: _buildZoomOutButton(context, state),
         icon: Icons.zoom_out,
@@ -897,7 +881,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ),
       ),
 
-      // 9) Navigation Buttons
+      // 7) Navigation Buttons
       ActionButtonData(
         widget: _buildFirstPageButton(state),
         icon: Icons.first_page,
@@ -957,7 +941,23 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     TextBookLoaded state,
   ) {
     return [
-      // 1) הצג הערות
+      // 1) הוספת סימניה
+      ActionButtonData(
+        widget: _buildBookmarkButton(context, state),
+        icon: Icons.bookmark_add,
+        tooltip: 'הוספת סימניה',
+        onPressed: () => _handleBookmarkPress(context, state),
+      ),
+
+      // 2) הוסף הערה אישית
+      ActionButtonData(
+        widget: _buildAddNoteButton(context, state),
+        icon: Icons.note_add,
+        tooltip: 'הוסף הערה אישית',
+        onPressed: () => _handleAddNotePress(context, state),
+      ),
+
+      // 3) הצג הערות
       ActionButtonData(
         widget: _buildShowNotesButton(context, state),
         icon: Icons.notes,
@@ -967,7 +967,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
-      // 2) סמן כנלמד בשמור וזכור
+      // 4) סמן כנלמד בשמור וזכור
       if (_isBookSupportedByShamorZachor(state.book.title))
         ActionButtonData(
           widget: _buildShamorZachorButton(context, state),
@@ -976,7 +976,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           onPressed: () => _markShamorZachorProgress(state.book.title),
         ),
 
-      // 3) ערוך את הספר
+      // 5) ערוך את הספר
       ActionButtonData(
         widget: _buildFullFileEditorButton(context, state),
         icon: Icons.edit_document,
@@ -984,7 +984,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _handleFullFileEditorPress(context, state),
       ),
 
-      // 4) דווח על טעות בספר
+      // 6) דווח על טעות בספר
       ActionButtonData(
         widget: _buildReportBugButton(context, state),
         icon: Icons.error_outline,
@@ -992,7 +992,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _showReportBugDialog(context, state),
       ),
 
-      // 5) הדפסה
+      // 7) הדפסה
       ActionButtonData(
         widget: _buildPrintButton(context, state),
         icon: Icons.print,
