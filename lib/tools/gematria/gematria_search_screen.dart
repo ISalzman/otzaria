@@ -260,7 +260,8 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
         color: Theme.of(context).colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            
+            color: Colors.black.withValues(alpha:0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -272,7 +273,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
         decoration: InputDecoration(
           hintText: 'חפש גימטריה...',
           hintStyle: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.5),
           ),
           filled: true,
           fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
