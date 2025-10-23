@@ -197,8 +197,9 @@ class _MeasurementConverterScreenState
           if (unit == 'מטר') return 100.0;
           if (unit == 'ק"מ') return 100000.0;
         } else {
-          if (opinion.isEmpty)
+          if (opinion.isEmpty) {
             return null; // Opinion required for ancient units
+          }
           final value = modernLengthFactors[opinion]![normalizedUnit];
           if (value == null) return null;
           // Units in data are cm, m, km. Convert all to cm.
@@ -218,8 +219,9 @@ class _MeasurementConverterScreenState
           if (unit == 'ק"מ רבוע') return 1000000.0;
           if (unit == 'דונם') return 1000.0;
         } else {
-          if (opinion.isEmpty)
+          if (opinion.isEmpty) {
             return null; // Opinion required for ancient units
+          }
           final value = modernAreaFactors[opinion]![normalizedUnit];
           if (value == null) return null;
           // Units in data are m^2, dunam. Convert all to m^2
@@ -240,8 +242,9 @@ class _MeasurementConverterScreenState
           if (unit == 'מטר מעוקב') return 1000000.0;
           if (unit == 'קוב') return 1000000.0;
         } else {
-          if (opinion.isEmpty)
+          if (opinion.isEmpty) {
             return null; // Opinion required for ancient units
+          }
           final value = modernVolumeFactors[opinion]![normalizedUnit];
           if (value == null) return null;
           // Units in data are cm^3, L. Convert all to cm^3
@@ -259,8 +262,9 @@ class _MeasurementConverterScreenState
           if (unit == 'ק"ג') return 1000.0;
           if (unit == 'טון') return 1000000.0;
         } else {
-          if (opinion.isEmpty)
+          if (opinion.isEmpty) {
             return null; // Opinion required for ancient units
+          }
           final value = modernWeightFactors[opinion]![_normalizeUnitName(unit)];
           if (value == null) return null;
           // Units in data are g, kg. Convert all to g
@@ -273,14 +277,16 @@ class _MeasurementConverterScreenState
       case 'זמן': // Base unit: seconds
         if (modernTimeUnits.contains(unit)) {
           if (unit == 'שניות') return 1.0;
-          if (unit == 'חלקים')
+          if (unit == 'חלקים') {
             return 10.0 / 3.0; // 3.333... seconds (3 seconds and 1/3)
+          }
           if (unit == 'דקות') return 60.0;
           if (unit == 'שעות') return 3600.0;
           if (unit == 'ימים') return 86400.0;
         } else {
-          if (opinion.isEmpty)
+          if (opinion.isEmpty) {
             return null; // Opinion required for ancient units
+          }
           final value = modernTimeFactors[opinion]![unit];
           if (value == null) return null;
           return value; // Already in seconds

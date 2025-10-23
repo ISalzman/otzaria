@@ -884,6 +884,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
     if (textBook == null) return;
 
+    if (!context.mounted) return;
+
     final index = await pdfToTextPage(
         widget.tab.book, currentOutline, currentPage, context);
 

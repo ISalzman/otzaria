@@ -125,7 +125,7 @@ void showReadingSettingsDialog(BuildContext context) {
                                   ),
                                   const SizedBox(height: 8),
                                   DropdownButtonFormField<String>(
-                                    value: settingsState.fontFamily,
+                                    initialValue: settingsState.fontFamily,
                                     decoration: InputDecoration(
                                       contentPadding:
                                           const EdgeInsets.symmetric(
@@ -410,7 +410,7 @@ void showReadingSettingsDialog(BuildContext context) {
                                   ),
                                   const SizedBox(height: 8),
                                   DropdownButtonFormField<String>(
-                                    value: settingsState.copyWithHeaders,
+                                    initialValue: settingsState.copyWithHeaders,
                                     decoration: InputDecoration(
                                       contentPadding:
                                           const EdgeInsets.symmetric(
@@ -468,7 +468,7 @@ void showReadingSettingsDialog(BuildContext context) {
                                   ),
                                   const SizedBox(height: 8),
                                   DropdownButtonFormField<String>(
-                                    value: settingsState.copyHeaderFormat,
+                                    initialValue: settingsState.copyHeaderFormat,
                                     decoration: InputDecoration(
                                       contentPadding:
                                           const EdgeInsets.symmetric(
