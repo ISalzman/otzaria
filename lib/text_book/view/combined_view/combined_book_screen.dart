@@ -707,63 +707,67 @@ $textWithBreaks
             collapsedBackgroundColor: Colors.transparent,
             // ביטול אפקטי hover ו-splash
             visualDensity: VisualDensity.compact,
-            onExpansionChanged: (expanded) {
-              // עדכון המצב בהתאם למצב החדש של ה-ExpansionTile
-              if (expanded) {
-                _textBookBloc.add(UpdateSelectedIndex(index));
-              } else {
-                _textBookBloc.add(const UpdateSelectedIndex(null));
-              }
-            },
-            title: Padding(
-              // padding קטן לעיצוב
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  BlocBuilder<SettingsBloc, SettingsState>(
-                    builder: (context, settingsState) {
-                      String data = widget.data[index];
-                      if (!settingsState.showTeamim) {
-                        data = utils.removeTeamim(data);
-                      }
-                      if (settingsState.replaceHolyNames) {
-                        data = utils.replaceHolyNames(data);
-                      }
+            // הסרת onExpansionChanged - נטפל בלחיצות ידנית
+            title: GestureDetector(
+              // רק לחיצה על ה-title תפתח/תסגור את המפרשים
+              onTap: () {
+                if (controller.isExpanded) {
+                  controller.collapse();
+                  _textBookBloc.add(const UpdateSelectedIndex(null));
+                } else {
+                  controller.expand();
+                  _textBookBloc.add(UpdateSelectedIndex(index));
+                }
+              },
+              child: Padding(
+                // padding קטן לעיצוב
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BlocBuilder<SettingsBloc, SettingsState>(
+                      builder: (context, settingsState) {
+                        String data = widget.data[index];
+                        if (!settingsState.showTeamim) {
+                          data = utils.removeTeamim(data);
+                        }
+                        if (settingsState.replaceHolyNames) {
+                          data = utils.replaceHolyNames(data);
+                        }
 
-                      return HtmlWidget(
-                        '''
+                        return HtmlWidget(
+                          '''
                         <div style="text-align: justify; direction: rtl;">
                           ${() {
-                          String processedData = state.removeNikud
-                              ? utils.highLight(utils.removeVolwels('$data\n'),
-                                  state.searchText)
-                              : utils.highLight('$data\n', state.searchText);
-                          // החלת עיצוב הסוגריים העגולים
-                          return utils.formatTextWithParentheses(processedData);
-                        }()}
+                            String processedData = state.removeNikud
+                                ? utils.highLight(utils.removeVolwels('$data\n'),
+                                    state.searchText)
+                                : utils.highLight('$data\n', state.searchText);
+                            // החלת עיצוב הסוגריים העגולים
+                            return utils.formatTextWithParentheses(processedData);
+                          }()}
                         </div>
                         ''',
-                        textStyle: TextStyle(
-                          fontSize: widget.textSize,
-                          fontFamily: settingsState.fontFamily,
-                          height: 1.5,
-                        ),
-                      );
-                    },
-                  ),
-                ],
+                          textStyle: TextStyle(
+                            fontSize: widget.textSize,
+                            fontFamily: settingsState.fontFamily,
+                            height: 1.5,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
             children: [
-              widget.showCommentaryAsExpansionTiles
-                  ? CommentaryListBase(
-                      indexes: [index],
-                      fontSize: widget.textSize,
-                      openBookCallback: widget.openBookCallback,
-                      showSearch: false,
-                    )
-                  : const SizedBox.shrink(),
+              if (widget.showCommentaryAsExpansionTiles)
+                CommentaryListBase(
+                  indexes: [index],
+                  fontSize: widget.textSize,
+                  openBookCallback: widget.openBookCallback,
+                  showSearch: false,
+                ),
             ],
           ),
         ),
