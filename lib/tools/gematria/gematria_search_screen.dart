@@ -2,16 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
-import 'package:otzaria/navigation/bloc/navigation_event.dart';
-import 'package:otzaria/navigation/bloc/navigation_state.dart' show Screen;
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
-import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
-import 'package:otzaria/tabs/bloc/tabs_event.dart';
-import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'gematria_search.dart';
+import 'package:otzaria/utils/open_book.dart';
 
 class GematriaSearchScreen extends StatefulWidget {
   const GematriaSearchScreen({super.key});
@@ -31,6 +26,10 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
   bool _torahOnly = false; // חיפוש בתורה בלבד
   bool _hasMoreResults = false; // האם יש יותר תוצאות מהמקסימום
   String _lastSearchText = ''; // טקסט החיפוש האחרון
+  bool _hasSearched = false; // האם בוצע חיפוש בפועל
+  bool _useSmallGematria = false; // שימוש בגימטריה קטנה
+  bool _useFinalLetters = false; // שימוש באותיות סופיות שונות
+  bool _useWithKolel = false; // שימוש בגימטריה עם הכולל
 
   // סדר ספרי התנ"ך
   static const List<String> _tanachOrder = [
@@ -40,7 +39,8 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
     'יהושע', 'שופטים', 'שמואל א', 'שמואל ב', 'מלכים א', 'מלכים ב',
     // נביאים אחרונים
     'ישעיהו', 'ירמיהו', 'יחזקאל',
-    'הושע', 'יואל', 'עמוס', 'עובדיה', 'יונה', 'מיכה', 'נחום', 'חבקוק', 'צפניה', 'חגי', 'זכריה', 'מלאכי',
+    'הושע', 'יואל', 'עמוס', 'עובדיה', 'יונה', 'מיכה', 'נחום', 'חבקוק', 'צפניה',
+    'חגי', 'זכריה', 'מלאכי',
     // כתובים
     'תהלים', 'משלי', 'איוב',
     'שיר השירים', 'רות', 'איכה', 'קהלת', 'אסתר',
@@ -71,27 +71,63 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
   Future<void> _performSearch() async {
     final searchText = _searchController.text.trim();
     if (searchText.isEmpty) return;
-    
+
     // שמירת טקסט החיפוש האחרון
     _lastSearchText = searchText;
+
+    int? targetGimatria;
+
+    // קביעת שיטת החישוב
+    String gematriaMethod = 'regular';
+    if (_useSmallGematria) {
+      gematriaMethod = 'small';
+    } else if (_useFinalLetters) {
+      gematriaMethod = 'finalLetters';
+    }
+
+    // Check if input is a number
+    final numericValue = int.tryParse(searchText);
+    if (numericValue != null) {
+      targetGimatria = numericValue;
+    } else {
+      // Check for invalid characters (allow Hebrew letters, final forms, spaces, and numbers)
+      final validChars = RegExp(r'^[א-תםןךףץ\s0-9]+$');
+      if (!validChars.hasMatch(searchText)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'קלט לא תקין. יש להזין אותיות עבריות או מספרים בלבד.',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      targetGimatria = GimatriaSearch.gimatria(
+        searchText,
+        method: gematriaMethod,
+      );
+
+      // הוספת הכולל - מספר המילים
+      if (_useWithKolel) {
+        final wordCount = searchText.trim().split(RegExp(r'\s+')).length;
+        targetGimatria += wordCount;
+      }
+    }
+
+    if (targetGimatria == 0) return;
 
     setState(() {
       _isSearching = true;
       _searchResults = [];
+      _lastGematriaValue = targetGimatria;
+      _hasSearched = true;
     });
 
     try {
-      // בדיקה אם הטקסט הוא מספר - אם כן, השתמש בו ישירות
-      int targetGimatria;
-      final parsedNumber = int.tryParse(searchText);
-      if (parsedNumber != null) {
-        targetGimatria = parsedNumber;
-      } else {
-        // אחרת, חשב את הגימטריה של הטקסט העברי
-        targetGimatria = GimatriaSearch.gimatria(searchText);
-      }
-      _lastGematriaValue = targetGimatria;
-
       // קבלת נתיב הספרייה מההגדרות
       final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
 
@@ -112,6 +148,8 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
           maxPhraseWords: 8,
           fileLimit: _maxResults + 1, // מבקשים אחד יותר כדי לדעת אם יש עוד
           wholeVerseOnly: _wholeVerseOnly,
+          gematriaMethod: gematriaMethod,
+          useWithKolel: _useWithKolel,
         );
         allResults.addAll(results);
         if (allResults.length > _maxResults) break;
@@ -159,7 +197,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
             data: result,
           );
         }).toList();
-        
+
         // מיון התוצאות לפי סדר התנ"ך
         _searchResults.sort((a, b) {
           final aOrder = _getBookOrder(a.bookTitle);
@@ -172,7 +210,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
           final bResult = b.data as SearchResult;
           return aResult.line.compareTo(bResult.line);
         });
-        
+
         _isSearching = false;
       });
     } catch (e) {
@@ -181,9 +219,9 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
         _searchResults = [];
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('שגיאה בחיפוש: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('שגיאה בחיפוש: $e')));
       }
     }
   }
@@ -195,19 +233,17 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
         children: [
           _buildSearchBar(),
           if (_lastGematriaValue != null) _buildStatusBar(),
-          Expanded(
-            child: _buildResultsList(),
-          ),
+          Expanded(child: _buildResultsList()),
         ],
       ),
     );
   }
 
   Widget _buildStatusBar() {
-    final resultsText = _hasMoreResults 
+    final resultsText = _hasMoreResults
         ? 'הוגבל ל-${_searchResults.length} תוצאות'
         : 'נמצאו ${_searchResults.length} תוצאות';
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -255,7 +291,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
     final oldTorahOnly = _torahOnly;
     final oldWholeVerseOnly = _wholeVerseOnly;
     final oldFilterDuplicates = _filterDuplicates;
-    
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -337,6 +373,67 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
               ),
+              const SizedBox(height: 16),
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'שיטת חישוב גימטריה:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                title: const Text(
+                  'גימטריה קטנה',
+                  textAlign: TextAlign.right,
+                ),
+                value: _useSmallGematria,
+                onChanged: (value) {
+                  setState(() {
+                    _useSmallGematria = value ?? false;
+                    if (_useSmallGematria) {
+                      _useFinalLetters = false; // לא יכול להיות שתי שיטות יחד
+                    }
+                  });
+                  setDialogState(() {});
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+              CheckboxListTile(
+                title: const Text(
+                  'אותיות סופיות שונות',
+                  textAlign: TextAlign.right,
+                ),
+                value: _useFinalLetters,
+                onChanged: (value) {
+                  setState(() {
+                    _useFinalLetters = value ?? false;
+                    if (_useFinalLetters) {
+                      _useSmallGematria = false; // לא יכול להיות שתי שיטות יחד
+                    }
+                  });
+                  setDialogState(() {});
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+              const SizedBox(height: 16),
+              CheckboxListTile(
+                title: const Text(
+                  'עם הכולל',
+                  textAlign: TextAlign.right,
+                ),
+                value: _useWithKolel,
+                onChanged: (value) {
+                  setState(() {
+                    _useWithKolel = value ?? false;
+                  });
+                  setDialogState(() {});
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
             ],
           ),
           actions: [
@@ -348,7 +445,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
                     oldTorahOnly != _torahOnly ||
                     oldWholeVerseOnly != _wholeVerseOnly ||
                     oldFilterDuplicates != _filterDuplicates;
-                
+
                 // אם יש טקסט חיפוש והגדרות השתנו, בצע חיפוש מחדש
                 if (settingsChanged && _lastSearchText.isNotEmpty) {
                   _performSearch();
@@ -368,8 +465,8 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         boxShadow: [
-          BoxShadow(            
-            color: Colors.black.withValues(alpha:0.05),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -381,7 +478,8 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
         decoration: InputDecoration(
           hintText: 'חפש גימטריה...',
           hintStyle: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.5),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
           ),
           filled: true,
           fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -406,6 +504,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
                     setState(() {
                       _searchResults = [];
                       _lastGematriaValue = null;
+                      _hasSearched = false;
                     });
                   },
                 )
@@ -418,12 +517,10 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
 
   Widget _buildResultsList() {
     if (_isSearching) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
-    if (_searchResults.isEmpty && _searchController.text.isNotEmpty) {
+    if (_searchResults.isEmpty && _hasSearched) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -431,20 +528,18 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
             Icon(
               Icons.search_off,
               size: 64,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.3),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
               'לא נמצאו תוצאות',
               style: TextStyle(
                 fontSize: 18,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
           ],
@@ -460,20 +555,18 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
             Icon(
               Icons.calculate_outlined,
               size: 64,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.3),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
               'הזן ערך לחיפוש גימטריה',
               style: TextStyle(
                 fontSize: 18,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
           ],
@@ -494,28 +587,13 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: () {
-          // פתיחת הספר במיקום הנכון
-          if (result.data != null) {
-            final searchResult = result.data as SearchResult;
-            final tab = TextBookTab(
-              book: TextBook(
-                title: utils.getTitleFromPath(searchResult.file),
-              ),
-              index: searchResult.line - 1, // line מתחיל מ-1, index מ-0
-              openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                      false) ||
-                  (Settings.getValue<bool>('key-default-sidebar-open') ??
-                      false),
-            );
-            context.read<TabsBloc>().add(AddTab(tab));
-            // מעבר למסך הקריאה (עיון)
-            context.read<NavigationBloc>().add(const NavigateToScreen(Screen.reading));
-          }
+          final book = TextBook(title: result.bookTitle);
+          final index = result.data.line - 1;
+          final searchQuery = result.preview;
+          openBook(context, book, index, searchQuery, ignoreHistory: true);
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(
@@ -580,17 +658,18 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
                           if (settingsState.replaceHolyNames) {
                             displayText = utils.replaceHolyNames(displayText);
                           }
-                          
+
                           // הוספת הקשר אם קיים
                           final searchResult = result.data as SearchResult;
                           String contextBefore = searchResult.contextBefore;
                           String contextAfter = searchResult.contextAfter;
-                          
+
                           if (settingsState.replaceHolyNames) {
-                            contextBefore = utils.replaceHolyNames(contextBefore);
+                            contextBefore =
+                                utils.replaceHolyNames(contextBefore);
                             contextAfter = utils.replaceHolyNames(contextAfter);
                           }
-                          
+
                           return RichText(
                             textAlign: TextAlign.right,
                             text: TextSpan(
