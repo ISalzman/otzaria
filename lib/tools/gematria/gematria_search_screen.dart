@@ -5,6 +5,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'gematria_search.dart';
 import 'package:otzaria/utils/open_book.dart';
 
@@ -119,13 +120,8 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
       final validChars = RegExp(r'^[א-תםןךףץ\s0-9]+$');
       if (!validChars.hasMatch(searchText)) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'קלט לא תקין. יש להזין אותיות עבריות או מספרים בלבד.',
-              ),
-              backgroundColor: Colors.red,
-            ),
+          UiSnack.showError(
+            'קלט לא תקין. יש להזין אותיות עבריות או מספרים בלבד.',
           );
         }
         return;
