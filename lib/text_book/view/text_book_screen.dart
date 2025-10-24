@@ -2300,7 +2300,7 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
             TabBar(
               controller: _tabController,
               tabs: const [
-                Tab(text: 'דיווח רגיל'),
+                Tab(text: 'שליחת דיווח'),
                 Tab(text: 'דיווח דרך קו אוצריא'),
               ],
             ),

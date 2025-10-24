@@ -505,21 +505,9 @@ jobs:
           prerelease: ${{ steps.version.outputs.prerelease }}
           files: release-files/*
           body: |
-            ## Changes in this release
-            Built from commit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
-            Branch: ${{ github.ref_name }}
-            
-            ### Downloads:
-            - **Windows**: Download the `.exe` installer
-            - **Windows (.msix)**: Download the `.msix` package
-            - **Windows (.zip)**: Download the `.zip` archive
-            - **Linux (Debian/Ubuntu)**: Download the `.deb` package and install with `sudo dpkg -i <filename>.deb`
-            - **Linux (Fedora/RHEL)**: Download the `.rpm` package and install with `sudo dnf localinstall <filename>.rpm`
-            - **Linux (Generic)**: Download the `.zip` file and extract
-            - **Android**: Install the `.apk` file
-            - **macOS**: Download and extract the `.zip` file
-            
-            ${{ github.ref_name == 'dev' && '⚠️ **This is a development build** - Use at your own risk!' || '' }}
+            ## שינויים בגרסה זו
+            נבנה מcommit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
+            ענף: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
@@ -608,32 +596,20 @@ jobs:
           prerelease: true
           files: release-files/*
           body: |
-            ## 🔄 PR Preview Build #${{ github.event.number }}
-            **This is a preview build for testing PR changes before merge.**
+            ## 🔄 בניית תצוגה מקדימה ל-PR #${{ github.event.number }}
+            **זו בנייה לבדיקת שינויי PR לפני מיזוג.**
             
-            ### PR Information:
-            - **PR Title**: ${{ github.event.pull_request.title }}
-            - **PR Author**: @${{ github.event.pull_request.user.login }}
-            - **PR Number**: #${{ github.event.number }}
-            - **Branch**: `${{ github.head_ref }}` → `${{ github.base_ref }}`
+            ### מידע על ה-PR:
+            - **כותרת PR**: ${{ github.event.pull_request.title }}
+            - **מחבר PR**: @${{ github.event.pull_request.user.login }}
+            - **מספר PR**: #${{ github.event.number }}
+            - **ענף**: `${{ github.head_ref }}` → `${{ github.base_ref }}`
             
-            ### PR Description:
+            ### תיאור PR:
             ${{ github.event.pull_request.body }}
             
             ---
-            Built from commit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
-            
-            ### Downloads:
-            - **Windows**: Download the `.exe` installer
-            - **Windows (.msix)**: Download the `.msix` package
-            - **Windows (.zip)**: Download the `.zip` archive
-            - **Linux (Debian/Ubuntu)**: Download the `.deb` package and install with `sudo dpkg -i <filename>.deb`
-            - **Linux (Fedora/RHEL)**: Download the `.rpm` package and install with `sudo dnf localinstall <filename>.rpm`
-            - **Linux (Generic)**: Download the `.zip` file and extract
-            - **Android**: Install the `.apk` file
-            - **macOS**: Download and extract the `.zip` file
-            
-            ⚠️ **This is a preview build for testing purposes** - Use at your own risk!
+            נבנה מcommit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -670,19 +646,19 @@ jobs:
 
           if [ -n "$PREV_TAG" ]; then
             RANGE="$PREV_TAG..$CURRENT_TAG"
-            # צור רשימה של כותרות הקומיטים בטווח
+            # צור רשימה של כותרות הcommits בטווח
             COMMITS=$(git log --pretty=format:'- %s' "$RANGE" || true)
           else
-            # אם אין תג קודם, קח רק את הקומיט של התג הנוכחי
+            # אם אין תג קודם, קח רק את הcommit של התג הנוכחי
             SHA=$(git rev-list -n 1 "$CURRENT_TAG")
             COMMITS=$(git log --pretty=format:'- %s' "${SHA}^..${SHA}" || true)
           fi
 
           if [ -z "${COMMITS// /}" ]; then
-            COMMITS="(לא נמצאו כותרות קומיטים חדשות להצגה)"
+            COMMITS="(לא נמצאו כותרות commits חדשות להצגה)"
           fi
 
-          # העבר את רשימת הקומיטים והתג הקודם לשלבים הבאים
+          # העבר את רשימת הcommits והתג הקודם לשלבים הבאים
           {
             echo "prev_tag=${PREV_TAG}"
             echo "commits<<EOF"

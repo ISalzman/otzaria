@@ -720,12 +720,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// בניית רשימת כפתורים בסדר ההצגה (מימין לשמאל ב-RTL)
   List<ActionButtonData> _buildDisplayOrderPdfActions(BuildContext context) {
     return [
-      // 1) Text Button (ראשון מימין - יעלם אחרון!)
+      // 1) Text Button
       ActionButtonData(
         widget: _buildTextButton(
             context, widget.tab.book, widget.tab.pdfViewerController),
         icon: Icons.article,
-        tooltip: 'פתח טקסט',
+        tooltip: 'פתח ספר במהדורת טקסט',
         onPressed: () => _handleTextButtonPress(context),
       ),
 
@@ -928,7 +928,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       builder: (context, snapshot) => snapshot.hasData
           ? IconButton(
               icon: const Icon(Icons.article),
-              tooltip: 'פתח טקסט',
+              tooltip: 'פתח ספר במהדורת טקסט',
               onPressed: () async {
                 final currentPage = controller.isReady
                     ? controller.pageNumber ?? 1
