@@ -390,6 +390,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
+                color: Color(0xFFD32F2F), // צבע אדום חזק למילות החיפוש
               ),
               availableWidth,
             );
