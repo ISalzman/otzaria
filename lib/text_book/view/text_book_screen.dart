@@ -101,38 +101,43 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         .join('&');
   }
 
-  /// בדיקה אם הספר נתמך על ידי שמור וזכור
-  bool _isBookSupportedByShamorZachor(String bookTitle) {
+
+  /// Check if book is already being tracked in Shamor Zachor
+  bool _isBookTrackedInShamorZachor(String bookTitle) {
     try {
       final dataProvider = context.read<ShamorZachorDataProvider>();
       if (!dataProvider.hasData) {
-        debugPrint('Shamor Zachor data not loaded yet');
         return false;
       }
 
-      // לא להציג בתלמוד ירושלמי
-      if (bookTitle.contains('ירושלמי')) {
-        debugPrint('Book $bookTitle is Yerushalmi - not supported');
-        return false;
+      // Extract clean book name
+      String cleanBookName = bookTitle;
+      if (bookTitle.contains(' - ')) {
+        final parts = bookTitle.split(' - ');
+        cleanBookName = parts.last.trim();
       }
 
-      // חיפוש הספר בכל הקטגוריות - חיפוש מדויק יותר
-      final searchResults = dataProvider.searchBooks(bookTitle);
-      debugPrint(
-          'Searching for book: $bookTitle, found ${searchResults.length} results');
+      // For dynamic provider, use the dedicated method
+      if (dataProvider.useDynamicLoader) {
+        // Try to detect category (similar to add function)
+        // For now, search across all categories
+        final searchResults = dataProvider.searchBooks(cleanBookName);
+        return searchResults.any((result) =>
+            result.bookName == cleanBookName ||
+            result.bookName.contains(cleanBookName) ||
+            cleanBookName.contains(result.bookName));
+      }
 
-      // בדיקה מדויקת יותר - גם שם מלא וגם חלקי
-      final isSupported = searchResults.any((result) =>
-          result.bookName == bookTitle ||
-          result.bookName.contains(bookTitle) ||
-          bookTitle.contains(result.bookName));
+      // Legacy: Search for the book
+      final searchResults = dataProvider.searchBooks(cleanBookName);
 
-      debugPrint(
-          'Book $bookTitle is ${isSupported ? 'supported' : 'not supported'} by Shamor Zachor');
-      return isSupported;
+      // If found in existing categories, it's tracked
+      return searchResults.any((result) =>
+          result.bookName == cleanBookName ||
+          result.bookName.contains(cleanBookName) ||
+          cleanBookName.contains(result.bookName));
     } catch (e) {
-      // אם אין provider או שגיאה אחרת, הספר לא נתמך
-      debugPrint('Error checking Shamor Zachor support: $e');
+      debugPrint('Error checking if book is tracked: $e');
       return false;
     }
   }
@@ -971,14 +976,23 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
-      // 4) סמן כנלמד בשמור וזכור
-      if (_isBookSupportedByShamorZachor(state.book.title))
-        ActionButtonData(
-          widget: _buildShamorZachorButton(context, state),
-          icon: Icons.check_circle,
-          tooltip: 'סמן כנלמד בשמור וזכור',
-          onPressed: () => _markShamorZachorProgress(state.book.title),
-        ),
+      // 4) שמור וזכור - סמן כנלמד או הוסף למעקב
+      ActionButtonData(
+        widget: _buildShamorZachorButton(context, state),
+        icon: _isBookTrackedInShamorZachor(state.book.title)
+            ? Icons.check_circle
+            : Icons.add_circle_outline,
+        tooltip: _isBookTrackedInShamorZachor(state.book.title)
+            ? 'סמן כנלמד בשמור וזכור'
+            : 'הוסף למעקב לימוד בשמור וזכור',
+        onPressed: () {
+          if (_isBookTrackedInShamorZachor(state.book.title)) {
+            _markShamorZachorProgress(state.book.title);
+          } else {
+            _addBookToShamorZachorTracking(state.book.title);
+          }
+        },
+      ),
 
       // 5) ערוך את הספר
       ActionButtonData(
@@ -1291,19 +1305,113 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildShamorZachorButton(BuildContext context, TextBookLoaded state) {
-    if (!_isBookSupportedByShamorZachor(state.book.title)) {
-      return const SizedBox.shrink();
-    }
+    // Always show button - either for marking progress or for adding to tracking
+    final isTracked = _isBookTrackedInShamorZachor(state.book.title);
 
     return IconButton(
-      onPressed: () => _markShamorZachorProgress(state.book.title),
-      icon: Image.asset(
-        'assets/icon/shamor_zachor_with_v.png',
-        width: 24,
-        height: 24,
-      ),
-      tooltip: 'סמן כנלמד בשמור וזכור',
+      onPressed: () {
+        if (isTracked) {
+          // Book is already tracked - mark progress
+          _markShamorZachorProgress(state.book.title);
+        } else {
+          // Book is not tracked - add to tracking
+          _addBookToShamorZachorTracking(state.book.title);
+        }
+      },
+      icon: isTracked
+          ? Image.asset(
+              'assets/icon/shamor_zachor_with_v.png',
+              width: 24,
+              height: 24,
+            )
+          : const Icon(Icons.add_circle_outline, size: 24),
+      tooltip: isTracked
+          ? 'סמן כנלמד בשמור וזכור'
+          : 'הוסף למעקב לימוד בשמור וזכור',
     );
+  }
+
+  /// Add book to Shamor Zachor tracking
+  Future<void> _addBookToShamorZachorTracking(String bookTitle) async {
+    try {
+      final state = context.read<TextBookBloc>().state as TextBookLoaded;
+      final dataProvider = context.read<ShamorZachorDataProvider>();
+
+      // Check if provider supports dynamic loading
+      if (!dataProvider.useDynamicLoader) {
+        UiSnack.showError('הוספת ספרים מותאמת אישית דורשת את הגרסה החדשה של שמור וזכור');
+        return;
+      }
+
+      // 1. Get book path from library
+      final titleToPath = await state.book.data.titleToPath;
+      final bookPath = titleToPath[bookTitle];
+
+      if (bookPath == null) {
+        UiSnack.showError('לא נמצא נתיב לספר');
+        return;
+      }
+
+      debugPrint('Adding book to tracking - Path: $bookPath');
+
+      // 2. Detect category and content type from path
+      String categoryName = 'כללי';
+      String contentType = 'פרק'; // Default
+
+      if (bookPath.contains('תלמוד בבלי')) {
+        categoryName = 'תלמוד בבלי';
+        contentType = 'דף';
+      } else if (bookPath.contains('תנך') || bookPath.contains('תנ"ך')) {
+        categoryName = 'תנ"ך';
+        contentType = 'פרק';
+      } else if (bookPath.contains('משנה') && !bookPath.contains('תורה')) {
+        categoryName = 'משנה';
+        contentType = 'משנה';
+      } else if (bookPath.contains('ירושלמי')) {
+        categoryName = 'תלמוד ירושלמי';
+        contentType = 'דף';
+      } else if (bookPath.contains('רמב"ם') || bookPath.contains('רמבם')) {
+        categoryName = 'רמב"ם';
+        contentType = 'הלכה';
+      } else if (bookPath.contains('הלכה')) {
+        categoryName = 'הלכה';
+        contentType = 'הלכה';
+      }
+
+      debugPrint('Detected - Category: $categoryName, ContentType: $contentType');
+
+      // 3. Extract clean book name
+      String cleanBookName = bookTitle;
+      if (bookTitle.contains(' - ')) {
+        final parts = bookTitle.split(' - ');
+        cleanBookName = parts.last.trim();
+      }
+
+      // 4. Show loading indicator
+      UiSnack.show('סורק ספר ומוסיף למעקב...');
+
+      // 5. Add book via provider
+      await dataProvider.addCustomBook(
+        bookName: cleanBookName,
+        categoryName: categoryName,
+        bookPath: bookPath,
+        contentType: contentType,
+      );
+
+      debugPrint('Book added to tracking: $cleanBookName in category $categoryName');
+      debugPrint('All categories after add: ${dataProvider.getCategoryNames()}');
+      debugPrint('Has category "$categoryName": ${dataProvider.getCategory(categoryName) != null}');
+
+      // 6. Success message
+      UiSnack.show('הספר "$cleanBookName" נוסף למעקב בהצלחה!');
+
+      // 7. Update UI to reflect the change
+      setState(() {});
+    } catch (e, stackTrace) {
+      debugPrint('Error adding book to Shamor Zachor: $e');
+      debugPrint('Stack trace: $stackTrace');
+      UiSnack.showError('שגיאה בהוספת הספר למעקב: ${e.toString()}');
+    }
   }
 
   /// פונקציות עזר לטיפול בלחיצות על כפתורים בתפריט הנפתח
