@@ -25,7 +25,8 @@ class ShamorZachorServiceFactory {
   /// This method is async and will initialize all required services
   static Future<DynamicDataLoaderService> getDynamicLoader({
     required String libraryBasePath,
-    required Future<List<Map<String, dynamic>>> Function(String bookPath) getTocFunction,
+    required Future<List<Map<String, dynamic>>> Function(String bookPath)
+        getTocFunction,
   }) async {
     // Return existing instance if available
     if (_dynamicLoaderInstance != null) {
@@ -71,7 +72,7 @@ class ShamorZachorServiceFactory {
         prefs: prefs,
       );
 
-      // 5. Initialize it (this will scan built-in books on first run)
+      // 5. Initialize it (loads from cache, starts background scan if needed)
       await dynamicLoader.initialize();
       _logger.info('DynamicDataLoaderService initialized');
 

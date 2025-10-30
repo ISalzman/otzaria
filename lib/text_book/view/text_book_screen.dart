@@ -101,7 +101,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         .join('&');
   }
 
-
   /// Check if book is already being tracked in Shamor Zachor
   bool _isBookTrackedInShamorZachor(String bookTitle) {
     try {
@@ -282,19 +281,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       debugPrint('Current ref: $currentRef');
 
-      // חילוץ מספר הפרק מהפניה
-      int? chapterNumber = _extractChapterNumber(currentRef);
+      // חילוץ שם הפרק מהפניה
       String? chapterName = _extractChapterName(currentRef);
-      String? amudKey = _extractAmudKey(currentRef);
 
-      if (chapterNumber == null) {
-        UiSnack.showError('לא הצלחתי לזהות את הפרק הנוכחי');
-        return;
+      // אם לא הצלחנו לחלץ שם פרק, נשתמש בכל הפניה
+      if (chapterName == null || chapterName.isEmpty) {
+        chapterName = currentRef;
       }
 
-      debugPrint('Chapter number: $chapterNumber');
       debugPrint('Chapter name: $chapterName');
-      debugPrint('Amud key: $amudKey');
       debugPrint('Book content type: ${bookDetails.contentType}');
       debugPrint('Book is daf type: ${bookDetails.isDafType}');
       debugPrint('Total learnable items: ${bookDetails.learnableItems.length}');
@@ -302,34 +297,65 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // מציאת הפריט הרלוונטי בשמור וזכור
       final learnableItems = bookDetails.learnableItems;
 
-      // חיפוש הפריט המתאים - בתלמוד לפי דף ועמוד, אחרת לפי פרק
+      // חיפוש הפריט המתאים לפי שם הכותרת (כפי שהיא מופיעה בטקסט)
       LearnableItem? targetItem;
 
-      if (bookDetails.isDafType || amudKey != null) {
-        // זה תלמוד - חפש לפי דף ועמוד
-        final targetAmud = amudKey ?? 'a'; // ברירת מחדל עמוד א'
+      // נחפש לפי שם הכותרת הנוכחית
+      final searchTitle = chapterName;
+
+      debugPrint('Searching for title: "$searchTitle"');
+      debugPrint('Available learnable items:');
+      for (int i = 0; i < learnableItems.length && i < 10; i++) {
+        final item = learnableItems[i];
+        debugPrint(
+            '  [$i] displayLabel: "${item.displayLabel}", partName: "${item.partName}", hierarchyPath: ${item.hierarchyPath}');
+      }
+      if (learnableItems.length > 10) {
+        debugPrint('  ... and ${learnableItems.length - 10} more items');
+      }
+
+      try {
+        // חיפוש לפי displayLabel או partName שמכיל את שם הכותרת
+        targetItem = learnableItems.firstWhere(
+          (item) {
+            // בדיקה לפי displayLabel
+            if (item.displayLabel != null &&
+                item.displayLabel!.contains(searchTitle)) {
+              return true;
+            }
+            // בדיקה לפי partName
+            if (item.partName.contains(searchTitle)) {
+              return true;
+            }
+            // בדיקה לפי hierarchyPath
+            if (item.hierarchyPath.any((path) => path.contains(searchTitle))) {
+              return true;
+            }
+            return false;
+          },
+        );
+      } catch (e) {
+        // אם לא מצאנו בחיפוש מדויק, ננסה חיפוש חלקי
         try {
           targetItem = learnableItems.firstWhere(
-            (item) =>
-                item.pageNumber == chapterNumber && item.amudKey == targetAmud,
+            (item) {
+              final itemTitle = item.displayLabel ?? item.partName;
+              final searchWords = searchTitle.split(' ');
+              return searchWords
+                  .any((word) => word.length > 2 && itemTitle.contains(word));
+            },
           );
-        } catch (e) {
-          targetItem = null;
-        }
-      } else {
-        // זה לא תלמוד - חפש לפי מספר פרק
-        try {
-          targetItem = learnableItems.firstWhere(
-            (item) => item.pageNumber == chapterNumber,
-          );
-        } catch (e) {
+        } catch (e2) {
           targetItem = null;
         }
       }
 
       if (targetItem == null) {
-        throw Exception('${chapterName ?? chapterNumber} לא נמצא בשמור וזכור');
+        throw Exception('$searchTitle לא נמצא בשמור וזכור');
       }
+
+      debugPrint(
+          'Found target item: displayLabel="${targetItem.displayLabel}", partName="${targetItem.partName}"');
 
       debugPrint(
           'Target item: ${targetItem.pageNumber}${targetItem.amudKey}, absoluteIndex: ${targetItem.absoluteIndex}');
@@ -350,8 +376,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       }
 
       if (columnToMark == null) {
-        UiSnack.show(
-            'אין מקום פנוי ב${chapterName ?? chapterNumber}, למדת הרבה!');
+        UiSnack.show('אין מקום פנוי ב$chapterName, למדת הרבה!');
         return;
       }
 
@@ -367,111 +392,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       final columnName = _getColumnDisplayName(columnToMark);
       // השתמש בשם המקורי מהכותרת
-      final displayName = chapterName ?? 'פרק $chapterNumber';
+      final displayName = chapterName;
       UiSnack.showSuccess('$displayName סומן כ$columnName בהצלחה!');
     } catch (e) {
       debugPrint('Error in _markShamorZachorProgress: $e');
       UiSnack.showError('שגיאה בסימון: ${e.toString()}');
     }
-  }
-
-  /// חילוץ מספר הפרק מהפניה
-  int? _extractChapterNumber(String ref) {
-    // דוגמאות לפניות: "בראשית, פרק א", "שמות, פרק ב", "בראשית א", "שמות ב"
-
-    // חיפוש מספרים עבריים
-    final hebrewNumbers = {
-      'א': 1,
-      'ב': 2,
-      'ג': 3,
-      'ד': 4,
-      'ה': 5,
-      'ו': 6,
-      'ז': 7,
-      'ח': 8,
-      'ט': 9,
-      'י': 10,
-      'יא': 11,
-      'יב': 12,
-      'יג': 13,
-      'יד': 14,
-      'טו': 15,
-      'טז': 16,
-      'יז': 17,
-      'יח': 18,
-      'יט': 19,
-      'כ': 20,
-      'כא': 21,
-      'כב': 22,
-      'כג': 23,
-      'כד': 24,
-      'כה': 25,
-      'כו': 26,
-      'כז': 27,
-      'כח': 28,
-      'כט': 29,
-      'ל': 30,
-      'לא': 31,
-      'לב': 32,
-      'לג': 33,
-      'לד': 34,
-      'לה': 35,
-      'לו': 36,
-      'לז': 37,
-      'לח': 38,
-      'לט': 39,
-      'מ': 40,
-      'מא': 41,
-      'מב': 42,
-      'מג': 43,
-      'מד': 44,
-      'מה': 45,
-      'מו': 46,
-      'מז': 47,
-      'מח': 48,
-      'מט': 49,
-      'נ': 50
-    };
-
-    // חיפוש דפוסים שונים - פרק, דף, או רק מספר
-    final patterns = [
-      RegExp(r'פרק\s+([א-ת]+)'),
-      RegExp(r'דף\s+([א-ת]+)\.?'), // תמיכה ב"דף ו." או "דף ו"
-      RegExp(r',\s*([א-ת]+)\.?$'), // תמיכה ב", ו." או ", ו"
-      RegExp(r'\s+([א-ת]+)\.?$'), // תמיכה ב" ו." או " ו"
-    ];
-
-    for (final pattern in patterns) {
-      final match = pattern.firstMatch(ref);
-      if (match != null) {
-        final hebrewNum = match.group(1);
-        if (hebrewNum != null && hebrewNumbers.containsKey(hebrewNum)) {
-          return hebrewNumbers[hebrewNum];
-        }
-      }
-    }
-
-    // חיפוש מספרים רגילים
-    final numberPattern = RegExp(r'(\d+)');
-    final numberMatch = numberPattern.firstMatch(ref);
-    if (numberMatch != null) {
-      return int.tryParse(numberMatch.group(1)!);
-    }
-
-    return null;
-  }
-
-  /// חילוץ עמוד (א'/ב') מהפניה
-  String? _extractAmudKey(String ref) {
-    // דוגמאות: "חגיגה, דף ג:" -> "b", "ברכות, דף ו." -> "a"
-
-    if (ref.contains(':')) {
-      return 'b'; // נקודתיים מציינים עמוד ב'
-    } else if (ref.contains('.')) {
-      return 'a'; // נקודה מציינת עמוד א'
-    }
-
-    return null; // לא תלמוד
   }
 
   /// חילוץ שם הפרק/דף מהפניה (לתצוגה)
@@ -1325,9 +1251,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               height: 24,
             )
           : const Icon(Icons.add_circle_outline, size: 24),
-      tooltip: isTracked
-          ? 'סמן כנלמד בשמור וזכור'
-          : 'הוסף למעקב לימוד בשמור וזכור',
+      tooltip:
+          isTracked ? 'סמן כנלמד בשמור וזכור' : 'הוסף למעקב לימוד בשמור וזכור',
     );
   }
 
@@ -1339,7 +1264,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       // Check if provider supports dynamic loading
       if (!dataProvider.useDynamicLoader) {
-        UiSnack.showError('הוספת ספרים מותאמת אישית דורשת את הגרסה החדשה של שמור וזכור');
+        UiSnack.showError(
+            'הוספת ספרים מותאמת אישית דורשת את הגרסה החדשה של שמור וזכור');
         return;
       }
 
@@ -1378,7 +1304,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         contentType = 'הלכה';
       }
 
-      debugPrint('Detected - Category: $categoryName, ContentType: $contentType');
+      debugPrint(
+          'Detected - Category: $categoryName, ContentType: $contentType');
 
       // 3. Extract clean book name
       String cleanBookName = bookTitle;
@@ -1398,9 +1325,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         contentType: contentType,
       );
 
-      debugPrint('Book added to tracking: $cleanBookName in category $categoryName');
-      debugPrint('All categories after add: ${dataProvider.getCategoryNames()}');
-      debugPrint('Has category "$categoryName": ${dataProvider.getCategory(categoryName) != null}');
+      debugPrint(
+          'Book added to tracking: $cleanBookName in category $categoryName');
+      debugPrint(
+          'All categories after add: ${dataProvider.getCategoryNames()}');
+      debugPrint(
+          'Has category "$categoryName": ${dataProvider.getCategory(categoryName) != null}');
 
       // 6. Success message
       UiSnack.show('הספר "$cleanBookName" נוסף למעקב בהצלחה!');

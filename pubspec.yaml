@@ -69,7 +69,6 @@ dependencies:
   search_highlight_text: ^1.0.0+2
   fuzzywuzzy: ^1.1.6
   file_picker: ^10.2.1
-  permission_handler: ^11.3.0
   flutter_launcher_icons: "^0.13.1"
   provider: ^6.1.5
   docx_to_text: ^1.0.1

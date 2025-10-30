@@ -161,16 +161,12 @@ void main() async {
             )..add(LoadWorkspaces()),
           ),
           ChangeNotifierProvider<ShamorZachorDataProvider>(
-            lazy: false, // Create immediately
+            lazy: true, // Create only when needed
             create: (context) {
-              // Reduced noisy startup logs
-
-              // Create a provider that will update itself once loader is available
+              // Create provider based on current state of loader
               final provider = _shamorZachorDataLoader != null
                   ? ShamorZachorDataProvider.dynamic(_shamorZachorDataLoader!)
                   : ShamorZachorDataProvider(); // Start with legacy
-
-              // Intentionally avoid print() to satisfy lints
 
               return provider;
             },
@@ -235,30 +231,14 @@ Future<void> initialize() async {
 
   // Initialize Shamor Zachor dynamic data loader
   try {
-    if (kDebugMode) debugPrint('Initializing Shamor Zachor dynamic data loader...');
-
     final libraryBasePath = await AppPaths.getLibraryPath();
-    if (kDebugMode) debugPrint('Library base path: $libraryBasePath');
 
     _shamorZachorDataLoader = await ShamorZachorServiceFactory.getDynamicLoader(
       libraryBasePath: libraryBasePath,
       // Use the shared TOC parser utility so SZ and navigator share logic
       getTocFunction: TocParser.parseFlatFromFile,
     );
-
-    // Avoid noisy prints; rely on debugPrint in debug mode only
-
-    if (kDebugMode) {
-      debugPrint('Shamor Zachor dynamic data loader initialized successfully');
-    }
-  } catch (e, stackTrace) {
-    if (kDebugMode) {
-      debugPrint('Failed to initialize Shamor Zachor data loader: $e');
-      debugPrint('Stack trace: $stackTrace');
-    }
-    if (kDebugMode) {
-      debugPrint('Failed to initialize Shamor Zachor data loader: $e');
-    }
+  } catch (e) {
     // Continue without Shamor Zachor functionality if initialization fails
   }
 }
