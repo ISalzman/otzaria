@@ -53,6 +53,7 @@ import 'package:shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:shamor_zachor/services/shamor_zachor_service_factory.dart';
 import 'package:shamor_zachor/services/dynamic_data_loader_service.dart';
 import 'package:otzaria/utils/toc_parser.dart';
+import 'package:otzaria/settings/backup_service.dart';
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
@@ -240,6 +241,18 @@ Future<void> initialize() async {
     );
   } catch (e) {
     // Continue without Shamor Zachor functionality if initialization fails
+  }
+
+  // Check and perform automatic backup if needed
+  try {
+    if (await BackupService.shouldPerformAutoBackup()) {
+      await BackupService.performAutoBackup();
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('Failed to perform automatic backup: $e');
+    }
+    // Continue without backup if it fails
   }
 }
 

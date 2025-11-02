@@ -18,6 +18,7 @@ import 'package:otzaria/settings/reading_settings_dialog.dart';
 import 'package:otzaria/settings/library_settings_dialog.dart';
 import 'package:otzaria/settings/calendar_settings_dialog.dart';
 import 'package:otzaria/settings/gematria_settings_dialog.dart';
+import 'package:otzaria/settings/backup_service.dart';
 import 'dart:async';
 
 class MySettingsScreen extends StatefulWidget {
@@ -341,6 +342,234 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                           ),
                         ],
                       ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                SettingsGroup(
+                  title: 'גיבוי',
+                  titleAlignment: Alignment.centerRight,
+                  titleTextStyle: const TextStyle(fontSize: 25),
+                  children: [
+                    SettingsGroup(
+                      title: 'גבה את:',
+                      titleAlignment: Alignment.centerRight,
+                      children: [
+                        _buildColumns(3, [
+                          SwitchSettingsTile(
+                            settingKey: 'key-backup-settings',
+                            title: 'הגדרות',
+                            subtitle: 'כולל את כלל הגדרות התוכנה',
+                            leading: const Icon(Icons.settings),
+                            defaultValue: true,
+                            activeColor: Theme.of(context).cardColor,
+                          ),
+                          SwitchSettingsTile(
+                            settingKey: 'key-backup-bookmarks',
+                            title: 'סימניות',
+                            subtitle: 'כל הסימניות שנשמרו',
+                            leading: const Icon(Icons.bookmark),
+                            defaultValue: true,
+                            activeColor: Theme.of(context).cardColor,
+                          ),
+                          SwitchSettingsTile(
+                            settingKey: 'key-backup-history',
+                            title: 'היסטוריה',
+                            subtitle: 'היסטוריית הלימוד',
+                            leading: const Icon(Icons.history),
+                            defaultValue: true,
+                            activeColor: Theme.of(context).cardColor,
+                          ),
+                          SwitchSettingsTile(
+                            settingKey: 'key-backup-notes',
+                            title: 'הערות אישיות',
+                            subtitle: 'כל ההערות האישיות שלך',
+                            leading: const Icon(Icons.note),
+                            defaultValue: true,
+                            activeColor: Theme.of(context).cardColor,
+                          ),
+                          SwitchSettingsTile(
+                            settingKey: 'key-backup-workspaces',
+                            title: 'שולחנות עבודה',
+                            subtitle: 'כל שולחנות העבודה',
+                            leading: const Icon(Icons.workspaces),
+                            defaultValue: true,
+                            activeColor: Theme.of(context).cardColor,
+                          ),
+                          SwitchSettingsTile(
+                            settingKey: 'key-backup-shamor-zachor',
+                            title: 'זכור ושמור',
+                            subtitle: 'ספרים ומעקב לימוד',
+                            leading: const Icon(Icons.book_outlined),
+                            defaultValue: true,
+                            activeColor: Theme.of(context).cardColor,
+                          ),
+                        ]),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    DropDownSettingsTile<String>(
+                      settingKey: 'key-auto-backup-frequency',
+                      title: 'גיבוי אוטומטי',
+                      leading: const Icon(Icons.schedule),
+                      selected: 'none',
+                      values: const {
+                        'none': 'ללא',
+                        'weekly': 'כל שבוע',
+                        'monthly': 'כל חודש',
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    SimpleSettingsTile(
+                      title: 'צור גיבוי עכשיו',
+                      subtitle: 'שמור גיבוי של הנתונים שנבחרו',
+                      leading: const Icon(Icons.backup, color: Colors.green),
+                      onTap: () async {
+                        final includeSettings =
+                            Settings.getValue<bool>('key-backup-settings') ??
+                                true;
+                        final includeBookmarks =
+                            Settings.getValue<bool>('key-backup-bookmarks') ??
+                                true;
+                        final includeHistory =
+                            Settings.getValue<bool>('key-backup-history') ??
+                                true;
+                        final includeNotes =
+                            Settings.getValue<bool>('key-backup-notes') ?? true;
+                        final includeWorkspaces =
+                            Settings.getValue<bool>('key-backup-workspaces') ??
+                                true;
+                        final includeShamorZachor = Settings.getValue<bool>(
+                                'key-backup-shamor-zachor') ??
+                            true;
+
+                        try {
+                          final backupPath = await BackupService.createBackup(
+                            includeSettings: includeSettings,
+                            includeBookmarks: includeBookmarks,
+                            includeHistory: includeHistory,
+                            includeNotes: includeNotes,
+                            includeWorkspaces: includeWorkspaces,
+                            includeShamorZachor: includeShamorZachor,
+                          );
+
+                          // Verify file was created
+                          final file = File(backupPath);
+                          final fileExists = await file.exists();
+                          final fileSize = fileExists ? await file.length() : 0;
+
+                          if (!context.mounted) return;
+
+                          if (fileExists) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('הגיבוי נשמר בהצלחה!\n'
+                                    'נתיב: $backupPath\n'
+                                    'גודל: ${(fileSize / 1024).toStringAsFixed(1)} KB'),
+                                duration: const Duration(seconds: 5),
+                                action: SnackBarAction(
+                                  label: 'פתח תיקייה',
+                                  onPressed: () async {
+                                    final dir = Directory(file.parent.path);
+                                    if (Platform.isWindows) {
+                                      await Process.run('explorer', [dir.path]);
+                                    }
+                                  },
+                                ),
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'שגיאה: הקובץ לא נוצר בנתיב:\n$backupPath'),
+                                backgroundColor: Colors.orange,
+                                duration: const Duration(seconds: 5),
+                              ),
+                            );
+                          }
+                        } catch (e, stackTrace) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'שגיאה ביצירת הגיבוי:\n$e\n\nStack trace:\n${stackTrace.toString().substring(0, 200)}'),
+                              backgroundColor: Colors.red,
+                              duration: const Duration(seconds: 10),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    SimpleSettingsTile(
+                      title: 'שחזר מגיבוי',
+                      subtitle: 'בחר קובץ גיבוי לשחזור',
+                      leading: const Icon(Icons.restore, color: Colors.blue),
+                      onTap: () async {
+                        String? filePath = await FilePicker.platform
+                            .pickFiles(
+                              type: FileType.custom,
+                              allowedExtensions: ['json'],
+                              dialogTitle: 'בחר קובץ גיבוי',
+                            )
+                            .then((result) => result?.files.single.path);
+
+                        if (filePath == null) return;
+
+                        if (!context.mounted) return;
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('שחזור מגיבוי?'),
+                            content: const Text(
+                              'פעולה זו תחליף את הנתונים הקיימים בנתונים מהגיבוי. האם להמשיך?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('ביטול'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('אישור',
+                                    style: TextStyle(color: Colors.blue)),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirmed != true) return;
+
+                        try {
+                          await BackupService.restoreFromBackup(filePath);
+
+                          if (!context.mounted) return;
+                          await showDialog<void>(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (context) => AlertDialog(
+                              title: const Text('השחזור הושלם'),
+                              content: const Text(
+                                'הנתונים שוחזרו בהצלחה. יש להפעיל מחדש את התוכנה.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => exit(0),
+                                  child: const Text('סגור את התוכנה'),
+                                ),
+                              ],
+                            ),
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('שגיאה בשחזור הגיבוי: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
                     ),
                   ],
                 ),
