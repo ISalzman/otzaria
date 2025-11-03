@@ -165,7 +165,8 @@ flutter:
     - assets/
     - assets/logos/
     - assets/ca/
-    - assets/icons/
+    - assets/icon/logo_nedarim.png
+    - assets/icon/memorial_candle.svg
     - assets/icon/שמור וזכור.png
     - assets/icon/shamor_zachor_with_v.png
     - assets/icon/icon.png
