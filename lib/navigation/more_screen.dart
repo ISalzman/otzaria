@@ -8,6 +8,7 @@ import 'package:otzaria/settings/gematria_settings_dialog.dart';
 import 'package:shamor_zachor/shamor_zachor.dart';
 import 'calendar_widget.dart';
 import 'calendar_cubit.dart';
+import 'package:otzaria/personal_notes/view/personal_notes_screen.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
@@ -84,7 +85,11 @@ class _MoreScreenState extends State<MoreScreen> {
               ),
               NavigationRailDestination(
                 icon: Icon(Icons.straighten),
-                label: Text('ממיר מידות'),
+                label: Text('מדות ושיעורים'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.note_alt_outlined),
+                label: Text('הערות אישיות'),
               ),
               NavigationRailDestination(
                 icon: Icon(Icons.calculate),
@@ -108,9 +113,11 @@ class _MoreScreenState extends State<MoreScreen> {
       case 1:
         return _shamorZachorTitle;
       case 2:
-        return 'ממיר מידות תורני';
+        return 'מדות ושיעורים';
       case 3:
-        return 'גימטריות';
+        return 'הערות אישיות';
+      case 4:
+        return 'גימטריה';
       default:
         return 'עזרים';
     }
@@ -139,7 +146,7 @@ class _MoreScreenState extends State<MoreScreen> {
     switch (index) {
       case 0:
         return [buildSettingsButton(() => showCalendarSettingsDialog(context))];
-      case 3:
+      case 4:
         return [buildSettingsButton(() => showGematriaSettingsDialog(context))];
       default:
         return null;
@@ -160,6 +167,8 @@ class _MoreScreenState extends State<MoreScreen> {
       case 2:
         return const MeasurementConverterScreen();
       case 3:
+        return const PersonalNotesManagerScreen();
+      case 4:
         return GematriaSearchScreen(key: _gematriaKey);
       default:
         return Container();

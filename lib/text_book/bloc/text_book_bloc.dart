@@ -38,6 +38,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<ToggleNikud>(_onToggleNikud);
     on<UpdateVisibleIndecies>(_onUpdateVisibleIndecies);
     on<UpdateSelectedIndex>(_onUpdateSelectedIndex);
+    on<HighlightLine>(_onHighlightLine);
+    on<ClearHighlightedLine>(_onClearHighlightedLine);
     on<TogglePinLeftPane>(_onTogglePinLeftPane);
     on<UpdateSearchText>(_onUpdateSearchText);
     on<CreateNoteFromToolbar>(_onCreateNoteFromToolbar);
@@ -338,6 +340,34 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         visibleLinks: visibleLinks,
       ));
     }
+  }
+
+  void _onHighlightLine(
+    HighlightLine event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is! TextBookLoaded) return;
+    final currentState = state as TextBookLoaded;
+    emit(currentState.copyWith(highlightedLine: event.lineIndex));
+
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!isClosed) {
+        add(ClearHighlightedLine(event.lineIndex));
+      }
+    });
+  }
+
+  void _onClearHighlightedLine(
+    ClearHighlightedLine event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is! TextBookLoaded) return;
+    final currentState = state as TextBookLoaded;
+    if (currentState.highlightedLine == null) return;
+    if (event.lineIndex != null && currentState.highlightedLine != event.lineIndex) {
+      return;
+    }
+    emit(currentState.copyWith(clearHighlight: true));
   }
 
   void _onTogglePinLeftPane(

@@ -87,6 +87,24 @@ class UpdateSelectedIndex extends TextBookEvent {
   List<Object?> get props => [index];
 }
 
+class HighlightLine extends TextBookEvent {
+  final int lineIndex;
+
+  const HighlightLine(this.lineIndex);
+
+  @override
+  List<Object?> get props => [lineIndex];
+}
+
+class ClearHighlightedLine extends TextBookEvent {
+  final int? lineIndex;
+
+  const ClearHighlightedLine([this.lineIndex]);
+
+  @override
+  List<Object?> get props => [lineIndex];
+}
+
 class TogglePinLeftPane extends TextBookEvent {
   final bool pin;
 

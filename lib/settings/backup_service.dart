@@ -6,10 +6,9 @@ import 'package:logging/logging.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/history/history_repository.dart';
-import 'package:otzaria/notes/data/notes_data_provider.dart';
-import 'package:otzaria/notes/models/note.dart';
 import 'package:otzaria/workspaces/workspace_repository.dart';
 import 'package:otzaria/workspaces/workspace.dart';
+import 'package:otzaria/personal_notes/storage/personal_notes_storage.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -173,9 +172,51 @@ class BackupService {
 
   /// Backup notes
   static Future<List<Map<String, dynamic>>> _backupNotes() async {
-    final notesProvider = NotesDataProvider.instance;
-    final notes = await notesProvider.getAllNotes();
-    return notes.map((n) => n.toJson()).toList();
+    final storage = PersonalNotesStorage.instance;
+    final notesDirPath = await storage.notesDirectoryPath();
+    final notesDir = Directory(notesDirPath);
+
+    if (!await notesDir.exists()) {
+      return [];
+    }
+
+    final List<Map<String, dynamic>> result = [];
+    await for (final entity in notesDir.list()) {
+      if (entity is! File || !entity.path.endsWith('_annotations.json')) {
+        continue;
+      }
+
+      try {
+        final annotationsRaw = await entity.readAsString(encoding: utf8);
+        if (annotationsRaw.trim().isEmpty) continue;
+
+        final annotationsMap = jsonDecode(annotationsRaw) as Map<String, dynamic>;
+        final bookId = annotationsMap['book_id'] as String?;
+        if (bookId == null || bookId.isEmpty) continue;
+
+        final safeName = p.basename(entity.path).replaceAll('_annotations.json', '');
+        final textFile = File(p.join(notesDirPath, 'הערות אישיות על $safeName.txt'));
+        String noteText = '';
+        if (await textFile.exists()) {
+          try {
+            noteText = await textFile.readAsString(encoding: utf8);
+          } catch (_) {
+            noteText = '';
+          }
+        }
+
+        result.add({
+          'bookId': bookId,
+          'safeName': safeName,
+          'annotations': annotationsMap,
+          'text': noteText,
+        });
+      } catch (e) {
+        _logger.warning('Skipping notes file due to error: $e');
+      }
+    }
+
+    return result;
   }
 
   /// Backup workspaces
@@ -303,10 +344,69 @@ class BackupService {
   static Future<void> _restoreNotes(
     List<Map<String, dynamic>> notesData,
   ) async {
-    final notesProvider = NotesDataProvider.instance;
-    for (final noteData in notesData) {
-      final note = Note.fromJson(noteData);
-      await notesProvider.createNote(note);
+    final storage = PersonalNotesStorage.instance;
+    final notesDirPath = await storage.notesDirectoryPath();
+    final notesDir = Directory(notesDirPath);
+
+    if (!await notesDir.exists()) {
+      await notesDir.create(recursive: true);
+    }
+
+    // Clear existing notes to avoid duplicates
+    await for (final entity in notesDir.list()) {
+      if (entity is File &&
+          (entity.path.endsWith('_annotations.json') ||
+              entity.path.contains('הערות אישיות על ') &&
+                  entity.path.endsWith('.txt'))) {
+        try {
+          await entity.delete();
+        } catch (_) {
+          // Ignore deletion errors and continue
+        }
+      }
+    }
+
+    for (final entry in notesData) {
+      try {
+        final bookId = (entry['bookId'] as String?)?.trim();
+        if (bookId == null || bookId.isEmpty) {
+          continue;
+        }
+
+        final safeNameRaw = (entry['safeName'] as String?)?.trim();
+        final safeName =
+            (safeNameRaw != null && safeNameRaw.isNotEmpty)
+                ? safeNameRaw
+                : PersonalNotesStorage.safeFileName(bookId);
+
+        Map<String, dynamic>? annotations;
+        final rawAnnotations = entry['annotations'];
+        if (rawAnnotations is Map<String, dynamic>) {
+          annotations = Map<String, dynamic>.from(rawAnnotations);
+        } else if (rawAnnotations is String && rawAnnotations.trim().isNotEmpty) {
+          annotations = jsonDecode(rawAnnotations) as Map<String, dynamic>;
+        }
+
+        if (annotations == null) {
+          continue;
+        }
+
+        annotations['book_id'] = bookId;
+
+        final noteText = (entry['text'] as String?) ?? '';
+
+        final jsonPath = p.join(notesDirPath, '${safeName}_annotations.json');
+        final txtPath =
+            p.join(notesDirPath, 'הערות אישיות על $safeName.txt');
+
+        await File(jsonPath).writeAsString(
+          const JsonEncoder.withIndent('  ').convert(annotations),
+          encoding: utf8,
+        );
+        await File(txtPath).writeAsString(noteText, encoding: utf8);
+      } catch (e) {
+        _logger.warning('Failed to restore note entry: $e');
+      }
     }
   }
 

@@ -3,10 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
-import 'package:otzaria/notes/widgets/notes_sidebar.dart';
-import 'package:otzaria/core/scaffold_messenger.dart';
+import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 
 /// Widget שמציג כרטיסיות עם מפרשים וקישורים בחלונית הצד
 class TabbedCommentaryPanel extends StatefulWidget {
@@ -157,13 +157,10 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                         widget.initialTabIndex == 1, // אם נפתח ישירות לקישורים
                   ),
                   // כרטיסיית ההערות האישיות
-                  NotesSidebar(
+                  PersonalNotesSidebar(
                     bookId: state.book.title,
-                    onClose: null, // לא צריך כפתור סגירה - יש את הכפתור הכללי
-                    onNavigateToPosition: (start, end) {
-                      // ניווט למיקום ההערה בטקסט
-                      UiSnack.show('ניווט למיקום $start-$end');
-                    },
+                    onNavigateToLine: (line) =>
+                        _handleNoteNavigation(context, state, line),
                   ),
                 ],
               ),
@@ -173,4 +170,29 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
       },
     );
   }
+  Future<void> _handleNoteNavigation(
+    BuildContext context,
+    TextBookLoaded state,
+    int lineNumber,
+  ) async {
+    if (lineNumber < 1 || state.content.isEmpty) {
+      return;
+    }
+
+    final targetIndex = (lineNumber - 1).clamp(0, state.content.length - 1);
+
+    await state.scrollController.scrollTo(
+      index: targetIndex,
+      alignment: 0.05,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+    );
+
+    if (!mounted) return;
+
+    final bloc = context.read<TextBookBloc>();
+    bloc.add(UpdateSelectedIndex(targetIndex));
+    bloc.add(HighlightLine(targetIndex));
+  }
+
 }

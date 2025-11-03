@@ -33,7 +33,7 @@ import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dar
 import 'package:otzaria/text_book/editing/helpers/editor_settings_helper.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:otzaria/notes/notes_system.dart';
+import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/models/phone_report_data.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/services/phone_report_service.dart';
@@ -880,11 +880,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () => _handleBookmarkPress(context, state),
       ),
 
-      // 2) הוסף הערה אישית
+      // 2) הוסף הערה לקטע זה
       ActionButtonData(
         widget: _buildAddNoteButton(context, state),
         icon: Icons.note_add,
-        tooltip: 'הוסף הערה אישית',
+        tooltip: 'הוסף הערה לקטע זה',
         onPressed: () => _handleAddNotePress(context, state),
       ),
 
@@ -1055,66 +1055,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   Widget _buildAddNoteButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
-      onPressed: () {
-        final selectedText = state.selectedTextForNote;
-        if (selectedText == null || selectedText.trim().isEmpty) {
-          UiSnack.show(UiSnack.noTextSelected);
-          return;
-        }
-
-        // יצירת הערה עם הטקסט הנבחר
-        _showNoteEditor(
-          context,
-          selectedText,
-          state.selectedTextStart ?? 0,
-          state.selectedTextEnd ?? selectedText.length,
-          state.book.title,
-        );
-      },
+      onPressed: () => _handleAddNotePress(context, state),
       icon: const Icon(Icons.note_add),
-      tooltip: 'הוסף הערה אישית',
+      tooltip: 'הוסף הערה לקטע זה',
     );
   }
 
-  void _showNoteEditor(BuildContext context, String selectedText, int charStart,
-      int charEnd, String bookId) {
-    // שמירת ה-context המקורי
-    final originalContext = context;
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => NoteEditorDialog(
-        selectedText: selectedText,
-        bookId: bookId,
-        charStart: charStart,
-        charEnd: charEnd,
-        onSave: (noteRequest) async {
-          try {
-            final notesService = NotesIntegrationService.instance;
-            await notesService.createNoteFromSelection(
-              bookId,
-              selectedText,
-              charStart,
-              charEnd,
-              noteRequest.contentMarkdown,
-              tags: noteRequest.tags,
-              privacy: noteRequest.privacy,
-            );
-
-            if (originalContext.mounted) {
-              // Dialog is already closed by NoteEditorDialog
-              UiSnack.show(UiSnack.noteCreated);
-            }
-          } catch (e) {
-            if (originalContext.mounted) {
-              UiSnack.showError('שגיאה ביצירת הערה',
-                  backgroundColor: Theme.of(originalContext).colorScheme.error);
-            }
-          }
-        },
-      ),
-    );
-  }
 
   Widget _buildSearchButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
@@ -1366,20 +1312,47 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     openBook(context, book, index ?? 1, '', ignoreHistory: true);
   }
 
-  void _handleAddNotePress(BuildContext context, TextBookLoaded state) {
-    final selectedText = state.selectedTextForNote;
-    if (selectedText == null || selectedText.trim().isEmpty) {
-      UiSnack.show(UiSnack.noTextSelected);
+  Future<void> _handleAddNotePress(BuildContext context, TextBookLoaded state) async {
+    final positions = state.positionsListener.itemPositions.value;
+    final currentIndex = positions.isNotEmpty ? positions.first.index : 0;
+    final controller = TextEditingController(
+      text: state.selectedTextForNote?.trim() ?? '',
+    );
+
+    final noteContent = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => PersonalNoteEditorDialog(
+        title: 'הוסף הערה לקטע זה',
+        controller: controller,
+      ),
+    );
+
+    if (noteContent == null) {
       return;
     }
 
-    _showNoteEditor(
-      context,
-      selectedText,
-      state.selectedTextStart ?? 0,
-      state.selectedTextEnd ?? selectedText.length,
-      state.book.title,
-    );
+    final trimmed = noteContent.trim();
+    if (trimmed.isEmpty) {
+      UiSnack.show('ההערה ריקה, לא נשמרה');
+      return;
+    }
+
+    if (!mounted) return;
+
+    try {
+      context.read<PersonalNotesBloc>().add(AddPersonalNote(
+            bookId: state.book.title,
+            lineNumber: currentIndex + 1,
+            content: trimmed,
+          ));
+      context.read<TextBookBloc>().add(const ToggleSplitView(true));
+      setState(() {
+        _sidebarTabIndex = 2;
+      });
+      UiSnack.show('ההערה נשמרה בהצלחה');
+    } catch (e) {
+      UiSnack.showError('שמירת ההערה נכשלה: $e');
+    }
   }
 
   void _handleBookmarkPress(BuildContext context, TextBookLoaded state) async {
