@@ -16,6 +16,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
+import 'package:otzaria/utils/html_link_handler.dart';
 
 class CombinedView extends StatefulWidget {
   CombinedView({
@@ -141,7 +142,6 @@ class _CombinedViewState extends State<CombinedView> {
       UiSnack.showError('שמירת ההערה נכשלה: $e');
     }
   }
-
 
   ctx.ContextMenu _buildContextMenuForIndex(
     TextBookLoaded state,
@@ -298,8 +298,9 @@ class _CombinedViewState extends State<CombinedView> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        decoration:
-            backgroundColor != null ? BoxDecoration(color: backgroundColor) : null,
+        decoration: backgroundColor != null
+            ? BoxDecoration(color: backgroundColor)
+            : null,
         child: Theme(
           data: Theme.of(context).copyWith(
             splashColor: Colors.transparent,
@@ -351,11 +352,13 @@ class _CombinedViewState extends State<CombinedView> {
                         <div style="text-align: justify; direction: rtl;">
                           ${() {
                             String processedData = state.removeNikud
-                                ? utils.highLight(utils.removeVolwels('$data\n'),
+                                ? utils.highLight(
+                                    utils.removeVolwels('$data\n'),
                                     state.searchText)
                                 : utils.highLight('$data\n', state.searchText);
                             // החלת עיצוב הסוגריים העגולים
-                            return utils.formatTextWithParentheses(processedData);
+                            return utils
+                                .formatTextWithParentheses(processedData);
                           }()}
                         </div>
                         ''',
@@ -364,6 +367,15 @@ class _CombinedViewState extends State<CombinedView> {
                             fontFamily: settingsState.fontFamily,
                             height: 1.5,
                           ),
+                          onTapUrl: settingsState.enableHtmlLinks
+                              ? (url) async {
+                                  return await HtmlLinkHandler.handleLink(
+                                    context,
+                                    url,
+                                    (tab) => widget.openBookCallback(tab),
+                                  );
+                                }
+                              : null,
                         );
                       },
                     ),
@@ -390,5 +402,4 @@ class _CombinedViewState extends State<CombinedView> {
   Widget build(BuildContext context) {
     return buildKeyboardListener();
   }
-
 }
