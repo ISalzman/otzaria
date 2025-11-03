@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:otzaria/core/scaffold_messenger.dart';
@@ -149,7 +150,7 @@ class _PersonalNotesManagerScreenState
               IconButton(
                 tooltip: 'רענון',
                 onPressed: _reloadCurrentBook,
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
               ),
             ],
           ),
@@ -270,18 +271,18 @@ class _PersonalNotesManagerScreenState
               children: [
                 IconButton(
                   tooltip: 'עריכה',
-                  icon: const Icon(Icons.edit),
+                  icon: const Icon(FluentIcons.edit_24_regular),
                   onPressed: () => _editNote(note),
                 ),
                 if (!located)
                   IconButton(
                     tooltip: 'מיקום מחדש',
-                    icon: const Icon(Icons.place),
+                    icon: const Icon(FluentIcons.location_24_regular),
                     onPressed: () => _repositionMissing(note),
                   ),
                 IconButton(
                   tooltip: 'מחיקה',
-                  icon: const Icon(Icons.delete),
+                  icon: const Icon(FluentIcons.delete_24_regular),
                   onPressed: () => _deleteNote(note),
                 ),
               ],

@@ -69,7 +69,7 @@ dependencies:
   search_highlight_text: ^1.0.0+2
   fuzzywuzzy: ^1.1.6
   flutter_svg: ^2.0.10+1  
-  font_awesome_flutter: ^10.6.0 
+  fluentui_system_icons: ^1.1.273
   file_picker: ^10.2.1
   flutter_launcher_icons: "^0.13.1"
   provider: ^6.1.5

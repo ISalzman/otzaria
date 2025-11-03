@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/focus/focus_repository.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -144,14 +145,14 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   autofocus: true,
                   decoration: InputDecoration(
                     constraints: const BoxConstraints(maxWidth: 400),
-                    prefixIcon: const Icon(Icons.search),
+                    prefixIcon: const Icon(FluentIcons.search_24_regular),
                     suffixIcon: IconButton(
                       onPressed: () {
                         focusRepository.librarySearchController.clear();
                         _update(context, state, settingsState);
                         _refocusSearchBar();
                       },
-                      icon: const Icon(Icons.clear),
+                      icon: const Icon(FluentIcons.dismiss_24_regular),
                     ),
                     border: const OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(8.0)),
@@ -179,7 +180,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: IconButton(
-        icon: const Icon(Icons.settings_outlined),
+        icon: const Icon(FluentIcons.settings_24_regular),
         tooltip: 'הגדרות',
         onPressed: () => showLibrarySettingsDialog(context),
         style: IconButton.styleFrom(
@@ -503,7 +504,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       // חזור לתיקיה קודמת (ראשון במסך הרחב)
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(Icons.arrow_upward),
+          icon: const Icon(FluentIcons.arrow_up_24_regular),
           tooltip: 'חזרה לתיקיה הקודמת',
           onPressed: () {
             if (state.currentCategory?.parent != null) {
@@ -514,7 +515,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             }
           },
         ),
-        icon: Icons.arrow_upward,
+        icon: FluentIcons.arrow_up_24_regular,
         tooltip: 'חזרה לתיקיה הקודמת',
         onPressed: () {
           if (state.currentCategory?.parent != null) {
@@ -529,7 +530,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       // חזרה לתיקיה ראשית
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(Icons.home),
+          icon: const Icon(FluentIcons.home_24_regular),
           tooltip: 'חזרה לתיקיה הראשית',
           onPressed: () {
             setState(() => _depth = 0);
@@ -539,7 +540,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             _refocusSearchBar(selectAll: true);
           },
         ),
-        icon: Icons.home,
+        icon: FluentIcons.home_24_regular,
         tooltip: 'חזרה לתיקיה הראשית',
         onPressed: () {
           setState(() => _depth = 0);
@@ -571,7 +572,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             child: const SyncIconButton(),
           ),
         ),
-        icon: Icons.sync,
+        icon: FluentIcons.arrow_sync_24_regular,
         tooltip: 'סינכרון',
         onPressed: () {
           // הפעולה מטופלת ב-SyncIconButton
@@ -581,13 +582,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       // טעינה מחדש
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
           tooltip: 'טעינה מחדש של רשימת הספרים',
           onPressed: () {
             context.read<LibraryBloc>().add(RefreshLibrary());
           },
         ),
-        icon: Icons.refresh,
+        icon: FluentIcons.arrow_clockwise_24_regular,
         tooltip: 'טעינה מחדש של רשימת הספרים',
         onPressed: () {
           context.read<LibraryBloc>().add(RefreshLibrary());
@@ -597,11 +598,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       // היסטוריה
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(Icons.history),
+          icon: const Icon(FluentIcons.history_24_regular),
           tooltip: 'הצג היסטוריה',
           onPressed: () => _showHistoryDialog(context),
         ),
-        icon: Icons.history,
+        icon: FluentIcons.history_24_regular,
         tooltip: 'הצג היסטוריה',
         onPressed: () => _showHistoryDialog(context),
       ),
@@ -609,11 +610,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       // סימניות
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(Icons.bookmark),
+          icon: const Icon(FluentIcons.bookmark_24_regular),
           tooltip: 'הצג סימניות',
           onPressed: () => _showBookmarksDialog(context),
         ),
-        icon: Icons.bookmark,
+        icon: FluentIcons.bookmark_24_regular,
         tooltip: 'הצג סימניות',
         onPressed: () => _showBookmarksDialog(context),
       ),
@@ -626,7 +627,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             onPressed: () => _showSwitchWorkspaceDialog(context),
           ),
         ),
-        icon: Icons.workspaces,
+        icon: FluentIcons.grid_24_regular,
         tooltip: 'החלף שולחן עבודה',
         onPressed: () => _showSwitchWorkspaceDialog(context),
       ),
@@ -643,7 +644,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       // 1) חזור לתיקיה קודמת, חזרה לתיקיה ראשית (החשובים ביותר)
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(Icons.arrow_upward),
+          icon: const Icon(FluentIcons.arrow_up_24_regular),
           tooltip: 'חזרה לתיקיה הקודמת',
           onPressed: () {
             if (state.currentCategory?.parent != null) {
@@ -654,7 +655,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             }
           },
         ),
-        icon: Icons.arrow_upward,
+        icon: FluentIcons.arrow_up_24_regular,
         tooltip: 'חזרה לתיקיה הקודמת',
         onPressed: () {
           if (state.currentCategory?.parent != null) {
@@ -668,7 +669,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(Icons.home),
+          icon: const Icon(FluentIcons.home_24_regular),
           tooltip: 'חזרה לתיקיה הראשית',
           onPressed: () {
             setState(() => _depth = 0);
@@ -678,7 +679,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             _refocusSearchBar(selectAll: true);
           },
         ),
-        icon: Icons.home,
+        icon: FluentIcons.home_24_regular,
         tooltip: 'חזרה לתיקיה הראשית',
         onPressed: () {
           setState(() => _depth = 0);
@@ -692,22 +693,22 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       // 2) הצג היסטוריה, הצג סימניות
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(Icons.history),
+          icon: const Icon(FluentIcons.history_24_regular),
           tooltip: 'הצג היסטוריה',
           onPressed: () => _showHistoryDialog(context),
         ),
-        icon: Icons.history,
+        icon: FluentIcons.history_24_regular,
         tooltip: 'הצג היסטוריה',
         onPressed: () => _showHistoryDialog(context),
       ),
 
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(Icons.bookmark),
+          icon: const Icon(FluentIcons.bookmark_24_regular),
           tooltip: 'הצג סימניות',
           onPressed: () => _showBookmarksDialog(context),
         ),
-        icon: Icons.bookmark,
+        icon: FluentIcons.bookmark_24_regular,
         tooltip: 'הצג סימניות',
         onPressed: () => _showBookmarksDialog(context),
       ),
@@ -720,7 +721,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             onPressed: () => _showSwitchWorkspaceDialog(context),
           ),
         ),
-        icon: Icons.workspaces,
+        icon: FluentIcons.grid_24_regular,
         tooltip: 'החלף שולחן עבודה',
         onPressed: () => _showSwitchWorkspaceDialog(context),
       ),
@@ -746,7 +747,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             child: const SyncIconButton(),
           ),
         ),
-        icon: Icons.sync,
+        icon: FluentIcons.arrow_sync_24_regular,
         tooltip: 'סינכרון',
         onPressed: () {
           // הפעולה מטופלת ב-SyncIconButton
@@ -756,13 +757,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       // 5) טעינה מחדש של רשימת הספרים
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
           tooltip: 'טעינה מחדש של רשימת הספרים',
           onPressed: () {
             context.read<LibraryBloc>().add(RefreshLibrary());
           },
         ),
-        icon: Icons.refresh,
+        icon: FluentIcons.arrow_clockwise_24_regular,
         tooltip: 'טעינה מחדש של רשימת הספרים',
         onPressed: () {
           context.read<LibraryBloc>().add(RefreshLibrary());

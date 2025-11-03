@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/daf_yomi/calendar.dart';
 
@@ -63,7 +64,7 @@ class DafYomi extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Icon(
-                    Icons.calendar_month_outlined,
+                    FluentIcons.calendar_month_24_regular,
                     color: Theme.of(context).colorScheme.secondary,
                     size: 24,
                   ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/focus/focus_repository.dart';
@@ -100,7 +101,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         icon: Tooltip(
           preferBelow: false,
           message: formatShortcut(libraryShortcut),
-          child: const Icon(Icons.library_books),
+          child: const Icon(FluentIcons.library_24_regular),
         ),
         label: 'ספרייה',
       ),
@@ -109,7 +110,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         icon: Tooltip(
           preferBelow: false,
           message: formatShortcut(findShortcut),
-          child: const Icon(Icons.auto_stories_rounded),
+          child: const Icon(FluentIcons.book_search_24_regular),
         ),
         label: 'איתור',
       ),
@@ -118,7 +119,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         icon: Tooltip(
           preferBelow: false,
           message: formatShortcut(browseShortcut),
-          child: const Icon(Icons.menu_book),
+          child: const Icon(FluentIcons.book_open_24_regular),
         ),
         label: 'עיון',
       ),
@@ -127,20 +128,20 @@ class MainWindowScreenState extends State<MainWindowScreen>
         icon: Tooltip(
           preferBelow: false,
           message: formatShortcut(searchShortcut),
-          child: const Icon(Icons.search),
+          child: const Icon(FluentIcons.search_24_regular),
         ),
         label: 'חיפוש',
       ),
       NavigationDestination(
-        icon: Icon(Icons.more_horiz),
+        icon: Icon(FluentIcons.more_horizontal_24_regular),
         label: 'עזרים',
       ),
       NavigationDestination(
-        icon: Icon(Icons.settings),
+        icon: Icon(FluentIcons.settings_24_regular),
         label: 'הגדרות',
       ),
       NavigationDestination(
-        icon: Icon(Icons.info_outline),
+        icon: Icon(FluentIcons.info_24_regular),
         label: 'אודות',
       ),
     ];

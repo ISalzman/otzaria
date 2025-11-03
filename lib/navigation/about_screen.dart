@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/data_collection_service.dart';
@@ -77,7 +77,8 @@ class _AboutScreenState extends State<AboutScreen> {
                 width: 250,
                 child: Row(
                   children: [
-                    const Icon(Icons.person, size: 16, color: Colors.grey),
+                    const Icon(FluentIcons.person_24_regular,
+                        size: 16, color: Colors.grey),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
@@ -205,13 +206,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 backgroundColor: color,
                 foregroundColor: Colors.white,
               ),
-              icon: showGitHubIcon
-                  ? FaIcon(
-                      FontAwesomeIcons.github,
-                      size: 18,
-                      color: Colors.white,
-                    )
-                  : Icon(icon, size: 18),
+              icon: Icon(icon, size: 18),
               label: Text(buttonText),
             ),
           ),
@@ -398,7 +393,7 @@ class _AboutScreenState extends State<AboutScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.favorite,
+              Icon(FluentIcons.heart_24_regular,
                   color: Theme.of(context).primaryColor, size: 24),
               const SizedBox(width: 8),
               Text(
@@ -440,7 +435,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     width: 18,
                     height: 18,
                     errorBuilder: (context, error, stackTrace) =>
-                        const Icon(Icons.credit_card, size: 18),
+                        const Icon(FluentIcons.payment_24_regular, size: 18),
                   ),
                   label: const Text('נדרים+', style: TextStyle(fontSize: 12)),
                 ),
@@ -461,7 +456,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  icon: const Icon(Icons.credit_card, size: 18),
+                  icon: const Icon(FluentIcons.payment_24_regular, size: 18),
                   label: const Text('אחר', style: TextStyle(fontSize: 12)),
                 ),
               ),
@@ -570,7 +565,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     alignment: Alignment.centerRight,
                     child: ElevatedButton.icon(
                       onPressed: () => _showChangelogDialog(context),
-                      icon: const Icon(Icons.history),
+                      icon: const Icon(FluentIcons.history_24_regular),
                       label: const Text('יומן שינויים'),
                     ),
                   ),
@@ -604,7 +599,7 @@ class _AboutScreenState extends State<AboutScreen> {
                             description:
                                 'מפתחים מוזמנים להצטרף לפיתוח אוצריא ולתרום לקהילה התורנית.',
                             buttonText: 'הצטרף עכשיו',
-                            icon: Icons.code,
+                            icon: FluentIcons.code_24_regular,
                             color: Colors.grey[600]!,
                             showGitHubIcon: true,
                             onTap: () async {
@@ -624,7 +619,7 @@ class _AboutScreenState extends State<AboutScreen> {
                             description:
                                 'עזור לנו להוסיף ספרים חדשים לספריית אוצריא ולהרחיב את המאגר התורני.',
                             buttonText: 'הצטרף לעריכה',
-                            icon: Icons.edit,
+                            icon: FluentIcons.edit_24_regular,
                             color: Colors.green[600]!,
                             onTap: () async {
                               const url = 'https://forms.gle/editing-form-url';

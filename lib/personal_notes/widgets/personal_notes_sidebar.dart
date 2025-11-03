@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
@@ -81,7 +82,7 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
                   .read<PersonalNotesBloc>()
                   .add(LoadPersonalNotes(widget.bookId));
             },
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
           ),
         ],
       ),
@@ -401,7 +402,7 @@ class _MissingNoteTile extends StatelessWidget {
           onDelete: onDelete,
           extraAction: IconButton(
             tooltip: 'מיקום מחדש',
-            icon: const Icon(Icons.place),
+            icon: const Icon(FluentIcons.location_24_regular),
             onPressed: onReposition,
           ),
         ),
@@ -428,13 +429,13 @@ class _NoteActions extends StatelessWidget {
       children: [
         IconButton(
           tooltip: 'עריכה',
-          icon: const Icon(Icons.edit),
+          icon: const Icon(FluentIcons.edit_24_regular),
           onPressed: onEdit,
         ),
         extraAction ?? const SizedBox.shrink(),
         IconButton(
           tooltip: 'מחיקה',
-          icon: const Icon(Icons.delete),
+          icon: const Icon(FluentIcons.delete_24_regular),
           onPressed: onDelete,
         ),
       ],
