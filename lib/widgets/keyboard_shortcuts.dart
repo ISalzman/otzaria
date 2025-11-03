@@ -10,6 +10,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/find_ref/find_ref_dialog.dart';
 import 'package:provider/provider.dart';
 
 class KeyboardShortcuts extends StatelessWidget {
@@ -107,15 +108,16 @@ class KeyboardShortcuts extends StatelessWidget {
               .read<NavigationBloc>()
               .add(const NavigateToScreen(Screen.library));
           //set focus
-          context.read<FocusRepository>().requestLibrarySearchFocus(selectAll: true);
+          context
+              .read<FocusRepository>()
+              .requestLibrarySearchFocus(selectAll: true);
         },
         shortcuts[Settings.getValue<String>('key-shortcut-open-find-ref') ??
             'ctrl+o']!: () {
-          context
-              .read<NavigationBloc>()
-              .add(const NavigateToScreen(Screen.find));
-          //set focus
-          context.read<FocusRepository>().requestFindRefSearchFocus(selectAll: true);
+          showDialog(
+            context: context,
+            builder: (context) => FindRefDialog(),
+          );
         },
         shortcuts[Settings.getValue<String>('key-shortcut-close-tab') ??
             'ctrl+w']!: () {
