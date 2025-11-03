@@ -230,7 +230,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SvgPicture.asset(
-                    'assets/icons/memorial_candle.svg',
+                    'assets/icon/memorial_candle.svg',
                     width: 20,
                     height: 20,
                     colorFilter: ColorFilter.mode(
@@ -291,7 +291,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     SvgPicture.asset(
-                      'assets/icons/memorial_candle.svg',
+                      'assets/icon/memorial_candle.svg',
                       width: 20,
                       height: 20,
                       colorFilter: ColorFilter.mode(
@@ -431,7 +431,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   icon: Image.asset(
-                    'assets/icons/logo_nedarim.png',
+                    'assets/icon/logo_nedarim.png',
                     width: 18,
                     height: 18,
                     errorBuilder: (context, error, stackTrace) =>
@@ -581,7 +581,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
               final isSmallScreen = screenWidth < 800;
 
-              return Container(
+              return SizedBox(
                 width: isSmallScreen ? screenWidth * 0.9 : 300,
                 child: SingleChildScrollView(
                   child: Card(

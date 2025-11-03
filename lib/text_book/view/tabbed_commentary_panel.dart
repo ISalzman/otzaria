@@ -171,6 +171,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
       },
     );
   }
+
   Future<void> _handleNoteNavigation(
     BuildContext context,
     TextBookLoaded state,
@@ -190,10 +191,10 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
     );
 
     if (!mounted) return;
+    if (!context.mounted) return;
 
     final bloc = context.read<TextBookBloc>();
     bloc.add(UpdateSelectedIndex(targetIndex));
     bloc.add(HighlightLine(targetIndex));
   }
-
 }

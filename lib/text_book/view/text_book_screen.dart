@@ -1062,7 +1062,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-
   Widget _buildSearchButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
       onPressed: () {
@@ -1313,12 +1312,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     openBook(context, book, index ?? 1, '', ignoreHistory: true);
   }
 
-  Future<void> _handleAddNotePress(BuildContext context, TextBookLoaded state) async {
+  Future<void> _handleAddNotePress(
+      BuildContext context, TextBookLoaded state) async {
     final positions = state.positionsListener.itemPositions.value;
     final currentIndex = positions.isNotEmpty ? positions.first.index : 0;
     final controller = TextEditingController(
       text: state.selectedTextForNote?.trim() ?? '',
     );
+    final notesBloc = context.read<PersonalNotesBloc>();
+    final textBookBloc = context.read<TextBookBloc>();
 
     final noteContent = await showDialog<String>(
       context: context,
@@ -1341,12 +1343,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     if (!mounted) return;
 
     try {
-      context.read<PersonalNotesBloc>().add(AddPersonalNote(
-            bookId: state.book.title,
-            lineNumber: currentIndex + 1,
-            content: trimmed,
-          ));
-      context.read<TextBookBloc>().add(const ToggleSplitView(true));
+      notesBloc.add(AddPersonalNote(
+        bookId: state.book.title,
+        lineNumber: currentIndex + 1,
+        content: trimmed,
+      ));
+      textBookBloc.add(const ToggleSplitView(true));
       setState(() {
         _sidebarTabIndex = 2;
       });
@@ -1359,18 +1361,20 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   void _handleBookmarkPress(BuildContext context, TextBookLoaded state) async {
     final index = state.positionsListener.itemPositions.value.first.index;
     final toc = state.book.tableOfContents;
+    final bookmarkBloc = context.read<BookmarkBloc>();
+    final theme = Theme.of(context);
     final ref = await refFromIndex(index, toc);
     if (!mounted || !context.mounted) return;
 
-    final bookmarkAdded = context.read<BookmarkBloc>().addBookmark(
-          ref: ref,
-          book: state.book,
-          index: index,
-          commentatorsToShow: state.activeCommentators,
-        );
+    final bookmarkAdded = bookmarkBloc.addBookmark(
+      ref: ref,
+      book: state.book,
+      index: index,
+      commentatorsToShow: state.activeCommentators,
+    );
 
     final successColor =
-        bookmarkAdded ? Theme.of(context).colorScheme.tertiaryContainer : null;
+        bookmarkAdded ? theme.colorScheme.tertiaryContainer : null;
     UiSnack.showSuccess(
         bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת',
         backgroundColor: successColor);
