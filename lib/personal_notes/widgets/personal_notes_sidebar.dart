@@ -152,6 +152,7 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
 
   Future<void> _editNote(BuildContext context, PersonalNote note) async {
     final controller = TextEditingController(text: note.content);
+    final bloc = context.read<PersonalNotesBloc>();
     final result = await showDialog<String>(
       context: context,
       builder: (context) => PersonalNoteEditorDialog(
@@ -160,16 +161,18 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
       ),
     );
     if (result == null) return;
-    context.read<PersonalNotesBloc>().add(
-          UpdatePersonalNote(
-            bookId: widget.bookId,
-            noteId: note.id,
-            content: result,
-          ),
-        );
+    if (!mounted) return;
+    bloc.add(
+      UpdatePersonalNote(
+        bookId: widget.bookId,
+        noteId: note.id,
+        content: result,
+      ),
+    );
   }
 
   Future<void> _confirmDelete(BuildContext context, PersonalNote note) async {
+    final bloc = context.read<PersonalNotesBloc>();
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -189,12 +192,13 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
     );
 
     if (shouldDelete == true) {
-      context.read<PersonalNotesBloc>().add(
-            DeletePersonalNote(
-              bookId: widget.bookId,
-              noteId: note.id,
-            ),
-          );
+      if (!mounted) return;
+      bloc.add(
+        DeletePersonalNote(
+          bookId: widget.bookId,
+          noteId: note.id,
+        ),
+      );
     }
   }
 
@@ -202,6 +206,7 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
     final controller = TextEditingController(
       text: note.lastKnownLineNumber?.toString() ?? '',
     );
+    final bloc = context.read<PersonalNotesBloc>();
 
     final newLine = await showDialog<int>(
       context: context,
@@ -246,13 +251,14 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
     );
 
     if (newLine != null) {
-      context.read<PersonalNotesBloc>().add(
-            RepositionPersonalNote(
-              bookId: widget.bookId,
-              noteId: note.id,
-              lineNumber: newLine,
-            ),
-          );
+      if (!mounted) return;
+      bloc.add(
+        RepositionPersonalNote(
+          bookId: widget.bookId,
+          noteId: note.id,
+          lineNumber: newLine,
+        ),
+      );
     }
   }
 }
