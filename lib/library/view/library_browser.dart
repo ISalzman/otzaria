@@ -82,6 +82,17 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         return BlocBuilder<LibraryBloc, LibraryState>(
+          buildWhen: (previous, current) {
+            // אל תבנה מחדש אם רק previewBook השתנה
+            // נבנה מחדש רק אם שדות אחרים השתנו
+            return previous.isLoading != current.isLoading ||
+                previous.error != current.error ||
+                previous.library != current.library ||
+                previous.currentCategory != current.currentCategory ||
+                previous.searchResults != current.searchResults ||
+                previous.searchQuery != current.searchQuery ||
+                previous.selectedTopics != current.selectedTopics;
+          },
           builder: (context, state) {
             if (state.isLoading) {
               return const Center(
@@ -180,27 +191,41 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                               decoration: BoxDecoration(
                                 color: Theme.of(context).colorScheme.surface,
                                 border: Border.all(
-                                  color: Theme.of(context).colorScheme.outline,
-                                  width: 1.5,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .outline
+                                      .withValues(alpha: 0.3),
+                                  width: 1.0,
                                 ),
                                 borderRadius: BorderRadius.circular(8.0),
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(7.0),
-                                child: BookPreviewPanel(
-                                  book: state.previewBook,
-                                  onOpenInReader: () {
-                                    if (state.previewBook != null) {
-                                      _openBookInReader(state.previewBook!);
-                                    }
+                                child: BlocBuilder<LibraryBloc, LibraryState>(
+                                  buildWhen: (previous, current) {
+                                    // רק אם previewBook השתנה
+                                    return previous.previewBook !=
+                                        current.previewBook;
                                   },
-                                  onClose: () {
-                                    setState(() {
-                                      _showPreview = false;
-                                    });
-                                    context.read<SettingsBloc>().add(
-                                          const UpdateLibraryShowPreview(false),
-                                        );
+                                  builder: (context, previewState) {
+                                    return BookPreviewPanel(
+                                      book: previewState.previewBook,
+                                      onOpenInReader: (index) {
+                                        if (previewState.previewBook != null) {
+                                          _openBookInReader(
+                                              previewState.previewBook!, index);
+                                        }
+                                      },
+                                      onClose: () {
+                                        setState(() {
+                                          _showPreview = false;
+                                        });
+                                        context.read<SettingsBloc>().add(
+                                              const UpdateLibraryShowPreview(
+                                                  false),
+                                            );
+                                      },
+                                    );
                                   },
                                 ),
                               ),
@@ -258,7 +283,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               ),
               // כפתור מעבר בין תצוגת רשת לרשימה
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                padding: const EdgeInsets.only(left: 2.0, right: 8.0),
                 child: IconButton(
                   icon: Icon(_viewMode == ViewMode.grid
                       ? FluentIcons.list_24_regular
@@ -291,7 +316,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               ),
               if (!_showPreview)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 2.0),
                   child: IconButton(
                     icon: const Icon(FluentIcons.eye_24_regular),
                     tooltip: 'הצג תצוגה מקדימה',
@@ -325,7 +350,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   Widget _buildSettingsButton(
       BuildContext context, SettingsState settingsState, LibraryState state) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 2.0),
       child: IconButton(
         icon: const Icon(FluentIcons.settings_24_regular),
         tooltip: 'הגדרות',
@@ -543,9 +568,14 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         final isSelected = state.previewBook == book;
 
         return Tooltip(
-          message: 'לחיצה אחת - תצוגה מקדימה | לחיצה כפולה - פתיחה בעיון',
+          message: _showPreview
+              ? 'לחיצה אחת - תצוגה מקדימה | לחיצה כפולה - פתיחה בעיון'
+              : 'לחיצה בודדת - פתיחה בעיון',
           child: GestureDetector(
-            onDoubleTap: () => _openBookInReader(book),
+            onDoubleTap: () {
+              final index = book is PdfBook ? 1 : 0;
+              _openBookInReader(book, index);
+            },
             child: Container(
               decoration: isSelected
                   ? BoxDecoration(
@@ -559,7 +589,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               child: BookGridItem(
                 book: book,
                 showTopics: showTopics,
-                onBookClickCallback: () => _showBookPreview(book),
+                onBookClickCallback: () {
+                  // אם תצוגה מקדימה מוצגת - הצג את הספר בתצוגה
+                  // אחרת - פתח את הספר בעיון
+                  if (_showPreview) {
+                    _showBookPreview(book);
+                  } else {
+                    final index = book is PdfBook ? 1 : 0;
+                    _openBookInReader(book, index);
+                  }
+                },
               ),
             ),
           ),
@@ -681,8 +720,20 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         final isSelected = state.previewBook == book;
 
         return InkWell(
-          onTap: () => _showBookPreview(book),
-          onDoubleTap: () => _openBookInReader(book),
+          onTap: () {
+            // אם תצוגה מקדימה מוצגת - הצג את הספר בתצוגה
+            // אחרת - פתח את הספר בעיון
+            if (_showPreview) {
+              _showBookPreview(book);
+            } else {
+              final index = book is PdfBook ? 1 : 0;
+              _openBookInReader(book, index);
+            }
+          },
+          onDoubleTap: () {
+            final index = book is PdfBook ? 1 : 0;
+            _openBookInReader(book, index);
+          },
           child: Container(
             padding: EdgeInsets.only(
               right: 16.0 + (level * 24.0) + 32.0, // הזחה נוספת לספרים
@@ -808,8 +859,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
-  void _openBookInReader(Book book) {
-    final index = book is PdfBook ? 1 : 0;
+  void _openBookInReader(Book book, int index) {
     openBook(context, book, index, '');
   }
 

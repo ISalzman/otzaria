@@ -12,16 +12,18 @@ class LoadContent extends TextBookEvent {
   final bool showSplitView;
   final bool removeNikud;
   final bool preserveState; // Whether to preserve current state during reload
+  final bool loadCommentators; // Whether to load commentators
 
   const LoadContent({
     required this.fontSize,
     required this.showSplitView,
     required this.removeNikud,
     this.preserveState = false, // Default to false for backward compatibility
+    this.loadCommentators = true, // Default to true for backward compatibility
   });
 
   @override
-  List<Object?> get props => [fontSize, showSplitView, removeNikud, preserveState];
+  List<Object?> get props => [fontSize, showSplitView, removeNikud, preserveState, loadCommentators];
 }
 
 class UpdateFontSize extends TextBookEvent {

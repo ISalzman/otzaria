@@ -111,10 +111,17 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         }
       }
 
-      final availableCommentators =
-          await _repository.getAvailableCommentators(links);
-      //
-      final eras = await utils.splitByEra(availableCommentators);
+      // טעינת מפרשים רק אם נדרש
+      final List<String> availableCommentators;
+      final Map<String, List<String>> eras;
+      if (event.loadCommentators) {
+        availableCommentators =
+            await _repository.getAvailableCommentators(links);
+        eras = await utils.splitByEra(availableCommentators);
+      } else {
+        availableCommentators = [];
+        eras = {};
+      }
 
       final defaultRemoveNikud =
           Settings.getValue<bool>('key-default-nikud') ?? false;
@@ -131,21 +138,24 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       );
 
       // Set up position listener with debouncing to prevent excessive updates
-      Timer? debounceTimer;
-      positionsListener.itemPositions.addListener(() {
-        // Cancel previous timer if exists
-        debounceTimer?.cancel();
+      // רק אם loadCommentators=true (כלומר, לא בתצוגה מקדימה)
+      if (event.loadCommentators) {
+        Timer? debounceTimer;
+        positionsListener.itemPositions.addListener(() {
+          // Cancel previous timer if exists
+          debounceTimer?.cancel();
 
-        // Set new timer with 100ms delay
-        debounceTimer = Timer(const Duration(milliseconds: 100), () {
-          final visibleIndicesNow = positionsListener.itemPositions.value
-              .map((e) => e.index)
-              .toList();
-          if (visibleIndicesNow.isNotEmpty) {
-            add(UpdateVisibleIndecies(visibleIndicesNow));
-          }
+          // Set new timer with 100ms delay
+          debounceTimer = Timer(const Duration(milliseconds: 100), () {
+            final visibleIndicesNow = positionsListener.itemPositions.value
+                .map((e) => e.index)
+                .toList();
+            if (visibleIndicesNow.isNotEmpty) {
+              add(UpdateVisibleIndecies(visibleIndicesNow));
+            }
+          });
         });
-      });
+      }
 
       emit(TextBookLoaded(
         book: book,
@@ -157,7 +167,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         showLeftPane: showLeftPane || searchText.isNotEmpty,
         showSplitView: event.showSplitView,
         activeCommentators: commentators,
-        commentatorGroups: _buildCommentatorGroups(eras, availableCommentators),
+        commentatorGroups: event.loadCommentators 
+            ? _buildCommentatorGroups(eras, availableCommentators)
+            : [],
         removeNikud: removeNikud,
         visibleIndices: visibleIndices,
         pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
