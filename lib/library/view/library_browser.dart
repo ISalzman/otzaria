@@ -31,6 +31,9 @@ import 'package:otzaria/widgets/workspace_icon_button.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/settings/library_settings_dialog.dart';
+import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/navigation/bloc/navigation_event.dart';
+import 'package:otzaria/navigation/bloc/navigation_state.dart';
 
 class LibraryBrowser extends StatefulWidget {
   const LibraryBrowser({super.key});
@@ -110,6 +113,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                       child: DafYomi(
                         onDafYomiTap: (tractate, daf) {
                           openDafYomiBook(context, tractate, ' $daf.');
+                        },
+                        onCalendarTap: () {
+                          context.read<NavigationBloc>().add(
+                                const NavigateToScreen(Screen.more),
+                              );
                         },
                       ),
                     ),

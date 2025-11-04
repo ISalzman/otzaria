@@ -48,6 +48,9 @@ void main() {
         'copyWithHeaders': 'none',
         'copyHeaderFormat': 'same_line_after_brackets',
         'enableHtmlLinks': true,
+        'isFullscreen': false,
+        'libraryViewMode': 'grid',
+        'libraryShowPreview': true,
       };
 
       blocTest<SettingsBloc, SettingsState>(
@@ -82,6 +85,9 @@ void main() {
             copyWithHeaders: mockSettings['copyWithHeaders'] as String,
             copyHeaderFormat: mockSettings['copyHeaderFormat'] as String,
             enableHtmlLinks: mockSettings['enableHtmlLinks'] as bool,
+            isFullscreen: mockSettings['isFullscreen'] as bool,
+            libraryViewMode: mockSettings['libraryViewMode'] as String,
+            libraryShowPreview: mockSettings['libraryShowPreview'] as bool,
           ),
         ],
         verify: (_) {
