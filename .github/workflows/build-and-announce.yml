@@ -21,6 +21,8 @@ jobs:
   build_windows:
     if: github.event_name != 'release'
     runs-on: windows-2022
+    strategy:
+      fail-fast: false
     # env:
     #   RUSTUP_HOME: ${{ github.workspace }}\.rustup
     #   CARGO_HOME:  ${{ github.workspace }}\.cargo
@@ -144,6 +146,8 @@ jobs:
   build_linux:
     if: github.event_name != 'release'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
     env:
       RUSTUP_HOME: ${{ github.workspace }}/.rustup
       CARGO_HOME:  ${{ github.workspace }}/.cargo
@@ -325,6 +329,8 @@ jobs:
   build_android:
     if: github.event_name != 'release'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
@@ -351,6 +357,8 @@ jobs:
   build_macos_intel:
     if: github.event_name != 'release'
     runs-on: macos-13
+    strategy:
+      fail-fast: false
     env:
       RUSTUP_HOME: ${{ github.workspace }}/.rustup
       CARGO_HOME:  ${{ github.workspace }}/.cargo
@@ -370,6 +378,9 @@ jobs:
             echo "Cleaning existing Rust installation..."
             rm -rf "$RUSTUP_HOME" "$CARGO_HOME"
           fi
+          # צור את התיקיות מראש
+          mkdir -p "$RUSTUP_HOME/downloads"
+          mkdir -p "$CARGO_HOME/bin"
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -410,6 +421,8 @@ jobs:
   build_macos_apple_silicon:
     if: github.event_name != 'release'
     runs-on: macos-14
+    strategy:
+      fail-fast: false
     env:
       RUSTUP_HOME: ${{ github.workspace }}/.rustup
       CARGO_HOME:  ${{ github.workspace }}/.cargo
@@ -429,6 +442,9 @@ jobs:
             echo "Cleaning existing Rust installation..."
             rm -rf "$RUSTUP_HOME" "$CARGO_HOME"
           fi
+          # צור את התיקיות מראש
+          mkdir -p "$RUSTUP_HOME/downloads"
+          mkdir -p "$CARGO_HOME/bin"
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
