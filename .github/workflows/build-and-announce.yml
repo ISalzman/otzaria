@@ -350,7 +350,17 @@ jobs:
 
   build_macos:
     if: github.event_name != 'release'
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - runner: macos-13              # Intel x86_64
+            arch: intel
+            artifact_name: otzaria-macos-intel.app
+          - runner: macos-14              # Apple Silicon ARM64
+            arch: apple-silicon
+            artifact_name: otzaria-macos-apple-silicon.app
+    
+    runs-on: ${{ matrix.runner }}
     env:
       # אחסון יציב בתוך ה-workspace כדי למנוע תקלות rename של rustup
       RUSTUP_HOME: ${{ github.workspace }}/.rustup
@@ -384,18 +394,18 @@ jobs:
           path: |
             ${{ env.CARGO_HOME }}/registry
             ${{ env.CARGO_HOME }}/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-${{ matrix.arch }}-cargo-
 
-      - name: Build Flutter macOS app
+      - name: Build Flutter macOS app (${{ matrix.arch }})
         run: |
           flutter build macos
 
-      - name: Upload macos build
+      - name: Upload macOS build (${{ matrix.arch }})
         uses: actions/upload-artifact@v4
         with:
-          name: otzaria-macos.app
+          name: ${{ matrix.artifact_name }}
           path: build/macos/Build/Products/Release
 
   create_release:
@@ -484,11 +494,18 @@ jobs:
             cp artifacts/otzaria-android.apk/*.apk release-files/ || true
           fi
           
-          # macOS app 
-          if [ -d "artifacts/otzaria-macos.app" ]; then
-          cd artifacts/otzaria-macos.app
-          zip -r ../../release-files/otzaria-macos.zip *
-          cd ../..
+          # macOS Intel (מעבד אינטל)
+          if [ -d "artifacts/otzaria-macos-intel.app" ]; then
+            cd artifacts/otzaria-macos-intel.app
+            zip -r ../../release-files/otzaria-macos-intel.zip *
+            cd ../..
+          fi
+          
+          # macOS Apple Silicon (מעבד M1/M2/M3/M4)
+          if [ -d "artifacts/otzaria-macos-apple-silicon.app" ]; then
+            cd artifacts/otzaria-macos-apple-silicon.app
+            zip -r ../../release-files/otzaria-macos-apple-silicon.zip *
+            cd ../..
           fi
           
           # List files for debugging
@@ -576,11 +593,18 @@ jobs:
             cp artifacts/otzaria-android.apk/*.apk release-files/ || true
           fi
           
-          # macOS app 
-          if [ -d "artifacts/otzaria-macos.app" ]; then
-          cd artifacts/otzaria-macos.app
-          zip -r ../../release-files/otzaria-macos.zip *
-          cd ../..
+          # macOS Intel (מעבד אינטל)
+          if [ -d "artifacts/otzaria-macos-intel.app" ]; then
+            cd artifacts/otzaria-macos-intel.app
+            zip -r ../../release-files/otzaria-macos-intel.zip *
+            cd ../..
+          fi
+          
+          # macOS Apple Silicon (מעבד M1/M2/M3/M4)
+          if [ -d "artifacts/otzaria-macos-apple-silicon.app" ]; then
+            cd artifacts/otzaria-macos-apple-silicon.app
+            zip -r ../../release-files/otzaria-macos-apple-silicon.zip *
+            cd ../..
           fi
           
           # List files for debugging
