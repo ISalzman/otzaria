@@ -855,7 +855,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       ),
       ActionButtonData(
         widget: _buildLastPageButton(state),
-        icon: FluentIcons.arrow_step_in_24_regular,
+        icon: FluentIcons.arrow_forward_24_regular,
         tooltip: 'סוף הספר',
         onPressed: () {
           state.scrollController.scrollTo(
@@ -1141,7 +1141,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   Widget _buildLastPageButton(TextBookLoaded state) {
     return IconButton(
-      icon: const Icon(FluentIcons.arrow_step_in_24_regular),
+      icon: const Icon(FluentIcons.arrow_forward_24_regular),
       tooltip: 'סוף הספר',
       onPressed: () {
         state.scrollController.scrollTo(

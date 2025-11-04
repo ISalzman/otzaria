@@ -49,7 +49,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   bool _showPreview = true; // האם להציג את התצוגה המקדימה
   ViewMode _viewMode = ViewMode.grid; // מצב תצוגה: רשת או רשימה
   final Set<String> _expandedCategories = {}; // קטגוריות שנפתחו בתצוגת רשימה
-  
+
   @override
   void initState() {
     super.initState();
@@ -121,10 +121,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 builder: (context, constraints) {
                   final screenWidth = constraints.maxWidth;
                   // ברירת מחדל: שליש ברשת, שני שליש ברשימה
-                  final previewWidth = _viewMode == ViewMode.list 
-                      ? (screenWidth * 2 / 3) 
+                  final previewWidth = _viewMode == ViewMode.list
+                      ? (screenWidth * 2 / 3)
                       : (screenWidth / 3);
-                  
+
                   return Row(
                     children: [
                       // תוכן הספרייה - עכשיו בצד ימין
@@ -139,7 +139,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                                     .text
                                     .length >
                                 2)
-                              _buildTopicsSelection(context, state, settingsState),
+                              _buildTopicsSelection(
+                                  context, state, settingsState),
                             // תוכן הספרייה
                             Expanded(child: _buildContent(state)),
                           ],
@@ -150,7 +151,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                         Padding(
                           padding: const EdgeInsets.all(8.0),
                           child: ResizablePreviewPanel(
-                            key: ValueKey(screenWidth), // מפתח שמשתנה עם רוחב המסך
+                            key: ValueKey(
+                                screenWidth), // מפתח שמשתנה עם רוחב המסך
                             initialWidth: previewWidth,
                             minWidth: 300,
                             maxWidth: screenWidth * 0.6, // מקסימום 60% מהמסך
@@ -235,19 +237,22 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
                 child: IconButton(
-                  icon: Icon(_viewMode == ViewMode.grid ? Icons.list : Icons.grid_view),
-                  tooltip: _viewMode == ViewMode.grid 
-                      ? 'תצוגת רשימה (עץ מתרחב)' 
+                  icon: Icon(_viewMode == ViewMode.grid
+                      ? FluentIcons.list_24_regular
+                      : FluentIcons.grid_24_regular),
+                  tooltip: _viewMode == ViewMode.grid
+                      ? 'תצוגת רשימה (עץ מתרחב)'
                       : 'תצוגת רשת',
                   onPressed: () {
                     setState(() {
-                      _viewMode = _viewMode == ViewMode.grid 
-                          ? ViewMode.list 
+                      _viewMode = _viewMode == ViewMode.grid
+                          ? ViewMode.list
                           : ViewMode.grid;
                     });
                   },
                   style: IconButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                    foregroundColor:
+                        Theme.of(context).colorScheme.onSurfaceVariant,
                     backgroundColor:
                         Theme.of(context).colorScheme.surfaceContainerHighest,
                     shape: RoundedRectangleBorder(
@@ -260,7 +265,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: IconButton(
-                    icon: const Icon(Icons.visibility),
+                    icon: const Icon(FluentIcons.eye_24_regular),
                     tooltip: 'הצג תצוגה מקדימה',
                     onPressed: () {
                       setState(() {
@@ -268,7 +273,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                       });
                     },
                     style: IconButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                      foregroundColor:
+                          Theme.of(context).colorScheme.onSurfaceVariant,
                       backgroundColor:
                           Theme.of(context).colorScheme.surfaceContainerHighest,
                       shape: RoundedRectangleBorder(
@@ -395,7 +401,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 focusRepository.librarySearchController.text.isNotEmpty
                     ? 'אין תוצאות עבור "${focusRepository.librarySearchController.text}"'
                     : 'אין פריטים להצגה בתיקייה זו',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
             );
@@ -409,7 +416,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         },
       );
     }
-    
+
     // תצוגת רשימה עם עץ מתרחב
     return _buildListView(state.currentCategory!);
   }
@@ -503,7 +510,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       },
       builder: (context, state) {
         final isSelected = state.previewBook == book;
-        
+
         return Tooltip(
           message: 'לחיצה אחת - תצוגה מקדימה | לחיצה כפולה - פתיחה בעיון',
           child: GestureDetector(
@@ -544,28 +551,28 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   /// בניית עץ קטגוריות ברקורסיבית
   List<Widget> _buildCategoryTree(Category category, int level) {
     List<Widget> widgets = [];
-    
+
     // מיון
     category.books.sort((a, b) => a.order.compareTo(b.order));
     category.subCategories.sort((a, b) => a.order.compareTo(b.order));
-    
+
     // הוספת ספרים בקטגוריה הנוכחית
     for (final book in category.books) {
       widgets.add(_buildListBookItem(book, level));
     }
-    
+
     // הוספת תת-קטגוריות
     for (final subCategory in category.subCategories) {
       final isExpanded = _expandedCategories.contains(subCategory.path);
-      
+
       widgets.add(_buildListCategoryItem(subCategory, level, isExpanded));
-      
+
       // אם הקטגוריה פתוחה, הוסף את התוכן שלה
       if (isExpanded) {
         widgets.addAll(_buildCategoryTree(subCategory, level + 1));
       }
     }
-    
+
     return widgets;
   }
 
@@ -599,7 +606,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         child: Row(
           children: [
             Icon(
-              isExpanded ? Icons.folder_open : Icons.folder,
+              isExpanded
+                  ? FluentIcons.folder_open_24_regular
+                  : FluentIcons.folder_24_regular,
               color: Theme.of(context).colorScheme.primary,
               size: 20,
             ),
@@ -615,7 +624,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               ),
             ),
             Icon(
-              isExpanded ? Icons.expand_less : Icons.expand_more,
+              isExpanded
+                  ? FluentIcons.chevron_up_24_regular
+                  : FluentIcons.chevron_down_24_regular,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ],
@@ -629,7 +640,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     if (book is ExternalBook) {
       return _buildExternalBookListItem(book, level);
     }
-    
+
     return BlocBuilder<LibraryBloc, LibraryState>(
       buildWhen: (previous, current) {
         return (previous.previewBook != current.previewBook) &&
@@ -637,7 +648,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       },
       builder: (context, state) {
         final isSelected = state.previewBook == book;
-        
+
         return InkWell(
           onTap: () => _showBookPreview(book),
           onDoubleTap: () => _openBookInReader(book),
@@ -649,8 +660,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               bottom: 10.0,
             ),
             decoration: BoxDecoration(
-              color: isSelected 
-                  ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha:0.3)
+              color: isSelected
+                  ? Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withValues(alpha: 0.3)
                   : null,
               border: Border(
                 bottom: BorderSide(
@@ -662,7 +676,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             child: Row(
               children: [
                 Icon(
-                  book is PdfBook ? Icons.picture_as_pdf : Icons.article,
+                  book is PdfBook
+                      ? FluentIcons.document_pdf_24_regular
+                      : FluentIcons.document_text_24_regular,
                   color: Theme.of(context).colorScheme.secondary,
                   size: 18,
                 ),
@@ -675,7 +691,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                         book.title,
                         style: TextStyle(
                           fontSize: 14,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
                       if (book.author != null && book.author!.isNotEmpty)
@@ -683,7 +700,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                           book.author!,
                           style: TextStyle(
                             fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                     ],
@@ -749,7 +767,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               ),
             ),
             Icon(
-              Icons.open_in_new,
+              FluentIcons.open_24_regular,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               size: 16,
             ),

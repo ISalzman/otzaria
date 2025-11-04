@@ -831,12 +831,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       // 9) Last Page Button
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(FluentIcons.arrow_step_in_24_regular),
+          icon: const Icon(FluentIcons.arrow_forward_24_regular),
           tooltip: 'סוף הספר',
           onPressed: () => widget.tab.pdfViewerController
               .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
         ),
-        icon: FluentIcons.arrow_step_in_24_regular,
+        icon: FluentIcons.arrow_forward_24_regular,
         tooltip: 'סוף הספר',
         onPressed: () => widget.tab.pdfViewerController
             .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
