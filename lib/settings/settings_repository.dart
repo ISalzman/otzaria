@@ -26,7 +26,6 @@ class SettingsRepository {
   static const String keyCalendarEvents = 'key-calendar-events';
   static const String keyCopyWithHeaders = 'key-copy-with-headers';
   static const String keyCopyHeaderFormat = 'key-copy-header-format';
-  static const String keyEnableHtmlLinks = 'key-enable-html-links';
   static const String keyIsFullscreen = 'key-is-fullscreen';
   static const String keyLibraryViewMode = 'key-library-view-mode';
   static const String keyLibraryShowPreview = 'key-library-show-preview';
@@ -119,10 +118,6 @@ class SettingsRepository {
       'copyHeaderFormat': _settings.getValue<String>(
         keyCopyHeaderFormat,
         defaultValue: 'same_line_after_brackets',
-      ),
-      'enableHtmlLinks': _settings.getValue<bool>(
-        keyEnableHtmlLinks,
-        defaultValue: true,
       ),
       'isFullscreen': _settings.getValue<bool>(
         keyIsFullscreen,
@@ -231,10 +226,6 @@ class SettingsRepository {
     await _settings.setValue(keyCopyHeaderFormat, value);
   }
 
-  Future<void> updateEnableHtmlLinks(bool value) async {
-    await _settings.setValue(keyEnableHtmlLinks, value);
-  }
-
   Future<void> updateIsFullscreen(bool value) async {
     await _settings.setValue(keyIsFullscreen, value);
   }
@@ -286,7 +277,6 @@ class SettingsRepository {
     await _settings.setValue(keyCalendarEvents, '[]');
     await _settings.setValue(keyCopyWithHeaders, 'none');
     await _settings.setValue(keyCopyHeaderFormat, 'same_line_after_brackets');
-    await _settings.setValue(keyEnableHtmlLinks, true);
     await _settings.setValue(keyIsFullscreen, false);
     await _settings.setValue(keyLibraryViewMode, 'grid');
     await _settings.setValue(keyLibraryShowPreview, true);

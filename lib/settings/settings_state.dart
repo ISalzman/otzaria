@@ -22,7 +22,6 @@ class SettingsState extends Equatable {
   final double facetFilteringWidth;
   final String copyWithHeaders;
   final String copyHeaderFormat;
-  final bool enableHtmlLinks;
   final bool isFullscreen;
   final String libraryViewMode;
   final bool libraryShowPreview;
@@ -48,7 +47,6 @@ class SettingsState extends Equatable {
     required this.facetFilteringWidth,
     required this.copyWithHeaders,
     required this.copyHeaderFormat,
-    required this.enableHtmlLinks,
     required this.isFullscreen,
     required this.libraryViewMode,
     required this.libraryShowPreview,
@@ -76,7 +74,6 @@ class SettingsState extends Equatable {
       facetFilteringWidth: 235,
       copyWithHeaders: 'none',
       copyHeaderFormat: 'same_line_after_brackets',
-      enableHtmlLinks: true,
       isFullscreen: false,
       libraryViewMode: 'grid',
       libraryShowPreview: true,
@@ -104,7 +101,6 @@ class SettingsState extends Equatable {
     double? facetFilteringWidth,
     String? copyWithHeaders,
     String? copyHeaderFormat,
-    bool? enableHtmlLinks,
     bool? isFullscreen,
     String? libraryViewMode,
     bool? libraryShowPreview,
@@ -131,7 +127,6 @@ class SettingsState extends Equatable {
       facetFilteringWidth: facetFilteringWidth ?? this.facetFilteringWidth,
       copyWithHeaders: copyWithHeaders ?? this.copyWithHeaders,
       copyHeaderFormat: copyHeaderFormat ?? this.copyHeaderFormat,
-      enableHtmlLinks: enableHtmlLinks ?? this.enableHtmlLinks,
       isFullscreen: isFullscreen ?? this.isFullscreen,
       libraryViewMode: libraryViewMode ?? this.libraryViewMode,
       libraryShowPreview: libraryShowPreview ?? this.libraryShowPreview,
@@ -160,7 +155,6 @@ class SettingsState extends Equatable {
         facetFilteringWidth,
         copyWithHeaders,
         copyHeaderFormat,
-        enableHtmlLinks,
         isFullscreen,
         libraryViewMode,
         libraryShowPreview,

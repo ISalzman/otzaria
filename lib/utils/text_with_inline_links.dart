@@ -1,4 +1,6 @@
 /// Utility functions for embedding inline links (character-based links) in text
+library;
+
 import 'package:otzaria/models/links.dart';
 
 /// Adds inline links to text based on character positions (start/end).

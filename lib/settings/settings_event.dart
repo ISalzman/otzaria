@@ -190,15 +190,6 @@ class UpdateCopyHeaderFormat extends SettingsEvent {
   List<Object?> get props => [copyHeaderFormat];
 }
 
-class UpdateEnableHtmlLinks extends SettingsEvent {
-  final bool enableHtmlLinks;
-
-  const UpdateEnableHtmlLinks(this.enableHtmlLinks);
-
-  @override
-  List<Object?> get props => [enableHtmlLinks];
-}
-
 class UpdateIsFullscreen extends SettingsEvent {
   final bool isFullscreen;
 

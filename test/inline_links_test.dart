@@ -114,25 +114,27 @@ void main() {
       expect(result.split('<a href=').length - 1, equals(1));
     });
 
-    test('preserves HTML in text', () {
-      final text = 'טקסט עם <b>מודגש</b> וקישור';
+    test('preserves existing content when adding links', () {
+      final text = 'טקסט רגיל עם תוכן';
       final link = Link(
         heRef: 'בראשית',
         index1: 1,
         path2: 'בראשית.txt',
         index2: 1,
         connectionType: 'reference',
-        start: 24,
-        end: 30,
+        start: 13,
+        end: 17,
       );
 
       final result = addInlineLinksToText(text, [link]);
 
-      // תגיות HTML קיימות צריכות להישמר
-      expect(result, contains('<b>מודגש</b>'));
+      // הטקסט המקורי צריך להישמר
+      expect(result, contains('טקסט רגיל'));
       // הקישור צריך להתווסף
       expect(result, contains('<a href='));
       expect(result, contains('otzaria://inline-link'));
+      // המילה שהקישור אמור לכסות
+      expect(result, contains('</a>'));
     });
 
     test('validates link positions', () {

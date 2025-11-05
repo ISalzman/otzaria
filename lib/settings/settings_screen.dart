@@ -316,21 +316,6 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                       },
                       activeColor: Theme.of(context).cardColor,
                     ),
-                    SwitchSettingsTile(
-                      settingKey: 'key-enable-html-links',
-                      title: 'הפעלת קישורים בתוך הספרים',
-                      enabledLabel:
-                          'קישורים בתוך הטקסט יהיו פעילים וניתנים ללחיצה',
-                      disabledLabel: 'קישורים בתוך הטקסט לא יהיו פעילים',
-                      leading: const Icon(FluentIcons.link_24_regular),
-                      defaultValue: state.enableHtmlLinks,
-                      onChange: (value) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(UpdateEnableHtmlLinks(value));
-                      },
-                      activeColor: Theme.of(context).cardColor,
-                    ),
                     // קוביות הגדרות
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -358,7 +343,9 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                             onTap: () => showCalendarSettingsDialog(context),
                           ),
                           // הגדרות זכור ושמור - מוסתר כרגע
+                          // ignore: dead_code
                           if (false)
+                            // ignore: dead_code
                             _buildSettingsCard(
                               context: context,
                               title: 'הגדרות זכור ושמור',

@@ -739,22 +739,20 @@ $textWithBreaks
                         // הוספת קישורים מבוססי תווים לפני כל עיבוד אחר
                         // כי start/end מתייחסים לטקסט המקורי
                         String dataWithLinks = data;
-                        if (settingsState.enableHtmlLinks) {
-                          try {
-                            final linksForLine = state.links
-                                .where((link) => 
-                                    link.index1 == index + 1 &&
-                                    link.start != null && 
-                                    link.end != null)
-                                .toList();
+                        try {
+                          final linksForLine = state.links
+                              .where((link) => 
+                                  link.index1 == index + 1 &&
+                                  link.start != null && 
+                                  link.end != null)
+                              .toList();
 
-                            if (linksForLine.isNotEmpty) {
-                              dataWithLinks = addInlineLinksToText(data, linksForLine);
-                            }
-                          } catch (e) {
-                            // אם יש שגיאה, פשוט נשתמש בטקסט המקורי
-                            dataWithLinks = data;
+                          if (linksForLine.isNotEmpty) {
+                            dataWithLinks = addInlineLinksToText(data, linksForLine);
                           }
+                        } catch (e) {
+                          // אם יש שגיאה, פשוט נשתמש בטקסט המקורי
+                          dataWithLinks = data;
                         }
 
                         // כעת מבצעים את שאר העיבודים
@@ -786,15 +784,13 @@ $textWithBreaks
                             fontFamily: settingsState.fontFamily,
                             height: 1.5,
                           ),
-                          onTapUrl: settingsState.enableHtmlLinks
-                              ? (url) async {
-                                  return await HtmlLinkHandler.handleLink(
-                                    context,
-                                    url,
-                                    (tab) => widget.openBookCallback(tab),
-                                  );
-                                }
-                              : null,
+                          onTapUrl: (url) async {
+                            return await HtmlLinkHandler.handleLink(
+                              context,
+                              url,
+                              (tab) => widget.openBookCallback(tab),
+                            );
+                          },
                         );
                       },
                     ),
