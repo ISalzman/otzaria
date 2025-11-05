@@ -446,7 +446,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             (link) =>
                 link.index1 == index + 1 &&
                 link.connectionType != 'commentary' &&
-                link.connectionType != 'targum',
+                link.connectionType != 'targum' &&
+                // מסנן קישורים מבוססי תווים (inline links) - הם אמורים להופיע רק בתוך הטקסט
+                link.start == null &&
+                link.end == null,
           )
           .toList();
       visibleLinks.addAll(indexLinks);

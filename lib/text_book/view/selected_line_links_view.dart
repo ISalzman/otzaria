@@ -120,7 +120,10 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   }
 
   Widget _buildLinksList(TextBookLoaded state) {
-    final links = state.visibleLinks;
+    // מסנן קישורים מבוססי תווים (inline links) - הם אמורים להופיע רק בתוך הטקסט
+    final links = state.visibleLinks
+        .where((link) => link.start == null && link.end == null)
+        .toList();
 
     if (links.isEmpty) {
       return const Center(
