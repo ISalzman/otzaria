@@ -6,18 +6,21 @@ import 'package:otzaria/settings/settings_repository.dart';
 
 /// פונקציה גלובלית להצגת דיאלוג הגדרות לוח שנה
 /// ניתן לקרוא לה מכל מקום באפליקציה
-void showCalendarSettingsDialog(BuildContext context) {
-  // ניסיון לקרוא את ה-CalendarCubit הקיים מה-context
-  CalendarCubit? existingCubit;
+void showCalendarSettingsDialog(BuildContext context,
+    {CalendarCubit? calendarCubit}) {
+  // אם נמסר Cubit במפורש נשתמש בו, אחרת ננסה לקרוא מה-context
+  CalendarCubit? existingCubit = calendarCubit;
   bool shouldCloseAfter = false;
 
-  try {
-    existingCubit = context.read<CalendarCubit>();
-  } catch (e) {
-    // אם אין CalendarCubit זמין, ניצור חדש
-    final settingsRepository = SettingsRepository();
-    existingCubit = CalendarCubit(settingsRepository: settingsRepository);
-    shouldCloseAfter = true;
+  if (existingCubit == null) {
+    try {
+      existingCubit = context.read<CalendarCubit>();
+    } catch (e) {
+      // אם אין CalendarCubit זמין, ניצור חדש
+      final settingsRepository = SettingsRepository();
+      existingCubit = CalendarCubit(settingsRepository: settingsRepository);
+      shouldCloseAfter = true;
+    }
   }
 
   final cubit = existingCubit;
@@ -25,7 +28,10 @@ void showCalendarSettingsDialog(BuildContext context) {
   showDialog(
     context: context,
     builder: (dialogContext) {
-      return _CalendarSettingsDialog(calendarCubit: cubit);
+      return BlocProvider.value(
+        value: cubit,
+        child: _CalendarSettingsDialog(calendarCubit: cubit),
+      );
     },
   ).then((_) {
     if (shouldCloseAfter) {

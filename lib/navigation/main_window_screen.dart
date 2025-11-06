@@ -24,6 +24,7 @@ import 'package:otzaria/update/my_updat_widget.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/navigation/calendar_cubit.dart';
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
@@ -35,6 +36,7 @@ class MainWindowScreen extends StatefulWidget {
 class MainWindowScreenState extends State<MainWindowScreen>
     with TickerProviderStateMixin {
   late final PageController pageController;
+  late final CalendarCubit _calendarCubit;
   Orientation? _previousOrientation;
 
   // Keep the pages list as templates; the actual first page (library)
@@ -48,6 +50,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   @override
   void initState() {
     super.initState();
+    _calendarCubit = CalendarCubit();
     final initialPage =
         _pageIndexForScreen(
           context.read<NavigationBloc>().state.currentScreen,
@@ -72,6 +75,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   @override
   void dispose() {
+    _calendarCubit.close();
     pageController.dispose();
     super.dispose();
   }
@@ -217,27 +221,29 @@ class MainWindowScreenState extends State<MainWindowScreen>
           },
         ),
       ],
-      child: BlocBuilder<NavigationBloc, NavigationState>(
-        builder: (context, state) {
-          // Build the pages list here so we can inject the EmptyLibraryScreen
-          // into the library page while keeping the rest of the app visible.
-          _pages = [
-            KeepAlivePage(
-              child: state.isLibraryEmpty
-                  ? EmptyLibraryScreen(
-                      onLibraryLoaded: () {
-                        context.read<NavigationBloc>().refreshLibrary();
-                      },
-                    )
-                  : const LibraryBrowser(),
-            ),
-            const KeepAlivePage(child: ReadingScreen()),
-            const KeepAlivePage(child: SizedBox.shrink()),
-            const KeepAlivePage(child: MoreScreen()),
-            const KeepAlivePage(child: MySettingsScreen()),
-          ];
+      child: BlocProvider.value(
+        value: _calendarCubit,
+        child: BlocBuilder<NavigationBloc, NavigationState>(
+          builder: (context, state) {
+            // Build the pages list here so we can inject the EmptyLibraryScreen
+            // into the library page while keeping the rest of the app visible.
+            _pages = [
+              KeepAlivePage(
+                child: state.isLibraryEmpty
+                    ? EmptyLibraryScreen(
+                        onLibraryLoaded: () {
+                          context.read<NavigationBloc>().refreshLibrary();
+                        },
+                      )
+                    : const LibraryBrowser(),
+              ),
+              const KeepAlivePage(child: ReadingScreen()),
+              const KeepAlivePage(child: SizedBox.shrink()),
+              const KeepAlivePage(child: MoreScreen()),
+              const KeepAlivePage(child: MySettingsScreen()),
+            ];
 
-          return SafeArea(
+            return SafeArea(
             child: KeyboardShortcuts(
               child: MyUpdatWidget(
                 child: Scaffold(
@@ -366,6 +372,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
             ),
           );
         },
+        ),
       ),
     );
   }

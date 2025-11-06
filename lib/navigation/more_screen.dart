@@ -3,7 +3,6 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tools/measurement_converter/measurement_converter_screen.dart';
 import 'package:otzaria/tools/gematria/gematria_search_screen.dart';
-import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/settings/calendar_settings_dialog.dart';
 import 'package:otzaria/settings/gematria_settings_dialog.dart';
 import 'package:shamor_zachor/shamor_zachor.dart';
@@ -20,8 +19,6 @@ class MoreScreen extends StatefulWidget {
 
 class _MoreScreenState extends State<MoreScreen> {
   int _selectedIndex = 0;
-  late final CalendarCubit _calendarCubit;
-  late final SettingsRepository _settingsRepository;
   final GlobalKey<GematriaSearchScreenState> _gematriaKey =
       GlobalKey<GematriaSearchScreenState>();
 
@@ -33,19 +30,6 @@ class _MoreScreenState extends State<MoreScreen> {
     setState(() {
       _shamorZachorTitle = title;
     });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _settingsRepository = SettingsRepository();
-    _calendarCubit = CalendarCubit(settingsRepository: _settingsRepository);
-  }
-
-  @override
-  void dispose() {
-    _calendarCubit.close();
-    super.dispose();
   }
 
   @override
@@ -146,7 +130,12 @@ class _MoreScreenState extends State<MoreScreen> {
 
     switch (index) {
       case 0:
-        return [buildSettingsButton(() => showCalendarSettingsDialog(context))];
+        return [
+          buildSettingsButton(() => showCalendarSettingsDialog(
+                context,
+                calendarCubit: context.read<CalendarCubit>(),
+              ))
+        ];
       case 4:
         return [buildSettingsButton(() => showGematriaSettingsDialog(context))];
       default:
@@ -157,10 +146,7 @@ class _MoreScreenState extends State<MoreScreen> {
   Widget _buildCurrentWidget(int index) {
     switch (index) {
       case 0:
-        return BlocProvider.value(
-          value: _calendarCubit,
-          child: const CalendarWidget(),
-        );
+        return const CalendarWidget();
       case 1:
         return ShamorZachorWidget(
           onTitleChanged: _updateShamorZachorTitle,

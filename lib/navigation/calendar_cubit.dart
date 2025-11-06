@@ -167,7 +167,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     ));
   }
 
-  void changeCity(String newCity) {
+  Future<void> changeCity(String newCity) async {
     final newTimes = _calculateDailyTimes(state.selectedGregorianDate, newCity);
     final bool inIsrael = _isCityInIsrael(newCity);
     emit(state.copyWith(
@@ -176,7 +176,18 @@ class CalendarCubit extends Cubit<CalendarState> {
       inIsrael: inIsrael,
     ));
     // שמור את הבחירה בהגדרות
-    _settingsRepository.updateSelectedCity(newCity);
+    await _settingsRepository.updateSelectedCity(newCity);
+  }
+
+  Future<void> changeCalendarType(CalendarType type) async {
+    emit(state.copyWith(calendarType: type));
+    // שמור את הבחירה בהגדרות
+    await _settingsRepository.updateCalendarType(_calendarTypeToString(type));
+  }
+
+  /// טעינה מחדש של הגדרות מהאחסון
+  Future<void> reloadSettings() async {
+    await _initializeCalendar();
   }
 
   void _previousMonth() {
@@ -313,12 +324,6 @@ class CalendarCubit extends Cubit<CalendarState> {
       selectedJewishDate: newJewishDate,
       dailyTimes: newTimes,
     ));
-  }
-
-  void changeCalendarType(CalendarType type) {
-    emit(state.copyWith(calendarType: type));
-    // שמור את הבחירה בהגדרות
-    _settingsRepository.updateCalendarType(_calendarTypeToString(type));
   }
 
   void changeCalendarView(CalendarView view) {

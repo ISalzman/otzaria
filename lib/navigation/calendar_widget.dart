@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1754,7 +1755,10 @@ class CalendarWidget extends StatelessWidget {
   Widget _buildCityDropdownWithSearch(
       BuildContext context, CalendarState state) {
     return ElevatedButton(
-      onPressed: () => showCalendarSettingsDialog(context),
+      onPressed: () => showCalendarSettingsDialog(
+        context,
+        calendarCubit: context.read<CalendarCubit>(),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
