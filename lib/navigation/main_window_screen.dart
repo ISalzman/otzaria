@@ -33,6 +33,9 @@ class MainWindowScreen extends StatefulWidget {
   MainWindowScreenState createState() => MainWindowScreenState();
 }
 
+// Global key for accessing MoreScreen
+final GlobalKey<State<MoreScreen>> moreScreenKey = GlobalKey<State<MoreScreen>>();
+
 class MainWindowScreenState extends State<MainWindowScreen>
     with TickerProviderStateMixin {
   late final PageController pageController;
@@ -155,8 +158,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
         label: 'חיפוש',
       ),
       NavigationDestination(
-        icon: Icon(FluentIcons.more_horizontal_24_regular),
-        label: 'עזרים',
+        icon: Icon(FluentIcons.apps_24_regular),
+        label: 'כלים',
       ),
       NavigationDestination(
         icon: Icon(FluentIcons.settings_24_regular),
@@ -239,7 +242,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
               ),
               const KeepAlivePage(child: ReadingScreen()),
               const KeepAlivePage(child: SizedBox.shrink()),
-              const KeepAlivePage(child: MoreScreen()),
+              KeepAlivePage(child: MoreScreen(key: moreScreenKey)),
               const KeepAlivePage(child: MySettingsScreen()),
             ];
 

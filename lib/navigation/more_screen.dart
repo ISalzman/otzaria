@@ -9,6 +9,7 @@ import 'package:shamor_zachor/shamor_zachor.dart';
 import 'calendar_widget.dart';
 import 'calendar_cubit.dart';
 import 'package:otzaria/personal_notes/view/personal_notes_screen.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
@@ -17,10 +18,13 @@ class MoreScreen extends StatefulWidget {
   State<MoreScreen> createState() => _MoreScreenState();
 }
 
-class _MoreScreenState extends State<MoreScreen> {
+class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
   int _selectedIndex = 0;
+  late final CalendarCubit _calendarCubit;
+  late final SettingsRepository _settingsRepository;
   final GlobalKey<GematriaSearchScreenState> _gematriaKey =
       GlobalKey<GematriaSearchScreenState>();
+  late final PageController _pageController;
 
   // Title for the ShamorZachor section (dynamic from the package)
   String _shamorZachorTitle = 'זכור ושמור';
@@ -30,6 +34,35 @@ class _MoreScreenState extends State<MoreScreen> {
     setState(() {
       _shamorZachorTitle = title;
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _settingsRepository = SettingsRepository();
+    _calendarCubit = CalendarCubit(settingsRepository: _settingsRepository);
+    _pageController = PageController(initialPage: 0);
+  }
+
+  /// Reset to calendar page - public method for external access
+  void resetToCalendar() {
+    if (_selectedIndex != 0) {
+      setState(() {
+        _selectedIndex = 0;
+      });
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(0);
+      }
+    }
+  }
+
+
+
+  @override
+  void dispose() {
+    _calendarCubit.close();
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
@@ -49,44 +82,78 @@ class _MoreScreenState extends State<MoreScreen> {
         centerTitle: true,
         actions: _getActions(context, _selectedIndex),
       ),
-      body: Row(
-        children: [
-          NavigationRail(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (int index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-            labelType: NavigationRailLabelType.all,
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(FluentIcons.calendar_24_regular),
-                label: Text('לוח שנה'),
+      body: OrientationBuilder(
+        builder: (context, orientation) {
+          return Row(
+            children: [
+              NavigationRail(
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: (int index) {
+                  setState(() {
+                    _selectedIndex = index;
+                  });
+                  if (_pageController.hasClients) {
+                    _pageController.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  }
+                },
+                labelType: NavigationRailLabelType.all,
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.calendar_month_outlined),
+                    label: Text('לוח שנה'),
+                  ),
+                  NavigationRailDestination(
+                    icon: ImageIcon(AssetImage('assets/icon/זכור ושמור.png')),
+                    label: Text('זכור ושמור'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(FluentIcons.ruler_24_regular),
+                    label: Text('מדות ושיעורים'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(FluentIcons.note_24_regular),
+                    label: Text('הערות אישיות'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(FluentIcons.calculator_24_regular),
+                    label: Text('גימטריות'),
+                  ),
+                ],
               ),
-              NavigationRailDestination(
-                icon: ImageIcon(AssetImage('assets/icon/שמור וזכור.png')),
-                label: Text('זכור ושמור'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(FluentIcons.ruler_24_regular),
-                label: Text('מדות ושיעורים'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(FluentIcons.note_24_regular),
-                label: Text('הערות אישיות'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(FluentIcons.calculator_24_regular),
-                label: Text('גימטריות'),
+              const VerticalDivider(thickness: 1, width: 1),
+              Expanded(
+                child: PageView(
+                  scrollDirection: orientation == Orientation.landscape
+                      ? Axis.vertical
+                      : Axis.horizontal,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  controller: _pageController,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _selectedIndex = index;
+                    });
+                  },
+                  children: [
+                    BlocProvider.value(
+                      value: _calendarCubit,
+                      child: const CalendarWidget(),
+                    ),
+                    ShamorZachorWidget(
+                      onTitleChanged: _updateShamorZachorTitle,
+                    ),
+                    const MeasurementConverterScreen(),
+                    const PersonalNotesManagerScreen(),
+                    GematriaSearchScreen(key: _gematriaKey),
+                  ],
+                ),
               ),
             ],
-          ),
-          const VerticalDivider(thickness: 1, width: 1),
-          Expanded(
-            child: _buildCurrentWidget(_selectedIndex),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -104,7 +171,7 @@ class _MoreScreenState extends State<MoreScreen> {
       case 4:
         return 'גימטריה';
       default:
-        return 'עזרים';
+        return 'כלים';
     }
   }
 
@@ -143,22 +210,5 @@ class _MoreScreenState extends State<MoreScreen> {
     }
   }
 
-  Widget _buildCurrentWidget(int index) {
-    switch (index) {
-      case 0:
-        return const CalendarWidget();
-      case 1:
-        return ShamorZachorWidget(
-          onTitleChanged: _updateShamorZachorTitle,
-        );
-      case 2:
-        return const MeasurementConverterScreen();
-      case 3:
-        return const PersonalNotesManagerScreen();
-      case 4:
-        return GematriaSearchScreen(key: _gematriaKey);
-      default:
-        return Container();
-    }
-  }
+
 }
