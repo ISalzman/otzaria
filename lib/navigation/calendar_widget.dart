@@ -436,10 +436,12 @@ class CalendarWidget extends StatelessWidget {
         Expanded(
           child: _HoverableDayCell(
             onAdd: () {
-              // לפני פתיחת הדיאלוג, נבחר את התא שנלחץ
-              context.read<CalendarCubit>().selectDate(jewishDate, dayDate);
-              _showCreateEventDialog(context,
-                  context.read<CalendarCubit>().state); // קבלת המצב המעודכן
+              // יצירת אירוע לתאריך הספציפי של התא, ללא שינוי התאריך הנבחר
+              _showCreateEventDialog(
+                context,
+                context.read<CalendarCubit>().state,
+                specificDate: dayDate,
+              );
             },
             child: GestureDetector(
               onTap: () =>
@@ -471,25 +473,28 @@ class CalendarWidget extends StatelessWidget {
                     width: isToday ? 2 : 1,
                   ),
                 ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '${dayDate.day}',
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Text(
+                        _formatHebrewDay(jewishDate.getJewishDayOfMonth()),
                         style: TextStyle(
                           color: isSelected
                               ? Theme.of(context).colorScheme.onPrimaryContainer
                               : Theme.of(context).colorScheme.onSurface,
-                          fontWeight: isSelected || isToday
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          fontSize: 16,
+                          fontWeight:
+                              isSelected || isToday ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 12,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _formatHebrewDay(jewishDate.getJewishDayOfMonth()),
+                    ),
+                    Positioned(
+                      top: 4,
+                      left: 4,
+                      child: Text(
+                        '${dayDate.day}',
                         style: TextStyle(
                           color: isSelected
                               ? Theme.of(context)
@@ -497,16 +502,20 @@ class CalendarWidget extends StatelessWidget {
                                   .onPrimaryContainer
                                   .withValues(alpha: 0.85)
                               : Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontSize: 12,
+                          fontSize: 10,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      _DayExtras(
+                    ),
+                    Positioned(
+                      top: 30,
+                      left: 4,
+                      right: 4,
+                      child: _DayExtras(
                         date: dayDate,
                         inIsrael: state.inIsrael,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -537,7 +546,11 @@ class CalendarWidget extends StatelessWidget {
         gregorianDate.year == DateTime.now().year;
 
     return _HoverableDayCell(
-      onAdd: () => _showCreateEventDialog(context, state),
+      onAdd: () => _showCreateEventDialog(
+        context, 
+        state, 
+        specificDate: gregorianDate,
+      ),
       child: GestureDetector(
         onTap: () =>
             context.read<CalendarCubit>().selectDate(jewishDate, gregorianDate),
@@ -634,7 +647,11 @@ class CalendarWidget extends StatelessWidget {
         gregorianDate.year == DateTime.now().year;
 
     return _HoverableDayCell(
-      onAdd: () => _showCreateEventDialog(context, state),
+      onAdd: () => _showCreateEventDialog(
+        context, 
+        state, 
+        specificDate: gregorianDate,
+      ),
       child: GestureDetector(
         onTap: () =>
             context.read<CalendarCubit>().selectDate(jewishDate, gregorianDate),
@@ -1531,7 +1548,7 @@ class CalendarWidget extends StatelessWidget {
   }
 
   void _showCreateEventDialog(BuildContext context, CalendarState state,
-      {CustomEvent? existingEvent}) {
+      {CustomEvent? existingEvent, DateTime? specificDate}) {
     final cubit = context.read<CalendarCubit>();
     final isEditMode = existingEvent != null;
 
@@ -1549,13 +1566,13 @@ class CalendarWidget extends StatelessWidget {
     // משתנה חדש שבודק אם האירוע מוגדר כ"תמיד"
     bool recurForever = existingEvent?.recurringYears == null;
 
-    // קביעת התאריכים המוצגים - לפי האירוע אם עריכה, אחרת לפי הנבחר
+    // קביעת התאריכים המוצגים - לפי האירוע אם עריכה, אחרת לפי התאריך הספציפי או הנבחר
     final displayedGregorianDate = existingEvent != null
         ? existingEvent.baseGregorianDate
-        : state.selectedGregorianDate;
+        : (specificDate ?? state.selectedGregorianDate);
     final displayedJewishDate = existingEvent != null
         ? JewishDate.fromDateTime(existingEvent.baseGregorianDate)
-        : state.selectedJewishDate;
+        : JewishDate.fromDateTime(specificDate ?? state.selectedGregorianDate);
 
     showDialog(
       context: context,
@@ -1732,7 +1749,7 @@ class CalendarWidget extends StatelessWidget {
                       cubit.addEvent(
                         title: titleController.text.trim(),
                         description: descriptionController.text.trim(),
-                        baseGregorianDate: state.selectedGregorianDate,
+                        baseGregorianDate: displayedGregorianDate,
                         isRecurring: isRecurring,
                         recurOnHebrew: useHebrewCalendar,
                         recurringYears: recurringYears,
@@ -1842,6 +1859,66 @@ class CalendarWidget extends StatelessWidget {
     );
   }
 
+  // Helper function to get events in the displayed range based on calendar view
+  List<CustomEvent> _getEventsInDisplayedRange(BuildContext context, CalendarState state) {
+    final cubit = context.read<CalendarCubit>();
+    final Set<CustomEvent> eventsSet = {};
+    
+    switch (state.calendarView) {
+      case CalendarView.month:
+        // Get all events for the month
+        final DateTime startOfMonth;
+        final DateTime endOfMonth;
+        
+        if (state.calendarType == CalendarType.gregorian) {
+          startOfMonth = DateTime(state.currentGregorianDate.year, state.currentGregorianDate.month, 1);
+          endOfMonth = DateTime(state.currentGregorianDate.year, state.currentGregorianDate.month + 1, 0);
+        } else {
+          // Hebrew calendar - convert first and last day of month
+          final firstDay = JewishDate();
+          firstDay.setJewishDate(
+            state.currentJewishDate.getJewishYear(),
+            state.currentJewishDate.getJewishMonth(),
+            1,
+          );
+          startOfMonth = firstDay.getGregorianCalendar();
+          
+          final lastDayNum = state.currentJewishDate.getDaysInJewishMonth();
+          final lastDay = JewishDate();
+          lastDay.setJewishDate(
+            state.currentJewishDate.getJewishYear(),
+            state.currentJewishDate.getJewishMonth(),
+            lastDayNum,
+          );
+          endOfMonth = lastDay.getGregorianCalendar();
+        }
+        
+        // Collect events for each day in the month
+        for (DateTime date = startOfMonth; date.isBefore(endOfMonth) || date.isAtSameMomentAs(endOfMonth); date = date.add(Duration(days: 1))) {
+          eventsSet.addAll(cubit.eventsForDate(date));
+        }
+        break;
+        
+      case CalendarView.week:
+        // Get all events for the week
+        final selectedDate = state.selectedGregorianDate;
+        final startOfWeek = selectedDate.subtract(Duration(days: selectedDate.weekday % 7));
+        final endOfWeek = startOfWeek.add(Duration(days: 6));
+        
+        for (DateTime date = startOfWeek; date.isBefore(endOfWeek) || date.isAtSameMomentAs(endOfWeek); date = date.add(Duration(days: 1))) {
+          eventsSet.addAll(cubit.eventsForDate(date));
+        }
+        break;
+        
+      case CalendarView.day:
+        // Get events for the selected day only
+        eventsSet.addAll(cubit.eventsForDate(state.selectedGregorianDate));
+        break;
+    }
+    
+    return eventsSet.toList()..sort((a, b) => a.title.compareTo(b.title));
+  }
+
   Widget _buildEventsList(BuildContext context, CalendarState state,
       {bool isSearch = false}) {
     final cubit = context.read<CalendarCubit>();
@@ -1850,14 +1927,15 @@ class CalendarWidget extends StatelessWidget {
     if (state.eventSearchQuery.isNotEmpty) {
       events = cubit.getFilteredEvents(state.eventSearchQuery);
     } else {
-      events = []; // Show nothing when search is empty
+      // Show events occurring in the displayed range
+      events = _getEventsInDisplayedRange(context, state);
     }
 
     if (events.isEmpty) {
       if (state.eventSearchQuery.isNotEmpty) {
         return const Center(child: Text('לא נמצאו אירועים מתאימים'));
       } else {
-        return const SizedBox(); // Empty when no search
+        return const Center(child: Text('אין אירועים בטווח המוצג'));
       }
     }
 

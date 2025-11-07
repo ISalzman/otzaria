@@ -62,7 +62,7 @@ class _CalendarSettingsDialogState extends State<_CalendarSettingsDialog> {
         return AlertDialog(
           title: const Text('הגדרות לוח שנה'),
           content: SizedBox(
-            width: 500,
+            width: 400,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
