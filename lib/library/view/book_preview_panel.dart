@@ -332,6 +332,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                         openLeftPaneTab: (index) {},
                         showCommentaryAsExpansionTiles: false,
                         tab: _currentTextTab!,
+                        isPreviewMode: true,
                       ),
                     );
                   }

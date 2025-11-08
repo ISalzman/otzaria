@@ -212,23 +212,31 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                                         current.previewBook;
                                   },
                                   builder: (context, previewState) {
-                                    return BookPreviewPanel(
-                                      book: previewState.previewBook,
-                                      onOpenInReader: (index) {
+                                    return GestureDetector(
+                                      onDoubleTap: () {
                                         if (previewState.previewBook != null) {
                                           _openBookInReader(
-                                              previewState.previewBook!, index);
+                                              previewState.previewBook!, 0);
                                         }
                                       },
-                                      onClose: () {
-                                        setState(() {
-                                          _showPreview = false;
-                                        });
-                                        context.read<SettingsBloc>().add(
-                                              const UpdateLibraryShowPreview(
-                                                  false),
-                                            );
-                                      },
+                                      child: BookPreviewPanel(
+                                        book: previewState.previewBook,
+                                        onOpenInReader: (index) {
+                                          if (previewState.previewBook != null) {
+                                            _openBookInReader(
+                                                previewState.previewBook!, index);
+                                          }
+                                        },
+                                        onClose: () {
+                                          setState(() {
+                                            _showPreview = false;
+                                          });
+                                          context.read<SettingsBloc>().add(
+                                                const UpdateLibraryShowPreview(
+                                                    false),
+                                              );
+                                        },
+                                      ),
                                     );
                                   },
                                 ),
@@ -439,8 +447,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   Widget _buildContent(LibraryState state) {
-    // במצב חיפוש או תצוגת רשת - התנהגות רגילה
-    if (state.searchResults != null || _viewMode == ViewMode.grid) {
+    // במצב תצוגת רשת - תמיד רשת
+    if (_viewMode == ViewMode.grid) {
       final items = state.searchResults != null
           ? _buildSearchResults(state.searchResults!)
           : _buildCategoryContent(state.currentCategory!);
@@ -477,6 +485,12 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       );
     }
 
+    // תצוגת רשימה - גם בחיפוש וגם בלי
+    if (state.searchResults != null) {
+      // במצב חיפוש ברשימה - הצג רק את הספרים
+      return _buildSearchListView(state.searchResults!);
+    }
+    
     // תצוגת רשימה עם עץ מתרחב
     return _buildListView(state.currentCategory!);
   }
@@ -571,39 +585,34 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       builder: (context, state) {
         final isSelected = state.previewBook == book;
 
-        return Tooltip(
-          message: _showPreview
-              ? 'לחיצה אחת - תצוגה מקדימה | לחיצה כפולה - פתיחה בעיון'
-              : 'לחיצה בודדת - פתיחה בעיון',
-          child: GestureDetector(
-            onDoubleTap: () {
-              final index = book is PdfBook ? 1 : 0;
-              _openBookInReader(book, index);
-            },
-            child: Container(
-              decoration: isSelected
-                  ? BoxDecoration(
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.primary,
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    )
-                  : null,
-              child: BookGridItem(
-                book: book,
-                showTopics: showTopics,
-                onBookClickCallback: () {
-                  // אם תצוגה מקדימה מוצגת - הצג את הספר בתצוגה
-                  // אחרת - פתח את הספר בעיון
-                  if (_showPreview) {
-                    _showBookPreview(book);
-                  } else {
-                    final index = book is PdfBook ? 1 : 0;
-                    _openBookInReader(book, index);
-                  }
-                },
-              ),
+        return GestureDetector(
+          onDoubleTap: () {
+            final index = book is PdfBook ? 1 : 0;
+            _openBookInReader(book, index);
+          },
+          child: Container(
+            decoration: isSelected
+                ? BoxDecoration(
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  )
+                : null,
+            child: BookGridItem(
+              book: book,
+              showTopics: showTopics,
+              onBookClickCallback: () {
+                // אם תצוגה מקדימה מוצגת - הצג את הספר בתצוגה
+                // אחרת - פתח את הספר בעיון
+                if (_showPreview) {
+                  _showBookPreview(book);
+                } else {
+                  final index = book is PdfBook ? 1 : 0;
+                  _openBookInReader(book, index);
+                }
+              },
             ),
           ),
         );
@@ -613,6 +622,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   void _showBookPreview(Book book) {
     context.read<LibraryBloc>().add(SelectBookForPreview(book));
+  }
+
+  /// בניית תצוגת רשימה לתוצאות חיפוש
+  Widget _buildSearchListView(List<Book> books) {
+    return ListView.builder(
+      itemCount: books.length,
+      itemBuilder: (context, index) {
+        return _buildListBookItem(books[index], 0);
+      },
+    );
   }
 
   /// בניית תצוגת רשימה עם עץ מתרחב

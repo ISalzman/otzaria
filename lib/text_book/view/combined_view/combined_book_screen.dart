@@ -33,6 +33,7 @@ class CombinedView extends StatefulWidget {
     required this.textSize,
     required this.showCommentaryAsExpansionTiles,
     required this.tab,
+    this.isPreviewMode = false,
   });
 
   final List<String> data;
@@ -41,6 +42,7 @@ class CombinedView extends StatefulWidget {
   final double textSize;
   final bool showCommentaryAsExpansionTiles;
   final TextBookTab tab;
+  final bool isPreviewMode;
 
   @override
   State<CombinedView> createState() => _CombinedViewState();
@@ -161,6 +163,21 @@ class _CombinedViewState extends State<CombinedView> {
   // בניית תפריט קונטקסט "מקובע" לאינדקס ספציפי של פסקה
   ctx.ContextMenu _buildContextMenuForIndex(
       TextBookLoaded state, int paragraphIndex) {
+    // אם זה מצב תצוגה מקדימה, החזר תפריט מצומצם
+    if (widget.isPreviewMode) {
+      return ctx.ContextMenu(
+        entries: [
+          ctx.MenuItem(
+            label: 'העתק',
+            icon: FluentIcons.copy_24_regular,
+            enabled: (_lastSelectedText ?? _selectedText) != null &&
+                (_lastSelectedText ?? _selectedText)!.trim().isNotEmpty,
+            onSelected: _copyFormattedText,
+          ),
+        ],
+      );
+    }
+
     // 1. קבלת מידע על גודל המסך
     final screenHeight = MediaQuery.of(context).size.height;
 
