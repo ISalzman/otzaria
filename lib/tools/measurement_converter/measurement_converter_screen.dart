@@ -496,24 +496,31 @@ class _MeasurementConverterScreenState
 
   Widget _buildCategorySelector() {
     final categories = ['אורך', 'שטח', 'נפח', 'משקל', 'זמן'];
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const double cardWidth = 140.0;
-          const double spacing = 12.0;
-          
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            alignment: WrapAlignment.center,
-            children: categories
-                .map((category) => _buildCategoryCard(category, cardWidth))
-                .toList(),
-          );
-        },
-      ),
+      child: isSmallScreen
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: categories
+                    .map((category) => Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: _buildCategoryCard(category, 110.0),
+                        ))
+                    .toList(),
+              ),
+            )
+          : Wrap(
+              spacing: 12.0,
+              runSpacing: 12.0,
+              alignment: WrapAlignment.center,
+              children: categories
+                  .map((category) => _buildCategoryCard(category, 140.0))
+                  .toList(),
+            ),
     );
   }
 
@@ -586,6 +593,27 @@ class _MeasurementConverterScreenState
 
   Widget _buildMainContent() {
     final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 800;
+    
+    if (isSmallScreen) {
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildOpinionDropdown(),
+            const SizedBox(height: 16),
+            _buildInputField(),
+            if (_showResultField) ...[
+              const SizedBox(height: 16),
+              _buildResultDisplay(),
+            ],
+            const SizedBox(height: 24),
+            _buildUnitColumnsSmall(),
+          ],
+        ),
+      );
+    }
+    
     final fieldWidth = (screenWidth * 0.2).clamp(250.0, 450.0);
     
     return Center(
@@ -626,6 +654,207 @@ class _MeasurementConverterScreenState
     final bool isToModern = moderns.contains(_selectedToUnit);
     
     return (isFromModern || isToModern) && !(isFromModern && isToModern);
+  }
+
+  Widget _buildUnitColumnsSmall() {
+    final units = _units[_selectedCategory]!;
+    final modernUnits = _getModernUnitsForCategory(_selectedCategory);
+    final ancientUnits = units.where((unit) => !modernUnits.contains(unit)).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // From unit
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              width: 1,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    FluentIcons.arrow_up_24_regular,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'המר מ:',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildHorizontalUnitList(ancientUnits, modernUnits, _selectedFromUnit, (val) {
+                setState(() => _selectedFromUnit = val);
+                _rememberedFromUnits[_selectedCategory] = val!;
+                _convert();
+              }),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Center(
+            child: IconButton(
+              icon: const Icon(FluentIcons.arrow_swap_24_regular),
+              iconSize: 28,
+              onPressed: () {
+                setState(() {
+                  final temp = _selectedFromUnit;
+                  _selectedFromUnit = _selectedToUnit;
+                  _selectedToUnit = temp;
+                  _convert();
+                });
+              },
+              tooltip: 'החלף יחידות',
+              style: IconButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+        ),
+        // To unit
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              width: 1,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    FluentIcons.arrow_down_24_regular,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'המר ל:',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildHorizontalUnitList(ancientUnits, modernUnits, _selectedToUnit, (val) {
+                setState(() => _selectedToUnit = val);
+                _rememberedToUnits[_selectedCategory] = val!;
+                _convert();
+              }),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHorizontalUnitList(
+    List<String> ancientUnits,
+    List<String> modernUnits,
+    String? selectedValue,
+    ValueChanged<String?> onChanged,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (ancientUnits.isNotEmpty) ...[
+          Text(
+            'חז"ל',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: ancientUnits.map((unit) =>
+              _buildHorizontalUnitButton(unit, selectedValue == unit, onChanged)
+            ).toList(),
+          ),
+          if (modernUnits.isNotEmpty) const SizedBox(height: 12),
+        ],
+        if (modernUnits.isNotEmpty) ...[
+          Text(
+            'מודרני',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: modernUnits.map((unit) =>
+              _buildHorizontalUnitButton(unit, selectedValue == unit, onChanged)
+            ).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildHorizontalUnitButton(
+    String unit,
+    bool isSelected,
+    ValueChanged<String?> onChanged,
+  ) {
+    return GestureDetector(
+      onTap: () => onChanged(unit),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primaryContainer
+              : Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(8.0),
+          border: Border.all(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+            width: isSelected ? 2.0 : 1.0,
+          ),
+        ),
+        child: Text(
+          unit,
+          style: TextStyle(
+            color: isSelected
+                ? Theme.of(context).colorScheme.onPrimaryContainer
+                : Theme.of(context).colorScheme.onSurface,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildUnitColumns() {

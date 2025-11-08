@@ -23,6 +23,7 @@ class CalendarState extends Equatable {
   final String eventSearchQuery;
   final bool searchInDescriptions;
   final bool inIsrael;
+  final bool showAllEvents;
 
   const CalendarState({
     required this.selectedJewishDate,
@@ -37,6 +38,7 @@ class CalendarState extends Equatable {
     this.events = const [],
     this.eventSearchQuery = '',
     this.searchInDescriptions = false,
+    this.showAllEvents = false,
   });
 
   factory CalendarState.initial() {
@@ -54,6 +56,7 @@ class CalendarState extends Equatable {
       calendarView: CalendarView.month,
       searchInDescriptions: false,
       inIsrael: true,
+      showAllEvents: false,
     );
   }
 
@@ -70,6 +73,7 @@ class CalendarState extends Equatable {
     String? eventSearchQuery,
     bool? searchInDescriptions,
     bool? inIsrael,
+    bool? showAllEvents,
   }) {
     return CalendarState(
       selectedJewishDate: selectedJewishDate ?? this.selectedJewishDate,
@@ -85,6 +89,7 @@ class CalendarState extends Equatable {
       eventSearchQuery: eventSearchQuery ?? this.eventSearchQuery,
       searchInDescriptions: searchInDescriptions ?? this.searchInDescriptions,
       inIsrael: inIsrael ?? this.inIsrael,
+      showAllEvents: showAllEvents ?? this.showAllEvents,
     );
   }
 
@@ -112,6 +117,7 @@ class CalendarState extends Equatable {
         calendarType,
         calendarView,
         inIsrael,
+        showAllEvents,
       ];
 }
 
@@ -364,6 +370,10 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   void toggleSearchInDescriptions(bool value) {
     emit(state.copyWith(searchInDescriptions: value));
+  }
+
+  void toggleShowAllEvents(bool value) {
+    emit(state.copyWith(showAllEvents: value));
   }
 
   Map<String, String> shortTimesFor(DateTime date) {

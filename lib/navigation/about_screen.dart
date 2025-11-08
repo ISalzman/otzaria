@@ -71,49 +71,106 @@ class _AboutScreenState extends State<AboutScreen> {
       },
     ];
 
-    return Wrap(
-      spacing: 40,
-      runSpacing: 8,
-      children: developers
-          .map((dev) => SizedBox(
-                width: 250,
-                child: Row(
-                  children: [
-                    const Icon(FluentIcons.person_24_regular,
-                        size: 16, color: Colors.grey),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // במסכים קטנים, הצג בעמודה
+        if (constraints.maxWidth < 500) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: developers
+                .map((dev) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
                         children: [
-                          _buildContributor(dev['name']!, dev['url']!),
-                          if (dev['description'] != null)
-                            Text(
-                              '(${dev['description']})',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
+                          const Icon(FluentIcons.person_24_regular,
+                              size: 16, color: Colors.grey),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildContributor(dev['name']!, dev['url']!),
+                                if (dev['description'] != null)
+                                  Text(
+                                    '(${dev['description']})',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                              ],
                             ),
+                          ),
                         ],
                       ),
+                    ))
+                .toList(),
+          );
+        }
+        // במסכים רחבים, השתמש ב-Wrap
+        return Wrap(
+          spacing: 40,
+          runSpacing: 12,
+          children: developers
+              .map((dev) => SizedBox(
+                    width: 220,
+                    child: Row(
+                      children: [
+                        const Icon(FluentIcons.person_24_regular,
+                            size: 16, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildContributor(dev['name']!, dev['url']!),
+                              if (dev['description'] != null)
+                                Text(
+                                  '(${dev['description']})',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ))
-          .toList(),
+                  ))
+              .toList(),
+        );
+      },
     );
   }
 
   Widget _buildTechnicalDetails() {
-    return Wrap(
-      spacing: 30,
-      runSpacing: 8,
-      children: [
-        _buildCompactInfoItem('גרסת תוכנה', appVersion ?? 'לא ידוע'),
-        _buildCompactInfoItem('גרסת ספרייה', libraryVersion ?? 'לא ידוע'),
-        _buildCompactInfoItem('מספר ספרים', '${bookCount ?? 'לא ידוע'}'),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // במסכים קטנים, הצג בעמודה
+        if (constraints.maxWidth < 500) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCompactInfoItem('גרסת תוכנה', appVersion ?? 'לא ידוע'),
+              const SizedBox(height: 8),
+              _buildCompactInfoItem('גרסת ספרייה', libraryVersion ?? 'לא ידוע'),
+              const SizedBox(height: 8),
+              _buildCompactInfoItem('מספר ספרים', '${bookCount ?? 'לא ידוע'}'),
+            ],
+          );
+        }
+        // במסכים רחבים, השתמש ב-Wrap
+        return Wrap(
+          spacing: 30,
+          runSpacing: 8,
+          children: [
+            _buildCompactInfoItem('גרסת תוכנה', appVersion ?? 'לא ידוע'),
+            _buildCompactInfoItem('גרסת ספרייה', libraryVersion ?? 'לא ידוע'),
+            _buildCompactInfoItem('מספר ספרים', '${bookCount ?? 'לא ידוע'}'),
+          ],
+        );
+      },
     );
   }
 
@@ -137,27 +194,36 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Widget _buildMemorialCardsRow() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildMemorialCard(
-            'לע"נ ר\' משה בן יהודה ראה ז"ל',
-            'סכום משמעותי לפיתוח התוכנה',
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildDonationMemorialCard(
-            'מקום זה יכול להיות מונצח לע"נ יקירך',
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildDonationMemorialCard(
-            'מקום זה יכול להיות מונצח לע"נ יקירך',
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // אם הרוחב קטן מ-700, הצג בעמודה
+        if (constraints.maxWidth < 700) {
+          return _buildMemorialCardsColumn();
+        }
+        // אחרת, הצג בשורה
+        return Row(
+          children: [
+            Expanded(
+              child: _buildMemorialCard(
+                'לע"נ ר\' משה בן יהודה ראה ז"ל',
+                'סכום משמעותי לפיתוח התוכנה',
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildDonationMemorialCard(
+                'מקום זה יכול להיות מונצח לע"נ יקירך',
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildDonationMemorialCard(
+                'מקום זה יכול להיות מונצח לע"נ יקירך',
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -275,13 +341,7 @@ class _AboutScreenState extends State<AboutScreen> {
       child: Card(
         elevation: 2,
         child: InkWell(
-          onTap: () async {
-            const url = 'https://forms.gle/Dq8bn7mw7he4wtTC9';
-            final uri = Uri.parse(url);
-            if (await canLaunchUrl(uri)) {
-              await launchUrl(uri);
-            }
-          },
+          onTap: () => _openLocalHtmlFile('donate.html'),
           borderRadius: BorderRadius.circular(8),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -453,48 +513,92 @@ class _AboutScreenState extends State<AboutScreen> {
           ),
           const SizedBox(height: 16),
           // שורה עם שני כפתורים אחד לצד השני
-          Row(
-            children: [
-              // כפתור נדרים פלוס
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    const url = 'https://nedar.im/ejco';
-                    final uri = Uri.parse(url);
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // במסכים קטנים מאוד, הצג בעמודה
+              if (constraints.maxWidth < 300) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        const url = 'https://nedar.im/ejco';
+                        final uri = Uri.parse(url);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: Image.asset(
+                        'assets/icon/logo_nedarim.png',
+                        width: 18,
+                        height: 18,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(FluentIcons.payment_24_regular, size: 18),
+                      ),
+                      label: const Text('נדרים+', style: TextStyle(fontSize: 12)),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => _openLocalHtmlFile('donate.html'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[600],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(FluentIcons.payment_24_regular, size: 18),
+                      label: const Text('אחר', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                );
+              }
+              // במסכים רגילים, הצג בשורה
+              return Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        const url = 'https://nedar.im/ejco';
+                        final uri = Uri.parse(url);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: Image.asset(
+                        'assets/icon/logo_nedarim.png',
+                        width: 18,
+                        height: 18,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(FluentIcons.payment_24_regular, size: 18),
+                      ),
+                      label: const Text('נדרים+', style: TextStyle(fontSize: 12)),
+                    ),
                   ),
-                  icon: Image.asset(
-                    'assets/icon/logo_nedarim.png',
-                    width: 18,
-                    height: 18,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const Icon(FluentIcons.payment_24_regular, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _openLocalHtmlFile('donate.html'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[600],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(FluentIcons.payment_24_regular, size: 18),
+                      label: const Text('אחר', style: TextStyle(fontSize: 12)),
+                    ),
                   ),
-                  label: const Text('נדרים+', style: TextStyle(fontSize: 12)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // כפתור תרומה רגילה
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _openLocalHtmlFile('donate.html'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[600],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  icon: const Icon(FluentIcons.payment_24_regular, size: 18),
-                  label: const Text('אחר', style: TextStyle(fontSize: 12)),
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -503,19 +607,29 @@ class _AboutScreenState extends State<AboutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 900;
+
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // תוכן ראשי - מצד ימין
-          Expanded(
-            flex: 3,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      child: isSmallScreen
+          ? _buildSmallScreenLayout(context)
+          : _buildWideScreenLayout(context),
+    );
+  }
+
+  Widget _buildWideScreenLayout(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // תוכן ראשי - מצד ימין
+        Expanded(
+          flex: 3,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                   // סמל וכותרת משנה
                   Row(
                     children: [
@@ -608,66 +722,190 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
           ),
 
-          // כארד צדדי - מצד שמאל
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final screenWidth = MediaQuery.of(context).size.width;
-
-              final isSmallScreen = screenWidth < 800;
-
-              return SizedBox(
-                width: isSmallScreen ? screenWidth * 0.9 : 300,
-                child: SingleChildScrollView(
-                  child: Card(
-                    margin: const EdgeInsets.all(16),
-                    elevation: 4,
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // כארד הצטרפות למפתחים
-                          _buildActionCard(
-                            title: 'הצטרף לפיתוח!',
-                            description:
-                                'מפתחים מוזמנים להצטרף לפיתוח אוצריא ולתרום לקהילה התורנית.',
-                            buttonText: 'הצטרף עכשיו',
-                            icon: FluentIcons.code_24_regular,
-                            color: Colors.grey[600]!,
-                            showGitHubIcon: true,
-                            onTap: () =>
-                                _openLocalHtmlFile('tutorial-development.html'),
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          // כארד הצטרפות לצוות העריכה
-                          _buildActionCard(
-                            title: 'הצטרף לצוות העריכה',
-                            description:
-                                'עזור לנו להוסיף ספרים חדשים לספריית אוצריא ולהרחיב את המאגר התורני.',
-                            buttonText: 'הצטרף לעריכה',
-                            icon: FluentIcons.edit_24_regular,
-                            color: Colors.green[600]!,
-                            onTap: () =>
-                                _openLocalHtmlFile('tutorial-dicta.html'),
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          // כארד תרומות
-                          _buildDonationCard(),
-                        ],
-                      ),
+        // כארד צדדי - מצד שמאל
+        SizedBox(
+          width: 300,
+          child: SingleChildScrollView(
+            child: Card(
+              margin: const EdgeInsets.all(16),
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildActionCard(
+                      title: 'הצטרף לפיתוח!',
+                      description:
+                          'מפתחים מוזמנים להצטרף לפיתוח אוצריא ולתרום לקהילה התורנית.',
+                      buttonText: 'הצטרף עכשיו',
+                      icon: FluentIcons.code_24_regular,
+                      color: Colors.grey[600]!,
+                      showGitHubIcon: true,
+                      onTap: () =>
+                          _openLocalHtmlFile('tutorial-development.html'),
                     ),
-                  ),
+                    const SizedBox(height: 20),
+                    _buildActionCard(
+                      title: 'הצטרף לצוות העריכה',
+                      description:
+                          'עזור לנו להוסיף ספרים חדשים לספריית אוצריא ולהרחיב את המאגר התורני.',
+                      buttonText: 'הצטרף לעריכה',
+                      icon: FluentIcons.edit_24_regular,
+                      color: Colors.green[600]!,
+                      onTap: () => _openLocalHtmlFile('tutorial-dicta.html'),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildDonationCard(),
+                  ],
                 ),
-              );
-            },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSmallScreenLayout(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // סמל וכותרת
+          _buildHeader(),
+          const SizedBox(height: 16),
+
+          // תיאור
+          const Text(
+            'מאגר תורני רחב עם ממשק מודרני ומהיר, לשימוד תורה בקלות ובנוחות בכל מקום.',
+            style: TextStyle(fontSize: 14, height: 1.5),
+          ),
+          const SizedBox(height: 24),
+
+          // כארדים של פעולות (למעלה במסכים קטנים)
+          _buildActionCard(
+            title: 'הצטרף לפיתוח!',
+            description:
+                'מפתחים מוזמנים להצטרף לפיתוח אוצריא ולתרום לקהילה התורנית.',
+            buttonText: 'הצטרף עכשיו',
+            icon: FluentIcons.code_24_regular,
+            color: Colors.grey[600]!,
+            showGitHubIcon: true,
+            onTap: () => _openLocalHtmlFile('tutorial-development.html'),
+          ),
+          const SizedBox(height: 16),
+          _buildActionCard(
+            title: 'הצטרף לצוות העריכה',
+            description:
+                'עזור לנו להוסיף ספרים חדשים לספריית אוצריא ולהרחיב את המאגר התורני.',
+            buttonText: 'הצטרף לעריכה',
+            icon: FluentIcons.edit_24_regular,
+            color: Colors.green[600]!,
+            onTap: () => _openLocalHtmlFile('tutorial-dicta.html'),
+          ),
+          const SizedBox(height: 16),
+          _buildDonationCard(),
+          const SizedBox(height: 24),
+
+          // תורמים
+          const Text(
+            'תורמים',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          _buildMemorialCardsColumn(),
+          const SizedBox(height: 24),
+
+          // מפתחים
+          const Text(
+            'מפתחים',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          _buildDevelopersList(),
+          const SizedBox(height: 24),
+
+          // פרטים טכניים
+          const Text(
+            'פרטים טכניים',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          _buildTechnicalDetails(),
+          const SizedBox(height: 16),
+
+          // כפתור יומן שינויים
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _showChangelogDialog(context),
+              icon: const Icon(FluentIcons.history_24_regular),
+              label: const Text('יומן שינויים'),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isVerySmall = constraints.maxWidth < 400;
+        return Row(
+          children: [
+            Image.asset(
+              'assets/icon/icon.png',
+              width: isVerySmall ? 50 : 60,
+              height: isVerySmall ? 50 : 60,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'אוצריא',
+                    style: TextStyle(
+                      fontSize: isVerySmall ? 20 : 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'מאגר תורני חינמי',
+                    style: TextStyle(
+                      fontSize: isVerySmall ? 12 : 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildMemorialCardsColumn() {
+    return Column(
+      children: [
+        _buildMemorialCard(
+          'לע"נ ר\' משה בן יהודה ראה ז"ל',
+          'סכום משמעותי לפיתוח התוכנה',
+        ),
+        const SizedBox(height: 12),
+        _buildDonationMemorialCard(
+          'מקום זה יכול להיות מונצח לע"נ יקירך',
+        ),
+        const SizedBox(height: 12),
+        _buildDonationMemorialCard(
+          'מקום זה יכול להיות מונצח לע"נ יקירך',
+        ),
+      ],
     );
   }
 }
