@@ -151,7 +151,8 @@ class _ReadingScreenState extends State<ReadingScreen>
                   centerTitle: true,
                   title: Container(
                     // שימוש בכל גובה ה-AppBar כך שלא יהיה רווח למעלה
-                    constraints: const BoxConstraints(maxHeight: kToolbarHeight),
+                    constraints:
+                        const BoxConstraints(maxHeight: kToolbarHeight),
                     child: ScrollableTabBarWithArrows(
                       controller: controller,
                       // ממורכז את שורת הטאבים
@@ -324,7 +325,7 @@ class _ReadingScreenState extends State<ReadingScreen>
               final newIndex = state.tabs.indexOf(tab);
               context.read<TabsBloc>().add(MoveTab(draggedTab.data, newIndex));
             },
-builder: (context, candidateData, rejectedData) => Row(
+            builder: (context, candidateData, rejectedData) => Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // --- לוגיקה חדשה ומאוחדת לפס הפרדה שמופיע מימין לטאב ---
@@ -333,11 +334,11 @@ builder: (context, candidateData, rejectedData) => Row(
                     // תנאי 1: הצגת פס הפרדה בקצה הימני של כל הטאבים.
                     // הפס נוצר על ידי הטאב הראשון (index 0) כשהוא אינו פעיל.
                     (index == 0 && state.currentTabIndex != 0) ||
-                    // תנאי 2: הצגת פס הפרדה בין שני טאבים.
-                    // הפס נוצר על ידי הטאב הנוכחי (index) אם הוא וגם הטאב שלפניו (index - 1) אינם פעילים.
-                    (index > 0 &&
-                        state.currentTabIndex != index &&
-                        state.currentTabIndex != index - 1))
+                        // תנאי 2: הצגת פס הפרדה בין שני טאבים.
+                        // הפס נוצר על ידי הטאב הנוכחי (index) אם הוא וגם הטאב שלפניו (index - 1) אינם פעילים.
+                        (index > 0 &&
+                            state.currentTabIndex != index &&
+                            state.currentTabIndex != index - 1))
                   Container(
                     width: 1,
                     height: 32,
@@ -349,8 +350,8 @@ builder: (context, candidateData, rejectedData) => Row(
                 Container(
                   // ניצול מלא של גובה ה-AppBar, ללא רווח עליון
                   constraints: const BoxConstraints(maxHeight: kToolbarHeight),
-                  padding:
-                      const EdgeInsets.only(left: 6, right: 6, top: 0, bottom: 0),
+                  padding: const EdgeInsets.only(
+                      left: 6, right: 6, top: 0, bottom: 0),
                   child: CustomPaint(
                     painter: isSelected
                         ? _TabBackgroundPainter(
@@ -439,14 +440,6 @@ builder: (context, candidateData, rejectedData) => Row(
     );
   }
 
-  bool _showBetweenSeparator(int index, TabsState state) {
-    final last = state.tabs.length - 1;
-    if (index >= last) return false; // אין טאב שאחריו
-    final selected = state.currentTabIndex;
-    // מציגים מפריד רק אם שני הטאבים הסמוכים אינם פעילים
-    return index != selected && (index + 1) != selected;
-  }
-
   List<ContextMenuEntry> _getMenuItems(
       List<OpenedTab> tabs, BuildContext context) {
     List<MenuItem> items = tabs
@@ -477,21 +470,23 @@ builder: (context, candidateData, rejectedData) => Row(
   }
 
   void pinTabToHomePage(OpenedTab tab, BuildContext context) {
-    print('Pinning tab: ${tab.title}'); // debug
-    
+    debugPrint('Pinning tab: ${tab.title}'); // debug
+
     // קבל את הרשימה הנוכחית של הספרים הנעוצים
-    final currentBooksString = Settings.getValue<String>('key-pinned-books') ?? '';
-    
+    final currentBooksString =
+        Settings.getValue<String>('key-pinned-books') ?? '';
+
     List<Map<String, dynamic>> currentPinnedBooksJson;
     try {
-      currentPinnedBooksJson = currentBooksString.isEmpty 
-          ? <Map<String, dynamic>>[] 
-          : (jsonDecode(currentBooksString) as List).cast<Map<String, dynamic>>();
+      currentPinnedBooksJson = currentBooksString.isEmpty
+          ? <Map<String, dynamic>>[]
+          : (jsonDecode(currentBooksString) as List)
+              .cast<Map<String, dynamic>>();
     } catch (e) {
-      print('Error parsing current pinned books, resetting: $e');
+      debugPrint('Error parsing current pinned books, resetting: $e');
       currentPinnedBooksJson = <Map<String, dynamic>>[];
     }
-    
+
     // בדוק אם הספר כבר נעוץ
     if (currentPinnedBooksJson.any((book) => book['title'] == tab.title)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -502,13 +497,13 @@ builder: (context, candidateData, rejectedData) => Row(
       );
       return;
     }
-    
+
     // צור אובייקט עם כל המידע של הטאב
     final bookData = <String, dynamic>{
       'title': tab.title,
       'type': tab.runtimeType.toString(),
     };
-    
+
     // הוסף מידע ספציפי לפי סוג הטאב
     if (tab is TextBookTab) {
       bookData['bookTitle'] = tab.book.title;
@@ -518,16 +513,16 @@ builder: (context, candidateData, rejectedData) => Row(
       bookData['bookPath'] = tab.book.path;
       bookData['pageNumber'] = tab.pageNumber;
     }
-    
+
     // הוסף את הספר החדש
     final updatedBooks = [...currentPinnedBooksJson, bookData];
-    
+
     // שמור את הרשימה המעודכנת כ-JSON
     final booksString = jsonEncode(updatedBooks);
     Settings.setValue<String>('key-pinned-books', booksString);
-    
-    print('Saved pinned books: $booksString'); // debug
-    
+
+    debugPrint('Saved pinned books: $booksString'); // debug
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('הצמדת "${tab.title}" לדף הבית'),
@@ -571,9 +566,9 @@ builder: (context, candidateData, rejectedData) => Row(
 // CustomPainter לציור רקע של הטאב הפעיל
 class _TabBackgroundPainter extends CustomPainter {
   final Color backgroundColor;
-  
+
   _TabBackgroundPainter(this.backgroundColor);
-  
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
@@ -581,38 +576,38 @@ class _TabBackgroundPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final path = Path();
-  // radius היה בשימוש בעבר לציור נוסף והוסר
-  final topRadius = 8.0;
-  // החזרת קו הבסיס הנמוך כדי להבטיח שהוא נראה משני הצדדים
-  final bottomOffset = 6.0;
+    // radius היה בשימוש בעבר לציור נוסף והוסר
+    final topRadius = 8.0;
+    // החזרת קו הבסיס הנמוך כדי להבטיח שהוא נראה משני הצדדים
+    final bottomOffset = 6.0;
 
     // מתחילים מהפינה השמאלית התחתונה
     path.moveTo(0, size.height + bottomOffset);
-    
+
     // קו שמאלי למעלה
     path.lineTo(0, topRadius);
-    
+
     // פינה עליונה שמאלית מעוגלת
     path.arcToPoint(
       Offset(topRadius, 0),
       radius: Radius.circular(topRadius),
     );
-    
+
     // קו עליון
     path.lineTo(size.width - topRadius, 0);
-    
+
     // פינה עליונה ימנית מעוגלת
     path.arcToPoint(
       Offset(size.width, topRadius),
       radius: Radius.circular(topRadius),
     );
-    
+
     // קו ימני למטה
     path.lineTo(size.width, size.height + bottomOffset);
-    
+
     // קו תחתון
     path.lineTo(0, size.height + bottomOffset);
-    
+
     path.close();
     canvas.drawPath(path, paint);
   }
@@ -633,35 +628,35 @@ class _TabBorderPainter extends CustomPainter {
 
     final path = Path();
     final radius = 8.0;
-  final topRadius = 8.0;
-  final extendLength = 2000.0; // אורך ארוך מספיק להגיע לקצה החלון
-  // שימוש ב-offset נמוך כדי למנוע "בליעה" של הקו התחתון
-  final bottomOffset = 6.0;
+    final topRadius = 8.0;
+    final extendLength = 2000.0; // אורך ארוך מספיק להגיע לקצה החלון
+    // שימוש ב-offset נמוך כדי למנוע "בליעה" של הקו התחתון
+    final bottomOffset = 6.0;
 
     // מתחילים מהפינה השמאלית התחתונה עם עיגול
     path.moveTo(0, size.height - radius + bottomOffset);
-    
+
     // קו שמאלי למעלה
     path.lineTo(0, topRadius);
-    
+
     // פינה עליונה שמאלית מעוגלת
     path.arcToPoint(
       Offset(topRadius, 0),
       radius: Radius.circular(topRadius),
     );
-    
+
     // קו עליון
     path.lineTo(size.width - topRadius, 0);
-    
+
     // פינה עליונה ימנית מעוגלת
     path.arcToPoint(
       Offset(size.width, topRadius),
       radius: Radius.circular(topRadius),
     );
-    
+
     // קו ימני למטה
     path.lineTo(size.width, size.height - radius + bottomOffset);
-    
+
     // פינה תחתונה ימנית מעוגלת - הקפדה שהקו התחתון יישאר רציף
     path.arcToPoint(
       Offset(size.width + radius, size.height + bottomOffset),
@@ -670,7 +665,7 @@ class _TabBorderPainter extends CustomPainter {
     );
 
     canvas.drawPath(path, paint);
-    
+
     // פינה תחתונה שמאלית מעוגלת - הקפדה שהקו התחתון יישאר רציף
     final leftBottomPath = Path();
     leftBottomPath.moveTo(0, size.height - radius + bottomOffset);
@@ -679,9 +674,9 @@ class _TabBorderPainter extends CustomPainter {
       radius: Radius.circular(radius),
       clockwise: true,
     );
-    
+
     canvas.drawPath(leftBottomPath, paint);
-    
+
     // קווים ארוכים נפרדים - משני הצדדים
     // קו ימני
     canvas.drawLine(
@@ -689,7 +684,7 @@ class _TabBorderPainter extends CustomPainter {
       Offset(size.width + extendLength, size.height + bottomOffset),
       paint,
     );
-    
+
     // קו שמאלי
     canvas.drawLine(
       Offset(-radius, size.height + bottomOffset),
@@ -701,4 +696,3 @@ class _TabBorderPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
