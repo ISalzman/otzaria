@@ -483,10 +483,10 @@ class _AboutScreenState extends State<AboutScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+        color: Colors.grey[600]!.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: Theme.of(context).primaryColor.withValues(alpha: 0.3)),
+            color: Colors.grey[600]!.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -494,14 +494,14 @@ class _AboutScreenState extends State<AboutScreen> {
           Row(
             children: [
               Icon(Icons.volunteer_activism_outlined,
-                  color: Theme.of(context).primaryColor, size: 24),
+                  color: Colors.grey[600]!, size: 24),
               const SizedBox(width: 8),
               Text(
                 'תרום לפרויקט',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).primaryColor,
+                  color: Colors.grey[600]!,
                 ),
               ),
             ],
@@ -529,7 +529,7 @@ class _AboutScreenState extends State<AboutScreen> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
+                        backgroundColor: Colors.grey[600],
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
@@ -569,7 +569,7 @@ class _AboutScreenState extends State<AboutScreen> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
+                        backgroundColor: Colors.grey[600],
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
@@ -753,7 +753,7 @@ class _AboutScreenState extends State<AboutScreen> {
                           'עזור לנו להוסיף ספרים חדשים לספריית אוצריא ולהרחיב את המאגר התורני.',
                       buttonText: 'הצטרף לעריכה',
                       icon: FluentIcons.edit_24_regular,
-                      color: Colors.green[600]!,
+                      color: Colors.grey[600]!,
                       onTap: () => _openLocalHtmlFile('tutorial-dicta.html'),
                     ),
                     const SizedBox(height: 20),
@@ -803,7 +803,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 'עזור לנו להוסיף ספרים חדשים לספריית אוצריא ולהרחיב את המאגר התורני.',
             buttonText: 'הצטרף לעריכה',
             icon: FluentIcons.edit_24_regular,
-            color: Colors.green[600]!,
+            color: Colors.grey[600]!,
             onTap: () => _openLocalHtmlFile('tutorial-dicta.html'),
           ),
           const SizedBox(height: 16),
