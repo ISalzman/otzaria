@@ -67,6 +67,9 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 700;
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor:
@@ -84,6 +87,40 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
       ),
       body: OrientationBuilder(
         builder: (context, orientation) {
+          if (isSmallScreen) {
+            // במסכים קטנים - השתמש ב-BottomNavigationBar
+            return Column(
+              children: [
+                Expanded(
+                  child: PageView(
+                    scrollDirection: orientation == Orientation.landscape
+                        ? Axis.vertical
+                        : Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(),
+                    controller: _pageController,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _selectedIndex = index;
+                      });
+                    },
+                    children: [
+                      BlocProvider.value(
+                        value: _calendarCubit,
+                        child: const CalendarWidget(),
+                      ),
+                      ShamorZachorWidget(
+                        onTitleChanged: _updateShamorZachorTitle,
+                      ),
+                      const MeasurementConverterScreen(),
+                      const PersonalNotesManagerScreen(),
+                      GematriaSearchScreen(key: _gematriaKey),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }
+          // במסכים רחבים - השתמש ב-NavigationRail
           return Row(
             children: [
               NavigationRail(
@@ -155,6 +192,48 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
           );
         },
       ),
+      bottomNavigationBar: isSmallScreen
+          ? BottomNavigationBar(
+              currentIndex: _selectedIndex,
+              onTap: (int index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+                if (_pageController.hasClients) {
+                  _pageController.animateToPage(
+                    index,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                }
+              },
+              type: BottomNavigationBarType.fixed,
+              selectedFontSize: 11,
+              unselectedFontSize: 10,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.calendar_month_outlined, size: 20),
+                  label: 'לוח שנה',
+                ),
+                BottomNavigationBarItem(
+                  icon: ImageIcon(AssetImage('assets/icon/זכור ושמור.png'), size: 20),
+                  label: 'זכור ושמור',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.straighten, size: 20),
+                  label: 'מדות',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(FluentIcons.note_24_regular, size: 20),
+                  label: 'הערות',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(FluentIcons.calculator_24_regular, size: 20),
+                  label: 'גימטריה',
+                ),
+              ],
+            )
+          : null,
     );
   }
 
