@@ -8,7 +8,8 @@ import 'package:otzaria/models/books.dart';
 class TocParser {
   /// Parse TOC from a file path and return a flat structure compatible with
   /// Shamor Zachor scanner (list of maps with text/index/level).
-  static Future<List<Map<String, dynamic>>> parseFlatFromFile(String bookPath) async {
+  static Future<List<Map<String, dynamic>>> parseFlatFromFile(
+      String bookPath) async {
     try {
       final file = File(bookPath);
       if (!await file.exists()) {
@@ -58,13 +59,8 @@ class TocParser {
         }
       }
 
-      // Fallback: consider short bold-only lines as level-1 headers
-      if (line.contains('<b>') && !line.contains('<br>')) {
-        final text = _stripHtmlTags(line);
-        if (text.isNotEmpty && text.length < 100) {
-          headers.add(_Header(text: text, index: i, level: 1));
-        }
-      }
+      // Removed fallback for bold-only lines as it was too broad
+      // and incorrectly identified regular bold text as headers
     }
 
     return headers;
