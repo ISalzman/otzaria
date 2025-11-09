@@ -34,7 +34,8 @@ class MainWindowScreen extends StatefulWidget {
 }
 
 // Global key for accessing MoreScreen
-final GlobalKey<State<MoreScreen>> moreScreenKey = GlobalKey<State<MoreScreen>>();
+final GlobalKey<State<MoreScreen>> moreScreenKey =
+    GlobalKey<State<MoreScreen>>();
 
 class MainWindowScreenState extends State<MainWindowScreen>
     with TickerProviderStateMixin {
@@ -54,8 +55,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   void initState() {
     super.initState();
     _calendarCubit = CalendarCubit();
-    final initialPage =
-        _pageIndexForScreen(
+    final initialPage = _pageIndexForScreen(
           context.read<NavigationBloc>().state.currentScreen,
         ) ??
         Screen.library.index;
@@ -90,10 +90,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
         if (!mounted || !pageController.hasClients) {
           return;
         }
-        final currentScreen = context
-            .read<NavigationBloc>()
-            .state
-            .currentScreen;
+        final currentScreen =
+            context.read<NavigationBloc>().state.currentScreen;
         final targetPage = _pageIndexForScreen(currentScreen);
         if (targetPage == null) {
           return;
@@ -111,12 +109,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     final libraryShortcut =
         Settings.getValue<String>('key-shortcut-open-library-browser') ??
-        'ctrl+l';
+            'ctrl+l';
     final findShortcut =
         Settings.getValue<String>('key-shortcut-open-find-ref') ?? 'ctrl+o';
     final browseShortcut =
         Settings.getValue<String>('key-shortcut-open-reading-screen') ??
-        'ctrl+r';
+            'ctrl+r';
     final searchShortcut =
         Settings.getValue<String>('key-shortcut-open-new-search') ?? 'ctrl+q';
 
@@ -158,11 +156,26 @@ class MainWindowScreenState extends State<MainWindowScreen>
         label: 'חיפוש',
       ),
       NavigationDestination(
-        icon: Icon(FluentIcons.apps_24_regular),
+        tooltip: '',
+        icon: Tooltip(
+          preferBelow: false,
+          message: formatShortcut(
+            Settings.getValue<String>('key-shortcut-open-more') ?? 'ctrl+m',
+          ),
+          child: const Icon(FluentIcons.apps_24_regular),
+        ),
         label: 'כלים',
       ),
       NavigationDestination(
-        icon: Icon(FluentIcons.settings_24_regular),
+        tooltip: '',
+        icon: Tooltip(
+          preferBelow: false,
+          message: formatShortcut(
+            Settings.getValue<String>('key-shortcut-open-settings') ??
+                'ctrl+comma',
+          ),
+          child: const Icon(FluentIcons.settings_24_regular),
+        ),
         label: 'הגדרות',
       ),
       NavigationDestination(
@@ -192,8 +205,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
       }
       if (state.currentScreen == Screen.library) {
         context.read<FocusRepository>().requestLibrarySearchFocus(
-          selectAll: true,
-        );
+              selectAll: true,
+            );
       }
     }
   }
@@ -211,8 +224,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           listenWhen: (previous, current) {
             // Trigger when settings are loaded for the first time (not initial state anymore)
             // or when autoUpdateIndex changes
-            final isInitialLoad =
-                previous == SettingsState.initial() &&
+            final isInitialLoad = previous == SettingsState.initial() &&
                 current != SettingsState.initial();
             final hasChanged =
                 previous.autoUpdateIndex != current.autoUpdateIndex;
@@ -241,7 +253,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
                     : const LibraryBrowser(),
               ),
               const KeepAlivePage(child: ReadingScreen()),
-              const KeepAlivePage(child: SizedBox.shrink()),
               KeepAlivePage(child: MoreScreen(key: moreScreenKey)),
               const KeepAlivePage(child: MySettingsScreen()),
             ];
@@ -269,62 +280,58 @@ class MainWindowScreenState extends State<MainWindowScreen>
                           children: [
                             SizedBox.fromSize(
                               size: const Size.fromWidth(80),
-                              child: LayoutBuilder(
-                                builder: (context, constraints) =>
-                                    NavigationRail(
-                                      labelType: NavigationRailLabelType.all,
-                                      destinations: [
-                                        for (var destination
-                                            in _buildNavigationDestinations())
-                                          NavigationRailDestination(
-                                            icon: Tooltip(
-                                              preferBelow: false,
-                                              message:
-                                                  destination.tooltip ?? '',
-                                              child: destination.icon,
+                              child: Material(
+                                color: Theme.of(context).colorScheme.surface,
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    // חישוב גובה משוער לכל הכפתורים
+                                    const buttonHeight = 60.0; // גובה משוער לכפתור + padding
+                                    final totalButtonsHeight = 7 * buttonHeight;
+                                    final minSpacerHeight = 20.0;
+                                    final needsScroll = totalButtonsHeight + minSpacerHeight > constraints.maxHeight;
+
+                                    if (needsScroll) {
+                                      // אם אין מספיק מקום, השתמש בגלילה
+                                      return SingleChildScrollView(
+                                        child: Column(
+                                          children: [
+                                            for (int i = 0; i < 7; i++)
+                                              _buildNavButton(
+                                                context,
+                                                _buildNavigationDestinations()[i],
+                                                i,
+                                                state.currentScreen,
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    } else {
+                                      // אם יש מספיק מקום, השתמש ב-Spacer
+                                      return Column(
+                                        children: [
+                                          // כפתורים עליונים
+                                          for (int i = 0; i < 5; i++)
+                                            _buildNavButton(
+                                              context,
+                                              _buildNavigationDestinations()[i],
+                                              i,
+                                              state.currentScreen,
                                             ),
-                                            label: Text(destination.label),
-                                            padding:
-                                                destination.label == 'הגדרות'
-                                                ? EdgeInsets.only(
-                                                    top:
-                                                        constraints.maxHeight -
-                                                        470,
-                                                  )
-                                                : null,
-                                          ),
-                                      ],
-                                      selectedIndex: _getSelectedIndex(
-                                        state.currentScreen,
-                                      ),
-                                      onDestinationSelected: (index) {
-                                        if (index == Screen.search.index) {
-                                          _handleSearchTabOpen(context);
-                                        } else if (index == Screen.find.index) {
-                                          _handleFindRefOpen(context);
-                                        } else if (index ==
-                                            Screen.about.index) {
-                                          showDialog(
-                                            context: context,
-                                            builder: (context) =>
-                                                const AboutDialogWidget(),
-                                          );
-                                        } else {
-                                          context.read<NavigationBloc>().add(
-                                            NavigateToScreen(
-                                              Screen.values[index],
+                                          // רווח גמיש
+                                          const Spacer(),
+                                          // כפתורים תחתונים
+                                          for (int i = 5; i < 7; i++)
+                                            _buildNavButton(
+                                              context,
+                                              _buildNavigationDestinations()[i],
+                                              i,
+                                              state.currentScreen,
                                             ),
-                                          );
-                                        }
-                                        if (index == Screen.library.index) {
-                                          context
-                                              .read<FocusRepository>()
-                                              .requestLibrarySearchFocus(
-                                                selectAll: true,
-                                              );
-                                        }
-                                      },
-                                    ),
+                                        ],
+                                      );
+                                    }
+                                  },
+                                ),
                               ),
                             ),
                             const VerticalDivider(thickness: 1, width: 1),
@@ -388,9 +395,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case Screen.search:
         return 1;
       case Screen.more:
-        return 3;
+        return 2;
       case Screen.settings:
-        return 4;
+        return 3;
       case Screen.find:
       case Screen.about:
         return null;
@@ -461,6 +468,78 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case Screen.about:
         return 6;
     }
+  }
+
+  Widget _buildNavButton(
+    BuildContext context,
+    NavigationDestination destination,
+    int index,
+    Screen currentScreen,
+  ) {
+    final isSelected = _getSelectedIndex(currentScreen) == index;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: 80,
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: () {
+              if (index == Screen.search.index) {
+                _handleSearchTabOpen(context);
+              } else if (index == Screen.find.index) {
+                _handleFindRefOpen(context);
+              } else if (index == Screen.about.index) {
+                showDialog(
+                  context: context,
+                  builder: (context) => const AboutDialogWidget(),
+                );
+              } else {
+                context.read<NavigationBloc>().add(
+                  NavigateToScreen(Screen.values[index]),
+                );
+              }
+              if (index == Screen.library.index) {
+                context.read<FocusRepository>().requestLibrarySearchFocus(
+                  selectAll: true,
+                );
+              }
+            },
+            icon: IconTheme(
+              data: IconThemeData(
+                color: isSelected
+                    ? colorScheme.onSecondaryContainer
+                    : colorScheme.onSurfaceVariant,
+                size: 24,
+              ),
+              child: destination.icon,
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: isSelected
+                  ? colorScheme.secondaryContainer
+                  : Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              minimumSize: const Size(64, 25),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            destination.label,
+            style: TextStyle(
+              fontSize: 12,
+              color: isSelected
+                  ? colorScheme.onSecondaryContainer
+                  : colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
   }
 }
 

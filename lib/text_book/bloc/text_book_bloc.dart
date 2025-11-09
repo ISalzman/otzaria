@@ -309,8 +309,20 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       }
 
       int? index = currentState.selectedIndex;
-      if (!event.visibleIndecies.contains(index)) {
-        index = null;
+      // איפוס selectedIndex רק אם היתה גלילה משמעותית (יותר מ-3 שורות)
+      // כדי למנוע איפוס כשפשוט עוברים בין tabs
+      if (index != null && !event.visibleIndecies.contains(index)) {
+        final oldFirst = currentState.visibleIndices.isNotEmpty 
+            ? currentState.visibleIndices.first 
+            : 0;
+        final newFirst = event.visibleIndecies.isNotEmpty 
+            ? event.visibleIndecies.first 
+            : 0;
+        
+        // רק אם גללנו יותר מ-3 שורות, נאפס את הבחירה
+        if ((oldFirst - newFirst).abs() > 3) {
+          index = null;
+        }
       }
       final visibleLinks = _getVisibleLinks(
         links: currentState.links,

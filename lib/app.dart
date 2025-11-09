@@ -44,9 +44,13 @@ class App extends StatelessWidget {
                         TextStyle(fontSize: 18.0, fontFamily: 'candara'),
                   ),
                 ).copyWith(
-                  dialogTheme: const DialogThemeData(
-                    barrierColor: Color(0x22000000),
-                    backgroundColor: Colors.white,
+                  dialogTheme: DialogThemeData(
+                    barrierColor: const Color(0x22000000),
+                    backgroundColor: ThemeData(
+                      colorScheme: ColorScheme.fromSeed(
+                        seedColor: state.seedColor,
+                      ),
+                    ).scaffoldBackgroundColor,
                   ),
                 ),
           home: const MainWindowScreen(),
