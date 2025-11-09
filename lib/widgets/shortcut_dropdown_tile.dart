@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/shortcut_validator.dart';
+import 'package:otzaria/widgets/custom_shortcut_dialog.dart';
+import 'package:otzaria/widgets/keyboard_shortcuts.dart';
 
 /// Custom DropDownSettingsTile that filters out shortcuts already in use
-class ShortcutDropDownTile extends StatelessWidget {
+class ShortcutDropDownTile extends StatefulWidget {
   final String settingKey;
   final String title;
   final String selected;
@@ -20,14 +22,20 @@ class ShortcutDropDownTile extends StatelessWidget {
   });
 
   @override
+  State<ShortcutDropDownTile> createState() => _ShortcutDropDownTileState();
+}
+
+class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
+  @override
   Widget build(BuildContext context) {
     // Get current value for this setting
-    final currentValue = Settings.getValue<String>(settingKey) ?? selected;
+    final currentValue =
+        Settings.getValue<String>(widget.settingKey) ?? widget.selected;
 
     // Get all shortcuts that are in use by OTHER settings
     final usedShortcuts = <String>{};
     for (final key in ShortcutValidator.shortcutKeys) {
-      if (key != settingKey) {
+      if (key != widget.settingKey) {
         // Don't include current setting
         final value = Settings.getValue<String>(key) ??
             ShortcutValidator.defaultShortcuts[key];
@@ -39,33 +47,86 @@ class ShortcutDropDownTile extends StatelessWidget {
 
     // Filter out shortcuts that are already in use
     final availableShortcuts = <String, String>{};
-    for (final entry in allShortcuts.entries) {
+
+    // הוספת אופציה להתאמה אישית
+    availableShortcuts['__custom__'] = 'התאמה אישית...';
+
+    for (final entry in widget.allShortcuts.entries) {
       // Include if: it's the current value OR it's not used by others
       if (entry.key == currentValue || !usedShortcuts.contains(entry.key)) {
         availableShortcuts[entry.key] = entry.value;
       }
     }
 
-    // If current value is not in available shortcuts (shouldn't happen), add it
-    if (!availableShortcuts.containsKey(currentValue)) {
+    // If current value is not in available shortcuts (custom shortcut), add it
+    if (!availableShortcuts.containsKey(currentValue) &&
+        !widget.allShortcuts.containsKey(currentValue)) {
       availableShortcuts[currentValue] =
-          allShortcuts[currentValue] ?? currentValue.toUpperCase();
+          currentValue.toUpperCase().replaceAll('+', ' + ');
     }
 
     return DropDownSettingsTile<String>(
-      settingKey: settingKey,
-      title: title,
-      selected: selected,
+      key: ValueKey('${widget.settingKey}_$currentValue'),
+      settingKey: widget.settingKey,
+      title: widget.title,
+      selected: widget.selected,
       values: availableShortcuts,
-      leading: leading,
-      onChange: (newValue) {
+      leading: widget.leading,
+      onChange: (newValue) async {
+        // אם בחרו בהתאמה אישית, פתח את הדיאלוג
+        if (newValue == '__custom__') {
+          final customShortcut = await showDialog<String>(
+            context: context,
+            builder: (context) => CustomShortcutDialog(
+              initialShortcut: currentValue,
+            ),
+          );
+
+          if (customShortcut != null && customShortcut.isNotEmpty) {
+            // שמירת הקיצור המותאם אישית
+            await Settings.setValue<String>(widget.settingKey, customShortcut);
+
+            // עדכון המסך
+            if (mounted) {
+              setState(() {});
+            }
+
+            // שידור שהקיצורים השתנו
+            notifyShortcutsChanged();
+
+            // בדיקת קונפליקטים
+            final conflicts = ShortcutValidator.checkConflicts();
+            if (conflicts.isNotEmpty && conflicts.containsKey(customShortcut)) {
+              final conflictingKeys = conflicts[customShortcut]!;
+              final conflictingNames = conflictingKeys
+                  .where((k) => k != widget.settingKey)
+                  .map((k) => ShortcutValidator.shortcutNames[k] ?? k)
+                  .join(', ');
+
+              if (conflictingNames.isNotEmpty && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'אזהרה: קיצור זה כבר בשימוש עבור: $conflictingNames',
+                      textDirection: TextDirection.rtl,
+                    ),
+                    backgroundColor: Colors.orange,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              }
+            }
+          }
+          return;
+        }
+
         // Check if the new value creates a conflict
         final conflicts = ShortcutValidator.checkConflicts();
         if (conflicts.isNotEmpty && conflicts.containsKey(newValue)) {
           // Show warning
           final conflictingKeys = conflicts[newValue]!;
           final conflictingNames = conflictingKeys
-              .where((k) => k != settingKey)
+              .where((k) => k != widget.settingKey)
               .map((k) => ShortcutValidator.shortcutNames[k] ?? k)
               .join(', ');
 
