@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/settings_bloc.dart';
+import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/utils/shortcut_validator.dart';
 import 'package:otzaria/widgets/custom_shortcut_dialog.dart';
-import 'package:otzaria/widgets/keyboard_shortcuts.dart';
 
 /// Custom DropDownSettingsTile that filters out shortcuts already in use
 class ShortcutDropDownTile extends StatefulWidget {
@@ -73,6 +75,8 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
       values: availableShortcuts,
       leading: widget.leading,
       onChange: (newValue) async {
+        String? finalValue = newValue;
+
         // אם בחרו בהתאמה אישית, פתח את הדיאלוג
         if (newValue == '__custom__') {
           final customShortcut = await showDialog<String>(
@@ -85,52 +89,32 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
           if (customShortcut != null && customShortcut.isNotEmpty) {
             // שמירת הקיצור המותאם אישית
             await Settings.setValue<String>(widget.settingKey, customShortcut);
-
-            // עדכון המסך
-            if (mounted) {
-              setState(() {});
-            }
-
-            // שידור שהקיצורים השתנו
-            notifyShortcutsChanged();
-
-            // בדיקת קונפליקטים
-            final conflicts = ShortcutValidator.checkConflicts();
-            if (conflicts.isNotEmpty && conflicts.containsKey(customShortcut)) {
-              final conflictingKeys = conflicts[customShortcut]!;
-              final conflictingNames = conflictingKeys
-                  .where((k) => k != widget.settingKey)
-                  .map((k) => ShortcutValidator.shortcutNames[k] ?? k)
-                  .join(', ');
-
-              if (conflictingNames.isNotEmpty && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'אזהרה: קיצור זה כבר בשימוש עבור: $conflictingNames',
-                      textDirection: TextDirection.rtl,
-                    ),
-                    backgroundColor: Colors.orange,
-                    duration: const Duration(seconds: 3),
-                  ),
-                );
-              }
-            }
+            finalValue = customShortcut;
+          } else {
+            // המשתמש ביטל, אל תמשיך
+            finalValue = null;
           }
-          return;
         }
 
-        // Check if the new value creates a conflict
+        if (finalValue == null) return;
+
+        // עדכון ה-BLoC
+        if (mounted) {
+          context
+              .read<SettingsBloc>()
+              .add(UpdateShortcut(widget.settingKey, finalValue));
+        }
+
+        // בדיקת קונפליקטים
         final conflicts = ShortcutValidator.checkConflicts();
-        if (conflicts.isNotEmpty && conflicts.containsKey(newValue)) {
-          // Show warning
-          final conflictingKeys = conflicts[newValue]!;
+        if (conflicts.isNotEmpty && conflicts.containsKey(finalValue)) {
+          final conflictingKeys = conflicts[finalValue]!;
           final conflictingNames = conflictingKeys
               .where((k) => k != widget.settingKey)
               .map((k) => ShortcutValidator.shortcutNames[k] ?? k)
               .join(', ');
 
-          if (conflictingNames.isNotEmpty) {
+          if (conflictingNames.isNotEmpty && context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(

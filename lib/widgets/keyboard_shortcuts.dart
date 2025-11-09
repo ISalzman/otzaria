@@ -1,7 +1,5 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/focus/focus_repository.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
@@ -15,16 +13,11 @@ import 'package:otzaria/find_ref/find_ref_dialog.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/bookmarks/bookmarks_dialog.dart';
 import 'package:otzaria/history/history_dialog.dart';
+import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
-
-// StreamController גלובלי לשידור שינויים בקיצורים
-final _shortcutsChangedController = StreamController<void>.broadcast();
-Stream<void> get shortcutsChangedStream => _shortcutsChangedController.stream;
-
-void notifyShortcutsChanged() {
-  _shortcutsChangedController.add(null);
-}
+import 'package:otzaria/settings/settings_state.dart';
 
 class KeyboardShortcuts extends StatefulWidget {
   final Widget child;
@@ -36,25 +29,6 @@ class KeyboardShortcuts extends StatefulWidget {
 }
 
 class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
-  StreamSubscription<void>? _shortcutsSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-    // האזנה לשינויים בקיצורים
-    _shortcutsSubscription = shortcutsChangedStream.listen((_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _shortcutsSubscription?.cancel();
-    super.dispose();
-  }
-
   final Map<String, LogicalKeySet> shortcuts = {
     'ctrl+a': LogicalKeySet(
       LogicalKeyboardKey.control,
@@ -390,32 +364,31 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
   }
 
   Map<ShortcutActivator, VoidCallback> _buildShortcutBindings(
-      BuildContext context) {
+      BuildContext context, Map<String, String> shortcutSettings) {
     // קריאת ערכי הקיצורים מההגדרות בכל פעם שהפונקציה נקראת
     // ניווט כללי
     final libraryShortcut =
-        Settings.getValue<String>('key-shortcut-open-library-browser') ??
-            'ctrl+l';
+        shortcutSettings['key-shortcut-open-library-browser'] ?? 'ctrl+l';
     final findRefShortcut =
-        Settings.getValue<String>('key-shortcut-open-find-ref') ?? 'ctrl+o';
+        shortcutSettings['key-shortcut-open-find-ref'] ?? 'ctrl+o';
     final closeTabShortcut =
-        Settings.getValue<String>('key-shortcut-close-tab') ?? 'ctrl+w';
+        shortcutSettings['key-shortcut-close-tab'] ?? 'ctrl+w';
     final closeAllTabsShortcut =
-        Settings.getValue<String>('key-shortcut-close-all-tabs') ?? 'ctrl+x';
+        shortcutSettings['key-shortcut-close-all-tabs'] ?? 'ctrl+x';
     final readingScreenShortcut =
-        Settings.getValue<String>('key-shortcut-open-reading-screen') ??
-            'ctrl+r';
+        shortcutSettings['key-shortcut-open-reading-screen'] ?? 'ctrl+r';
     final newSearchShortcut =
-        Settings.getValue<String>('key-shortcut-open-new-search') ?? 'ctrl+q';
+        shortcutSettings['key-shortcut-open-new-search'] ?? 'ctrl+q';
     final settingsShortcut =
-        Settings.getValue<String>('key-shortcut-open-settings') ?? 'ctrl+comma';
+        shortcutSettings['key-shortcut-open-settings'] ?? 'ctrl+comma';
     final moreShortcut =
-        Settings.getValue<String>('key-shortcut-open-more') ?? 'ctrl+m';
+        shortcutSettings['key-shortcut-open-more'] ?? 'ctrl+m';
     final bookmarksShortcut =
-        Settings.getValue<String>('key-shortcut-open-bookmarks') ??
-            'ctrl+shift+b';
+        shortcutSettings['key-shortcut-open-bookmarks'] ?? 'ctrl+shift+b';
     final historyShortcut =
-        Settings.getValue<String>('key-shortcut-open-history') ?? 'ctrl+h';
+        shortcutSettings['key-shortcut-open-history'] ?? 'ctrl+h';
+    final workspaceShortcut =
+        shortcutSettings['key-shortcut-switch-workspace'] ?? 'ctrl+k';
 
     final bindings = <ShortcutActivator, VoidCallback>{};
 
@@ -517,15 +490,33 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       );
     });
 
+    addBinding(workspaceShortcut, () {
+      // Open workspace switcher dialog
+      showDialog(
+        context: context,
+        builder: (context) => const WorkspaceSwitcherDialog(),
+      );
+    });
+
     return bindings;
   }
 
   @override
   Widget build(BuildContext context) {
-    // בניית הקיצורים מחדש בכל build כדי לקבל את הערכים המעודכנים
-    return CallbackShortcuts(
-      bindings: _buildShortcutBindings(context),
-      child: widget.child,
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      buildWhen: (previous, current) =>
+          previous.shortcuts != current.shortcuts,
+      builder: (context, state) {
+        return CallbackShortcuts(
+          bindings: _buildShortcutBindings(context, state.shortcuts),
+          child: Focus(
+            autofocus: true,
+            canRequestFocus: true,
+            descendantsAreFocusable: true,
+            child: widget.child,
+          ),
+        );
+      },
     );
   }
 

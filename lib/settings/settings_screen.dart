@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:file_picker/file_picker.dart';
@@ -21,8 +22,6 @@ import 'package:otzaria/settings/calendar_settings_dialog.dart';
 import 'package:otzaria/settings/gematria_settings_dialog.dart';
 import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
-import 'package:otzaria/utils/shortcut_validator.dart';
-import 'package:otzaria/widgets/keyboard_shortcuts.dart';
 import 'dart:async';
 
 class MySettingsScreen extends StatefulWidget {
@@ -38,6 +37,16 @@ class _MySettingsScreenState extends State<MySettingsScreen>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   Widget _buildSettingsCard({
     required BuildContext context,
@@ -274,57 +283,46 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                               onTap: () async {
                                 final confirmed = await showDialog<bool>(
                                   context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('איפוס קיצורי מקשים?'),
-                                    content: const Text(
-                                      'כל קיצורי המקשים המותאמים אישית יאופסו לברירת המחדל. האם להמשיך?',
+                                  barrierDismissible: false,
+                                  builder: (dialogContext) => Actions(
+                                    actions: const {},
+                                    child: AlertDialog(
+                                      title: const Text('איפוס קיצורי מקשים?'),
+                                      content: const Text(
+                                        'כל קיצורי המקשים המותאמים אישית יאופסו לברירת המחדל. האם להמשיך?',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(
+                                              dialogContext, false),
+                                          child: const Text('ביטול'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(
+                                              dialogContext, true),
+                                          child: const Text('אישור',
+                                              style:
+                                                  TextStyle(color: Colors.red)),
+                                        ),
+                                      ],
                                     ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, false),
-                                        child: const Text('ביטול'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, true),
-                                        child: const Text('אישור',
-                                            style:
-                                                TextStyle(color: Colors.red)),
-                                      ),
-                                    ],
                                   ),
                                 );
 
                                 if (confirmed == true && context.mounted) {
-                                  // איפוס כל קיצורי המקשים לברירת מחדל
-                                  for (final key
-                                      in ShortcutValidator.shortcutKeys) {
-                                    final defaultValue =
-                                        ShortcutValidator.defaultShortcuts[key];
-                                    if (defaultValue != null) {
-                                      await Settings.setValue<String>(
-                                          key, defaultValue);
-                                    }
-                                  }
+                                  context
+                                      .read<SettingsBloc>()
+                                      .add(ResetShortcuts());
 
-                                  // שידור שהקיצורים השתנו
-                                  notifyShortcutsChanged();
-
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'קיצורי המקשים אופסו בהצלחה',
-                                          textDirection: TextDirection.rtl,
-                                        ),
-                                        duration: Duration(seconds: 2),
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'קיצורי המקשים אופסו בהצלחה',
+                                        textDirection: TextDirection.rtl,
                                       ),
-                                    );
-
-                                    // רענון המסך
-                                    setState(() {});
-                                  }
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
                                 }
                               },
                             ),
@@ -404,6 +402,14 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                 selected: 'ctrl+h',
                                 leading:
                                     const Icon(FluentIcons.history_24_regular),
+                              ),
+                              ShortcutDropDownTile(
+                                settingKey: 'key-shortcut-switch-workspace',
+                                title: 'החלף שולחן עבודה',
+                                allShortcuts: shortcuctsList,
+                                selected: 'ctrl+k',
+                                leading:
+                                    const Icon(FluentIcons.grid_24_regular),
                               ),
                             ]),
                             const SizedBox(height: 16),
@@ -1160,7 +1166,7 @@ class _MarginSliderPreviewState extends State<MarginSliderPreview> {
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
                   onTapDown: (details) {
-                    final RenderBox renderBox =
+                    final renderBox =
                         context.findRenderObject() as RenderBox;
                     final localPosition =
                         renderBox.globalToLocal(details.globalPosition);
@@ -1197,7 +1203,7 @@ class _MarginSliderPreviewState extends State<MarginSliderPreview> {
                         decoration: BoxDecoration(
                           color: Theme.of(context)
                               .dividerColor
-                              .withValues(alpha: 0.5),
+                              .withAlpha(128),
                           borderRadius: BorderRadius.circular(trackHeight / 2),
                         ),
                       ),
@@ -1282,7 +1288,7 @@ class _MarginSliderPreviewState extends State<MarginSliderPreview> {
                 curve: Curves.easeInOut,
                 clipBehavior: Clip.hardEdge,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor.withValues(alpha: 0.5),
+                  color: Theme.of(context).cardColor.withAlpha(128),
                   border: Border.all(color: Theme.of(context).dividerColor),
                   borderRadius: BorderRadius.circular(6),
                 ),
