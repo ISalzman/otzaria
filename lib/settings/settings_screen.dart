@@ -179,10 +179,22 @@ class _MySettingsScreenState extends State<MySettingsScreen>
     return Scaffold(
       body: BlocBuilder<SettingsBloc, SettingsState>(
         builder: (context, state) {
-          return Center(
-            child: SettingsScreen(
-              title: 'הגדרות',
-              children: [
+          return Theme(
+            data: Theme.of(context).copyWith(
+              appBarTheme: AppBarTheme(
+                backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                centerTitle: true,
+                titleTextStyle: TextStyle(
+                  color: Theme.of(context).colorScheme.secondary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            child: Center(
+              child: SettingsScreen(
+                title: 'הגדרות',
+                children: [
                 SettingsGroup(
                   titleAlignment: Alignment.centerRight,
                   title: 'הגדרות עיצוב',
@@ -800,7 +812,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                       subtitle:
                           'פעולה זו תמחק את כל ההגדרות ותחזיר את התוכנה למצב ההתחלתי',
                       leading:
-                          const Icon(FluentIcons.arrow_download_24_regular),
+                          const Icon(FluentIcons.arrow_reset_24_regular),
                       onTap: () async {
                         // דיאלוג לאישור המשתמש
                         final confirmed = await showDialog<bool>(
@@ -844,6 +856,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                   ],
                 )
               ],
+            ),
             ),
           );
         },

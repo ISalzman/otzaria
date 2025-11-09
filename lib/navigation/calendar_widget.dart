@@ -2334,6 +2334,14 @@ class _DayExtras extends StatelessWidget {
       l.addAll(yomTov.split(',').map((e) => e.trim()));
     }
 
+    // הוספת פרשת השבוע לשבתות
+    if (jc.getDayOfWeek() == 7) { // שבת
+      final parsha = hdf.formatParsha(jc);
+      if (parsha.isNotEmpty) {
+        l.add(parsha);
+      }
+    }
+
     // 2. ה-Formatter לא תמיד מתייחס לר"ח כאל "יום טוב", אז נוסיף אותו ידנית אם צריך
     if (jc.isRoshChodesh() && !l.contains('ראש חודש')) {
       l.add('ר"ח');
