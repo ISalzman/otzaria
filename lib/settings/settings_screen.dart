@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:file_picker/file_picker.dart';
@@ -37,16 +36,6 @@ class _MySettingsScreenState extends State<MySettingsScreen>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
 
   Widget _buildSettingsCard({
     required BuildContext context,
@@ -1166,8 +1155,7 @@ class _MarginSliderPreviewState extends State<MarginSliderPreview> {
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
                   onTapDown: (details) {
-                    final renderBox =
-                        context.findRenderObject() as RenderBox;
+                    final renderBox = context.findRenderObject() as RenderBox;
                     final localPosition =
                         renderBox.globalToLocal(details.globalPosition);
                     final tapX = localPosition.dx;
@@ -1201,9 +1189,7 @@ class _MarginSliderPreviewState extends State<MarginSliderPreview> {
                       Container(
                         height: trackHeight,
                         decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .dividerColor
-                              .withAlpha(128),
+                          color: Theme.of(context).dividerColor.withAlpha(128),
                           borderRadius: BorderRadius.circular(trackHeight / 2),
                         ),
                       ),

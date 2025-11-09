@@ -75,10 +75,16 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
       values: availableShortcuts,
       leading: widget.leading,
       onChange: (newValue) async {
+        if (!mounted) return;
+
+        final scaffoldMessenger = ScaffoldMessenger.of(context);
+        final settingsBloc = context.read<SettingsBloc>();
         String? finalValue = newValue;
 
         // אם בחרו בהתאמה אישית, פתח את הדיאלוג
         if (newValue == '__custom__') {
+          if (!mounted) return;
+
           final customShortcut = await showDialog<String>(
             context: context,
             builder: (context) => CustomShortcutDialog(
@@ -96,14 +102,10 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
           }
         }
 
-        if (finalValue == null) return;
+        if (finalValue == null || !mounted) return;
 
         // עדכון ה-BLoC
-        if (mounted) {
-          context
-              .read<SettingsBloc>()
-              .add(UpdateShortcut(widget.settingKey, finalValue));
-        }
+        settingsBloc.add(UpdateShortcut(widget.settingKey, finalValue));
 
         // בדיקת קונפליקטים
         final conflicts = ShortcutValidator.checkConflicts();
@@ -114,8 +116,8 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
               .map((k) => ShortcutValidator.shortcutNames[k] ?? k)
               .join(', ');
 
-          if (conflictingNames.isNotEmpty && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+          if (conflictingNames.isNotEmpty) {
+            scaffoldMessenger.showSnackBar(
               SnackBar(
                 content: Text(
                   'אזהרה: קיצור זה כבר בשימוש עבור: $conflictingNames',

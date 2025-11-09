@@ -15,7 +15,6 @@ import 'package:otzaria/bookmarks/bookmarks_dialog.dart';
 import 'package:otzaria/history/history_dialog.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:provider/provider.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 
@@ -381,8 +380,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
         shortcutSettings['key-shortcut-open-new-search'] ?? 'ctrl+q';
     final settingsShortcut =
         shortcutSettings['key-shortcut-open-settings'] ?? 'ctrl+comma';
-    final moreShortcut =
-        shortcutSettings['key-shortcut-open-more'] ?? 'ctrl+m';
+    final moreShortcut = shortcutSettings['key-shortcut-open-more'] ?? 'ctrl+m';
     final bookmarksShortcut =
         shortcutSettings['key-shortcut-open-bookmarks'] ?? 'ctrl+shift+b';
     final historyShortcut =
@@ -504,8 +502,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
-      buildWhen: (previous, current) =>
-          previous.shortcuts != current.shortcuts,
+      buildWhen: (previous, current) => previous.shortcuts != current.shortcuts,
       builder: (context, state) {
         return CallbackShortcuts(
           bindings: _buildShortcutBindings(context, state.shortcuts),
