@@ -151,6 +151,12 @@ class FileSystemData {
     // Process top-level directories
     await for (FileSystemEntity entity in Directory(path).list()) {
       if (entity is Directory) {
+        // Skip "אודות התוכנה" directory
+        final dirName = entity.path.split(Platform.pathSeparator).last;
+        if (dirName == 'אודות התוכנה') {
+          continue;
+        }
+
         library.subCategories.add(await getAllCategoriesAndBooksFromDirectory(
             Directory(entity.path), library));
       }

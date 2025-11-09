@@ -125,20 +125,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           
           try {
-            $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Y-PLONI/otzaria-library/releases/latest"
-            $zipAsset = $latestRelease.assets | Where-Object { $_.name -eq "otzaria_latest.zip" }
+            $downloadUrl = "https://github.com/Y-PLONI/otzaria-library/releases/download/latest/otzaria_latest.zip"
+            Write-Host "Downloading from: $downloadUrl"
             
-            if (-not $zipAsset) {
-              Write-Host "::error::Could not find otzaria_latest.zip in latest release"
-              exit 1
-            }
+            Invoke-WebRequest -Uri $downloadUrl -OutFile "otzaria_latest.zip" -UseBasicParsing
             
-            Write-Host "Library version: $($latestRelease.tag_name)"
-            Write-Host "Downloading from: $($zipAsset.browser_download_url)"
-            Write-Host "Size: $([math]::Round($zipAsset.size / 1MB, 2)) MB"
-            
-            Invoke-WebRequest -Uri $zipAsset.browser_download_url -OutFile "otzaria_latest.zip" -UseBasicParsing
-            Write-Host "Library ZIP downloaded successfully"
+            $fileSize = (Get-Item "otzaria_latest.zip").Length
+            Write-Host "Library ZIP downloaded successfully. Size: $([math]::Round($fileSize / 1MB, 2)) MB"
           }
           catch {
             Write-Host "::error::Failed to download library: $_"

@@ -41,6 +41,27 @@ Type: filesandordirs; Name: "{app}\links"
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Code]
+function InitializeSetup(): Boolean;
+var
+  InstallPath: String;
+begin
+  Result := True;
+  InstallPath := ExpandConstant('C:\{#MyAppName}');
+  
+  // בדיקה אם התיקיות קיימות והצגת אזהרה
+  if DirExists(InstallPath + '\אוצריא') or DirExists(InstallPath + '\links') then
+  begin
+    if MsgBox('שים לב: אם קיימים נתונים בתיקיות הבאות, הם ימחקו:' + #13#10 +
+              '- אוצריא' + #13#10 +
+              '- links' + #13#10#13#10 +
+              'האם להמשיך בהתקנה?',
+              mbConfirmation, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+    end;
+  end;
+end;
+
 function VCRedistNeedsInstall: Boolean;
 var
   Version: String;
