@@ -34,7 +34,8 @@ class MainWindowScreen extends StatefulWidget {
 }
 
 // Global key for accessing MoreScreen
-final GlobalKey<State<MoreScreen>> moreScreenKey = GlobalKey<State<MoreScreen>>();
+final GlobalKey<State<MoreScreen>> moreScreenKey =
+    GlobalKey<State<MoreScreen>>();
 
 class MainWindowScreenState extends State<MainWindowScreen>
     with TickerProviderStateMixin {
@@ -54,8 +55,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   void initState() {
     super.initState();
     _calendarCubit = CalendarCubit();
-    final initialPage =
-        _pageIndexForScreen(
+    final initialPage = _pageIndexForScreen(
           context.read<NavigationBloc>().state.currentScreen,
         ) ??
         Screen.library.index;
@@ -90,10 +90,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
         if (!mounted || !pageController.hasClients) {
           return;
         }
-        final currentScreen = context
-            .read<NavigationBloc>()
-            .state
-            .currentScreen;
+        final currentScreen =
+            context.read<NavigationBloc>().state.currentScreen;
         final targetPage = _pageIndexForScreen(currentScreen);
         if (targetPage == null) {
           return;
@@ -111,12 +109,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     final libraryShortcut =
         Settings.getValue<String>('key-shortcut-open-library-browser') ??
-        'ctrl+l';
+            'ctrl+l';
     final findShortcut =
         Settings.getValue<String>('key-shortcut-open-find-ref') ?? 'ctrl+o';
     final browseShortcut =
         Settings.getValue<String>('key-shortcut-open-reading-screen') ??
-        'ctrl+r';
+            'ctrl+r';
     final searchShortcut =
         Settings.getValue<String>('key-shortcut-open-new-search') ?? 'ctrl+q';
 
@@ -158,11 +156,26 @@ class MainWindowScreenState extends State<MainWindowScreen>
         label: 'חיפוש',
       ),
       NavigationDestination(
-        icon: Icon(FluentIcons.apps_24_regular),
+        tooltip: '',
+        icon: Tooltip(
+          preferBelow: false,
+          message: formatShortcut(
+            Settings.getValue<String>('key-shortcut-open-more') ?? 'ctrl+m',
+          ),
+          child: const Icon(FluentIcons.apps_24_regular),
+        ),
         label: 'כלים',
       ),
       NavigationDestination(
-        icon: Icon(FluentIcons.settings_24_regular),
+        tooltip: '',
+        icon: Tooltip(
+          preferBelow: false,
+          message: formatShortcut(
+            Settings.getValue<String>('key-shortcut-open-settings') ??
+                'ctrl+comma',
+          ),
+          child: const Icon(FluentIcons.settings_24_regular),
+        ),
         label: 'הגדרות',
       ),
       NavigationDestination(
@@ -192,8 +205,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
       }
       if (state.currentScreen == Screen.library) {
         context.read<FocusRepository>().requestLibrarySearchFocus(
-          selectAll: true,
-        );
+              selectAll: true,
+            );
       }
     }
   }
@@ -211,8 +224,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           listenWhen: (previous, current) {
             // Trigger when settings are loaded for the first time (not initial state anymore)
             // or when autoUpdateIndex changes
-            final isInitialLoad =
-                previous == SettingsState.initial() &&
+            final isInitialLoad = previous == SettingsState.initial() &&
                 current != SettingsState.initial();
             final hasChanged =
                 previous.autoUpdateIndex != current.autoUpdateIndex;
