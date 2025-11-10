@@ -4,6 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
+import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/navigation/bloc/navigation_event.dart';
+import 'package:otzaria/navigation/bloc/navigation_state.dart' show Screen;
 import 'package:otzaria/pdf_book/pdf_book_screen.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -89,8 +92,62 @@ class _ReadingScreenState extends State<ReadingScreen>
           return BlocBuilder<TabsBloc, TabsState>(
             builder: (context, state) {
               if (!state.hasOpenTabs) {
-                // אם אין טאבים פתוחים אין מה להציג
-                return const Center(child: Text('אין כרטיסיות פתוחות'));
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Text('לא נבחרו ספרים'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: TextButton(
+                          onPressed: () {
+                            context.read<NavigationBloc>().add(
+                                  const NavigateToScreen(Screen.library),
+                                );
+                          },
+                          child: const Text('דפדף בספרייה'),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: TextButton(
+                          onPressed: () {
+                            _showSaveWorkspaceDialog(context);
+                          },
+                          child: const Text('החלף שולחן עבודה'),
+                        ),
+                      ),
+                      // קו מפריד
+                      Container(
+                        height: 1,
+                        width: 200,
+                        color: Colors.grey.shade400,
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: TextButton(
+                          onPressed: () {
+                            _showHistoryDialog(context);
+                          },
+                          child: const Text('הצג היסטוריה'),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: TextButton(
+                          onPressed: () {
+                            _showBookmarksDialog(context);
+                          },
+                          child: const Text('הצג סימניות'),
+                        ),
+                      )
+                    ],
+                  ),
+                );
               }
 
               final controller = TabController(
