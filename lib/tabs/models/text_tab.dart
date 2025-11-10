@@ -125,12 +125,17 @@ class TextBookTab extends OpenedTab {
       final loadedState = bloc.state as TextBookLoaded;
       commentators = loadedState.activeCommentators;
       splitedView = loadedState.showSplitView;
-      // עדכון האינדקס מה-state הנטען
+      // עדכון האינדקס מה-state הנטען - תמיד לוקחים את האינדקס האחרון שנראה
       if (loadedState.visibleIndices.isNotEmpty) {
         currentIndex = loadedState.visibleIndices.first;
-        // עדכון גם את ה-index של הטאב עצמו
+        // עדכון גם את ה-index של הטאב עצמו כדי שישמר
         index = currentIndex;
+        debugPrint('DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex (מתוך visibleIndices)');
+      } else {
+        debugPrint('DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex (ברירת מחדל)');
       }
+    } else {
+      debugPrint('DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex (state לא loaded)');
     }
 
     return {
