@@ -92,60 +92,126 @@ class _ReadingScreenState extends State<ReadingScreen>
           return BlocBuilder<TabsBloc, TabsState>(
             builder: (context, state) {
               if (!state.hasOpenTabs) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text('לא נבחרו ספרים'),
+                // קריאת הגדרות כדי להציג את קיצורי המקלדת
+                final historyShortcut =
+                    Settings.getValue<String>('key-shortcut-open-history') ??
+                        'ctrl+h';
+                final bookmarksShortcut =
+                    Settings.getValue<String>('key-shortcut-open-bookmarks') ??
+                        'ctrl+shift+b';
+                final workspaceShortcut = Settings.getValue<String>(
+                        'key-shortcut-switch-workspace') ??
+                    'ctrl+k';
+
+                return Scaffold(
+                  appBar: AppBar(
+                    key: ValueKey(
+                        'appbar_empty_${historyShortcut}_${bookmarksShortcut}_${workspaceShortcut}'),
+                    leadingWidth: _kAppBarControlsWidth,
+                    leading: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // קבוצת היסטוריה וסימניות
+                        IconButton(
+                          icon: const Icon(FluentIcons.history_24_regular),
+                          tooltip:
+                              'הצג היסטוריה (${historyShortcut.toUpperCase()})',
+                          onPressed: () => _showHistoryDialog(context),
+                        ),
+                        IconButton(
+                          icon: const Icon(FluentIcons.bookmark_24_regular),
+                          tooltip:
+                              'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
+                          onPressed: () => _showBookmarksDialog(context),
+                        ),
+                        // קו מפריד
+                        Container(
+                          height: 24,
+                          width: 1,
+                          color: Colors.grey.shade400,
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                        ),
+                        // קבוצת שולחן עבודה
+                        IconButton(
+                          icon: const Icon(FluentIcons.add_square_24_regular),
+                          tooltip:
+                              'החלף שולחן עבודה (${workspaceShortcut.toUpperCase()})',
+                          onPressed: () => _showSaveWorkspaceDialog(context),
+                        ),
+                      ],
+                    ),
+                    titleSpacing: 0,
+                    centerTitle: true,
+                    title: const Text('עיון'),
+                    actions: [
+                      // כפתור מסך מלא
+                      BlocBuilder<SettingsBloc, SettingsState>(
+                        builder: (context, settingsState) {
+                          return IconButton(
+                            icon: Icon(settingsState.isFullscreen
+                                ? FluentIcons.full_screen_minimize_24_regular
+                                : FluentIcons.full_screen_maximize_24_regular),
+                            tooltip: settingsState.isFullscreen
+                                ? 'צא ממסך מלא'
+                                : 'מסך מלא',
+                            onPressed: () async {
+                              final newFullscreenState =
+                                  !settingsState.isFullscreen;
+                              context
+                                  .read<SettingsBloc>()
+                                  .add(UpdateIsFullscreen(newFullscreenState));
+                              await windowManager
+                                  .setFullScreen(newFullscreenState);
+                            },
+                          );
+                        },
                       ),
+                      // כפתור הגדרות
                       Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: TextButton(
-                          onPressed: () {
-                            context.read<NavigationBloc>().add(
-                                  const NavigateToScreen(Screen.library),
-                                );
-                          },
-                          child: const Text('דפדף בספרייה'),
+                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                        child: IconButton(
+                          icon: const Icon(FluentIcons.settings_24_regular),
+                          tooltip: 'הגדרות תצוגת הספרים',
+                          onPressed: () => showReadingSettingsDialog(context),
+                          style: IconButton.styleFrom(
+                            foregroundColor:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: TextButton(
-                          onPressed: () {
-                            _showSaveWorkspaceDialog(context);
-                          },
-                          child: const Text('החלף שולחן עבודה'),
-                        ),
-                      ),
-                      // קו מפריד
-                      Container(
-                        height: 1,
-                        width: 200,
-                        color: Colors.grey.shade400,
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: TextButton(
-                          onPressed: () {
-                            _showHistoryDialog(context);
-                          },
-                          child: const Text('הצג היסטוריה'),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: TextButton(
-                          onPressed: () {
-                            _showBookmarksDialog(context);
-                          },
-                          child: const Text('הצג סימניות'),
-                        ),
-                      )
                     ],
+                  ),
+                  body: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text(
+                            'לא נבחרו ספרים',
+                            style: TextStyle(fontSize: 18),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              context.read<NavigationBloc>().add(
+                                    const NavigateToScreen(Screen.library),
+                                  );
+                            },
+                            icon: const Icon(FluentIcons.library_24_regular),
+                            label: const Text('דפדף בספרייה'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }
@@ -200,13 +266,13 @@ class _ReadingScreenState extends State<ReadingScreen>
                       IconButton(
                         icon: const Icon(FluentIcons.history_24_regular),
                         tooltip:
-                            'הצג היסטוריה ($historyShortcut.toUpperCase())',
+                            'הצג היסטוריה (${historyShortcut.toUpperCase()})',
                         onPressed: () => _showHistoryDialog(context),
                       ),
                       IconButton(
                         icon: const Icon(FluentIcons.bookmark_24_regular),
                         tooltip:
-                            'הצג סימניות ($bookmarksShortcut.toUpperCase())',
+                            'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
                         onPressed: () => _showBookmarksDialog(context),
                       ),
                       // קו מפריד
@@ -220,7 +286,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                       IconButton(
                         icon: const Icon(FluentIcons.add_square_24_regular),
                         tooltip:
-                            'החלף שולחן עבודה ($workspaceShortcut.toUpperCase())',
+                            'החלף שולחן עבודה (${workspaceShortcut.toUpperCase()})',
                         onPressed: () => _showSaveWorkspaceDialog(context),
                       ),
                     ],

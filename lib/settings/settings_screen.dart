@@ -21,6 +21,7 @@ import 'package:otzaria/settings/calendar_settings_dialog.dart';
 import 'package:otzaria/settings/gematria_settings_dialog.dart';
 import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
+import 'package:otzaria/widgets/confirmation_dialog.dart';
 import 'dart:async';
 
 class MySettingsScreen extends StatefulWidget {
@@ -179,6 +180,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
       'ctrl+9': "CTRL + 9",
       'ctrl+comma': "CTRL + ,",
       'ctrl+shift+b': "CTRL + SHIFT + B",
+      'ctrl+shift+w': "CTRL + SHIFT + W",
     };
 
     return Scaffold(
@@ -272,32 +274,13 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                               leading: const Icon(
                                   FluentIcons.arrow_reset_24_regular),
                               onTap: () async {
-                                final confirmed = await showDialog<bool>(
+                                final confirmed = await showConfirmationDialog(
                                   context: context,
+                                  title: 'איפוס קיצורי מקשים?',
+                                  content:
+                                      'כל קיצורי המקשים המותאמים אישית יאופסו לברירת המחדל. האם להמשיך?',
+                                  isDangerous: true,
                                   barrierDismissible: false,
-                                  builder: (dialogContext) => Actions(
-                                    actions: const {},
-                                    child: AlertDialog(
-                                      title: const Text('איפוס קיצורי מקשים?'),
-                                      content: const Text(
-                                        'כל קיצורי המקשים המותאמים אישית יאופסו לברירת המחדל. האם להמשיך?',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(
-                                              dialogContext, false),
-                                          child: const Text('ביטול'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(
-                                              dialogContext, true),
-                                          child: const Text('אישור',
-                                              style:
-                                                  TextStyle(color: Colors.red)),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
                                 );
 
                                 if (confirmed == true && context.mounted) {
@@ -465,7 +448,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                     FluentIcons.dismiss_circle_24_regular),
                               ),
                               ShortcutDropDownTile(
-                                selected: 'ctrl+x',
+                                selected: 'ctrl+shift+w',
                                 settingKey: 'key-shortcut-close-all-tabs',
                                 title: 'סגור כל הספרים',
                                 allShortcuts: shortcuctsList,
@@ -737,28 +720,12 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                 if (filePath == null) return;
 
                                 if (!context.mounted) return;
-                                final confirmed = await showDialog<bool>(
+                                final confirmed = await showConfirmationDialog(
                                   context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('שחזור מגיבוי?'),
-                                    content: const Text(
+                                  title: 'שחזור מגיבוי?',
+                                  content:
                                       'פעולה זו תחליף את הנתונים הקיימים בנתונים מהגיבוי. האם להמשיך?',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, false),
-                                        child: const Text('ביטול'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, true),
-                                        child: const Text('אישור',
-                                            style:
-                                                TextStyle(color: Colors.blue)),
-                                      ),
-                                    ],
-                                  ),
+                                  confirmColor: Colors.blue,
                                 );
 
                                 if (confirmed != true) return;
@@ -841,26 +808,12 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                               leading: const Icon(FluentIcons.table_24_regular),
                               onTap: () async {
                                 if (indexingState is IndexingInProgress) {
-                                  final result = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                            content: const Text(
-                                                'האם לעצור את תהליך יצירת האינדקס?'),
-                                            actions: <Widget>[
-                                              TextButton(
-                                                child: const Text('ביטול'),
-                                                onPressed: () {
-                                                  Navigator.pop(context, false);
-                                                },
-                                              ),
-                                              TextButton(
-                                                child: const Text('אישור'),
-                                                onPressed: () {
-                                                  Navigator.pop(context, true);
-                                                },
-                                              ),
-                                            ],
-                                          ));
+                                  final result = await showConfirmationDialog(
+                                    context: context,
+                                    title: 'עצירת אינדקס',
+                                    content:
+                                        'האם לעצור את תהליך יצירת האינדקס?',
+                                  );
                                   if (!context.mounted) return;
                                   if (result == true) {
                                     context
@@ -869,26 +822,11 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                     setState(() {});
                                   }
                                 } else {
-                                  final result = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                            content: const Text(
-                                                'האם לאפס את האינדקס?'),
-                                            actions: <Widget>[
-                                              TextButton(
-                                                child: const Text('ביטול'),
-                                                onPressed: () {
-                                                  Navigator.pop(context, false);
-                                                },
-                                              ),
-                                              TextButton(
-                                                child: const Text('אישור'),
-                                                onPressed: () {
-                                                  Navigator.pop(context, true);
-                                                },
-                                              ),
-                                            ],
-                                          ));
+                                  final result = await showConfirmationDialog(
+                                    context: context,
+                                    title: 'איפוס אינדקס',
+                                    content: 'האם לאפס את האינדקס?',
+                                  );
                                   if (!context.mounted) return;
                                   if (result == true) {
                                     //reset the index
@@ -994,24 +932,12 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         leading: const Icon(FluentIcons.arrow_reset_24_regular),
                         onTap: () async {
                           // דיאלוג לאישור המשתמש
-                          final confirmed = await showDialog<bool>(
+                          final confirmed = await showConfirmationDialog(
                             context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('איפוס הגדרות?'),
-                              content: const Text(
-                                  'כל ההגדרות האישיות שלך ימחקו. פעולה זו אינה הפיכה. האם להמשיך?'),
-                              actions: [
-                                TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('ביטול')),
-                                TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    child: const Text('אישור',
-                                        style: TextStyle(color: Colors.red))),
-                              ],
-                            ),
+                            title: 'איפוס הגדרות?',
+                            content:
+                                'כל ההגדרות האישיות שלך ימחקו. פעולה זו אינה הפיכה. האם להמשיך?',
+                            isDangerous: true,
                           );
 
                           if (confirmed == true && context.mounted) {
