@@ -161,7 +161,16 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog> {
       focusNode: FocusNode()..requestFocus(),
       autofocus: true,
       onKeyEvent: (KeyEvent event) {
-        if (!_isRecording) return;
+        if (!_isRecording) {
+          // אם לא מקליטים, אפשר אנטר לאישור
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.enter &&
+              _pressedKeys.isNotEmpty) {
+            final shortcut = _formatKeysToShortcut(_pressedKeys);
+            Navigator.pop(context, shortcut);
+          }
+          return;
+        }
 
         if (event is KeyDownEvent) {
           setState(() {
