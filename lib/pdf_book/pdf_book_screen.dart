@@ -212,6 +212,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         bindings: <ShortcutActivator, VoidCallback>{
           LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyF):
               _ensureSearchTabIsActive,
+      LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.equal):
+        _zoomIn,
+      LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.add):
+        _zoomIn,
+      LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.numpadAdd):
+        _zoomIn,
+      LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.minus):
+        _zoomOut,
+      LogicalKeySet(
+          LogicalKeyboardKey.control, LogicalKeyboardKey.numpadSubtract):
+        _zoomOut,
           LogicalKeySet(LogicalKeyboardKey.arrowRight): _goNextPage,
           LogicalKeySet(LogicalKeyboardKey.arrowLeft): _goPreviousPage,
           LogicalKeySet(LogicalKeyboardKey.arrowDown): _goNextPage,
@@ -569,6 +580,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ),
       ),
     );
+  }
+
+  void _zoomIn() {
+    widget.tab.pdfViewerController.zoomUp();
+  }
+
+  void _zoomOut() {
+    widget.tab.pdfViewerController.zoomDown();
   }
 
   void _goNextPage() {
