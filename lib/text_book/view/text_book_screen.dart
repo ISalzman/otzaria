@@ -603,7 +603,47 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             }
 
             if (state is TextBookInitial || state is TextBookLoading) {
-              return const Center(child: CircularProgressIndicator());
+              return Scaffold(
+                appBar: AppBar(
+                  backgroundColor:
+                      Theme.of(context).colorScheme.surfaceContainer,
+                  shape: Border(
+                    bottom: BorderSide(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                      width: 0.3,
+                    ),
+                  ),
+                  elevation: 0,
+                  scrolledUnderElevation: 0,
+                  centerTitle: false,
+                  title: Text(
+                    widget.tab.book.title,
+                    style: const TextStyle(fontSize: 17),
+                    textAlign: TextAlign.end,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  leading: IconButton(
+                    icon: const Icon(FluentIcons.navigation_24_regular),
+                    tooltip: "ניווט וחיפוש",
+                    onPressed: null, // מושבת בזמן טעינה - תלוי בתוכן
+                  ),
+                  actions: const [
+                    // מציג רק אינדיקטור טעינה קטן במקום הכפתורים
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                body: const Center(child: CircularProgressIndicator()),
+              );
             }
 
             if (state is TextBookError) {
