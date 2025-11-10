@@ -51,7 +51,6 @@ class CombinedView extends StatefulWidget {
 class _CombinedViewState extends State<CombinedView> {
   // שמירת הטקסט הנבחר האחרון לפני שהתפריט נפתח
   String? _savedSelectedText;
-  int? _savedSelectedIndex;
 
   // שמירת reference ל-BLoC לשימוש ב-listeners
   late final TextBookBloc _textBookBloc;
@@ -343,8 +342,6 @@ class _CombinedViewState extends State<CombinedView> {
     );
   }
 
-
-
   /// יצירת הערה מטקסט נבחר
   void _createNoteFromSelection() {
     // נשתמש בבחירה האחרונה שנשמרה, או בבחירה הנוכחית
@@ -474,7 +471,7 @@ $textWithBreaks
   Future<void> _copyFormattedText() async {
     // משתמש בטקסט השמור שנבחר לפני פתיחת התפריט
     final plainText = _savedSelectedText;
-    
+
     if (plainText == null || plainText.trim().isEmpty) {
       UiSnack.show('אנא בחר טקסט להעתקה');
       return;
@@ -659,7 +656,6 @@ $textWithBreaks
             // שומר את הטקסט הנבחר לפני שהתפריט נפתח
             if (selection != null && selection.plainText.isNotEmpty) {
               _savedSelectedText = selection.plainText;
-              _savedSelectedIndex = index;
             }
           },
           child: AnimatedContainer(
@@ -684,64 +680,66 @@ $textWithBreaks
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4.0),
                   child: BlocBuilder<SettingsBloc, SettingsState>(
-                  builder: (context, settingsState) {
-                    String data = widget.data[index];
+                    builder: (context, settingsState) {
+                      String data = widget.data[index];
 
-                    // הוספת קישורים מבוססי תווים
-                    String dataWithLinks = data;
-                    try {
-                      final linksForLine = state.links
-                          .where((link) =>
-                              link.index1 == index + 1 &&
-                              link.start != null &&
-                              link.end != null)
-                          .toList();
+                      // הוספת קישורים מבוססי תווים
+                      String dataWithLinks = data;
+                      try {
+                        final linksForLine = state.links
+                            .where((link) =>
+                                link.index1 == index + 1 &&
+                                link.start != null &&
+                                link.end != null)
+                            .toList();
 
-                      if (linksForLine.isNotEmpty) {
-                        dataWithLinks = addInlineLinksToText(data, linksForLine);
+                        if (linksForLine.isNotEmpty) {
+                          dataWithLinks =
+                              addInlineLinksToText(data, linksForLine);
+                        }
+                      } catch (e) {
+                        dataWithLinks = data;
                       }
-                    } catch (e) {
-                      dataWithLinks = data;
-                    }
 
-                    // עיבודים נוספים
-                    if (!settingsState.showTeamim) {
-                      dataWithLinks = utils.removeTeamim(dataWithLinks);
-                    }
-                    if (settingsState.replaceHolyNames) {
-                      dataWithLinks = utils.replaceHolyNames(dataWithLinks);
-                    }
+                      // עיבודים נוספים
+                      if (!settingsState.showTeamim) {
+                        dataWithLinks = utils.removeTeamim(dataWithLinks);
+                      }
+                      if (settingsState.replaceHolyNames) {
+                        dataWithLinks = utils.replaceHolyNames(dataWithLinks);
+                      }
 
-                    String processedData = state.removeNikud
-                        ? utils.highLight(
-                            utils.removeVolwels('$dataWithLinks\n'),
-                            state.searchText)
-                        : utils.highLight('$dataWithLinks\n', state.searchText);
+                      String processedData = state.removeNikud
+                          ? utils.highLight(
+                              utils.removeVolwels('$dataWithLinks\n'),
+                              state.searchText)
+                          : utils.highLight(
+                              '$dataWithLinks\n', state.searchText);
 
-                    processedData =
-                        utils.formatTextWithParentheses(processedData);
+                      processedData =
+                          utils.formatTextWithParentheses(processedData);
 
-                    return HtmlWidget(
-                      '''
+                      return HtmlWidget(
+                        '''
                     <div style="text-align: justify; direction: rtl;">
                       $processedData
                     </div>
                     ''',
-                      key: ValueKey('html_${widget.tab.book.title}_$index'),
-                      textStyle: TextStyle(
-                        fontSize: widget.textSize,
-                        fontFamily: settingsState.fontFamily,
-                        height: 1.5,
-                      ),
-                      onTapUrl: (url) async {
-                        return await HtmlLinkHandler.handleLink(
-                          context,
-                          url,
-                          (tab) => widget.openBookCallback(tab),
-                        );
-                      },
-                    );
-                  },
+                        key: ValueKey('html_${widget.tab.book.title}_$index'),
+                        textStyle: TextStyle(
+                          fontSize: widget.textSize,
+                          fontFamily: settingsState.fontFamily,
+                          height: 1.5,
+                        ),
+                        onTapUrl: (url) async {
+                          return await HtmlLinkHandler.handleLink(
+                            context,
+                            url,
+                            (tab) => widget.openBookCallback(tab),
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
               ),

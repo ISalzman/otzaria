@@ -106,7 +106,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                 return Scaffold(
                   appBar: AppBar(
                     key: ValueKey(
-                        'appbar_empty_${historyShortcut}_${bookmarksShortcut}_${workspaceShortcut}'),
+                        'appbar_empty_${historyShortcut}_${bookmarksShortcut}_$workspaceShortcut'),
                     leadingWidth: _kAppBarControlsWidth,
                     leading: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -256,7 +256,7 @@ class _ReadingScreenState extends State<ReadingScreen>
               return Scaffold(
                 appBar: AppBar(
                   key: ValueKey(
-                      'appbar_${historyShortcut}_${bookmarksShortcut}_${workspaceShortcut}_${closeTabShortcut}'),
+                      'appbar_${historyShortcut}_${bookmarksShortcut}_${workspaceShortcut}_$closeTabShortcut'),
                   // 1. משתמשים בקבוע שהגדרנו עבור הרוחב
                   leadingWidth: _kAppBarControlsWidth,
                   leading: Row(
