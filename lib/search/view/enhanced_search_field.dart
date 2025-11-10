@@ -330,7 +330,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
         ),
       ],
       child: KeyboardListener(
-        focusNode: FocusNode()..requestFocus(),
+        focusNode: FocusNode(),
         onKeyEvent: (KeyEvent event) {
           // טיפול ב-Enter גם כשהפוקוס לא בתיבת החיפוש
           if (event is KeyDownEvent &&
