@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/focus/focus_repository.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
@@ -17,6 +18,7 @@ import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/settings/settings_event.dart';
 
 class KeyboardShortcuts extends StatefulWidget {
   final Widget child;
@@ -29,6 +31,12 @@ class KeyboardShortcuts extends StatefulWidget {
 
 class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
   final Map<String, LogicalKeySet> shortcuts = {
+    'f11': LogicalKeySet(
+      LogicalKeyboardKey.f11,
+    ),
+    'escape': LogicalKeySet(
+      LogicalKeyboardKey.escape,
+    ),
     'ctrl+a': LogicalKeySet(
       LogicalKeyboardKey.control,
       LogicalKeyboardKey.keyA,
@@ -499,6 +507,23 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
         context: context,
         builder: (context) => const WorkspaceSwitcherDialog(),
       );
+    });
+
+    // F11 - Toggle fullscreen
+    addBinding('f11', () async {
+      final settingsBloc = context.read<SettingsBloc>();
+      final newFullscreenState = !settingsBloc.state.isFullscreen;
+      settingsBloc.add(UpdateIsFullscreen(newFullscreenState));
+      await windowManager.setFullScreen(newFullscreenState);
+    });
+
+    // ESC - Exit fullscreen
+    addBinding('escape', () async {
+      final settingsBloc = context.read<SettingsBloc>();
+      if (settingsBloc.state.isFullscreen) {
+        settingsBloc.add(const UpdateIsFullscreen(false));
+        await windowManager.setFullScreen(false);
+      }
     });
 
     return bindings;
