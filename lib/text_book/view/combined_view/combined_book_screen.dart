@@ -193,6 +193,7 @@ class _CombinedViewState extends State<CombinedView> {
         ctx.MenuItem.submenu(
           label: 'מפרשים',
           icon: FluentIcons.book_24_regular,
+          enabled: state.availableCommentators.isNotEmpty,
           items: [
             ctx.MenuItem(
               label: 'הצג את כל המפרשים',
@@ -590,13 +591,27 @@ $textWithBreaks
         if (state is! TextBookLoaded) {
           return const Center(child: CircularProgressIndicator());
         }
-        return ProgressiveScroll(
-          maxSpeed: 10000.0,
-          curve: 10.0,
-          accelerationFactor: 5,
-          scrollController: widget.tab.mainOffsetController,
-          // הסרנו את SelectionArea מכאן - עכשיו כל פסקה וכל מפרש יש לו SelectionArea משלו
-          child: buildOuterList(state),
+        return SelectionArea(
+          // SelectionArea אחד לכל הרשימה - מאפשר בחירה רציפה בין פסקאות
+          contextMenuBuilder: (context, selectableRegionState) {
+            return const SizedBox.shrink();
+          },
+          onSelectionChanged: (selection) {
+            if (selection != null && selection.plainText.isNotEmpty) {
+              setState(() {
+                _savedSelectedText = selection.plainText;
+                // לא שומרים אינדקס ספציפי כי הבחירה יכולה להיות על פני מספר פסקאות
+                _currentSelectedIndex = null;
+              });
+            }
+          },
+          child: ProgressiveScroll(
+            maxSpeed: 10000.0,
+            curve: 10.0,
+            accelerationFactor: 5,
+            scrollController: widget.tab.mainOffsetController,
+            child: buildOuterList(state),
+          ),
         );
       },
     );
@@ -640,35 +655,14 @@ $textWithBreaks
       key: PageStorageKey(widget.data[index]),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // הטקסט של הספר - ווידג'ט נפרד לגמרי עם רקע משלו
-        SelectionArea(
-          // SelectionArea נפרד רק לטקסט - מאפשר בחירת טקסט בטקסט בלבד
-          contextMenuBuilder: (context, selectableRegionState) {
-            // מחזיר null כדי לבטל את תפריט ברירת המחדל של Flutter
-            return const SizedBox.shrink();
-          },
-          onSelectionChanged: (selection) {
-            // שומר את הטקסט הנבחר ואת האינדקס הנוכחי
-            // לא מאפס את הטקסט כשהבחירה מתבטלת - רק עדכן כשיש טקסט חדש
-            debugPrint(
-                'onSelectionChanged: selection=${selection?.plainText}, index=$index');
-            if (selection != null && selection.plainText.isNotEmpty) {
-              setState(() {
-                _savedSelectedText = selection.plainText;
-                _currentSelectedIndex = index;
-              });
-              debugPrint('Saved text: "$_savedSelectedText"');
-            }
-            // לא מאפסים את _savedSelectedText כשהבחירה מתבטלת
-            // כך הטקסט נשאר זמין לתפריט ההקשר
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            decoration: backgroundColor != null
-                ? BoxDecoration(color: backgroundColor)
-                : null,
-            child: GestureDetector(
+        // הטקסט של הספר - ללא SelectionArea נפרד, כי יש SelectionArea כללי
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          decoration: backgroundColor != null
+              ? BoxDecoration(color: backgroundColor)
+              : null,
+          child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: () {
                 // מאפס את הטקסט השמור כשלוחצים על הפסקה
@@ -684,13 +678,10 @@ $textWithBreaks
                 }
               },
               onSecondaryTapDown: (details) {
-                // לוג לבדיקה
-                debugPrint(
-                    'Secondary tap at index $index, saved text: "$_savedSelectedText"');
-                if (_savedSelectedText == null ||
-                    _savedSelectedText!.isEmpty) {
-                  debugPrint('WARNING: No text saved before opening menu!');
-                }
+                // שומר את האינדקס הנוכחי לשימוש בתפריט ההקשר
+                setState(() {
+                  _currentSelectedIndex = index;
+                });
               },
               child: ctx.ContextMenuRegion(
                 contextMenu: _buildContextMenuForIndex(state, index, context),
@@ -762,23 +753,13 @@ $textWithBreaks
               ),
             ),
           ),
-        ),
-        // המפרשים - ווידג'ט נפרד לגמרי עם SelectionArea משלו
+        // המפרשים - ללא SelectionArea נפרד, כי יש SelectionArea כללי
         if (widget.showCommentaryAsExpansionTiles && isSelected)
-          SelectionArea(
-            // SelectionArea נפרד רק למפרשים - מאפשר בחירת טקסט
-            // אין קשר ל-SelectionArea של הטקסט, לכן לחיצות כאן לא משפיעות על הטקסט
-            // משתמש בתפריט ההקשר הרגיל של Flutter (Copy, Select All)
-            contextMenuBuilder: (context, selectableRegionState) {
-              // מחזיר SizedBox.shrink כדי לבטל את תפריט ברירת המחדל של Flutter
-              return const SizedBox.shrink();
-            },
-            child: CommentaryListBase(
-              indexes: [index],
-              fontSize: widget.textSize,
-              openBookCallback: widget.openBookCallback,
-              showSearch: false,
-            ),
+          CommentaryListBase(
+            indexes: [index],
+            fontSize: widget.textSize,
+            openBookCallback: widget.openBookCallback,
+            showSearch: false,
           ),
       ],
     );
