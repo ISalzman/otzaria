@@ -49,7 +49,7 @@ class CombinedView extends StatefulWidget {
 }
 
 class _CombinedViewState extends State<CombinedView> {
-  // שמירת הטקסט הנבחר האחרון לפני שהתפריט נפתח
+  // שמירת הטקסט הנבחר האחרון
   String? _savedSelectedText;
 
   // שמירת reference ל-BLoC לשימוש ב-listeners
@@ -103,17 +103,7 @@ class _CombinedViewState extends State<CombinedView> {
     }
   }
 
-  // מעקב אחר בחירת טקסט בלי setState
-  String? _selectedText;
-  int? _selectionStart;
-  int? _selectionEnd;
-
-  // שמירת הבחירה האחרונה לשימוש בתפריט הקונטקסט
-  String? _lastSelectedText;
-  int? _lastSelectionStart;
-  int? _lastSelectionEnd;
-
-  // מעקב אחר האינדקס הנוכחי שנבחר
+  // מעקב אחר האינדקס הנוכחי שנבחר (לשימוש בהעתקה עם כותרות)
   int? _currentSelectedIndex;
 
   /// helper קטן שמחזיר רשימת MenuEntry מקבוצה אחת, כולל כפתור הצג/הסתר הכל
@@ -162,7 +152,7 @@ class _CombinedViewState extends State<CombinedView> {
 
   // בניית תפריט קונטקסט "מקובע" לאינדקס ספציפי של פסקה
   ctx.ContextMenu _buildContextMenuForIndex(
-      TextBookLoaded state, int paragraphIndex) {
+      TextBookLoaded state, int paragraphIndex, BuildContext menuContext) {
     // אם זה מצב תצוגה מקדימה, החזר תפריט מצומצם
     if (widget.isPreviewMode) {
       return ctx.ContextMenu(
@@ -170,8 +160,8 @@ class _CombinedViewState extends State<CombinedView> {
           ctx.MenuItem(
             label: 'העתק',
             icon: FluentIcons.copy_24_regular,
-            enabled: (_lastSelectedText ?? _selectedText) != null &&
-                (_lastSelectedText ?? _selectedText)!.trim().isNotEmpty,
+            enabled: _savedSelectedText != null &&
+                _savedSelectedText!.trim().isNotEmpty,
             onSelected: _copyFormattedText,
           ),
         ],
@@ -316,8 +306,8 @@ class _CombinedViewState extends State<CombinedView> {
         ctx.MenuItem(
           label: 'העתק',
           icon: FluentIcons.copy_24_regular,
-          enabled: (_lastSelectedText ?? _selectedText) != null &&
-              (_lastSelectedText ?? _selectedText)!.trim().isNotEmpty,
+          enabled: _savedSelectedText != null &&
+              _savedSelectedText!.trim().isNotEmpty,
           onSelected: _copyFormattedText,
         ),
         ctx.MenuItem(
@@ -344,16 +334,14 @@ class _CombinedViewState extends State<CombinedView> {
 
   /// יצירת הערה מטקסט נבחר
   void _createNoteFromSelection() {
-    // נשתמש בבחירה האחרונה שנשמרה, או בבחירה הנוכחית
-    final text = _lastSelectedText ?? _selectedText;
+    // נשתמש בבחירה האחרונה שנשמרה
+    final text = _savedSelectedText;
     if (text == null || text.trim().isEmpty) {
       UiSnack.show('אנא בחר טקסט ליצירת הערה אישית');
       return;
     }
 
-    final start = _lastSelectionStart ?? _selectionStart ?? 0;
-    final end = _lastSelectionEnd ?? _selectionEnd ?? text.length;
-    _showNoteEditor(text, start, end);
+    _showNoteEditor(text, 0, text.length);
   }
 
   /// העתקת פסקה לפי אינדקס (משתמש ב־widget.data[index] ומייצר גם HTML)
@@ -471,6 +459,9 @@ $textWithBreaks
   Future<void> _copyFormattedText() async {
     // משתמש בטקסט השמור שנבחר לפני פתיחת התפריט
     final plainText = _savedSelectedText;
+
+    debugPrint('_copyFormattedText called with: "$plainText"');
+    debugPrint('_currentSelectedIndex: $_currentSelectedIndex');
 
     if (plainText == null || plainText.trim().isEmpty) {
       UiSnack.show('אנא בחר טקסט להעתקה');
@@ -652,11 +643,24 @@ $textWithBreaks
         // הטקסט של הספר - ווידג'ט נפרד לגמרי עם רקע משלו
         SelectionArea(
           // SelectionArea נפרד רק לטקסט - מאפשר בחירת טקסט בטקסט בלבד
+          contextMenuBuilder: (context, selectableRegionState) {
+            // מחזיר null כדי לבטל את תפריט ברירת המחדל של Flutter
+            return const SizedBox.shrink();
+          },
           onSelectionChanged: (selection) {
-            // שומר את הטקסט הנבחר לפני שהתפריט נפתח
+            // שומר את הטקסט הנבחר ואת האינדקס הנוכחי
+            // לא מאפס את הטקסט כשהבחירה מתבטלת - רק עדכן כשיש טקסט חדש
+            debugPrint(
+                'onSelectionChanged: selection=${selection?.plainText}, index=$index');
             if (selection != null && selection.plainText.isNotEmpty) {
-              _savedSelectedText = selection.plainText;
+              setState(() {
+                _savedSelectedText = selection.plainText;
+                _currentSelectedIndex = index;
+              });
+              debugPrint('Saved text: "$_savedSelectedText"');
             }
+            // לא מאפסים את _savedSelectedText כשהבחירה מתבטלת
+            // כך הטקסט נשאר זמין לתפריט ההקשר
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -664,19 +668,32 @@ $textWithBreaks
             decoration: backgroundColor != null
                 ? BoxDecoration(color: backgroundColor)
                 : null,
-            child: ctx.ContextMenuRegion(
-              contextMenu: _buildContextMenuForIndex(state, index),
-              child: GestureDetector(
-                // GestureDetector בתוך ContextMenuRegion - רק לחיצה שמאלית
-                behavior: HitTestBehavior.translucent,
-                onTap: () {
-                  // פשוט מעדכן את selectedIndex - זה יגרום לבנייה מחדש
-                  if (isSelected) {
-                    _textBookBloc.add(const UpdateSelectedIndex(null));
-                  } else {
-                    _textBookBloc.add(UpdateSelectedIndex(index));
-                  }
-                },
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                // מאפס את הטקסט השמור כשלוחצים על הפסקה
+                setState(() {
+                  _savedSelectedText = null;
+                  _currentSelectedIndex = null;
+                });
+                // פשוט מעדכן את selectedIndex - זה יגרום לבנייה מחדש
+                if (isSelected) {
+                  _textBookBloc.add(const UpdateSelectedIndex(null));
+                } else {
+                  _textBookBloc.add(UpdateSelectedIndex(index));
+                }
+              },
+              onSecondaryTapDown: (details) {
+                // לוג לבדיקה
+                debugPrint(
+                    'Secondary tap at index $index, saved text: "$_savedSelectedText"');
+                if (_savedSelectedText == null ||
+                    _savedSelectedText!.isEmpty) {
+                  debugPrint('WARNING: No text saved before opening menu!');
+                }
+              },
+              child: ctx.ContextMenuRegion(
+                contextMenu: _buildContextMenuForIndex(state, index, context),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4.0),
                   child: BlocBuilder<SettingsBloc, SettingsState>(
@@ -752,6 +769,10 @@ $textWithBreaks
             // SelectionArea נפרד רק למפרשים - מאפשר בחירת טקסט
             // אין קשר ל-SelectionArea של הטקסט, לכן לחיצות כאן לא משפיעות על הטקסט
             // משתמש בתפריט ההקשר הרגיל של Flutter (Copy, Select All)
+            contextMenuBuilder: (context, selectableRegionState) {
+              // מחזיר SizedBox.shrink כדי לבטל את תפריט ברירת המחדל של Flutter
+              return const SizedBox.shrink();
+            },
             child: CommentaryListBase(
               indexes: [index],
               fontSize: widget.textSize,

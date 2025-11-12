@@ -250,21 +250,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
 
-      // אם אין מפרשים פעילים וחלונית הצד פתוחה, סוגר אותה
-      final shouldCloseSplitView =
-          event.commentators.isEmpty && currentState.showSplitView;
-
-      // אם יש מפרשים חדשים ואין חלונית פתוחה, פותח אותה
-      final shouldOpenSplitView = event.commentators.isNotEmpty &&
-          currentState.activeCommentators.isEmpty &&
-          !currentState.showSplitView;
-
+      // עדכון המפרשים הפעילים בלבד, ללא שינוי של סוג התצוגה
       emit(currentState.copyWith(
         activeCommentators: event.commentators,
         selectedIndex: currentState.selectedIndex,
-        showSplitView: shouldCloseSplitView
-            ? false
-            : (shouldOpenSplitView ? true : currentState.showSplitView),
       ));
     }
   }

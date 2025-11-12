@@ -290,59 +290,74 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
           ],
           Flexible(
             fit: FlexFit.loose,
-            child: FutureBuilder(
-              future: getLinksforIndexs(
-                  indexes: widget.indexes ??
-                      (state.selectedIndex != null
-                          ? [state.selectedIndex!]
-                          : state.visibleIndices),
-                  links: state.links,
-                  commentatorsToShow: state.activeCommentators),
-              builder: (context, thisLinksSnapshot) {
-                if (!thisLinksSnapshot.hasData) {
-                  return _buildSkeletonLoading();
-                }
-                if (thisLinksSnapshot.data!.isEmpty) {
-                  // אם אין מפרשים, פשוט נציג מסך ריק
-                  return const SizedBox.shrink();
-                }
-                final data = thisLinksSnapshot.data!;
-
-                // מקבץ את הקישורים לקבוצות רצופות
-                final groups = _groupConsecutiveLinks(data);
-
-                // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+            child: Builder(
+              builder: (context) {
+                // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים
                 final currentIndexes = widget.indexes ??
                     (state.selectedIndex != null
                         ? [state.selectedIndex!]
                         : state.visibleIndices);
-                final indexesKey = currentIndexes.join(',');
+                
+                // סינון מהיר של קישורים רלוונטיים
+                final hasRelevantLinks = state.links.any((link) =>
+                    currentIndexes.contains(link.index1 - 1) &&
+                    state.activeCommentators.contains(
+                        utils.getTitleFromPath(link.path2)));
+                
+                // אם אין קישורים רלוונטיים, לא מציג כלום
+                if (!hasRelevantLinks) {
+                  return const SizedBox.shrink();
+                }
+                
+                return FutureBuilder(
+                  future: getLinksforIndexs(
+                      indexes: currentIndexes,
+                      links: state.links,
+                      commentatorsToShow: state.activeCommentators),
+                  builder: (context, thisLinksSnapshot) {
+                    if (!thisLinksSnapshot.hasData) {
+                      // רק אם יש קישורים רלוונטיים, מציג אנימציית טעינה
+                      return _buildSkeletonLoading();
+                    }
+                    if (thisLinksSnapshot.data!.isEmpty) {
+                      // אם אין מפרשים, פשוט נציג מסך ריק
+                      return const SizedBox.shrink();
+                    }
+                    final data = thisLinksSnapshot.data!;
 
-                return ProgressiveScroll(
-                  scrollController: scrollController,
-                  maxSpeed: 10000.0,
-                  curve: 10.0,
-                  accelerationFactor: 5,
-                  child: ScrollablePositionedList.builder(
-                    itemScrollController: _itemScrollController,
-                    itemPositionsListener: _itemPositionsListener,
-                    initialScrollIndex:
-                        _lastScrollIndex.clamp(0, groups.length - 1),
-                    key: PageStorageKey(
-                        'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
-                    physics: const ClampingScrollPhysics(),
-                    scrollOffsetController: scrollController,
-                    shrinkWrap: true,
-                    itemCount: groups.length,
-                    itemBuilder: (context, groupIndex) {
-                      final group = groups[groupIndex];
-                      return _buildCommentaryGroupTile(
-                        group: group,
-                        state: state,
-                        indexesKey: indexesKey,
-                      );
-                    },
-                  ),
+                    // מקבץ את הקישורים לקבוצות רצופות
+                    final groups = _groupConsecutiveLinks(data);
+
+                    // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+                    final indexesKey = currentIndexes.join(',');
+
+                    return ProgressiveScroll(
+                      scrollController: scrollController,
+                      maxSpeed: 10000.0,
+                      curve: 10.0,
+                      accelerationFactor: 5,
+                      child: ScrollablePositionedList.builder(
+                        itemScrollController: _itemScrollController,
+                        itemPositionsListener: _itemPositionsListener,
+                        initialScrollIndex:
+                            _lastScrollIndex.clamp(0, groups.length - 1),
+                        key: PageStorageKey(
+                            'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
+                        physics: const ClampingScrollPhysics(),
+                        scrollOffsetController: scrollController,
+                        shrinkWrap: true,
+                        itemCount: groups.length,
+                        itemBuilder: (context, groupIndex) {
+                          final group = groups[groupIndex];
+                          return _buildCommentaryGroupTile(
+                            group: group,
+                            state: state,
+                            indexesKey: indexesKey,
+                          );
+                        },
+                      ),
+                    );
+                  },
                 );
               },
             ),
