@@ -35,7 +35,7 @@ class SplitedViewScreen extends StatefulWidget {
 class _SplitedViewScreenState extends State<SplitedViewScreen> {
   late final MultiSplitViewController _controller;
   late final GlobalKey<SelectionAreaState> _selectionKey;
-  bool _paneOpen = true;
+  bool _paneOpen = false;
 
   @override
   void initState() {
@@ -118,56 +118,18 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
         if (state is! TextBookLoaded) {
           return const Center(child: CircularProgressIndicator());
         }
-        return Stack(
-          children: [
-            MultiSplitView(
-              controller: _controller,
-              axis: Axis.horizontal,
-              resizable: true,
-              dividerBuilder:
-                  (axis, index, resizable, dragging, highlighted, themeData) {
-                final color = dragging
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).dividerColor;
-                return MouseRegion(
-                  cursor: SystemMouseCursors.resizeColumn,
-                  child: Container(
-                    width: 8,
-                    alignment: Alignment.center,
-                    child: Container(
-                      width: 1.5,
-                      color: color,
-                    ),
-                  ),
-                );
-              },
-              children: [
-                ContextMenuRegion(
-                  contextMenu: _buildContextMenu(state),
-                  child: SelectionArea(
-                    key: _selectionKey,
-                    child: _paneOpen
-                        ? TabbedCommentaryPanel(
-                            fontSize: state.fontSize,
-                            openBookCallback: widget.openBookCallback,
-                            showSearch: true,
-                            onClosePane: _togglePane,
-                            initialTabIndex: widget.initialTabIndex,
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ),
-                CombinedView(
-                  data: widget.content,
-                  textSize: state.fontSize,
-                  openBookCallback: widget.openBookCallback,
-                  openLeftPaneTab: widget.openLeftPaneTab,
-                  showCommentaryAsExpansionTiles: false,
-                  tab: widget.tab,
-                ),
-              ],
-            ),
-            if (!_paneOpen)
+        
+        if (!_paneOpen) {
+          return Stack(
+            children: [
+              CombinedView(
+                data: widget.content,
+                textSize: state.fontSize,
+                openBookCallback: widget.openBookCallback,
+                openLeftPaneTab: widget.openLeftPaneTab,
+                showCommentaryAsExpansionTiles: false,
+                tab: widget.tab,
+              ),
               Positioned(
                 left: 8,
                 top: 8,
@@ -201,6 +163,53 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                   ),
                 ),
               ),
+            ],
+          );
+        }
+        
+        return MultiSplitView(
+          controller: _controller,
+          axis: Axis.horizontal,
+          resizable: true,
+          dividerBuilder:
+              (axis, index, resizable, dragging, highlighted, themeData) {
+            final color = dragging
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).dividerColor;
+            return MouseRegion(
+              cursor: SystemMouseCursors.resizeColumn,
+              child: Container(
+                width: 8,
+                alignment: Alignment.center,
+                child: Container(
+                  width: 1.5,
+                  color: color,
+                ),
+              ),
+            );
+          },
+          children: [
+            ContextMenuRegion(
+              contextMenu: _buildContextMenu(state),
+              child: SelectionArea(
+                key: _selectionKey,
+                child: TabbedCommentaryPanel(
+                  fontSize: state.fontSize,
+                  openBookCallback: widget.openBookCallback,
+                  showSearch: true,
+                  onClosePane: _togglePane,
+                  initialTabIndex: widget.initialTabIndex,
+                ),
+              ),
+            ),
+            CombinedView(
+              data: widget.content,
+              textSize: state.fontSize,
+              openBookCallback: widget.openBookCallback,
+              openLeftPaneTab: widget.openLeftPaneTab,
+              showCommentaryAsExpansionTiles: false,
+              tab: widget.tab,
+            ),
           ],
         );
       },

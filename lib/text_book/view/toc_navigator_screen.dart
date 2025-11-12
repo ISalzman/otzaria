@@ -349,28 +349,33 @@ class _TocViewerState extends State<TocViewer>
             if (state is! TextBookLoaded) return const Center();
             return Column(
               children: [
-                TextField(
-                  controller: searchController,
-                  onChanged: (value) => setState(() {}),
-                  focusNode: widget.focusNode,
-                  autofocus: true,
-                  onSubmitted: (_) {
-                    widget.focusNode.requestFocus();
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'איתור כותרת...',
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(FluentIcons.dismiss_24_regular),
-                          onPressed: () {
-                            setState(() {
-                              searchController.clear();
-                            });
-                          },
-                        ),
-                      ],
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    controller: searchController,
+                    onChanged: (value) => setState(() {}),
+                    focusNode: widget.focusNode,
+                    autofocus: true,
+                    onSubmitted: (_) {
+                      widget.focusNode.requestFocus();
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'איתור כותרת...',
+                      prefixIcon: const Icon(FluentIcons.search_24_regular),
+                      suffixIcon: searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(FluentIcons.dismiss_24_regular),
+                              onPressed: () {
+                                setState(() {
+                                  searchController.clear();
+                                });
+                              },
+                            )
+                          : null,
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
                     ),
                   ),
                 ),

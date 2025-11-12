@@ -35,9 +35,7 @@ class TextBookScaffold extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final hasSidebarContent = state.activeCommentators.isNotEmpty ||
-            initialSidebarTabIndex != null;
-        final isSplit = state.showSplitView && hasSidebarContent;
+        final isSplit = state.showSplitView;
 
         if (isSplit) {
           return SplitedViewScreen(
