@@ -89,6 +89,8 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
   int _totalSearchResults = 0;
   final Map<String, int> _searchResultsPerLink = {}; // שונה למפתח String
   int _lastScrollIndex = 0; // שומר את מיקום הגלילה האחרון
+  bool _allExpanded = true; // מצב גלובלי של פתיחה/סגירה של כל המפרשים
+
 
   String _getLinkKey(Link link) => '${link.path2}_${link.index2}';
 
@@ -138,12 +140,12 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
     required TextBookLoaded state,
     required String indexesKey,
   }) {
-    final groupKey = '${group.bookTitle}_$indexesKey';
+    final groupKey = '${group.bookTitle}_${indexesKey}_$_allExpanded';
 
     return ExpansionTile(
       key: PageStorageKey(groupKey),
       maintainState: true,
-      initiallyExpanded: true, // כרטיסיות פתוחות בברירת מחדל
+      initiallyExpanded: _allExpanded, // נשלט על ידי המצב הגלובלי
       backgroundColor: Theme.of(context).colorScheme.surface,
       collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
       title: BlocBuilder<SettingsBloc, SettingsState>(
@@ -254,6 +256,22 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                       },
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  // כפתור סגירה/פתיחה גלובלית של כל המפרשים - מוצג רק אם יש מפרשים פעילים
+                  if (state.activeCommentators.isNotEmpty)
+                    IconButton(
+                      icon: Icon(
+                        _allExpanded
+                            ? FluentIcons.arrow_collapse_all_24_regular
+                            : FluentIcons.arrow_expand_all_24_regular,
+                      ),
+                      tooltip: _allExpanded ? 'סגור את כל המפרשים' : 'פתח את כל המפרשים',
+                      onPressed: () {
+                        setState(() {
+                          _allExpanded = !_allExpanded;
+                        });
+                      },
+                    ),
                   // מציג את לחצן הסגירה רק אם יש callback
                   if (widget.onClosePane != null) ...[
                     const SizedBox(width: 8),
@@ -287,62 +305,101 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                 ],
               ),
             ),
+          ] else ...[
+            // כפתור סגירה/פתיחה גלובלית כאשר אין תיבת חיפוש - מוצג רק אם יש מפרשים פעילים
+            if (state.activeCommentators.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        _allExpanded
+                            ? FluentIcons.arrow_collapse_all_24_regular
+                            : FluentIcons.arrow_expand_all_24_regular,
+                      ),
+                      tooltip: _allExpanded ? 'סגור את כל המפרשים' : 'פתח את כל המפרשים',
+                      onPressed: () {
+                        setState(() {
+                          _allExpanded = !_allExpanded;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
           ],
           Flexible(
             fit: FlexFit.loose,
-            child: FutureBuilder(
-              future: getLinksforIndexs(
-                  indexes: widget.indexes ??
-                      (state.selectedIndex != null
-                          ? [state.selectedIndex!]
-                          : state.visibleIndices),
-                  links: state.links,
-                  commentatorsToShow: state.activeCommentators),
-              builder: (context, thisLinksSnapshot) {
-                if (!thisLinksSnapshot.hasData) {
-                  return _buildSkeletonLoading();
-                }
-                if (thisLinksSnapshot.data!.isEmpty) {
-                  // אם אין מפרשים, פשוט נציג מסך ריק
-                  return const SizedBox.shrink();
-                }
-                final data = thisLinksSnapshot.data!;
-
-                // מקבץ את הקישורים לקבוצות רצופות
-                final groups = _groupConsecutiveLinks(data);
-
-                // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+            child: Builder(
+              builder: (context) {
+                // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים
                 final currentIndexes = widget.indexes ??
                     (state.selectedIndex != null
                         ? [state.selectedIndex!]
                         : state.visibleIndices);
-                final indexesKey = currentIndexes.join(',');
+                
+                // סינון מהיר של קישורים רלוונטיים
+                final hasRelevantLinks = state.links.any((link) =>
+                    currentIndexes.contains(link.index1 - 1) &&
+                    state.activeCommentators.contains(
+                        utils.getTitleFromPath(link.path2)));
+                
+                // אם אין קישורים רלוונטיים, לא מציג כלום
+                if (!hasRelevantLinks) {
+                  return const SizedBox.shrink();
+                }
+                
+                return FutureBuilder(
+                  future: getLinksforIndexs(
+                      indexes: currentIndexes,
+                      links: state.links,
+                      commentatorsToShow: state.activeCommentators),
+                  builder: (context, thisLinksSnapshot) {
+                    if (!thisLinksSnapshot.hasData) {
+                      // רק אם יש קישורים רלוונטיים, מציג אנימציית טעינה
+                      return _buildSkeletonLoading();
+                    }
+                    if (thisLinksSnapshot.data!.isEmpty) {
+                      // אם אין מפרשים, פשוט נציג מסך ריק
+                      return const SizedBox.shrink();
+                    }
+                    final data = thisLinksSnapshot.data!;
 
-                return ProgressiveScroll(
-                  scrollController: scrollController,
-                  maxSpeed: 10000.0,
-                  curve: 10.0,
-                  accelerationFactor: 5,
-                  child: ScrollablePositionedList.builder(
-                    itemScrollController: _itemScrollController,
-                    itemPositionsListener: _itemPositionsListener,
-                    initialScrollIndex:
-                        _lastScrollIndex.clamp(0, groups.length - 1),
-                    key: PageStorageKey(
-                        'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
-                    physics: const ClampingScrollPhysics(),
-                    scrollOffsetController: scrollController,
-                    shrinkWrap: true,
-                    itemCount: groups.length,
-                    itemBuilder: (context, groupIndex) {
-                      final group = groups[groupIndex];
-                      return _buildCommentaryGroupTile(
-                        group: group,
-                        state: state,
-                        indexesKey: indexesKey,
-                      );
-                    },
-                  ),
+                    // מקבץ את הקישורים לקבוצות רצופות
+                    final groups = _groupConsecutiveLinks(data);
+
+                    // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+                    final indexesKey = currentIndexes.join(',');
+
+                    return ProgressiveScroll(
+                      scrollController: scrollController,
+                      maxSpeed: 10000.0,
+                      curve: 10.0,
+                      accelerationFactor: 5,
+                      child: ScrollablePositionedList.builder(
+                        itemScrollController: _itemScrollController,
+                        itemPositionsListener: _itemPositionsListener,
+                        initialScrollIndex:
+                            _lastScrollIndex.clamp(0, groups.length - 1),
+                        key: PageStorageKey(
+                            'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
+                        physics: const ClampingScrollPhysics(),
+                        scrollOffsetController: scrollController,
+                        shrinkWrap: true,
+                        itemCount: groups.length,
+                        itemBuilder: (context, groupIndex) {
+                          final group = groups[groupIndex];
+                          return _buildCommentaryGroupTile(
+                            group: group,
+                            state: state,
+                            indexesKey: indexesKey,
+                          );
+                        },
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -426,3 +483,5 @@ class _SkeletonLine extends StatelessWidget {
     );
   }
 }
+
+

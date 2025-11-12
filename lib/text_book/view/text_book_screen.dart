@@ -23,7 +23,6 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/printing/printing_screen.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
-import 'package:otzaria/text_book/view/links_screen.dart';
 import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
@@ -531,7 +530,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     // יוצרים את בקר הלשוניות עם האינדקס ההתחלתי שקבענו
     tabController = TabController(
-      length: 4, // יש 4 לשוניות
+      length: 3, // יש 3 לשוניות
       vsync: this,
       initialIndex: initialIndex,
     );
@@ -917,12 +916,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // 2) Split View Button
       ActionButtonData(
         widget: _buildSplitViewButton(context, state),
-        icon: !state.showSplitView
-            ? FluentIcons.panel_left_24_regular
-            : FluentIcons.panel_left_24_regular,
-        tooltip: !state.showSplitView
-            ? 'הצגת מפרשים בצד הטקסט'
-            : 'הצגת מפרשים מתחת הטקסט',
+        icon: FluentIcons.panel_left_24_regular,
+        tooltip: state.showSplitView
+            ? 'הצגת מפרשים מתחת הטקסט'
+            : 'הצגת מפרשים בצד הטקסט',
         onPressed: () => context.read<TextBookBloc>().add(
               ToggleSplitView(!state.showSplitView),
             ),
@@ -1154,14 +1151,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       onPressed: () => context.read<TextBookBloc>().add(
             ToggleSplitView(!state.showSplitView),
           ),
-      icon: Icon(
-        !state.showSplitView
-            ? FluentIcons.panel_left_24_regular
-            : FluentIcons.panel_left_24_regular,
+      icon: RotatedBox(
+        quarterTurns: state.showSplitView ? 0 : 3,  // מסובב 270 מעלות (90 נגד כיוון השעון) כשמתחת
+        child: const Icon(FluentIcons.panel_left_24_regular),
       ),
-      tooltip: !state.showSplitView
-          ? ' הצגת מפרשים בצד הטקסט'
-          : 'הצגת מפרשים מתחת הטקסט',
+      tooltip: state.showSplitView
+          ? 'הצגת מפרשים מתחת הטקסט'
+          : 'הצגת מפרשים בצד הטקסט',
     );
   }
 
@@ -2156,66 +2152,6 @@ $detailsSection
     );
   }
 
-  Widget _buildCustomTab(String text, int index, TextBookLoaded state) {
-    return AnimatedBuilder(
-      animation: tabController,
-      builder: (context, child) {
-        final isSelected = tabController.index == index;
-        return MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            onTap: () {
-              tabController.animateTo(index);
-              if (index == 1 && !Platform.isAndroid) {
-                textSearchFocusNode.requestFocus();
-              } else if (index == 0 && !Platform.isAndroid) {
-                navigationSearchFocusNode.requestFocus();
-              }
-            },
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  tabController.animateTo(index);
-                  if (index == 1 && !Platform.isAndroid) {
-                    textSearchFocusNode.requestFocus();
-                  } else if (index == 0 && !Platform.isAndroid) {
-                    navigationSearchFocusNode.requestFocus();
-                  }
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                  decoration: BoxDecoration(
-                    border: isSelected
-                        ? Border(
-                            bottom: BorderSide(
-                                color: Theme.of(context).primaryColor,
-                                width: 2))
-                        : null,
-                  ),
-                  child: Text(
-                    text,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.fade,
-                    softWrap: false,
-                    style: TextStyle(
-                      color: isSelected ? Theme.of(context).primaryColor : null,
-                      fontWeight:
-                          isSelected ? FontWeight.bold : FontWeight.normal,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildTabBar(TextBookLoaded state) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (state.showLeftPane && !Platform.isAndroid && !_isInitialFocusDone) {
@@ -2237,63 +2173,72 @@ $detailsSection
             padding: const EdgeInsets.fromLTRB(1, 0, 4, 0),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                  child: _buildCustomTab('ניווט', 0, state)),
-                              Container(
-                                  height: 24,
-                                  width: 1,
-                                  color: Colors.grey.shade400,
-                                  margin: const EdgeInsets.symmetric(
-                                      horizontal: 2)),
-                              Expanded(
-                                  child: _buildCustomTab('חיפוש', 1, state)),
-                              Container(
-                                  height: 24,
-                                  width: 1,
-                                  color: Colors.grey.shade400,
-                                  margin: const EdgeInsets.symmetric(
-                                      horizontal: 2)),
-                              Expanded(
-                                  child: _buildCustomTab('מפרשים', 2, state)),
-                              Container(
-                                  height: 24,
-                                  width: 1,
-                                  color: Colors.grey.shade400,
-                                  margin: const EdgeInsets.symmetric(
-                                      horizontal: 2)),
-                              Expanded(
-                                  child: _buildCustomTab('קישורים', 3, state)),
-                            ],
-                          ),
-                          Container(
-                            height: 1,
-                            color: Theme.of(context).dividerColor,
-                          ),
-                        ],
+                Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Theme.of(context).dividerColor,
+                        width: 1,
                       ),
                     ),
-                    if (MediaQuery.of(context).size.width >= 600)
-                      IconButton(
-                        onPressed:
-                            (Settings.getValue<bool>('key-pin-sidebar') ??
-                                    false)
-                                ? null
-                                : () => context.read<TextBookBloc>().add(
-                                      TogglePinLeftPane(!state.pinLeftPane),
-                                    ),
-                        icon: const Icon(FluentIcons.pin_24_regular),
-                        isSelected: state.pinLeftPane ||
-                            (Settings.getValue<bool>('key-pin-sidebar') ??
-                                false),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TabBar(
+                          controller: tabController,
+                          tabs: const [
+                            Tab(text: 'ניווט'),
+                            Tab(text: 'חיפוש'),
+                            Tab(text: 'מפרשים'),
+                          ],
+                          labelColor: Theme.of(context).colorScheme.primary,
+                          unselectedLabelColor: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.6),
+                          indicatorColor: Theme.of(context).colorScheme.primary,
+                          dividerColor: Colors.transparent,
+                          overlayColor: WidgetStateProperty.all(Colors.transparent),
+                        ),
                       ),
-                  ],
+                      if (MediaQuery.of(context).size.width >= 600)
+                        IconButton(
+                          onPressed:
+                              (Settings.getValue<bool>('key-pin-sidebar') ??
+                                      false)
+                                  ? null
+                                  : () => context.read<TextBookBloc>().add(
+                                        TogglePinLeftPane(!state.pinLeftPane),
+                                      ),
+                          icon: AnimatedRotation(
+                            turns: (state.pinLeftPane ||
+                                    (Settings.getValue<bool>('key-pin-sidebar') ??
+                                        false))
+                                ? -0.125
+                                : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: Icon(
+                              (state.pinLeftPane ||
+                                      (Settings.getValue<bool>(
+                                              'key-pin-sidebar') ??
+                                          false))
+                                  ? FluentIcons.pin_24_filled
+                                  : FluentIcons.pin_24_regular,
+                            ),
+                          ),
+                          color: (state.pinLeftPane ||
+                                  (Settings.getValue<bool>('key-pin-sidebar') ??
+                                      false))
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                          isSelected: state.pinLeftPane ||
+                              (Settings.getValue<bool>('key-pin-sidebar') ??
+                                  false),
+                        ),
+                    ],
+                  ),
                 ),
                 Expanded(
                   child: TabBarView(
@@ -2316,7 +2261,6 @@ $detailsSection
                         child: _buildSearchView(context, state),
                       ),
                       _buildCommentaryView(),
-                      _buildLinkView(context, state),
                     ],
                   ),
                 ),
@@ -2346,32 +2290,6 @@ $detailsSection
       focusNode: navigationSearchFocusNode,
       closeLeftPaneCallback: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
-    );
-  }
-
-  Widget _buildLinkView(BuildContext context, TextBookLoaded state) {
-    return LinksViewer(
-      openTabcallback: widget.openBookCallback,
-      closeLeftPanelCallback: () =>
-          context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
-      isSplitViewOpen: state.showSplitView &&
-          (state.activeCommentators.isNotEmpty || _sidebarTabIndex != null),
-      links: state.visibleLinks,
-      openInSidebarCallback: () {
-        final isSplitOpen = state.showSplitView &&
-            (state.activeCommentators.isNotEmpty || _sidebarTabIndex != null);
-
-        if (isSplitOpen) {
-          // אם החלונית פתוחה - סוגר אותה
-          context.read<TextBookBloc>().add(const ToggleSplitView(false));
-        } else {
-          // אם החלונית סגורה - פותח אותה עם כרטיסיית הקישורים
-          setState(() {
-            _sidebarTabIndex = 1; // כרטיסיית הקישורים
-          });
-          context.read<TextBookBloc>().add(const ToggleSplitView(true));
-        }
-      },
     );
   }
 
