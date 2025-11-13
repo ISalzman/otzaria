@@ -2699,7 +2699,7 @@ class _RegularReportTabState extends State<_RegularReportTab> {
                             );
                           }
                         : null,
-                    child: const Text('שליחת דוא"ל'),
+                    child: const Text('המשך'),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
