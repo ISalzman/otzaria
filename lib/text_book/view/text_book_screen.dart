@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
 import 'dart:async';
-import 'package:csv/csv.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -2542,7 +2541,7 @@ class _RegularReportTabState extends State<_RegularReportTab> {
   /// בדיקה אם כפתור "שלח דיווח" צריך להיות מושבת בדיווח הרגיל
   Future<bool> _isPhoneReportDisabled() async {
     try {
-      final bookDetails = await _getBookDetails(widget.state.book.title);
+      final bookDetails = SourcesBooksService().getBookDetails(widget.state.book.title);
       final sourceFolder = bookDetails['תיקיית המקור'];
 
       if (sourceFolder != null) {
@@ -2557,54 +2556,7 @@ class _RegularReportTabState extends State<_RegularReportTab> {
     }
   }
 
-  /// קבלת פרטי הספר מה-CSV
-  Future<Map<String, String>> _getBookDetails(String bookTitle) async {
-    try {
-      final libraryPath = Settings.getValue('key-library-path');
-      if (libraryPath == null || libraryPath.isEmpty) {
-        return _getDefaultBookDetails();
-      }
 
-      final csvPath =
-          '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}SourcesBooks.csv';
-      final file = File(csvPath);
-
-      if (!await file.exists()) {
-        return _getDefaultBookDetails();
-      }
-
-      final csvContent = await file.readAsString(encoding: utf8);
-      final rows = const CsvToListConverter().convert(csvContent);
-
-      if (rows.isEmpty) {
-        return _getDefaultBookDetails();
-      }
-
-      for (final row in rows.skip(1)) {
-        if (row.isNotEmpty && row[0].toString() == bookTitle) {
-          final fileNameRaw = row[0].toString();
-          return {
-            'שם הקובץ': fileNameRaw,
-            'נתיב הקובץ': row[1].toString(),
-            'תיקיית המקור': row[2].toString(),
-          };
-        }
-      }
-
-      return _getDefaultBookDetails();
-    } catch (e) {
-      debugPrint('Error reading book details: $e');
-      return _getDefaultBookDetails();
-    }
-  }
-
-  Map<String, String> _getDefaultBookDetails() {
-    return {
-      'שם הקובץ': 'לא ניתן למצוא את הספר',
-      'נתיב הקובץ': 'לא ניתן למצוא את הספר',
-      'תיקיית המקור': 'לא ניתן למצוא את הספר',
-    };
-  }
 
   @override
   void dispose() {
