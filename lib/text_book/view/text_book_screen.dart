@@ -3001,7 +3001,7 @@ Future<void> _addNoteFromKeyboard(
 Map<String, String> _getSourceDisplayInfo(String source) {
   switch (source) {
     case 'Ben-Yehuda':
-      return {'text': 'Ben-Yehuda', 'url': ''};
+      return {'text': 'פרוייקט בן-יהודה', 'https://benyehuda.org/': ''};
     case 'Dicta':
       return {'text': 'ספריית דיקטה', 'url': 'https://library.dicta.org.il/'};
     case 'OnYourWay':
