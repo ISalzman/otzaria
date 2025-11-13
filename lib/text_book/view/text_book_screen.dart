@@ -37,6 +37,7 @@ import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/models/phone_report_data.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/services/phone_report_service.dart';
+import 'package:otzaria/services/sources_books_service.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:otzaria/widgets/phone_report_tab.dart';
@@ -1642,7 +1643,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       state.book.tableOfContents,
     );
 
-    final bookDetails = await _getBookDetailsFromCsv(state.book.title);
+    final bookDetails = SourcesBooksService().getBookDetails(state.book.title);
 
     return {'currentRef': currentRef, 'bookDetails': bookDetails};
   }
@@ -3083,8 +3084,8 @@ Future<void> _showBookSourceDialog(
   try {
     debugPrint('Opening book source dialog for: "${state.book.title}"');
 
-    // טעינת פרטי הספר מהקובץ CSV
-    final bookDetails = await _getBookDetailsFromCsv(state.book.title);
+    // קבלת פרטי הספר מהשירות (נטען כבר בזיכרון)
+    final bookDetails = SourcesBooksService().getBookDetails(state.book.title);
     final bookSource = bookDetails['תיקיית המקור'] ?? 'לא נמצא מקור';
 
     // קבלת מידע התצוגה עבור המקור
@@ -3166,72 +3167,6 @@ Future<void> _showBookSourceDialog(
       UiSnack.showError('שגיאה בטעינת מקור הספר: ${e.toString()}');
     }
   }
-}
-
-/// קבלת פרטי הספר מה-CSV (עבור הקלאס הראשי)
-Future<Map<String, String>> _getBookDetailsFromCsv(String bookTitle) async {
-  try {
-    final libraryPath = Settings.getValue('key-library-path');
-    if (libraryPath == null || libraryPath.isEmpty) {
-      debugPrint('Library path is null or empty');
-      return _getDefaultBookDetailsFromCsv();
-    }
-
-    final csvPath =
-        '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}SourcesBooks.csv';
-    final file = File(csvPath);
-
-    debugPrint('Looking for CSV file at: $csvPath');
-    if (!await file.exists()) {
-      debugPrint('CSV file does not exist');
-      return _getDefaultBookDetailsFromCsv();
-    }
-
-    final csvContent = await file.readAsString(encoding: utf8);
-    final rows = const CsvToListConverter().convert(csvContent);
-
-    if (rows.isEmpty) {
-      debugPrint('CSV file is empty');
-      return _getDefaultBookDetailsFromCsv();
-    }
-
-    debugPrint('Searching for book: "$bookTitle"');
-    debugPrint('Total rows in CSV: ${rows.length}');
-
-    for (final row in rows.skip(1)) {
-      if (row.isNotEmpty && row.length >= 3) {
-        final fileNameRaw = row[0].toString();
-        final fileName = fileNameRaw.replaceAll('.txt', '');
-
-        debugPrint(
-            'Checking row: fileName="$fileName", fileNameRaw="$fileNameRaw"');
-
-        // נבדוק התאמה עם ובלי .txt
-        if (fileName == bookTitle || fileNameRaw == bookTitle) {
-          debugPrint('Found match! Returning book details');
-          return {
-            'שם הקובץ': fileNameRaw,
-            'נתיב הקובץ': row[1].toString(),
-            'תיקיית המקור': row[2].toString(),
-          };
-        }
-      }
-    }
-
-    debugPrint('No match found for book: "$bookTitle"');
-    return _getDefaultBookDetailsFromCsv();
-  } catch (e) {
-    debugPrint('Error reading book details: $e');
-    return _getDefaultBookDetailsFromCsv();
-  }
-}
-
-Map<String, String> _getDefaultBookDetailsFromCsv() {
-  return {
-    'שם הקובץ': 'לא ניתן למצוא את הספר',
-    'נתיב הקובץ': 'לא ניתן למצוא את הספר',
-    'תיקיית המקור': 'לא ניתן למצוא את הספר',
-  };
 }
 
 void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
