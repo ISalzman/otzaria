@@ -34,7 +34,7 @@ class ReportingNumbersWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'מספרי הדיווח:',
+              'נתוני הדיווח:',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -42,61 +42,34 @@ class ReportingNumbersWidget extends StatelessWidget {
             ),
             const SizedBox(height: 12),
 
-            // IntrinsicHeight חיוני כדי שה-VerticalDivider יידע מה הגובה שלו
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // טור ימין
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _buildNumberRow(
-                          context,
-                          'מספר גירסה',
-                          libraryVersion,
-                        ),
-                        const SizedBox(height: 8),
-                        _buildNumberRow(
-                          context,
-                          'מספר ספר',
-                          bookId?.toString() ?? 'לא זמין',
-                          enabled: bookId != null,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // קו מפריד אנכי בין הטורים
-                  const VerticalDivider(
-                    width: 20, // הרוחב הכולל שהמפריד תופס
-                    thickness: 1, // עובי הקו
-                    indent: 5, // ריפוד עליון
-                    endIndent: 5, // ריפוד תחתון
-                    color: Colors.grey, // צבע הקו (אופציונלי)
-                  ),
-
-                  // טור שמאל
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _buildNumberRow(
-                          context,
-                          'מספר שורה',
-                          lineNumber.toString(),
-                        ),
-                        const SizedBox(height: 8),
-                        _buildNumberRow(
-                          context,
-                          'מספר שגיאה',
-                          errorId?.toString() ?? 'לא נבחר',
-                          enabled: errorId != null,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            // Wrap מאפשר לנתונים להיות באותה שורה ולעבור לשורה הבאה אם אין מקום
+            Wrap(
+              spacing: 16, // מרווח אופקי בין הפריטים
+              runSpacing: 8, // מרווח אנכי בין השורות
+              children: [
+                _buildCompactNumberItem(
+                  context,
+                  'מספר גירסה',
+                  libraryVersion,
+                ),
+                _buildCompactNumberItem(
+                  context,
+                  'מספר ספר',
+                  bookId?.toString() ?? 'לא זמין',
+                  enabled: bookId != null,
+                ),
+                _buildCompactNumberItem(
+                  context,
+                  'מספר שורה',
+                  lineNumber.toString(),
+                ),
+                _buildCompactNumberItem(
+                  context,
+                  'מספר שגיאה',
+                  errorId?.toString() ?? 'לא נבחר',
+                  enabled: errorId != null,
+                ),
+              ],
             ),
 
             if (showPhoneNumber) ...[
@@ -111,31 +84,48 @@ class ReportingNumbersWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildNumberRow(
+  Widget _buildCompactNumberItem(
     BuildContext context,
     String label,
     String value, {
     bool enabled = true,
   }) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: Theme.of(context).dividerColor,
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
             '$label: $value',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: enabled ? null : Theme.of(context).disabledColor,
                 ),
             textDirection: TextDirection.rtl,
           ),
-        ),
-        const SizedBox(width: 8),
-        IconButton(
-          onPressed: enabled ? () => _copyToClipboard(context, value) : null,
-          icon: const Icon(FluentIcons.copy_24_regular, size: 18),
-          tooltip: 'העתק',
-          visualDensity: VisualDensity.compact,
-        ),
-      ],
+          const SizedBox(width: 6),
+          InkWell(
+            onTap: enabled ? () => _copyToClipboard(context, value) : null,
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(
+                FluentIcons.copy_24_regular,
+                size: 16,
+                color: enabled
+                    ? Theme.of(context).iconTheme.color
+                    : Theme.of(context).disabledColor,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

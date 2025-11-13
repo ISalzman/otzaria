@@ -58,11 +58,11 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
     final errors = <String>[];
 
     if (_selectedText == null || _selectedText!.isEmpty) {
-      errors.add('יש לבחור טקסט שבו נמצאת השגיאה');
+      errors.add('בחירת הטקסט שבו נמצאת השגיאה');
     }
 
     if (_selectedErrorType == null) {
-      errors.add('יש לבחור סוג שגיאה');
+      errors.add('סוג השגיאה');
     }
 
     if (widget.bookId == null) {
@@ -118,7 +118,7 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
             const SizedBox(height: 8),
             Text(
               '1. סמן את הטקסט שבו נמצאת הטעות  •  '
-              '2. בחר את סוג השגיאה מהרשימה  •  '
+              '2. בחר את סוג השגיאה   •  '
               '3. השתמש במספרים המוצגים למטה כשתתקשר',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onPrimaryContainer,
@@ -255,6 +255,8 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
   }
 
   Widget _buildErrorTypeSelection(BuildContext context) {
+    final isEnabled = _selectedText != null && _selectedText!.isNotEmpty;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -265,30 +267,46 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
               ),
           textDirection: TextDirection.rtl,
         ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<ErrorType>(
-          initialValue: _selectedErrorType,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            hintText: 'בחר סוג שגיאה...',
-          ),
-          isExpanded: true,
-          items: ErrorType.errorTypes.map((errorType) {
-            return DropdownMenuItem<ErrorType>(
-              value: errorType,
-              child: Text(
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8, // מרווח אופקי בין הכפתורים
+          runSpacing: 8, // מרווח אנכי בין השורות
+          children: ErrorType.errorTypes.map((errorType) {
+            final isSelected = _selectedErrorType?.id == errorType.id;
+            
+            return FilterChip(
+              label: Text(
                 errorType.hebrewLabel,
-                textDirection: TextDirection.rtl,
+                style: TextStyle(
+                  color: isSelected 
+                      ? Theme.of(context).colorScheme.onPrimary
+                      : isEnabled 
+                          ? Theme.of(context).colorScheme.onSurface
+                          : Theme.of(context).disabledColor,
+                ),
+              ),
+              selected: isSelected,
+              onSelected: isEnabled 
+                  ? (bool selected) {
+                      setState(() {
+                        _selectedErrorType = selected ? errorType : null;
+                      });
+                    }
+                  : null,
+              backgroundColor: isEnabled 
+                  ? null 
+                  : Theme.of(context).disabledColor.withValues(alpha: 0.1),
+              selectedColor: Theme.of(context).colorScheme.primary,
+              checkmarkColor: Theme.of(context).colorScheme.onPrimary,
+              side: BorderSide(
+                color: isSelected 
+                    ? Theme.of(context).colorScheme.primary
+                    : isEnabled 
+                        ? Theme.of(context).colorScheme.outline
+                        : Theme.of(context).disabledColor,
               ),
             );
           }).toList(),
-          onChanged: (_selectedText != null && _selectedText!.isNotEmpty)
-              ? (ErrorType? value) {
-                  setState(() {
-                    _selectedErrorType = value;
-                  });
-                }
-              : null,
         ),
       ],
     );
@@ -324,7 +342,7 @@ class _PhoneReportTabState extends State<PhoneReportTab> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'יש לתקן את השגיאות הבאות:',
+                  'אי אפשר להתקדם... עדיין לא מילאתם בטופס...',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.onErrorContainer,
