@@ -103,12 +103,9 @@ class SourcesBooksService {
     };
   }
 
-  /// איפוס הנתונים (לשימוש בעת שינוי נתיב ספרייה או סגירת התוכנה)
+  /// איפוס הנתונים (לשימוש בעת שינוי נתיב ספרייה)
   void clearData() {
-    if (_booksData != null) {
-      debugPrint('Clearing SourcesBooks data from memory...');
+    
       _booksData = null;
-      debugPrint('SourcesBooks data cleared successfully');
     }
   }
-}
