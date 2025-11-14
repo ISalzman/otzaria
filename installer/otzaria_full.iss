@@ -2,7 +2,6 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "אוצריא"
-#define MyAppNameEnglish "Otzaria"
 #define MyAppVersion "0.9.71"
 #define MyAppPublisher "sivan22"
 #define MyAppURL "https://github.com/Y-PLONI/otzaria"
@@ -19,7 +18,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName=C:\{#MyAppNameEnglish}
+DefaultDirName=C:\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
@@ -49,7 +48,7 @@ var
   InstallPath, OldPath: String;
 begin
   Result := True;
-  InstallPath := ExpandConstant('C:\{#MyAppNameEnglish}');
+  InstallPath := ExpandConstant('C:\{#MyAppName}');
   OldPath := 'C:\אוצריא';
   
   // בדיקה אם יש התקנה ישנה בנתיב העברי

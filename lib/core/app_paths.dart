@@ -7,7 +7,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 /// Utility class for managing application paths.
 /// Centralizes path construction logic to avoid duplication.
 class AppPaths {
-  /// Gets the main library path from settings. Defaults to 'C:/Otzaria' for Windows if not set.
+  /// Gets the main library path from settings. Defaults to 'C:/אוצריא' for Windows if not set.
   static Future<String> getLibraryPath() async {
     // Check existing library path setting
     final currentPath = Settings.getValue('key-library-path');
@@ -28,7 +28,7 @@ class AppPaths {
         libraryPath = (await getApplicationDocumentsDirectory()).path;
       }
     } else if (Platform.isWindows) {
-      libraryPath = 'C:/Otzaria';
+      libraryPath = 'C:/אוצריא';
     } else {
       // Linux, macOS: use application support directory for consistency
       libraryPath = (await getApplicationSupportDirectory()).path;
