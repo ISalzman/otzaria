@@ -4,18 +4,7 @@ permissions:
   contents: write
 
 on:
-  push:
-    branches:
-      - main
-      - dev
-
-  pull_request:
-    types: [opened, synchronize, reopened]
   workflow_dispatch:
-
-  # טריגר לפרסום בלבד
-  release:
-    types: [published, prereleased]
 
 jobs:
   build_windows:
