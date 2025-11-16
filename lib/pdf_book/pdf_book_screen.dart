@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
@@ -11,6 +12,9 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/pdf_book/pdf_page_number_dispaly.dart';
 import 'package:otzaria/pdf_book/pdf_commentary_panel.dart';
+import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
+import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
+import 'package:otzaria/personal_notes/widgets/personal_note_editor_dialog.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
@@ -1016,7 +1020,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// כפתורים שתמיד יהיו בתפריט "..."
   List<ActionButtonData> _buildAlwaysInMenuPdfActions(BuildContext context) {
     return [
-      // 1) הוספת סימניה
+      // 1) הוספת הערה
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(FluentIcons.note_add_24_regular),
+          tooltip: 'הוסף הערה לעמוד זה',
+          onPressed: () => _handleAddNotePress(context),
+        ),
+        icon: FluentIcons.note_add_24_regular,
+        tooltip: 'הוסף הערה לעמוד זה',
+        onPressed: () => _handleAddNotePress(context),
+      ),
+
+      // 2) הוספת סימניה
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.bookmark_add_24_regular),
@@ -1028,7 +1044,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: () => _handleBookmarkPress(context),
       ),
 
-      // 2) הדפסה
+      // 3) הדפסה
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.print_24_regular),
@@ -1077,6 +1093,98 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (mounted) {
       UiSnack.show(
           bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
+    }
+  }
+
+  /// טיפול בלחיצה על כפתור הוספת הערה
+  Future<void> _handleAddNotePress(BuildContext context) async {
+    final currentPage = widget.tab.pdfViewerController.isReady
+        ? (widget.tab.pdfViewerController.pageNumber ?? 1)
+        : 1;
+    
+    // קבלת טווח השורות של העמוד הנוכחי
+    final library = await DataRepository.instance.library;
+    final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
+    
+    String dialogTitle = 'הוסף הערה לעמוד $currentPage';
+    if (textBook != null && widget.tab.pdfHeadings != null) {
+      // מציאת טווח השורות של העמוד
+      final currentTitle = widget.tab.currentTitle.value;
+      final currentLineNumber = widget.tab.pdfHeadings!.getLineNumberForHeading(currentTitle);
+      
+      if (currentLineNumber != null) {
+        // מציאת הכותרת הבאה כדי לדעת את טווח השורות
+        final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
+        final currentIndex = sortedHeadings.indexWhere((e) => e.value == currentLineNumber);
+        
+        if (currentIndex != -1) {
+          final nextLineNumber = currentIndex < sortedHeadings.length - 1
+              ? sortedHeadings[currentIndex + 1].value
+              : null;
+          
+          if (nextLineNumber != null) {
+            dialogTitle = 'הוסף הערה לעמוד $currentPage\n(שורות $currentLineNumber-${nextLineNumber - 1} בטקסט)';
+          } else {
+            dialogTitle = 'הוסף הערה לעמוד $currentPage\n(משורה $currentLineNumber בטקסט)';
+          }
+        }
+      }
+    }
+    
+    final controller = TextEditingController();
+    final notesBloc = context.read<PersonalNotesBloc>();
+
+    final noteContent = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => PersonalNoteEditorDialog(
+        title: dialogTitle,
+        controller: controller,
+      ),
+    );
+
+    if (noteContent == null) {
+      debugPrint('Note dialog cancelled');
+      return;
+    }
+
+    final trimmed = noteContent.trim();
+    if (trimmed.isEmpty) {
+      UiSnack.show('ההערה ריקה, לא נשמרה');
+      return;
+    }
+
+    if (!mounted) return;
+
+    try {
+      // תמיד נשתמש בשם הספר המקורי כדי שההערות יהיו משותפות
+      final bookId = widget.tab.book.title;
+      
+      debugPrint('Adding note to bookId: $bookId, page: $currentPage');
+      debugPrint('Note content: $trimmed');
+      
+      notesBloc.add(AddPersonalNote(
+        bookId: bookId,
+        lineNumber: currentPage,
+        content: trimmed,
+      ));
+      
+      // פתיחת חלונית המפרשים בטאב ההערות
+      _showRightPane.value = true;
+      
+      // המתנה קצרה לעדכון ה-bloc
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      debugPrint('Note added successfully');
+      
+      if (textBook != null) {
+        UiSnack.show('ההערה נשמרה ותוצג בכל שורות העמוד בתצוגת הטקסט');
+      } else {
+        UiSnack.show('ההערה נשמרה בהצלחה');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Error adding note: $e');
+      debugPrint('Stack trace: $stackTrace');
+      UiSnack.showError('שמירת ההערה נכשלה: $e');
     }
   }
 
