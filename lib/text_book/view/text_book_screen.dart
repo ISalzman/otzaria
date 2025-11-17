@@ -554,7 +554,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   void _openLeftPaneTab(int index) {
     context.read<TextBookBloc>().add(const ToggleLeftPane(true));
-    tabController.index = index;
+    // וידוא שהאינדקס תקף לפני הגדרה
+    final validIndex = index.clamp(0, tabController.length - 1);
+    tabController.index = validIndex;
   }
 
   @override
@@ -945,8 +947,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
-
-
       // 5) Zoom In Button
       ActionButtonData(
         widget: _buildZoomInButton(context, state),
@@ -1039,7 +1039,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       ActionButtonData(
         widget: _buildAddNoteButton(context, state),
         icon: FluentIcons.note_add_24_regular,
-        tooltip: 'הוסף הערה לקטע זה',
+        tooltip: 'הוסף הערה אישית לשורה זו',
         onPressed: () => _handleAddNotePress(context, state),
       ),
 
@@ -1185,8 +1185,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-
-
   Widget _buildBookmarkButton(BuildContext context, TextBookLoaded state) {
     final shortcut =
         Settings.getValue<String>('key-shortcut-add-bookmark') ?? 'ctrl+b';
@@ -1231,7 +1229,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       onPressed: () => _handleAddNotePress(context, state),
       icon: const Icon(FluentIcons.note_add_24_regular),
-      tooltip: 'הוסף הערה לקטע זה (${shortcut.toUpperCase()})',
+      tooltip: 'הוסף הערה אישית לשורה זו (${shortcut.toUpperCase()})',
     );
   }
 
@@ -1493,16 +1491,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       BuildContext context, TextBookLoaded state) async {
     final positions = state.positionsListener.itemPositions.value;
     final currentIndex = positions.isNotEmpty ? positions.first.index : 0;
-    final controller = TextEditingController(
-      text: state.selectedTextForNote?.trim() ?? '',
-    );
+    // לא צריך טקסט נבחר - ההערה חלה על כל השורה
+    final controller = TextEditingController();
     final notesBloc = context.read<PersonalNotesBloc>();
     final textBookBloc = context.read<TextBookBloc>();
 
     final noteContent = await showDialog<String>(
       context: context,
       builder: (dialogContext) => PersonalNoteEditorDialog(
-        title: 'הוסף הערה לקטע זה',
+        title: 'הוסף הערה אישית לשורה זו',
         controller: controller,
       ),
     );
@@ -2248,8 +2245,6 @@ $detailsSection
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
     );
   }
-
-
 }
 
 // החלף את כל המחלקה הזו בקובץ text_book_screen.TXT
@@ -2540,7 +2535,8 @@ class _RegularReportTabState extends State<_RegularReportTab> {
   /// בדיקה אם כפתור "שלח דיווח" צריך להיות מושבת בדיווח הרגיל
   Future<bool> _isPhoneReportDisabled() async {
     try {
-      final bookDetails = SourcesBooksService().getBookDetails(widget.state.book.title);
+      final bookDetails =
+          SourcesBooksService().getBookDetails(widget.state.book.title);
       final sourceFolder = bookDetails['תיקיית המקור'];
 
       if (sourceFolder != null) {
@@ -2554,8 +2550,6 @@ class _RegularReportTabState extends State<_RegularReportTab> {
       return false;
     }
   }
-
-
 
   @override
   void dispose() {
@@ -2957,16 +2951,15 @@ Future<void> _addNoteFromKeyboard(
     BuildContext context, TextBookLoaded state) async {
   final positions = state.positionsListener.itemPositions.value;
   final currentIndex = positions.isNotEmpty ? positions.first.index : 0;
-  final controller = TextEditingController(
-    text: state.selectedTextForNote?.trim() ?? '',
-  );
+  // לא צריך טקסט נבחר - ההערה חלה על כל השורה
+  final controller = TextEditingController();
   final notesBloc = context.read<PersonalNotesBloc>();
   final textBookBloc = context.read<TextBookBloc>();
 
   final noteContent = await showDialog<String>(
     context: context,
     builder: (dialogContext) => PersonalNoteEditorDialog(
-      title: 'הוסף הערה לקטע זה',
+      title: 'הוסף הערה אישית לשורה זו',
       controller: controller,
     ),
   );
@@ -3006,13 +2999,19 @@ Map<String, String> _getSourceDisplayInfo(String source) {
     case 'OnYourWay':
       return {'text': 'ובלכתך בדרך', 'url': 'https://mobile.tora.ws/'};
     case 'Orayta':
-      return {'text': 'אורייתא', 'url': 'https://github.com/MosheWagner/Orayta-Books'};
+      return {
+        'text': 'אורייתא',
+        'url': 'https://github.com/MosheWagner/Orayta-Books'
+      };
     case 'sefaria':
       return {'text': 'ספריא', 'url': 'https://www.sefaria.org/texts'};
     case 'MoreBooks':
       return {'text': 'ספרים פרטיים או מקורות נוספים', 'url': ''};
     case 'wiki_jewish_books':
-      return {'text': 'אוצר הספרים היהודי השיתופי', 'url': 'https://wiki.jewishbooks.org.il/'};
+      return {
+        'text': 'אוצר הספרים היהודי השיתופי',
+        'url': 'https://wiki.jewishbooks.org.il/'
+      };
     case 'Tashma':
       return {'text': 'תא שמע', 'url': 'https://tashma.co.il/'};
     default:
