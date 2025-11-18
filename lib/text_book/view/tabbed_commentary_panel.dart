@@ -48,15 +48,19 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
   @override
   void initState() {
     super.initState();
+    // וידוא שהאינדקס ההתחלתי תקף (בין 0 ל-2)
+    final validInitialIndex = (widget.initialTabIndex ?? 0).clamp(0, 2);
     _tabController = TabController(
       length: 3, // 3 טאבים: מפרשים, קישורים והערות אישיות
       vsync: this,
-      initialIndex: widget.initialTabIndex ?? 0, // כרטיסייה ראשונית
+      initialIndex: validInitialIndex, // כרטיסייה ראשונית
     );
-    
+
     // מאזין לשינויים בטאב ושומר אותם
     _tabController.addListener(() {
-      if (_tabController.indexIsChanging || _tabController.index != _tabController.previousIndex) {
+      if (!_tabController.indexIsChanging &&
+          _tabController.index >= 0 &&
+          _tabController.index < 3) {
         widget.onTabChanged?.call(_tabController.index);
       }
     });
@@ -65,10 +69,14 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
   @override
   void didUpdateWidget(TabbedCommentaryPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // אם יש אינדקס חדש, עובר אליו
+    // אם יש אינדקס חדש, עובר אליו (עם וידוא שהוא תקף)
     if (widget.initialTabIndex != null &&
         widget.initialTabIndex != oldWidget.initialTabIndex) {
-      _tabController.animateTo(widget.initialTabIndex!);
+      final validIndex = widget.initialTabIndex!.clamp(0, 2);
+      // וודא שהאינדקס שונה מהנוכחי לפני שמנסים לעבור אליו
+      if (_tabController.index != validIndex) {
+        _tabController.animateTo(validIndex);
+      }
     }
   }
 
@@ -107,7 +115,10 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                       FluentIcons.filter_24_regular,
                       color: _showFilterTab
                           ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          : Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.6),
                     ),
                     tooltip: 'בחירת מפרשים',
                     onPressed: () {
@@ -121,14 +132,17 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                       builder: (context, constraints) {
                         // חישוב גודל הטקסט לפי רוחב זמין
                         final availableWidth = constraints.maxWidth;
-                        final fontSize = availableWidth < 200 ? 11.0 : (availableWidth < 300 ? 13.0 : 14.0);
-                        
+                        final fontSize = availableWidth < 200
+                            ? 11.0
+                            : (availableWidth < 300 ? 13.0 : 14.0);
+
                         return TabBar(
                           controller: _tabController,
                           isScrollable: true,
                           tabAlignment: TabAlignment.start,
                           padding: EdgeInsets.zero,
-                          labelPadding: EdgeInsets.symmetric(horizontal: availableWidth < 250 ? 8 : 16),
+                          labelPadding: EdgeInsets.symmetric(
+                              horizontal: availableWidth < 250 ? 8 : 16),
                           tabs: [
                             Tab(
                               child: Text(
@@ -217,7 +231,8 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                           openBookCallback: widget.openBookCallback,
                           fontSize: widget.fontSize,
                           showVisibleLinksIfNoSelection:
-                              widget.initialTabIndex == 1, // אם נפתח ישירות לקישורים
+                              widget.initialTabIndex ==
+                                  1, // אם נפתח ישירות לקישורים
                         ),
                         // כרטיסיית ההערות האישיות
                         PersonalNotesSidebar(
