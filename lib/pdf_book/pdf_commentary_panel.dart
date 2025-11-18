@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
@@ -8,7 +9,9 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/pdf_book/pdf_commentators_selector.dart';
 import 'package:otzaria/pdf_book/pdf_commentary_content.dart';
+import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:pdfrx/pdfrx.dart';
 
 /// מייצג קבוצת קטעי פירוש רצופים מאותו ספר
 class CommentaryGroup {
@@ -283,13 +286,35 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       );
     }
 
-    // סינון מפרשים לפי השורה הנוכחית
+    // סינון מפרשים לפי טווח השורות של העמוד הנוכחי
     final currentLine = widget.tab.currentTextLineNumber!;
-    debugPrint('Looking for links at line: ${currentLine + 1}');
+    
+    // מציאת טווח השורות של העמוד הנוכחי
+    int startLine = currentLine + 1;
+    int endLine = startLine;
+    
+    if (widget.tab.pdfHeadings != null) {
+      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
+      final currentIndex = sortedHeadings.indexWhere((e) => e.value == currentLine);
+      
+      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
+        endLine = sortedHeadings[currentIndex + 1].value - 1;
+      } else {
+        // אם זה העמוד האחרון, נניח טווח של 50 שורות
+        endLine = startLine + 50;
+      }
+    } else {
+      // אם אין headings, נניח טווח של 50 שורות
+      endLine = startLine + 50;
+    }
+    
+    debugPrint('Looking for links in range: $startLine-$endLine');
+    debugPrint('Active commentators: ${widget.tab.activeCommentators.length}');
     
     final relevantLinks = widget.tab.links
         .where((link) =>
-            link.index1 == currentLine + 1 &&
+            link.index1 >= startLine &&
+            link.index1 <= endLine &&
             (link.connectionType == "commentary" ||
                 link.connectionType == "targum") &&
             widget.tab.activeCommentators
@@ -300,15 +325,15 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     
     if (relevantLinks.isEmpty) {
       // בדיקה מפורטת למה אין קישורים
-      final allLinksForLine = widget.tab.links
-          .where((link) => link.index1 == currentLine + 1)
+      final allLinksInRange = widget.tab.links
+          .where((link) => link.index1 >= startLine && link.index1 <= endLine)
           .toList();
       
-      debugPrint('Total links for line ${currentLine + 1}: ${allLinksForLine.length}');
-      if (allLinksForLine.isNotEmpty) {
-        debugPrint('Available commentators in links:');
-        for (final link in allLinksForLine.take(5)) {
-          debugPrint('  - ${utils.getTitleFromPath(link.path2)} (${link.connectionType})');
+      debugPrint('Total links in range $startLine-$endLine: ${allLinksInRange.length}');
+      if (allLinksInRange.isNotEmpty) {
+        debugPrint('Available commentators in range:');
+        for (final link in allLinksInRange.take(5)) {
+          debugPrint('  - Line ${link.index1}: ${utils.getTitleFromPath(link.path2)} (${link.connectionType})');
         }
       }
       
@@ -327,7 +352,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
               ),
               const SizedBox(height: 8),
               Text(
-                'Debug: Line ${currentLine + 1}, ${allLinksForLine.length} links found, ${widget.tab.activeCommentators.length} active commentators',
+                'Debug: Range $startLine-$endLine, ${allLinksInRange.length} links found, ${widget.tab.activeCommentators.length} active commentators',
                 style: TextStyle(
                   fontSize: widget.fontSize * 0.7,
                   color: Colors.red,
@@ -409,11 +434,30 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       );
     }
 
-    // סינון קישורים (לא מפרשים)
+    // סינון קישורים (לא מפרשים) לפי טווח השורות של העמוד
     final currentLine = widget.tab.currentTextLineNumber!;
+    
+    // מציאת טווח השורות של העמוד הנוכחי
+    int startLine = currentLine + 1;
+    int endLine = startLine;
+    
+    if (widget.tab.pdfHeadings != null) {
+      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
+      final currentIndex = sortedHeadings.indexWhere((e) => e.value == currentLine);
+      
+      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
+        endLine = sortedHeadings[currentIndex + 1].value - 1;
+      } else {
+        endLine = startLine + 50;
+      }
+    } else {
+      endLine = startLine + 50;
+    }
+    
     final relevantLinks = widget.tab.links
         .where((link) =>
-            link.index1 == currentLine + 1 &&
+            link.index1 >= startLine &&
+            link.index1 <= endLine &&
             link.connectionType != "commentary" &&
             link.connectionType != "targum" &&
             link.start == null &&
@@ -445,7 +489,12 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   Widget _buildLinkTile(Link link) {
+    final keyStr = '${link.path2}_${link.index2}';
     return ExpansionTile(
+      key: PageStorageKey(keyStr),
+      maintainState: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
       title: Text(
         link.heRef,
         style: TextStyle(
@@ -459,7 +508,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         style: TextStyle(
           fontSize: widget.fontSize * 0.65,
           fontFamily: 'FrankRuhlCLM',
-          color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
         ),
       ),
       children: [
@@ -488,6 +537,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) {
+                  debugPrint('Error loading link content: ${snapshot.error}');
+                  debugPrint('Stack trace: ${snapshot.stackTrace}');
                   return Text('שגיאה: ${snapshot.error}');
                 }
                 return Text(
@@ -506,17 +557,70 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   Widget _buildNotesView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Text(
-          'הערות אישיות - בקרוב',
-          style: TextStyle(
-            fontSize: widget.fontSize * 0.9,
-            color: Colors.grey,
-          ),
-        ),
+    // נשתמש בספר הטקסט המקורי תמיד - כך ההערות יהיו משותפות
+    return FutureBuilder(
+      future: DataRepository.instance.library.then(
+        (library) => library.findBookByTitle(widget.tab.book.title, TextBook),
       ),
+      builder: (context, snapshot) {
+        final bookId = widget.tab.book.title; // תמיד נשתמש בשם הספר המקורי
+        
+        debugPrint('Building notes view for bookId: $bookId');
+        
+        return PersonalNotesSidebar(
+          key: ValueKey(bookId),
+          bookId: bookId,
+          onNavigateToLine: (lineNumber) {
+            // מנסים למצוא את העמוד המתאים למספר השורה
+            if (widget.tab.pdfHeadings != null) {
+              final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
+              
+              // מציאת הכותרת הקרובה ביותר למספר השורה
+              for (int i = sortedHeadings.length - 1; i >= 0; i--) {
+                if (sortedHeadings[i].value <= lineNumber) {
+                  // מצאנו את הכותרת - צריך למצוא את העמוד שלה
+                  final headingTitle = sortedHeadings[i].key;
+                  final targetPage = _findPageForHeading(headingTitle);
+                  
+                  if (targetPage != null) {
+                    debugPrint('Navigating from line $lineNumber to page: $targetPage');
+                    if (widget.tab.pdfViewerController.isReady) {
+                      widget.tab.pdfViewerController.goToPage(pageNumber: targetPage);
+                    }
+                    return;
+                  }
+                  break;
+                }
+              }
+            }
+            
+            // אם לא הצלחנו למצוא, נניח שזה מספר עמוד
+            debugPrint('Navigating to page: $lineNumber');
+            if (widget.tab.pdfViewerController.isReady) {
+              widget.tab.pdfViewerController.goToPage(pageNumber: lineNumber);
+            }
+          },
+        );
+      },
     );
+  }
+  
+  // מוצא את העמוד של כותרת מסוימת
+  int? _findPageForHeading(String heading) {
+    final outline = widget.tab.outline.value;
+    if (outline == null) return null;
+    
+    int? findInNodes(List<PdfOutlineNode> nodes) {
+      for (final node in nodes) {
+        if (node.title == heading) {
+          return node.dest?.pageNumber;
+        }
+        final childResult = findInNodes(node.children);
+        if (childResult != null) return childResult;
+      }
+      return null;
+    }
+    
+    return findInNodes(outline);
   }
 }

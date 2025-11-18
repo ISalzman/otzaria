@@ -116,14 +116,7 @@ class _OutlineViewState extends State<OutlineView>
     if (_isManuallyScrolling || !widget.controller.isReady) return;
 
     final currentPage = widget.controller.pageNumber;
-    
-    // אם הדף זהה, רק נעדכן את ה-UI בלי לגלול
-    if (currentPage == _lastScrolledPage) {
-      if (mounted) {
-        setState(() {});
-      }
-      return;
-    }
+    if (currentPage == _lastScrolledPage) return;
 
     PdfOutlineNode? activeNode;
 
@@ -323,8 +316,10 @@ class _OutlineViewState extends State<OutlineView>
   Widget _buildOutlineItem(PdfOutlineNode node, {int level = 0}) {
     final itemKey = _tocItemKeys.putIfAbsent(node, () => GlobalKey());
     void navigateToEntry() {
-      _isManuallyScrolling = false;
-      _lastScrolledPage = node.dest?.pageNumber;
+      setState(() {
+        _isManuallyScrolling = false;
+        _lastScrolledPage = null;
+      });
       if (node.dest != null) {
         widget.controller.goTo(widget.controller
             .calcMatrixFitWidthForPage(pageNumber: node.dest?.pageNumber ?? 1));
