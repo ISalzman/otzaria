@@ -90,7 +90,10 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
   final Map<String, int> _searchResultsPerLink = {}; // שונה למפתח String
   int _lastScrollIndex = 0; // שומר את מיקום הגלילה האחרון
   bool _allExpanded = true; // מצב גלובלי של פתיחה/סגירה של כל המפרשים
-
+  final Map<String, bool> _expansionStates =
+      {}; // מעקב אחרי מצב כל ExpansionTile
+  final Map<String, ExpansibleController> _controllers =
+      {}; // controllers לכל ExpansionTile
 
   String _getLinkKey(Link link) => '${link.path2}_${link.index2}';
 
@@ -118,6 +121,10 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
   void dispose() {
     _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
     _searchController.dispose();
+    // מנקה את כל ה-controllers
+    for (var controller in _controllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -135,17 +142,59 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
     }
   }
 
+  void _updateGlobalExpansionState() {
+    if (_expansionStates.isEmpty) return;
+
+    // בודק אם כל המפרשים פתוחים
+    final allExpanded = _expansionStates.values.every((state) => state == true);
+    // בודק אם כל המפרשים סגורים
+    final allCollapsed =
+        _expansionStates.values.every((state) => state == false);
+
+    // מעדכן את המצב הגלובלי רק אם כולם באותו מצב
+    if (allExpanded) {
+      _allExpanded = true;
+    } else if (allCollapsed) {
+      _allExpanded = false;
+    }
+    // אם יש מצב מעורב, לא משנים את _allExpanded
+  }
+
   Widget _buildCommentaryGroupTile({
     required CommentaryGroup group,
     required TextBookLoaded state,
     required String indexesKey,
   }) {
-    final groupKey = '${group.bookTitle}_${indexesKey}_$_allExpanded';
+    final groupKey = '${group.bookTitle}_$indexesKey';
+
+    // אם אין מצב שמור עבור הקבוצה הזו, משתמש במצב הגלובלי
+    if (!_expansionStates.containsKey(groupKey)) {
+      _expansionStates[groupKey] = _allExpanded;
+    }
+
+    // יוצר controller אם לא קיים
+    if (!_controllers.containsKey(groupKey)) {
+      _controllers[groupKey] = ExpansibleController();
+    }
+
+    final isExpanded = _expansionStates[groupKey] ?? _allExpanded;
 
     return ExpansionTile(
       key: PageStorageKey(groupKey),
+      controller: _controllers[groupKey],
       maintainState: true,
-      initiallyExpanded: _allExpanded, // נשלט על ידי המצב הגלובלי
+      initiallyExpanded: isExpanded,
+      onExpansionChanged: (isExpanded) {
+        _expansionStates[groupKey] = isExpanded;
+        // בודק אם כל המפרשים פתוחים או סגורים ומעדכן את המצב הגלובלי
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _updateGlobalExpansionState();
+            });
+          }
+        });
+      },
       backgroundColor: Theme.of(context).colorScheme.surface,
       collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
       title: BlocBuilder<SettingsBloc, SettingsState>(
@@ -265,10 +314,24 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                             ? FluentIcons.arrow_collapse_all_24_regular
                             : FluentIcons.arrow_expand_all_24_regular,
                       ),
-                      tooltip: _allExpanded ? 'סגור את כל המפרשים' : 'פתח את כל המפרשים',
+                      tooltip: _allExpanded
+                          ? 'סגור את כל המפרשים'
+                          : 'פתח את כל המפרשים',
                       onPressed: () {
                         setState(() {
                           _allExpanded = !_allExpanded;
+                          // מעדכן את כל המצבים של ה-ExpansionTiles
+                          for (var key in _expansionStates.keys) {
+                            _expansionStates[key] = _allExpanded;
+                          }
+                          // משתמש ב-controllers לפתיחה/סגירה
+                          for (var controller in _controllers.values) {
+                            if (_allExpanded) {
+                              controller.expand();
+                            } else {
+                              controller.collapse();
+                            }
+                          }
                         });
                       },
                     ),
@@ -309,7 +372,8 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
             // כפתור סגירה/פתיחה גלובלית כאשר אין תיבת חיפוש - מוצג רק אם יש מפרשים פעילים
             if (state.activeCommentators.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -319,10 +383,24 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                             ? FluentIcons.arrow_collapse_all_24_regular
                             : FluentIcons.arrow_expand_all_24_regular,
                       ),
-                      tooltip: _allExpanded ? 'סגור את כל המפרשים' : 'פתח את כל המפרשים',
+                      tooltip: _allExpanded
+                          ? 'סגור את כל המפרשים'
+                          : 'פתח את כל המפרשים',
                       onPressed: () {
                         setState(() {
                           _allExpanded = !_allExpanded;
+                          // מעדכן את כל המצבים של ה-ExpansionTiles
+                          for (var key in _expansionStates.keys) {
+                            _expansionStates[key] = _allExpanded;
+                          }
+                          // משתמש ב-controllers לפתיחה/סגירה
+                          for (var controller in _controllers.values) {
+                            if (_allExpanded) {
+                              controller.expand();
+                            } else {
+                              controller.collapse();
+                            }
+                          }
                         });
                       },
                     ),
@@ -339,18 +417,18 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                     (state.selectedIndex != null
                         ? [state.selectedIndex!]
                         : state.visibleIndices);
-                
+
                 // סינון מהיר של קישורים רלוונטיים
                 final hasRelevantLinks = state.links.any((link) =>
                     currentIndexes.contains(link.index1 - 1) &&
-                    state.activeCommentators.contains(
-                        utils.getTitleFromPath(link.path2)));
-                
+                    state.activeCommentators
+                        .contains(utils.getTitleFromPath(link.path2)));
+
                 // אם אין קישורים רלוונטיים, לא מציג כלום
                 if (!hasRelevantLinks) {
                   return const SizedBox.shrink();
                 }
-                
+
                 return FutureBuilder(
                   future: getLinksforIndexs(
                       indexes: currentIndexes,
@@ -483,5 +561,3 @@ class _SkeletonLine extends StatelessWidget {
     );
   }
 }
-
-

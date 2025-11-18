@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
@@ -141,7 +140,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     _sidebarWidth = ValueNotifier<double>(
         Settings.getValue<double>('key-sidebar-width', defaultValue: 300)!);
-    
+
     _rightPaneWidth = ValueNotifier<double>(350.0);
     _showRightPane = ValueNotifier<bool>(false);
 
@@ -197,13 +196,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       debugPrint('=== Loading PDF Headings and Links ===');
       debugPrint('Book title: ${widget.tab.book.title}');
       debugPrint('Book path: ${widget.tab.book.path}');
-      
+
       // טעינת headings
       final headings = await PdfHeadings.loadFromFile(widget.tab.book.title);
       if (headings != null) {
         widget.tab.pdfHeadings = headings;
         debugPrint('✅ Loaded ${headings.headingsMap.length} headings');
-        debugPrint('Sample headings: ${headings.headingsMap.entries.take(3).map((e) => '${e.key}: ${e.value}').join(', ')}');
+        debugPrint(
+            'Sample headings: ${headings.headingsMap.entries.take(3).map((e) => '${e.key}: ${e.value}').join(', ')}');
       } else {
         debugPrint('❌ Failed to load headings file');
       }
@@ -212,11 +212,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       debugPrint('📚 Starting to load library...');
       final library = await DataRepository.instance.library;
       debugPrint('✅ Library loaded successfully');
-      
-      debugPrint('🔍 Searching for TextBook with title: "${widget.tab.book.title}"');
+
+      debugPrint(
+          '🔍 Searching for TextBook with title: "${widget.tab.book.title}"');
       final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
       debugPrint('TextBook found: ${textBook != null}');
-      
+
       if (textBook != null) {
         debugPrint('📖 TextBook type: ${textBook.runtimeType}');
         if (textBook is TextBook) {
@@ -224,12 +225,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           final loadedLinks = await textBook.links;
           widget.tab.links = loadedLinks;
           debugPrint('✅ Loaded ${widget.tab.links.length} links');
-          
+
           // הצגת דוגמאות של links
           if (widget.tab.links.isNotEmpty) {
             debugPrint('Sample links:');
             for (final link in widget.tab.links.take(3)) {
-              debugPrint('  - Line ${link.index1}: ${link.heRef} (${link.connectionType})');
+              debugPrint(
+                  '  - Line ${link.index1}: ${link.heRef} (${link.connectionType})');
             }
           } else {
             debugPrint('⚠️ Links list is empty');
@@ -261,16 +263,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         newPage, widget.tab.outline.value ?? [], widget.tab.book.title);
     if (token == _lastComputedForPage) {
       widget.tab.currentTitle.value = title;
-      
+
       debugPrint('=== Page Changed ===');
       debugPrint('Page: $newPage, Title: "$title"');
-      
+
       // עדכון מספר השורה בטקסט לפי הכותרת
       if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
-        debugPrint('Headings available: ${widget.tab.pdfHeadings!.headingsMap.length}');
-        final lineNumber = widget.tab.pdfHeadings!.getLineNumberForHeading(title);
+        debugPrint(
+            'Headings available: ${widget.tab.pdfHeadings!.headingsMap.length}');
+        final lineNumber =
+            widget.tab.pdfHeadings!.getLineNumberForHeading(title);
         debugPrint('Line number for "$title": $lineNumber');
-        
+
         if (lineNumber != null) {
           widget.tab.currentTextLineNumber = lineNumber;
           debugPrint('✅ Updated currentTextLineNumber to: $lineNumber');
@@ -279,7 +283,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           }
         } else {
           debugPrint('❌ No line number found for heading: "$title"');
-          debugPrint('Available headings: ${widget.tab.pdfHeadings!.headingsMap.keys.take(5).join(", ")}');
+          debugPrint(
+              'Available headings: ${widget.tab.pdfHeadings!.headingsMap.keys.take(5).join(", ")}');
         }
       } else {
         debugPrint('❌ pdfHeadings is null or title is empty');
@@ -411,160 +416,167 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                           return false;
                         },
                         child: Listener(
-                      onPointerSignal: (event) {
-                        if (event is PointerScrollEvent &&
-                            !(widget.tab.pinLeftPane.value ||
-                                (Settings.getValue<bool>('key-pin-sidebar') ??
-                                    false))) {
-                          widget.tab.showLeftPane.value = false;
-                        }
-                      },
-                      child: ColorFiltered(
-                        colorFilter: ColorFilter.mode(
-                          Colors.white,
-                          Provider.of<SettingsBloc>(context, listen: true)
-                                  .state
-                                  .isDarkMode
-                              ? BlendMode.difference
-                              : BlendMode.dst,
-                        ),
-                        child: PdfViewer.file(
-                          widget.tab.book.path,
-                          initialPageNumber: widget.tab.pageNumber,
-                          passwordProvider: () => passwordDialog(context),
-                          controller: widget.tab.pdfViewerController,
-                          params: PdfViewerParams(
-                            backgroundColor: Theme.of(context)
-                                .colorScheme
-                                .surface, // צבע רקע המסך, בתצוגת ספרי PDF
-                            maxScale: 10,
-                            horizontalCacheExtent: 1,
-                            verticalCacheExtent: 1,
-                            onInteractionStart: (_) {
-                              if (!(widget.tab.pinLeftPane.value ||
-                                  (Settings.getValue<bool>('key-pin-sidebar') ??
-                                      false))) {
-                                widget.tab.showLeftPane.value = false;
-                              }
-                            },
-                            viewerOverlayBuilder:
-                                (context, size, handleLinkTap) => [
-                              PdfViewerScrollThumb(
-                                controller: widget.tab.pdfViewerController,
-                                orientation: ScrollbarOrientation.right,
-                                thumbSize: const Size(40, 25),
-                                thumbBuilder: (context, thumbSize, pageNumber,
-                                        controller) =>
-                                    Container(
-                                  color: Colors.black,
-                                  child: Center(
-                                    child: Text(
-                                      pageNumber.toString(),
-                                      style:
-                                          const TextStyle(color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              PdfViewerScrollThumb(
-                                controller: widget.tab.pdfViewerController,
-                                orientation: ScrollbarOrientation.bottom,
-                                thumbSize: const Size(80, 5),
-                                thumbBuilder: (context, thumbSize, pageNumber,
-                                        controller) =>
-                                    Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[300],
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                ),
-                              ),
-                            ],
-                            loadingBannerBuilder:
-                                (context, bytesDownloaded, totalBytes) =>
-                                    Center(
-                              child: CircularProgressIndicator(
-                                value: totalBytes != null
-                                    ? bytesDownloaded / totalBytes
-                                    : null,
-                                backgroundColor: Colors.grey,
-                              ),
+                          onPointerSignal: (event) {
+                            if (event is PointerScrollEvent &&
+                                !(widget.tab.pinLeftPane.value ||
+                                    (Settings.getValue<bool>(
+                                            'key-pin-sidebar') ??
+                                        false))) {
+                              widget.tab.showLeftPane.value = false;
+                            }
+                          },
+                          child: ColorFiltered(
+                            colorFilter: ColorFilter.mode(
+                              Colors.white,
+                              Provider.of<SettingsBloc>(context, listen: true)
+                                      .state
+                                      .isDarkMode
+                                  ? BlendMode.difference
+                                  : BlendMode.dst,
                             ),
-                            linkWidgetBuilder: (context, link, size) =>
-                                Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () async {
-                                  if (link.url != null) {
-                                    navigateToUrl(link.url!);
-                                  } else if (link.dest != null) {
-                                    widget.tab.pdfViewerController
-                                        .goToDest(link.dest);
+                            child: PdfViewer.file(
+                              widget.tab.book.path,
+                              initialPageNumber: widget.tab.pageNumber,
+                              passwordProvider: () => passwordDialog(context),
+                              controller: widget.tab.pdfViewerController,
+                              params: PdfViewerParams(
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .surface, // צבע רקע המסך, בתצוגת ספרי PDF
+                                maxScale: 10,
+                                horizontalCacheExtent: 1,
+                                verticalCacheExtent: 1,
+                                onInteractionStart: (_) {
+                                  if (!(widget.tab.pinLeftPane.value ||
+                                      (Settings.getValue<bool>(
+                                              'key-pin-sidebar') ??
+                                          false))) {
+                                    widget.tab.showLeftPane.value = false;
                                   }
                                 },
-                                hoverColor: Colors.blue.withValues(alpha: 0.2),
-                              ),
-                            ),
-                            pagePaintCallbacks: [
-                              textSearcher.pageTextMatchPaintCallback
-                            ],
-                            onDocumentChanged: (document) async {
-                              if (document == null) {
-                                widget.tab.documentRef.value = null;
-                                widget.tab.outline.value = null;
-                              }
-                            },
-                            onViewerReady: (document, controller) async {
-                              // 1. הגדרת המידע הראשוני מהמסמך
-                              widget.tab.documentRef.value =
-                                  controller.documentRef;
-                              widget.tab.outline.value =
-                                  await document.loadOutline();
+                                viewerOverlayBuilder:
+                                    (context, size, handleLinkTap) => [
+                                  PdfViewerScrollThumb(
+                                    controller: widget.tab.pdfViewerController,
+                                    orientation: ScrollbarOrientation.right,
+                                    thumbSize: const Size(40, 25),
+                                    thumbBuilder: (context, thumbSize,
+                                            pageNumber, controller) =>
+                                        Container(
+                                      color: Colors.black,
+                                      child: Center(
+                                        child: Text(
+                                          pageNumber.toString(),
+                                          style: const TextStyle(
+                                              color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  PdfViewerScrollThumb(
+                                    controller: widget.tab.pdfViewerController,
+                                    orientation: ScrollbarOrientation.bottom,
+                                    thumbSize: const Size(80, 5),
+                                    thumbBuilder: (context, thumbSize,
+                                            pageNumber, controller) =>
+                                        Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[300],
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                loadingBannerBuilder:
+                                    (context, bytesDownloaded, totalBytes) =>
+                                        Center(
+                                  child: CircularProgressIndicator(
+                                    value: totalBytes != null
+                                        ? bytesDownloaded / totalBytes
+                                        : null,
+                                    backgroundColor: Colors.grey,
+                                  ),
+                                ),
+                                linkWidgetBuilder: (context, link, size) =>
+                                    Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () async {
+                                      if (link.url != null) {
+                                        navigateToUrl(link.url!);
+                                      } else if (link.dest != null) {
+                                        widget.tab.pdfViewerController
+                                            .goToDest(link.dest);
+                                      }
+                                    },
+                                    hoverColor:
+                                        Colors.blue.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                pagePaintCallbacks: [
+                                  textSearcher.pageTextMatchPaintCallback
+                                ],
+                                onDocumentChanged: (document) async {
+                                  if (document == null) {
+                                    widget.tab.documentRef.value = null;
+                                    widget.tab.outline.value = null;
+                                  }
+                                },
+                                onViewerReady: (document, controller) async {
+                                  // 1. הגדרת המידע הראשוני מהמסמך
+                                  widget.tab.documentRef.value =
+                                      controller.documentRef;
+                                  widget.tab.outline.value =
+                                      await document.loadOutline();
 
-                              // 2. עדכון הכותרת הנוכחית
-                              final currentPage =
-                                  widget.tab.pdfViewerController.isReady
-                                      ? (widget.tab.pdfViewerController
-                                              .pageNumber ??
-                                          1)
-                                      : 1;
-                              final title = await refFromPageNumber(
+                                  // 2. עדכון הכותרת הנוכחית
+                                  final currentPage =
+                                      widget.tab.pdfViewerController.isReady
+                                          ? (widget.tab.pdfViewerController
+                                                  .pageNumber ??
+                                              1)
+                                          : 1;
+                                  final title = await refFromPageNumber(
                                       currentPage,
                                       widget.tab.outline.value,
                                       widget.tab.book.title);
-                              widget.tab.currentTitle.value = title;
+                                  widget.tab.currentTitle.value = title;
 
-                              // 2.5. עדכון מספר השורה בטקסט לפי הכותרת הראשונית
-                              if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
-                                final lineNumber = widget.tab.pdfHeadings!.getLineNumberForHeading(title);
-                                if (lineNumber != null) {
-                                  widget.tab.currentTextLineNumber = lineNumber;
-                                  debugPrint('✅ Initial currentTextLineNumber set to: $lineNumber for title: "$title"');
-                                }
-                              }
+                                  // 2.5. עדכון מספר השורה בטקסט לפי הכותרת הראשונית
+                                  if (widget.tab.pdfHeadings != null &&
+                                      title.isNotEmpty) {
+                                    final lineNumber = widget.tab.pdfHeadings!
+                                        .getLineNumberForHeading(title);
+                                    if (lineNumber != null) {
+                                      widget.tab.currentTextLineNumber =
+                                          lineNumber;
+                                      debugPrint(
+                                          '✅ Initial currentTextLineNumber set to: $lineNumber for title: "$title"');
+                                    }
+                                  }
 
-                              // 3. הפעלת החיפוש הראשוני (עכשיו עם מנגנון ניסיונות חוזרים)
-                              _runInitialSearchIfNeeded();
+                                  // 3. הפעלת החיפוש הראשוני (עכשיו עם מנגנון ניסיונות חוזרים)
+                                  _runInitialSearchIfNeeded();
 
-                              // 4. הצגת חלונית הצד אם צריך
-                              if (mounted &&
-                                  (widget.tab.showLeftPane.value ||
-                                      widget.tab.searchText.isNotEmpty)) {
-                                widget.tab.showLeftPane.value = true;
-                              }
-                            },
+                                  // 4. הצגת חלונית הצד אם צריך
+                                  if (mounted &&
+                                      (widget.tab.showLeftPane.value ||
+                                          widget.tab.searchText.isNotEmpty)) {
+                                    widget.tab.showLeftPane.value = true;
+                                  }
+                                },
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
                       // כפתור צף לפתיחת חלונית המפרשים
                       ValueListenableBuilder(
                         valueListenable: _showRightPane,
                         builder: (context, showRightPane, child) {
                           // מציג את הכפתור רק כשהחלונית סגורה
                           if (showRightPane) return const SizedBox.shrink();
-                          
+
                           return Positioned(
                             left: 8,
                             top: 8,
@@ -592,7 +604,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                 ),
                                 icon: Icon(
                                   FluentIcons.panel_left_contract_24_regular,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface,
                                 ),
                                 tooltip: 'פתח מפרשים וקישורים',
                                 onPressed: () {
@@ -690,14 +703,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         ValueListenableBuilder(
                           valueListenable: widget.tab.pinLeftPane,
                           builder: (context, pinLeftPanel, child) => IconButton(
-                            onPressed: (Settings.getValue<bool>(
-                                        'key-pin-sidebar') ??
-                                    false)
-                                ? null
-                                : () {
-                                    widget.tab.pinLeftPane.value =
-                                        !widget.tab.pinLeftPane.value;
-                                  },
+                            onPressed:
+                                (Settings.getValue<bool>('key-pin-sidebar') ??
+                                        false)
+                                    ? null
+                                    : () {
+                                        widget.tab.pinLeftPane.value =
+                                            !widget.tab.pinLeftPane.value;
+                                      },
                             icon: AnimatedRotation(
                               turns: (pinLeftPanel ||
                                       (Settings.getValue<bool>(
@@ -1101,36 +1114,40 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final currentPage = widget.tab.pdfViewerController.isReady
         ? (widget.tab.pdfViewerController.pageNumber ?? 1)
         : 1;
-    
+
     // קבלת טווח השורות של העמוד הנוכחי
     final library = await DataRepository.instance.library;
     final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
-    
+
     String dialogTitle = 'הוסף הערה לעמוד $currentPage';
     if (textBook != null && widget.tab.pdfHeadings != null) {
       // מציאת טווח השורות של העמוד
       final currentTitle = widget.tab.currentTitle.value;
-      final currentLineNumber = widget.tab.pdfHeadings!.getLineNumberForHeading(currentTitle);
-      
+      final currentLineNumber =
+          widget.tab.pdfHeadings!.getLineNumberForHeading(currentTitle);
+
       if (currentLineNumber != null) {
         // מציאת הכותרת הבאה כדי לדעת את טווח השורות
         final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
-        final currentIndex = sortedHeadings.indexWhere((e) => e.value == currentLineNumber);
-        
+        final currentIndex =
+            sortedHeadings.indexWhere((e) => e.value == currentLineNumber);
+
         if (currentIndex != -1) {
           final nextLineNumber = currentIndex < sortedHeadings.length - 1
               ? sortedHeadings[currentIndex + 1].value
               : null;
-          
+
           if (nextLineNumber != null) {
-            dialogTitle = 'הוסף הערה לעמוד $currentPage\n(שורות $currentLineNumber-${nextLineNumber - 1} בטקסט)';
+            dialogTitle =
+                'הוסף הערה לעמוד $currentPage\n(שורות $currentLineNumber-${nextLineNumber - 1} בטקסט)';
           } else {
-            dialogTitle = 'הוסף הערה לעמוד $currentPage\n(משורה $currentLineNumber בטקסט)';
+            dialogTitle =
+                'הוסף הערה לעמוד $currentPage\n(משורה $currentLineNumber בטקסט)';
           }
         }
       }
     }
-    
+
     final controller = TextEditingController();
     final notesBloc = context.read<PersonalNotesBloc>();
 
@@ -1158,24 +1175,24 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     try {
       // תמיד נשתמש בשם הספר המקורי כדי שההערות יהיו משותפות
       final bookId = widget.tab.book.title;
-      
+
       debugPrint('Adding note to bookId: $bookId, page: $currentPage');
       debugPrint('Note content: $trimmed');
-      
+
       notesBloc.add(AddPersonalNote(
         bookId: bookId,
         lineNumber: currentPage,
         content: trimmed,
       ));
-      
+
       // פתיחת חלונית המפרשים בטאב ההערות
       _showRightPane.value = true;
-      
+
       // המתנה קצרה לעדכון ה-bloc
       await Future.delayed(const Duration(milliseconds: 100));
-      
+
       debugPrint('Note added successfully');
-      
+
       if (textBook != null) {
         UiSnack.show('ההערה נשמרה ותוצג בכל שורות העמוד בתצוגת הטקסט');
       } else {
