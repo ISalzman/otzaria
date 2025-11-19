@@ -136,6 +136,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     widget.tab.pdfViewerController = pdfController;
 
+    // הגדרת מעקב אחר שינויי עמוד לשמירה
+    widget.tab.setupPageTracking();
+
     debugPrint('DEBUG: אתחול PDF טאב - דף התחלתי: ${widget.tab.pageNumber}');
 
     _sidebarWidth = ValueNotifier<double>(
