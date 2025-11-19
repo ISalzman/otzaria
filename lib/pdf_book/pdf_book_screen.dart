@@ -1115,6 +1115,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ? (widget.tab.pdfViewerController.pageNumber ?? 1)
         : 1;
 
+    // שמירת הערכים מה-context לפני ה-async gap
+    final notesBloc = context.read<PersonalNotesBloc>();
+    final dialogContext = context;
+
     // קבלת טווח השורות של העמוד הנוכחי
     final library = await DataRepository.instance.library;
     final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
@@ -1148,16 +1152,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       }
     }
 
+    if (!mounted) return;
+
     final controller = TextEditingController();
-    final notesBloc = context.read<PersonalNotesBloc>();
 
     final noteContent = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => PersonalNoteEditorDialog(
+      // ignore: use_build_context_synchronously
+      context: dialogContext,
+      builder: (context) => PersonalNoteEditorDialog(
         title: dialogTitle,
         controller: controller,
       ),
     );
+
+    if (!mounted) return;
 
     if (noteContent == null) {
       debugPrint('Note dialog cancelled');

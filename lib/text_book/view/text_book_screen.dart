@@ -1593,7 +1593,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       if (result.data is ReportedErrorData) {
         // === דיווח רגיל (מייל או שמירה) ===
         final errorData = result.data as ReportedErrorData;
-        
+
         // שליפת הנתונים הכבדים שנטענו ברקע בזמן שהדיאלוג היה פתוח
         final heavyData = await _getPreloadedHeavyData(state);
 
@@ -1617,7 +1617,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         );
 
         // ביצוע הפעולה שנבחרה בדיאלוג (ללא דיאלוג נוסף!)
-        if (result.action == ReportAction.sendEmail || 
+        if (result.action == ReportAction.sendEmail ||
             result.action == ReportAction.saveForLater) {
           await _handleRegularReportAction(
             result.action,
@@ -1629,7 +1629,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             contextText,
           );
         }
-
       } else if (result.data is PhoneReportData) {
         // === דיווח טלפוני ===
         await _handlePhoneReport(result.data as PhoneReportData);
@@ -1867,10 +1866,11 @@ $detailsSection
             onPressed: () {
               // 1. סגירת הדיאלוג הנוכחי
               Navigator.of(dialogContext).pop();
-              
+
               // 2. פתיחת דיאלוג הדיווח מחדש
               // אנו בודקים שעדיין ניתן להציג (mounted) ומשתמשים ב-State ששמרנו
-              if (parentContext.mounted && currentTextBookState is TextBookLoaded) {
+              if (parentContext.mounted &&
+                  currentTextBookState is TextBookLoaded) {
                 _showReportBugDialog(parentContext, currentTextBookState);
               }
             },
@@ -1994,9 +1994,8 @@ $detailsSection
               child: Text(
                 'שלח עכשיו בדוא"ל',
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.primaryContainer, 
-                  fontWeight: FontWeight.bold
-                ),
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    fontWeight: FontWeight.bold),
               ),
             ),
 
@@ -2396,7 +2395,8 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
         Navigator.of(context).pop(ReportDialogResult(action, reportData));
       },
       onPhoneSubmit: (phoneReportData) {
-        Navigator.of(context).pop(ReportDialogResult(ReportAction.phone, phoneReportData));
+        Navigator.of(context)
+            .pop(ReportDialogResult(ReportAction.phone, phoneReportData));
       },
       onCancel: () {
         Navigator.of(context).pop();
@@ -2465,7 +2465,8 @@ class _TabbedReportDialogState extends State<_TabbedReportDialog>
           lineNumber: lineNumber,
         );
         // דיווח טלפוני מחזיר Action.phone
-        Navigator.of(context).pop(ReportDialogResult(ReportAction.phone, reportData));
+        Navigator.of(context)
+            .pop(ReportDialogResult(ReportAction.phone, reportData));
       },
       onCancel: () {
         Navigator.of(context).pop();
@@ -2506,44 +2507,10 @@ class _RegularReportTabState extends State<_RegularReportTab> {
   final TextEditingController _detailsController = TextEditingController();
   int? _selectionStart;
   int? _selectionEnd;
-  final DataCollectionService _dataService = DataCollectionService();
-
-  // נתונים לדיווח טלפוני (משמש לכפתור השמאלי אם קיים)
-  String _libraryVersion = 'unknown';
-  int? _bookId;
-  bool _isLoadingPhoneData = false;
-
   @override
   void initState() {
     super.initState();
     _selectedContent = widget.initialSelectedText;
-    _loadPhoneReportData();
-  }
-
-  Future<void> _loadPhoneReportData() async {
-    setState(() {
-      _isLoadingPhoneData = true;
-    });
-
-    try {
-      final availability =
-          await _dataService.checkDataAvailability(widget.state.book.title);
-
-      if (mounted) {
-        setState(() {
-          _libraryVersion = availability['libraryVersion'] ?? 'unknown';
-          _bookId = availability['bookId'];
-          _isLoadingPhoneData = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading phone report data: $e');
-      if (mounted) {
-        setState(() {
-          _isLoadingPhoneData = false;
-        });
-      }
-    }
   }
 
   Future<bool> _isPhoneReportDisabled() async {
@@ -2568,16 +2535,6 @@ class _RegularReportTabState extends State<_RegularReportTab> {
   void dispose() {
     _detailsController.dispose();
     super.dispose();
-  }
-
-  int _calculateLineNumber() {
-    if (_selectionStart == null) return 1;
-    final textBeforeSelection =
-        widget.visibleText.substring(0, _selectionStart!);
-    final lineOffset = '\n'.allMatches(textBeforeSelection).length;
-    final positions = widget.state.positionsListener.itemPositions.value;
-    final currentIndex = positions.isNotEmpty ? positions.first.index : 0;
-    return currentIndex + lineOffset + 1;
   }
 
   @override
@@ -2666,7 +2623,7 @@ class _RegularReportTabState extends State<_RegularReportTab> {
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // --- שדה הטקסט לפירוט (זהה למקור) ---
           Align(
             alignment: Alignment.centerRight,
@@ -2701,22 +2658,16 @@ class _RegularReportTabState extends State<_RegularReportTab> {
               final canSubmit =
                   _selectedContent != null && _selectedContent!.isNotEmpty;
 
-              final canSubmitPhone = canSubmit &&
-                  !_isLoadingPhoneData &&
-                  _bookId != null &&
-                  _libraryVersion != 'unknown' &&
-                  !isPhoneDisabled;
-
               return SizedBox(
                 width: double.infinity,
-   // מבטיח שהשורה תתפוס את כל הרוחב כדי שהיישור יעבוד             
+                // מבטיח שהשורה תתפוס את כל הרוחב כדי שהיישור יעבוד
                 // כאן אנו מחזירים שורה (Row) או Wrap עם הכפתורים החדשים
                 child: Wrap(
                   spacing: 8.0,
                   runSpacing: 8.0,
                   // ב-RTL (עברית): .end מיישר לשמאל
                   // ב-LTR (אנגלית): .start מיישר לשמאל
-                  alignment: WrapAlignment.end, 
+                  alignment: WrapAlignment.end,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     // סדר הכפתורים:
@@ -2729,7 +2680,7 @@ class _RegularReportTabState extends State<_RegularReportTab> {
                       onPressed: widget.onCancel,
                       child: const Text('ביטול'),
                     ),
-                    
+
                     // 2. כפתור שמור לדיווח מאוחר
                     ElevatedButton.icon(
                       onPressed: canSubmit
@@ -2768,28 +2719,22 @@ class _RegularReportTabState extends State<_RegularReportTab> {
                     if (!isPhoneDisabled)
                       OutlinedButton(
                         onPressed: null, // canSubmitPhone
-                            // ? () async {
-                            //     final lineNumber = _calculateLineNumber();
-                            //     final phoneReportData = PhoneReportData(
-                            //       selectedText: _selectedContent!,
-                            //       errorId: 6,
-                            //       moreInfo: _detailsController.text.trim().isEmpty
-                            //           ? 'more_info'
-                            //           : _detailsController.text.trim(),
-                            //       libraryVersion: _libraryVersion,
-                            //       bookId: _bookId!,
-                            //       lineNumber: lineNumber,
-                            //     );
-                            //     widget.onPhoneSubmit(phoneReportData);
-                            //   }
-                            // : null,
-                        child: _isLoadingPhoneData
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('שלח ישירות לאוצריא (לא פעיל זמנית)'),
+                        // ? () async {
+                        //     final lineNumber = _calculateLineNumber();
+                        //     final phoneReportData = PhoneReportData(
+                        //       selectedText: _selectedContent!,
+                        //       errorId: 6,
+                        //       moreInfo: _detailsController.text.trim().isEmpty
+                        //           ? 'more_info'
+                        //           : _detailsController.text.trim(),
+                        //       libraryVersion: _libraryVersion,
+                        //       bookId: _bookId!,
+                        //       lineNumber: lineNumber,
+                        //     );
+                        //     widget.onPhoneSubmit(phoneReportData);
+                        //   }
+                        // : null,
+                        child: const Text('שלח ישירות לאוצריא (לא פעיל זמנית)'),
                       ),
                   ],
                 ),

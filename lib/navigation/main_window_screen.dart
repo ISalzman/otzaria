@@ -468,12 +468,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return;
     }
 
+    final navigationBloc = context.read<NavigationBloc>();
+
     showDialog(
       context: context,
       builder: (context) => const SearchDialog(existingTab: null),
     ).then((_) {
       // אחרי סגירת הדיאלוג, אם אנחנו במסך reading/search, נוודא שהמצב מסונכרן
-      final currentScreen = context.read<NavigationBloc>().state.currentScreen;
+      if (!mounted) return;
+      final currentScreen = navigationBloc.state.currentScreen;
       if (currentScreen == Screen.reading || currentScreen == Screen.search) {
         _syncPageWithState();
       }
@@ -509,12 +512,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   void _handleFindRefOpen(BuildContext context) {
+    final navigationBloc = context.read<NavigationBloc>();
+
     showDialog(
       context: context,
       builder: (context) => FindRefDialog(),
     ).then((_) {
       // אחרי סגירת הדיאלוג, אם אנחנו במסך reading, נוודא שהמצב מסונכרן
-      final currentScreen = context.read<NavigationBloc>().state.currentScreen;
+      if (!mounted) return;
+      final currentScreen = navigationBloc.state.currentScreen;
       if (currentScreen == Screen.reading || currentScreen == Screen.search) {
         _syncPageWithState();
       }
