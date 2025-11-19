@@ -64,6 +64,8 @@ class CommentaryListBase extends StatefulWidget {
   final List<int>? indexes;
   final bool showSearch;
   final VoidCallback? onClosePane;
+  final bool shrinkWrap;
+  final ItemPositionsListener? itemPositionsListener;
 
   const CommentaryListBase({
     super.key,
@@ -72,19 +74,20 @@ class CommentaryListBase extends StatefulWidget {
     this.indexes,
     required this.showSearch,
     this.onClosePane,
+    this.shrinkWrap = true,
+    this.itemPositionsListener,
   });
 
   @override
-  State<CommentaryListBase> createState() => _CommentaryListBaseState();
+  State<CommentaryListBase> createState() => CommentaryListBaseState();
 }
 
-class _CommentaryListBaseState extends State<CommentaryListBase> {
+class CommentaryListBaseState extends State<CommentaryListBase> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   final ScrollOffsetController scrollController = ScrollOffsetController();
-  final ItemScrollController _itemScrollController = ItemScrollController();
-  final ItemPositionsListener _itemPositionsListener =
-      ItemPositionsListener.create();
+  final ItemScrollController itemScrollController = ItemScrollController();
+  late final ItemPositionsListener itemPositionsListener;
   int _currentSearchIndex = 0;
   int _totalSearchResults = 0;
   final Map<String, int> _searchResultsPerLink = {}; // שונה למפתח String
@@ -105,12 +108,24 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
   @override
   void initState() {
     super.initState();
+    itemPositionsListener =
+        widget.itemPositionsListener ?? ItemPositionsListener.create();
     // האזנה לשינויים במיקום הגלילה כדי לשמור את המיקום האחרון
-    _itemPositionsListener.itemPositions.addListener(_updateLastScrollIndex);
+    itemPositionsListener.itemPositions.addListener(_updateLastScrollIndex);
+  }
+
+  void scrollToTop() {
+    if (itemScrollController.isAttached) {
+      itemScrollController.scrollTo(
+        index: 0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   void _updateLastScrollIndex() {
-    final positions = _itemPositionsListener.itemPositions.value;
+    final positions = itemPositionsListener.itemPositions.value;
     if (positions.isNotEmpty) {
       // שומר את האינדקס של הפריט הראשון הנראה
       _lastScrollIndex = positions.first.index;
@@ -119,7 +134,7 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
 
   @override
   void dispose() {
-    _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
+    itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
     _searchController.dispose();
     // מנקה את כל ה-controllers
     for (var controller in _controllers.values) {
@@ -259,10 +274,105 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
   Widget build(BuildContext context) {
     return BlocBuilder<TextBookBloc, TextBookState>(builder: (context, state) {
       if (state is! TextBookLoaded) return const Center();
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.showSearch) ...[
+
+      Widget buildList() {
+        return Builder(
+          builder: (context) {
+            // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים
+            final currentIndexes = widget.indexes ??
+                (state.selectedIndex != null
+                    ? [state.selectedIndex!]
+                    : state.visibleIndices);
+
+            // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
+            final hasAnyCommentaryLinks = state.links.any((link) =>
+                currentIndexes.contains(link.index1 - 1) &&
+                (link.connectionType == "commentary" ||
+                    link.connectionType == "targum"));
+
+            // סינון מהיר של קישורים רלוונטיים
+            final hasRelevantLinks = state.links.any((link) =>
+                currentIndexes.contains(link.index1 - 1) &&
+                state.activeCommentators
+                    .contains(utils.getTitleFromPath(link.path2)));
+
+            // אם אין קישורים רלוונטיים, לא מציג כלום
+            if (!hasRelevantLinks) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    hasAnyCommentaryLinks
+                        ? 'לא נבחרו מפרשים להצגה'
+                        : 'לא נמצאו מפרשים לקטע הנבחר',
+                    style: TextStyle(
+                      fontSize: widget.fontSize * 0.7,
+                      color: Colors.grey,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              );
+            }
+
+            return FutureBuilder(
+              future: getLinksforIndexs(
+                  indexes: currentIndexes,
+                  links: state.links,
+                  commentatorsToShow: state.activeCommentators),
+              builder: (context, thisLinksSnapshot) {
+                if (!thisLinksSnapshot.hasData) {
+                  // רק אם יש קישורים רלוונטיים, מציג אנימציית טעינה
+                  return _buildSkeletonLoading();
+                }
+                if (thisLinksSnapshot.data!.isEmpty) {
+                  // אם אין מפרשים, פשוט נציג מסך ריק
+                  return const SizedBox.shrink();
+                }
+                final data = thisLinksSnapshot.data!;
+
+                // מקבץ את הקישורים לקבוצות רצופות
+                final groups = _groupConsecutiveLinks(data);
+
+                // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+                final indexesKey = currentIndexes.join(',');
+
+                return ProgressiveScroll(
+                  scrollController: scrollController,
+                  maxSpeed: 10000.0,
+                  curve: 10.0,
+                  accelerationFactor: 5,
+                  child: ScrollablePositionedList.builder(
+                    itemScrollController: itemScrollController,
+                    itemPositionsListener: itemPositionsListener,
+                    initialScrollIndex:
+                        _lastScrollIndex.clamp(0, groups.length - 1),
+                    key: PageStorageKey(
+                        'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
+                    physics: const ClampingScrollPhysics(),
+                    scrollOffsetController: scrollController,
+                    shrinkWrap: widget.shrinkWrap,
+                    itemCount: groups.length,
+                    itemBuilder: (context, groupIndex) {
+                      final group = groups[groupIndex];
+                      return _buildCommentaryGroupTile(
+                        group: group,
+                        state: state,
+                        indexesKey: indexesKey,
+                      );
+                    },
+                  ),
+                );
+              },
+            );
+          },
+        );
+      }
+
+      if (widget.showSearch) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Row(
@@ -368,142 +478,58 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                 ],
               ),
             ),
-          ] else ...[
-            // כפתור סגירה/פתיחה גלובלית כאשר אין תיבת חיפוש - מוצג רק אם יש מפרשים פעילים
+            Flexible(
+              fit: FlexFit.loose,
+              child: buildList(),
+            ),
+          ],
+        );
+      } else {
+        return Stack(
+          children: [
+            buildList(),
             if (state.activeCommentators.isNotEmpty)
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        _allExpanded
-                            ? FluentIcons.arrow_collapse_all_24_regular
-                            : FluentIcons.arrow_expand_all_24_regular,
-                      ),
-                      tooltip: _allExpanded
-                          ? 'סגור את כל המפרשים'
-                          : 'פתח את כל המפרשים',
-                      onPressed: () {
-                        setState(() {
-                          _allExpanded = !_allExpanded;
-                          // מעדכן את כל המצבים של ה-ExpansionTiles
-                          for (var key in _expansionStates.keys) {
-                            _expansionStates[key] = _allExpanded;
-                          }
-                          // משתמש ב-controllers לפתיחה/סגירה
-                          for (var controller in _controllers.values) {
-                            if (_allExpanded) {
-                              controller.expand();
-                            } else {
-                              controller.collapse();
-                            }
-                          }
-                        });
-                      },
-                    ),
-                  ],
+              Positioned(
+                top: 8,
+                left: 8,
+                child: IconButton(
+                  style: IconButton.styleFrom(
+                    backgroundColor: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.1),
+                    foregroundColor: Theme.of(context).colorScheme.primary,
+                  ),
+                  icon: Icon(
+                    _allExpanded
+                        ? FluentIcons.arrow_collapse_all_24_regular
+                        : FluentIcons.arrow_expand_all_24_regular,
+                  ),
+                  tooltip: _allExpanded
+                      ? 'סגור את כל המפרשים'
+                      : 'פתח את כל המפרשים',
+                  onPressed: () {
+                    setState(() {
+                      _allExpanded = !_allExpanded;
+                      // מעדכן את כל המצבים של ה-ExpansionTiles
+                      for (var key in _expansionStates.keys) {
+                        _expansionStates[key] = _allExpanded;
+                      }
+                      // משתמש ב-controllers לפתיחה/סגירה
+                      for (var controller in _controllers.values) {
+                        if (_allExpanded) {
+                          controller.expand();
+                        } else {
+                          controller.collapse();
+                        }
+                      }
+                    });
+                  },
                 ),
               ),
           ],
-          Flexible(
-            fit: FlexFit.loose,
-            child: Builder(
-              builder: (context) {
-                // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים
-                final currentIndexes = widget.indexes ??
-                    (state.selectedIndex != null
-                        ? [state.selectedIndex!]
-                        : state.visibleIndices);
-
-                // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
-                final hasAnyCommentaryLinks = state.links.any((link) =>
-                    currentIndexes.contains(link.index1 - 1) &&
-                    (link.connectionType == "commentary" ||
-                        link.connectionType == "targum"));
-
-                // סינון מהיר של קישורים רלוונטיים
-                final hasRelevantLinks = state.links.any((link) =>
-                    currentIndexes.contains(link.index1 - 1) &&
-                    state.activeCommentators
-                        .contains(utils.getTitleFromPath(link.path2)));
-
-                // אם אין קישורים רלוונטיים, לא מציג כלום
-                if (!hasRelevantLinks) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        hasAnyCommentaryLinks
-                            ? 'לא נבחרו מפרשים להצגה'
-                            : 'לא נמצאו מפרשים לקטע הנבחר',
-                        style: TextStyle(
-                          fontSize: widget.fontSize * 0.7,
-                          color: Colors.grey,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  );
-                }
-
-                return FutureBuilder(
-                  future: getLinksforIndexs(
-                      indexes: currentIndexes,
-                      links: state.links,
-                      commentatorsToShow: state.activeCommentators),
-                  builder: (context, thisLinksSnapshot) {
-                    if (!thisLinksSnapshot.hasData) {
-                      // רק אם יש קישורים רלוונטיים, מציג אנימציית טעינה
-                      return _buildSkeletonLoading();
-                    }
-                    if (thisLinksSnapshot.data!.isEmpty) {
-                      // אם אין מפרשים, פשוט נציג מסך ריק
-                      return const SizedBox.shrink();
-                    }
-                    final data = thisLinksSnapshot.data!;
-
-                    // מקבץ את הקישורים לקבוצות רצופות
-                    final groups = _groupConsecutiveLinks(data);
-
-                    // יצירת מפתח ייחודי לאינדקסים הנוכחיים
-                    final indexesKey = currentIndexes.join(',');
-
-                    return ProgressiveScroll(
-                      scrollController: scrollController,
-                      maxSpeed: 10000.0,
-                      curve: 10.0,
-                      accelerationFactor: 5,
-                      child: ScrollablePositionedList.builder(
-                        itemScrollController: _itemScrollController,
-                        itemPositionsListener: _itemPositionsListener,
-                        initialScrollIndex:
-                            _lastScrollIndex.clamp(0, groups.length - 1),
-                        key: PageStorageKey(
-                            'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
-                        physics: const ClampingScrollPhysics(),
-                        scrollOffsetController: scrollController,
-                        shrinkWrap: true,
-                        itemCount: groups.length,
-                        itemBuilder: (context, groupIndex) {
-                          final group = groups[groupIndex];
-                          return _buildCommentaryGroupTile(
-                            group: group,
-                            state: state,
-                            indexesKey: indexesKey,
-                          );
-                        },
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      );
+        );
+      }
     });
   }
 
