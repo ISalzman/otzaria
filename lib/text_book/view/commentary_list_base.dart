@@ -418,6 +418,12 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
                         ? [state.selectedIndex!]
                         : state.visibleIndices);
 
+                // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
+                final hasAnyCommentaryLinks = state.links.any((link) =>
+                    currentIndexes.contains(link.index1 - 1) &&
+                    (link.connectionType == "commentary" ||
+                        link.connectionType == "targum"));
+
                 // סינון מהיר של קישורים רלוונטיים
                 final hasRelevantLinks = state.links.any((link) =>
                     currentIndexes.contains(link.index1 - 1) &&
@@ -426,7 +432,21 @@ class _CommentaryListBaseState extends State<CommentaryListBase> {
 
                 // אם אין קישורים רלוונטיים, לא מציג כלום
                 if (!hasRelevantLinks) {
-                  return const SizedBox.shrink();
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        hasAnyCommentaryLinks
+                            ? 'לא נבחרו מפרשים להצגה'
+                            : 'לא נמצאו מפרשים לקטע הנבחר',
+                        style: TextStyle(
+                          fontSize: widget.fontSize * 0.7,
+                          color: Colors.grey,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
                 }
 
                 return FutureBuilder(

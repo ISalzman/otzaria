@@ -328,15 +328,11 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       final allLinksInRange = widget.tab.links
           .where((link) => link.index1 >= startLine && link.index1 <= endLine)
           .toList();
-      
-      debugPrint('Total links in range $startLine-$endLine: ${allLinksInRange.length}');
-      if (allLinksInRange.isNotEmpty) {
-        debugPrint('Available commentators in range:');
-        for (final link in allLinksInRange.take(5)) {
-          debugPrint('  - Line ${link.index1}: ${utils.getTitleFromPath(link.path2)} (${link.connectionType})');
-        }
-      }
-      
+
+      final hasCommentaryLinks = allLinksInRange.any((link) =>
+          link.connectionType == "commentary" ||
+          link.connectionType == "targum");
+
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -344,18 +340,12 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'לא נמצאו מפרשים לדף זה',
+                hasCommentaryLinks
+                    ? 'לא נבחרו מפרשים להצגה'
+                    : 'לא נמצאו מפרשים לקטע הנבחר',
                 style: TextStyle(
                   fontSize: widget.fontSize * 0.9,
                   color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Debug: Range $startLine-$endLine, ${allLinksInRange.length} links found, ${widget.tab.activeCommentators.length} active commentators',
-                style: TextStyle(
-                  fontSize: widget.fontSize * 0.7,
-                  color: Colors.red,
                 ),
                 textAlign: TextAlign.center,
               ),
