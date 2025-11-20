@@ -279,7 +279,7 @@ class SearchResultTile extends StatefulWidget {
     super.key,
   });
 
-  final PdfTextRangeWithFragments match;
+  final PdfPageTextRange match;
   final void Function() onTap;
   final PdfPageTextCache pageTextStore;
   final double height;
@@ -367,8 +367,8 @@ class _SearchResultTileState extends State<SearchResultTile> {
     );
   }
 
-  TextSpan createTextSpanForMatch(PdfPageText? pageText,
-      PdfTextRangeWithFragments match, SettingsState settingsState,
+  TextSpan createTextSpanForMatch(PdfPageText? pageText, PdfPageTextRange match,
+      SettingsState settingsState,
       {TextStyle? style}) {
     style ??= TextStyle(
       fontSize: 16,
@@ -377,7 +377,7 @@ class _SearchResultTileState extends State<SearchResultTile> {
       height: 1.5,
     );
     if (pageText == null) {
-      String text = match.fragments.map((f) => f.text).join();
+      String text = match.text;
       if (settingsState.replaceHolyNames) {
         text = utils.replaceHolyNames(text);
       }
@@ -388,27 +388,23 @@ class _SearchResultTileState extends State<SearchResultTile> {
     }
     final fullText = pageText.fullText;
     int first = 0;
-    for (int i = match.fragments.first.index - 1; i >= 0;) {
+    for (int i = match.start - 1; i >= 0; i--) {
       if (fullText[i] == '\n') {
         first = i + 1;
         break;
       }
-      i--;
     }
     int last = fullText.length;
-    for (int i = match.fragments.last.end; i < fullText.length; i++) {
+    for (int i = match.end; i < fullText.length; i++) {
       if (fullText[i] == '\n') {
         last = i;
         break;
       }
     }
 
-    String header =
-        fullText.substring(first, match.fragments.first.index + match.start);
-    String body = fullText.substring(match.fragments.first.index + match.start,
-        match.fragments.last.index + match.end);
-    String footer =
-        fullText.substring(match.fragments.last.index + match.end, last);
+    String header = fullText.substring(first, match.start);
+    String body = fullText.substring(match.start, match.end);
+    String footer = fullText.substring(match.end, last);
 
     if (settingsState.replaceHolyNames) {
       header = utils.replaceHolyNames(header);

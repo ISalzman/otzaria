@@ -44,7 +44,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = MultiSplitViewController(areas: _openAreas());
+    _controller = MultiSplitViewController();
     _selectionKey = GlobalKey<SelectionAreaState>();
     _currentTabIndex = _getInitialTabIndex();
   }
@@ -59,7 +59,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
         // אם עוברים למצב split view, פותחים את הטור השמאלי אוטומטית
         if (widget.showSplitView && !_paneOpen) {
           _paneOpen = true;
-          _updateAreas();
         }
       });
     }
@@ -81,19 +80,67 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     }
   }
 
-  List<Area> _openAreas() => [
-        Area(weight: 0.4, minimalSize: 200),
-        Area(weight: 0.6, minimalSize: 200),
+  List<Area> _openAreas(BuildContext context, TextBookLoaded state) => [
+        Area(
+          flex: 0.4,
+          min: 200,
+          builder: (context, area) => ContextMenuRegion(
+            contextMenu: _buildContextMenu(state),
+            child: SelectionArea(
+              key: _selectionKey,
+              child: TabbedCommentaryPanel(
+                fontSize: state.fontSize,
+                openBookCallback: widget.openBookCallback,
+                showSearch: true,
+                onClosePane: _togglePane,
+                initialTabIndex: _currentTabIndex,
+                onTabChanged: (index) {
+                  debugPrint(
+                      'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}');
+                  setState(() {
+                    _currentTabIndex = index;
+                  });
+                  if (!widget.showSplitView) {
+                    debugPrint('DEBUG: Saving tab $index to combined settings');
+                    Settings.setValue<int>(
+                        'key-sidebar-tab-index-combined', index);
+                  } else {
+                    debugPrint('DEBUG: NOT saving tab (split view mode)');
+                  }
+                },
+              ),
+            ),
+          ),
+        ),
+        Area(
+          flex: 0.6,
+          min: 200,
+          builder: (context, area) => CombinedView(
+            data: widget.content,
+            textSize: state.fontSize,
+            openBookCallback: widget.openBookCallback,
+            openLeftPaneTab: widget.openLeftPaneTab,
+            showCommentaryAsExpansionTiles: false,
+            tab: widget.tab,
+          ),
+        ),
       ];
 
-  List<Area> _closedAreas() => [
-        Area(weight: 0, minimalSize: 0),
-        Area(weight: 1, minimalSize: 200),
+  List<Area> _closedAreas(BuildContext context, TextBookLoaded state) => [
+        Area(flex: 0, min: 0),
+        Area(
+          flex: 1,
+          min: 200,
+          builder: (context, area) => CombinedView(
+            data: widget.content,
+            textSize: state.fontSize,
+            openBookCallback: widget.openBookCallback,
+            openLeftPaneTab: widget.openLeftPaneTab,
+            showCommentaryAsExpansionTiles: false,
+            tab: widget.tab,
+          ),
+        ),
       ];
-
-  void _updateAreas() {
-    _controller.areas = _paneOpen ? _openAreas() : _closedAreas();
-  }
 
   void _togglePane() {
     if (!_paneOpen) {
@@ -103,7 +150,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
       // סגירת הטור
       setState(() {
         _paneOpen = false;
-        _updateAreas();
       });
     }
   }
@@ -139,7 +185,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     setState(() {
       _paneOpen = true;
       _currentTabIndex = targetTab;
-      _updateAreas();
     });
   }
 
@@ -153,7 +198,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     if (!_paneOpen) {
       setState(() {
         _paneOpen = true;
-        _updateAreas();
       });
     }
   }
@@ -258,6 +302,9 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
           controller: _controller,
           axis: Axis.horizontal,
           resizable: true,
+          initialAreas: _paneOpen
+              ? _openAreas(context, state)
+              : _closedAreas(context, state),
           dividerBuilder:
               (axis, index, resizable, dragging, highlighted, themeData) {
             final color = dragging
@@ -275,45 +322,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
               ),
             );
           },
-          children: [
-            ContextMenuRegion(
-              contextMenu: _buildContextMenu(state),
-              child: SelectionArea(
-                key: _selectionKey,
-                child: TabbedCommentaryPanel(
-                  fontSize: state.fontSize,
-                  openBookCallback: widget.openBookCallback,
-                  showSearch: true,
-                  onClosePane: _togglePane,
-                  initialTabIndex: _currentTabIndex,
-                  onTabChanged: (index) {
-                    debugPrint(
-                        'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}');
-                    setState(() {
-                      _currentTabIndex = index;
-                    });
-                    // שומר את הטאב רק בתצוגה משולבת
-                    if (!widget.showSplitView) {
-                      debugPrint(
-                          'DEBUG: Saving tab $index to combined settings');
-                      Settings.setValue<int>(
-                          'key-sidebar-tab-index-combined', index);
-                    } else {
-                      debugPrint('DEBUG: NOT saving tab (split view mode)');
-                    }
-                  },
-                ),
-              ),
-            ),
-            CombinedView(
-              data: widget.content,
-              textSize: state.fontSize,
-              openBookCallback: widget.openBookCallback,
-              openLeftPaneTab: widget.openLeftPaneTab,
-              showCommentaryAsExpansionTiles: false,
-              tab: widget.tab,
-            ),
-          ],
         );
       },
     );

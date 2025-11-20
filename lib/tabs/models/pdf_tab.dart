@@ -30,7 +30,7 @@ class PdfBookTab extends OpenedTab {
 
   String searchText;
 
-  List<PdfTextRangeWithFragments>? pdfSearchMatches;
+  List<PdfPageTextRange>? pdfSearchMatches;
   int? pdfSearchCurrentMatchIndex;
 
   final currentTitle = ValueNotifier<String>("");
