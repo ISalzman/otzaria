@@ -1525,6 +1525,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         // ביצוע הפעולה שנבחרה בדיאלוג (ללא דיאלוג נוסף!)
         if (result.action == ErrorReportAction.sendEmail ||
             result.action == ErrorReportAction.saveForLater) {
+          if (!context.mounted) return;
           await ErrorReportHelper.handleRegularReportAction(
             context,
             result.action,
