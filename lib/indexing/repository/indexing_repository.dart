@@ -74,8 +74,7 @@ class IndexingRepository {
         await Future.delayed(Duration.zero);
       }
 
-    await Future.delayed(Duration.zero); 
-
+      await Future.delayed(Duration.zero);
     }
 
     // Reset indexing flag after completion
@@ -98,7 +97,7 @@ class IndexingRepository {
       if (!_tantivyDataProvider.isIndexing.value) {
         return;
       }
-      
+
       // Yield control periodically to prevent blocking
       if (i % 100 == 0) {
         await Future.delayed(Duration.zero);
@@ -164,13 +163,14 @@ class IndexingRepository {
 
     // Process each page
     for (int i = 0; i < pages.length; i++) {
-      final texts = (await pages[i].loadText()).fullText.split('\n');
+      final pageText = await pages[i].loadText();
+      final texts = pageText?.fullText.split('\n') ?? [];
       // Index each line from the page
       for (int j = 0; j < texts.length; j++) {
         if (!_tantivyDataProvider.isIndexing.value) {
           return;
         }
-        
+
         // Yield control periodically to prevent blocking
         if (j % 50 == 0) {
           await Future.delayed(Duration.zero);

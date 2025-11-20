@@ -218,9 +218,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
             Future<void> extractWithArchive() async {
               // Create extractor with memory-efficient settings
-              final extractor = ZipDecoder();
-              final inputStream = InputFileStream(_tempFile!.path);
-              final archive = extractor.decodeBuffer(inputStream);
+              final bytes = await _tempFile!.readAsBytes();
+              final archive = ZipDecoder().decodeBytes(bytes);
               final totalFiles = archive.files.length;
               var extractedFiles = 0;
 
@@ -240,9 +239,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
                     if (file.isFile) {
                       final outputFile = File(filePath);
                       await outputFile.parent.create(recursive: true);
-                      final outputStream = OutputFileStream(outputFile.path);
-                      file.writeContent(outputStream);
-                      outputStream.close();
+                      await outputFile.writeAsBytes(file.content as List<int>);
                     } else {
                       await Directory(filePath).create(recursive: true);
                     }
@@ -253,8 +250,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
                   }
                 }
               }
-
-              inputStream.close();
             }
 
             Future<void> extractWithFlutterArchive() async {
