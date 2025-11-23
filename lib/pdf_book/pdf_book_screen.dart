@@ -1169,15 +1169,62 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     int index = widget.tab.pdfViewerController.isReady
         ? (widget.tab.pdfViewerController.pageNumber ?? 1)
         : 1;
+
+    // נסה למצוא כותרת מה-outline
+    String ref;
+    final outline = widget.tab.outline.value;
+    debugPrint(
+        'DEBUG Bookmark: outline is ${outline == null ? "null" : "not null"}, isEmpty: ${outline?.isEmpty}, page: $index');
+    if (outline != null && outline.isNotEmpty) {
+      final heading = _findHeadingForPage(outline, index);
+      debugPrint('DEBUG Bookmark: heading found: $heading');
+      if (heading != null) {
+        ref = '${widget.tab.title} $heading'; // שם הספר + הכותרת
+      } else {
+        ref =
+            '${widget.tab.title} עמוד $index'; // אם אין כותרת, הצג עם מספר עמוד
+      }
+    } else {
+      ref =
+          '${widget.tab.title} עמוד $index'; // אם אין outline, הצג עם מספר עמוד
+    }
+
     bool bookmarkAdded = Provider.of<BookmarkBloc>(context, listen: false)
-        .addBookmark(
-            ref: '${widget.tab.title} עמוד $index',
-            book: widget.tab.book,
-            index: index);
+        .addBookmark(ref: ref, book: widget.tab.book, index: index);
     if (mounted) {
       UiSnack.show(
           bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
     }
+  }
+
+  /// מוצא את הכותרת המתאימה לעמוד מסוים ב-outline
+  String? _findHeadingForPage(List<PdfOutlineNode> outline, int page) {
+    PdfOutlineNode? bestMatch;
+
+    void searchNodes(List<PdfOutlineNode> nodes) {
+      for (final node in nodes) {
+        final nodePage = node.dest?.pageNumber;
+        debugPrint(
+            'DEBUG: checking node "${node.title}" with page $nodePage against target page $page');
+        if (nodePage != null && nodePage <= page) {
+          // אם זה העמוד המדויק או קרוב יותר מהמצא הקודם
+          if (bestMatch == null ||
+              nodePage > (bestMatch!.dest?.pageNumber ?? 0)) {
+            bestMatch = node;
+            debugPrint(
+                'DEBUG: new bestMatch: "${node.title}" at page $nodePage');
+          }
+          // חפש גם בילדים
+          if (node.children.isNotEmpty) {
+            searchNodes(node.children);
+          }
+        }
+      }
+    }
+
+    searchNodes(outline);
+    debugPrint('DEBUG: final bestMatch: ${bestMatch?.title}');
+    return bestMatch?.title;
   }
 
   /// טיפול בלחיצה על כפתור הוספת הערה
