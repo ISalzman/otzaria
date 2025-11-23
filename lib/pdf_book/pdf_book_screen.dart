@@ -138,9 +138,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     pdfController = PdfViewerController();
     widget.tab.pdfViewerController = pdfController;
 
-    // הגדרת מעקב אחר שינויי עמוד לשמירה
-    widget.tab.setupPageTracking();
-
     // textSearcher ייוצר ב-onDocumentChanged כשה-document מוכן
 
     debugPrint('DEBUG: אתחול PDF טאב - דף התחלתי: ${widget.tab.pageNumber}');
@@ -266,6 +263,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (newPage == widget.tab.pageNumber) return;
     widget.tab.pageNumber = newPage;
     final token = _lastComputedForPage = newPage;
+    
+    // עדכון מיידי של הכותרת עם מספר העמוד
+    widget.tab.currentTitle.value = 'עמוד $newPage';
+    
     final title = await refFromPageNumber(
         newPage, widget.tab.outline.value ?? [], widget.tab.book.title);
     if (token == _lastComputedForPage) {
