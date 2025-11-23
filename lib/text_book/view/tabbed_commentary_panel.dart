@@ -143,6 +143,14 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                           padding: EdgeInsets.zero,
                           labelPadding: EdgeInsets.symmetric(
                               horizontal: availableWidth < 250 ? 8 : 16),
+                          indicatorWeight: 1,
+                          dividerHeight: 1,
+                          indicator: UnderlineTabIndicator(
+                            borderSide: BorderSide(
+                              color: Theme.of(context).colorScheme.primary,
+                              width: 1,
+                            ),
+                          ),
                           tabs: [
                             Tab(
                               child: Text(
