@@ -56,6 +56,9 @@ app.*.map.json
 .git/
 .vscode/
 android/
+!android/settings.gradle
+!android/build.gradle
+!android/app/build.gradle
 build/
 fonts/
 
