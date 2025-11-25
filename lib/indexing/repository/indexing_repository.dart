@@ -84,7 +84,7 @@ class IndexingRepository {
   /// Indexes a text-based book by processing its content and adding it to the search index and reference index.
   Future<void> _indexTextBook(TextBook book) async {
     final index = await _tantivyDataProvider.engine;
-    final refIndex = _tantivyDataProvider.refEngine;
+    final refIndex = await _tantivyDataProvider.refEngine;
     var text = await book.text;
     final title = book.title;
     final topics = "/${book.topics.replaceAll(', ', '/')}";
