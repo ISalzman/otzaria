@@ -56,10 +56,12 @@ class _CombinedViewState extends State<CombinedView> {
   late final TextBookBloc _textBookBloc;
 
   bool _hasScrolledToInitialPosition = false;
+  late final FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
+    _focusNode = FocusNode();
     // שמירת ה-BLoC מראש
     _textBookBloc = context.read<TextBookBloc>();
 
@@ -93,6 +95,7 @@ class _CombinedViewState extends State<CombinedView> {
   void dispose() {
     widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
     widget.tab.positionsListener.itemPositions.removeListener(_updateTabIndex);
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -623,6 +626,7 @@ $textWithBreaks
             }
           },
           child: ProgressiveScroll(
+            focusNode: _focusNode,
             maxSpeed: 10000.0,
             curve: 10.0,
             accelerationFactor: 5,
@@ -682,6 +686,7 @@ $textWithBreaks
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () {
+              _focusNode.requestFocus();
               // מאפס את הטקסט השמור כשלוחצים על הפסקה
               setState(() {
                 _savedSelectedText = null;
@@ -786,6 +791,7 @@ $textWithBreaks
       ],
     );
   }
+
 
   /// בדיקה אם יש מפרשים לאינדקס מסוים
   bool _hasCommentaries(TextBookLoaded state, int index) {
