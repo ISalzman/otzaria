@@ -37,6 +37,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<RefreshShortcuts>(_onRefreshShortcuts);
     on<ResetShortcuts>(_onResetShortcuts);
     on<UpdateShortcut>(_onUpdateShortcut);
+    on<UpdateEnablePerBookSettings>(_onUpdateEnablePerBookSettings);
   }
 
   Future<void> _onLoadSettings(
@@ -44,7 +45,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     final settings = await _repository.loadSettings();
-  emit(SettingsState(
+    emit(SettingsState(
       isDarkMode: settings['isDarkMode'],
       seedColor: settings['seedColor'],
       paddingSize: settings['paddingSize'],
@@ -72,7 +73,16 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       shortcuts: Map<String, String>.unmodifiable(
         Map<String, String>.from(settings['shortcuts'] as Map),
       ),
+      enablePerBookSettings: settings['enablePerBookSettings'],
     ));
+  }
+
+  Future<void> _onUpdateEnablePerBookSettings(
+    UpdateEnablePerBookSettings event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateEnablePerBookSettings(event.enablePerBookSettings);
+    emit(state.copyWith(enablePerBookSettings: event.enablePerBookSettings));
   }
 
   Future<void> _onUpdateDarkMode(

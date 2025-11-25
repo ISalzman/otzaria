@@ -32,6 +32,7 @@ class SettingsRepository {
   static const String keyIsFullscreen = 'key-is-fullscreen';
   static const String keyLibraryViewMode = 'key-library-view-mode';
   static const String keyLibraryShowPreview = 'key-library-show-preview';
+  static const String keyEnablePerBookSettings = 'key-enable-per-book-settings';
 
   final SettingsWrapper _settings;
 
@@ -139,6 +140,10 @@ class SettingsRepository {
         defaultValue: true,
       ),
       'shortcuts': await getShortcuts(),
+      'enablePerBookSettings': _settings.getValue<bool>(
+        keyEnablePerBookSettings,
+        defaultValue: true,
+      ),
     };
   }
 
@@ -250,6 +255,10 @@ class SettingsRepository {
     await _settings.setValue(keyLibraryShowPreview, value);
   }
 
+  Future<void> updateEnablePerBookSettings(bool value) async {
+    await _settings.setValue(keyEnablePerBookSettings, value);
+  }
+
   Future<Map<String, String>> getShortcuts() async {
     // Start with the default shortcuts
     final shortcuts =
@@ -336,6 +345,7 @@ class SettingsRepository {
     await _settings.setValue(keyIsFullscreen, false);
     await _settings.setValue(keyLibraryViewMode, 'grid');
     await _settings.setValue(keyLibraryShowPreview, true);
+    await _settings.setValue(keyEnablePerBookSettings, true);
 
     // Mark as initialized
     await _settings.setValue('settings_initialized', true);

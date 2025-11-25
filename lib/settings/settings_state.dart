@@ -27,6 +27,7 @@ class SettingsState extends Equatable {
   final String libraryViewMode;
   final bool libraryShowPreview;
   final Map<String, String> shortcuts;
+  final bool enablePerBookSettings;
 
   const SettingsState({
     required this.isDarkMode,
@@ -54,6 +55,7 @@ class SettingsState extends Equatable {
     required this.libraryViewMode,
     required this.libraryShowPreview,
     required this.shortcuts,
+    required this.enablePerBookSettings,
   });
 
   factory SettingsState.initial() {
@@ -83,6 +85,7 @@ class SettingsState extends Equatable {
       libraryViewMode: 'grid',
       libraryShowPreview: true,
       shortcuts: {},
+      enablePerBookSettings: true,
     );
   }
 
@@ -112,6 +115,7 @@ class SettingsState extends Equatable {
     String? libraryViewMode,
     bool? libraryShowPreview,
     Map<String, String>? shortcuts,
+    bool? enablePerBookSettings,
   }) {
     return SettingsState(
       isDarkMode: isDarkMode ?? this.isDarkMode,
@@ -119,7 +123,8 @@ class SettingsState extends Equatable {
       paddingSize: paddingSize ?? this.paddingSize,
       fontSize: fontSize ?? this.fontSize,
       fontFamily: fontFamily ?? this.fontFamily,
-      commentatorsFontFamily: commentatorsFontFamily ?? this.commentatorsFontFamily,
+      commentatorsFontFamily:
+          commentatorsFontFamily ?? this.commentatorsFontFamily,
       showOtzarHachochma: showOtzarHachochma ?? this.showOtzarHachochma,
       showHebrewBooks: showHebrewBooks ?? this.showHebrewBooks,
       showExternalBooks: showExternalBooks ?? this.showExternalBooks,
@@ -140,6 +145,8 @@ class SettingsState extends Equatable {
       libraryViewMode: libraryViewMode ?? this.libraryViewMode,
       libraryShowPreview: libraryShowPreview ?? this.libraryShowPreview,
       shortcuts: shortcuts ?? this.shortcuts,
+      enablePerBookSettings:
+          enablePerBookSettings ?? this.enablePerBookSettings,
     );
   }
 
@@ -170,5 +177,6 @@ class SettingsState extends Equatable {
         libraryViewMode,
         libraryShowPreview,
         shortcuts,
+        enablePerBookSettings,
       ];
 }

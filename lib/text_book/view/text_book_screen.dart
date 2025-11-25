@@ -41,6 +41,7 @@ import 'package:shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:shamor_zachor/models/book_model.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/settings/per_book_settings.dart';
 
 class TextBookViewerBloc extends StatefulWidget {
   final void Function(OpenedTab) openBookCallback;
@@ -435,6 +436,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   void initState() {
     super.initState();
 
+    // טעינת הגדרות פר-ספר
+    _loadPerBookSettings();
+
     // וודא שהמיקום הנוכחי נשמר בטאב
 
     // אם יש טקסט חיפוש (searchText), נתחיל בלשונית 'חיפוש' (שנמצאת במקום ה-1)
@@ -454,6 +458,109 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         .read<SettingsBloc>()
         .stream
         .listen((state) => _sidebarWidth.value = state.sidebarWidth);
+  }
+
+  /// טעינת הגדרות פר-ספר
+  Future<void> _loadPerBookSettings() async {
+    final settingsBloc = context.read<SettingsBloc>();
+    debugPrint(
+        '🔧 _loadPerBookSettings: enablePerBookSettings = ${settingsBloc.state.enablePerBookSettings}');
+
+    if (!settingsBloc.state.enablePerBookSettings) {
+      debugPrint('🔧 Per-book settings disabled, skipping load');
+      return;
+    }
+
+    final settings = await TextBookPerBookSettings.load(widget.tab.book.title);
+    debugPrint('🔧 Loaded settings for "${widget.tab.book.title}": $settings');
+
+    if (settings == null) {
+      debugPrint('🔧 No saved settings found for this book');
+      return;
+    }
+
+    if (!mounted) return;
+
+    final textBookBloc = context.read<TextBookBloc>();
+
+    // המתן עד שה-TextBookBloc יהיה במצב TextBookLoaded
+    await for (final state in textBookBloc.stream) {
+      if (state is TextBookLoaded) {
+        debugPrint('🔧 TextBookLoaded state reached, applying settings...');
+
+        // החלת ההגדרות
+        if (settings.fontSize != null) {
+          debugPrint('🔧 Applying fontSize: ${settings.fontSize}');
+          textBookBloc.add(UpdateFontSize(settings.fontSize!));
+        }
+        if (settings.commentatorsBelow != null) {
+          debugPrint(
+              '🔧 Applying commentatorsBelow: ${settings.commentatorsBelow}');
+          textBookBloc.add(ToggleSplitView(!settings.commentatorsBelow!));
+        }
+        if (settings.removeNikud != null) {
+          debugPrint('🔧 Applying removeNikud: ${settings.removeNikud}');
+          textBookBloc.add(ToggleNikud(settings.removeNikud!));
+        }
+        break;
+      }
+    }
+  }
+
+  /// שמירת הגדרות פר-ספר
+  Future<void> _savePerBookSettings() async {
+    final settingsBloc = context.read<SettingsBloc>();
+    if (!settingsBloc.state.enablePerBookSettings) {
+      debugPrint('💾 Per-book settings disabled, not saving');
+      return;
+    }
+
+    final textBookBloc = context.read<TextBookBloc>();
+    final currentState = textBookBloc.state;
+
+    if (currentState is! TextBookLoaded) {
+      debugPrint('💾 TextBook not loaded yet, cannot save settings');
+      return;
+    }
+
+    final settings = TextBookPerBookSettings(
+      fontSize: currentState.fontSize,
+      commentatorsBelow: !currentState.showSplitView,
+      removeNikud: currentState.removeNikud,
+    );
+
+    debugPrint('💾 Saving settings for "${widget.tab.book.title}":');
+    debugPrint('   fontSize: ${settings.fontSize}');
+    debugPrint('   commentatorsBelow: ${settings.commentatorsBelow}');
+    debugPrint('   removeNikud: ${settings.removeNikud}');
+
+    await settings.save(widget.tab.book.title);
+    debugPrint('💾 Settings saved successfully!');
+  }
+
+  /// איפוס הגדרות פר-ספר
+  Future<void> _resetPerBookSettings() async {
+    await TextBookPerBookSettings.delete(widget.tab.book.title);
+
+    // טעינה מחדש של ההגדרות הכלליות
+    if (!mounted) return;
+    final settingsBloc = context.read<SettingsBloc>();
+    final textBookBloc = context.read<TextBookBloc>();
+
+    textBookBloc.add(LoadContent(
+      fontSize: settingsBloc.state.fontSize,
+      showSplitView: Settings.getValue<bool>('key-splited-view') ?? false,
+      removeNikud: settingsBloc.state.defaultRemoveNikud,
+      preserveState: true,
+    ));
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ההגדרות הפר-ספריות אופסו בהצלחה'),
+        ),
+      );
+    }
   }
 
   @override
@@ -991,6 +1098,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
+      // 4) איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת)
+      if (context.read<SettingsBloc>().state.enablePerBookSettings)
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.arrow_reset_24_regular),
+            tooltip: 'אפס הגדרות ספר זה',
+            onPressed: () => _resetPerBookSettings(),
+          ),
+          icon: FluentIcons.arrow_reset_24_regular,
+          tooltip: 'אפס הגדרות ספר זה',
+          onPressed: () => _resetPerBookSettings(),
+        ),
+
       // 5) ערוך את הספר
       ActionButtonData(
         widget: _buildFullFileEditorButton(context, state),
@@ -1077,9 +1197,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   Widget _buildSplitViewButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
-      onPressed: () => context.read<TextBookBloc>().add(
-            ToggleSplitView(!state.showSplitView),
-          ),
+      onPressed: () {
+        context.read<TextBookBloc>().add(
+              ToggleSplitView(!state.showSplitView),
+            );
+        _savePerBookSettings();
+      },
       icon: RotatedBox(
         quarterTurns: state.showSplitView
             ? 0
@@ -1094,8 +1217,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   Widget _buildNikudButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
-      onPressed: () =>
-          context.read<TextBookBloc>().add(ToggleNikud(!state.removeNikud)),
+      onPressed: () {
+        context.read<TextBookBloc>().add(ToggleNikud(!state.removeNikud));
+        _savePerBookSettings();
+      },
       icon: const Icon(FluentIcons.text_font_24_regular),
       tooltip: 'הצג או הסתר ניקוד',
     );
@@ -1143,9 +1268,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       icon: const Icon(FluentIcons.zoom_in_24_regular),
       tooltip: 'הגדלת טקסט (CTRL + +)',
-      onPressed: () => context.read<TextBookBloc>().add(
-            UpdateFontSize(min(50.0, state.fontSize + 3)),
-          ),
+      onPressed: () {
+        context.read<TextBookBloc>().add(
+              UpdateFontSize(min(50.0, state.fontSize + 3)),
+            );
+        _savePerBookSettings();
+      },
     );
   }
 
@@ -1153,9 +1281,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       icon: const Icon(FluentIcons.zoom_out_24_regular),
       tooltip: 'הקטנת טקסט (CTRL + -)',
-      onPressed: () => context.read<TextBookBloc>().add(
-            UpdateFontSize(max(15.0, state.fontSize - 3)),
-          ),
+      onPressed: () {
+        context.read<TextBookBloc>().add(
+              UpdateFontSize(max(15.0, state.fontSize - 3)),
+            );
+        _savePerBookSettings();
+      },
     );
   }
 

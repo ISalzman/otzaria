@@ -34,6 +34,7 @@ import 'package:otzaria/utils/page_converter.dart';
 import 'package:flutter/gestures.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'pdf_zoom_bar.dart';
+import 'package:otzaria/settings/per_book_settings.dart';
 
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
@@ -194,6 +195,61 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     // טעינת headings וlinks
     _loadPdfHeadingsAndLinks();
+
+    // טעינת הגדרות פר-ספר
+    _loadPerBookSettings();
+  }
+
+  /// טעינת הגדרות פר-ספר
+  Future<void> _loadPerBookSettings() async {
+    final settingsBloc = context.read<SettingsBloc>();
+    if (!settingsBloc.state.enablePerBookSettings) return;
+
+    final settings = await PdfBookPerBookSettings.load(widget.tab.book.title);
+    if (settings == null || !mounted) return;
+
+    // החלת ההגדרות
+    if (settings.zoom != null && widget.tab.pdfViewerController.isReady) {
+      widget.tab.pdfViewerController.setZoom(
+        widget.tab.pdfViewerController.centerPosition,
+        settings.zoom!,
+      );
+    }
+  }
+
+  /// שמירת הגדרות פר-ספר
+  Future<void> _savePerBookSettings() async {
+    final settingsBloc = context.read<SettingsBloc>();
+    if (!settingsBloc.state.enablePerBookSettings) return;
+
+    if (!widget.tab.pdfViewerController.isReady) return;
+
+    final settings = PdfBookPerBookSettings(
+      zoom: widget.tab.pdfViewerController.value.zoom,
+    );
+
+    await settings.save(widget.tab.book.title);
+  }
+
+  /// איפוס הגדרות פר-ספר
+  Future<void> _resetPerBookSettings() async {
+    await PdfBookPerBookSettings.delete(widget.tab.book.title);
+
+    // איפוס הזום לברירת מחדל
+    if (widget.tab.pdfViewerController.isReady) {
+      widget.tab.pdfViewerController.setZoom(
+        widget.tab.pdfViewerController.centerPosition,
+        1.0,
+      );
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ההגדרות הפר-ספריות אופסו בהצלחה'),
+        ),
+      );
+    }
   }
 
   Future<void> _loadPdfHeadingsAndLinks() async {
@@ -849,6 +905,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       newZoom,
     );
     _showZoomBarTemporarily();
+    _savePerBookSettings();
   }
 
   void _zoomOut() {
@@ -860,6 +917,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       newZoom,
     );
     _showZoomBarTemporarily();
+    _savePerBookSettings();
   }
 
   void _resetZoom() {
@@ -869,6 +927,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       1.0,
     );
     _showZoomBarTemporarily();
+    _savePerBookSettings();
   }
 
   void _goNextPage() {
@@ -1152,7 +1211,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: () => _handleBookmarkPress(context),
       ),
 
-      // 4) הדפסה
+      // 4) איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת)
+      if (context.read<SettingsBloc>().state.enablePerBookSettings)
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.arrow_reset_24_regular),
+            tooltip: 'אפס הגדרות ספר זה',
+            onPressed: () => _resetPerBookSettings(),
+          ),
+          icon: FluentIcons.arrow_reset_24_regular,
+          tooltip: 'אפס הגדרות ספר זה',
+          onPressed: () => _resetPerBookSettings(),
+        ),
+
+      // 5) הדפסה
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.print_24_regular),

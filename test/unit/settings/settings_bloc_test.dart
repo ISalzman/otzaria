@@ -32,6 +32,7 @@ void main() {
         'paddingSize': 15.0,
         'fontSize': 18.0,
         'fontFamily': 'Rubik',
+        'commentatorsFontFamily': 'NotoRashiHebrew',
         'showOtzarHachochma': true,
         'showHebrewBooks': true,
         'showExternalBooks': true,
@@ -50,6 +51,8 @@ void main() {
         'isFullscreen': false,
         'libraryViewMode': 'grid',
         'libraryShowPreview': true,
+        'enablePerBookSettings': true,
+        'shortcuts': <String, String>{},
       };
 
       blocTest<SettingsBloc, SettingsState>(
@@ -90,6 +93,8 @@ void main() {
             libraryViewMode: mockSettings['libraryViewMode'] as String,
             libraryShowPreview: mockSettings['libraryShowPreview'] as bool,
             shortcuts: const {},
+            enablePerBookSettings:
+                mockSettings['enablePerBookSettings'] as bool,
           ),
         ],
         verify: (_) {

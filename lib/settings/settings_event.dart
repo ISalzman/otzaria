@@ -244,3 +244,12 @@ class UpdateShortcut extends SettingsEvent {
   @override
   List<Object?> get props => [key, value];
 }
+
+class UpdateEnablePerBookSettings extends SettingsEvent {
+  final bool enablePerBookSettings;
+
+  const UpdateEnablePerBookSettings(this.enablePerBookSettings);
+
+  @override
+  List<Object?> get props => [enablePerBookSettings];
+}
