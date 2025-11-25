@@ -389,13 +389,67 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     // קיבוץ המפרשים לפי ספר
     final groups = _groupConsecutiveLinks(relevantLinks);
 
-    return ListView.builder(
-      itemCount: groups.length,
-      itemBuilder: (context, index) {
-        final group = groups[index];
-        return _buildCommentaryGroupTile(group);
+    // מיון הקבוצות לפי סדר הדורות
+    return FutureBuilder<List<CommentaryGroup>>(
+      future: _sortGroupsByEra(groups),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final sortedGroups = snapshot.data!;
+
+        return ListView.builder(
+          itemCount: sortedGroups.length,
+          itemBuilder: (context, index) {
+            final group = sortedGroups[index];
+            return _buildCommentaryGroupTile(group);
+          },
+        );
       },
     );
+  }
+
+  /// ממיין קבוצות מפרשים לפי סדר הדורות
+  Future<List<CommentaryGroup>> _sortGroupsByEra(
+      List<CommentaryGroup> groups) async {
+    // יצירת מפה של כל שם ספר לדור שלו
+    final Map<String, int> eraOrder = {};
+
+    for (final group in groups) {
+      final title = group.bookTitle;
+
+      // בדיקה לאיזה דור שייך הספר
+      if (await utils.hasTopic(title, 'תורה שבכתב')) {
+        eraOrder[title] = 0;
+      } else if (await utils.hasTopic(title, 'חז"ל')) {
+        eraOrder[title] = 1;
+      } else if (await utils.hasTopic(title, 'ראשונים')) {
+        eraOrder[title] = 2;
+      } else if (await utils.hasTopic(title, 'אחרונים')) {
+        eraOrder[title] = 3;
+      } else if (await utils.hasTopic(title, 'מחברי זמננו')) {
+        eraOrder[title] = 4;
+      } else {
+        eraOrder[title] = 5; // שאר מפרשים
+      }
+    }
+
+    // מיון הקבוצות לפי הדור
+    final sortedGroups = List<CommentaryGroup>.from(groups);
+    sortedGroups.sort((a, b) {
+      final orderA = eraOrder[a.bookTitle] ?? 5;
+      final orderB = eraOrder[b.bookTitle] ?? 5;
+
+      if (orderA != orderB) {
+        return orderA.compareTo(orderB);
+      }
+
+      // אם שני הספרים באותו דור, ממיינים לפי שם
+      return a.bookTitle.compareTo(b.bookTitle);
+    });
+
+    return sortedGroups;
   }
 
   Widget _buildCommentaryGroupTile(CommentaryGroup group) {
