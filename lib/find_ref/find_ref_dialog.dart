@@ -116,7 +116,8 @@ class _FindRefDialogState extends State<FindRefDialog> {
                 final refs = state is FindRefSuccess ? state.refs : [];
                 return Focus(
                   onKeyEvent: (node, event) {
-                    if (event is! KeyDownEvent) {
+                    // טיפול גם ב-KeyDownEvent וגם ב-KeyRepeatEvent (לחיצה רצופה)
+                    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
                       return KeyEventResult.ignored;
                     }
 
