@@ -147,11 +147,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _sidebarWidth = ValueNotifier<double>(
         Settings.getValue<double>('key-sidebar-width', defaultValue: 300)!);
 
-    _rightPaneWidth = ValueNotifier<double>(350.0);
+    // טען את רוחב החלונית הימנית מההגדרות
+    final settingsBloc = context.read<SettingsBloc>();
+    _rightPaneWidth =
+        ValueNotifier<double>(settingsBloc.state.commentaryPaneWidth);
     _showRightPane = ValueNotifier<bool>(false);
 
-    _settingsSub = context.read<SettingsBloc>().stream.listen((state) {
+    _settingsSub = settingsBloc.stream.listen((state) {
       _sidebarWidth.value = state.sidebarWidth;
+      _rightPaneWidth.value = state.commentaryPaneWidth;
     });
 
     pdfController.addListener(_onPdfViewerControllerUpdate);
@@ -719,6 +723,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                   (_rightPaneWidth.value + details.delta.dx)
                                       .clamp(250.0, 600.0);
                               _rightPaneWidth.value = newWidth;
+                            },
+                            onHorizontalDragEnd: (_) {
+                              // שמור את הרוחב ב-SettingsBloc
+                              context.read<SettingsBloc>().add(
+                                  UpdateCommentaryPaneWidth(
+                                      _rightPaneWidth.value));
                             },
                             child: const VerticalDivider(width: 4),
                           ),

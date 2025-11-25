@@ -10,6 +10,8 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
+import 'package:otzaria/settings/settings_bloc.dart';
+import 'package:otzaria/settings/settings_event.dart';
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -40,7 +42,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   late final GlobalKey<SelectionAreaState> _selectionKey;
   bool _paneOpen = false;
   int? _currentTabIndex;
-  double _leftPaneWidth = 400.0;
+  late double _leftPaneWidth;
   bool _isResizing = false;
 
   @override
@@ -49,8 +51,8 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     _controller = MultiSplitViewController();
     _selectionKey = GlobalKey<SelectionAreaState>();
     _currentTabIndex = _getInitialTabIndex();
-    // טען את רוחב הפאנל השמור
-    _leftPaneWidth = Settings.getValue<double>('key-left-pane-width') ?? 400.0;
+    // טען את רוחב הפאנל מההגדרות
+    _leftPaneWidth = context.read<SettingsBloc>().state.commentaryPaneWidth;
   }
 
   @override
@@ -225,9 +227,10 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                       },
                       onHorizontalDragEnd: (_) {
                         setState(() => _isResizing = false);
-                        // שמור את הרוחב
-                        Settings.setValue<double>(
-                            'key-left-pane-width', _leftPaneWidth);
+                        // שמור את הרוחב ב-SettingsBloc
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateCommentaryPaneWidth(_leftPaneWidth));
                       },
                       child: Container(
                         width: _isResizing ? 4 : 8,

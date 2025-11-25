@@ -29,6 +29,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdatePinSidebar>(_onUpdatePinSidebar);
     on<UpdateSidebarWidth>(_onUpdateSidebarWidth);
     on<UpdateFacetFilteringWidth>(_onUpdateFacetFilteringWidth);
+    on<UpdateCommentaryPaneWidth>(_onUpdateCommentaryPaneWidth);
     on<UpdateCopyWithHeaders>(_onUpdateCopyWithHeaders);
     on<UpdateCopyHeaderFormat>(_onUpdateCopyHeaderFormat);
     on<UpdateIsFullscreen>(_onUpdateIsFullscreen);
@@ -65,6 +66,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       pinSidebar: settings['pinSidebar'],
       sidebarWidth: settings['sidebarWidth'],
       facetFilteringWidth: settings['facetFilteringWidth'],
+      commentaryPaneWidth: settings['commentaryPaneWidth'],
       copyWithHeaders: settings['copyWithHeaders'],
       copyHeaderFormat: settings['copyHeaderFormat'],
       isFullscreen: settings['isFullscreen'],
@@ -236,6 +238,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateFacetFilteringWidth(event.facetFilteringWidth);
     emit(state.copyWith(facetFilteringWidth: event.facetFilteringWidth));
+  }
+
+  Future<void> _onUpdateCommentaryPaneWidth(
+    UpdateCommentaryPaneWidth event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateCommentaryPaneWidth(event.commentaryPaneWidth);
+    emit(state.copyWith(commentaryPaneWidth: event.commentaryPaneWidth));
   }
 
   Future<void> _onUpdateCopyWithHeaders(

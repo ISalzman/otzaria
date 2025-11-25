@@ -21,6 +21,7 @@ class SettingsState extends Equatable {
   final bool pinSidebar;
   final double sidebarWidth;
   final double facetFilteringWidth;
+  final double commentaryPaneWidth;
   final String copyWithHeaders;
   final String copyHeaderFormat;
   final bool isFullscreen;
@@ -49,6 +50,7 @@ class SettingsState extends Equatable {
     required this.pinSidebar,
     required this.sidebarWidth,
     required this.facetFilteringWidth,
+    required this.commentaryPaneWidth,
     required this.copyWithHeaders,
     required this.copyHeaderFormat,
     required this.isFullscreen,
@@ -79,6 +81,7 @@ class SettingsState extends Equatable {
       pinSidebar: false,
       sidebarWidth: 300,
       facetFilteringWidth: 235,
+      commentaryPaneWidth: 400,
       copyWithHeaders: 'none',
       copyHeaderFormat: 'same_line_after_brackets',
       isFullscreen: false,
@@ -109,6 +112,7 @@ class SettingsState extends Equatable {
     bool? pinSidebar,
     double? sidebarWidth,
     double? facetFilteringWidth,
+    double? commentaryPaneWidth,
     String? copyWithHeaders,
     String? copyHeaderFormat,
     bool? isFullscreen,
@@ -139,6 +143,7 @@ class SettingsState extends Equatable {
       pinSidebar: pinSidebar ?? this.pinSidebar,
       sidebarWidth: sidebarWidth ?? this.sidebarWidth,
       facetFilteringWidth: facetFilteringWidth ?? this.facetFilteringWidth,
+      commentaryPaneWidth: commentaryPaneWidth ?? this.commentaryPaneWidth,
       copyWithHeaders: copyWithHeaders ?? this.copyWithHeaders,
       copyHeaderFormat: copyHeaderFormat ?? this.copyHeaderFormat,
       isFullscreen: isFullscreen ?? this.isFullscreen,
@@ -171,6 +176,7 @@ class SettingsState extends Equatable {
         pinSidebar,
         sidebarWidth,
         facetFilteringWidth,
+        commentaryPaneWidth,
         copyWithHeaders,
         copyHeaderFormat,
         isFullscreen,

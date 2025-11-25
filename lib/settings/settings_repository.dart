@@ -24,6 +24,7 @@ class SettingsRepository {
   static const String keyPinSidebar = 'key-pin-sidebar';
   static const String keySidebarWidth = 'key-sidebar-width';
   static const String keyFacetFilteringWidth = 'key-facet-filtering-width';
+  static const String keyCommentaryPaneWidth = 'key-commentary-pane-width';
   static const String keyCalendarType = 'key-calendar-type';
   static const String keySelectedCity = 'key-selected-city';
   static const String keyCalendarEvents = 'key-calendar-events';
@@ -107,6 +108,8 @@ class SettingsRepository {
           _settings.getValue<double>(keySidebarWidth, defaultValue: 300),
       'facetFilteringWidth':
           _settings.getValue<double>(keyFacetFilteringWidth, defaultValue: 235),
+      'commentaryPaneWidth':
+          _settings.getValue<double>(keyCommentaryPaneWidth, defaultValue: 400),
       'calendarType': _settings.getValue<String>(
         keyCalendarType,
         defaultValue: 'combined',
@@ -223,6 +226,10 @@ class SettingsRepository {
     await _settings.setValue(keyFacetFilteringWidth, value);
   }
 
+  Future<void> updateCommentaryPaneWidth(double value) async {
+    await _settings.setValue(keyCommentaryPaneWidth, value);
+  }
+
   Future<void> updateCalendarType(String value) async {
     await _settings.setValue(keyCalendarType, value);
   }
@@ -337,6 +344,7 @@ class SettingsRepository {
     await _settings.setValue(keyPinSidebar, false);
     await _settings.setValue(keySidebarWidth, 300.0);
     await _settings.setValue(keyFacetFilteringWidth, 235.0);
+    await _settings.setValue(keyCommentaryPaneWidth, 400.0);
     await _settings.setValue(keyCalendarType, 'combined');
     await _settings.setValue(keySelectedCity, 'ירושלים');
     await _settings.setValue(keyCalendarEvents, '[]');
