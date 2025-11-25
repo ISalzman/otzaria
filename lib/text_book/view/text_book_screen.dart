@@ -950,8 +950,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // 3) Nikud Button
       ActionButtonData(
         widget: _buildNikudButton(context, state),
-        icon: FluentIcons.text_font_24_regular,
-        tooltip: 'הצג או הסתר ניקוד',
+        icon: state.removeNikud
+            ? FluentIcons.text_font_24_regular
+            : FluentIcons.text_font_info_24_regular,
+        tooltip: state.removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
         onPressed: () =>
             context.read<TextBookBloc>().add(ToggleNikud(!state.removeNikud)),
       ),
@@ -1221,8 +1223,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         context.read<TextBookBloc>().add(ToggleNikud(!state.removeNikud));
         _savePerBookSettings();
       },
-      icon: const Icon(FluentIcons.text_font_24_regular),
-      tooltip: 'הצג או הסתר ניקוד',
+      icon: Icon(state.removeNikud
+          ? FluentIcons.text_font_24_regular
+          : FluentIcons.text_font_info_24_regular),
+      tooltip: state.removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
     );
   }
 
