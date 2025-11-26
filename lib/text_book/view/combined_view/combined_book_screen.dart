@@ -57,6 +57,9 @@ class _CombinedViewState extends State<CombinedView> {
 
   bool _hasScrolledToInitialPosition = false;
   late final FocusNode _focusNode;
+  
+  // שמירת גובה הבלוק בפועל לחישובים דינאמיים
+  double _viewportHeight = 0;
 
   @override
   void initState() {
@@ -611,28 +614,35 @@ $textWithBreaks
         if (state is! TextBookLoaded) {
           return const Center(child: CircularProgressIndicator());
         }
-        return SelectionArea(
-          // SelectionArea אחד לכל הרשימה - מאפשר בחירה רציפה בין פסקאות
-          contextMenuBuilder: (context, selectableRegionState) {
-            return const SizedBox.shrink();
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // שומר את גובה הבלוק בפועל לשימוש בחישובי הגלילה
+            _viewportHeight = constraints.maxHeight;
+            
+            return SelectionArea(
+              // SelectionArea אחד לכל הרשימה - מאפשר בחירה רציפה בין פסקאות
+              contextMenuBuilder: (context, selectableRegionState) {
+                return const SizedBox.shrink();
+              },
+              onSelectionChanged: (selection) {
+                if (selection != null && selection.plainText.isNotEmpty) {
+                  setState(() {
+                    _savedSelectedText = selection.plainText;
+                    // לא שומרים אינדקס ספציפי כי הבחירה יכולה להיות על פני מספר פסקאות
+                    _currentSelectedIndex = null;
+                  });
+                }
+              },
+              child: ProgressiveScroll(
+                focusNode: _focusNode,
+                maxSpeed: 10000.0,
+                curve: 10.0,
+                accelerationFactor: 5,
+                scrollController: widget.tab.mainOffsetController,
+                child: buildOuterList(state),
+              ),
+            );
           },
-          onSelectionChanged: (selection) {
-            if (selection != null && selection.plainText.isNotEmpty) {
-              setState(() {
-                _savedSelectedText = selection.plainText;
-                // לא שומרים אינדקס ספציפי כי הבחירה יכולה להיות על פני מספר פסקאות
-                _currentSelectedIndex = null;
-              });
-            }
-          },
-          child: ProgressiveScroll(
-            focusNode: _focusNode,
-            maxSpeed: 10000.0,
-            curve: 10.0,
-            accelerationFactor: 5,
-            scrollController: widget.tab.mainOffsetController,
-            child: buildOuterList(state),
-          ),
         );
       },
     );
@@ -697,6 +707,30 @@ $textWithBreaks
                 _textBookBloc.add(const UpdateSelectedIndex(null));
               } else {
                 _textBookBloc.add(UpdateSelectedIndex(index));
+
+                // גלילה אוטומטית כך שהקטע יהיה בראש העמוד
+                // רק אם יש מפרשים להצגה ואנחנו במצב ExpansionTiles
+                if (widget.showCommentaryAsExpansionTiles &&
+                    _hasCommentaries(state, index)) {
+                  // מחכים שה-UI יתעדכן עם פתיחת המפרש, ואז קופצים למיקום
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (mounted && widget.tab.scrollController.isAttached) {
+                        // גלילה חכמה: נגלול כך שהטקסט הבא (index + 1) יהיה בתחתית
+                        // המפרשים תופסים עד 75% מהבלוק
+                        // נרצה שהטקסט הבא יהיה ב-90% מהבלוק (כלומר 10% מלמטה)
+                        // כך נוודא שרואים: 15% טקסט למעלה, 75% מפרשים, 10% טקסט למטה
+                        final nextIndex = (index + 1).clamp(0, widget.data.length - 1);
+                        widget.tab.scrollController.scrollTo(
+                          index: nextIndex,
+                          alignment: 0.9, // הטקסט הבא יהיה ב-90% מלמעלה (כלומר 10% מלמטה)
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      }
+                    });
+                  });
+                }
               }
             },
             onSecondaryTapDown: (details) {
@@ -787,11 +821,11 @@ $textWithBreaks
             index: index,
             textSize: widget.textSize,
             openBookCallback: widget.openBookCallback,
+            viewportHeight: _viewportHeight,
           ),
       ],
     );
   }
-
 
   /// בדיקה אם יש מפרשים לאינדקס מסוים
   bool _hasCommentaries(TextBookLoaded state, int index) {
@@ -822,11 +856,13 @@ class _CommentaryCard extends StatefulWidget {
   final int index;
   final double textSize;
   final Function(OpenedTab) openBookCallback;
+  final double viewportHeight;
 
   const _CommentaryCard({
     required this.index,
     required this.textSize,
     required this.openBookCallback,
+    required this.viewportHeight,
   });
 
   @override
@@ -838,46 +874,50 @@ class _CommentaryCardState extends State<_CommentaryCard> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Container(
-          margin: const EdgeInsets.only(right: 24.0, left: 8.0, bottom: 8.0),
+    // חישוב גובה המפרשים לפי גובה הבלוק בפועל (לא כל המסך):
+    // המפרשים יהיו 75% מגובה הבלוק
+    // השאר (25%) יתחלק: 15% למעלה (טקסט), 10% למטה (טקסט)
+    final maxHeight = widget.viewportHeight > 0 
+        ? widget.viewportHeight * 0.75 
+        : MediaQuery.of(context).size.height * 0.75;
+
+    return Container(
+      margin: const EdgeInsets.only(right: 24.0, left: 8.0, bottom: 8.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(12),
+          bottomLeft: Radius.circular(12),
+          bottomRight: Radius.circular(12),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(12),
+          bottomLeft: Radius.circular(12),
+          bottomRight: Radius.circular(12),
+        ),
+        child: ConstrainedBox(
           constraints: BoxConstraints(
-            minHeight: 50,
-            maxHeight: MediaQuery.of(context).size.height * 0.6,
+            maxHeight: maxHeight,
           ),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(12),
-              bottomLeft: Radius.circular(12),
-              bottomRight: Radius.circular(12),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
+          child: CommentaryListBase(
+            key: _commentaryKey,
+            indexes: [widget.index],
+            fontSize: widget.textSize,
+            openBookCallback: widget.openBookCallback,
+            showSearch: false,
+            shrinkWrap: true,
           ),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(12),
-              bottomLeft: Radius.circular(12),
-              bottomRight: Radius.circular(12),
-            ),
-            child: CommentaryListBase(
-              key: _commentaryKey,
-              indexes: [widget.index],
-              fontSize: widget.textSize,
-              openBookCallback: widget.openBookCallback,
-              showSearch: false,
-              shrinkWrap: false,
-            ),
-          ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

@@ -206,7 +206,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                     textSize: state.fontSize,
                     openBookCallback: widget.openBookCallback,
                     openLeftPaneTab: widget.openLeftPaneTab,
-                    showCommentaryAsExpansionTiles: false,
+                    showCommentaryAsExpansionTiles: !widget.showSplitView,
                     tab: widget.tab,
                   ),
                 ),

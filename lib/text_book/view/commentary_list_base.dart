@@ -685,6 +685,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         );
       } else {
         return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             // כפתור גלובלי מעל הרשימה
             if (state.activeCommentators.isNotEmpty)
@@ -729,7 +730,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 ),
               ),
             // הרשימה
-            Expanded(
+            Flexible(
               child: buildList(),
             ),
           ],
