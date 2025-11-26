@@ -56,6 +56,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
   Widget? _cachedReadingPage;
   Widget? _cachedMorePage;
   Widget? _cachedSettingsPage;
+  
+  // שמירת מצב הספרייה הקודם כדי לזהות שינויים
+  bool? _previousLibraryEmptyState;
 
   bool _hasCheckedAutoIndex = false;
 
@@ -275,7 +278,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
             // Build the pages list here so we can inject the EmptyLibraryScreen
             // into the library page while keeping the rest of the app visible.
             // נבנה את הדפים רק פעם אחת ונשמור אותם
-            if (_cachedLibraryPage == null || state.isLibraryEmpty != (_cachedLibraryPage is EmptyLibraryScreen)) {
+            // אם מצב הספרייה השתנה, נבנה מחדש את דף הספרייה
+            if (_cachedLibraryPage == null || 
+                state.isLibraryEmpty != (_cachedLibraryPage is EmptyLibraryScreen) ||
+                _previousLibraryEmptyState != state.isLibraryEmpty) {
               _cachedLibraryPage = state.isLibraryEmpty
                   ? EmptyLibraryScreen(
                       onLibraryLoaded: () {
@@ -283,6 +289,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       },
                     )
                   : const LibraryBrowser();
+              _previousLibraryEmptyState = state.isLibraryEmpty;
             }
             
             _cachedReadingPage ??= const ReadingScreen();
