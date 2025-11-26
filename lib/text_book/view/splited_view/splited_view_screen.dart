@@ -10,6 +10,8 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
+import 'package:otzaria/settings/settings_bloc.dart';
+import 'package:otzaria/settings/settings_event.dart';
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -40,26 +42,31 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   late final GlobalKey<SelectionAreaState> _selectionKey;
   bool _paneOpen = false;
   int? _currentTabIndex;
+  late double _leftPaneWidth;
+  bool _isResizing = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = MultiSplitViewController(areas: _openAreas());
+    _controller = MultiSplitViewController();
     _selectionKey = GlobalKey<SelectionAreaState>();
     _currentTabIndex = _getInitialTabIndex();
+    // טען את רוחב הפאנל מההגדרות
+    _leftPaneWidth = context.read<SettingsBloc>().state.commentaryPaneWidth;
   }
 
   @override
   void didUpdateWidget(SplitedViewScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // אם showSplitView השתנה, מאפס את הטאב
-    if (oldWidget.showSplitView != widget.showSplitView) {
+    // אם showSplitView השתנה או initialTabIndex השתנה, מעדכן את הטאב
+    if (oldWidget.showSplitView != widget.showSplitView ||
+        oldWidget.initialTabIndex != widget.initialTabIndex) {
       setState(() {
         _currentTabIndex = _getInitialTabIndex();
-        // אם עוברים למצב split view, פותחים את הטור השמאלי אוטומטית
-        if (widget.showSplitView && !_paneOpen) {
+        // אם עוברים למצב split view או initialTabIndex השתנה, פותחים את הטור השמאלי אוטומטית
+        if ((widget.showSplitView || widget.initialTabIndex != null) &&
+            !_paneOpen) {
           _paneOpen = true;
-          _updateAreas();
         }
       });
     }
@@ -81,20 +88,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     }
   }
 
-  List<Area> _openAreas() => [
-        Area(weight: 0.4, minimalSize: 200),
-        Area(weight: 0.6, minimalSize: 200),
-      ];
-
-  List<Area> _closedAreas() => [
-        Area(weight: 0, minimalSize: 0),
-        Area(weight: 1, minimalSize: 200),
-      ];
-
-  void _updateAreas() {
-    _controller.areas = _paneOpen ? _openAreas() : _closedAreas();
-  }
-
   void _togglePane() {
     if (!_paneOpen) {
       // פתיחת הטור - בחר את הטאב הנכון
@@ -103,7 +96,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
       // סגירת הטור
       setState(() {
         _paneOpen = false;
-        _updateAreas();
       });
     }
   }
@@ -139,7 +131,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     setState(() {
       _paneOpen = true;
       _currentTabIndex = targetTab;
-      _updateAreas();
     });
   }
 
@@ -153,7 +144,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     if (!_paneOpen) {
       setState(() {
         _paneOpen = true;
-        _updateAreas();
       });
     }
   }
@@ -205,18 +195,96 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        // אם החלונית סגורה - מציגים combined view עם כפתור צף
-        if (!_paneOpen) {
-          return Stack(
-            children: [
-              CombinedView(
-                data: widget.content,
-                textSize: state.fontSize,
-                openBookCallback: widget.openBookCallback,
-                openLeftPaneTab: widget.openLeftPaneTab,
-                showCommentaryAsExpansionTiles: !widget.showSplitView,
-                tab: widget.tab,
-              ),
+        return Stack(
+          children: [
+            Row(
+              children: [
+                // תוכן הספר
+                Expanded(
+                  child: CombinedView(
+                    data: widget.content,
+                    textSize: state.fontSize,
+                    openBookCallback: widget.openBookCallback,
+                    openLeftPaneTab: widget.openLeftPaneTab,
+                    showCommentaryAsExpansionTiles: !widget.showSplitView,
+                    tab: widget.tab,
+                  ),
+                ),
+                // מפריד ניתן לגרירה
+                if (_paneOpen)
+                  MouseRegion(
+                    cursor: SystemMouseCursors.resizeColumn,
+                    child: GestureDetector(
+                      onHorizontalDragStart: (_) {
+                        setState(() => _isResizing = true);
+                      },
+                      onHorizontalDragUpdate: (details) {
+                        setState(() {
+                          // גרירה שמאלה מקטינה, ימינה מגדילה
+                          _leftPaneWidth = (_leftPaneWidth + details.delta.dx)
+                              .clamp(200.0, 800.0);
+                        });
+                      },
+                      onHorizontalDragEnd: (_) {
+                        setState(() => _isResizing = false);
+                        // שמור את הרוחב ב-SettingsBloc
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateCommentaryPaneWidth(_leftPaneWidth));
+                      },
+                      child: Container(
+                        width: _isResizing ? 4 : 8,
+                        color: _isResizing
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.transparent,
+                        alignment: Alignment.center,
+                        child: _isResizing
+                            ? null
+                            : Container(
+                                width: 1.5,
+                                color: Theme.of(context).dividerColor,
+                              ),
+                      ),
+                    ),
+                  ),
+                // פאנל שמאלי (בצד ימין של המסך)
+                if (_paneOpen)
+                  SizedBox(
+                    width: _leftPaneWidth,
+                    child: ContextMenuRegion(
+                      contextMenu: _buildContextMenu(state),
+                      child: SelectionArea(
+                        key: _selectionKey,
+                        child: TabbedCommentaryPanel(
+                          fontSize: state.fontSize,
+                          openBookCallback: widget.openBookCallback,
+                          showSearch: true,
+                          onClosePane: _togglePane,
+                          initialTabIndex: _currentTabIndex,
+                          onTabChanged: (index) {
+                            debugPrint(
+                                'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}');
+                            setState(() {
+                              _currentTabIndex = index;
+                            });
+                            if (!widget.showSplitView) {
+                              debugPrint(
+                                  'DEBUG: Saving tab $index to combined settings');
+                              Settings.setValue<int>(
+                                  'key-sidebar-tab-index-combined', index);
+                            } else {
+                              debugPrint(
+                                  'DEBUG: NOT saving tab (split view mode)');
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            // כפתור צף להצגה כאשר הפאנל סגור
+            if (!_paneOpen)
               Positioned(
                 left: 8,
                 top: 8,
@@ -246,73 +314,11 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                       FluentIcons.panel_left_contract_24_regular,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
+                    tooltip: 'פתח מפרשים וקישורים',
                     onPressed: _togglePane,
                   ),
                 ),
               ),
-            ],
-          );
-        }
-
-        return MultiSplitView(
-          controller: _controller,
-          axis: Axis.horizontal,
-          resizable: true,
-          dividerBuilder:
-              (axis, index, resizable, dragging, highlighted, themeData) {
-            final color = dragging
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).dividerColor;
-            return MouseRegion(
-              cursor: SystemMouseCursors.resizeColumn,
-              child: Container(
-                width: 8,
-                alignment: Alignment.center,
-                child: Container(
-                  width: 1.5,
-                  color: color,
-                ),
-              ),
-            );
-          },
-          children: [
-            ContextMenuRegion(
-              contextMenu: _buildContextMenu(state),
-              child: SelectionArea(
-                key: _selectionKey,
-                child: TabbedCommentaryPanel(
-                  fontSize: state.fontSize,
-                  openBookCallback: widget.openBookCallback,
-                  showSearch: true,
-                  onClosePane: _togglePane,
-                  initialTabIndex: _currentTabIndex,
-                  onTabChanged: (index) {
-                    debugPrint(
-                        'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}');
-                    setState(() {
-                      _currentTabIndex = index;
-                    });
-                    // שומר את הטאב רק בתצוגה משולבת
-                    if (!widget.showSplitView) {
-                      debugPrint(
-                          'DEBUG: Saving tab $index to combined settings');
-                      Settings.setValue<int>(
-                          'key-sidebar-tab-index-combined', index);
-                    } else {
-                      debugPrint('DEBUG: NOT saving tab (split view mode)');
-                    }
-                  },
-                ),
-              ),
-            ),
-            CombinedView(
-              data: widget.content,
-              textSize: state.fontSize,
-              openBookCallback: widget.openBookCallback,
-              openLeftPaneTab: widget.openLeftPaneTab,
-              showCommentaryAsExpansionTiles: false,
-              tab: widget.tab,
-            ),
           ],
         );
       },

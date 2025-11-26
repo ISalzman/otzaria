@@ -66,6 +66,7 @@ class CommentaryListBase extends StatefulWidget {
   final VoidCallback? onClosePane;
   final bool shrinkWrap;
   final ItemPositionsListener? itemPositionsListener;
+  final VoidCallback? onOpenCommentatorsFilter;
 
   const CommentaryListBase({
     super.key,
@@ -76,6 +77,7 @@ class CommentaryListBase extends StatefulWidget {
     this.onClosePane,
     this.shrinkWrap = true,
     this.itemPositionsListener,
+    this.onOpenCommentatorsFilter,
   });
 
   @override
@@ -86,8 +88,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   final ScrollOffsetController scrollController = ScrollOffsetController();
-  final ItemScrollController itemScrollController = ItemScrollController();
-  late final ItemPositionsListener itemPositionsListener;
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener =
+      ItemPositionsListener.create();
+  final Map<String, GlobalKey> _itemKeys = {};
   int _currentSearchIndex = 0;
   int _totalSearchResults = 0;
   final Map<String, int> _searchResultsPerLink = {}; // שונה למפתח String
@@ -100,23 +104,43 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   String _getLinkKey(Link link) => '${link.path2}_${link.index2}';
 
+  // רשימה של כל ה-links לפי סדר הופעתם (נבנית מחדש בכל build)
+  List<Link> _orderedLinks = [];
+
   int _getItemSearchIndex(Link link) {
-    // פשוט מחזיר 0 - החיפוש יעבוד בתוך CommentaryContent
-    return 0;
+    // מחשב את האינדקס המצטבר עד ל-link הנוכחי
+    int cumulativeIndex = 0;
+    final linkKey = _getLinkKey(link);
+
+    for (final orderedLink in _orderedLinks) {
+      final currentKey = _getLinkKey(orderedLink);
+      if (currentKey == linkKey) {
+        // מצאנו את ה-link הנוכחי
+        final itemResults = _searchResultsPerLink[linkKey] ?? 0;
+        if (itemResults == 0) return -1;
+
+        // מחשב את האינדקס היחסי בתוך ה-link הזה
+        final relativeIndex = _currentSearchIndex - cumulativeIndex;
+        return (relativeIndex >= 0 && relativeIndex < itemResults)
+            ? relativeIndex
+            : -1;
+      }
+      cumulativeIndex += _searchResultsPerLink[currentKey] ?? 0;
+    }
+
+    return -1;
   }
 
   @override
   void initState() {
     super.initState();
-    itemPositionsListener =
-        widget.itemPositionsListener ?? ItemPositionsListener.create();
     // האזנה לשינויים במיקום הגלילה כדי לשמור את המיקום האחרון
-    itemPositionsListener.itemPositions.addListener(_updateLastScrollIndex);
+    _itemPositionsListener.itemPositions.addListener(_updateLastScrollIndex);
   }
 
   void scrollToTop() {
-    if (itemScrollController.isAttached) {
-      itemScrollController.scrollTo(
+    if (_itemScrollController.isAttached) {
+      _itemScrollController.scrollTo(
         index: 0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -125,7 +149,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   }
 
   void _updateLastScrollIndex() {
-    final positions = itemPositionsListener.itemPositions.value;
+    final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isNotEmpty) {
       // שומר את האינדקס של הפריט הראשון הנראה
       _lastScrollIndex = positions.first.index;
@@ -134,13 +158,106 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   @override
   void dispose() {
-    itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
+    _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
     _searchController.dispose();
     // מנקה את כל ה-controllers
     for (var controller in _controllers.values) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  void _scrollToSearchResult() {
+    if (_totalSearchResults == 0 ||
+        _orderedLinks.isEmpty ||
+        !_itemScrollController.isAttached) {
+      return;
+    }
+
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded) return;
+
+    int cumulativeIndex = 0;
+    Link? targetLink;
+
+    // 1. מוצא את ה-link שמכיל את תוצאת החיפוש הנוכחית
+    for (final link in _orderedLinks) {
+      final linkKey = _getLinkKey(link);
+      final itemResults = _searchResultsPerLink[linkKey] ?? 0;
+      if (_currentSearchIndex < cumulativeIndex + itemResults) {
+        targetLink = link;
+        break;
+      }
+      cumulativeIndex += itemResults;
+    }
+
+    if (targetLink == null) return;
+
+    // 2. מוצא את ה-group שמכיל את ה-link
+    final groups = _groupConsecutiveLinks(_orderedLinks);
+    int targetGroupIndex = -1;
+    CommentaryGroup? targetGroup;
+
+    for (int i = 0; i < groups.length; i++) {
+      final group = groups[i];
+      if (group.links.any((l) => _getLinkKey(l) == _getLinkKey(targetLink!))) {
+        targetGroupIndex = i;
+        targetGroup = group;
+        break;
+      }
+    }
+
+    if (targetGroupIndex == -1 || targetGroup == null) return;
+
+    // 3. מבטיח שה-ExpansionTile של הקבוצה פתוח
+    final currentIndexes = widget.indexes ??
+        (state.selectedIndex != null
+            ? [state.selectedIndex!]
+            : state.visibleIndices);
+    final indexesKey = currentIndexes.join(',');
+    final groupKey = '${targetGroup.bookTitle}_$indexesKey';
+
+    final bool isCurrentlyExpanded = _expansionStates[groupKey] ?? _allExpanded;
+    if (!isCurrentlyExpanded) {
+      // אם הקבוצה סגורה, פותח אותה
+      setState(() {
+        _expansionStates[groupKey] = true;
+        _controllers[groupKey]?.expand();
+      });
+    }
+
+    // 4. גולל לפריט אחרי שה-frame הנוכחי סיים להיבנות
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      // נותן ל-ExpansionTile זמן לסיים את האנימציה
+      await Future.delayed(const Duration(milliseconds: 120));
+      if (!mounted) return;
+
+      final linkKey = _getLinkKey(targetLink!);
+      final itemKey = _itemKeys[linkKey];
+      final itemContext = itemKey?.currentContext;
+
+      if (itemContext != null) {
+        if (itemContext.mounted) {
+          Scrollable.ensureVisible(
+            itemContext,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOut,
+            alignment: 0.1, // מביא את הפריט לחלק העליון של המסך
+          );
+        }
+      } else {
+        // Fallback: אם לא מוצאים את ההקשר, גולל לקבוצה
+        if (_itemScrollController.isAttached) {
+          _itemScrollController.scrollTo(
+            index: targetGroupIndex,
+            duration: const Duration(milliseconds: 300),
+            alignment: 0.1,
+          );
+        }
+      }
+    });
   }
 
   void _updateSearchResultsCount(Link link, int count) {
@@ -210,8 +327,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           }
         });
       },
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: Colors.transparent,
+      collapsedBackgroundColor: Colors.transparent,
       title: BlocBuilder<SettingsBloc, SettingsState>(
         builder: (context, settingsState) {
           String displayTitle = group.bookTitle;
@@ -230,6 +347,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       ),
       children: group.links.map((link) {
         return ListTile(
+          key: _itemKeys[_getLinkKey(link)],
           contentPadding: const EdgeInsets.only(right: 32.0, left: 16.0),
           title: BlocBuilder<SettingsBloc, SettingsState>(
             builder: (context, settingsState) {
@@ -301,15 +419,35 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    hasAnyCommentaryLinks
-                        ? 'לא נבחרו מפרשים להצגה'
-                        : 'לא נמצאו מפרשים לקטע הנבחר',
-                    style: TextStyle(
-                      fontSize: widget.fontSize * 0.7,
-                      color: Colors.grey,
-                    ),
-                    textAlign: TextAlign.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        hasAnyCommentaryLinks
+                            ? 'לא נבחרו מפרשים להצגה'
+                            : 'לא נמצאו מפרשים לקטע הנבחר',
+                        style: TextStyle(
+                          fontSize: widget.fontSize * 0.7,
+                          color: Colors.grey,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (hasAnyCommentaryLinks &&
+                          widget.onOpenCommentatorsFilter != null) ...[
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: widget.onOpenCommentatorsFilter,
+                          icon: const Icon(FluentIcons.apps_list_24_regular),
+                          label: const Text('בחר מפרשים'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               );
@@ -331,6 +469,17 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 }
                 final data = thisLinksSnapshot.data!;
 
+                // שומר את הסדר של ה-links לצורך חישוב אינדקס החיפוש
+                _orderedLinks = data;
+
+                // מנקה מפתחות ישנים ומכין מפתחות חדשים
+                final currentLinkKeys = data.map((l) => _getLinkKey(l)).toSet();
+                _itemKeys.removeWhere(
+                    (key, value) => !currentLinkKeys.contains(key));
+                for (final key in currentLinkKeys) {
+                  _itemKeys.putIfAbsent(key, () => GlobalKey());
+                }
+
                 // מקבץ את הקישורים לקבוצות רצופות
                 final groups = _groupConsecutiveLinks(data);
 
@@ -343,8 +492,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                   curve: 10.0,
                   accelerationFactor: 5,
                   child: ScrollablePositionedList.builder(
-                    itemScrollController: itemScrollController,
-                    itemPositionsListener: itemPositionsListener,
+                    itemScrollController: _itemScrollController,
+                    itemPositionsListener: _itemPositionsListener,
                     initialScrollIndex:
                         _lastScrollIndex.clamp(0, groups.length - 1),
                     key: PageStorageKey(
@@ -384,18 +533,68 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         hintText: 'חפש בתוך המפרשים המוצגים...',
                         prefixIcon: const Icon(FluentIcons.search_24_regular),
                         suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon:
-                                    const Icon(FluentIcons.dismiss_24_regular),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() {
-                                    _searchQuery = '';
-                                    _currentSearchIndex = 0;
-                                    _totalSearchResults = 0;
-                                    _searchResultsPerLink.clear();
-                                  });
-                                },
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_totalSearchResults > 1) ...[
+                                    Text(
+                                      '${_currentSearchIndex + 1}/$_totalSearchResults',
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      icon: const Icon(
+                                          FluentIcons.chevron_up_24_regular),
+                                      iconSize: 20,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 24,
+                                        minHeight: 24,
+                                      ),
+                                      onPressed: _currentSearchIndex > 0
+                                          ? () {
+                                              setState(() {
+                                                _currentSearchIndex--;
+                                              });
+                                              _scrollToSearchResult();
+                                            }
+                                          : null,
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                          FluentIcons.chevron_down_24_regular),
+                                      iconSize: 20,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 24,
+                                        minHeight: 24,
+                                      ),
+                                      onPressed: _currentSearchIndex <
+                                              _totalSearchResults - 1
+                                          ? () {
+                                              setState(() {
+                                                _currentSearchIndex++;
+                                              });
+                                              _scrollToSearchResult();
+                                            }
+                                          : null,
+                                    ),
+                                  ],
+                                  IconButton(
+                                    icon: const Icon(
+                                        FluentIcons.dismiss_24_regular),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchQuery = '';
+                                        _currentSearchIndex = 0;
+                                        _totalSearchResults = 0;
+                                        _searchResultsPerLink.clear();
+                                      });
+                                    },
+                                  ),
+                                ],
                               )
                             : null,
                         isDense: true,
@@ -485,48 +684,55 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           ],
         );
       } else {
-        return Stack(
+        return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            buildList(),
+            // כפתור גלובלי מעל הרשימה
             if (state.activeCommentators.isNotEmpty)
-              Positioned(
-                top: 8,
-                left: 8,
-                child: IconButton(
-                  style: IconButton.styleFrom(
-                    backgroundColor: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: 0.1),
-                    foregroundColor: Theme.of(context).colorScheme.primary,
-                  ),
-                  icon: Icon(
-                    _allExpanded
-                        ? FluentIcons.arrow_collapse_all_24_regular
-                        : FluentIcons.arrow_expand_all_24_regular,
-                  ),
-                  tooltip: _allExpanded
-                      ? 'סגור את כל המפרשים'
-                      : 'פתח את כל המפרשים',
-                  onPressed: () {
-                    setState(() {
-                      _allExpanded = !_allExpanded;
-                      // מעדכן את כל המצבים של ה-ExpansionTiles
-                      for (var key in _expansionStates.keys) {
-                        _expansionStates[key] = _allExpanded;
-                      }
-                      // משתמש ב-controllers לפתיחה/סגירה
-                      for (var controller in _controllers.values) {
-                        if (_allExpanded) {
-                          controller.expand();
-                        } else {
-                          controller.collapse();
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.1),
+                      foregroundColor: Theme.of(context).colorScheme.primary,
+                    ),
+                    icon: Icon(
+                      _allExpanded
+                          ? FluentIcons.arrow_collapse_all_24_regular
+                          : FluentIcons.arrow_expand_all_24_regular,
+                    ),
+                    tooltip: _allExpanded
+                        ? 'סגור את כל המפרשים'
+                        : 'פתח את כל המפרשים',
+                    onPressed: () {
+                      setState(() {
+                        _allExpanded = !_allExpanded;
+                        // מעדכן את כל המצבים של ה-ExpansionTiles
+                        for (var key in _expansionStates.keys) {
+                          _expansionStates[key] = _allExpanded;
                         }
-                      }
-                    });
-                  },
+                        // משתמש ב-controllers לפתיחה/סגירה
+                        for (var controller in _controllers.values) {
+                          if (_allExpanded) {
+                            controller.expand();
+                          } else {
+                            controller.collapse();
+                          }
+                        }
+                      });
+                    },
+                  ),
                 ),
               ),
+            // הרשימה
+            Flexible(
+              child: buildList(),
+            ),
           ],
         );
       }

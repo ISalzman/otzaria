@@ -181,6 +181,15 @@ class UpdateFacetFilteringWidth extends SettingsEvent {
   List<Object?> get props => [facetFilteringWidth];
 }
 
+class UpdateCommentaryPaneWidth extends SettingsEvent {
+  final double commentaryPaneWidth;
+
+  const UpdateCommentaryPaneWidth(this.commentaryPaneWidth);
+
+  @override
+  List<Object?> get props => [commentaryPaneWidth];
+}
+
 class UpdateCopyWithHeaders extends SettingsEvent {
   final String copyWithHeaders;
 
@@ -243,4 +252,13 @@ class UpdateShortcut extends SettingsEvent {
 
   @override
   List<Object?> get props => [key, value];
+}
+
+class UpdateEnablePerBookSettings extends SettingsEvent {
+  final bool enablePerBookSettings;
+
+  const UpdateEnablePerBookSettings(this.enablePerBookSettings);
+
+  @override
+  List<Object?> get props => [enablePerBookSettings];
 }

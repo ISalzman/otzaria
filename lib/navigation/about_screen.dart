@@ -739,6 +739,16 @@ class _AboutScreenState extends State<AboutScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildActionCard(
+                      title: 'אודות התוכנה',
+                      description:
+                          'מידע נוסף על התוכנה, תכונות, ומדריכים לשימוש.',
+                      buttonText: 'אודות התוכנה',
+                      icon: FluentIcons.info_24_regular,
+                      color: Colors.grey[600]!,
+                      onTap: () => _openLocalHtmlFile('index.html'),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildActionCard(
                       title: 'הצטרף לפיתוח!',
                       description:
                           'מפתחים מוזמנים להצטרף לפיתוח אוצריא ולתרום לקהילה התורנית.',
@@ -789,6 +799,16 @@ class _AboutScreenState extends State<AboutScreen> {
           const SizedBox(height: 24),
 
           // כארדים של פעולות (למעלה במסכים קטנים)
+          _buildActionCard(
+            title: 'אודות התוכנה',
+            description:
+                'מידע נוסף על התוכנה, תכונות, ומדריכים לשימוש.',
+            buttonText: 'אודות התוכנה',
+            icon: FluentIcons.info_24_regular,
+            color: Colors.grey[600]!,
+            onTap: () => _openLocalHtmlFile('index.html'),
+          ),
+          const SizedBox(height: 16),
           _buildActionCard(
             title: 'הצטרף לפיתוח!',
             description:

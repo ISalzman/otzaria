@@ -32,6 +32,7 @@ void main() {
         'paddingSize': 15.0,
         'fontSize': 18.0,
         'fontFamily': 'Rubik',
+        'commentatorsFontFamily': 'NotoRashiHebrew',
         'showOtzarHachochma': true,
         'showHebrewBooks': true,
         'showExternalBooks': true,
@@ -45,11 +46,14 @@ void main() {
         'pinSidebar': true,
         'sidebarWidth': 300.0,
         'facetFilteringWidth': 235.0,
+        'commentaryPaneWidth': 400.0,
         'copyWithHeaders': 'none',
         'copyHeaderFormat': 'same_line_after_brackets',
         'isFullscreen': false,
         'libraryViewMode': 'grid',
         'libraryShowPreview': true,
+        'enablePerBookSettings': true,
+        'shortcuts': <String, String>{},
       };
 
       blocTest<SettingsBloc, SettingsState>(
@@ -84,12 +88,15 @@ void main() {
             pinSidebar: mockSettings['pinSidebar'] as bool,
             sidebarWidth: mockSettings['sidebarWidth'] as double,
             facetFilteringWidth: mockSettings['facetFilteringWidth'] as double,
+            commentaryPaneWidth: mockSettings['commentaryPaneWidth'] as double,
             copyWithHeaders: mockSettings['copyWithHeaders'] as String,
             copyHeaderFormat: mockSettings['copyHeaderFormat'] as String,
             isFullscreen: mockSettings['isFullscreen'] as bool,
             libraryViewMode: mockSettings['libraryViewMode'] as String,
             libraryShowPreview: mockSettings['libraryShowPreview'] as bool,
             shortcuts: const {},
+            enablePerBookSettings:
+                mockSettings['enablePerBookSettings'] as bool,
           ),
         ],
         verify: (_) {

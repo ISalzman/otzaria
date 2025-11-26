@@ -55,6 +55,8 @@ import 'package:shamor_zachor/services/dynamic_data_loader_service.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/services/sources_books_service.dart';
+import 'package:pdfrx/pdfrx.dart';
+import 'package:otzaria/services/notification_service.dart';
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
@@ -222,6 +224,15 @@ Future<void> initialize() async {
   await createDirs();
   await loadCerts();
 
+  // נדרש לטעינת PDF דרך pdfrx: הגדרת תקיית cache
+  try {
+    final cacheDir = await getTemporaryDirectory();
+    Pdfrx.getCacheDirectory = () => cacheDir.path;
+    debugPrint('Pdfrx cache directory set to: ${cacheDir.path}');
+  } catch (e) {
+    debugPrint('Failed to set Pdfrx cache directory: $e');
+  }
+
   // Initialize Shamor Zachor dynamic data loader
   try {
     final libraryBasePath = await AppPaths.getLibraryPath();
@@ -255,6 +266,15 @@ Future<void> initialize() async {
       debugPrint('Failed to load SourcesBooks.csv: $e');
     }
     // Continue without sources data if it fails
+  }
+
+  // Initialize Notification Service
+  try {
+    await NotificationService().init();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('Failed to initialize notification service: $e');
+    }
   }
 }
 

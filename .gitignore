@@ -55,7 +55,15 @@ app.*.map.json
 
 .git/
 .vscode/
-android/
+android/.gradle/
+android/.idea/
+android/local.properties
+android/captures/
+android/gradle/
+android/gradlew
+android/gradlew.bat
+android/app/.cxx/
+android/app/google-services.json
 build/
 fonts/
 

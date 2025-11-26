@@ -21,12 +21,14 @@ class SettingsState extends Equatable {
   final bool pinSidebar;
   final double sidebarWidth;
   final double facetFilteringWidth;
+  final double commentaryPaneWidth;
   final String copyWithHeaders;
   final String copyHeaderFormat;
   final bool isFullscreen;
   final String libraryViewMode;
   final bool libraryShowPreview;
   final Map<String, String> shortcuts;
+  final bool enablePerBookSettings;
 
   const SettingsState({
     required this.isDarkMode,
@@ -48,12 +50,14 @@ class SettingsState extends Equatable {
     required this.pinSidebar,
     required this.sidebarWidth,
     required this.facetFilteringWidth,
+    required this.commentaryPaneWidth,
     required this.copyWithHeaders,
     required this.copyHeaderFormat,
     required this.isFullscreen,
     required this.libraryViewMode,
     required this.libraryShowPreview,
     required this.shortcuts,
+    required this.enablePerBookSettings,
   });
 
   factory SettingsState.initial() {
@@ -77,12 +81,14 @@ class SettingsState extends Equatable {
       pinSidebar: false,
       sidebarWidth: 300,
       facetFilteringWidth: 235,
+      commentaryPaneWidth: 400,
       copyWithHeaders: 'none',
       copyHeaderFormat: 'same_line_after_brackets',
       isFullscreen: false,
       libraryViewMode: 'grid',
       libraryShowPreview: true,
       shortcuts: {},
+      enablePerBookSettings: true,
     );
   }
 
@@ -106,12 +112,14 @@ class SettingsState extends Equatable {
     bool? pinSidebar,
     double? sidebarWidth,
     double? facetFilteringWidth,
+    double? commentaryPaneWidth,
     String? copyWithHeaders,
     String? copyHeaderFormat,
     bool? isFullscreen,
     String? libraryViewMode,
     bool? libraryShowPreview,
     Map<String, String>? shortcuts,
+    bool? enablePerBookSettings,
   }) {
     return SettingsState(
       isDarkMode: isDarkMode ?? this.isDarkMode,
@@ -119,7 +127,8 @@ class SettingsState extends Equatable {
       paddingSize: paddingSize ?? this.paddingSize,
       fontSize: fontSize ?? this.fontSize,
       fontFamily: fontFamily ?? this.fontFamily,
-      commentatorsFontFamily: commentatorsFontFamily ?? this.commentatorsFontFamily,
+      commentatorsFontFamily:
+          commentatorsFontFamily ?? this.commentatorsFontFamily,
       showOtzarHachochma: showOtzarHachochma ?? this.showOtzarHachochma,
       showHebrewBooks: showHebrewBooks ?? this.showHebrewBooks,
       showExternalBooks: showExternalBooks ?? this.showExternalBooks,
@@ -134,12 +143,15 @@ class SettingsState extends Equatable {
       pinSidebar: pinSidebar ?? this.pinSidebar,
       sidebarWidth: sidebarWidth ?? this.sidebarWidth,
       facetFilteringWidth: facetFilteringWidth ?? this.facetFilteringWidth,
+      commentaryPaneWidth: commentaryPaneWidth ?? this.commentaryPaneWidth,
       copyWithHeaders: copyWithHeaders ?? this.copyWithHeaders,
       copyHeaderFormat: copyHeaderFormat ?? this.copyHeaderFormat,
       isFullscreen: isFullscreen ?? this.isFullscreen,
       libraryViewMode: libraryViewMode ?? this.libraryViewMode,
       libraryShowPreview: libraryShowPreview ?? this.libraryShowPreview,
       shortcuts: shortcuts ?? this.shortcuts,
+      enablePerBookSettings:
+          enablePerBookSettings ?? this.enablePerBookSettings,
     );
   }
 
@@ -164,11 +176,13 @@ class SettingsState extends Equatable {
         pinSidebar,
         sidebarWidth,
         facetFilteringWidth,
+        commentaryPaneWidth,
         copyWithHeaders,
         copyHeaderFormat,
         isFullscreen,
         libraryViewMode,
         libraryShowPreview,
         shortcuts,
+        enablePerBookSettings,
       ];
 }

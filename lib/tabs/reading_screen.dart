@@ -421,7 +421,7 @@ class _ReadingScreenState extends State<ReadingScreen>
       },
       child: ContextMenuRegion(
         contextMenu: ContextMenu(
-          entries: [
+          entries: <ContextMenuEntry>[
             MenuItem(
               label: tab.isPinned ? 'בטל הצמדת כרטיסיה' : 'הצמד כרטיסיה',
               onSelected: () => context.read<TabsBloc>().add(TogglePinTab(tab)),
@@ -438,11 +438,11 @@ class _ReadingScreenState extends State<ReadingScreen>
               label: 'שיכפול',
               onSelected: () => context.read<TabsBloc>().add(CloneTab(tab)),
             ),
-            // הוסרת אפשרות הצמדה לדף הבית לאחר הסרת דף הבית
-            MenuItem.submenu(
-              label: 'רשימת הכרטיסיות ',
-              items: _getMenuItems(state.tabs, context),
-            )
+            const MenuDivider(),
+            MenuItem(
+              label: 'רשימת הכרטיסיות',
+              onSelected: () => _showTabsListDialog(context, state),
+            ),
           ],
         ),
         child: Draggable<OpenedTab>(
@@ -460,9 +460,7 @@ class _ReadingScreenState extends State<ReadingScreen>
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 15),
               child: Text(
-                tab is SearchingTab
-                    ? '${tab.title}:  ${tab.queryController.text}'
-                    : tab.title,
+                tab.title,
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -530,12 +528,9 @@ class _ReadingScreenState extends State<ReadingScreen>
                               ValueListenableBuilder(
                                 valueListenable: tab.queryController,
                                 builder: (context, value, child) => Tooltip(
-                                  message:
-                                      '${tab.title}:  ${tab.queryController.text}',
+                                  message: tab.title,
                                   child: Text(
-                                    truncate(
-                                        '${tab.title}:  ${tab.queryController.text}',
-                                        12),
+                                    truncate(tab.title, 25),
                                   ),
                                 ),
                               )
@@ -599,20 +594,55 @@ class _ReadingScreenState extends State<ReadingScreen>
     );
   }
 
-  List<ContextMenuEntry> _getMenuItems(
-      List<OpenedTab> tabs, BuildContext context) {
-    List<MenuItem> items = tabs
-        .map((tab) => MenuItem(
-              label: tab.title,
-              onSelected: () {
-                final index = tabs.indexOf(tab);
-                context.read<TabsBloc>().add(SetCurrentTab(index));
-              },
-            ))
-        .toList();
+  void _showTabsListDialog(BuildContext context, TabsState state) {
+    final tabs = state.tabs;
+    final tabsBloc = context.read<TabsBloc>();
 
-    items.sort((a, b) => a.label.compareTo(b.label));
-    return items;
+    final sortedTabs = List<OpenedTab>.from(tabs);
+    sortedTabs.sort((a, b) => a.title.compareTo(b.title));
+
+    showDialog<OpenedTab>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("רשימת כרטיסיות פתוחות"),
+          content: SizedBox(
+            width: 300,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: sortedTabs.map((tab) {
+                  return ListTile(
+                    title: Text(
+                      tab.title,
+                      textDirection: TextDirection.rtl,
+                    ),
+                    onTap: () {
+                      Navigator.of(context).pop(tab);
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text("סגור"),
+            ),
+          ],
+        );
+      },
+    ).then((selectedTab) {
+      if (selectedTab != null && mounted) {
+        final index = tabs.indexOf(selectedTab);
+        if (index != -1) {
+          tabsBloc.add(SetCurrentTab(index));
+        }
+      }
+    });
   }
 
   void _showSaveWorkspaceDialog(BuildContext context) {

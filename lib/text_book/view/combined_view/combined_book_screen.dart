@@ -56,10 +56,15 @@ class _CombinedViewState extends State<CombinedView> {
   late final TextBookBloc _textBookBloc;
 
   bool _hasScrolledToInitialPosition = false;
+  late final FocusNode _focusNode;
+  
+  // שמירת גובה הבלוק בפועל לחישובים דינאמיים
+  double _viewportHeight = 0;
 
   @override
   void initState() {
     super.initState();
+    _focusNode = FocusNode();
     // שמירת ה-BLoC מראש
     _textBookBloc = context.read<TextBookBloc>();
 
@@ -93,6 +98,7 @@ class _CombinedViewState extends State<CombinedView> {
   void dispose() {
     widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
     widget.tab.positionsListener.itemPositions.removeListener(_updateTabIndex);
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -608,27 +614,35 @@ $textWithBreaks
         if (state is! TextBookLoaded) {
           return const Center(child: CircularProgressIndicator());
         }
-        return SelectionArea(
-          // SelectionArea אחד לכל הרשימה - מאפשר בחירה רציפה בין פסקאות
-          contextMenuBuilder: (context, selectableRegionState) {
-            return const SizedBox.shrink();
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // שומר את גובה הבלוק בפועל לשימוש בחישובי הגלילה
+            _viewportHeight = constraints.maxHeight;
+            
+            return SelectionArea(
+              // SelectionArea אחד לכל הרשימה - מאפשר בחירה רציפה בין פסקאות
+              contextMenuBuilder: (context, selectableRegionState) {
+                return const SizedBox.shrink();
+              },
+              onSelectionChanged: (selection) {
+                if (selection != null && selection.plainText.isNotEmpty) {
+                  setState(() {
+                    _savedSelectedText = selection.plainText;
+                    // לא שומרים אינדקס ספציפי כי הבחירה יכולה להיות על פני מספר פסקאות
+                    _currentSelectedIndex = null;
+                  });
+                }
+              },
+              child: ProgressiveScroll(
+                focusNode: _focusNode,
+                maxSpeed: 10000.0,
+                curve: 10.0,
+                accelerationFactor: 5,
+                scrollController: widget.tab.mainOffsetController,
+                child: buildOuterList(state),
+              ),
+            );
           },
-          onSelectionChanged: (selection) {
-            if (selection != null && selection.plainText.isNotEmpty) {
-              setState(() {
-                _savedSelectedText = selection.plainText;
-                // לא שומרים אינדקס ספציפי כי הבחירה יכולה להיות על פני מספר פסקאות
-                _currentSelectedIndex = null;
-              });
-            }
-          },
-          child: ProgressiveScroll(
-            maxSpeed: 10000.0,
-            curve: 10.0,
-            accelerationFactor: 5,
-            scrollController: widget.tab.mainOffsetController,
-            child: buildOuterList(state),
-          ),
         );
       },
     );
@@ -682,6 +696,7 @@ $textWithBreaks
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () {
+              _focusNode.requestFocus();
               // מאפס את הטקסט השמור כשלוחצים על הפסקה
               setState(() {
                 _savedSelectedText = null;
@@ -692,6 +707,30 @@ $textWithBreaks
                 _textBookBloc.add(const UpdateSelectedIndex(null));
               } else {
                 _textBookBloc.add(UpdateSelectedIndex(index));
+
+                // גלילה אוטומטית כך שהקטע יהיה בראש העמוד
+                // רק אם יש מפרשים להצגה ואנחנו במצב ExpansionTiles
+                if (widget.showCommentaryAsExpansionTiles &&
+                    _hasCommentaries(state, index)) {
+                  // מחכים שה-UI יתעדכן עם פתיחת המפרש, ואז קופצים למיקום
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (mounted && widget.tab.scrollController.isAttached) {
+                        // גלילה חכמה: נגלול כך שהטקסט הבא (index + 1) יהיה בתחתית
+                        // המפרשים תופסים עד 75% מהבלוק
+                        // נרצה שהטקסט הבא יהיה ב-90% מהבלוק (כלומר 10% מלמטה)
+                        // כך נוודא שרואים: 15% טקסט למעלה, 75% מפרשים, 10% טקסט למטה
+                        final nextIndex = (index + 1).clamp(0, widget.data.length - 1);
+                        widget.tab.scrollController.scrollTo(
+                          index: nextIndex,
+                          alignment: 0.9, // הטקסט הבא יהיה ב-90% מלמעלה (כלומר 10% מלמטה)
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      }
+                    });
+                  });
+                }
               }
             },
             onSecondaryTapDown: (details) {
@@ -775,14 +814,29 @@ $textWithBreaks
           ),
         ),
         // המפרשים - ללא SelectionArea נפרד, כי יש SelectionArea כללי
-        if (widget.showCommentaryAsExpansionTiles && isSelected)
+        if (widget.showCommentaryAsExpansionTiles &&
+            isSelected &&
+            _hasCommentaries(state, index))
           _CommentaryCard(
             index: index,
             textSize: widget.textSize,
             openBookCallback: widget.openBookCallback,
+            viewportHeight: _viewportHeight,
           ),
       ],
     );
+  }
+
+  /// בדיקה אם יש מפרשים לאינדקס מסוים
+  bool _hasCommentaries(TextBookLoaded state, int index) {
+    // בדיקה אם יש קישורים רלוונטיים לאינדקס הזה
+    final hasRelevantLinks = state.links.any((link) =>
+        link.index1 == index + 1 &&
+        (link.connectionType == "commentary" ||
+            link.connectionType == "targum") &&
+        state.activeCommentators.contains(utils.getTitleFromPath(link.path2)));
+
+    return hasRelevantLinks;
   }
 
   @override
@@ -802,11 +856,13 @@ class _CommentaryCard extends StatefulWidget {
   final int index;
   final double textSize;
   final Function(OpenedTab) openBookCallback;
+  final double viewportHeight;
 
   const _CommentaryCard({
     required this.index,
     required this.textSize,
     required this.openBookCallback,
+    required this.viewportHeight,
   });
 
   @override
@@ -814,102 +870,19 @@ class _CommentaryCard extends StatefulWidget {
 }
 
 class _CommentaryCardState extends State<_CommentaryCard> {
-  final ItemPositionsListener _itemPositionsListener =
-      ItemPositionsListener.create();
   final GlobalKey<CommentaryListBaseState> _commentaryKey = GlobalKey();
-  final ValueNotifier<bool> _showButton = ValueNotifier(false);
-  OverlayEntry? _overlayEntry;
-
-  @override
-  void initState() {
-    super.initState();
-    _itemPositionsListener.itemPositions.addListener(_checkScrollPosition);
-    _showButton.addListener(_updateOverlay);
-  }
-
-  @override
-  void dispose() {
-    _removeOverlay();
-    _itemPositionsListener.itemPositions.removeListener(_checkScrollPosition);
-    _showButton.removeListener(_updateOverlay);
-    _showButton.dispose();
-    super.dispose();
-  }
-
-  void _checkScrollPosition() {
-    final positions = _itemPositionsListener.itemPositions.value;
-    if (positions.isEmpty) return;
-
-    final first = positions.first;
-    // If first item is index 0 and its top is visible (>= 0), we are at top.
-    final isAtTop = first.index == 0 && first.itemLeadingEdge >= -0.05;
-    if (isAtTop) {
-      if (_showButton.value) _showButton.value = false;
-    } else {
-      if (!_showButton.value) _showButton.value = true;
-    }
-  }
-
-  void _updateOverlay() {
-    if (_showButton.value) {
-      _showOverlay();
-    } else {
-      _removeOverlay();
-    }
-  }
-
-  void _showOverlay() {
-    if (_overlayEntry != null) return;
-
-    final overlay = Overlay.of(context);
-    // ignore: unnecessary_null_comparison
-    if (overlay == null) return;
-    final theme = Theme.of(context);
-
-    _overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        left: 16,
-        bottom: 16,
-        child: SafeArea(
-          child: Theme(
-            data: theme,
-            child: Material(
-              type: MaterialType.transparency,
-              child: IconButton(
-                icon: const Icon(FluentIcons.arrow_up_24_regular),
-                tooltip: 'חזרה לשורת הטקסט',
-                style: IconButton.styleFrom(
-                  backgroundColor:
-                      theme.colorScheme.primary.withValues(alpha: 0.1),
-                  foregroundColor: theme.colorScheme.primary,
-                  shadowColor: Colors.black26,
-                  elevation: 4,
-                ),
-                onPressed: () {
-                  _commentaryKey.currentState?.scrollToTop();
-                },
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    overlay.insert(_overlayEntry!);
-  }
-
-  void _removeOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
 
   @override
   Widget build(BuildContext context) {
+    // חישוב גובה המפרשים לפי גובה הבלוק בפועל (לא כל המסך):
+    // המפרשים יהיו 75% מגובה הבלוק
+    // השאר (25%) יתחלק: 15% למעלה (טקסט), 10% למטה (טקסט)
+    final maxHeight = widget.viewportHeight > 0 
+        ? widget.viewportHeight * 0.75 
+        : MediaQuery.of(context).size.height * 0.75;
+
     return Container(
       margin: const EdgeInsets.only(right: 24.0, left: 8.0, bottom: 8.0),
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.5,
-      ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerLow,
         borderRadius: const BorderRadius.only(
@@ -931,14 +904,18 @@ class _CommentaryCardState extends State<_CommentaryCard> {
           bottomLeft: Radius.circular(12),
           bottomRight: Radius.circular(12),
         ),
-        child: CommentaryListBase(
-          key: _commentaryKey,
-          indexes: [widget.index],
-          fontSize: widget.textSize,
-          openBookCallback: widget.openBookCallback,
-          showSearch: false,
-          shrinkWrap: false,
-          itemPositionsListener: _itemPositionsListener,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: maxHeight,
+          ),
+          child: CommentaryListBase(
+            key: _commentaryKey,
+            indexes: [widget.index],
+            fontSize: widget.textSize,
+            openBookCallback: widget.openBookCallback,
+            showSearch: false,
+            shrinkWrap: true,
+          ),
         ),
       ),
     );

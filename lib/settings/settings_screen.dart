@@ -15,6 +15,8 @@ import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
+import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/settings/reading_settings_dialog.dart';
 import 'package:otzaria/settings/library_settings_dialog.dart';
 import 'package:otzaria/settings/calendar_settings_dialog.dart';
@@ -885,9 +887,14 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                   await FilePicker.platform.getDirectoryPath();
                               if (path != null) {
                                 if (!context.mounted) return;
+                                // עדכון מיקום הספרייה
                                 context
                                     .read<LibraryBloc>()
                                     .add(UpdateLibraryPath(path));
+                                // רענון מצב הניווט כדי לבדוק אם הספרייה ריקה
+                                context
+                                    .read<NavigationBloc>()
+                                    .add(const CheckLibrary());
                               }
                             },
                           ),
@@ -905,9 +912,14 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                     .getDirectoryPath();
                                 if (path != null) {
                                   if (!context.mounted) return;
+                                  // עדכון מיקום ספרי היברובוקס
                                   context
                                       .read<LibraryBloc>()
                                       .add(UpdateHebrewBooksPath(path));
+                                  // רענון מצב הניווט
+                                  context
+                                      .read<NavigationBloc>()
+                                      .add(const CheckLibrary());
                                 }
                               },
                             ),
