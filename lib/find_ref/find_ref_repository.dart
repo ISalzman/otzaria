@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
@@ -20,17 +21,26 @@ class FindRefRepository {
     }
 
     // שלב 1: שלוף יותר תוצאות מהרגיל כדי לפצות על אלו שיסוננו
+    // שולחים את השאילתה המקורית ל-Tantivy (ללא עיבוד)
+    // הסינון והדירוג יתבצעו בצד שלנו
     final rawResults = await TantivyDataProvider.instance.searchRefs(
-      replaceParaphrases(removeSectionNames(ref)),
+      ref,
       300,
       false,
     );
+    debugPrint('[FindRef] Tantivy results: ${rawResults.length} '
+        '(pdf: ${rawResults.where((r) => r.isPdf).length}, '
+        'text: ${rawResults.where((r) => !r.isPdf).length})');
 
     // שלב 2: בצע סינון כפילויות (דה-דופליקציה) חכם
     final unique = _dedupeRefs(rawResults);
+    debugPrint(
+        '[FindRef] After dedupe: ${unique.length} (pdf: ${unique.where((r) => r.isPdf).length})');
 
     // שלב 3: סנן ודירג בהתאם לכללי האיתור החדשים
     final ranked = _filterAndRank(unique, queryTokens);
+    debugPrint('[FindRef] Ranked: ${ranked.length} '
+        '(first: ${ranked.isNotEmpty ? ranked.first.reference : 'none'})');
 
     return ranked.length > 15
         ? ranked.take(15).toList(growable: false)
@@ -79,8 +89,9 @@ class FindRefRepository {
   }
 
   String _normalizeForMatch(String input) {
-    var cleaned = replaceParaphrases(input);
-    cleaned = removeTeamim(removeVolwels(cleaned));
+    // נרמול בסיסי בלבד - ללא replaceParaphrases או removeSectionNames
+    // כדי לא לשבש שמות ספרים
+    var cleaned = removeTeamim(removeVolwels(input));
     cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9\u0590-\u05FF\s]'), ' ');
     cleaned = cleaned.toLowerCase();
     return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -90,6 +101,22 @@ class FindRefRepository {
       .split(' ')
       .where((token) => token.isNotEmpty)
       .toList(growable: false);
+
+  /// בודק אם השאילתה היא רק שם ספר (ללא דפים ספציפיים)
+  bool _isBookOnlyQuery(List<_RefEntry> bookEntries, List<String> queryTokens) {
+    if (bookEntries.isEmpty) return false;
+
+    // נבדוק אם יש ערך עם depth == 1 (שם הספר עצמו)
+    final hasBookRoot = bookEntries.any((e) => e.depth == 1);
+    if (!hasBookRoot) return false;
+
+    // נבדוק אם כל הטוקנים של השאילתה מתאימים לשם הספר
+    final bookTokens = bookEntries.first.bookTokens;
+    final bookMatch = _matchBook(bookTokens, queryTokens);
+
+    // אם אין טוקנים שנשארו אחרי ההתאמה לשם הספר, זו שאילתה של שם ספר בלבד
+    return bookMatch.remainingTokens.isEmpty;
+  }
 
   List<ReferenceSearchResult> _filterAndRank(
     List<ReferenceSearchResult> results,
@@ -106,8 +133,12 @@ class FindRefRepository {
     final matches = <_MatchInfo>[];
     for (final bookEntries in entriesByBook.values) {
       _annotateDepth(bookEntries);
+
+      // בדוק אם השאילתה היא רק שם ספר (ללא דפים)
+      final isBookOnlyQuery = _isBookOnlyQuery(bookEntries, queryTokens);
+
       for (final entry in bookEntries) {
-        final match = _matchEntry(entry, queryTokens);
+        final match = _matchEntry(entry, queryTokens, isBookOnlyQuery);
         if (match != null) {
           matches.add(match);
         }
@@ -122,6 +153,10 @@ class FindRefRepository {
         b.bookMatchType,
       ).compareTo(_bookMatchRank(a.bookMatchType));
       if (bookCmp != 0) return bookCmp;
+
+      // נותנים עדיפות למי שיש לו יותר טוקנים מתאימים בשם הספר
+      final bookTokensCmp = b.bookTokensMatched.compareTo(a.bookTokensMatched);
+      if (bookTokensCmp != 0) return bookTokensCmp;
 
       final headingCmp = b.headingTokensMatched.compareTo(
         a.headingTokensMatched,
@@ -173,22 +208,35 @@ class FindRefRepository {
     }
   }
 
-  _MatchInfo? _matchEntry(_RefEntry entry, List<String> queryTokens) {
+  _MatchInfo? _matchEntry(
+    _RefEntry entry,
+    List<String> queryTokens,
+    bool isBookOnlyQuery,
+  ) {
     final bookMatch = _matchBook(entry.bookTokens, queryTokens);
     if (bookMatch.type == _BookMatchType.none) {
+      debugPrint(
+          '🔍 [Match] No book match for "${entry.result.reference}" (book: ${entry.bookTokens.join(" ")})');
       return null;
     }
 
     if (bookMatch.remainingTokens.isEmpty) {
-      if (entry.depth == 1) {
-        return _MatchInfo(
-          entry: entry,
-          bookMatchType: bookMatch.type,
-          level: 1,
-          headingTokensMatched: 0,
-        );
+      // כשהשאילתה היא רק שם ספר, נחזיר רק ערכים עם depth == 1
+      if (isBookOnlyQuery && entry.depth != 1) {
+        debugPrint(
+            '🔍 [Match] Skipping non-root entry for book-only query: "${entry.result.reference}"');
+        return null;
       }
-      return null;
+
+      debugPrint(
+          '🔍 [Match] Book-only match for "${entry.result.reference}" (depth: ${entry.depth}, level: ${entry.depth})');
+      return _MatchInfo(
+        entry: entry,
+        bookMatchType: bookMatch.type,
+        level: entry.depth,
+        headingTokensMatched: 0,
+        bookTokensMatched: bookMatch.matchedCount,
+      );
     }
 
     if (entry.depth == 1) {
@@ -210,6 +258,7 @@ class FindRefRepository {
           bookMatchType: bookMatch.type,
           level: 2,
           headingTokensMatched: level2Match.matchedCount,
+          bookTokensMatched: bookMatch.matchedCount,
         );
       }
       return null;
@@ -232,6 +281,7 @@ class FindRefRepository {
       bookMatchType: bookMatch.type,
       level: 3,
       headingTokensMatched: level2Match.matchedCount + level3Match.matchedCount,
+      bookTokensMatched: bookMatch.matchedCount,
     );
   }
 
@@ -254,6 +304,7 @@ class FindRefRepository {
       return _BookMatchResult(
         type: _BookMatchType.full,
         remainingTokens: remaining,
+        matchedCount: exactMatches,
       );
     }
 
@@ -261,6 +312,7 @@ class FindRefRepository {
       return _BookMatchResult(
         type: _BookMatchType.partial,
         remainingTokens: remaining,
+        matchedCount: exactMatches,
       );
     }
 
@@ -273,6 +325,7 @@ class FindRefRepository {
         return _BookMatchResult(
           type: _BookMatchType.prefix,
           remainingTokens: remaining,
+          matchedCount: 1,
         );
       }
     }
@@ -280,6 +333,7 @@ class FindRefRepository {
     return _BookMatchResult(
       type: _BookMatchType.none,
       remainingTokens: queryTokens,
+      matchedCount: 0,
     );
   }
 
@@ -354,6 +408,8 @@ class _RefEntry {
     final normalizedRef = normalizer(result.reference);
 
     if (normalizedTitle.isEmpty || normalizedRef.isEmpty) {
+      debugPrint(
+          '🔍 [Parse] Empty title or ref: "${result.title}" -> "${result.reference}"');
       return null;
     }
 
@@ -367,17 +423,23 @@ class _RefEntry {
         .toList(growable: false);
 
     if (bookTokens.isEmpty || referenceTokens.length < bookTokens.length) {
+      debugPrint(
+          '🔍 [Parse] Invalid tokens: book=[${bookTokens.join(",")}] ref=[${referenceTokens.join(",")}]');
       return null;
     }
 
     for (int i = 0; i < bookTokens.length; i++) {
       if (referenceTokens[i] != bookTokens[i]) {
+        debugPrint(
+            '🔍 [Parse] Mismatch at position $i: book="${bookTokens[i]}" ref="${referenceTokens[i]}" (title: "${result.title}", ref: "${result.reference}")');
         return null;
       }
     }
 
     final headingTokens = referenceTokens.sublist(bookTokens.length);
 
+    debugPrint(
+        '🔍 [Parse] Success: "${result.reference}" -> book=[${bookTokens.join(" ")}] heading=[${headingTokens.join(" ")}]');
     return _RefEntry(
       result: result,
       originalIndex: index,
@@ -393,12 +455,14 @@ class _MatchInfo {
   final _BookMatchType bookMatchType;
   final int level;
   final int headingTokensMatched;
+  final int bookTokensMatched;
 
   _MatchInfo({
     required this.entry,
     required this.bookMatchType,
     required this.level,
     required this.headingTokensMatched,
+    required this.bookTokensMatched,
   });
 
   int get originalIndex => entry.originalIndex;
@@ -409,8 +473,13 @@ enum _BookMatchType { none, prefix, partial, full }
 class _BookMatchResult {
   final _BookMatchType type;
   final List<String> remainingTokens;
+  final int matchedCount;
 
-  _BookMatchResult({required this.type, required this.remainingTokens});
+  _BookMatchResult({
+    required this.type,
+    required this.remainingTokens,
+    required this.matchedCount,
+  });
 }
 
 class _HeadingMatchResult {

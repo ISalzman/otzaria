@@ -349,7 +349,7 @@ String replaceParaphrases(String s) {
       .replaceAll(' בר', ' בראשית רבה')
       .replaceAll(' ברר', ' בראשית רבה')
       .replaceAll(' בש', ' בית שמואל')
-      .replaceAll(' ד', ' דף')
+      .replaceAll(' ד ', ' דף ')
       .replaceAll(' דבר', ' דברים רבה')
       .replaceAll(' דהי', ' דברי הימים')
       .replaceAll(' דויד', ' דוד')
