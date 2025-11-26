@@ -50,6 +50,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
   // EmptyLibraryScreen inside the library tab while keeping the
   // rest of the application UI available.
   List<Widget> _pages = [];
+  
+  // שמירת הדפים כדי שלא ייבנו מחדש
+  Widget? _cachedLibraryPage;
+  Widget? _cachedReadingPage;
+  Widget? _cachedMorePage;
+  Widget? _cachedSettingsPage;
 
   bool _hasCheckedAutoIndex = false;
 
@@ -220,9 +226,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
       setState(() {
         _currentPageIndex = targetPage;
       });
-      // סנכרון ה-PageController ללא אנימציה
+      // מעבר עם אנימציה
       if (pageController.hasClients) {
-        pageController.jumpToPage(targetPage);
+        pageController.animateToPage(
+          targetPage,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
       }
     }
 
@@ -264,19 +274,26 @@ class MainWindowScreenState extends State<MainWindowScreen>
           builder: (context, state) {
             // Build the pages list here so we can inject the EmptyLibraryScreen
             // into the library page while keeping the rest of the app visible.
+            // נבנה את הדפים רק פעם אחת ונשמור אותם
+            if (_cachedLibraryPage == null || state.isLibraryEmpty != (_cachedLibraryPage is EmptyLibraryScreen)) {
+              _cachedLibraryPage = state.isLibraryEmpty
+                  ? EmptyLibraryScreen(
+                      onLibraryLoaded: () {
+                        context.read<NavigationBloc>().refreshLibrary();
+                      },
+                    )
+                  : const LibraryBrowser();
+            }
+            
+            _cachedReadingPage ??= const ReadingScreen();
+            _cachedMorePage ??= MoreScreen(key: moreScreenKey);
+            _cachedSettingsPage ??= const MySettingsScreen();
+            
             _pages = [
-              KeepAlivePage(
-                child: state.isLibraryEmpty
-                    ? EmptyLibraryScreen(
-                        onLibraryLoaded: () {
-                          context.read<NavigationBloc>().refreshLibrary();
-                        },
-                      )
-                    : const LibraryBrowser(),
-              ),
-              const KeepAlivePage(child: ReadingScreen()),
-              KeepAlivePage(child: MoreScreen(key: moreScreenKey)),
-              const KeepAlivePage(child: MySettingsScreen()),
+              _cachedLibraryPage!,
+              _cachedReadingPage!,
+              _cachedMorePage!,
+              _cachedSettingsPage!,
             ];
 
             return SafeArea(
@@ -288,30 +305,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       builder: (context, orientation) {
                         _handleOrientationChange(context, orientation);
 
-                        final pageView = AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          switchInCurve: Curves.easeInOut,
-                          switchOutCurve: Curves.easeInOut,
-                          transitionBuilder: (child, animation) {
-                            final offsetAnimation = Tween<Offset>(
-                              begin: orientation == Orientation.landscape
-                                  ? const Offset(0.0, 0.3)
-                                  : const Offset(0.3, 0.0),
-                              end: Offset.zero,
-                            ).animate(animation);
-
-                            return SlideTransition(
-                              position: offsetAnimation,
-                              child: FadeTransition(
-                                opacity: animation,
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: KeyedSubtree(
-                            key: ValueKey<int>(_currentPageIndex),
-                            child: _pages[_currentPageIndex],
-                          ),
+                        final pageView = PageView(
+                          controller: pageController,
+                          scrollDirection: orientation == Orientation.landscape
+                              ? Axis.vertical
+                              : Axis.horizontal,
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: _pages,
                         );
 
                         if (orientation == Orientation.landscape) {
