@@ -32,7 +32,7 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
   String? _selectedFilter; // null = all notes
   bool _isLoadingBooks = true;
   String? _booksError;
-  Map<String, PersonalNotesState> _bookStates = {};
+  final Map<String, PersonalNotesState> _bookStates = {};
   final Map<String, bool> _expansionState = {};
 
   @override
@@ -65,16 +65,6 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
         _isLoadingBooks = false;
       });
     }
-  }
-
-  Future<void> _reloadAllBooks() async {
-    // Clear existing states
-    setState(() {
-      _bookStates.clear();
-    });
-    
-    // Reload the books list from storage
-    await _loadBooks();
   }
 
   void _onFilterChanged(String? filter) {
