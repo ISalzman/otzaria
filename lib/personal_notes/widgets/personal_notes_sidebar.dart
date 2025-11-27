@@ -290,28 +290,10 @@ class _LocatedNoteTile extends StatelessWidget {
               .titleSmall
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (note.referenceWords.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4.0),
-                child: Text(
-                  note.referenceWords.join(' '),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: Theme.of(context).colorScheme.primary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            Text(
-              note.content,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+        subtitle: Text(
+          note.content,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
         ),
         trailing: _NoteActions(onEdit: onEdit, onDelete: onDelete),
       ),

@@ -768,28 +768,13 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
                 ],
               ),
               const SizedBox(height: 8),
-              if (!isMissing && note.referenceWords.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    note.referenceWords.join(' '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
-                ),
-              Expanded(
-                child: Text(
-                  note.content,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.black87,
-                      ),
-                ),
+              Text(
+                note.content,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.black87,
+                    ),
               ),
               if (isMissing && note.lastKnownLineNumber != null)
                 Padding(

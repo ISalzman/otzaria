@@ -17,28 +17,52 @@ List<String> splitBookContentIntoLines(String content) {
 List<String> extractReferenceWordsFromLine(
   String line, {
   int limit = kReferenceWordsLimit,
+  String? excludeBookTitle,
 }) {
-  final matches = wordPattern.allMatches(line);
+  // Strip HTML tags from the line before extracting words
+  final cleanedLine = _stripHtmlTags(line);
+  final matches = wordPattern.allMatches(cleanedLine);
   final words = <String>[];
+
+  // Split book title into words for exclusion
+  final excludedWords = excludeBookTitle != null
+      ? excludeBookTitle.split(RegExp(r'\s+')).map(normalizeWord).toSet()
+      : <String>{};
+
   for (final match in matches) {
-    words.add(normalizeWord(match.group(0)!));
-    if (words.length == limit) {
-      break;
+    final word = normalizeWord(match.group(0)!);
+    // Skip words that are part of the book title
+    if (!excludedWords.contains(word)) {
+      words.add(word);
+      if (words.length == limit) {
+        break;
+      }
     }
   }
   return words;
+}
+
+String _stripHtmlTags(String htmlText) {
+  // Remove HTML tags
+  final RegExp htmlTagPattern = RegExp(r'<[^>]*>');
+  return htmlText.replaceAll(htmlTagPattern, '').trim();
 }
 
 List<String> extractReferenceWordsFromLines(
   List<String> lines,
   int lineNumber, {
   int limit = kReferenceWordsLimit,
+  String? excludeBookTitle,
 }) {
   final index = lineNumber - 1;
   if (index < 0 || index >= lines.length) {
     return const [];
   }
-  return extractReferenceWordsFromLine(lines[index], limit: limit);
+  return extractReferenceWordsFromLine(
+    lines[index],
+    limit: limit,
+    excludeBookTitle: excludeBookTitle,
+  );
 }
 
 String normalizeWord(String word) {
