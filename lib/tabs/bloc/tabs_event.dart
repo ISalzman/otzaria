@@ -93,3 +93,33 @@ class TogglePinTab extends TabsEvent {
   @override
   List<Object?> get props => [tab];
 }
+
+class EnableSideBySideMode extends TabsEvent {
+  final OpenedTab rightTab;
+  final OpenedTab leftTab;
+
+  const EnableSideBySideMode({
+    required this.rightTab,
+    required this.leftTab,
+  });
+
+  @override
+  List<Object?> get props => [rightTab, leftTab];
+}
+
+class DisableSideBySideMode extends TabsEvent {
+  const DisableSideBySideMode();
+}
+
+class UpdateSplitRatio extends TabsEvent {
+  final double ratio;
+
+  const UpdateSplitRatio(this.ratio);
+
+  @override
+  List<Object?> get props => [ratio];
+}
+
+class SwapSideBySideTabs extends TabsEvent {
+  const SwapSideBySideTabs();
+}

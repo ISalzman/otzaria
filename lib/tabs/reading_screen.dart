@@ -226,19 +226,28 @@ class _ReadingScreenState extends State<ReadingScreen>
               );
 
               controller.addListener(() {
-                if (controller.indexIsChanging &&
-                    state.currentTabIndex < state.tabs.length) {
-                  // שמירת המצב הנוכחי לפני המעבר לטאב אחר
+                // בדיקה אם TabBarView קיים (לא במצב side-by-side)
+                try {
+                  if (controller.indexIsChanging &&
+                      state.currentTabIndex < state.tabs.length) {
+                    // שמירת המצב הנוכחי לפני המעבר לטאב אחר
+                    debugPrint(
+                        'DEBUG: מעבר בין טאבים - שמירת מצב טאב ${state.currentTabIndex}');
+                    context.read<HistoryBloc>().add(CaptureStateForHistory(
+                        state.tabs[state.currentTabIndex]));
+                    // שמירת כל הטאבים לדיסק
+                    context.read<TabsBloc>().add(const SaveTabs());
+                  }
+                  if (controller.index != state.currentTabIndex) {
+                    debugPrint('DEBUG: עדכון טאב נוכחי ל-${controller.index}');
+                    context
+                        .read<TabsBloc>()
+                        .add(SetCurrentTab(controller.index));
+                  }
+                } catch (e) {
+                  // אם TabBarView לא קיים, מתעלמים
                   debugPrint(
-                      'DEBUG: מעבר בין טאבים - שמירת מצב טאב ${state.currentTabIndex}');
-                  context.read<HistoryBloc>().add(CaptureStateForHistory(
-                      state.tabs[state.currentTabIndex]));
-                  // שמירת כל הטאבים לדיסק
-                  context.read<TabsBloc>().add(const SaveTabs());
-                }
-                if (controller.index != state.currentTabIndex) {
-                  debugPrint('DEBUG: עדכון טאב נוכחי ל-${controller.index}');
-                  context.read<TabsBloc>().add(SetCurrentTab(controller.index));
+                      'DEBUG: TabController listener error (expected in side-by-side mode): $e');
                 }
               });
 
@@ -367,11 +376,15 @@ class _ReadingScreenState extends State<ReadingScreen>
                 ),
                 body: SizedBox.fromSize(
                   size: MediaQuery.of(context).size,
-                  child: TabBarView(
-                    controller: controller,
-                    children:
-                        state.tabs.map((tab) => _buildTabView(tab)).toList(),
-                  ),
+                  child: _shouldShowSideBySideView(state)
+                      ? _buildSideBySideView(state)
+                      : TabBarView(
+                          key: const ValueKey('normal_tab_view'),
+                          controller: controller,
+                          children: state.tabs
+                              .map((tab) => _buildTabView(tab))
+                              .toList(),
+                        ),
                 ),
               );
             },
@@ -409,7 +422,13 @@ class _ReadingScreenState extends State<ReadingScreen>
 
   Widget _buildTab(BuildContext context, OpenedTab tab, TabsState state) {
     final index = state.tabs.indexOf(tab);
-    final isSelected = index == state.currentTabIndex;
+    // במצב side-by-side, רק הטאבים המוצגים יהיו מסומנים
+    // אבל רק אם אנחנו באמת מציגים את מצב side-by-side
+    final isShowingSideBySide = _shouldShowSideBySideView(state);
+    final isSelected = isShowingSideBySide
+        ? (index == state.sideBySideMode!.rightTabIndex ||
+            index == state.sideBySideMode!.leftTabIndex)
+        : (index == state.currentTabIndex);
     final closeTabShortcut =
         Settings.getValue<String>('key-shortcut-close-tab') ?? 'ctrl+w';
 
@@ -438,6 +457,33 @@ class _ReadingScreenState extends State<ReadingScreen>
               label: 'שיכפול',
               onSelected: () => context.read<TabsBloc>().add(CloneTab(tab)),
             ),
+            const MenuDivider(),
+            // אפשרות "הצג לצד" - רק אם יש יותר מטאב אחד ולא במצב side-by-side
+            if (state.tabs.length > 1 && !state.isSideBySideMode)
+              MenuItem.submenu(
+                label: 'הצג לצד',
+                items: state.tabs
+                    .where((t) => t != tab)
+                    .map((otherTab) => MenuItem(
+                          label: otherTab.title,
+                          onSelected: () {
+                            context.read<TabsBloc>().add(
+                                  EnableSideBySideMode(
+                                    rightTab: tab, // הטאב הנוכחי ימני
+                                    leftTab: otherTab, // הטאב שנבחר שמאלי
+                                  ),
+                                );
+                          },
+                        ))
+                    .toList(),
+              ),
+            // אפשרות "בטל הצגת ספרים זה לצד זה" - רק במצב side-by-side
+            if (state.isSideBySideMode)
+              MenuItem(
+                label: 'בטל הצגת ספרים זה לצד זה',
+                onSelected: () =>
+                    context.read<TabsBloc>().add(const DisableSideBySideMode()),
+              ),
             const MenuDivider(),
             MenuItem(
               label: 'רשימת הכרטיסיות',
@@ -476,118 +522,140 @@ class _ReadingScreenState extends State<ReadingScreen>
               final newIndex = state.tabs.indexOf(tab);
               context.read<TabsBloc>().add(MoveTab(draggedTab.data, newIndex));
             },
-            builder: (context, candidateData, rejectedData) => Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // --- לוגיקה חדשה ומאוחדת לפס הפרדה שמופיע מימין לטאב ---
-                // בסביבת RTL, הווידג'ט הראשון ברשימה מופיע הכי ימני במסך.
-                if (
-                    // תנאי 1: הצגת פס הפרדה בקצה הימני של כל הטאבים.
-                    // הפס נוצר על ידי הטאב הראשון (index 0) כשהוא אינו פעיל.
-                    (index == 0 && state.currentTabIndex != 0) ||
-                        // תנאי 2: הצגת פס הפרדה בין שני טאבים.
-                        // הפס נוצר על ידי הטאב הנוכחי (index) אם הוא וגם הטאב שלפניו (index - 1) אינם פעילים.
-                        (index > 0 &&
-                            state.currentTabIndex != index &&
-                            state.currentTabIndex != index - 1))
-                  Container(
-                    width: 1,
-                    height: 32,
-                    margin: const EdgeInsets.only(top: 12, bottom: 8),
-                    color: Colors.grey.shade400,
-                  ),
+            builder: (context, candidateData, rejectedData) {
+              // קביעת אילו טאבים נחשבים "פעילים" לצורך פס ההפרדה
+              bool isTabActive(int tabIndex) {
+                // רק אם אנחנו באמת מציגים side-by-side
+                if (isShowingSideBySide) {
+                  return tabIndex == state.sideBySideMode!.rightTabIndex ||
+                      tabIndex == state.sideBySideMode!.leftTabIndex;
+                } else {
+                  return tabIndex == state.currentTabIndex;
+                }
+              }
 
-                // הווידג'ט המרכזי שמכיל את הטאב עצמו (ללא שינוי).
-                Container(
-                  // ניצול מלא של גובה ה-AppBar, ללא רווח עליון
-                  constraints: const BoxConstraints(maxHeight: kToolbarHeight),
-                  padding: const EdgeInsets.only(
-                      left: 6, right: 6, top: 0, bottom: 0),
-                  child: CustomPaint(
-                    painter: isSelected
-                        ? _TabBackgroundPainter(
-                            Theme.of(context).colorScheme.surfaceContainer)
-                        : null,
-                    foregroundPainter: isSelected ? _TabBorderPainter() : null,
-                    child: Tab(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // אינדיקטור הצמדה
-                            if (tab.isPinned)
-                              const Padding(
-                                padding: EdgeInsets.only(left: 4.0),
-                                child: Icon(
-                                  FluentIcons.pin_24_filled,
-                                  size: 14,
-                                ),
-                              ),
-                            if (tab is SearchingTab)
-                              ValueListenableBuilder(
-                                valueListenable: tab.queryController,
-                                builder: (context, value, child) => Tooltip(
-                                  message: tab.title,
-                                  child: Text(
-                                    truncate(tab.title, 25),
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // --- לוגיקה חדשה ומאוחדת לפס הפרדה שמופיע מימין לטאב ---
+                  // בסביבת RTL, הווידג'ט הראשון ברשימה מופיע הכי ימני במסך.
+                  if (
+                      // תנאי 1: הצגת פס הפרדה בקצה הימני של כל הטאבים.
+                      // הפס נוצר על ידי הטאב הראשון (index 0) כשהוא אינו פעיל.
+                      (index == 0 && !isTabActive(0)) ||
+                          // תנאי 2: הצגת פס הפרדה בין שני טאבים.
+                          // הפס נוצר על ידי הטאב הנוכחי (index) אם הוא וגם הטאב שלפניו (index - 1) אינם פעילים.
+                          (index > 0 &&
+                              !isTabActive(index) &&
+                              !isTabActive(index - 1)))
+                    Container(
+                      width: 1,
+                      height: 32,
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      color: Colors.grey.shade400,
+                    ),
+
+                  // הווידג'ט המרכזי שמכיל את הטאב עצמו (ללא שינוי).
+                  Container(
+                    // ניצול מלא של גובה ה-AppBar, ללא רווח עליון
+                    constraints:
+                        const BoxConstraints(maxHeight: kToolbarHeight),
+                    padding: const EdgeInsets.only(
+                        left: 6, right: 6, top: 0, bottom: 0),
+                    child: CustomPaint(
+                      painter: isSelected
+                          ? _TabBackgroundPainter(
+                              Theme.of(context).colorScheme.surfaceContainer)
+                          : null,
+                      foregroundPainter: isSelected
+                          ? _TabBorderPainter(
+                              isInSideBySideMode: isShowingSideBySide,
+                              isLeftTab: isShowingSideBySide &&
+                                  index == state.sideBySideMode!.leftTabIndex,
+                              isRightTab: isShowingSideBySide &&
+                                  index == state.sideBySideMode!.rightTabIndex,
+                            )
+                          : null,
+                      child: Tab(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // אינדיקטור הצמדה
+                              if (tab.isPinned)
+                                const Padding(
+                                  padding: EdgeInsets.only(left: 4.0),
+                                  child: Icon(
+                                    FluentIcons.pin_24_filled,
+                                    size: 14,
                                   ),
                                 ),
-                              )
-                            else if (tab is PdfBookTab)
-                              Tooltip(
-                                message: tab.title,
-                                child: Row(
-                                  children: [
-                                    const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: Icon(
-                                          FluentIcons.document_pdf_24_regular,
-                                          size: 16),
+                              if (tab is SearchingTab)
+                                ValueListenableBuilder(
+                                  valueListenable: tab.queryController,
+                                  builder: (context, value, child) => Tooltip(
+                                    message: tab.title,
+                                    child: Text(
+                                      truncate(tab.title, 25),
                                     ),
-                                    Text(truncate(tab.title, 12)),
-                                  ],
-                                ),
-                              )
-                            else
-                              Tooltip(
+                                  ),
+                                )
+                              else if (tab is PdfBookTab)
+                                Tooltip(
                                   message: tab.title,
-                                  child: Text(truncate(tab.title, 12))),
-                            Tooltip(
-                              preferBelow: false,
-                              message: closeTabShortcut.toUpperCase(),
-                              child: IconButton(
-                                constraints: const BoxConstraints(
-                                  minWidth: 25,
-                                  minHeight: 25,
-                                  maxWidth: 25,
-                                  maxHeight: 25,
+                                  child: Row(
+                                    children: [
+                                      const Padding(
+                                        padding: EdgeInsets.all(8.0),
+                                        child: Icon(
+                                            FluentIcons.document_pdf_24_regular,
+                                            size: 16),
+                                      ),
+                                      Text(truncate(tab.title, 12)),
+                                    ],
+                                  ),
+                                )
+                              else
+                                Tooltip(
+                                    message: tab.title,
+                                    child: Text(truncate(tab.title, 12))),
+                              Tooltip(
+                                preferBelow: false,
+                                message: closeTabShortcut.toUpperCase(),
+                                child: IconButton(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 25,
+                                    minHeight: 25,
+                                    maxWidth: 25,
+                                    maxHeight: 25,
+                                  ),
+                                  onPressed: () => closeTab(tab, context),
+                                  icon: const Icon(
+                                      FluentIcons.dismiss_24_regular,
+                                      size: 10),
                                 ),
-                                onPressed: () => closeTab(tab, context),
-                                icon: const Icon(FluentIcons.dismiss_24_regular,
-                                    size: 10),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
 
-                // --- לוגיקה לפס הפרדה שמופיע משמאל לטאב ---
-                // משמש רק עבור הקצה השמאלי ביותר של כל הטאבים.
-                // הפס נוצר על ידי הטאב האחרון כשהוא אינו פעיל.
-                if (index == state.tabs.length - 1 &&
-                    state.currentTabIndex != index)
-                  Container(
-                    width: 1,
-                    height: 32,
-                    margin: const EdgeInsets.only(top: 12, bottom: 8),
-                    color: Colors.grey.shade400,
-                  ),
-              ],
-            ),
+                  // --- לוגיקה לפס הפרדה שמופיע משמאל לטאב ---
+                  // משמש רק עבור הקצה השמאלי ביותר של כל הטאבים.
+                  // הפס נוצר על ידי הטאב האחרון כשהוא אינו פעיל.
+                  if (index == state.tabs.length - 1 && !isTabActive(index))
+                    Container(
+                      width: 1,
+                      height: 32,
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      color: Colors.grey.shade400,
+                    ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -750,6 +818,197 @@ class _ReadingScreenState extends State<ReadingScreen>
       builder: (context) => const BookmarksDialog(),
     );
   }
+
+  bool _shouldShowSideBySideView(TabsState state) {
+    // מציג side-by-side רק אם:
+    // 1. המצב קיים
+    // 2. הטאב הנוכחי הוא אחד משני הטאבים המוצגים
+    // 3. לא במצב מעבר (indexIsChanging)
+    if (!state.isSideBySideMode) return false;
+
+    final isOneOfSideBySideTabs =
+        state.currentTabIndex == state.sideBySideMode!.rightTabIndex ||
+            state.currentTabIndex == state.sideBySideMode!.leftTabIndex;
+
+    return isOneOfSideBySideTabs;
+  }
+
+  Widget _buildSideBySideView(TabsState state) {
+    // בדיקה שהאינדקסים תקינים
+    if (!state.isSideBySideMode) {
+      return const SizedBox.shrink();
+    }
+
+    final sideBySideMode = state.sideBySideMode!;
+
+    // וידוא שהאינדקסים תקינים
+    if (sideBySideMode.rightTabIndex >= state.tabs.length ||
+        sideBySideMode.leftTabIndex >= state.tabs.length) {
+      return const SizedBox.shrink();
+    }
+
+    final rightTab = state.tabs[sideBySideMode.rightTabIndex];
+    final leftTab = state.tabs[sideBySideMode.leftTabIndex];
+
+    return _SideBySideViewWidget(
+      key: ValueKey(
+          '${sideBySideMode.rightTabIndex}_${sideBySideMode.leftTabIndex}'),
+      rightTab: rightTab,
+      leftTab: leftTab,
+      initialSplitRatio: sideBySideMode.splitRatio,
+      onSplitRatioChanged: (ratio) {
+        context.read<TabsBloc>().add(UpdateSplitRatio(ratio));
+      },
+      onSwapSides: () {
+        context.read<TabsBloc>().add(const SwapSideBySideTabs());
+      },
+      buildTabView: _buildTabView,
+    );
+  }
+}
+
+// Widget להצגת 2 ספרים זה לצד זה
+class _SideBySideViewWidget extends StatefulWidget {
+  final OpenedTab rightTab;
+  final OpenedTab leftTab;
+  final double initialSplitRatio;
+  final Function(double) onSplitRatioChanged;
+  final Function() onSwapSides;
+  final Widget Function(OpenedTab) buildTabView;
+
+  const _SideBySideViewWidget({
+    super.key,
+    required this.rightTab,
+    required this.leftTab,
+    required this.initialSplitRatio,
+    required this.onSplitRatioChanged,
+    required this.onSwapSides,
+    required this.buildTabView,
+  });
+
+  @override
+  State<_SideBySideViewWidget> createState() => _SideBySideViewWidgetState();
+}
+
+class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
+  late double _splitRatio;
+  bool _isResizing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _splitRatio = widget.initialSplitRatio;
+  }
+
+  @override
+  void didUpdateWidget(_SideBySideViewWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // עדכון היחס אם השתנה (למשל, אחרי החלפת צדדים)
+    if (widget.initialSplitRatio != oldWidget.initialSplitRatio) {
+      setState(() {
+        _splitRatio = widget.initialSplitRatio;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalWidth = constraints.maxWidth;
+        final rightWidth = totalWidth * _splitRatio;
+        final leftWidth = totalWidth * (1.0 - _splitRatio);
+        final dividerWidth = _isResizing ? 4.0 : 8.0;
+
+        return Stack(
+          children: [
+            Row(
+              children: [
+                // ספר ימני (בגלל RTL, זה יופיע בצד ימין)
+                SizedBox(
+                  width: rightWidth,
+                  child: widget.buildTabView(widget.rightTab),
+                ),
+                // מפריד ניתן לגרירה
+                MouseRegion(
+                  cursor: SystemMouseCursors.resizeColumn,
+                  child: GestureDetector(
+                    onHorizontalDragStart: (_) {
+                      setState(() => _isResizing = true);
+                    },
+                    onHorizontalDragUpdate: (details) {
+                      setState(() {
+                        // תיקון: הפיכת הכיוון כי אנחנו ב-RTL
+                        final delta = -details.delta.dx / totalWidth;
+                        _splitRatio = (_splitRatio + delta).clamp(0.2, 0.8);
+                      });
+                    },
+                    onHorizontalDragEnd: (_) {
+                      setState(() => _isResizing = false);
+                      widget.onSplitRatioChanged(_splitRatio);
+                    },
+                    child: Container(
+                      width: dividerWidth,
+                      color: _isResizing
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.transparent,
+                      alignment: Alignment.center,
+                      child: _isResizing
+                          ? null
+                          : Container(
+                              width: 1.5,
+                              color: Theme.of(context).dividerColor,
+                            ),
+                    ),
+                  ),
+                ),
+                // ספר שמאלי (בגלל RTL, זה יופיע בצד שמאל)
+                SizedBox(
+                  width: leftWidth - dividerWidth,
+                  child: widget.buildTabView(widget.leftTab),
+                ),
+              ],
+            ),
+            // כפתור החלפת צדדים - באמצע פס ההפרדה, למעלה
+            Positioned(
+              right: rightWidth - 10, // הזזה שמאלה
+              top: 12,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surface
+                      .withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(16), // הקטנה
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  iconSize: 16, // הקטנת האייקון
+                  padding: const EdgeInsets.all(6), // הקטנת הפדינג
+                  constraints: const BoxConstraints(
+                    minWidth: 30, // הקטנת הגודל
+                    minHeight: 30,
+                  ),
+                  icon: Icon(
+                    FluentIcons.arrow_swap_24_regular,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  tooltip: 'הפוך צדדים',
+                  onPressed: widget.onSwapSides,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 // CustomPainter לציור רקע של הטאב הפעיל
@@ -808,6 +1067,16 @@ class _TabBackgroundPainter extends CustomPainter {
 // CustomPainter לציור גבול מעוגל לטאב הפעיל
 // עם קווים המשתרעים משני הצדדים עד סוף החלון
 class _TabBorderPainter extends CustomPainter {
+  final bool isInSideBySideMode;
+  final bool isLeftTab;
+  final bool isRightTab;
+
+  _TabBorderPainter({
+    this.isInSideBySideMode = false,
+    this.isLeftTab = false,
+    this.isRightTab = false,
+  });
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
@@ -867,19 +1136,25 @@ class _TabBorderPainter extends CustomPainter {
     canvas.drawPath(leftBottomPath, paint);
 
     // קווים ארוכים נפרדים - משני הצדדים
-    // קו ימני
-    canvas.drawLine(
-      Offset(size.width + radius, size.height + bottomOffset),
-      Offset(size.width + extendLength, size.height + bottomOffset),
-      paint,
-    );
+    // במצב side-by-side, לא מציירים קו בין שני הטאבים המקובצים
 
-    // קו שמאלי
-    canvas.drawLine(
-      Offset(-radius, size.height + bottomOffset),
-      Offset(-extendLength, size.height + bottomOffset),
-      paint,
-    );
+    // קו ימני - לא מציירים אם זה הטאב השמאלי במצב side-by-side
+    if (!(isInSideBySideMode && isLeftTab)) {
+      canvas.drawLine(
+        Offset(size.width + radius, size.height + bottomOffset),
+        Offset(size.width + extendLength, size.height + bottomOffset),
+        paint,
+      );
+    }
+
+    // קו שמאלי - לא מציירים אם זה הטאב הימני במצב side-by-side
+    if (!(isInSideBySideMode && isRightTab)) {
+      canvas.drawLine(
+        Offset(-radius, size.height + bottomOffset),
+        Offset(-extendLength, size.height + bottomOffset),
+        paint,
+      );
+    }
   }
 
   @override

@@ -97,6 +97,8 @@ class TextBookTab extends OpenedTab {
   /// The JSON map should have 'initalIndex', 'title', 'commentaries',
   /// and 'type' keys.
   factory TextBookTab.fromJson(Map<String, dynamic> json) {
+    // במצב side-by-side, חלונית הצד תמיד סגורה
+    // אחרת, לפי ההגדרות
     final bool shouldOpenLeftPane =
         (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
             (Settings.getValue<bool>('key-default-sidebar-open') ?? false);

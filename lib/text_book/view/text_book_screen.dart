@@ -12,6 +12,8 @@ import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart' hide UpdateFontSize;
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -546,12 +548,25 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     if (!mounted) return;
     final settingsBloc = context.read<SettingsBloc>();
     final textBookBloc = context.read<TextBookBloc>();
+    final tabsBloc = context.read<TabsBloc>();
+    final isSideBySide = tabsBloc.state.isSideBySideMode;
+
+    // בדיקה אם הטאב הנוכחי הוא אחד מהטאבים המוצגים
+    final currentTabIndex = tabsBloc.state.currentTabIndex;
+    final isInSideBySide = isSideBySide &&
+        (currentTabIndex == tabsBloc.state.sideBySideMode!.leftTabIndex ||
+            currentTabIndex == tabsBloc.state.sideBySideMode!.rightTabIndex);
 
     textBookBloc.add(LoadContent(
       fontSize: settingsBloc.state.fontSize,
-      showSplitView: Settings.getValue<bool>('key-splited-view') ?? false,
+      // במצב side-by-side, מפרשים תמיד מתחת
+      showSplitView: isSideBySide
+          ? false
+          : (Settings.getValue<bool>('key-splited-view') ?? false),
       removeNikud: settingsBloc.state.defaultRemoveNikud,
       preserveState: true,
+      // במצב side-by-side, חלונית הצד תמיד סגורה
+      forceCloseLeftPane: isInSideBySide,
     ));
 
     if (mounted) {
@@ -584,227 +599,277 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
-        return BlocConsumer<TextBookBloc, TextBookState>(
-          bloc: context.read<TextBookBloc>(),
-          listener: (context, state) {
-            if (state is TextBookLoaded &&
-                state.isEditorOpen &&
-                state.editorIndex != null) {
-              _openEditorDialog(context, state);
+        return BlocBuilder<TabsBloc, TabsState>(
+          builder: (context, tabsState) {
+            // סגירת חלונית הצד כשנמצאים במצב side-by-side
+            if (tabsState.isSideBySideMode) {
+              final currentState = context.read<TextBookBloc>().state;
+              if (currentState is TextBookLoaded && currentState.showLeftPane) {
+                // בדיקה אם הטאב הנוכחי הוא אחד מהטאבים המוצגים
+                final currentTabIndex = tabsState.currentTabIndex;
+                final isInSideBySide = currentTabIndex ==
+                        tabsState.sideBySideMode!.leftTabIndex ||
+                    currentTabIndex == tabsState.sideBySideMode!.rightTabIndex;
+
+                if (isInSideBySide) {
+                  // סגירה מיידית
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      context
+                          .read<TextBookBloc>()
+                          .add(const ToggleLeftPane(false));
+                    }
+                  });
+                }
+              }
             }
 
-            // איפוס אינדקס הכרטיסייה כשהחלונית נסגרת
-            if (state is TextBookLoaded &&
-                !state.showSplitView &&
-                _sidebarTabIndex != null) {
-              setState(() {
-                _sidebarTabIndex = null;
-              });
-            }
-          },
-          builder: (context, state) {
-            if (state is TextBookInitial) {
-              // איפוס אינדקס הכרטיסייה כשטוענים ספר חדש
-              if (_sidebarTabIndex != null) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
+            return BlocConsumer<TextBookBloc, TextBookState>(
+              bloc: context.read<TextBookBloc>(),
+              listener: (context, state) {
+                if (state is TextBookLoaded &&
+                    state.isEditorOpen &&
+                    state.editorIndex != null) {
+                  _openEditorDialog(context, state);
+                }
+
+                // איפוס אינדקס הכרטיסייה כשהחלונית נסגרת
+                if (state is TextBookLoaded &&
+                    !state.showSplitView &&
+                    _sidebarTabIndex != null) {
                   setState(() {
                     _sidebarTabIndex = null;
                   });
-                });
-              }
+                }
+              },
+              builder: (context, state) {
+                if (state is TextBookInitial) {
+                  // איפוס אינדקס הכרטיסייה כשטוענים ספר חדש
+                  if (_sidebarTabIndex != null) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      setState(() {
+                        _sidebarTabIndex = null;
+                      });
+                    });
+                  }
 
-              context.read<TextBookBloc>().add(
-                    LoadContent(
-                      fontSize: settingsState.fontSize,
-                      showSplitView:
-                          Settings.getValue<bool>('key-splited-view') ?? false,
-                      removeNikud: settingsState.defaultRemoveNikud,
-                    ),
-                  );
-            }
+                  // בדיקה אם נמצאים במצב side-by-side
+                  final tabsBloc = context.read<TabsBloc>();
+                  final isSideBySide = tabsBloc.state.isSideBySideMode;
 
-            if (state is TextBookInitial || state is TextBookLoading) {
-              final screenWidth = MediaQuery.of(context).size.width;
-              return Scaffold(
-                appBar: AppBar(
-                  backgroundColor:
-                      Theme.of(context).colorScheme.surfaceContainer,
-                  shape: Border(
-                    bottom: BorderSide(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                      width: 0.3,
-                    ),
-                  ),
-                  elevation: 0,
-                  scrolledUnderElevation: 0,
-                  centerTitle: false,
-                  title: Text(
-                    widget.tab.book.title,
-                    style: const TextStyle(fontSize: 17),
-                    textAlign: TextAlign.end,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  leading: IconButton(
-                    icon: const Icon(FluentIcons.navigation_24_regular),
-                    tooltip: "ניווט וחיפוש",
-                    onPressed: null,
-                  ),
-                  actions: [
-                    ResponsiveActionBar(
-                      key: ValueKey('loading_actions_$screenWidth'),
+                  // בדיקה אם הטאב הנוכחי הוא אחד מהטאבים המוצגים
+                  final currentTabIndex = tabsBloc.state.currentTabIndex;
+                  final isInSideBySide = isSideBySide &&
+                      (currentTabIndex ==
+                              tabsBloc.state.sideBySideMode!.leftTabIndex ||
+                          currentTabIndex ==
+                              tabsBloc.state.sideBySideMode!.rightTabIndex);
+
+                  context.read<TextBookBloc>().add(
+                        LoadContent(
+                          fontSize: settingsState.fontSize,
+                          // במצב side-by-side, מפרשים תמיד מתחת (showSplitView = false)
+                          showSplitView: isSideBySide
+                              ? false
+                              : (Settings.getValue<bool>('key-splited-view') ??
+                                  false),
+                          removeNikud: settingsState.defaultRemoveNikud,
+                          // במצב side-by-side, חלונית הצד תמיד סגורה
+                          forceCloseLeftPane: isInSideBySide,
+                        ),
+                      );
+                }
+
+                if (state is TextBookInitial || state is TextBookLoading) {
+                  final screenWidth = MediaQuery.of(context).size.width;
+                  return Scaffold(
+                    appBar: AppBar(
+                      backgroundColor:
+                          Theme.of(context).colorScheme.surfaceContainer,
+                      shape: Border(
+                        bottom: BorderSide(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                          width: 0.3,
+                        ),
+                      ),
+                      elevation: 0,
+                      scrolledUnderElevation: 0,
+                      centerTitle: false,
+                      title: Text(
+                        widget.tab.book.title,
+                        style: const TextStyle(fontSize: 17),
+                        textAlign: TextAlign.end,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      leading: IconButton(
+                        icon: const Icon(FluentIcons.navigation_24_regular),
+                        tooltip: "ניווט וחיפוש",
+                        onPressed: null,
+                      ),
                       actions: [
-                        ActionButtonData(
-                          widget: IconButton(
-                            icon:
-                                const Icon(FluentIcons.document_pdf_24_regular),
-                            tooltip: 'פתח ספר במהדורה מודפסת',
-                            onPressed: null,
-                          ),
-                          icon: FluentIcons.document_pdf_24_regular,
-                          tooltip: 'פתח ספר במהדורה מודפסת',
-                          onPressed: null,
-                        ),
-                        ActionButtonData(
-                          widget: IconButton(
-                            icon: const Icon(FluentIcons.panel_left_24_regular),
-                            tooltip: 'הצגת מפרשים',
-                            onPressed: null,
-                          ),
-                          icon: FluentIcons.panel_left_24_regular,
-                          tooltip: 'הצגת מפרשים',
-                          onPressed: null,
-                        ),
-                        ActionButtonData(
-                          widget: IconButton(
-                            icon: const Icon(FluentIcons.text_font_24_regular),
-                            tooltip: 'הצג או הסתר ניקוד',
-                            onPressed: null,
-                          ),
-                          icon: FluentIcons.text_font_24_regular,
-                          tooltip: 'הצג או הסתר ניקוד',
-                          onPressed: null,
-                        ),
-                        ActionButtonData(
-                          widget: IconButton(
-                            icon: const Icon(FluentIcons.search_24_regular),
-                            tooltip: 'חיפוש',
-                            onPressed: null,
-                          ),
-                          icon: FluentIcons.search_24_regular,
-                          tooltip: 'חיפוש',
-                          onPressed: null,
-                        ),
-                        ActionButtonData(
-                          widget: IconButton(
-                            icon: const Icon(FluentIcons.zoom_in_24_regular),
-                            tooltip: 'הגדלת טקסט',
-                            onPressed: null,
-                          ),
-                          icon: FluentIcons.zoom_in_24_regular,
-                          tooltip: 'הגדלת טקסט',
-                          onPressed: null,
-                        ),
-                        ActionButtonData(
-                          widget: IconButton(
-                            icon: const Icon(FluentIcons.zoom_out_24_regular),
-                            tooltip: 'הקטנת טקסט',
-                            onPressed: null,
-                          ),
-                          icon: FluentIcons.zoom_out_24_regular,
-                          tooltip: 'הקטנת טקסט',
-                          onPressed: null,
-                        ),
-                        ActionButtonData(
-                          widget: IconButton(
-                            icon: const Icon(
-                                FluentIcons.arrow_previous_24_filled),
-                            tooltip: 'תחילת הספר',
-                            onPressed: null,
-                          ),
-                          icon: FluentIcons.arrow_previous_24_filled,
-                          tooltip: 'תחילת הספר',
-                          onPressed: null,
-                        ),
-                        ActionButtonData(
-                          widget: IconButton(
-                            icon:
-                                const Icon(FluentIcons.chevron_left_24_regular),
-                            tooltip: 'הקטע הקודם',
-                            onPressed: null,
-                          ),
-                          icon: FluentIcons.chevron_left_24_regular,
-                          tooltip: 'הקטע הקודם',
-                          onPressed: null,
-                        ),
-                        ActionButtonData(
-                          widget: IconButton(
-                            icon: const Icon(
-                                FluentIcons.chevron_right_24_regular),
-                            tooltip: 'הקטע הבא',
-                            onPressed: null,
-                          ),
-                          icon: FluentIcons.chevron_right_24_regular,
-                          tooltip: 'הקטע הבא',
-                          onPressed: null,
-                        ),
-                        ActionButtonData(
-                          widget: IconButton(
-                            icon: const Icon(FluentIcons.arrow_next_24_filled),
-                            tooltip: 'סוף הספר',
-                            onPressed: null,
-                          ),
-                          icon: FluentIcons.arrow_next_24_filled,
-                          tooltip: 'סוף הספר',
-                          onPressed: null,
+                        ResponsiveActionBar(
+                          key: ValueKey('loading_actions_$screenWidth'),
+                          actions: [
+                            ActionButtonData(
+                              widget: IconButton(
+                                icon: const Icon(
+                                    FluentIcons.document_pdf_24_regular),
+                                tooltip: 'פתח ספר במהדורה מודפסת',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons.document_pdf_24_regular,
+                              tooltip: 'פתח ספר במהדורה מודפסת',
+                              onPressed: null,
+                            ),
+                            ActionButtonData(
+                              widget: IconButton(
+                                icon: const Icon(
+                                    FluentIcons.panel_left_24_regular),
+                                tooltip: 'הצגת מפרשים',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons.panel_left_24_regular,
+                              tooltip: 'הצגת מפרשים',
+                              onPressed: null,
+                            ),
+                            ActionButtonData(
+                              widget: IconButton(
+                                icon: const Icon(
+                                    FluentIcons.text_font_24_regular),
+                                tooltip: 'הצג או הסתר ניקוד',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons.text_font_24_regular,
+                              tooltip: 'הצג או הסתר ניקוד',
+                              onPressed: null,
+                            ),
+                            ActionButtonData(
+                              widget: IconButton(
+                                icon: const Icon(FluentIcons.search_24_regular),
+                                tooltip: 'חיפוש',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons.search_24_regular,
+                              tooltip: 'חיפוש',
+                              onPressed: null,
+                            ),
+                            ActionButtonData(
+                              widget: IconButton(
+                                icon:
+                                    const Icon(FluentIcons.zoom_in_24_regular),
+                                tooltip: 'הגדלת טקסט',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons.zoom_in_24_regular,
+                              tooltip: 'הגדלת טקסט',
+                              onPressed: null,
+                            ),
+                            ActionButtonData(
+                              widget: IconButton(
+                                icon:
+                                    const Icon(FluentIcons.zoom_out_24_regular),
+                                tooltip: 'הקטנת טקסט',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons.zoom_out_24_regular,
+                              tooltip: 'הקטנת טקסט',
+                              onPressed: null,
+                            ),
+                            ActionButtonData(
+                              widget: IconButton(
+                                icon: const Icon(
+                                    FluentIcons.arrow_previous_24_filled),
+                                tooltip: 'תחילת הספר',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons.arrow_previous_24_filled,
+                              tooltip: 'תחילת הספר',
+                              onPressed: null,
+                            ),
+                            ActionButtonData(
+                              widget: IconButton(
+                                icon: const Icon(
+                                    FluentIcons.chevron_left_24_regular),
+                                tooltip: 'הקטע הקודם',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons.chevron_left_24_regular,
+                              tooltip: 'הקטע הקודם',
+                              onPressed: null,
+                            ),
+                            ActionButtonData(
+                              widget: IconButton(
+                                icon: const Icon(
+                                    FluentIcons.chevron_right_24_regular),
+                                tooltip: 'הקטע הבא',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons.chevron_right_24_regular,
+                              tooltip: 'הקטע הבא',
+                              onPressed: null,
+                            ),
+                            ActionButtonData(
+                              widget: IconButton(
+                                icon: const Icon(
+                                    FluentIcons.arrow_next_24_filled),
+                                tooltip: 'סוף הספר',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons.arrow_next_24_filled,
+                              tooltip: 'סוף הספר',
+                              onPressed: null,
+                            ),
+                          ],
+                          alwaysInMenu: [],
+                          maxVisibleButtons: screenWidth < 400
+                              ? 2
+                              : screenWidth < 500
+                                  ? 4
+                                  : screenWidth < 600
+                                      ? 6
+                                      : screenWidth < 700
+                                          ? 8
+                                          : screenWidth < 800
+                                              ? 10
+                                              : screenWidth < 900
+                                                  ? 12
+                                                  : screenWidth < 1100
+                                                      ? 14
+                                                      : 999,
                         ),
                       ],
-                      alwaysInMenu: [],
-                      maxVisibleButtons: screenWidth < 400
-                          ? 2
-                          : screenWidth < 500
-                              ? 4
-                              : screenWidth < 600
-                                  ? 6
-                                  : screenWidth < 700
-                                      ? 8
-                                      : screenWidth < 800
-                                          ? 10
-                                          : screenWidth < 900
-                                              ? 12
-                                              : screenWidth < 1100
-                                                  ? 14
-                                                  : 999,
                     ),
-                  ],
-                ),
-                body: const Center(child: CircularProgressIndicator()),
-              );
-            }
-
-            if (state is TextBookError) {
-              return Center(child: Text('Error: ${(state).message}'));
-            }
-
-            if (state is TextBookLoaded) {
-              return LayoutBuilder(
-                builder: (context, constrains) {
-                  final wideScreen = (MediaQuery.of(context).size.width >= 600);
-                  return KeyboardListener(
-                    focusNode: FocusNode(),
-                    onKeyEvent: (event) =>
-                        _handleGlobalKeyEvent(event, context, state),
-                    child: Scaffold(
-                      appBar: _buildAppBar(context, state, wideScreen),
-                      body: _buildBody(context, state, wideScreen),
-                    ),
+                    body: const Center(child: CircularProgressIndicator()),
                   );
-                },
-              );
-            }
+                }
 
-            // Fallback
-            return const Center(child: Text('Unknown state'));
+                if (state is TextBookError) {
+                  return Center(child: Text('Error: ${(state).message}'));
+                }
+
+                if (state is TextBookLoaded) {
+                  return LayoutBuilder(
+                    builder: (context, constrains) {
+                      final wideScreen =
+                          (MediaQuery.of(context).size.width >= 600);
+                      return KeyboardListener(
+                        focusNode: FocusNode(),
+                        onKeyEvent: (event) =>
+                            _handleGlobalKeyEvent(event, context, state),
+                        child: Scaffold(
+                          appBar: _buildAppBar(context, state, wideScreen),
+                          body: _buildBody(context, state, wideScreen),
+                        ),
+                      );
+                    },
+                  );
+                }
+
+                // Fallback
+                return const Center(child: Text('Unknown state'));
+              },
+            );
           },
         );
       },
