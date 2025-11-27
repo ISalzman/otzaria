@@ -34,6 +34,10 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
   String? _booksError;
   final Map<String, PersonalNotesState> _bookStates = {};
   final Map<String, bool> _expansionState = {};
+  bool _isNavigationVisible = true;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  double _navigationWidth = 250.0;
 
   @override
   void initState() {
@@ -75,6 +79,7 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
 
   @override
   void dispose() {
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -128,41 +133,114 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
           });
         }
       },
-      child: Row(
+      child: Column(
         children: [
-          // Right sidebar navigation
-          Container(
-            width: 250,
-            decoration: BoxDecoration(
-              border: Border(
-                left: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: 1,
-                ),
-              ),
-            ),
-            child: _buildNavigationPanel(),
-          ),
-          // Main content area
+          // שורת כלים עליונה לכל רוחב העמוד
+          _buildTopBar(),
+          Divider(height: 1, color: Colors.grey.withValues(alpha: 0.3)),
+          // תוכן העמוד
           Expanded(
-            child: _buildAllNotesList(),
+            child: Row(
+              children: [
+                // Right sidebar navigation - גובה מלא
+                if (_isNavigationVisible) ...[
+                  Container(
+                    width: _navigationWidth,
+                    child: _buildNotesTree(),
+                  ),
+                  // Resizable divider
+                  MouseRegion(
+                    cursor: SystemMouseCursors.resizeColumn,
+                    child: GestureDetector(
+                      onHorizontalDragUpdate: (details) {
+                        setState(() {
+                          _navigationWidth = (_navigationWidth - details.delta.dx)
+                              .clamp(150.0, 500.0);
+                        });
+                      },
+                      child: Container(
+                        width: 8,
+                        color: Colors.transparent,
+                        child: Center(
+                          child: VerticalDivider(
+                            width: 1,
+                            thickness: 1,
+                            color: Theme.of(context).dividerColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                // Main content area
+                Expanded(
+                  child: _buildAllNotesList(),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildNavigationPanel() {
-    return Column(
-      children: [
-        Container(
-          height: 1,
-          color: Colors.grey.shade300,
-        ),
-        Expanded(
-          child: _buildNotesTree(),
-        ),
-      ],
+
+
+  Widget _buildTopBar() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Row(
+        children: [
+          // לחצן סגירה/פתיחה של חלונית הניווט
+          IconButton(
+            tooltip: _isNavigationVisible ? 'הסתר ניווט' : 'הצג ניווט',
+            onPressed: () {
+              setState(() {
+                _isNavigationVisible = !_isNavigationVisible;
+              });
+            },
+            icon: const Icon(Icons.menu),
+          ),
+          const SizedBox(width: 8),
+          // חלונית חיפוש באמצע
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'חפש בהערות...',
+                prefixIcon: const Icon(FluentIcons.search_24_regular),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(FluentIcons.dismiss_24_regular),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          // לחצן ריענון
+          IconButton(
+            tooltip: 'רענן',
+            onPressed: _loadBooks,
+            icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
+          ),
+        ],
+      ),
     );
   }
 
@@ -186,8 +264,10 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
         final isRootExpanded = _expansionState['/personal_notes_root'] ?? true;
         final isRootSelected = _selectedFilter == null;
 
-        return SingleChildScrollView(
-          child: Column(
+        return ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            Column(
             children: [
               // Root "הערות אישיות" folder
               InkWell(
@@ -268,7 +348,8 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
                 _buildMissingNotesTile(),
               ],
             ],
-          ),
+            ),
+          ],
         );
       },
     );
@@ -565,6 +646,17 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
           }
         }
       }
+    }
+
+    // סינון לפי חיפוש
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      allNotes.removeWhere((noteWithBook) {
+        final note = noteWithBook.note;
+        return !note.content.toLowerCase().contains(query) &&
+               !note.bookId.toLowerCase().contains(query) &&
+               !(note.lineNumber?.toString().contains(query) ?? false);
+      });
     }
 
     // Filter by selected filter
