@@ -25,6 +25,9 @@ class PersonalNotesSidebar extends StatefulWidget {
 }
 
 class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +43,12 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
     if (oldWidget.bookId != widget.bookId) {
       context.read<PersonalNotesBloc>().add(LoadPersonalNotes(widget.bookId));
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -66,17 +75,39 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
 
   Widget _buildHeader(BuildContext context, PersonalNotesState state) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(8.0),
       child: Row(
         children: [
-          Text(
-            'הערות אישיות',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'חפש בהערות...',
+                prefixIcon: const Icon(FluentIcons.search_24_regular),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(FluentIcons.dismiss_24_regular),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           IconButton(
             tooltip: 'רענן',
             onPressed: () {
@@ -111,35 +142,78 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      children: [
-        if (state.locatedNotes.isNotEmpty) ...[
-          _SectionHeader(
-            title: 'הערות',
-            count: state.locatedNotes.length,
+    // סינון ההערות לפי שאילתת החיפוש
+    final filteredLocatedNotes = _searchQuery.isEmpty
+        ? state.locatedNotes
+        : state.locatedNotes.where((note) {
+            final query = _searchQuery.toLowerCase();
+            return note.content.toLowerCase().contains(query) ||
+                note.lineNumber.toString().contains(query);
+          }).toList();
+
+    final filteredMissingNotes = _searchQuery.isEmpty
+        ? state.missingNotes
+        : state.missingNotes.where((note) {
+            final query = _searchQuery.toLowerCase();
+            return note.content.toLowerCase().contains(query) ||
+                (note.lastKnownLineNumber?.toString().contains(query) ?? false);
+          }).toList();
+
+    // אם אין תוצאות חיפוש
+    if (_searchQuery.isNotEmpty &&
+        filteredLocatedNotes.isEmpty &&
+        filteredMissingNotes.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'לא נמצאו הערות התואמות לחיפוש',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           ),
-          ...state.locatedNotes.map(
+        ),
+      );
+    }
+
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        if (filteredLocatedNotes.isNotEmpty) ...[
+          ...filteredLocatedNotes.map(
             (note) => _LocatedNoteTile(
               note: note,
               onTap: () => widget.onNavigateToLine(note.lineNumber!),
               onEdit: () => _editNote(context, note),
               onDelete: () => _confirmDelete(context, note),
+              searchQuery: _searchQuery,
             ),
           ),
-          const SizedBox(height: 12),
         ],
-        if (state.missingNotes.isNotEmpty) ...[
-          _SectionHeader(
-            title: 'הערות חסרות מיקום',
-            count: state.missingNotes.length,
-          ),
-          ...state.missingNotes.map(
+        if (filteredMissingNotes.isNotEmpty) ...[
+          if (filteredLocatedNotes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                'הערות חסרות מיקום',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.5),
+                    ),
+              ),
+            ),
+          ...filteredMissingNotes.map(
             (note) => _MissingNoteTile(
               note: note,
               onReposition: () => _reposition(context, note),
               onEdit: () => _editNote(context, note),
               onDelete: () => _confirmDelete(context, note),
+              searchQuery: _searchQuery,
             ),
           ),
         ],
@@ -224,79 +298,66 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final int count;
-
-  const _SectionHeader({required this.title, required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: Theme.of(context)
-                .textTheme
-                .titleSmall
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.secondaryContainer,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              count.toString(),
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _LocatedNoteTile extends StatelessWidget {
   final PersonalNote note;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final String searchQuery;
 
   const _LocatedNoteTile({
     required this.note,
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
+    this.searchQuery = '',
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: ListTile(
-        onTap: onTap,
-        title: Text(
-          'שורה ${note.lineNumber}',
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.bold),
+    return Column(
+      children: [
+        ExpansionTile(
+          key: PageStorageKey('note_${note.id}'),
+          maintainState: true,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
+          title: Text(
+            'שורה ${note.lineNumber}',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          trailing: _NoteActions(onEdit: onEdit, onDelete: onDelete),
+          onExpansionChanged: (isExpanded) {
+            if (isExpanded) {
+              onTap();
+            }
+          },
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 12.0),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  note.content,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        height: 1.5,
+                      ),
+                  textAlign: TextAlign.justify,
+                  textDirection: TextDirection.rtl,
+                ),
+              ),
+            ),
+          ],
         ),
-        subtitle: Text(
-          note.content,
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
+        Divider(
+          height: 1,
+          thickness: 0.5,
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
         ),
-        trailing: _NoteActions(onEdit: onEdit, onDelete: onDelete),
-      ),
+      ],
     );
   }
 }
@@ -306,56 +367,94 @@ class _MissingNoteTile extends StatelessWidget {
   final VoidCallback onReposition;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final String searchQuery;
 
   const _MissingNoteTile({
     required this.note,
     required this.onReposition,
     required this.onEdit,
     required this.onDelete,
+    this.searchQuery = '',
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: Theme.of(context).colorScheme.surfaceTint.withValues(alpha: 0.08),
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: ListTile(
-        onTap: onReposition,
-        title: Text(
-          'הערה ללא מיקום',
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (note.lastKnownLineNumber != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4.0),
-                child: Text(
-                  'שורה קודמת: ${note.lastKnownLineNumber}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+    return Column(
+      children: [
+        ExpansionTile(
+          key: PageStorageKey('missing_note_${note.id}'),
+          maintainState: true,
+          backgroundColor: Theme.of(context).colorScheme.surfaceTint.withValues(alpha: 0.05),
+          collapsedBackgroundColor: Theme.of(context).colorScheme.surfaceTint.withValues(alpha: 0.05),
+          title: Text(
+            'הערה ללא מיקום',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          trailing: _NoteActions(
+            onEdit: onEdit,
+            onDelete: onDelete,
+            extraAction: IconButton(
+              tooltip: 'מיקום מחדש',
+              icon: const Icon(FluentIcons.location_24_regular, size: 18),
+              iconSize: 18,
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(
+                minWidth: 32,
+                minHeight: 32,
               ),
-            Text(
-              note.content,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
+              onPressed: onReposition,
+            ),
+          ),
+          onExpansionChanged: (isExpanded) {
+            if (isExpanded) {
+              onReposition();
+            }
+          },
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (note.lastKnownLineNumber != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Text(
+                        'שורה קודמת: ${note.lastKnownLineNumber}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.6),
+                            ),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      note.content,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            height: 1.5,
+                          ),
+                      textAlign: TextAlign.justify,
+                      textDirection: TextDirection.rtl,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        trailing: _NoteActions(
-          onEdit: onEdit,
-          onDelete: onDelete,
-          extraAction: IconButton(
-            tooltip: 'מיקום מחדש',
-            icon: const Icon(FluentIcons.location_24_regular),
-            onPressed: onReposition,
-          ),
+        Divider(
+          height: 1,
+          thickness: 0.5,
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
         ),
-      ),
+      ],
     );
   }
 }
@@ -373,20 +472,33 @@ class _NoteActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 4,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
           tooltip: 'עריכה',
-          icon: const Icon(FluentIcons.edit_24_regular),
+          icon: const Icon(FluentIcons.edit_24_regular, size: 18),
+          iconSize: 18,
+          padding: const EdgeInsets.all(8),
+          constraints: const BoxConstraints(
+            minWidth: 32,
+            minHeight: 32,
+          ),
           onPressed: onEdit,
         ),
-        extraAction ?? const SizedBox.shrink(),
+        if (extraAction != null) extraAction!,
         IconButton(
           tooltip: 'מחיקה',
-          icon: const Icon(FluentIcons.delete_24_regular),
+          icon: const Icon(FluentIcons.delete_24_regular, size: 18),
+          iconSize: 18,
+          padding: const EdgeInsets.all(8),
+          constraints: const BoxConstraints(
+            minWidth: 32,
+            minHeight: 32,
+          ),
           onPressed: onDelete,
         ),
+        const SizedBox(width: 8), // מרווח לחץ ההרחבה
       ],
     );
   }
