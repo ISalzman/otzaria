@@ -181,6 +181,17 @@ class PersonalNotesStorage {
     final txtFile = await _getTxtFile(bookId);
     final jsonFile = await _getJsonFile(bookId);
 
+    // If no notes remain, delete both files
+    if (notes.isEmpty) {
+      if (await txtFile.exists()) {
+        await txtFile.delete();
+      }
+      if (await jsonFile.exists()) {
+        await jsonFile.delete();
+      }
+      return [];
+    }
+
     final buffer = StringBuffer();
 
     final updatedNotes = <PersonalNote>[];

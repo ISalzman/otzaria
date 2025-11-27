@@ -373,9 +373,17 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
 
   int _getNotesCountForCategory(Category category) {
     int count = 0;
+    
+    // Deduplicate books by title to avoid counting notes twice
+    // when the same book exists in both PDF and text formats
+    final seenTitles = <String>{};
     for (final book in category.books) {
-      count += _getNotesCountForBook(book.title);
+      if (!seenTitles.contains(book.title)) {
+        count += _getNotesCountForBook(book.title);
+        seenTitles.add(book.title);
+      }
     }
+    
     for (final subCat in category.subCategories) {
       count += _getNotesCountForCategory(subCat);
     }
@@ -543,10 +551,19 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
       }
     }
 
+    // Deduplicate books by title - keep only first occurrence
+    // This handles cases where the same book exists in both PDF and text formats
+    final seenTitles = <String>{};
     for (final book in category.books) {
+      // Skip if we already added a book with this title
+      if (seenTitles.contains(book.title)) {
+        continue;
+      }
+      
       final count = _getNotesCountForBook(book.title);
       if (count > 0) {
         children.add(_buildBookTile(book, count, level + 1));
+        seenTitles.add(book.title);
       }
     }
 
