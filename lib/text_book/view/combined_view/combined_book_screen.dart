@@ -51,6 +51,8 @@ class CombinedView extends StatefulWidget {
 class _CombinedViewState extends State<CombinedView> {
   // שמירת הטקסט הנבחר האחרון
   String? _savedSelectedText;
+  // שמירת האינדקס של השורה שממנה הטקסט הודגש
+  int? _savedSelectedIndex;
 
   // שמירת reference ל-BLoC לשימוש ב-listeners
   late final TextBookBloc _textBookBloc;
@@ -571,6 +573,15 @@ $textWithBreaks
   /// הצגת עורך ההערות
   void _showNoteEditor() {
     final controller = TextEditingController();
+    
+    // שמירת ה-state הנוכחי לפני פתיחת הדיאלוג
+    final state = _textBookBloc.state;
+    if (state is! TextBookLoaded) return;
+    
+    // משתמש בשורה שממנה הודגש טקסט (אם קיים), אחרת בשורה הנבחרת, אחרת בשורה הראשונה הנראית
+    final currentIndex = _savedSelectedIndex ?? 
+                         state.selectedIndex ?? 
+                         (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
 
     showDialog(
       context: context,
@@ -590,8 +601,8 @@ $textWithBreaks
       if (!mounted) return;
 
       try {
-        // מציאת מספר השורה על בסיס האינדקס הנוכחי
-        final lineNumber = (_currentSelectedIndex ?? 0) + 1;
+        // מציאת מספר השורה על בסיס האינדקס שנשמר
+        final lineNumber = currentIndex + 1;
 
         context.read<PersonalNotesBloc>().add(AddPersonalNote(
               bookId: widget.tab.book.title,
@@ -626,10 +637,38 @@ $textWithBreaks
               },
               onSelectionChanged: (selection) {
                 if (selection != null && selection.plainText.isNotEmpty) {
+                  // מחשב את מספר השורה המדויק של הטקסט המודגש
+                  // משתמש באותה לוגיקה כמו בדיווח שגיאות
+                  final state = _textBookBloc.state;
+                  int? foundIndex;
+                  
+                  if (state is TextBookLoaded) {
+                    // מקבל את השורה הראשונה הנראית
+                    final baseIndex = state.visibleIndices.isNotEmpty 
+                        ? state.visibleIndices.first 
+                        : 0;
+                    
+                    // בונה את הטקסט הנראה
+                    final visibleText = state.visibleIndices
+                        .map((idx) => widget.data[idx]
+                            .replaceAll(RegExp(r'<[^>]*>'), ''))
+                        .join('\n');
+                    
+                    // מוצא את המיקום של הטקסט המודגש
+                    final selectionStart = visibleText.indexOf(selection.plainText);
+                    
+                    if (selectionStart >= 0) {
+                      // סופר כמה שורות יש לפני הטקסט המודגש
+                      final before = visibleText.substring(0, selectionStart);
+                      final offset = '\n'.allMatches(before).length;
+                      foundIndex = baseIndex + offset;
+                    }
+                  }
+                  
                   setState(() {
                     _savedSelectedText = selection.plainText;
-                    // לא שומרים אינדקס ספציפי כי הבחירה יכולה להיות על פני מספר פסקאות
-                    _currentSelectedIndex = null;
+                    _savedSelectedIndex = foundIndex;
+                    _currentSelectedIndex = foundIndex;
                   });
                 }
               },

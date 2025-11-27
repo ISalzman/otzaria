@@ -2242,8 +2242,9 @@ void _addBookmarkFromKeyboard(
 /// Helper function to add note from keyboard shortcut
 Future<void> _addNoteFromKeyboard(
     BuildContext context, TextBookLoaded state) async {
-  final positions = state.positionsListener.itemPositions.value;
-  final currentIndex = positions.isNotEmpty ? positions.first.index : 0;
+  // משתמש בשורה הנבחרת אם קיימת, אחרת בשורה הראשונה הנראית
+  final currentIndex = state.selectedIndex ?? 
+                       (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
   // לא צריך טקסט נבחר - ההערה חלה על כל השורה
   final controller = TextEditingController();
   final notesBloc = context.read<PersonalNotesBloc>();
