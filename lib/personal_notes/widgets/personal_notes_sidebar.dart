@@ -323,11 +323,13 @@ class _LocatedNoteTile extends StatelessWidget {
           backgroundColor: Theme.of(context).colorScheme.surface,
           collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
           title: Text(
-            'שורה ${note.lineNumber}',
+            note.title,
             style: Theme.of(context)
                 .textTheme
                 .titleSmall
                 ?.copyWith(fontWeight: FontWeight.w600),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           trailing: _NoteActions(onEdit: onEdit, onDelete: onDelete),
           onExpansionChanged: (isExpanded) {

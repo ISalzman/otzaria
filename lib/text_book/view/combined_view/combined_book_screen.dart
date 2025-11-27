@@ -580,6 +580,9 @@ $textWithBreaks
     final state = _textBookBloc.state;
     if (state is! TextBookLoaded) return;
     
+    // שמירת הטקסט הנבחר לפני פתיחת הדיאלוג
+    final selectedText = _savedSelectedText;
+    
     // משתמש בשורה שממנה הודגש טקסט (אם קיים), אחרת בשורה הנבחרת, אחרת בשורה הראשונה הנראית
     final currentIndex = _savedSelectedIndex ?? 
                          state.selectedIndex ?? 
@@ -610,6 +613,7 @@ $textWithBreaks
               bookId: widget.tab.book.title,
               lineNumber: lineNumber,
               content: trimmed,
+              selectedText: selectedText?.trim(),
             ));
         UiSnack.show('ההערה נשמרה בהצלחה');
         

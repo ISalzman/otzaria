@@ -810,11 +810,13 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
                 children: [
                   Expanded(
                     child: Text(
-                      isMissing ? 'הערה ללא מיקום' : 'שורה ${note.lineNumber}',
+                      isMissing ? 'הערה ללא מיקום' : note.title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: Colors.black87,
                           ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Row(

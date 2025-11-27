@@ -50,6 +50,7 @@ class PersonalNotesService {
     required String bookContent,
     required int lineNumber,
     required String content,
+    String? selectedText,
   }) async {
     final notes = await _storage.readNotes(bookId);
     final lines = splitBookContentIntoLines(bookContent);
@@ -57,6 +58,11 @@ class PersonalNotesService {
 
     final referenceWords =
         extractReferenceWordsFromLines(lines, normalizedLineNumber, excludeBookTitle: bookId);
+    
+    // Use selectedText if provided, otherwise extract display text from the line
+    final displayTitle = selectedText?.trim().isNotEmpty == true
+        ? selectedText!.trim()
+        : extractDisplayTextFromLines(lines, normalizedLineNumber, excludeBookTitle: bookId);
 
     final now = DateTime.now();
     final newNote = PersonalNote(
@@ -64,6 +70,7 @@ class PersonalNotesService {
       bookId: bookId,
       lineNumber: normalizedLineNumber,
       referenceWords: referenceWords,
+      displayTitle: displayTitle,
       lastKnownLineNumber: null,
       status: PersonalNoteStatus.located,
       pointer: const PersonalNotePointer(textStartLine: 0, textLineCount: 0),
@@ -142,11 +149,14 @@ class PersonalNotesService {
     final normalizedLineNumber = lineNumber.clamp(1, lines.length);
     final newReference =
         extractReferenceWordsFromLines(lines, normalizedLineNumber, excludeBookTitle: bookId);
+    final newDisplayTitle =
+        extractDisplayTextFromLines(lines, normalizedLineNumber, excludeBookTitle: bookId);
     final now = DateTime.now();
 
     final updatedNote = notes[index].copyWith(
       lineNumber: normalizedLineNumber,
       referenceWords: newReference,
+      displayTitle: newDisplayTitle,
       lastKnownLineNumber: null,
       status: PersonalNoteStatus.located,
       updatedAt: now,
@@ -195,7 +205,8 @@ class PersonalNotesService {
         extractReferenceWordsFromLines(lines, note.lineNumber!, excludeBookTitle: bookId);
 
     if (_wordsMatch(note.referenceWords, actualWords)) {
-      // no change required, but keep reference words up to date as they might shrink (new line shorter)
+      // no change required, but keep reference words up to date
+      // IMPORTANT: We keep the existing displayTitle - don't overwrite it!
       if (const ListEquality<String>().equals(note.referenceWords, actualWords)) {
         return note;
       }
@@ -207,6 +218,7 @@ class PersonalNotesService {
 
     final match = _searchNearby(lines, note.lineNumber!, note.referenceWords, bookId);
     if (match != null) {
+      // When we find the note in a new location, keep the existing displayTitle
       return note.copyWith(
         lineNumber: match.line,
         referenceWords: match.words,

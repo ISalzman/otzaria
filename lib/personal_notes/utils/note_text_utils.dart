@@ -65,6 +65,77 @@ List<String> extractReferenceWordsFromLines(
   );
 }
 
+/// Extract the beginning of a line as display text (without normalization).
+/// This is used for showing the user a preview of the line content.
+String extractDisplayTextFromLine(
+  String line, {
+  int maxWords = 5,
+  String? excludeBookTitle,
+}) {
+  // Strip HTML tags from the line before extracting text
+  final cleanedLine = _stripHtmlTags(line);
+  
+  if (cleanedLine.isEmpty) {
+    return '';
+  }
+  
+  // Split book title into words for exclusion
+  final excludedWords = excludeBookTitle != null
+      ? excludeBookTitle.split(RegExp(r'\s+')).map((w) => w.trim().toLowerCase()).toSet()
+      : <String>{};
+  
+  // Split the line into words and collect them with their positions
+  final matches = wordPattern.allMatches(cleanedLine).toList();
+  int wordCount = 0;
+  int? endPosition;
+  
+  for (final match in matches) {
+    final word = match.group(0)!;
+    // Skip words that are part of the book title
+    if (!excludedWords.contains(word.trim().toLowerCase())) {
+      wordCount++;
+      if (wordCount == maxWords) {
+        endPosition = match.end;
+        break;
+      }
+    }
+  }
+  
+  // If we didn't find enough words, use the whole line (up to 100 chars)
+  if (endPosition == null) {
+    final maxLen = cleanedLine.length > 100 ? 100 : cleanedLine.length;
+    return cleanedLine.substring(0, maxLen).trim();
+  }
+  
+  // Extract the substring from the beginning to the end of the last word
+  String result = cleanedLine.substring(0, endPosition).trim();
+  
+  // If the result is too long, truncate it
+  if (result.length > 100) {
+    result = result.substring(0, 100).trim();
+  }
+  
+  return result;
+}
+
+/// Extract display text from a specific line number in the book.
+String extractDisplayTextFromLines(
+  List<String> lines,
+  int lineNumber, {
+  int maxWords = 5,
+  String? excludeBookTitle,
+}) {
+  final index = lineNumber - 1;
+  if (index < 0 || index >= lines.length) {
+    return '';
+  }
+  return extractDisplayTextFromLine(
+    lines[index],
+    maxWords: maxWords,
+    excludeBookTitle: excludeBookTitle,
+  );
+}
+
 String normalizeWord(String word) {
   final cleaned =
       word.characters.where((c) => wordCharPattern.hasMatch(c)).toString();
