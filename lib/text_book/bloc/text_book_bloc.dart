@@ -163,7 +163,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         availableCommentators: availableCommentators,
         tableOfContents: tableOfContents,
         fontSize: event.fontSize,
-        showLeftPane: showLeftPane || searchText.isNotEmpty,
+        showLeftPane: event.forceCloseLeftPane
+            ? false
+            : (showLeftPane || searchText.isNotEmpty),
         showSplitView: event.showSplitView,
         activeCommentators: commentators,
         commentatorGroups: event.loadCommentators

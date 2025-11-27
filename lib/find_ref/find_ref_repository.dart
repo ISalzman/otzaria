@@ -162,17 +162,6 @@ class FindRefRepository {
         a.headingTokensMatched,
       );
       if (headingCmp != 0) return headingCmp;
-
-      // מיון לפי שם הספר (אלפביתי)
-      final bookNameCmp = a.entry.result.title.compareTo(b.entry.result.title);
-      if (bookNameCmp != 0) return bookNameCmp;
-
-      // אם שם הספר זהה, נעדיף PDF על פני טקסט
-      final pdfCmp = b.entry.result.isPdf.toString().compareTo(
-            a.entry.result.isPdf.toString(),
-          );
-      if (pdfCmp != 0) return pdfCmp;
-
       return a.originalIndex.compareTo(b.originalIndex);
     });
 
