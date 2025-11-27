@@ -34,6 +34,7 @@ class CombinedView extends StatefulWidget {
     required this.showCommentaryAsExpansionTiles,
     required this.tab,
     this.isPreviewMode = false,
+    this.onOpenPersonalNotes,
   });
 
   final List<String> data;
@@ -43,6 +44,7 @@ class CombinedView extends StatefulWidget {
   final bool showCommentaryAsExpansionTiles;
   final TextBookTab tab;
   final bool isPreviewMode;
+  final VoidCallback? onOpenPersonalNotes;
 
   @override
   State<CombinedView> createState() => _CombinedViewState();
@@ -610,8 +612,9 @@ $textWithBreaks
               content: trimmed,
             ));
         UiSnack.show('ההערה נשמרה בהצלחה');
-        // הערה: המפרשים והערות עברו לחלונית הימנית (TabbedCommentaryPanel)
-        // לא צריך לפתוח טאב כאן
+        
+        // פתיחת חלונית ההערות האישיות
+        widget.onOpenPersonalNotes?.call();
       } catch (e) {
         UiSnack.showError('שמירת ההערה נכשלה: $e');
       }

@@ -208,6 +208,13 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                     openLeftPaneTab: widget.openLeftPaneTab,
                     showCommentaryAsExpansionTiles: !widget.showSplitView,
                     tab: widget.tab,
+                    onOpenPersonalNotes: () {
+                      // פתיחת הפאנל הימני עם טאב ההערות האישיות
+                      setState(() {
+                        _paneOpen = true;
+                        _currentTabIndex = 2; // אינדקס של הערות אישיות
+                      });
+                    },
                   ),
                 ),
                 // מפריד ניתן לגרירה
