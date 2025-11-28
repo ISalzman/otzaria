@@ -38,10 +38,12 @@ import 'package:otzaria/settings/per_book_settings.dart';
 
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
+  final bool isInCombinedView;
 
   const PdfBookScreen({
     super.key,
     required this.tab,
+    this.isInCombinedView = false,
   });
 
   @override
@@ -1079,102 +1081,184 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: _ensureSearchTabIsActive,
       ),
 
-      // 5) First Page Button
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.arrow_previous_24_regular),
+      // 5-9) Navigation Buttons - רק אם לא בתצוגה משולבת
+      if (!widget.isInCombinedView) ...[
+        // 5) First Page Button
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.arrow_previous_24_regular),
+            tooltip: 'תחילת הספר',
+            onPressed: () =>
+                widget.tab.pdfViewerController.goToPage(pageNumber: 1),
+          ),
+          icon: FluentIcons.arrow_previous_24_regular,
           tooltip: 'תחילת הספר',
-          onPressed: () =>
-              widget.tab.pdfViewerController.goToPage(pageNumber: 1),
+          onPressed: () => widget.tab.pdfViewerController.goToPage(pageNumber: 1),
         ),
-        icon: FluentIcons.arrow_previous_24_regular,
-        tooltip: 'תחילת הספר',
-        onPressed: () => widget.tab.pdfViewerController.goToPage(pageNumber: 1),
-      ),
 
-      // 6) Previous Page Button
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.chevron_left_24_regular),
+        // 6) Previous Page Button
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.chevron_left_24_regular),
+            tooltip: 'הקודם',
+            onPressed: () {
+              if (widget.tab.pdfViewerController.isReady) {
+                final currentPage =
+                    widget.tab.pdfViewerController.pageNumber ?? 1;
+                widget.tab.pdfViewerController.goToPage(
+                  pageNumber: max(currentPage - 1, 1),
+                );
+              }
+            },
+          ),
+          icon: FluentIcons.chevron_left_24_regular,
           tooltip: 'הקודם',
           onPressed: () {
             if (widget.tab.pdfViewerController.isReady) {
-              final currentPage =
-                  widget.tab.pdfViewerController.pageNumber ?? 1;
+              final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
               widget.tab.pdfViewerController.goToPage(
                 pageNumber: max(currentPage - 1, 1),
               );
             }
           },
         ),
-        icon: FluentIcons.chevron_left_24_regular,
-        tooltip: 'הקודם',
-        onPressed: () {
-          if (widget.tab.pdfViewerController.isReady) {
-            final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
-            widget.tab.pdfViewerController.goToPage(
-              pageNumber: max(currentPage - 1, 1),
-            );
-          }
-        },
-      ),
 
-      // 7) Page Number Display - תמיד מוצג!
-      ActionButtonData(
-        widget: PageNumberDisplay(controller: widget.tab.pdfViewerController),
-        icon: FluentIcons.text_font_24_regular,
-        tooltip: 'מספר עמוד',
-        onPressed: null, // לא ניתן ללחיצה
-      ),
+        // 7) Page Number Display - תמיד מוצג!
+        ActionButtonData(
+          widget: PageNumberDisplay(controller: widget.tab.pdfViewerController),
+          icon: FluentIcons.text_font_24_regular,
+          tooltip: 'מספר עמוד',
+          onPressed: null, // לא ניתן ללחיצה
+        ),
 
-      // 8) Next Page Button
-      ActionButtonData(
-        widget: IconButton(
+        // 8) Next Page Button
+        ActionButtonData(
+          widget: IconButton(
+            onPressed: () {
+              if (widget.tab.pdfViewerController.isReady) {
+                final currentPage =
+                    widget.tab.pdfViewerController.pageNumber ?? 1;
+                widget.tab.pdfViewerController.goToPage(
+                  pageNumber: min(
+                      currentPage + 1, widget.tab.pdfViewerController.pageCount),
+                );
+              }
+            },
+            icon: const Icon(FluentIcons.chevron_right_24_regular),
+            tooltip: 'הבא',
+          ),
+          icon: FluentIcons.chevron_right_24_regular,
+          tooltip: 'הבא',
           onPressed: () {
             if (widget.tab.pdfViewerController.isReady) {
-              final currentPage =
-                  widget.tab.pdfViewerController.pageNumber ?? 1;
+              final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
               widget.tab.pdfViewerController.goToPage(
                 pageNumber: min(
                     currentPage + 1, widget.tab.pdfViewerController.pageCount),
               );
             }
           },
-          icon: const Icon(FluentIcons.chevron_right_24_regular),
-          tooltip: 'הבא',
         ),
-        icon: FluentIcons.chevron_right_24_regular,
-        tooltip: 'הבא',
-        onPressed: () {
-          if (widget.tab.pdfViewerController.isReady) {
-            final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
-            widget.tab.pdfViewerController.goToPage(
-              pageNumber: min(
-                  currentPage + 1, widget.tab.pdfViewerController.pageCount),
-            );
-          }
-        },
-      ),
 
-      // 9) Last Page Button
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.arrow_next_24_filled),
+        // 9) Last Page Button
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.arrow_next_24_filled),
+            tooltip: 'סוף הספר',
+            onPressed: () => widget.tab.pdfViewerController
+                .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
+          ),
+          icon: FluentIcons.arrow_next_24_filled,
           tooltip: 'סוף הספר',
           onPressed: () => widget.tab.pdfViewerController
               .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
         ),
-        icon: FluentIcons.arrow_next_24_filled,
-        tooltip: 'סוף הספר',
-        onPressed: () => widget.tab.pdfViewerController
-            .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
-      ),
+      ],
     ];
   }
 
   /// כפתורים שתמיד יהיו בתפריט "..."
   List<ActionButtonData> _buildAlwaysInMenuPdfActions(BuildContext context) {
     return [
+      // כפתורי ניווט - רק בתצוגה משולבת
+      if (widget.isInCombinedView) ...[
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.arrow_previous_24_regular),
+            tooltip: 'תחילת הספר',
+            onPressed: () =>
+                widget.tab.pdfViewerController.goToPage(pageNumber: 1),
+          ),
+          icon: FluentIcons.arrow_previous_24_regular,
+          tooltip: 'תחילת הספר',
+          onPressed: () => widget.tab.pdfViewerController.goToPage(pageNumber: 1),
+        ),
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.chevron_left_24_regular),
+            tooltip: 'הקודם',
+            onPressed: () {
+              if (widget.tab.pdfViewerController.isReady) {
+                final currentPage =
+                    widget.tab.pdfViewerController.pageNumber ?? 1;
+                widget.tab.pdfViewerController.goToPage(
+                  pageNumber: max(currentPage - 1, 1),
+                );
+              }
+            },
+          ),
+          icon: FluentIcons.chevron_left_24_regular,
+          tooltip: 'הקודם',
+          onPressed: () {
+            if (widget.tab.pdfViewerController.isReady) {
+              final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
+              widget.tab.pdfViewerController.goToPage(
+                pageNumber: max(currentPage - 1, 1),
+              );
+            }
+          },
+        ),
+        ActionButtonData(
+          widget: IconButton(
+            onPressed: () {
+              if (widget.tab.pdfViewerController.isReady) {
+                final currentPage =
+                    widget.tab.pdfViewerController.pageNumber ?? 1;
+                widget.tab.pdfViewerController.goToPage(
+                  pageNumber: min(
+                      currentPage + 1, widget.tab.pdfViewerController.pageCount),
+                );
+              }
+            },
+            icon: const Icon(FluentIcons.chevron_right_24_regular),
+            tooltip: 'הבא',
+          ),
+          icon: FluentIcons.chevron_right_24_regular,
+          tooltip: 'הבא',
+          onPressed: () {
+            if (widget.tab.pdfViewerController.isReady) {
+              final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
+              widget.tab.pdfViewerController.goToPage(
+                pageNumber: min(
+                    currentPage + 1, widget.tab.pdfViewerController.pageCount),
+              );
+            }
+          },
+        ),
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.arrow_next_24_filled),
+            tooltip: 'סוף הספר',
+            onPressed: () => widget.tab.pdfViewerController
+                .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
+          ),
+          icon: FluentIcons.arrow_next_24_filled,
+          tooltip: 'סוף הספר',
+          onPressed: () => widget.tab.pdfViewerController
+              .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
+        ),
+      ],
+
       // 1) הצג הערות אישיות
       ActionButtonData(
         widget: IconButton(
@@ -1221,8 +1305,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: () => _handleBookmarkPress(context),
       ),
 
-      // 4) איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת)
-      if (context.read<SettingsBloc>().state.enablePerBookSettings)
+      // 4) איפוס הגדרות פר-ספר - לא בתצוגה משולבת
+      if (!widget.isInCombinedView &&
+          context.read<SettingsBloc>().state.enablePerBookSettings)
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.arrow_reset_24_regular),
@@ -1234,17 +1319,43 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           onPressed: () => _resetPerBookSettings(),
         ),
 
-      // 5) הדפסה
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.print_24_regular),
+      // 5) הדפסה - לא בתצוגה משולבת
+      if (!widget.isInCombinedView)
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.print_24_regular),
+            tooltip: 'הדפס',
+            onPressed: () => _handlePrintPress(context),
+          ),
+          icon: FluentIcons.print_24_regular,
           tooltip: 'הדפס',
           onPressed: () => _handlePrintPress(context),
         ),
-        icon: FluentIcons.print_24_regular,
-        tooltip: 'הדפס',
-        onPressed: () => _handlePrintPress(context),
-      ),
+
+      // תת-תפריט "פעולות נוספות" - רק בתצוגה משולבת
+      if (widget.isInCombinedView)
+        ActionButtonData(
+          widget: const SizedBox.shrink(), // לא נראה כי זה בתפריט
+          icon: FluentIcons.more_horizontal_24_regular,
+          tooltip: 'פעולות נוספות',
+          onPressed: null, // לא ניתן ללחיצה - זה submenu
+          submenuItems: [
+            // איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת)
+            if (context.read<SettingsBloc>().state.enablePerBookSettings)
+              ActionButtonData(
+                widget: const SizedBox.shrink(),
+                icon: FluentIcons.arrow_reset_24_regular,
+                tooltip: 'אפס הגדרות ספר זה',
+                onPressed: () => _resetPerBookSettings(),
+              ),
+            ActionButtonData(
+              widget: const SizedBox.shrink(),
+              icon: FluentIcons.print_24_regular,
+              tooltip: 'הדפס',
+              onPressed: () => _handlePrintPress(context),
+            ),
+          ],
+        ),
     ];
   }
 
@@ -1449,6 +1560,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       filename: fileName,
     );
   }
+
+
 
   Widget _buildTextButton(
       BuildContext context, PdfBook book, PdfViewerController controller) {

@@ -4,6 +4,7 @@ a tab is either a pdf book or a text book, or a full text search window*/
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/models/books.dart';
 
 abstract class OpenedTab {
@@ -28,6 +29,13 @@ abstract class OpenedTab {
       return PdfBookTab(
         book: tab.book,
         pageNumber: tab.pageNumber,
+        isPinned: tab.isPinned,
+      );
+    } else if (tab is CombinedTab) {
+      return CombinedTab(
+        rightTab: OpenedTab.from(tab.rightTab),
+        leftTab: OpenedTab.from(tab.leftTab),
+        splitRatio: tab.splitRatio,
         isPinned: tab.isPinned,
       );
     }
@@ -66,6 +74,8 @@ abstract class OpenedTab {
       return TextBookTab.fromJson(json);
     } else if (type == 'PdfBookTab') {
       return PdfBookTab.fromJson(json);
+    } else if (type == 'CombinedTab') {
+      return CombinedTab.fromJson(json);
     }
     return SearchingTab.fromJson(json);
   }

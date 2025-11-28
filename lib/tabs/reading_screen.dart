@@ -15,6 +15,7 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/search/view/full_text_search_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
@@ -392,15 +393,13 @@ class _ReadingScreenState extends State<ReadingScreen>
                 ),
                 body: SizedBox.fromSize(
                   size: MediaQuery.of(context).size,
-                  child: _shouldShowSideBySideView(state)
-                      ? _buildSideBySideView(state)
-                      : TabBarView(
-                          key: const ValueKey('normal_tab_view'),
-                          controller: controller,
-                          children: state.tabs
-                              .map((tab) => _buildTabView(tab))
-                              .toList(),
-                        ),
+                  child: TabBarView(
+                    key: const ValueKey('normal_tab_view'),
+                    controller: controller,
+                    children: state.tabs
+                        .map((tab) => _buildTabView(tab))
+                        .toList(),
+                  ),
                 ),
               );
             },
@@ -411,7 +410,10 @@ class _ReadingScreenState extends State<ReadingScreen>
   }
 
   Widget _buildTabView(OpenedTab tab) {
-    if (tab is PdfBookTab) {
+    if (tab is CombinedTab) {
+      // הצגת שני הספרים זה לצד זה
+      return _buildCombinedTabView(tab);
+    } else if (tab is PdfBookTab) {
       return PdfBookScreen(
         key: PageStorageKey(tab),
         tab: tab,
@@ -436,15 +438,50 @@ class _ReadingScreenState extends State<ReadingScreen>
     return const SizedBox.shrink();
   }
 
+  Widget _buildCombinedTabView(CombinedTab combinedTab) {
+    return _SideBySideViewWidget(
+      key: ValueKey('combined_${combinedTab.rightTab.title}_${combinedTab.leftTab.title}'),
+      rightTab: combinedTab.rightTab,
+      leftTab: combinedTab.leftTab,
+      initialSplitRatio: combinedTab.splitRatio,
+      onSplitRatioChanged: (ratio) {
+        context.read<TabsBloc>().add(UpdateSplitRatio(ratio));
+      },
+      buildTabView: (tab) => _buildSingleTabContent(tab, isInCombinedView: true),
+    );
+  }
+
+  Widget _buildSingleTabContent(OpenedTab tab, {bool isInCombinedView = false}) {
+    if (tab is PdfBookTab) {
+      return PdfBookScreen(
+        key: PageStorageKey(tab),
+        tab: tab,
+        isInCombinedView: isInCombinedView,
+      );
+    } else if (tab is TextBookTab) {
+      return BlocProvider.value(
+          value: tab.bloc,
+          child: TextBookViewerBloc(
+            openBookCallback: (tab, {int index = 1}) {
+              context.read<TabsBloc>().add(AddTab(tab));
+            },
+            tab: tab,
+            isInCombinedView: isInCombinedView,
+          ));
+    } else if (tab is SearchingTab) {
+      return FullTextSearchScreen(
+        tab: tab,
+        openBookCallback: (tab, {int index = 1}) {
+          context.read<TabsBloc>().add(AddTab(tab));
+        },
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
   Widget _buildTab(BuildContext context, OpenedTab tab, TabsState state) {
     final index = state.tabs.indexOf(tab);
-    // במצב side-by-side, רק הטאבים המוצגים יהיו מסומנים
-    // אבל רק אם אנחנו באמת מציגים את מצב side-by-side
-    final isShowingSideBySide = _shouldShowSideBySideView(state);
-    final isSelected = isShowingSideBySide
-        ? (index == state.sideBySideMode!.rightTabIndex ||
-            index == state.sideBySideMode!.leftTabIndex)
-        : (index == state.currentTabIndex);
+    final isSelected = index == state.currentTabIndex;
     final closeTabShortcut =
         Settings.getValue<String>('key-shortcut-close-tab') ?? 'ctrl+w';
 
@@ -474,12 +511,12 @@ class _ReadingScreenState extends State<ReadingScreen>
               onSelected: () => context.read<TabsBloc>().add(CloneTab(tab)),
             ),
             const MenuDivider(),
-            // אפשרות "הצג לצד" - רק אם יש יותר מטאב אחד ולא במצב side-by-side
-            if (state.tabs.length > 1 && !state.isSideBySideMode)
+            // אפשרות "הצג לצד" - רק אם יש יותר מטאב אחד והטאב הנוכחי אינו משולב
+            if (state.tabs.length > 1 && tab is! CombinedTab)
               MenuItem.submenu(
                 label: 'הצג לצד',
                 items: state.tabs
-                    .where((t) => t != tab)
+                    .where((t) => t != tab && t is! CombinedTab)
                     .map((otherTab) => MenuItem(
                           label: otherTab.title,
                           onSelected: () {
@@ -493,13 +530,19 @@ class _ReadingScreenState extends State<ReadingScreen>
                         ))
                     .toList(),
               ),
-            // אפשרות "בטל הצגת ספרים זה לצד זה" - רק במצב side-by-side
-            if (state.isSideBySideMode)
+            // אפשרויות לטאב משולב
+            if (tab is CombinedTab) ...[
               MenuItem(
-                label: 'בטל הצגת ספרים זה לצד זה',
+                label: 'החלף את צדדי הספרים',
+                onSelected: () =>
+                    context.read<TabsBloc>().add(const SwapSideBySideTabs()),
+              ),
+              MenuItem(
+                label: 'פרק טאב משולב',
                 onSelected: () =>
                     context.read<TabsBloc>().add(const DisableSideBySideMode()),
               ),
+            ],
             const MenuDivider(),
             MenuItem(
               label: 'רשימת הכרטיסיות',
@@ -541,13 +584,7 @@ class _ReadingScreenState extends State<ReadingScreen>
             builder: (context, candidateData, rejectedData) {
               // קביעת אילו טאבים נחשבים "פעילים" לצורך פס ההפרדה
               bool isTabActive(int tabIndex) {
-                // רק אם אנחנו באמת מציגים side-by-side
-                if (isShowingSideBySide) {
-                  return tabIndex == state.sideBySideMode!.rightTabIndex ||
-                      tabIndex == state.sideBySideMode!.leftTabIndex;
-                } else {
-                  return tabIndex == state.currentTabIndex;
-                }
+                return tabIndex == state.currentTabIndex;
               }
 
               return Row(
@@ -584,13 +621,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                               Theme.of(context).colorScheme.surfaceContainer)
                           : null,
                       foregroundPainter: isSelected
-                          ? _TabBorderPainter(
-                              isInSideBySideMode: isShowingSideBySide,
-                              isLeftTab: isShowingSideBySide &&
-                                  index == state.sideBySideMode!.leftTabIndex,
-                              isRightTab: isShowingSideBySide &&
-                                  index == state.sideBySideMode!.rightTabIndex,
-                            )
+                          ? _TabBorderPainter()
                           : null,
                       child: Tab(
                         child: Padding(
@@ -607,7 +638,22 @@ class _ReadingScreenState extends State<ReadingScreen>
                                     size: 14,
                                   ),
                                 ),
-                              if (tab is SearchingTab)
+                              if (tab is CombinedTab)
+                                Tooltip(
+                                  message: tab.title,
+                                  child: Row(
+                                    children: [
+                                      const Padding(
+                                        padding: EdgeInsets.all(8.0),
+                                        child: Icon(
+                                            FluentIcons.panel_left_text_24_regular,
+                                            size: 16),
+                                      ),
+                                      Text(truncate(tab.title, 20)),
+                                    ],
+                                  ),
+                                )
+                              else if (tab is SearchingTab)
                                 ValueListenableBuilder(
                                   valueListenable: tab.queryController,
                                   builder: (context, value, child) => Tooltip(
@@ -835,52 +881,7 @@ class _ReadingScreenState extends State<ReadingScreen>
     );
   }
 
-  bool _shouldShowSideBySideView(TabsState state) {
-    // מציג side-by-side רק אם:
-    // 1. המצב קיים
-    // 2. הטאב הנוכחי הוא אחד משני הטאבים המוצגים
-    // 3. לא במצב מעבר (indexIsChanging)
-    if (!state.isSideBySideMode) return false;
 
-    final isOneOfSideBySideTabs =
-        state.currentTabIndex == state.sideBySideMode!.rightTabIndex ||
-            state.currentTabIndex == state.sideBySideMode!.leftTabIndex;
-
-    return isOneOfSideBySideTabs;
-  }
-
-  Widget _buildSideBySideView(TabsState state) {
-    // בדיקה שהאינדקסים תקינים
-    if (!state.isSideBySideMode) {
-      return const SizedBox.shrink();
-    }
-
-    final sideBySideMode = state.sideBySideMode!;
-
-    // וידוא שהאינדקסים תקינים
-    if (sideBySideMode.rightTabIndex >= state.tabs.length ||
-        sideBySideMode.leftTabIndex >= state.tabs.length) {
-      return const SizedBox.shrink();
-    }
-
-    final rightTab = state.tabs[sideBySideMode.rightTabIndex];
-    final leftTab = state.tabs[sideBySideMode.leftTabIndex];
-
-    return _SideBySideViewWidget(
-      key: ValueKey(
-          '${sideBySideMode.rightTabIndex}_${sideBySideMode.leftTabIndex}'),
-      rightTab: rightTab,
-      leftTab: leftTab,
-      initialSplitRatio: sideBySideMode.splitRatio,
-      onSplitRatioChanged: (ratio) {
-        context.read<TabsBloc>().add(UpdateSplitRatio(ratio));
-      },
-      onSwapSides: () {
-        context.read<TabsBloc>().add(const SwapSideBySideTabs());
-      },
-      buildTabView: _buildTabView,
-    );
-  }
 }
 
 // Widget להצגת 2 ספרים זה לצד זה
@@ -889,7 +890,6 @@ class _SideBySideViewWidget extends StatefulWidget {
   final OpenedTab leftTab;
   final double initialSplitRatio;
   final Function(double) onSplitRatioChanged;
-  final Function() onSwapSides;
   final Widget Function(OpenedTab) buildTabView;
 
   const _SideBySideViewWidget({
@@ -898,7 +898,6 @@ class _SideBySideViewWidget extends StatefulWidget {
     required this.leftTab,
     required this.initialSplitRatio,
     required this.onSplitRatioChanged,
-    required this.onSwapSides,
     required this.buildTabView,
   });
 
@@ -985,41 +984,6 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
                 ),
               ],
             ),
-            // כפתור החלפת צדדים - באמצע פס ההפרדה, למעלה
-            Positioned(
-              right: rightWidth - 10, // הזזה שמאלה
-              top: 12,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surface
-                      .withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(16), // הקטנה
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  iconSize: 16, // הקטנת האייקון
-                  padding: const EdgeInsets.all(6), // הקטנת הפדינג
-                  constraints: const BoxConstraints(
-                    minWidth: 30, // הקטנת הגודל
-                    minHeight: 30,
-                  ),
-                  icon: Icon(
-                    FluentIcons.arrow_swap_24_regular,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                  tooltip: 'הפוך צדדים',
-                  onPressed: widget.onSwapSides,
-                ),
-              ),
-            ),
           ],
         );
       },
@@ -1083,15 +1047,7 @@ class _TabBackgroundPainter extends CustomPainter {
 // CustomPainter לציור גבול מעוגל לטאב הפעיל
 // עם קווים המשתרעים משני הצדדים עד סוף החלון
 class _TabBorderPainter extends CustomPainter {
-  final bool isInSideBySideMode;
-  final bool isLeftTab;
-  final bool isRightTab;
-
-  _TabBorderPainter({
-    this.isInSideBySideMode = false,
-    this.isLeftTab = false,
-    this.isRightTab = false,
-  });
+  _TabBorderPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1152,25 +1108,19 @@ class _TabBorderPainter extends CustomPainter {
     canvas.drawPath(leftBottomPath, paint);
 
     // קווים ארוכים נפרדים - משני הצדדים
-    // במצב side-by-side, לא מציירים קו בין שני הטאבים המקובצים
+    // קו ימני
+    canvas.drawLine(
+      Offset(size.width + radius, size.height + bottomOffset),
+      Offset(size.width + extendLength, size.height + bottomOffset),
+      paint,
+    );
 
-    // קו ימני - לא מציירים אם זה הטאב השמאלי במצב side-by-side
-    if (!(isInSideBySideMode && isLeftTab)) {
-      canvas.drawLine(
-        Offset(size.width + radius, size.height + bottomOffset),
-        Offset(size.width + extendLength, size.height + bottomOffset),
-        paint,
-      );
-    }
-
-    // קו שמאלי - לא מציירים אם זה הטאב הימני במצב side-by-side
-    if (!(isInSideBySideMode && isRightTab)) {
-      canvas.drawLine(
-        Offset(-radius, size.height + bottomOffset),
-        Offset(-extendLength, size.height + bottomOffset),
-        paint,
-      );
-    }
+    // קו שמאלי
+    canvas.drawLine(
+      Offset(-radius, size.height + bottomOffset),
+      Offset(-extendLength, size.height + bottomOffset),
+      paint,
+    );
   }
 
   @override
