@@ -41,6 +41,8 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
   void didUpdateWidget(covariant PersonalNotesSidebar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.bookId != widget.bookId) {
+      _searchController.clear();
+      _searchQuery = '';
       context.read<PersonalNotesBloc>().add(LoadPersonalNotes(widget.bookId));
     }
   }
@@ -54,8 +56,9 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<PersonalNotesBloc, PersonalNotesState>(
+      buildWhen: (previous, current) => current.bookId == widget.bookId,
       builder: (context, state) {
-        if (state.isLoading && state.locatedNotes.isEmpty) {
+        if (state.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
 
