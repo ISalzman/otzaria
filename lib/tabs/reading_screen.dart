@@ -77,16 +77,32 @@ class _ReadingScreenState extends State<ReadingScreen>
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<TabsBloc, TabsState>(
-      listener: (context, state) {
-        if (state.hasOpenTabs) {
-          context
-              .read<HistoryBloc>()
-              .add(CaptureStateForHistory(state.currentTab!));
-        }
-      },
-      listenWhen: (previous, current) =>
-          previous.currentTabIndex != current.currentTabIndex,
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<TabsBloc, TabsState>(
+          listener: (context, state) {
+            if (state.hasOpenTabs) {
+              context
+                  .read<HistoryBloc>()
+                  .add(CaptureStateForHistory(state.currentTab!));
+            }
+          },
+          listenWhen: (previous, current) =>
+              previous.currentTabIndex != current.currentTabIndex,
+        ),
+        BlocListener<TabsBloc, TabsState>(
+          listener: (context, state) {
+            // כשסוגרים את הטאב האחרון, עוברים למסך הספרייה
+            if (!state.hasOpenTabs) {
+              context.read<NavigationBloc>().add(
+                    const NavigateToScreen(Screen.library),
+                  );
+            }
+          },
+          listenWhen: (previous, current) =>
+              previous.hasOpenTabs && !current.hasOpenTabs,
+        ),
+      ],
       child: BlocBuilder<SettingsBloc, SettingsState>(
         builder: (context, settingsState) {
           return BlocBuilder<TabsBloc, TabsState>(
