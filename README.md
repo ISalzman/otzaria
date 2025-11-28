@@ -12,7 +12,7 @@
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
+[![GPL-3.0 License][license-shield]][license-url]
 
 
 
@@ -212,7 +212,13 @@ Don't forget to give the project a star! Thanks again!
 <!-- LICENSE -->
 ## License
 
-The code is totally open-sourced under the [Unlicense](https://unlicense.org/) license.
+The code is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
+
+This means:
+- ✅ You can use, modify, and distribute this software
+- ✅ Any modifications must be released under the same GPL-3.0 license
+- ✅ Source code must be made available when distributing
+- ❌ Commercial use requires sharing all modifications and improvements
 
 The texts have different open licenses. You may check Sefaria's site for more info on that.
 
