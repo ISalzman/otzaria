@@ -323,7 +323,7 @@ class _LocatedNoteTile extends StatefulWidget {
 }
 
 class _LocatedNoteTileState extends State<_LocatedNoteTile> {
-  bool _isExpanded = false;
+  bool _isExpanded = true;
 
   @override
   Widget build(BuildContext context) {
@@ -411,7 +411,7 @@ class _MissingNoteTile extends StatefulWidget {
 }
 
 class _MissingNoteTileState extends State<_MissingNoteTile> {
-  bool _isExpanded = false;
+  bool _isExpanded = true;
 
   @override
   Widget build(BuildContext context) {
