@@ -66,6 +66,17 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
     }
   }
 
+  Widget _buildCenteredLabel(String text) {
+    return SizedBox(
+      width: 74,
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 11),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _calendarCubit.close();
@@ -99,36 +110,41 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
             )
           : Row(
               children: [
-                NavigationRail(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: (int index) {
-                    setState(() {
-                      _selectedIndex = index;
-                    });
-                  },
-                  labelType: NavigationRailLabelType.all,
-                  destinations: const [
-                    NavigationRailDestination(
-                      icon: Icon(Icons.calendar_month_outlined),
-                      label: Text('לוח שנה'),
-                    ),
-                    NavigationRailDestination(
-                      icon: ImageIcon(AssetImage('assets/icon/זכור ושמור.png')),
-                      label: Text('זכור ושמור'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.straighten),
-                      label: Text('מדות ושיעורים'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(FluentIcons.note_24_regular),
-                      label: Text('הערות אישיות'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(FluentIcons.calculator_24_regular),
-                      label: Text('גימטריות'),
-                    ),
-                  ],
+                SizedBox(
+                  width: 74,
+                  child: NavigationRail(
+                    selectedIndex: _selectedIndex,
+                    onDestinationSelected: (int index) {
+                      setState(() {
+                        _selectedIndex = index;
+                      });
+                    },
+                    labelType: NavigationRailLabelType.all,
+                    minWidth: 74,
+                    destinations: [
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        label: _buildCenteredLabel('לוח שנה'),
+                      ),
+                      NavigationRailDestination(
+                        icon: const ImageIcon(
+                            AssetImage('assets/icon/זכור ושמור.png')),
+                        label: _buildCenteredLabel('זכור ושמור'),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.straighten),
+                        label: _buildCenteredLabel('מדות ושיעורים'),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(FluentIcons.note_24_regular),
+                        label: _buildCenteredLabel('הערות אישיות'),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(FluentIcons.calculator_24_regular),
+                        label: _buildCenteredLabel('גימטריות'),
+                      ),
+                    ],
+                  ),
                 ),
                 const VerticalDivider(thickness: 1, width: 1),
                 Expanded(

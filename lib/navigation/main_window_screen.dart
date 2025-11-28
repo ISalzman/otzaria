@@ -50,13 +50,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
   // EmptyLibraryScreen inside the library tab while keeping the
   // rest of the application UI available.
   List<Widget> _pages = [];
-  
+
   // שמירת הדפים כדי שלא ייבנו מחדש
   Widget? _cachedLibraryPage;
   Widget? _cachedReadingPage;
   Widget? _cachedMorePage;
   Widget? _cachedSettingsPage;
-  
+
   // שמירת מצב הספרייה הקודם כדי לזהות שינויים
   bool? _previousLibraryEmptyState;
 
@@ -279,8 +279,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
             // into the library page while keeping the rest of the app visible.
             // נבנה את הדפים רק פעם אחת ונשמור אותם
             // אם מצב הספרייה השתנה, נבנה מחדש את דף הספרייה
-            if (_cachedLibraryPage == null || 
-                state.isLibraryEmpty != (_cachedLibraryPage is EmptyLibraryScreen) ||
+            if (_cachedLibraryPage == null ||
+                state.isLibraryEmpty !=
+                    (_cachedLibraryPage is EmptyLibraryScreen) ||
                 _previousLibraryEmptyState != state.isLibraryEmpty) {
               _cachedLibraryPage = state.isLibraryEmpty
                   ? EmptyLibraryScreen(
@@ -291,11 +292,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   : const LibraryBrowser();
               _previousLibraryEmptyState = state.isLibraryEmpty;
             }
-            
+
             _cachedReadingPage ??= const ReadingScreen();
             _cachedMorePage ??= MoreScreen(key: moreScreenKey);
             _cachedSettingsPage ??= const MySettingsScreen();
-            
+
             _pages = [
               _cachedLibraryPage!,
               _cachedReadingPage!,
@@ -325,7 +326,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                           return Row(
                             children: [
                               SizedBox.fromSize(
-                                size: const Size.fromWidth(80),
+                                size: const Size.fromWidth(74),
                                 child: Material(
                                   color: Theme.of(context).colorScheme.surface,
                                   child: LayoutBuilder(
@@ -564,7 +565,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      width: 80,
+      width: 74,
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -615,14 +616,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              minimumSize: const Size(64, 25),
+              minimumSize: const Size(56, 25),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             destination.label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               color: isSelected
                   ? colorScheme.onSecondaryContainer
                   : colorScheme.onSurfaceVariant,
