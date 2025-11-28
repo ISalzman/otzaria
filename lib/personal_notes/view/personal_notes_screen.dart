@@ -808,8 +808,8 @@ class _PersonalNotesManagerScreenState extends State<PersonalNotesManagerScreen>
                 final actualCardWidth = (availableWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
                 
                 // Adjust aspect ratio based on actual card width
-                // Target height is around 200px, so aspectRatio = width / 200
-                final aspectRatio = actualCardWidth / 200.0;
+                // Target height is around 150px (lower = more rectangular), so aspectRatio = width / 150
+                final aspectRatio = actualCardWidth / 150.0;
                 
                 return GridView.builder(
                   shrinkWrap: true,

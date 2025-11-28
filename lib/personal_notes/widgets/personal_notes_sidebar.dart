@@ -365,17 +365,21 @@ class _LocatedNoteTileState extends State<_LocatedNoteTile> {
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
           child: _isExpanded
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 12.0),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      widget.note.content,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            height: 1.5,
-                          ),
-                      textAlign: TextAlign.justify,
-                      textDirection: TextDirection.rtl,
+              ? InkWell(
+                  onTap: widget.onTap,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 12.0),
+                    color: Theme.of(context).colorScheme.surface,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        widget.note.content,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              height: 1.5,
+                            ),
+                        textAlign: TextAlign.justify,
+                        textDirection: TextDirection.rtl,
+                      ),
                     ),
                   ),
                 )
@@ -462,37 +466,41 @@ class _MissingNoteTileState extends State<_MissingNoteTile> {
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
           child: _isExpanded
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (widget.note.lastKnownLineNumber != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
+              ? InkWell(
+                  onTap: widget.onReposition,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 12.0),
+                    color: Theme.of(context).colorScheme.surfaceTint.withValues(alpha: 0.05),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (widget.note.lastKnownLineNumber != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: Text(
+                              'שורה קודמת: ${widget.note.lastKnownLineNumber}',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.6),
+                                  ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        Align(
+                          alignment: Alignment.centerRight,
                           child: Text(
-                            'שורה קודמת: ${widget.note.lastKnownLineNumber}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withValues(alpha: 0.6),
+                            widget.note.content,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  height: 1.5,
                                 ),
-                            textAlign: TextAlign.right,
+                            textAlign: TextAlign.justify,
+                            textDirection: TextDirection.rtl,
                           ),
                         ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          widget.note.content,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                height: 1.5,
-                              ),
-                          textAlign: TextAlign.justify,
-                          textDirection: TextDirection.rtl,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 )
               : const SizedBox.shrink(),
