@@ -59,7 +59,7 @@ class SettingsRepository {
       ),
       'textMaxWidth':
           _settings.getValue<double>(keyTextMaxWidth, defaultValue: -1),
-      'fontSize': _settings.getValue<double>(keyFontSize, defaultValue: 16),
+      'fontSize': _settings.getValue<double>(keyFontSize, defaultValue: 25),
       'fontFamily': _settings.getValue<String>(
         keyFontFamily,
         defaultValue: 'FrankRuhlCLM',
@@ -364,7 +364,7 @@ class SettingsRepository {
     await _settings.setValue(keyDarkMode, false);
     await _settings.setValue(keySwatchColor, '#ff2c1b02');
     await _settings.setValue(keyTextMaxWidth, -1.0);
-    await _settings.setValue(keyFontSize, 16.0);
+    await _settings.setValue(keyFontSize, 25.0);
     await _settings.setValue(keyFontFamily, 'FrankRuhlCLM');
     await _settings.setValue(keyShowOtzarHachochma, false);
     await _settings.setValue(keyShowHebrewBooks, false);
