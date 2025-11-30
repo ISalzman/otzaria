@@ -125,7 +125,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           
           try {
-            $downloadUrl = "https://github.com/Y-PLONI/otzaria-library/releases/download/latest/otzaria_latest.zip"
+            $downloadUrl = "https://github.com/Y-PLONI/otzaria-library/releases/latest/download/otzaria_latest.zip"
             Write-Host "Downloading from: $downloadUrl"
             
             Invoke-WebRequest -Uri $downloadUrl -OutFile "otzaria_latest.zip" -UseBasicParsing
