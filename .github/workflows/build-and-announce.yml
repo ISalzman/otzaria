@@ -125,7 +125,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           
           try {
-            $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Y-PLONI/otzaria-library/releases/latest"
+            $latestRelease = Invoke-RestMethod -Uri "https://github.com/Y-PLONI/otzaria-library/releases/latest/download/otzaria_latest.zip"
             $zipAsset = $latestRelease.assets | Where-Object { $_.name -eq "otzaria_latest.zip" }
             
             if (-not $zipAsset) {
