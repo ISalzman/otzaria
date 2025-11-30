@@ -348,18 +348,50 @@ void showReadingSettingsDialog(BuildContext context) {
                   ),
                   const Divider(),
 
-                  // רוחב השוליים בצידי הטקסט
+                  // רוחב הטקסט
                   StatefulBuilder(
                     builder: (context, setState) {
-                      double currentPadding = settingsState.paddingSize;
+                      // רוחב המסך לחישוב פיקסלים
+                      final screenWidth = MediaQuery.of(context).size.width;
+                      final currentMaxWidth = settingsState.textMaxWidth;
+                      
+                      // חישוב הרמה הנוכחית מהרוחב השמור
+                      // ערך שלילי = רמה דינמית (ברירת מחדל)
+                      // 0 = רוחב מלא
+                      // ערך חיובי = פיקסלים קבועים
+                      int currentLevel;
+                      if (currentMaxWidth < 0) {
+                        // ערך שלילי = רמה דינמית
+                        currentLevel = (-currentMaxWidth).toInt();
+                      } else if (currentMaxWidth == 0) {
+                        currentLevel = 0;
+                      } else {
+                        // ערך חיובי = פיקסלים, נחשב את הרמה המקבילה
+                        final ratio = currentMaxWidth / screenWidth;
+                        currentLevel = ((1.0 - ratio) / 0.05).round().clamp(0, 14);
+                      }
+                      
+                      // תיאור לפי אחוז הרוחב
+                      String getLevelDescription(int level) {
+                        if (level == 0) return 'מלא';
+                        final percent = 100 - (level * 5);
+                        return '$percent%';
+                      }
+
                       return Column(
                         children: [
                           ListTile(
                             leading: const Icon(
                                 FluentIcons.text_align_justify_24_regular),
-                            title: const Text('רוחב השוליים בצידי הטקסט'),
+                            title: const Text('רוחב הטקסט'),
+                            subtitle: Text(
+                              currentLevel == 0
+                                  ? 'הטקסט ימלא את כל הרוחב הזמין'
+                                  : 'הטקסט יהיה צר יותר ומרוכז במסך',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                             trailing: Text(
-                              currentPadding.toStringAsFixed(0),
+                              getLevelDescription(currentLevel),
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.primary,
                                 fontSize: 16,
@@ -371,16 +403,26 @@ void showReadingSettingsDialog(BuildContext context) {
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 16.0),
                             child: Slider(
-                              value: currentPadding,
+                              value: currentLevel.toDouble(),
                               min: 0,
-                              max: 500,
-                              divisions: 250,
-                              label: currentPadding.toStringAsFixed(0),
+                              max: 14,
+                              divisions: 14,
+                              label: getLevelDescription(currentLevel),
                               onChanged: (value) {
                                 setState(() {});
+                                // שומרים פיקסלים קבועים (לא רמה דינמית)
+                                final level = value.toInt();
+                                double newMaxWidth;
+                                if (level == 0) {
+                                  newMaxWidth = 0; // רוחב מלא
+                                } else {
+                                  // מחשבים פיקסלים לפי רוחב המסך הנוכחי
+                                  final widthPercent = 1.0 - (level * 0.05);
+                                  newMaxWidth = screenWidth * widthPercent;
+                                }
                                 context
                                     .read<SettingsBloc>()
-                                    .add(UpdatePaddingSize(value));
+                                    .add(UpdateTextMaxWidth(newMaxWidth));
                               },
                             ),
                           ),

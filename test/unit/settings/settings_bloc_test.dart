@@ -29,7 +29,7 @@ void main() {
       final mockSettings = {
         'isDarkMode': true,
         'seedColor': Colors.blue,
-        'paddingSize': 15.0,
+        'textMaxWidth': 800.0,
         'fontSize': 18.0,
         'fontFamily': 'Rubik',
         'commentatorsFontFamily': 'NotoRashiHebrew',
@@ -68,7 +68,7 @@ void main() {
           SettingsState(
             isDarkMode: mockSettings['isDarkMode'] as bool,
             seedColor: mockSettings['seedColor'] as Color,
-            paddingSize: mockSettings['paddingSize'] as double,
+            textMaxWidth: mockSettings['textMaxWidth'] as double,
             fontSize: mockSettings['fontSize'] as double,
             fontFamily: mockSettings['fontFamily'] as String,
             commentatorsFontFamily:

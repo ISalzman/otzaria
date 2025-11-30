@@ -6,6 +6,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 
 class TabsBloc extends Bloc<TabsEvent, TabsState> {
   final TabsRepository _repository;
@@ -310,18 +311,43 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       return;
     }
 
-    final sideBySideMode = SideBySideMode(
-      rightTabIndex: rightIndex,
-      leftTabIndex: leftIndex,
-    );
-
     debugPrint(
         'DEBUG: הפעלת מצב side-by-side: right=${event.rightTab.title}, left=${event.leftTab.title}');
 
-    _repository.saveTabs(state.tabs, state.currentTabIndex, sideBySideMode);
+    // יצירת טאב משולב חדש
+    final combinedTab = CombinedTab(
+      rightTab: event.rightTab,
+      leftTab: event.leftTab,
+      isPinned: event.rightTab.isPinned || event.leftTab.isPinned,
+    );
+
+    // הסרת שני הטאבים המקוריים והוספת הטאב המשולב במקומם
+    final newTabs = List<OpenedTab>.from(state.tabs);
+    
+    // מוצאים את האינדקס הנמוך יותר כדי להכניס שם את הטאב המשולב
+    final insertIndex = rightIndex < leftIndex ? rightIndex : leftIndex;
+    
+    // מסירים את שני הטאבים (מהגבוה לנמוך כדי לא לשבש אינדקסים)
+    if (rightIndex > leftIndex) {
+      newTabs.removeAt(rightIndex);
+      newTabs.removeAt(leftIndex);
+    } else {
+      newTabs.removeAt(leftIndex);
+      newTabs.removeAt(rightIndex);
+    }
+    
+    // מוסיפים את הטאב המשולב
+    newTabs.insert(insertIndex, combinedTab);
+
+    // האינדקס הנוכחי יהיה האינדקס של הטאב המשולב
+    final newCurrentIndex = insertIndex;
+
+    _repository.saveTabs(newTabs, newCurrentIndex, null);
 
     emit(state.copyWith(
-      sideBySideMode: sideBySideMode,
+      tabs: newTabs,
+      currentTabIndex: newCurrentIndex,
+      clearSideBySide: true,
       forceUpdate: true,
     ));
   }
@@ -330,43 +356,90 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       DisableSideBySideMode event, Emitter<TabsState> emit) {
     debugPrint('DEBUG: ביטול מצב side-by-side');
 
-    _repository.saveTabs(state.tabs, state.currentTabIndex, null);
+    // אם הטאב הנוכחי הוא CombinedTab, נפרק אותו לשני טאבים נפרדים
+    if (state.currentTab is CombinedTab) {
+      final combinedTab = state.currentTab as CombinedTab;
+      final newTabs = List<OpenedTab>.from(state.tabs);
+      final combinedIndex = state.currentTabIndex;
 
-    emit(state.copyWith(
-      clearSideBySide: true,
-      forceUpdate: true,
-    ));
+      // מסירים את הטאב המשולב
+      newTabs.removeAt(combinedIndex);
+
+      // מוסיפים את שני הטאבים המקוריים במקומו
+      newTabs.insert(combinedIndex, combinedTab.rightTab);
+      newTabs.insert(combinedIndex + 1, combinedTab.leftTab);
+
+      // האינדקס הנוכחי יהיה הטאב הימני
+      final newCurrentIndex = combinedIndex;
+
+      _repository.saveTabs(newTabs, newCurrentIndex, null);
+
+      emit(state.copyWith(
+        tabs: newTabs,
+        currentTabIndex: newCurrentIndex,
+        clearSideBySide: true,
+        forceUpdate: true,
+      ));
+    } else {
+      // אם זה לא טאב משולב, פשוט מנקים את המצב
+      _repository.saveTabs(state.tabs, state.currentTabIndex, null);
+
+      emit(state.copyWith(
+        clearSideBySide: true,
+        forceUpdate: true,
+      ));
+    }
   }
 
   void _onUpdateSplitRatio(UpdateSplitRatio event, Emitter<TabsState> emit) {
-    if (state.sideBySideMode == null) return;
+    // עדכון היחס של הטאב המשולב
+    if (state.currentTab is CombinedTab) {
+      final combinedTab = state.currentTab as CombinedTab;
+      combinedTab.splitRatio = event.ratio;
 
-    final updatedMode = state.sideBySideMode!.copyWith(splitRatio: event.ratio);
+      // שמירת השינוי
+      _repository.saveTabs(state.tabs, state.currentTabIndex, null);
 
-    _repository.saveTabs(state.tabs, state.currentTabIndex, updatedMode);
-
-    emit(state.copyWith(
-      sideBySideMode: updatedMode,
-    ));
+      emit(state.copyWith(
+        forceUpdate: true,
+      ));
+    }
   }
 
   void _onSwapSideBySideTabs(
       SwapSideBySideTabs event, Emitter<TabsState> emit) {
-    if (state.sideBySideMode == null) return;
+    // החלפת צדדים בטאב המשולב
+    if (state.currentTab is CombinedTab) {
+      final combinedTab = state.currentTab as CombinedTab;
 
-    debugPrint('DEBUG: החלפת צדדים במצב side-by-side');
+      debugPrint('DEBUG: החלפת צדדים במצב side-by-side');
 
-    final swappedMode = SideBySideMode(
-      leftTabIndex: state.sideBySideMode!.rightTabIndex,
-      rightTabIndex: state.sideBySideMode!.leftTabIndex,
-      splitRatio: 1.0 - state.sideBySideMode!.splitRatio,
-    );
+      // החלפת הטאבים
+      final tempTab = combinedTab.rightTab;
+      final newRightTab = combinedTab.leftTab;
+      final newLeftTab = tempTab;
 
-    _repository.saveTabs(state.tabs, state.currentTabIndex, swappedMode);
+      // יצירת טאב משולב חדש עם הטאבים המוחלפים
+      final newCombinedTab = CombinedTab(
+        rightTab: newRightTab,
+        leftTab: newLeftTab,
+        splitRatio: 1.0 - combinedTab.splitRatio,
+        isPinned: combinedTab.isPinned,
+      );
 
-    emit(state.copyWith(
-      sideBySideMode: swappedMode,
-      forceUpdate: true,
-    ));
+      // עדכון הרשימה
+      final newTabs = List<OpenedTab>.from(state.tabs);
+      newTabs[state.currentTabIndex] = newCombinedTab;
+
+      // ניקוי הטאב הישן
+      combinedTab.dispose();
+
+      _repository.saveTabs(newTabs, state.currentTabIndex, null);
+
+      emit(state.copyWith(
+        tabs: newTabs,
+        forceUpdate: true,
+      ));
+    }
   }
 }

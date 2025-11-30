@@ -48,11 +48,13 @@ import 'package:otzaria/settings/per_book_settings.dart';
 class TextBookViewerBloc extends StatefulWidget {
   final void Function(OpenedTab) openBookCallback;
   final TextBookTab tab;
+  final bool isInCombinedView;
 
   const TextBookViewerBloc({
     super.key,
     required this.openBookCallback,
     required this.tab,
+    this.isInCombinedView = false,
   });
 
   @override
@@ -548,25 +550,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     if (!mounted) return;
     final settingsBloc = context.read<SettingsBloc>();
     final textBookBloc = context.read<TextBookBloc>();
-    final tabsBloc = context.read<TabsBloc>();
-    final isSideBySide = tabsBloc.state.isSideBySideMode;
-
-    // בדיקה אם הטאב הנוכחי הוא אחד מהטאבים המוצגים
-    final currentTabIndex = tabsBloc.state.currentTabIndex;
-    final isInSideBySide = isSideBySide &&
-        (currentTabIndex == tabsBloc.state.sideBySideMode!.leftTabIndex ||
-            currentTabIndex == tabsBloc.state.sideBySideMode!.rightTabIndex);
 
     textBookBloc.add(LoadContent(
       fontSize: settingsBloc.state.fontSize,
-      // במצב side-by-side, מפרשים תמיד מתחת
-      showSplitView: isSideBySide
+      // בתצוגה משולבת, מפרשים תמיד מתחת
+      showSplitView: widget.isInCombinedView
           ? false
           : (Settings.getValue<bool>('key-splited-view') ?? false),
       removeNikud: settingsBloc.state.defaultRemoveNikud,
       preserveState: true,
-      // במצב side-by-side, חלונית הצד תמיד סגורה
-      forceCloseLeftPane: isInSideBySide,
+      // בתצוגה משולבת, חלונית הצד תמיד סגורה
+      forceCloseLeftPane: widget.isInCombinedView,
     ));
 
     if (mounted) {
@@ -653,29 +647,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     });
                   }
 
-                  // בדיקה אם נמצאים במצב side-by-side
-                  final tabsBloc = context.read<TabsBloc>();
-                  final isSideBySide = tabsBloc.state.isSideBySideMode;
-
-                  // בדיקה אם הטאב הנוכחי הוא אחד מהטאבים המוצגים
-                  final currentTabIndex = tabsBloc.state.currentTabIndex;
-                  final isInSideBySide = isSideBySide &&
-                      (currentTabIndex ==
-                              tabsBloc.state.sideBySideMode!.leftTabIndex ||
-                          currentTabIndex ==
-                              tabsBloc.state.sideBySideMode!.rightTabIndex);
-
                   context.read<TextBookBloc>().add(
                         LoadContent(
                           fontSize: settingsState.fontSize,
-                          // במצב side-by-side, מפרשים תמיד מתחת (showSplitView = false)
-                          showSplitView: isSideBySide
+                          // בתצוגה משולבת, מפרשים תמיד מתחת (showSplitView = false)
+                          showSplitView: widget.isInCombinedView
                               ? false
                               : (Settings.getValue<bool>('key-splited-view') ??
                                   false),
                           removeNikud: settingsState.defaultRemoveNikud,
-                          // במצב side-by-side, חלונית הצד תמיד סגורה
-                          forceCloseLeftPane: isInSideBySide,
+                          // בתצוגה משולבת, חלונית הצד תמיד סגורה
+                          forceCloseLeftPane: widget.isInCombinedView,
                         ),
                       );
                 }
@@ -1055,57 +1037,59 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ),
       ),
 
-      // 7) Navigation Buttons
-      ActionButtonData(
-        widget: _buildFirstPageButton(state),
-        icon: FluentIcons.arrow_previous_24_filled,
-        tooltip: 'תחילת הספר',
-        onPressed: () {
-          state.scrollController.scrollTo(
-            index: 0,
-            duration: const Duration(milliseconds: 300),
-          );
-        },
-      ),
-      ActionButtonData(
-        widget: _buildPreviousPageButton(state),
-        icon: FluentIcons.chevron_left_24_regular,
-        tooltip: 'הקטע הקודם',
-        onPressed: () {
-          state.scrollController.scrollTo(
-            duration: const Duration(milliseconds: 300),
-            index: max(
-              0,
-              state.positionsListener.itemPositions.value.first.index - 1,
-            ),
-          );
-        },
-      ),
-      ActionButtonData(
-        widget: _buildNextPageButton(state),
-        icon: FluentIcons.chevron_right_24_regular,
-        tooltip: 'הקטע הבא',
-        onPressed: () {
-          state.scrollController.scrollTo(
-            index: max(
-              state.positionsListener.itemPositions.value.first.index + 1,
-              state.positionsListener.itemPositions.value.length - 1,
-            ),
-            duration: const Duration(milliseconds: 300),
-          );
-        },
-      ),
-      ActionButtonData(
-        widget: _buildLastPageButton(state),
-        icon: FluentIcons.arrow_next_24_filled,
-        tooltip: 'סוף הספר',
-        onPressed: () {
-          state.scrollController.scrollTo(
-            index: state.content.length,
-            duration: const Duration(milliseconds: 300),
-          );
-        },
-      ),
+      // 7) Navigation Buttons - רק אם לא בתצוגה משולבת
+      if (!widget.isInCombinedView) ...[
+        ActionButtonData(
+          widget: _buildFirstPageButton(state),
+          icon: FluentIcons.arrow_previous_24_filled,
+          tooltip: 'תחילת הספר',
+          onPressed: () {
+            state.scrollController.scrollTo(
+              index: 0,
+              duration: const Duration(milliseconds: 300),
+            );
+          },
+        ),
+        ActionButtonData(
+          widget: _buildPreviousPageButton(state),
+          icon: FluentIcons.chevron_left_24_regular,
+          tooltip: 'הקטע הקודם',
+          onPressed: () {
+            state.scrollController.scrollTo(
+              duration: const Duration(milliseconds: 300),
+              index: max(
+                0,
+                state.positionsListener.itemPositions.value.first.index - 1,
+              ),
+            );
+          },
+        ),
+        ActionButtonData(
+          widget: _buildNextPageButton(state),
+          icon: FluentIcons.chevron_right_24_regular,
+          tooltip: 'הקטע הבא',
+          onPressed: () {
+            state.scrollController.scrollTo(
+              index: max(
+                state.positionsListener.itemPositions.value.first.index + 1,
+                state.positionsListener.itemPositions.value.length - 1,
+              ),
+              duration: const Duration(milliseconds: 300),
+            );
+          },
+        ),
+        ActionButtonData(
+          widget: _buildLastPageButton(state),
+          icon: FluentIcons.arrow_next_24_filled,
+          tooltip: 'סוף הספר',
+          onPressed: () {
+            state.scrollController.scrollTo(
+              index: state.content.length,
+              duration: const Duration(milliseconds: 300),
+            );
+          },
+        ),
+      ],
     ];
   }
 
@@ -1115,6 +1099,60 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     TextBookLoaded state,
   ) {
     return [
+      // כפתורי ניווט - רק בתצוגה משולבת
+      if (widget.isInCombinedView) ...[
+        ActionButtonData(
+          widget: _buildFirstPageButton(state),
+          icon: FluentIcons.arrow_previous_24_filled,
+          tooltip: 'תחילת הספר',
+          onPressed: () {
+            state.scrollController.scrollTo(
+              index: 0,
+              duration: const Duration(milliseconds: 300),
+            );
+          },
+        ),
+        ActionButtonData(
+          widget: _buildPreviousPageButton(state),
+          icon: FluentIcons.chevron_left_24_regular,
+          tooltip: 'הקטע הקודם',
+          onPressed: () {
+            state.scrollController.scrollTo(
+              duration: const Duration(milliseconds: 300),
+              index: max(
+                0,
+                state.positionsListener.itemPositions.value.first.index - 1,
+              ),
+            );
+          },
+        ),
+        ActionButtonData(
+          widget: _buildNextPageButton(state),
+          icon: FluentIcons.chevron_right_24_regular,
+          tooltip: 'הקטע הבא',
+          onPressed: () {
+            state.scrollController.scrollTo(
+              index: max(
+                state.positionsListener.itemPositions.value.first.index + 1,
+                state.positionsListener.itemPositions.value.length - 1,
+              ),
+              duration: const Duration(milliseconds: 300),
+            );
+          },
+        ),
+        ActionButtonData(
+          widget: _buildLastPageButton(state),
+          icon: FluentIcons.arrow_next_24_filled,
+          tooltip: 'סוף הספר',
+          onPressed: () {
+            state.scrollController.scrollTo(
+              index: state.content.length,
+              duration: const Duration(milliseconds: 300),
+            );
+          },
+        ),
+      ],
+
       // 1) הוספת סימניה
       ActionButtonData(
         widget: _buildBookmarkButton(context, state),
@@ -1165,8 +1203,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
-      // 4) איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת)
-      if (context.read<SettingsBloc>().state.enablePerBookSettings)
+      // 4) איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת) - לא בתצוגה משולבת
+      if (!widget.isInCombinedView &&
+          context.read<SettingsBloc>().state.enablePerBookSettings)
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.arrow_reset_24_regular),
@@ -1178,49 +1217,104 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           onPressed: () => _resetPerBookSettings(),
         ),
 
-      // 5) ערוך את הספר
-      ActionButtonData(
-        widget: _buildFullFileEditorButton(context, state),
-        icon: FluentIcons.document_edit_24_regular,
-        tooltip: 'ערוך את הספר',
-        onPressed: () => _handleFullFileEditorPress(context, state),
-      ),
+      // 5) ערוך את הספר - לא בתצוגה משולבת
+      if (!widget.isInCombinedView)
+        ActionButtonData(
+          widget: _buildFullFileEditorButton(context, state),
+          icon: FluentIcons.document_edit_24_regular,
+          tooltip: 'ערוך את הספר',
+          onPressed: () => _handleFullFileEditorPress(context, state),
+        ),
 
-      // 6) דווח על טעות בספר
-      ActionButtonData(
-        widget: _buildReportBugButton(context, state),
-        icon: FluentIcons.error_circle_24_regular,
-        tooltip: 'דווח על טעות בספר',
-        onPressed: () => _showReportBugDialog(context, state),
-      ),
+      // 6) דווח על טעות בספר - לא בתצוגה משולבת
+      if (!widget.isInCombinedView)
+        ActionButtonData(
+          widget: _buildReportBugButton(context, state),
+          icon: FluentIcons.error_circle_24_regular,
+          tooltip: 'דווח על טעות בספר',
+          onPressed: () => _showReportBugDialog(context, state),
+        ),
 
-      // 7) הדפסה
-      ActionButtonData(
-        widget: _buildPrintButton(context, state),
-        icon: FluentIcons.print_24_regular,
-        tooltip: 'הדפסה',
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => PrintingScreen(
-              data: Future.value(state.content.join('\n')),
-              startLine: state.visibleIndices.first,
-              removeNikud: state.removeNikud,
+      // 7) הדפסה - לא בתצוגה משולבת
+      if (!widget.isInCombinedView)
+        ActionButtonData(
+          widget: _buildPrintButton(context, state),
+          icon: FluentIcons.print_24_regular,
+          tooltip: 'הדפסה',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => PrintingScreen(
+                data: Future.value(state.content.join('\n')),
+                startLine: state.visibleIndices.first,
+                removeNikud: state.removeNikud,
+              ),
             ),
           ),
         ),
-      ),
 
-      // 8) מקור הספר וזכויות יוצרים
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.info_24_regular),
+      // 8) מקור הספר וזכויות יוצרים - לא בתצוגה משולבת
+      if (!widget.isInCombinedView)
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.info_24_regular),
+            tooltip: 'מקור הספר וזכויות יוצרים',
+            onPressed: () => showBookSourceDialog(context, state),
+          ),
+          icon: FluentIcons.info_24_regular,
           tooltip: 'מקור הספר וזכויות יוצרים',
           onPressed: () => showBookSourceDialog(context, state),
         ),
-        icon: FluentIcons.info_24_regular,
-        tooltip: 'מקור הספר וזכויות יוצרים',
-        onPressed: () => showBookSourceDialog(context, state),
-      ),
+
+      // תת-תפריט "פעולות נוספות" - רק בתצוגה משולבת
+      if (widget.isInCombinedView)
+        ActionButtonData(
+          widget: const SizedBox.shrink(), // לא נראה כי זה בתפריט
+          icon: FluentIcons.more_horizontal_24_regular,
+          tooltip: 'פעולות נוספות',
+          onPressed: null, // לא ניתן ללחיצה - זה submenu
+          submenuItems: [
+            // איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת)
+            if (context.read<SettingsBloc>().state.enablePerBookSettings)
+              ActionButtonData(
+                widget: const SizedBox.shrink(),
+                icon: FluentIcons.arrow_reset_24_regular,
+                tooltip: 'אפס הגדרות ספר זה',
+                onPressed: () => _resetPerBookSettings(),
+              ),
+            ActionButtonData(
+              widget: const SizedBox.shrink(),
+              icon: FluentIcons.document_edit_24_regular,
+              tooltip: 'ערוך את הספר',
+              onPressed: () => _handleFullFileEditorPress(context, state),
+            ),
+            ActionButtonData(
+              widget: const SizedBox.shrink(),
+              icon: FluentIcons.error_circle_24_regular,
+              tooltip: 'דווח על טעות בספר',
+              onPressed: () => _showReportBugDialog(context, state),
+            ),
+            ActionButtonData(
+              widget: const SizedBox.shrink(),
+              icon: FluentIcons.print_24_regular,
+              tooltip: 'הדפסה',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => PrintingScreen(
+                    data: Future.value(state.content.join('\n')),
+                    startLine: state.visibleIndices.first,
+                    removeNikud: state.removeNikud,
+                  ),
+                ),
+              ),
+            ),
+            ActionButtonData(
+              widget: const SizedBox.shrink(),
+              icon: FluentIcons.info_24_regular,
+              tooltip: 'מקור הספר וזכויות יוצרים',
+              onPressed: () => showBookSourceDialog(context, state),
+            ),
+          ],
+        ),
     ];
   }
 
@@ -1264,21 +1358,26 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   Widget _buildSplitViewButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
-      onPressed: () {
-        context.read<TextBookBloc>().add(
-              ToggleSplitView(!state.showSplitView),
-            );
-        _savePerBookSettings();
-      },
+      // בתצוגה משולבת, הכפתור מושבת (מפרשים תמיד מתחת)
+      onPressed: widget.isInCombinedView
+          ? null
+          : () {
+              context.read<TextBookBloc>().add(
+                    ToggleSplitView(!state.showSplitView),
+                  );
+              _savePerBookSettings();
+            },
       icon: RotatedBox(
         quarterTurns: state.showSplitView
             ? 0
             : 3, // מסובב 270 מעלות (90 נגד כיוון השעון) כשמתחת
         child: const Icon(FluentIcons.panel_left_24_regular),
       ),
-      tooltip: state.showSplitView
-          ? 'הצגת מפרשים מתחת הטקסט'
-          : 'הצגת מפרשים בצד הטקסט',
+      tooltip: widget.isInCombinedView
+          ? 'בתצוגה משולבת, מפרשים תמיד מתחת הטקסט'
+          : (state.showSplitView
+              ? 'הצגת מפרשים מתחת הטקסט'
+              : 'הצגת מפרשים בצד הטקסט'),
     );
   }
 
@@ -1442,6 +1541,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       onPressed: () => _showReportBugDialog(context, state),
     );
   }
+
+
 
   Widget _buildShamorZachorButton(BuildContext context, TextBookLoaded state) {
     // Always show button - either for marking progress or for adding to tracking
@@ -2242,18 +2343,28 @@ void _addBookmarkFromKeyboard(
 /// Helper function to add note from keyboard shortcut
 Future<void> _addNoteFromKeyboard(
     BuildContext context, TextBookLoaded state) async {
-  final positions = state.positionsListener.itemPositions.value;
-  final currentIndex = positions.isNotEmpty ? positions.first.index : 0;
+  // משתמש בשורה הנבחרת אם קיימת, אחרת בשורה הראשונה הנראית
+  final currentIndex = state.selectedIndex ?? 
+                       (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
   // לא צריך טקסט נבחר - ההערה חלה על כל השורה
   final controller = TextEditingController();
   final notesBloc = context.read<PersonalNotesBloc>();
   final textBookBloc = context.read<TextBookBloc>();
 
+  // קבלת הטקסט המזהה של השורה (כמו שיוצג ככותרת ההערה)
+  final referenceText = extractDisplayTextFromLines(
+    state.content,
+    currentIndex + 1,
+    excludeBookTitle: state.book.title,
+  );
+
   final noteContent = await showDialog<String>(
     context: context,
     builder: (dialogContext) => PersonalNoteEditorDialog(
-      title: 'הוסף הערה אישית לשורה זו',
+      title: 'הוסף הערה',
       controller: controller,
+      referenceText: referenceText,
+      icon: FluentIcons.note_add_24_regular,
     ),
   );
 
