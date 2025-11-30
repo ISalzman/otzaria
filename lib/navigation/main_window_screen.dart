@@ -26,6 +26,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/navigation/calendar_cubit.dart';
+import 'package:otzaria/widgets/ad_popup_dialog.dart';
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
@@ -72,6 +73,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
         Screen.library.index;
     _currentPageIndex = initialPage;
     pageController = PageController(initialPage: initialPage);
+
+    // הצגת פופאפ פרסומת אחרי 5 שניות
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AdPopupDialog.showIfNeeded(context);
+    });
   }
 
   void _checkAndStartIndexing(BuildContext context) {
