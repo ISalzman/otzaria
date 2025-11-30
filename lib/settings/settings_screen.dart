@@ -87,8 +87,6 @@ class _MySettingsScreenState extends State<MySettingsScreen>
     );
   }
 
-
-
   Widget _buildColumns(int maxColumns, List<Widget> children) {
     const double rowSpacing = 16.0;
     const double columnSpacing = 16.0;
@@ -926,17 +924,15 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                           ),
                         ]),
                       if (!(Platform.isAndroid || Platform.isIOS))
-
-
-                      SwitchSettingsTile(
-                        settingKey: 'key-dev-channel',
-                        title: 'עדכון לגרסאות מפתחים',
-                        enabledLabel:
-                            'קבלת עדכונים על גרסאות בדיקה, ייתכנו באגים וחוסר יציבות',
-                        disabledLabel: 'קבלת עדכונים על גרסאות יציבות בלבד',
-                        leading: const Icon(FluentIcons.bug_24_regular),
-                        activeColor: Theme.of(context).cardColor,
-                      ),
+                        SwitchSettingsTile(
+                          settingKey: 'key-dev-channel',
+                          title: 'עדכון לגרסאות מפתחים',
+                          enabledLabel:
+                              'קבלת עדכונים על גרסאות בדיקה, ייתכנו באגים וחוסר יציבות',
+                          disabledLabel: 'קבלת עדכונים על גרסאות יציבות בלבד',
+                          leading: const Icon(FluentIcons.bug_24_regular),
+                          activeColor: Theme.of(context).cardColor,
+                        ),
                       SimpleSettingsTile(
                         title: 'איפוס הגדרות',
                         subtitle:
