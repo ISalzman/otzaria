@@ -28,13 +28,13 @@ class UpdateSeedColor extends SettingsEvent {
   List<Object?> get props => [seedColor];
 }
 
-class UpdatePaddingSize extends SettingsEvent {
-  final double paddingSize;
+class UpdateTextMaxWidth extends SettingsEvent {
+  final double textMaxWidth;
 
-  const UpdatePaddingSize(this.paddingSize);
+  const UpdateTextMaxWidth(this.textMaxWidth);
 
   @override
-  List<Object?> get props => [paddingSize];
+  List<Object?> get props => [textMaxWidth];
 }
 
 class UpdateFontSize extends SettingsEvent {

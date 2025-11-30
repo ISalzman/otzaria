@@ -4,7 +4,7 @@ import 'package:equatable/equatable.dart';
 class SettingsState extends Equatable {
   final bool isDarkMode;
   final Color seedColor;
-  final double paddingSize;
+  final double textMaxWidth; // רוחב מקסימלי לטקסט בפיקסלים (0 = ללא הגבלה)
   final double fontSize;
   final String fontFamily;
   final String commentatorsFontFamily;
@@ -33,7 +33,7 @@ class SettingsState extends Equatable {
   const SettingsState({
     required this.isDarkMode,
     required this.seedColor,
-    required this.paddingSize,
+    required this.textMaxWidth,
     required this.fontSize,
     required this.fontFamily,
     required this.commentatorsFontFamily,
@@ -64,7 +64,7 @@ class SettingsState extends Equatable {
     return const SettingsState(
       isDarkMode: false,
       seedColor: Colors.brown,
-      paddingSize: 10,
+      textMaxWidth: -1, // רוחב מקסימלי לטקסט (-1 = רמה 1 = 95% כברירת מחדל, 0 = ללא הגבלה)
       fontSize: 16,
       fontFamily: 'FrankRuhlCLM',
       commentatorsFontFamily: 'NotoRashiHebrew',
@@ -95,7 +95,7 @@ class SettingsState extends Equatable {
   SettingsState copyWith({
     bool? isDarkMode,
     Color? seedColor,
-    double? paddingSize,
+    double? textMaxWidth,
     double? fontSize,
     String? fontFamily,
     String? commentatorsFontFamily,
@@ -124,7 +124,7 @@ class SettingsState extends Equatable {
     return SettingsState(
       isDarkMode: isDarkMode ?? this.isDarkMode,
       seedColor: seedColor ?? this.seedColor,
-      paddingSize: paddingSize ?? this.paddingSize,
+      textMaxWidth: textMaxWidth ?? this.textMaxWidth,
       fontSize: fontSize ?? this.fontSize,
       fontFamily: fontFamily ?? this.fontFamily,
       commentatorsFontFamily:
@@ -159,7 +159,7 @@ class SettingsState extends Equatable {
   List<Object?> get props => [
         isDarkMode,
         seedColor,
-        paddingSize,
+        textMaxWidth,
         fontSize,
         fontFamily,
         commentatorsFontFamily,

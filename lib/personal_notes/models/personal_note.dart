@@ -110,7 +110,7 @@ class PersonalNote extends Equatable {
 
   /// Get the title to display - either the stored displayTitle or fallback to reference words.
   String get title {
-    if (displayTitle != null && displayTitle!.isNotEmpty) {
+    if (displayTitle?.isNotEmpty == true) {
       return displayTitle!;
     }
     // Fallback to reference words (for old notes)

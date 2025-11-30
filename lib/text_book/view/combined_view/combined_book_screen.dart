@@ -800,69 +800,90 @@ $textWithBreaks
               contextMenu: _buildContextMenuForIndex(state, index, context),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4.0),
-                child: BlocBuilder<SettingsBloc, SettingsState>(
-                  builder: (context, settingsState) {
-                    final horizontalPadding = settingsState.paddingSize;
-                    String data = widget.data[index];
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return BlocBuilder<SettingsBloc, SettingsState>(
+                      builder: (context, settingsState) {
+                        var textMaxWidth = settingsState.textMaxWidth;
+                        
+                        // אם הערך שלילי, זו רמה שצריך לחשב לפי גודל המסך
+                        // למשל -2 = רמה 2 = 90% מרוחב המסך
+                        if (textMaxWidth < 0) {
+                          final level = (-textMaxWidth).toInt();
+                          final widthPercent = 1.0 - (level * 0.05);
+                          textMaxWidth = constraints.maxWidth * widthPercent;
+                        }
+                        
+                        String data = widget.data[index];
 
-                    // הוספת קישורים מבוססי תווים
-                    String dataWithLinks = data;
-                    try {
-                      final linksForLine = state.links
-                          .where((link) =>
-                              link.index1 == index + 1 &&
-                              link.start != null &&
-                              link.end != null)
-                          .toList();
+                        // הוספת קישורים מבוססי תווים
+                        String dataWithLinks = data;
+                        try {
+                          final linksForLine = state.links
+                              .where((link) =>
+                                  link.index1 == index + 1 &&
+                                  link.start != null &&
+                                  link.end != null)
+                              .toList();
 
-                      if (linksForLine.isNotEmpty) {
-                        dataWithLinks =
-                            addInlineLinksToText(data, linksForLine);
-                      }
-                    } catch (e) {
-                      dataWithLinks = data;
-                    }
+                          if (linksForLine.isNotEmpty) {
+                            dataWithLinks =
+                                addInlineLinksToText(data, linksForLine);
+                          }
+                        } catch (e) {
+                          dataWithLinks = data;
+                        }
 
-                    // עיבודים נוספים
-                    if (!settingsState.showTeamim) {
-                      dataWithLinks = utils.removeTeamim(dataWithLinks);
-                    }
-                    if (settingsState.replaceHolyNames) {
-                      dataWithLinks = utils.replaceHolyNames(dataWithLinks);
-                    }
+                        // עיבודים נוספים
+                        if (!settingsState.showTeamim) {
+                          dataWithLinks = utils.removeTeamim(dataWithLinks);
+                        }
+                        if (settingsState.replaceHolyNames) {
+                          dataWithLinks = utils.replaceHolyNames(dataWithLinks);
+                        }
 
-                    String processedData = state.removeNikud
-                        ? utils.highLight(
-                            utils.removeVolwels('$dataWithLinks\n'),
-                            state.searchText)
-                        : utils.highLight('$dataWithLinks\n', state.searchText);
+                        String processedData = state.removeNikud
+                            ? utils.highLight(
+                                utils.removeVolwels('$dataWithLinks\n'),
+                                state.searchText)
+                            : utils.highLight('$dataWithLinks\n', state.searchText);
 
-                    processedData =
-                        utils.formatTextWithParentheses(processedData);
+                        processedData =
+                            utils.formatTextWithParentheses(processedData);
 
-                    return Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: horizontalPadding),
-                      child: HtmlWidget(
-                        '''
-                      <div style="text-align: justify; direction: rtl;">
-                        $processedData
-                      </div>
-                      ''',
-                        key: ValueKey('html_${widget.tab.book.title}_$index'),
-                        textStyle: TextStyle(
-                          fontSize: widget.textSize,
-                          fontFamily: settingsState.fontFamily,
-                          height: 1.5,
-                        ),
-                        onTapUrl: (url) async {
-                          return await HtmlLinkHandler.handleLink(
-                            context,
-                            url,
-                            (tab) => widget.openBookCallback(tab),
+                        final textWidget = HtmlWidget(
+                          '''
+                          <div style="text-align: justify; direction: rtl;">
+                            $processedData
+                          </div>
+                          ''',
+                          key: ValueKey('html_${widget.tab.book.title}_$index'),
+                          textStyle: TextStyle(
+                            fontSize: widget.textSize,
+                            fontFamily: settingsState.fontFamily,
+                            height: 1.5,
+                          ),
+                          onTapUrl: (url) async {
+                            return await HtmlLinkHandler.handleLink(
+                              context,
+                              url,
+                              (tab) => widget.openBookCallback(tab),
+                            );
+                          },
+                        );
+
+                        // אם textMaxWidth הוא 0, הטקסט ימלא את כל הרוחב
+                        // אחרת, הטקסט יהיה ממורכז עם רוחב מקסימלי
+                        if (textMaxWidth > 0) {
+                          return Center(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: textMaxWidth),
+                              child: textWidget,
+                            ),
                           );
-                        },
-                      ),
+                        }
+                        return textWidget;
+                      },
                     );
                   },
                 ),
@@ -938,43 +959,72 @@ class _CommentaryCardState extends State<_CommentaryCard> {
         ? widget.viewportHeight * 0.75 
         : MediaQuery.of(context).size.height * 0.75;
 
-    return Container(
-      margin: const EdgeInsets.only(right: 24.0, left: 8.0, bottom: 8.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(12),
-          bottomLeft: Radius.circular(12),
-          bottomRight: Radius.circular(12),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(12),
-          bottomLeft: Radius.circular(12),
-          bottomRight: Radius.circular(12),
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: maxHeight,
-          ),
-          child: CommentaryListBase(
-            key: _commentaryKey,
-            indexes: [widget.index],
-            fontSize: widget.textSize,
-            openBookCallback: widget.openBookCallback,
-            showSearch: false,
-            shrinkWrap: true,
-          ),
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return BlocBuilder<SettingsBloc, SettingsState>(
+          builder: (context, settingsState) {
+            // שימוש באותו רוחב מקסימלי כמו הטקסט
+            var textMaxWidth = settingsState.textMaxWidth;
+            
+            // אם הערך שלילי, זו רמה שצריך לחשב לפי גודל המסך
+            if (textMaxWidth < 0) {
+              final level = (-textMaxWidth).toInt();
+              final widthPercent = 1.0 - (level * 0.05);
+              textMaxWidth = constraints.maxWidth * widthPercent;
+            }
+            
+            final commentaryContainer = Container(
+              margin: const EdgeInsets.only(bottom: 8.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                  bottomRight: Radius.circular(12),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                  bottomRight: Radius.circular(12),
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: maxHeight,
+                  ),
+                  child: CommentaryListBase(
+                    key: _commentaryKey,
+                    indexes: [widget.index],
+                    fontSize: widget.textSize,
+                    openBookCallback: widget.openBookCallback,
+                    showSearch: false,
+                    shrinkWrap: true,
+                  ),
+                ),
+              ),
+            );
+
+            // אם יש רוחב מקסימלי, נמרכז את המפרשים באותו רוחב כמו הטקסט
+            if (textMaxWidth > 0) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: textMaxWidth),
+                  child: commentaryContainer,
+                ),
+              );
+            }
+            return commentaryContainer;
+          },
+        );
+      },
     );
   }
 }

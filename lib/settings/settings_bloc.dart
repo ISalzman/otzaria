@@ -12,7 +12,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<LoadSettings>(_onLoadSettings);
     on<UpdateDarkMode>(_onUpdateDarkMode);
     on<UpdateSeedColor>(_onUpdateSeedColor);
-    on<UpdatePaddingSize>(_onUpdatePaddingSize);
+    on<UpdateTextMaxWidth>(_onUpdateTextMaxWidth);
     on<UpdateFontSize>(_onUpdateFontSize);
     on<UpdateFontFamily>(_onUpdateFontFamily);
     on<UpdateCommentatorsFontFamily>(_onUpdateCommentatorsFontFamily);
@@ -49,7 +49,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     emit(SettingsState(
       isDarkMode: settings['isDarkMode'],
       seedColor: settings['seedColor'],
-      paddingSize: settings['paddingSize'],
+      textMaxWidth: settings['textMaxWidth'],
       fontSize: settings['fontSize'],
       fontFamily: settings['fontFamily'],
       commentatorsFontFamily: settings['commentatorsFontFamily'],
@@ -103,12 +103,12 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     emit(state.copyWith(seedColor: event.seedColor));
   }
 
-  Future<void> _onUpdatePaddingSize(
-    UpdatePaddingSize event,
+  Future<void> _onUpdateTextMaxWidth(
+    UpdateTextMaxWidth event,
     Emitter<SettingsState> emit,
   ) async {
-    await _repository.updatePaddingSize(event.paddingSize);
-    emit(state.copyWith(paddingSize: event.paddingSize));
+    await _repository.updateTextMaxWidth(event.textMaxWidth);
+    emit(state.copyWith(textMaxWidth: event.textMaxWidth));
   }
 
   Future<void> _onUpdateFontSize(

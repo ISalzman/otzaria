@@ -6,7 +6,7 @@ import 'package:otzaria/utils/settings_wrapper.dart';
 class SettingsRepository {
   static const String keyDarkMode = 'key-dark-mode';
   static const String keySwatchColor = 'key-swatch-color';
-  static const String keyPaddingSize = 'key-padding-size';
+  static const String keyTextMaxWidth = 'key-text-max-width';
   static const String keyFontSize = 'key-font-size';
   static const String keyFontFamily = 'key-font-family';
   static const String keyCommentatorsFontFamily =
@@ -57,8 +57,8 @@ class SettingsRepository {
       'seedColor': ColorUtils.colorFromString(
         _settings.getValue<String>(keySwatchColor, defaultValue: '#ff2c1b02'),
       ),
-      'paddingSize':
-          _settings.getValue<double>(keyPaddingSize, defaultValue: 10),
+      'textMaxWidth':
+          _settings.getValue<double>(keyTextMaxWidth, defaultValue: -1),
       'fontSize': _settings.getValue<double>(keyFontSize, defaultValue: 16),
       'fontFamily': _settings.getValue<String>(
         keyFontFamily,
@@ -180,8 +180,8 @@ class SettingsRepository {
     await _settings.setValue(keySwatchColor, ColorUtils.colorToString(value));
   }
 
-  Future<void> updatePaddingSize(double value) async {
-    await _settings.setValue(keyPaddingSize, value);
+  Future<void> updateTextMaxWidth(double value) async {
+    await _settings.setValue(keyTextMaxWidth, value);
   }
 
   Future<void> updateFontSize(double value) async {
@@ -363,7 +363,7 @@ class SettingsRepository {
   Future<void> _writeDefaultsToStorage() async {
     await _settings.setValue(keyDarkMode, false);
     await _settings.setValue(keySwatchColor, '#ff2c1b02');
-    await _settings.setValue(keyPaddingSize, 10.0);
+    await _settings.setValue(keyTextMaxWidth, -1.0);
     await _settings.setValue(keyFontSize, 16.0);
     await _settings.setValue(keyFontFamily, 'FrankRuhlCLM');
     await _settings.setValue(keyShowOtzarHachochma, false);
