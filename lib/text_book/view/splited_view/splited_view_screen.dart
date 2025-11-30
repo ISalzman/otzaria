@@ -12,6 +12,7 @@ import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
+import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -44,6 +45,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   int? _currentTabIndex;
   late double _leftPaneWidth;
   bool _isResizing = false;
+  bool _isHovering = false; // מצב ריחוף על הטאב
 
   @override
   void initState() {
@@ -290,39 +292,53 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                   ),
               ],
             ),
-            // כפתור צף להצגה כאשר הפאנל סגור
+            // טאב צף להצגה כאשר הפאנל סגור - עם 3 מצבים והדרכה
             if (!_paneOpen)
               Positioned(
-                left: 8,
-                top: 8,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surface
-                        .withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+                left: 0, // צמוד לקצה
+                top: MediaQuery.of(context).size.height * 0.10, // למעלה במסך
+                child: CommentaryPaneTooltip(
+                  child: MouseRegion(
+                    onEnter: (_) => setState(() => _isHovering = true),
+                    onExit: (_) => setState(() => _isHovering = false),
+                    child: GestureDetector(
+                      onTap: _togglePane,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOut,
+                        // מצב 1: סגור - בליטה קטנה, מצב 2: ריחוף - נשלף יותר
+                        width: _isHovering ? 48 : 20,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: _isHovering ? 0.95 : 0.8),
+                          borderRadius: const BorderRadius.only(
+                            topRight: Radius.circular(40),
+                            bottomRight: Radius.circular(40),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: _isHovering ? 8 : 4,
+                              offset: const Offset(2, 0),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 150),
+                            opacity: _isHovering ? 1.0 : 0.6,
+                            child: Icon(
+                              FluentIcons.chevron_right_24_regular,
+                              size: _isHovering ? 24 : 18,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                  child: IconButton(
-                    iconSize: 18,
-                    padding: const EdgeInsets.all(8),
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
                     ),
-                    icon: Icon(
-                      FluentIcons.panel_left_contract_24_regular,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    tooltip: 'פתח מפרשים וקישורים',
-                    onPressed: _togglePane,
                   ),
                 ),
               ),

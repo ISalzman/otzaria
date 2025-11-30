@@ -35,6 +35,7 @@ import 'package:flutter/gestures.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
+import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
 
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
@@ -67,6 +68,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   int? _rightPaneInitialTabIndex; // אינדקס הטאב הרצוי בחלונית השמאלית
   late final StreamSubscription<SettingsState> _settingsSub;
   bool _showZoomBar = false;
+  bool _isRightPaneHovering = false; // מצב ריחוף על הטאב של חלונית המפרשים
   Timer? _zoomBarTimer;
 
   Future<void> _runInitialSearchIfNeeded() async {
@@ -646,7 +648,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                           ),
                         ),
                       ),
-                      // כפתור צף לפתיחת חלונית המפרשים
+                      // טאב צף לפתיחת חלונית המפרשים - עם 3 מצבים והדרכה
                       ValueListenableBuilder(
                         valueListenable: _showRightPane,
                         builder: (context, showRightPane, child) {
@@ -654,39 +656,52 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                           if (showRightPane) return const SizedBox.shrink();
 
                           return Positioned(
-                            left: 8,
-                            top: 8,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surface
-                                    .withValues(alpha: 0.9),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.2),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
+                            left: 0, // צמוד לקצה
+                            top: MediaQuery.of(context).size.height * 0.10, // למעלה במסך
+                            child: CommentaryPaneTooltip(
+                              child: MouseRegion(
+                                onEnter: (_) => setState(() => _isRightPaneHovering = true),
+                                onExit: (_) => setState(() => _isRightPaneHovering = false),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    _showRightPane.value = true;
+                                  },
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    curve: Curves.easeOut,
+                                    // מצב 1: סגור - בליטה קטנה, מצב 2: ריחוף - נשלף יותר
+                                    width: _isRightPaneHovering ? 48 : 20,
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest
+                                          .withValues(alpha: _isRightPaneHovering ? 0.95 : 0.8),
+                                      borderRadius: const BorderRadius.only(
+                                        topRight: Radius.circular(40),
+                                        bottomRight: Radius.circular(40),
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.15),
+                                          blurRadius: _isRightPaneHovering ? 8 : 4,
+                                          offset: const Offset(2, 0),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: AnimatedOpacity(
+                                        duration: const Duration(milliseconds: 150),
+                                        opacity: _isRightPaneHovering ? 1.0 : 0.6,
+                                        child: Icon(
+                                          FluentIcons.chevron_right_24_regular,
+                                          size: _isRightPaneHovering ? 24 : 18,
+                                          color: Theme.of(context).colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ],
-                              ),
-                              child: IconButton(
-                                iconSize: 18,
-                                padding: const EdgeInsets.all(8),
-                                constraints: const BoxConstraints(
-                                  minWidth: 36,
-                                  minHeight: 36,
                                 ),
-                                icon: Icon(
-                                  FluentIcons.panel_left_contract_24_regular,
-                                  color:
-                                      Theme.of(context).colorScheme.onSurface,
-                                ),
-                                tooltip: 'פתח מפרשים וקישורים',
-                                onPressed: () {
-                                  _showRightPane.value = true;
-                                },
                               ),
                             ),
                           );
