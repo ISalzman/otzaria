@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/focus/focus_repository.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart' hide UpdateFontSize;
 import 'package:otzaria/settings/settings_state.dart';
@@ -65,6 +66,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     with TickerProviderStateMixin {
   final FocusNode textSearchFocusNode = FocusNode();
   final FocusNode navigationSearchFocusNode = FocusNode();
+  final FocusNode _bookContentFocusNode = FocusNode(); // FocusNode לתוכן הספר
   late TabController tabController;
   late final ValueNotifier<double> _sidebarWidth;
   late final StreamSubscription<SettingsState> _settingsSub;
@@ -440,6 +442,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   void initState() {
     super.initState();
 
+    // רישום ה-FocusNode ב-FocusRepository
+    context.read<FocusRepository>().registerBookContentFocusNode(_bookContentFocusNode);
+
     // טעינת הגדרות פר-ספר
     _loadPerBookSettings();
 
@@ -574,9 +579,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   @override
   void dispose() {
+    // ביטול רישום ה-FocusNode מ-FocusRepository
+    context.read<FocusRepository>().unregisterBookContentFocusNode(_bookContentFocusNode);
+    
     tabController.dispose();
     textSearchFocusNode.dispose();
     navigationSearchFocusNode.dispose();
+    _bookContentFocusNode.dispose();
     _sidebarWidth.dispose();
     _settingsSub.cancel();
     super.dispose();
@@ -593,7 +602,23 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
-        return BlocBuilder<TabsBloc, TabsState>(
+        return BlocConsumer<TabsBloc, TabsState>(
+          listenWhen: (previous, current) =>
+              previous.currentTabIndex != current.currentTabIndex,
+          listener: (context, tabsState) {
+            // בקשת focus כשהטאב הנוכחי הוא הטאב של הספר הזה
+            final currentTab = tabsState.tabs.isNotEmpty &&
+                    tabsState.currentTabIndex < tabsState.tabs.length
+                ? tabsState.tabs[tabsState.currentTabIndex]
+                : null;
+            if (currentTab == widget.tab && mounted) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && !_bookContentFocusNode.hasFocus) {
+                  _bookContentFocusNode.requestFocus();
+                }
+              });
+            }
+          },
           builder: (context, tabsState) {
             // סגירת חלונית הצד כשנמצאים במצב side-by-side
             if (tabsState.isSideBySideMode) {
@@ -831,12 +856,20 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 }
 
                 if (state is TextBookLoaded) {
+                  // בקשת focus אוטומטית כשהספר נטען
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && !_bookContentFocusNode.hasFocus) {
+                      _bookContentFocusNode.requestFocus();
+                    }
+                  });
+                  
                   return LayoutBuilder(
                     builder: (context, constrains) {
                       final wideScreen =
                           (MediaQuery.of(context).size.width >= 600);
                       return KeyboardListener(
-                        focusNode: FocusNode(),
+                        focusNode: _bookContentFocusNode,
+                        autofocus: true,
                         onKeyEvent: (event) =>
                             _handleGlobalKeyEvent(event, context, state),
                         child: Scaffold(
@@ -1985,17 +2018,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 textSearchFocusNode.requestFocus();
               },
             },
-            child: Focus(
-              focusNode: FocusNode(),
-              autofocus: !Platform.isAndroid,
-              child: TextBookScaffold(
-                content: state.content,
-                openBookCallback: widget.openBookCallback,
-                openLeftPaneTab: _openLeftPaneTab,
-                searchTextController: TextEditingValue(text: state.searchText),
-                tab: widget.tab,
-                initialSidebarTabIndex: _sidebarTabIndex,
-              ),
+            child: TextBookScaffold(
+              content: state.content,
+              openBookCallback: widget.openBookCallback,
+              openLeftPaneTab: _openLeftPaneTab,
+              searchTextController: TextEditingValue(text: state.searchText),
+              tab: widget.tab,
+              initialSidebarTabIndex: _sidebarTabIndex,
             ),
           ),
         ),
@@ -2169,82 +2198,158 @@ void _handleFullFileEditorPress(BuildContext context, TextBookLoaded state) {
   context.read<TextBookBloc>().add(OpenFullFileEditor());
 }
 
+/// בודק אם הקיצור שנלחץ תואם להגדרה
+bool _matchesShortcut(KeyEvent event, String shortcutSetting) {
+  if (event is! KeyDownEvent) return false;
+  
+  final parts = shortcutSetting.toLowerCase().split('+');
+  final requiresCtrl = parts.contains('ctrl') || parts.contains('control');
+  final requiresShift = parts.contains('shift');
+  final requiresAlt = parts.contains('alt');
+  
+  // בדיקת modifiers
+  if (requiresCtrl != HardwareKeyboard.instance.isControlPressed) return false;
+  if (requiresShift != HardwareKeyboard.instance.isShiftPressed) return false;
+  if (requiresAlt != HardwareKeyboard.instance.isAltPressed) return false;
+  
+  // מציאת המקש הראשי (לא modifier)
+  final mainKey = parts.where((p) => 
+    p != 'ctrl' && p != 'control' && p != 'shift' && p != 'alt' && p != 'meta'
+  ).firstOrNull;
+  
+  if (mainKey == null) return false;
+  
+  // מיפוי שם המקש ל-LogicalKeyboardKey
+  final pressedKeyLabel = event.logicalKey.keyLabel.toLowerCase();
+  
+  // בדיקת אותיות
+  if (mainKey.length == 1 && mainKey.codeUnitAt(0) >= 97 && mainKey.codeUnitAt(0) <= 122) {
+    return pressedKeyLabel == mainKey;
+  }
+  
+  // בדיקת מספרים
+  if (mainKey.length == 1 && mainKey.codeUnitAt(0) >= 48 && mainKey.codeUnitAt(0) <= 57) {
+    return event.logicalKey == _digitKeyFromChar(mainKey);
+  }
+  
+  // בדיקת מקשים מיוחדים
+  return _matchesSpecialKey(event.logicalKey, mainKey);
+}
+
+LogicalKeyboardKey? _digitKeyFromChar(String digit) {
+  switch (digit) {
+    case '0': return LogicalKeyboardKey.digit0;
+    case '1': return LogicalKeyboardKey.digit1;
+    case '2': return LogicalKeyboardKey.digit2;
+    case '3': return LogicalKeyboardKey.digit3;
+    case '4': return LogicalKeyboardKey.digit4;
+    case '5': return LogicalKeyboardKey.digit5;
+    case '6': return LogicalKeyboardKey.digit6;
+    case '7': return LogicalKeyboardKey.digit7;
+    case '8': return LogicalKeyboardKey.digit8;
+    case '9': return LogicalKeyboardKey.digit9;
+    default: return null;
+  }
+}
+
+bool _matchesSpecialKey(LogicalKeyboardKey key, String keyName) {
+  switch (keyName) {
+    case 'comma': return key == LogicalKeyboardKey.comma;
+    case 'period': return key == LogicalKeyboardKey.period;
+    case 'slash': return key == LogicalKeyboardKey.slash;
+    case 'semicolon': return key == LogicalKeyboardKey.semicolon;
+    case 'quote': return key == LogicalKeyboardKey.quote;
+    case 'bracketleft': return key == LogicalKeyboardKey.bracketLeft;
+    case 'bracketright': return key == LogicalKeyboardKey.bracketRight;
+    case 'minus': return key == LogicalKeyboardKey.minus;
+    case 'equal': return key == LogicalKeyboardKey.equal;
+    case 'space': return key == LogicalKeyboardKey.space;
+    case 'tab': return key == LogicalKeyboardKey.tab;
+    case 'enter': return key == LogicalKeyboardKey.enter;
+    case 'escape': return key == LogicalKeyboardKey.escape;
+    case 'f1': return key == LogicalKeyboardKey.f1;
+    case 'f2': return key == LogicalKeyboardKey.f2;
+    case 'f3': return key == LogicalKeyboardKey.f3;
+    case 'f4': return key == LogicalKeyboardKey.f4;
+    case 'f5': return key == LogicalKeyboardKey.f5;
+    case 'f6': return key == LogicalKeyboardKey.f6;
+    case 'f7': return key == LogicalKeyboardKey.f7;
+    case 'f8': return key == LogicalKeyboardKey.f8;
+    case 'f9': return key == LogicalKeyboardKey.f9;
+    case 'f10': return key == LogicalKeyboardKey.f10;
+    case 'f11': return key == LogicalKeyboardKey.f11;
+    case 'f12': return key == LogicalKeyboardKey.f12;
+    default: return false;
+  }
+}
+
 bool _handleGlobalKeyEvent(
     KeyEvent event, BuildContext context, TextBookLoaded state) {
+  // קריאת קיצורים מההגדרות
+  final editSectionShortcut =
+      Settings.getValue<String>('key-shortcut-edit-section') ?? 'ctrl+e';
+  final searchInBookShortcut =
+      Settings.getValue<String>('key-shortcut-search-in-book') ?? 'ctrl+f';
+  final printShortcut =
+      Settings.getValue<String>('key-shortcut-print') ?? 'ctrl+p';
+  final addBookmarkShortcut =
+      Settings.getValue<String>('key-shortcut-add-bookmark') ?? 'ctrl+b';
+  final addNoteShortcut =
+      Settings.getValue<String>('key-shortcut-add-note') ?? 'ctrl+n';
+
+  // עריכת קטע
+  if (_matchesShortcut(event, editSectionShortcut)) {
+    if (!state.isEditorOpen) {
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        _handleFullFileEditorPress(context, state);
+      } else {
+        _handleTextEditorPress(context, state);
+      }
+      return true;
+    }
+  }
+
+  // חיפוש בספר
+  if (_matchesShortcut(event, searchInBookShortcut)) {
+    context.read<TextBookBloc>().add(const ToggleLeftPane(true));
+    final tabController = context
+        .findAncestorStateOfType<_TextBookViewerBlocState>()
+        ?.tabController;
+    if (tabController != null) {
+      tabController.index = 1;
+    }
+    return true;
+  }
+
+  // הדפסה
+  if (_matchesShortcut(event, printShortcut)) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PrintingScreen(
+          data: Future.value(state.content.join('\n')),
+          startLine: state.visibleIndices.first,
+          removeNikud: state.removeNikud,
+        ),
+      ),
+    );
+    return true;
+  }
+
+  // הוספת סימניה
+  if (_matchesShortcut(event, addBookmarkShortcut)) {
+    _addBookmarkFromKeyboard(context, state);
+    return true;
+  }
+
+  // הוספת הערה
+  if (_matchesShortcut(event, addNoteShortcut)) {
+    _addNoteFromKeyboard(context, state);
+    return true;
+  }
+
+  // קיצורים קבועים (לא ניתנים להתאמה אישית)
   if (event is KeyDownEvent && HardwareKeyboard.instance.isControlPressed) {
-    // קריאת קיצורים מההגדרות
-    final editSectionShortcut =
-        Settings.getValue<String>('key-shortcut-edit-section') ?? 'ctrl+e';
-    final searchInBookShortcut =
-        Settings.getValue<String>('key-shortcut-search-in-book') ?? 'ctrl+f';
-    final printShortcut =
-        Settings.getValue<String>('key-shortcut-print') ?? 'ctrl+p';
-    final addBookmarkShortcut =
-        Settings.getValue<String>('key-shortcut-add-bookmark') ?? 'ctrl+b';
-    final addNoteShortcut =
-        Settings.getValue<String>('key-shortcut-add-note') ?? 'ctrl+n';
-
     switch (event.logicalKey) {
-      // עריכת קטע (Ctrl+E כברירת מחדל)
-      case LogicalKeyboardKey.keyE:
-        if (editSectionShortcut.contains('ctrl+e')) {
-          if (!state.isEditorOpen) {
-            if (HardwareKeyboard.instance.isShiftPressed) {
-              _handleFullFileEditorPress(context, state);
-            } else {
-              _handleTextEditorPress(context, state);
-            }
-            return true;
-          }
-        }
-        break;
-
-      // חיפוש בספר (Ctrl+F כברירת מחדל)
-      case LogicalKeyboardKey.keyF:
-        if (searchInBookShortcut.contains('ctrl+f')) {
-          context.read<TextBookBloc>().add(const ToggleLeftPane(true));
-          final tabController = context
-              .findAncestorStateOfType<_TextBookViewerBlocState>()
-              ?.tabController;
-          if (tabController != null) {
-            tabController.index = 1;
-          }
-          return true;
-        }
-        break;
-
-      // הדפסה (Ctrl+P כברירת מחדל)
-      case LogicalKeyboardKey.keyP:
-        if (printShortcut.contains('ctrl+p')) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => PrintingScreen(
-                data: Future.value(state.content.join('\n')),
-                startLine: state.visibleIndices.first,
-                removeNikud: state.removeNikud,
-              ),
-            ),
-          );
-          return true;
-        }
-        break;
-
-      // הוספת סימניה (Ctrl+B כברירת מחדל)
-      case LogicalKeyboardKey.keyB:
-        if (addBookmarkShortcut.contains('ctrl+b')) {
-          _addBookmarkFromKeyboard(context, state);
-          return true;
-        }
-        break;
-
-      // הוספת הערה (Ctrl+N כברירת מחדל)
-      case LogicalKeyboardKey.keyN:
-        if (addNoteShortcut.contains('ctrl+n')) {
-          _addNoteFromKeyboard(context, state);
-          return true;
-        }
-        break;
-
       // הגדלת טקסט (Ctrl++ או Ctrl+=)
       case LogicalKeyboardKey.equal:
       case LogicalKeyboardKey.add:
