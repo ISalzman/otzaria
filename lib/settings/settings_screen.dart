@@ -247,13 +247,23 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                           activeColor: Theme.of(context).cardColor,
                         ),
                         ColorPickerSettingsTile(
+                          key: ValueKey(
+                              'color-picker-${state.isDarkMode ? 'dark' : 'light'}'),
                           title: 'צבע בסיס',
                           leading: const Icon(FluentIcons.color_24_regular),
-                          settingKey: 'key-swatch-color',
+                          settingKey: state.isDarkMode
+                              ? 'key-dark-swatch-color'
+                              : 'key-swatch-color',
                           onChange: (color) {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateSeedColor(color));
+                            if (state.isDarkMode) {
+                              context
+                                  .read<SettingsBloc>()
+                                  .add(UpdateDarkSeedColor(color));
+                            } else {
+                              context
+                                  .read<SettingsBloc>()
+                                  .add(UpdateSeedColor(color));
+                            }
                           },
                         ),
                       ]),

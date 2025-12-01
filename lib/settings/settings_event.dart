@@ -28,6 +28,15 @@ class UpdateSeedColor extends SettingsEvent {
   List<Object?> get props => [seedColor];
 }
 
+class UpdateDarkSeedColor extends SettingsEvent {
+  final Color darkSeedColor;
+
+  const UpdateDarkSeedColor(this.darkSeedColor);
+
+  @override
+  List<Object?> get props => [darkSeedColor];
+}
+
 class UpdateTextMaxWidth extends SettingsEvent {
   final double textMaxWidth;
 

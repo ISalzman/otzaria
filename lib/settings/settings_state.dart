@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 class SettingsState extends Equatable {
   final bool isDarkMode;
   final Color seedColor;
+  final Color darkSeedColor;
   final double textMaxWidth; // רוחב מקסימלי לטקסט בפיקסלים (0 = ללא הגבלה)
   final double fontSize;
   final String fontFamily;
@@ -33,6 +34,7 @@ class SettingsState extends Equatable {
   const SettingsState({
     required this.isDarkMode,
     required this.seedColor,
+    required this.darkSeedColor,
     required this.textMaxWidth,
     required this.fontSize,
     required this.fontFamily,
@@ -64,6 +66,7 @@ class SettingsState extends Equatable {
     return const SettingsState(
       isDarkMode: false,
       seedColor: Colors.brown,
+      darkSeedColor: Color(0xFFCE93D8), // סגול בהיר למצב כהה
       textMaxWidth: -1, // רוחב מקסימלי לטקסט (-1 = רמה 1 = 95% כברירת מחדל, 0 = ללא הגבלה)
       fontSize: 16,
       fontFamily: 'FrankRuhlCLM',
@@ -95,6 +98,7 @@ class SettingsState extends Equatable {
   SettingsState copyWith({
     bool? isDarkMode,
     Color? seedColor,
+    Color? darkSeedColor,
     double? textMaxWidth,
     double? fontSize,
     String? fontFamily,
@@ -124,6 +128,7 @@ class SettingsState extends Equatable {
     return SettingsState(
       isDarkMode: isDarkMode ?? this.isDarkMode,
       seedColor: seedColor ?? this.seedColor,
+      darkSeedColor: darkSeedColor ?? this.darkSeedColor,
       textMaxWidth: textMaxWidth ?? this.textMaxWidth,
       fontSize: fontSize ?? this.fontSize,
       fontFamily: fontFamily ?? this.fontFamily,
@@ -159,6 +164,7 @@ class SettingsState extends Equatable {
   List<Object?> get props => [
         isDarkMode,
         seedColor,
+        darkSeedColor,
         textMaxWidth,
         fontSize,
         fontFamily,

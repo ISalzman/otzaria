@@ -28,9 +28,48 @@ class App extends StatelessWidget {
           title: 'אוצריא',
           theme: state.isDarkMode
               ? ThemeData.dark(useMaterial3: true).copyWith(
-                  dialogTheme: DialogThemeData(
-                    barrierColor: const Color(0x22000000),
-                    backgroundColor: ThemeData.dark().scaffoldBackgroundColor,
+                  scaffoldBackgroundColor: const Color(0xFF242424),
+                  canvasColor: const Color(0xFF242424),
+                  cardColor: const Color(0xFF333333),
+                  colorScheme: ColorScheme.dark(
+                    surface: const Color(0xFF242424),
+                    surfaceContainer: const Color(0xFF333333),
+                    onSurface: const Color(0xFFE0E0E0),
+                    primary: state.darkSeedColor,
+                    onPrimary: Colors.white,
+                    secondary: state.darkSeedColor.withValues(alpha: 0.7),
+                    onSecondary: Colors.white,
+                    outline: const Color(0xFF4A4A4A),
+                  ),
+                  textTheme: ThemeData.dark().textTheme.apply(
+                        fontFamily: 'Roboto',
+                        bodyColor: const Color(0xFFE0E0E0),
+                        displayColor: const Color(0xFFE0E0E0),
+                      ).copyWith(
+                        bodyMedium: const TextStyle(
+                          fontSize: 18.0,
+                          fontFamily: 'candara',
+                          color: Color(0xFFE0E0E0),
+                        ),
+                      ),
+                  cardTheme: CardThemeData(
+                    color: const Color(0xFF333333),
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(
+                        color: Color(0xFF4A4A4A),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  appBarTheme: const AppBarTheme(
+                    backgroundColor: Color(0xFF2A2A2A),
+                    foregroundColor: Color(0xFFE0E0E0),
+                  ),
+                  dialogTheme: const DialogThemeData(
+                    barrierColor: Color(0x22000000),
+                    backgroundColor: Color(0xFF2A2A2A),
                   ),
                 )
               : ThemeData(

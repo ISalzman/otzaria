@@ -29,6 +29,7 @@ void main() {
       final mockSettings = {
         'isDarkMode': true,
         'seedColor': Colors.blue,
+        'darkSeedColor': const Color(0xFFCE93D8),
         'textMaxWidth': 800.0,
         'fontSize': 18.0,
         'fontFamily': 'Rubik',
@@ -68,6 +69,7 @@ void main() {
           SettingsState(
             isDarkMode: mockSettings['isDarkMode'] as bool,
             seedColor: mockSettings['seedColor'] as Color,
+            darkSeedColor: mockSettings['darkSeedColor'] as Color,
             textMaxWidth: mockSettings['textMaxWidth'] as double,
             fontSize: mockSettings['fontSize'] as double,
             fontFamily: mockSettings['fontFamily'] as String,

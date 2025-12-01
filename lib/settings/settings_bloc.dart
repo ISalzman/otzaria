@@ -12,6 +12,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<LoadSettings>(_onLoadSettings);
     on<UpdateDarkMode>(_onUpdateDarkMode);
     on<UpdateSeedColor>(_onUpdateSeedColor);
+    on<UpdateDarkSeedColor>(_onUpdateDarkSeedColor);
     on<UpdateTextMaxWidth>(_onUpdateTextMaxWidth);
     on<UpdateFontSize>(_onUpdateFontSize);
     on<UpdateFontFamily>(_onUpdateFontFamily);
@@ -49,6 +50,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     emit(SettingsState(
       isDarkMode: settings['isDarkMode'],
       seedColor: settings['seedColor'],
+      darkSeedColor: settings['darkSeedColor'],
       textMaxWidth: settings['textMaxWidth'],
       fontSize: settings['fontSize'],
       fontFamily: settings['fontFamily'],
@@ -101,6 +103,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateSeedColor(event.seedColor);
     emit(state.copyWith(seedColor: event.seedColor));
+  }
+
+  Future<void> _onUpdateDarkSeedColor(
+    UpdateDarkSeedColor event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateDarkSeedColor(event.darkSeedColor);
+    emit(state.copyWith(darkSeedColor: event.darkSeedColor));
   }
 
   Future<void> _onUpdateTextMaxWidth(

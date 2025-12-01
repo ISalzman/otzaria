@@ -6,6 +6,7 @@ import 'package:otzaria/utils/settings_wrapper.dart';
 class SettingsRepository {
   static const String keyDarkMode = 'key-dark-mode';
   static const String keySwatchColor = 'key-swatch-color';
+  static const String keyDarkSwatchColor = 'key-dark-swatch-color';
   static const String keyTextMaxWidth = 'key-text-max-width';
   static const String keyFontSize = 'key-font-size';
   static const String keyFontFamily = 'key-font-family';
@@ -56,6 +57,9 @@ class SettingsRepository {
       'isDarkMode': _settings.getValue<bool>(keyDarkMode, defaultValue: false),
       'seedColor': ColorUtils.colorFromString(
         _settings.getValue<String>(keySwatchColor, defaultValue: '#ff2c1b02'),
+      ),
+      'darkSeedColor': ColorUtils.colorFromString(
+        _settings.getValue<String>(keyDarkSwatchColor, defaultValue: '#ffce93d8'),
       ),
       'textMaxWidth':
           _settings.getValue<double>(keyTextMaxWidth, defaultValue: -1),
@@ -178,6 +182,10 @@ class SettingsRepository {
 
   Future<void> updateSeedColor(Color value) async {
     await _settings.setValue(keySwatchColor, ColorUtils.colorToString(value));
+  }
+
+  Future<void> updateDarkSeedColor(Color value) async {
+    await _settings.setValue(keyDarkSwatchColor, ColorUtils.colorToString(value));
   }
 
   Future<void> updateTextMaxWidth(double value) async {
@@ -363,6 +371,7 @@ class SettingsRepository {
   Future<void> _writeDefaultsToStorage() async {
     await _settings.setValue(keyDarkMode, false);
     await _settings.setValue(keySwatchColor, '#ff2c1b02');
+    await _settings.setValue(keyDarkSwatchColor, '#ffce93d8');
     await _settings.setValue(keyTextMaxWidth, -1.0);
     await _settings.setValue(keyFontSize, 25.0);
     await _settings.setValue(keyFontFamily, 'FrankRuhlCLM');
