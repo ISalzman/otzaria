@@ -73,6 +73,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   late final StreamSubscription<SettingsState> _settingsSub;
   int? _sidebarTabIndex; // אינדקס הכרטיסייה בסרגל הצדי
   bool _isInitialFocusDone = false;
+  FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
 
   // משתנים לשמירת נתונים כבדים שנטענים ברקע
   Future<Map<String, dynamic>>? _preloadedHeavyData;
@@ -444,9 +445,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     super.initState();
 
     // רישום ה-FocusNode ב-FocusRepository
-    context
-        .read<FocusRepository>()
-        .registerBookContentFocusNode(_bookContentFocusNode);
+    _focusRepository = context.read<FocusRepository>();
+    _focusRepository!.registerBookContentFocusNode(_bookContentFocusNode);
 
     // טעינת הגדרות פר-ספר
     _loadPerBookSettings();
@@ -582,10 +582,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   @override
   void dispose() {
-    // ביטול רישום ה-FocusNode מ-FocusRepository
-    context
-        .read<FocusRepository>()
-        .unregisterBookContentFocusNode(_bookContentFocusNode);
+    // ביטול רישום ה-FocusNode מ-FocusRepository (שימוש בהפניה שנשמרה)
+    _focusRepository?.unregisterBookContentFocusNode(_bookContentFocusNode);
 
     tabController.dispose();
     textSearchFocusNode.dispose();
