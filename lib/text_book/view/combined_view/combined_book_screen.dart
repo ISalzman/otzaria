@@ -35,6 +35,7 @@ class CombinedView extends StatefulWidget {
     required this.tab,
     this.isPreviewMode = false,
     this.onOpenPersonalNotes,
+    this.onOpenCommentatorsPane,
   });
 
   final List<String> data;
@@ -45,6 +46,7 @@ class CombinedView extends StatefulWidget {
   final TextBookTab tab;
   final bool isPreviewMode;
   final VoidCallback? onOpenPersonalNotes;
+  final VoidCallback? onOpenCommentatorsPane;
 
   @override
   State<CombinedView> createState() => _CombinedViewState();
@@ -155,6 +157,7 @@ class _CombinedViewState extends State<CombinedView> {
         icon: groupActive ? FluentIcons.checkmark_24_regular : null,
         onSelected: () {
           final current = List<String>.from(st.activeCommentators);
+          final isAdding = !groupActive;
           if (groupActive) {
             current.removeWhere(group.contains);
           } else {
@@ -163,6 +166,12 @@ class _CombinedViewState extends State<CombinedView> {
             }
           }
           context.read<TextBookBloc>().add(UpdateCommentators(current));
+          // פתיחת חלון הצד של המפרשים רק אם מוסיפים מפרשים ומפרשים מוגדרים בצד הטקסט (לא מתחת)
+          if (isAdding &&
+              !widget.showCommentaryAsExpansionTiles &&
+              widget.onOpenCommentatorsPane != null) {
+            widget.onOpenCommentatorsPane!();
+          }
         },
       ),
       ...group.map((title) {
@@ -172,10 +181,17 @@ class _CombinedViewState extends State<CombinedView> {
           icon: isActive ? FluentIcons.checkmark_24_regular : null,
           onSelected: () {
             final current = List<String>.from(st.activeCommentators);
+            final isAdding = !current.contains(title);
             current.contains(title)
                 ? current.remove(title)
                 : current.add(title);
             context.read<TextBookBloc>().add(UpdateCommentators(current));
+            // פתיחת חלון הצד של המפרשים רק אם מוסיפים מפרש ומפרשים מוגדרים בצד הטקסט (לא מתחת)
+            if (isAdding &&
+                !widget.showCommentaryAsExpansionTiles &&
+                widget.onOpenCommentatorsPane != null) {
+              widget.onOpenCommentatorsPane!();
+            }
           },
         );
       }),
@@ -238,6 +254,7 @@ class _CombinedViewState extends State<CombinedView> {
                 final allActive = state.activeCommentators
                     .toSet()
                     .containsAll(state.availableCommentators);
+                final isAdding = !allActive;
                 context.read<TextBookBloc>().add(
                       UpdateCommentators(
                         allActive
@@ -245,6 +262,12 @@ class _CombinedViewState extends State<CombinedView> {
                             : List<String>.from(state.availableCommentators),
                       ),
                     );
+                // פתיחת חלון הצד של המפרשים רק אם מוסיפים מפרשים ומפרשים מוגדרים בצד הטקסט (לא מתחת)
+                if (isAdding &&
+                    !widget.showCommentaryAsExpansionTiles &&
+                    widget.onOpenCommentatorsPane != null) {
+                  widget.onOpenCommentatorsPane!();
+                }
               },
             ),
             const ctx.MenuDivider(),
