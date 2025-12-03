@@ -557,6 +557,7 @@ class _OrganizationsList extends StatelessWidget {
     {
       'name': 'הצלה לאחים',
       'phone': '02-502-3231',
+      'logo': 'assets/logos/hatzala_leachim.png',
       'details': '''1 - לפניות חדשות והמשך טיפול
 2 - לפניות בנושא עיכוב יציאה מהארץ
 3 - לפניות בנושא עצורים בכלא הצבאי
