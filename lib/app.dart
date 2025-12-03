@@ -6,6 +6,16 @@ import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/navigation/main_window_screen.dart';
 
+/// קבועי צבעים לעיצוב האפליקציה
+class AppColors {
+  static const Color darkScaffold = Color(0xFF242424);
+  static const Color darkCard = Color(0xFF333333);
+  static const Color darkAppBar = Color(0xFF2A2A2A);
+  static const Color darkOnSurface = Color(0xFFE0E0E0);
+  static const Color darkOutline = Color(0xFF4A4A4A);
+  static const Color dialogBarrier = Color(0x22000000);
+}
+
 class App extends StatelessWidget {
   const App({super.key});
 
@@ -28,48 +38,51 @@ class App extends StatelessWidget {
           title: 'אוצריא',
           theme: state.isDarkMode
               ? ThemeData.dark(useMaterial3: true).copyWith(
-                  scaffoldBackgroundColor: const Color(0xFF242424),
-                  canvasColor: const Color(0xFF242424),
-                  cardColor: const Color(0xFF333333),
+                  scaffoldBackgroundColor: AppColors.darkScaffold,
+                  canvasColor: AppColors.darkScaffold,
+                  cardColor: AppColors.darkCard,
                   colorScheme: ColorScheme.dark(
-                    surface: const Color(0xFF242424),
-                    surfaceContainer: const Color(0xFF333333),
-                    onSurface: const Color(0xFFE0E0E0),
+                    surface: AppColors.darkScaffold,
+                    surfaceContainer: AppColors.darkCard,
+                    onSurface: AppColors.darkOnSurface,
                     primary: state.darkSeedColor,
                     onPrimary: Colors.white,
                     secondary: state.darkSeedColor.withValues(alpha: 0.7),
                     onSecondary: Colors.white,
-                    outline: const Color(0xFF4A4A4A),
+                    outline: AppColors.darkOutline,
                   ),
-                  textTheme: ThemeData.dark().textTheme.apply(
+                  textTheme: ThemeData.dark()
+                      .textTheme
+                      .apply(
                         fontFamily: 'Roboto',
-                        bodyColor: const Color(0xFFE0E0E0),
-                        displayColor: const Color(0xFFE0E0E0),
-                      ).copyWith(
+                        bodyColor: AppColors.darkOnSurface,
+                        displayColor: AppColors.darkOnSurface,
+                      )
+                      .copyWith(
                         bodyMedium: const TextStyle(
                           fontSize: 18.0,
                           fontFamily: 'candara',
-                          color: Color(0xFFE0E0E0),
+                          color: AppColors.darkOnSurface,
                         ),
                       ),
                   cardTheme: CardThemeData(
-                    color: const Color(0xFF333333),
+                    color: AppColors.darkCard,
                     elevation: 3,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                       side: const BorderSide(
-                        color: Color(0xFF4A4A4A),
+                        color: AppColors.darkOutline,
                         width: 1,
                       ),
                     ),
                   ),
                   appBarTheme: const AppBarTheme(
-                    backgroundColor: Color(0xFF2A2A2A),
-                    foregroundColor: Color(0xFFE0E0E0),
+                    backgroundColor: AppColors.darkAppBar,
+                    foregroundColor: AppColors.darkOnSurface,
                   ),
                   dialogTheme: const DialogThemeData(
-                    barrierColor: Color(0x22000000),
-                    backgroundColor: Color(0xFF2A2A2A),
+                    barrierColor: AppColors.dialogBarrier,
+                    backgroundColor: AppColors.darkAppBar,
                   ),
                 )
               : ThemeData(
@@ -84,7 +97,7 @@ class App extends StatelessWidget {
                   ),
                 ).copyWith(
                   dialogTheme: DialogThemeData(
-                    barrierColor: const Color(0x22000000),
+                    barrierColor: AppColors.dialogBarrier,
                     backgroundColor: ThemeData(
                       colorScheme: ColorScheme.fromSeed(
                         seedColor: state.seedColor,

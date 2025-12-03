@@ -25,6 +25,13 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
   TextEditingController searchController = TextEditingController();
   List<String> selectedTopics = [];
   List<String> commentatorsList = [];
+
+  /// עדכון רשימת המפרשים הפעילים וסגירת מסך הבחירה
+  void _updateAndNotify(List<String> newCommentators) {
+    context.read<TextBookBloc>().add(UpdateCommentators(newCommentators));
+    widget.onCommentatorSelected?.call();
+  }
+
   List<String> _torahShebichtav = [];
   List<String> _chazal = [];
   List<String> _rishonim = [];
@@ -128,16 +135,15 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<TextBookBloc, TextBookState>(
-      builder: (context, state) {
-        if (state is! TextBookLoaded) return const Center();
-        if (state.availableCommentators.isEmpty) {
-          return const Center(
-            child: Text("אין מפרשים"),
-          );
-        }
-        if (commentatorsList.isEmpty) _update(context, state);
-        return Column(
+    return BlocBuilder<TextBookBloc, TextBookState>(builder: (context, state) {
+      if (state is! TextBookLoaded) return const Center();
+      if (state.availableCommentators.isEmpty) {
+        return const Center(
+          child: Text("אין מפרשים"),
+        );
+      }
+      if (commentatorsList.isEmpty) _update(context, state);
+      return Column(
         children: [
           FilterListWidget<String>(
             hideSearchField: true,
@@ -230,10 +236,8 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
                               !e.startsWith('__BUTTON_'))
                           .toList();
                       if (checked ?? false) {
-                        context.read<TextBookBloc>().add(UpdateCommentators(
-                            {...state.activeCommentators, ...items}.toList()));
-                        // סגירת מסך הבחירה כשמוסיפים את כל המפרשים
-                        widget.onCommentatorSelected?.call();
+                        _updateAndNotify(
+                            {...state.activeCommentators, ...items}.toList());
                       } else {
                         context.read<TextBookBloc>().add(UpdateCommentators(
                             state.activeCommentators
@@ -264,8 +268,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
                               for (final t in _torahShebichtav) {
                                 if (!current.contains(t)) current.add(t);
                               }
-                              // סגירת מסך הבחירה כשמוסיפים קבוצה
-                              widget.onCommentatorSelected?.call();
+                              _updateAndNotify(current);
                             } else {
                               current.removeWhere(_torahShebichtav.contains);
                             }
@@ -288,8 +291,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
                               for (final t in _chazal) {
                                 if (!current.contains(t)) current.add(t);
                               }
-                              // סגירת מסך הבחירה כשמוסיפים קבוצה
-                              widget.onCommentatorSelected?.call();
+                              _updateAndNotify(current);
                             } else {
                               current.removeWhere(_chazal.contains);
                             }
@@ -312,8 +314,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
                               for (final t in _rishonim) {
                                 if (!current.contains(t)) current.add(t);
                               }
-                              // סגירת מסך הבחירה כשמוסיפים קבוצה
-                              widget.onCommentatorSelected?.call();
+                              _updateAndNotify(current);
                             } else {
                               current.removeWhere(_rishonim.contains);
                             }
@@ -336,8 +337,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
                               for (final t in _acharonim) {
                                 if (!current.contains(t)) current.add(t);
                               }
-                              // סגירת מסך הבחירה כשמוסיפים קבוצה
-                              widget.onCommentatorSelected?.call();
+                              _updateAndNotify(current);
                             } else {
                               current.removeWhere(_acharonim.contains);
                             }
@@ -360,8 +360,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
                               for (final t in _modern) {
                                 if (!current.contains(t)) current.add(t);
                               }
-                              // סגירת מסך הבחירה כשמוסיפים קבוצה
-                              widget.onCommentatorSelected?.call();
+                              _updateAndNotify(current);
                             } else {
                               current.removeWhere(_modern.contains);
                             }
@@ -384,8 +383,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
                               for (final t in _ungrouped) {
                                 if (!current.contains(t)) current.add(t);
                               }
-                              // סגירת מסך הבחירה כשמוסיפים קבוצה
-                              widget.onCommentatorSelected?.call();
+                              _updateAndNotify(current);
                             } else {
                               current.removeWhere(_ungrouped.contains);
                             }
