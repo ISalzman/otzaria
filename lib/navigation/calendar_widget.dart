@@ -1462,6 +1462,19 @@ class CalendarWidget extends StatelessWidget {
 
   int _hebrewMonthToInt(String monthName) {
     final cleanMonth = monthName.trim();
+
+    // טיפול מיוחד בחודשי אדר בשנה מעוברת
+    if (cleanMonth == 'אדר א' ||
+        cleanMonth == 'אדר א׳' ||
+        cleanMonth == 'אדר 1') {
+      return 12;
+    }
+    if (cleanMonth == 'אדר ב' ||
+        cleanMonth == 'אדר ב׳' ||
+        cleanMonth == 'אדר 2') {
+      return 13;
+    }
+
     final monthIndex = hebrewMonths.indexOf(cleanMonth);
     if (monthIndex != -1) return monthIndex + 1;
 
@@ -1632,14 +1645,34 @@ class CalendarWidget extends StatelessWidget {
     // 2. נסה לפרש כתאריך עברי (למשל: י"ח אלול תשפ"ה)
     try {
       final parts = cleanInput.split(RegExp(r'\s+'));
-      if (parts.length < 2 || parts.length > 3) return null;
+      if (parts.length < 2 || parts.length > 4) return null;
 
       final day = _hebrewNumberToInt(parts[0]);
-      final month = _hebrewMonthToInt(parts[1]);
+
+      // טיפול בשמות חודשים בני שתי מילים (אדר א, אדר ב)
+      String monthName;
+      int yearPartIndex;
+
+      if (parts.length >= 3 &&
+          (parts[1] == 'אדר') &&
+          (parts[2] == 'א' ||
+              parts[2] == 'א׳' ||
+              parts[2] == 'ב' ||
+              parts[2] == 'ב׳')) {
+        // שם החודש הוא שתי מילים: "אדר א" או "אדר ב"
+        monthName = '${parts[1]} ${parts[2]}';
+        yearPartIndex = 3;
+      } else {
+        // שם החודש הוא מילה אחת
+        monthName = parts[1];
+        yearPartIndex = 2;
+      }
+
+      final month = _hebrewMonthToInt(monthName);
       int year;
 
-      if (parts.length == 3) {
-        year = _hebrewYearToInt(parts[2]);
+      if (parts.length > yearPartIndex) {
+        year = _hebrewYearToInt(parts[yearPartIndex]);
       } else {
         // אם השנה הושמטה, נשתמש בשנה העברית הנוכחית שמוצגת בלוח
         year = context
