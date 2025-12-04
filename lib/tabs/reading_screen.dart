@@ -529,7 +529,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                 )
               else
                 MenuItem(
-                  label: 'שלב עם',
+                  label: 'הצג לצד',
                   enabled: false,
                   onSelected: () {},
                 ),
