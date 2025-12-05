@@ -99,12 +99,14 @@ void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Check for single instance
-  FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
-  bool isFirstInstance = await flutterSingleInstance.isFirstInstance();
-  if (!isFirstInstance) {
-    // If not the first instance, exit the app
-    exit(0);
+  // Check for single instance - skip on Apple platforms (macOS/iOS) due to sandbox restrictions
+  if (!Platform.isMacOS && !Platform.isIOS) {
+    FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
+    bool isFirstInstance = await flutterSingleInstance.isFirstInstance();
+    if (!isFirstInstance) {
+      // If not the first instance, exit the app
+      exit(0);
+    }
   }
 
   // Initialize bloc observer for debugging
@@ -319,7 +321,7 @@ Future<void> loadCerts() async {
 /// Clean up resources when the app is closing
 void cleanup() {
   _appWindowListener?.dispose();
-  
+
   // Clear SourcesBooks data from memory
   SourcesBooksService().clearData();
 }
