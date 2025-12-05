@@ -88,9 +88,8 @@ class ErrorReportHelper {
       }
     }
 
-    final ctxStart = (startWordIndex - wordsBefore) < 0 
-        ? 0 
-        : (startWordIndex - wordsBefore);
+    final ctxStart =
+        (startWordIndex - wordsBefore) < 0 ? 0 : (startWordIndex - wordsBefore);
     final ctxEnd = (endWordIndex + wordsAfter) >= matches.length
         ? matches.length - 1
         : (endWordIndex + wordsAfter);
@@ -338,7 +337,7 @@ $detailsSection
 
       final phoneReportService = PhoneReportService();
       final result = await phoneReportService.submitReport(reportData);
-      
+
       if (!context.mounted) return;
 
       // Hide loading indicator
@@ -508,14 +507,15 @@ class _TabbedReportDialogState extends State<TabbedReportDialog>
   Widget build(BuildContext context) {
     // חישוב גובה זמין בפועל (ללא שורת המשימות ואזורים מוגנים אחרים)
     final mediaQuery = MediaQuery.of(context);
-    final availableHeight = mediaQuery.size.height - 
-                           mediaQuery.padding.top - 
-                           mediaQuery.padding.bottom;
-    
+    final availableHeight = mediaQuery.size.height -
+        mediaQuery.padding.top -
+        mediaQuery.padding.bottom;
+
     return Dialog(
       child: SizedBox(
-        width: mediaQuery.size.width * 0.9,  // רוחב: 90% מרוחב המסך
-        height: availableHeight * 0.95, // גובה: 90% מהגובה הזמין (ללא שורת משימות)
+        width: mediaQuery.size.width * 0.9, // רוחב: 90% מרוחב המסך
+        height:
+            availableHeight * 0.95, // גובה: 90% מהגובה הזמין (ללא שורת משימות)
         child: Column(
           children: [
             Padding(
@@ -850,7 +850,7 @@ class _RegularReportTabState extends State<RegularReportTab> {
                       }
                     : null,
                 icon: const Icon(FluentIcons.save_24_regular, size: 18),
-                label: const Text('שמור לדיווח מאוחר'),
+                label: const Text('לא מחובר לרשת? שמור לדיווח מאוחר'),
               ),
               ElevatedButton.icon(
                 onPressed: canSubmit
