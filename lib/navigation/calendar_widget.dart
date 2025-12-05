@@ -7,6 +7,9 @@ import 'package:otzaria/daf_yomi/daf_yomi_helper.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/settings/calendar_settings_dialog.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'dart:io';
 
 // הפכנו את הווידג'ט ל-Stateless כי הוא כבר לא מנהל מצב בעצמו.
 class CalendarWidget extends StatelessWidget {
@@ -2207,10 +2210,6 @@ class _TimesAndEventsTabViewState extends State<_TimesAndEventsTabView>
                         ],
                       ),
                       const SizedBox(height: 16),
-                      widget.buildTimesGrid(context, widget.state),
-                      const SizedBox(height: 16),
-                      widget.buildDafYomiButtons(context, widget.state),
-                      const SizedBox(height: 16),
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
@@ -2220,15 +2219,37 @@ class _TimesAndEventsTabViewState extends State<_TimesAndEventsTabView>
                           border: Border.all(
                               color: Theme.of(context).primaryColor, width: 1),
                         ),
-                        child: Text(
-                          'אין לסמוך על הזמנים!',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).primaryColor,
-                          ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'אין לסמוך על הזמנים כלל!',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).primaryColor,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            InkWell(
+                              onTap: () =>
+                                  _openCalendarCalculationPage(context),
+                              child: Text(
+                                'שים לב! הזמנים שונים מהותית מהלוח \'עיתים לבינה\'!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context).primaryColor,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      widget.buildTimesGrid(context, widget.state),
+                      const SizedBox(height: 16),
+                      widget.buildDafYomiButtons(context, widget.state),
                     ],
                   ),
                 ),
@@ -2328,6 +2349,45 @@ class _TimesAndEventsTabViewState extends State<_TimesAndEventsTabView>
         ],
       ),
     );
+  }
+
+  // פונקציה לפתיחת דף חישוב הזמנים
+  static Future<void> _openCalendarCalculationPage(BuildContext context) async {
+    final libraryPath = Settings.getValue('key-library-path');
+    if (libraryPath == null || libraryPath.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('לא נמצאה תיקיית הספרייה')),
+      );
+      return;
+    }
+
+    final otzariaSitePath = Directory(
+        '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}otzaria-site');
+
+    if (!await otzariaSitePath.exists()) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('לא נמצאה תיקיית otzaria-site')),
+      );
+      return;
+    }
+
+    final htmlFile = File(
+        '${otzariaSitePath.path}${Platform.pathSeparator}calendar-calculation.html');
+    if (!await htmlFile.exists()) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('הקובץ calendar-calculation.html לא נמצא')),
+      );
+      return;
+    }
+
+    final uri = Uri.file(htmlFile.path);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
   }
 }
 
