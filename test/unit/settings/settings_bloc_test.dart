@@ -34,6 +34,7 @@ void main() {
         'fontSize': 18.0,
         'fontFamily': 'Rubik',
         'commentatorsFontFamily': 'NotoRashiHebrew',
+        'commentatorsFontSize': 22.0,
         'showOtzarHachochma': true,
         'showHebrewBooks': true,
         'showExternalBooks': true,
@@ -76,6 +77,8 @@ void main() {
             commentatorsFontFamily:
                 mockSettings['commentatorsFontFamily'] as String? ??
                     'NotoRashiHebrew',
+            commentatorsFontSize:
+                mockSettings['commentatorsFontSize'] as double? ?? 22.0,
             showOtzarHachochma: mockSettings['showOtzarHachochma'] as bool,
             showHebrewBooks: mockSettings['showHebrewBooks'] as bool,
             showExternalBooks: mockSettings['showExternalBooks'] as bool,

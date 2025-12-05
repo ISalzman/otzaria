@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -10,6 +11,8 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/pdf_book/pdf_commentators_selector.dart';
 import 'package:otzaria/pdf_book/pdf_commentary_content.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
+import 'package:otzaria/settings/settings_bloc.dart';
+import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:pdfrx/pdfrx.dart';
 
@@ -453,45 +456,49 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   Widget _buildCommentaryGroupTile(CommentaryGroup group) {
-    return ExpansionTile(
-      key: PageStorageKey(
-          '${group.bookTitle}_${widget.tab.currentTextLineNumber}'),
-      maintainState: true,
-      initiallyExpanded: false,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
-      title: Text(
-        group.bookTitle,
-        style: TextStyle(
-          fontSize: widget.fontSize * 0.85,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'FrankRuhlCLM',
-        ),
-      ),
-      children: group.links.map((link) {
-        return ListTile(
-          contentPadding: const EdgeInsets.only(right: 32.0, left: 16.0),
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      builder: (context, settingsState) {
+        return ExpansionTile(
+          key: PageStorageKey(
+              '${group.bookTitle}_${widget.tab.currentTextLineNumber}'),
+          maintainState: true,
+          initiallyExpanded: false,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
           title: Text(
-            link.heRef,
+            group.bookTitle,
             style: TextStyle(
-              fontSize: widget.fontSize * 0.75,
-              fontWeight: FontWeight.normal,
-              fontFamily: 'FrankRuhlCLM',
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.5),
+              fontSize: settingsState.commentatorsFontSize - 2,
+              fontWeight: FontWeight.bold,
+              fontFamily: settingsState.commentatorsFontFamily,
             ),
           ),
-          subtitle: PdfCommentaryContent(
-            key: ValueKey(
-                '${link.path2}_${link.index2}_${widget.tab.currentTextLineNumber}'),
-            link: link,
-            fontSize: widget.fontSize,
-            openBookCallback: widget.openBookCallback,
-          ),
+          children: group.links.map((link) {
+            return ListTile(
+              contentPadding: const EdgeInsets.only(right: 32.0, left: 16.0),
+              title: Text(
+                link.heRef,
+                style: TextStyle(
+                  fontSize: settingsState.commentatorsFontSize - 4,
+                  fontWeight: FontWeight.normal,
+                  fontFamily: settingsState.commentatorsFontFamily,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.5),
+                ),
+              ),
+              subtitle: PdfCommentaryContent(
+                key: ValueKey(
+                    '${link.path2}_${link.index2}_${widget.tab.currentTextLineNumber}'),
+                link: link,
+                fontSize: widget.fontSize,
+                openBookCallback: widget.openBookCallback,
+              ),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 
@@ -568,69 +575,77 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
   Widget _buildLinkTile(Link link) {
     final keyStr = '${link.path2}_${link.index2}';
-    return ExpansionTile(
-      key: PageStorageKey(keyStr),
-      maintainState: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
-      title: Text(
-        link.heRef,
-        style: TextStyle(
-          fontSize: widget.fontSize * 0.75,
-          fontWeight: FontWeight.w600,
-          fontFamily: 'FrankRuhlCLM',
-        ),
-      ),
-      subtitle: Text(
-        utils.getTitleFromPath(link.path2),
-        style: TextStyle(
-          fontSize: widget.fontSize * 0.65,
-          fontFamily: 'FrankRuhlCLM',
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-        ),
-      ),
-      children: [
-        GestureDetector(
-          onTap: () {
-            // פתיחת הספר בלחיצה על הקישור
-            widget.openBookCallback(
-              TextBookTab(
-                book: TextBook(
-                  title: utils.getTitleFromPath(link.path2),
-                ),
-                index: link.index2 - 1,
-                openLeftPane:
-                    (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      builder: (context, settingsState) {
+        return ExpansionTile(
+          key: PageStorageKey(keyStr),
+          maintainState: true,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
+          title: Text(
+            link.heRef,
+            style: TextStyle(
+              fontSize: settingsState.commentatorsFontSize - 2,
+              fontWeight: FontWeight.w600,
+              fontFamily: settingsState.commentatorsFontFamily,
+            ),
+          ),
+          subtitle: Text(
+            utils.getTitleFromPath(link.path2),
+            style: TextStyle(
+              fontSize: settingsState.commentatorsFontSize - 4,
+              fontFamily: settingsState.commentatorsFontFamily,
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.7),
+            ),
+          ),
+          children: [
+            GestureDetector(
+              onTap: () {
+                // פתיחת הספר בלחיצה על הקישור
+                widget.openBookCallback(
+                  TextBookTab(
+                    book: TextBook(
+                      title: utils.getTitleFromPath(link.path2),
+                    ),
+                    index: link.index2 - 1,
+                    openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
+                            false) ||
                         (Settings.getValue<bool>('key-default-sidebar-open') ??
                             false),
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: FutureBuilder<String>(
-              future: link.content,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  debugPrint('Error loading link content: ${snapshot.error}');
-                  debugPrint('Stack trace: ${snapshot.stackTrace}');
-                  return Text('שגיאה: ${snapshot.error}');
-                }
-                return Text(
-                  utils.stripHtmlIfNeeded(snapshot.data ?? ''),
-                  style: TextStyle(
-                    fontSize: widget.fontSize * 0.75,
-                    fontFamily: 'FrankRuhlCLM',
                   ),
                 );
               },
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: FutureBuilder<String>(
+                  future: link.content,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      debugPrint(
+                          'Error loading link content: ${snapshot.error}');
+                      debugPrint('Stack trace: ${snapshot.stackTrace}');
+                      return Text('שגיאה: ${snapshot.error}');
+                    }
+                    return Text(
+                      utils.stripHtmlIfNeeded(snapshot.data ?? ''),
+                      style: TextStyle(
+                        fontSize: widget.fontSize * 0.75,
+                        fontFamily: 'FrankRuhlCLM',
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 

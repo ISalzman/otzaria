@@ -12,6 +12,7 @@ class SettingsRepository {
   static const String keyFontFamily = 'key-font-family';
   static const String keyCommentatorsFontFamily =
       'key-commentators-font-family';
+  static const String keyCommentatorsFontSize = 'key-commentators-font-size';
   static const String keyShowOtzarHachochma = 'key-show-otzar-hachochma';
   static const String keyShowHebrewBooks = 'key-show-hebrew-books';
   static const String keyShowExternalBooks = 'key-show-external-books';
@@ -59,7 +60,8 @@ class SettingsRepository {
         _settings.getValue<String>(keySwatchColor, defaultValue: '#ff2c1b02'),
       ),
       'darkSeedColor': ColorUtils.colorFromString(
-        _settings.getValue<String>(keyDarkSwatchColor, defaultValue: '#ffce93d8'),
+        _settings.getValue<String>(keyDarkSwatchColor,
+            defaultValue: '#ffce93d8'),
       ),
       'textMaxWidth':
           _settings.getValue<double>(keyTextMaxWidth, defaultValue: -1),
@@ -71,6 +73,10 @@ class SettingsRepository {
       'commentatorsFontFamily': _settings.getValue<String>(
         keyCommentatorsFontFamily,
         defaultValue: 'NotoRashiHebrew',
+      ),
+      'commentatorsFontSize': _settings.getValue<double>(
+        keyCommentatorsFontSize,
+        defaultValue: 22,
       ),
       'showOtzarHachochma': _settings.getValue<bool>(
         keyShowOtzarHachochma,
@@ -185,7 +191,8 @@ class SettingsRepository {
   }
 
   Future<void> updateDarkSeedColor(Color value) async {
-    await _settings.setValue(keyDarkSwatchColor, ColorUtils.colorToString(value));
+    await _settings.setValue(
+        keyDarkSwatchColor, ColorUtils.colorToString(value));
   }
 
   Future<void> updateTextMaxWidth(double value) async {
@@ -202,6 +209,10 @@ class SettingsRepository {
 
   Future<void> updateCommentatorsFontFamily(String value) async {
     await _settings.setValue(keyCommentatorsFontFamily, value);
+  }
+
+  Future<void> updateCommentatorsFontSize(double value) async {
+    await _settings.setValue(keyCommentatorsFontSize, value);
   }
 
   Future<void> updateShowOtzarHachochma(bool value) async {
@@ -375,6 +386,8 @@ class SettingsRepository {
     await _settings.setValue(keyTextMaxWidth, -1.0);
     await _settings.setValue(keyFontSize, 25.0);
     await _settings.setValue(keyFontFamily, 'FrankRuhlCLM');
+    await _settings.setValue(keyCommentatorsFontFamily, 'NotoRashiHebrew');
+    await _settings.setValue(keyCommentatorsFontSize, 22.0);
     await _settings.setValue(keyShowOtzarHachochma, false);
     await _settings.setValue(keyShowHebrewBooks, false);
     await _settings.setValue(keyShowExternalBooks, false);

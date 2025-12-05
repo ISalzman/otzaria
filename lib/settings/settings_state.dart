@@ -9,6 +9,7 @@ class SettingsState extends Equatable {
   final double fontSize;
   final String fontFamily;
   final String commentatorsFontFamily;
+  final double commentatorsFontSize;
   final bool showOtzarHachochma;
   final bool showHebrewBooks;
   final bool showExternalBooks;
@@ -39,6 +40,7 @@ class SettingsState extends Equatable {
     required this.fontSize,
     required this.fontFamily,
     required this.commentatorsFontFamily,
+    required this.commentatorsFontSize,
     required this.showOtzarHachochma,
     required this.showHebrewBooks,
     required this.showExternalBooks,
@@ -67,10 +69,12 @@ class SettingsState extends Equatable {
       isDarkMode: false,
       seedColor: Colors.brown,
       darkSeedColor: Color(0xFFCE93D8), // סגול בהיר למצב כהה
-      textMaxWidth: -1, // רוחב מקסימלי לטקסט (-1 = רמה 1 = 95% כברירת מחדל, 0 = ללא הגבלה)
+      textMaxWidth:
+          -1, // רוחב מקסימלי לטקסט (-1 = רמה 1 = 95% כברירת מחדל, 0 = ללא הגבלה)
       fontSize: 16,
       fontFamily: 'FrankRuhlCLM',
       commentatorsFontFamily: 'NotoRashiHebrew',
+      commentatorsFontSize: 22,
       showOtzarHachochma: false,
       showHebrewBooks: false,
       showExternalBooks: false,
@@ -103,6 +107,7 @@ class SettingsState extends Equatable {
     double? fontSize,
     String? fontFamily,
     String? commentatorsFontFamily,
+    double? commentatorsFontSize,
     bool? showOtzarHachochma,
     bool? showHebrewBooks,
     bool? showExternalBooks,
@@ -134,6 +139,7 @@ class SettingsState extends Equatable {
       fontFamily: fontFamily ?? this.fontFamily,
       commentatorsFontFamily:
           commentatorsFontFamily ?? this.commentatorsFontFamily,
+      commentatorsFontSize: commentatorsFontSize ?? this.commentatorsFontSize,
       showOtzarHachochma: showOtzarHachochma ?? this.showOtzarHachochma,
       showHebrewBooks: showHebrewBooks ?? this.showHebrewBooks,
       showExternalBooks: showExternalBooks ?? this.showExternalBooks,
@@ -169,6 +175,7 @@ class SettingsState extends Equatable {
         fontSize,
         fontFamily,
         commentatorsFontFamily,
+        commentatorsFontSize,
         showOtzarHachochma,
         showHebrewBooks,
         showExternalBooks,
