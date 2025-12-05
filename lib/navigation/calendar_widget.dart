@@ -995,12 +995,13 @@ class CalendarWidget extends StatelessWidget {
           .add({'name': 'הדלקת נרות', 'time': dailyTimes['candleLighting']});
     }
 
-    // הוספת זמני יציאת שבת/חג (לא להוסיף בימי חול המועד והושענא רבה)
+    // הוספת זמני יציאת שבת/חג (לא להוסיף בימי חול המועד, הושענא רבה וחנוכה)
     final int yomTovIndex = jewishCalendar.getYomTovIndex();
     final bool isNotExitTimesDay =
         yomTovIndex == JewishCalendar.CHOL_HAMOED_SUCCOS ||
             yomTovIndex == JewishCalendar.CHOL_HAMOED_PESACH ||
-            yomTovIndex == JewishCalendar.HOSHANA_RABBA;
+            yomTovIndex == JewishCalendar.HOSHANA_RABBA ||
+            yomTovIndex == JewishCalendar.CHANUKAH;
 
     if ((jewishCalendar.getDayOfWeek() == 7 || jewishCalendar.isYomTov()) &&
         !isNotExitTimesDay) {
@@ -1055,12 +1056,6 @@ class CalendarWidget extends StatelessWidget {
           'time': dailyTimes['kidushLevanaLatest']
         });
       }
-    }
-
-    // הוספת זמני חנוכה
-    if (jewishCalendar.isChanukah()) {
-      timesList.add(
-          {'name': 'הדלקת נרות חנוכה', 'time': dailyTimes['chanukahCandles']});
     }
 
     // הוספת זמני קידוש לבנה
