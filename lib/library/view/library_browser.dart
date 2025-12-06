@@ -1122,27 +1122,28 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         },
       ),
 
-      // סינכרון
-      ActionButtonData(
-        widget: BlocProvider.value(
-          value: _fileSyncBloc,
-          child: BlocListener<FileSyncBloc, FileSyncState>(
-            listener: (context, syncState) {
-              if ((syncState.status == FileSyncStatus.completed ||
-                      syncState.status == FileSyncStatus.error) &&
-                  syncState.hasNewSync) {
-                context.read<LibraryBloc>().add(RefreshLibrary());
-              }
-            },
-            child: const SyncIconButton(),
+      // סינכרון - מוצג רק אם מצב אופליין לא מופעל
+      if (!(Settings.getValue<bool>('key-offline-mode') ?? false))
+        ActionButtonData(
+          widget: BlocProvider.value(
+            value: _fileSyncBloc,
+            child: BlocListener<FileSyncBloc, FileSyncState>(
+              listener: (context, syncState) {
+                if ((syncState.status == FileSyncStatus.completed ||
+                        syncState.status == FileSyncStatus.error) &&
+                    syncState.hasNewSync) {
+                  context.read<LibraryBloc>().add(RefreshLibrary());
+                }
+              },
+              child: const SyncIconButton(),
+            ),
           ),
+          icon: FluentIcons.arrow_sync_24_regular,
+          tooltip: 'סינכרון',
+          onPressed: () {
+            // הפעולה מטופלת ב-SyncIconButton
+          },
         ),
-        icon: FluentIcons.arrow_sync_24_regular,
-        tooltip: 'סינכרון',
-        onPressed: () {
-          // הפעולה מטופלת ב-SyncIconButton
-        },
-      ),
 
       // טעינה מחדש
       ActionButtonData(
@@ -1323,27 +1324,28 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         onPressed: () => _showSwitchWorkspaceDialog(context),
       ),
 
-      // 4) סינכרון
-      ActionButtonData(
-        widget: BlocProvider.value(
-          value: _fileSyncBloc,
-          child: BlocListener<FileSyncBloc, FileSyncState>(
-            listener: (context, syncState) {
-              if ((syncState.status == FileSyncStatus.completed ||
-                      syncState.status == FileSyncStatus.error) &&
-                  syncState.hasNewSync) {
-                context.read<LibraryBloc>().add(RefreshLibrary());
-              }
-            },
-            child: const SyncIconButton(),
+      // 4) סינכרון - מוצג רק אם מצב אופליין לא מופעל
+      if (!(Settings.getValue<bool>('key-offline-mode') ?? false))
+        ActionButtonData(
+          widget: BlocProvider.value(
+            value: _fileSyncBloc,
+            child: BlocListener<FileSyncBloc, FileSyncState>(
+              listener: (context, syncState) {
+                if ((syncState.status == FileSyncStatus.completed ||
+                        syncState.status == FileSyncStatus.error) &&
+                    syncState.hasNewSync) {
+                  context.read<LibraryBloc>().add(RefreshLibrary());
+                }
+              },
+              child: const SyncIconButton(),
+            ),
           ),
+          icon: FluentIcons.arrow_sync_24_regular,
+          tooltip: 'סינכרון',
+          onPressed: () {
+            // הפעולה מטופלת ב-SyncIconButton
+          },
         ),
-        icon: FluentIcons.arrow_sync_24_regular,
-        tooltip: 'סינכרון',
-        onPressed: () {
-          // הפעולה מטופלת ב-SyncIconButton
-        },
-      ),
 
       // 5) טעינה מחדש של רשימת הספרים
       ActionButtonData(

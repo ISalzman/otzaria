@@ -256,24 +256,26 @@ $detailsSection
               ),
             ),
             const SizedBox(width: 8),
-            TextButton(
-              onPressed: () {
-                launchMail(_fallbackMail, context);
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                minimumSize: const Size(0, 32),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                'שלח עכשיו בדוא"ל',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  fontWeight: FontWeight.bold,
+            // הכפתור "שלח עכשיו בדוא"ל" מוסתר במצב אופליין
+            if (!(Settings.getValue<bool>('key-offline-mode') ?? false))
+              TextButton(
+                onPressed: () {
+                  launchMail(_fallbackMail, context);
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                },
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  'שלח עכשיו בדוא"ל',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
             TextButton(
               onPressed: () {
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -818,6 +820,9 @@ class _RegularReportTabState extends State<RegularReportTab> {
   }
 
   Widget _buildActionButtons() {
+    // בדיקת מצב אופליין
+    final isOfflineMode = Settings.getValue<bool>('key-offline-mode') ?? false;
+    
     return FutureBuilder<bool>(
       future: _isPhoneReportDisabled(),
       builder: (context, snapshot) {
@@ -852,22 +857,25 @@ class _RegularReportTabState extends State<RegularReportTab> {
                 icon: const Icon(FluentIcons.save_24_regular, size: 18),
                 label: const Text('שמור לדיווח מאוחר'),
               ),
-              ElevatedButton.icon(
-                onPressed: canSubmit
-                    ? () {
-                        widget.onActionSelected(
-                          ErrorReportAction.sendEmail,
-                          ReportedErrorData(
-                            selectedText: _selectedContent!,
-                            errorDetails: _detailsController.text.trim(),
-                          ),
-                        );
-                      }
-                    : null,
-                icon: const Icon(FluentIcons.mail_24_regular, size: 18),
-                label: const Text('שלח בדוא"ל'),
-              ),
-              if (!isPhoneDisabled)
+              // הכפתור "שלח בדוא"ל" מוסתר במצב אופליין
+              if (!isOfflineMode)
+                ElevatedButton.icon(
+                  onPressed: canSubmit
+                      ? () {
+                          widget.onActionSelected(
+                            ErrorReportAction.sendEmail,
+                            ReportedErrorData(
+                              selectedText: _selectedContent!,
+                              errorDetails: _detailsController.text.trim(),
+                            ),
+                          );
+                        }
+                      : null,
+                  icon: const Icon(FluentIcons.mail_24_regular, size: 18),
+                  label: const Text('שלח בדוא"ל'),
+                ),
+              // הכפתור "שלח ישירות לאוצריא" מוסתר במצב אופליין
+              if (!isPhoneDisabled && !isOfflineMode)
                 OutlinedButton(
                   onPressed: null,
                   child: const Text('שלח ישירות לאוצריא (לא פעיל זמנית)'),

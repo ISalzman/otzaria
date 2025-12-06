@@ -69,14 +69,8 @@ Widget hebrewFlatChip({
   }
 
   if (UpdatStatus.error == status) {
-    return Tooltip(
-      message: 'אירעה שגיאה בעדכון. אנא נסה שוב.',
-      child: TextButton.icon(
-        onPressed: startUpdate,
-        icon: const Icon(FluentIcons.warning_24_regular),
-        label: const Text('שגיאה בחיבור לרשת במהלך בדיקת עדכונים'),
-      ),
-    );
+    // לא להציג הודעת שגיאה במצב אופליין
+    return Container();
   }
 
   return Container();

@@ -144,6 +144,7 @@ class BackupService {
       'key-hebrew-books-path',
       'key-dev-channel',
       'key-auto-sync',
+      'key-offline-mode',
     ];
 
     final settings = <String, dynamic>{};

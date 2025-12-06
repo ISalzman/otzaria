@@ -15,14 +15,26 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
     on<UpdateProgress>(_onUpdateProgress);
     on<ResetState>(_onResetState);
 
-    // Check for auto-sync setting
-    if (Settings.getValue<bool>('key-auto-sync') ?? false) {
+    // Check for auto-sync setting and offline mode
+    final isOfflineMode = Settings.getValue<bool>('key-offline-mode') ?? false;
+    final isAutoSync = Settings.getValue<bool>('key-auto-sync') ?? false;
+    if (isAutoSync && !isOfflineMode) {
       add(const StartSync());
     }
   }
 
   Future<void> _onStartSync(
       StartSync event, Emitter<FileSyncState> emit) async {
+    // Check if offline mode is enabled
+    final isOfflineMode = Settings.getValue<bool>('key-offline-mode') ?? false;
+    if (isOfflineMode) {
+      emit(state.copyWith(
+        status: FileSyncStatus.initial,
+        message: 'מצב אופליין מופעל',
+      ));
+      return;
+    }
+    
     // If already syncing or completed, reset first
     if (state.status == FileSyncStatus.syncing ||
         state.status == FileSyncStatus.completed) {
