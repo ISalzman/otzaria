@@ -1167,15 +1167,6 @@ void _addSpecialTimes(Map<String, String> times, JewishCalendar jewishCalendar,
     }
   }
 
-  // זמני חנוכה - הדלקת נרות
-  if (jewishCalendar.isChanukah()) {
-    final chanukahCandleLighting =
-        _calculateChanukahCandleLighting(zmanimCalendar);
-    if (chanukahCandleLighting != null) {
-      times['chanukahCandles'] = _formatTime(chanukahCandleLighting);
-    }
-  }
-
   // זמני קידוש לבנה
   try {
     final tchilasKidushLevana =
@@ -1274,12 +1265,6 @@ DateTime? _calculateKidushLevanaLatest(
     return zmanimCalendar.getAlosHashachar();
   }
   return null;
-}
-
-// חישוב זמן הדלקת נרות חנוכה - אחרי צאת הכוכבים
-DateTime? _calculateChanukahCandleLighting(
-    ComplexZmanimCalendar zmanimCalendar) {
-  return zmanimCalendar.getTzais();
 }
 
 // Helper functions for CalendarType conversion
