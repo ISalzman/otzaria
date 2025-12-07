@@ -54,14 +54,14 @@ class AppWindowListener extends WindowListener {
   @override
   void onWindowFocus() {
     if (kDebugMode) {
-      print('Window focused');
+      //print('Window focused');
     }
   }
 
   @override
   void onWindowBlur() {
     if (kDebugMode) {
-      print('Window blurred');
+      //print('Window blurred');
     }
   }
 

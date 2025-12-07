@@ -38,12 +38,20 @@ class NotificationService {
     const LinuxInitializationSettings initializationSettingsLinux =
         LinuxInitializationSettings(defaultActionName: 'Open');
 
+    const WindowsInitializationSettings initializationSettingsWindows =
+        WindowsInitializationSettings(
+      appName: 'Otzaria',
+      appUserModelId: 'com.otzaria.app',
+      guid: 'd49b0314-ee7a-4626-bf79-97cdb8a991bb',
+    );
+
     final InitializationSettings initializationSettings =
         InitializationSettings(
             android: initializationSettingsAndroid,
             iOS: initializationSettingsIOS,
             macOS: initializationSettingsIOS,
-            linux: initializationSettingsLinux);
+            linux: initializationSettingsLinux,
+            windows: initializationSettingsWindows);
 
     await flutterLocalNotificationsPlugin.initialize(initializationSettings,
         onDidReceiveNotificationResponse: onDidReceiveNotificationResponse);

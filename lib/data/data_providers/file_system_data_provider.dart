@@ -5,8 +5,9 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:csv/csv.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/utils/docx_to_otzaria.dart';
+import 'package:otzaria/data/data_providers/library_provider_manager.dart';
+import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/models/books.dart';
@@ -31,11 +32,8 @@ class FileSystemData {
   /// Future that resolves to metadata for all books and categories
   late Future<Map<String, Map<String, dynamic>>> metadata;
 
-  /// SQLite data provider for database operations
-  final SqliteDataProvider _sqliteProvider = SqliteDataProvider.instance;
-
-  /// Cache for tracking which books are in the database
-  final Map<String, bool> _bookInDbCache = {};
+  /// Library provider manager for coordinating multiple data sources
+  final LibraryProviderManager _providerManager = LibraryProviderManager.instance;
 
   /// Creates a new instance of [FileSystemData] and initializes the title to path mapping
   /// and metadata
@@ -43,128 +41,73 @@ class FileSystemData {
     libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
     titleToPath = _getTitleToPath();
     metadata = _getMetadata();
-    _initializeSqlite();
+    _initializeProviders();
   }
 
   /// Singleton instance of [FileSystemData]
   static FileSystemData instance = FileSystemData();
 
-  /// Initializes the SQLite provider
-  Future<void> _initializeSqlite() async {
+  /// Initializes the library providers
+  Future<void> _initializeProviders() async {
     try {
-      await _sqliteProvider.initialize();
-      debugPrint('SQLite provider initialized in FileSystemData');
+      await _providerManager.initialize();
+      debugPrint('Library providers initialized in FileSystemData');
     } catch (e) {
-      debugPrint('SQLite provider initialization failed (will use files only): $e');
+      debugPrint('Provider initialization failed: $e');
     }
   }
 
   /// Checks if a book is stored in the database
   Future<bool> isBookInDatabase(String title) async {
-    // Check cache first
-    if (_bookInDbCache.containsKey(title)) {
-      return _bookInDbCache[title]!;
-    }
-
-    // Check database
-    final isInDb = await _sqliteProvider.isBookInDatabase(title);
-    _bookInDbCache[title] = isInDb;
-    return isInDb;
+    return await _providerManager.databaseProvider.hasBook(title);
   }
 
   /// Gets the data source for a book (DB, File, or Personal)
   /// Returns: 'DB' for database, 'ק' for file, 'א' for personal
   Future<String> getBookDataSource(String title) async {
-    // Check if personal first
-    final isPersonal = await isPersonalBook(title);
-    if (isPersonal) return 'א';
-    
-    // Then check if in database
-    final isInDb = await isBookInDatabase(title);
-    return isInDb ? 'DB' : 'ק';
+    return await _providerManager.getBookDataSource(title);
   }
 
   /// Clears the book-in-database cache
   void clearBookCache() {
-    _bookInDbCache.clear();
+    _providerManager.clearCaches();
     debugPrint('Book cache cleared');
   }
 
   /// Gets statistics about database usage
   Future<Map<String, dynamic>> getDatabaseStats() async {
-    if (!_sqliteProvider.isInitialized) {
-      return {
-        'enabled': false,
-        'books': 0,
-        'links': 0,
-      };
-    }
-
-    final stats = await _sqliteProvider.getDatabaseStats();
-    return {
-      'enabled': true,
-      ...stats,
-    };
+    return await _providerManager.getStats();
   }
 
-  /// Gets the SQLite provider for advanced operations
-  SqliteDataProvider get sqliteProvider => _sqliteProvider;
+  /// Gets the library provider manager for advanced operations
+  LibraryProviderManager get providerManager => _providerManager;
+
+  /// Gets the file system provider
+  FileSystemLibraryProvider get fileSystemProvider => _providerManager.fileSystemProvider;
+
+  /// Gets the database provider
+  DatabaseLibraryProvider get databaseProvider => _providerManager.databaseProvider;
 
   /// Checks if a book is in the personal folder
   Future<bool> isPersonalBook(String title) async {
-    try {
-      final titleToPathMap = await titleToPath;
-      final bookPath = titleToPathMap[title];
-      if (bookPath == null) return false;
-      
-      // Check if path contains the personal folder
-      return bookPath.contains('${Platform.pathSeparator}אישי${Platform.pathSeparator}');
-    } catch (e) {
-      debugPrint('Error checking if book is personal: $e');
-      return false;
-    }
+    return await _providerManager.fileSystemProvider.isPersonalBook(title);
   }
 
   /// Gets the path to the personal books folder
   String getPersonalBooksPath() {
-    return '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אישי';
+    return _providerManager.fileSystemProvider.getPersonalBooksPath();
   }
 
   /// Ensures the personal books folder exists
   Future<void> ensurePersonalFolderExists() async {
-    final personalPath = getPersonalBooksPath();
-    final personalDir = Directory(personalPath);
-    
-    if (!await personalDir.exists()) {
-      await personalDir.create(recursive: true);
-      debugPrint('📁 Created personal books folder: $personalPath');
-      
-      // Create a README file to explain the folder
-      final readmePath = '$personalPath${Platform.pathSeparator}קרא אותי.txt';
-      final readmeFile = File(readmePath);
-      await readmeFile.writeAsString('''
-תיקייה זו מיועדת לספרים אישיים
-
-ספרים שנמצאים בתיקייה זו:
-• לא יועברו למסד הנתונים
-• לא יסונכרנו עם השרת
-• נשארים תמיד כקבצים
-• ניתנים לעריכה ישירה
-
-איך להוסיף ספר אישי:
-1. העתק קובץ TXT או DOCX לתיקייה זו
-2. או השתמש בכפתור "הוסף ספר אישי" בתוכנה
-
-הספרים יופיעו בספרייה עם סימון מיוחד (א)
-''', encoding: utf8);
-      debugPrint('📝 Created README in personal folder');
-    }
+    await _providerManager.fileSystemProvider.ensurePersonalFolderExists();
   }
 
   /// Retrieves the complete library structure from the file system.
   ///
   /// Reads the library from the configured path and combines it with metadata
   /// to create a full [Library] object containing all categories and books.
+  /// Uses LibraryProviderManager for unified catalog building.
   Future<Library> getLibrary() async {
     // בדיקה שהתיקייה הראשית קיימת
     final rootDir = Directory(libraryPath);
@@ -183,222 +126,12 @@ class FileSystemData {
 
     titleToPath = _getTitleToPath();
     metadata = _getMetadata();
-    return _getLibraryFromDirectory(otzariaPath, await metadata);
-  }
-
-  /// Recursively builds the library structure from a directory.
-  ///
-  /// Creates a hierarchical structure of categories and books by traversing
-  /// the file system directory structure.
-  Future<Library> _getLibraryFromDirectory(
-      String path, Map<String, dynamic> metadata) async {
-    // First, get all books from the database
-    final Set<String> dbBookTitles = {};
-    final Map<String, List<Map<String, dynamic>>> dbBookDataByCategory = {};
     
-    try {
-      if (_sqliteProvider.isInitialized && _sqliteProvider.repository != null) {
-        final dbBooks = await _sqliteProvider.repository!.getAllBooks();
-        debugPrint('📚 Found ${dbBooks.length} books in database');
-        
-        // Group book data by category (we'll create TextBook objects later with proper category reference)
-        for (final dbBook in dbBooks) {
-          dbBookTitles.add(dbBook.title);
-          
-          // Get category name for this book
-          final categoryName = dbBook.topics.isNotEmpty 
-              ? dbBook.topics.first.name 
-              : 'ללא קטגוריה';
-          
-          // Store book data to create TextBook later
-          final bookData = {
-            'title': dbBook.title,
-            'author': dbBook.authors.isNotEmpty ? dbBook.authors.first.name : null,
-            'heShortDesc': dbBook.heShortDesc,
-            'pubDate': dbBook.pubDates.isNotEmpty ? dbBook.pubDates.first.date : null,
-            'pubPlace': dbBook.pubPlaces.isNotEmpty ? dbBook.pubPlaces.first.name : null,
-            'order': dbBook.order.toInt(),
-            'topics': dbBook.topics.map((t) => t.name).join(', '),
-          };
-          
-          if (!dbBookDataByCategory.containsKey(categoryName)) {
-            dbBookDataByCategory[categoryName] = [];
-          }
-          dbBookDataByCategory[categoryName]!.add(bookData);
-        }
-        
-        debugPrint('📚 Grouped ${dbBooks.length} books into ${dbBookDataByCategory.length} categories from database');
-      }
-    } catch (e) {
-      debugPrint('⚠️ Error loading books from database: $e');
-    }
-    
-    /// Recursive helper function to process directories and build category structure
-    Future<Category> getAllCategoriesAndBooksFromDirectory(
-        Directory dir, Category? parent) async {
-      final title = getTitleFromPath(dir.path);
-      Category category = Category(
-          title: title,
-          description: metadata[title]?['heDesc'] ?? '',
-          shortDescription: metadata[title]?['heShortDesc'] ?? '',
-          order: metadata[title]?['order'] ?? 999,
-          subCategories: [],
-          books: [],
-          parent: parent);
-
-      // Process each entity in the directory
-      await for (FileSystemEntity entity in dir.list()) {
-        // Check if entity is accessible before processing
-        try {
-          // Verify we can access the entity
-          await entity.stat();
-
-          if (entity is Directory) {
-            // Recursively process subdirectories as categories
-            category.subCategories.add(
-                await getAllCategoriesAndBooksFromDirectory(
-                    Directory(entity.path), category));
-          } else if (entity is File) {
-            // Only process actual files, not directories mistaken as files
-            // Extract topics from the file path
-            var topics = entity.path
-                .split('אוצריא${Platform.pathSeparator}')
-                .last
-                .split(Platform.pathSeparator)
-                .toList();
-            topics = topics.sublist(0, topics.length - 1);
-
-            // Handle special case where title contains " על "
-            if (getTitleFromPath(entity.path).contains(' על ')) {
-              topics.add(getTitleFromPath(entity.path).split(' על ')[1]);
-            }
-
-            // Process PDF files
-            if (entity.path.toLowerCase().endsWith('.pdf')) {
-              final title = getTitleFromPath(entity.path);
-              
-              // Skip if already in DB
-              if (dbBookTitles.contains(title)) {
-                debugPrint('⏭️ Skipping "$title" - already in database');
-                continue;
-              }
-              
-              category.books.add(
-                PdfBook(
-                  title: title,
-                  category: category,
-                  path: entity.path,
-                  author: metadata[title]?['author'],
-                  heShortDesc: metadata[title]?['heShortDesc'],
-                  pubDate: metadata[title]?['pubDate'],
-                  pubPlace: metadata[title]?['pubPlace'],
-                  order: metadata[title]?['order'] ?? 999,
-                  topics: topics.join(', '),
-                ),
-              );
-            }
-
-            // Process text and docx files
-            if (entity.path.toLowerCase().endsWith('.txt') ||
-                entity.path.toLowerCase().endsWith('.docx')) {
-              final title = getTitleFromPath(entity.path);
-              
-              // Skip if already in DB
-              if (dbBookTitles.contains(title)) {
-                debugPrint('⏭️ Skipping "$title" - already in database');
-                continue;
-              }
-              
-              category.books.add(TextBook(
-                  title: title,
-                  category: category,
-                  author: metadata[title]?['author'],
-                  heShortDesc: metadata[title]?['heShortDesc'],
-                  pubDate: metadata[title]?['pubDate'],
-                  pubPlace: metadata[title]?['pubPlace'],
-                  order: metadata[title]?['order'] ?? 999,
-                  topics: topics.join(', '),
-                  extraTitles: metadata[title]?['extraTitles']));
-            }
-          }
-        } catch (e) {
-          // Skip entities that can't be accessed (like directories mistaken as files)
-          debugPrint('Skipping inaccessible entity: ${entity.path} - $e');
-          continue;
-        }
-      }
-
-      // Sort categories and books by their order
-      category.subCategories.sort((a, b) => a.order.compareTo(b.order));
-      category.books.sort((a, b) => a.order.compareTo(b.order));
-      return category;
-    }
-
-    // Initialize empty library
-    Library library = Library(categories: []);
-
-    // Process top-level directories from file system
-    await for (FileSystemEntity entity in Directory(path).list()) {
-      if (entity is Directory) {
-        // Skip "אודות התוכנה" directory
-        final dirName = entity.path.split(Platform.pathSeparator).last;
-        if (dirName == 'אודות התוכנה') {
-          continue;
-        }
-
-        library.subCategories.add(await getAllCategoriesAndBooksFromDirectory(
-            Directory(entity.path), library));
-      }
-    }
-    
-    // Now add DB books to existing categories or create new ones
-    for (final entry in dbBookDataByCategory.entries) {
-      final categoryName = entry.key;
-      final booksData = entry.value;
-      
-      // Try to find existing category with this name
-      Category? existingCategory;
-      try {
-        existingCategory = library.subCategories.firstWhere(
-          (cat) => cat.title == categoryName
-        );
-        debugPrint('📁 Found existing category "$categoryName" for DB books');
-      } catch (e) {
-        // Category doesn't exist, create it
-        existingCategory = Category(
-          title: categoryName,
-          description: metadata[categoryName]?['heDesc'] ?? '',
-          shortDescription: metadata[categoryName]?['heShortDesc'] ?? '',
-          order: metadata[categoryName]?['order'] ?? 999,
-          subCategories: [],
-          books: [],
-          parent: library,
-        );
-        library.subCategories.add(existingCategory);
-        debugPrint('📁 Created new category "$categoryName" for DB books');
-      }
-      
-      // Create TextBook objects with proper category reference and add them
-      for (final bookData in booksData) {
-        final book = TextBook(
-          title: bookData['title'],
-          category: existingCategory,
-          author: bookData['author'],
-          heShortDesc: bookData['heShortDesc'],
-          pubDate: bookData['pubDate'],
-          pubPlace: bookData['pubPlace'],
-          order: bookData['order'],
-          topics: bookData['topics'],
-        );
-        existingCategory.books.add(book);
-      }
-      
-      debugPrint('📚 Added ${booksData.length} DB books to category "$categoryName"');
-    }
-    
-    library.subCategories.sort((a, b) => a.order.compareTo(b.order));
-    debugPrint('✅ Library loaded with ${library.subCategories.length} top-level categories');
-    return library;
+    // Use the unified catalog builder from LibraryProviderManager
+    return _providerManager.buildLibraryCatalog(
+      await metadata,
+      otzariaPath,
+    );
   }
 
   /// Retrieves the list of books from Otzar HaChochma
@@ -532,43 +265,22 @@ class FileSystemData {
 
   /// Retrieves the text content of a book.
   ///
-  /// First checks if the book is in the database. If found, retrieves from DB.
-  /// Otherwise, falls back to reading from file system.
-  /// Supports both plain text and DOCX formats. DOCX files are processed
-  /// using a special converter to extract their content.
+  /// Uses LibraryProviderManager to get text from the appropriate provider.
   Future<String> getBookText(String title) async {
-    // Check cache first
-    bool? isInDb = _bookInDbCache[title];
+    final text = await _providerManager.getBookText(title);
+    if (text != null) {
+      return text;
+    }
     
-    // If not in cache, check database
-    if (isInDb == null) {
-      isInDb = await _sqliteProvider.isBookInDatabase(title);
-      _bookInDbCache[title] = isInDb;
-    }
-
-    // If book is in database, get it from there
-    if (isInDb) {
-      debugPrint('📚 Loading book "$title" from DATABASE');
-      final text = await _sqliteProvider.getBookTextFromDb(title);
-      if (text != null) {
-        return text;
-      }
-      // If failed to get from DB, fall back to file
-      debugPrint('⚠️ Failed to load from DB, falling back to file for "$title"');
-      _bookInDbCache[title] = false; // Update cache
-    }
-
-    // Fall back to file system
-    debugPrint('📄 Loading book "$title" from FILE');
+    // Fallback to direct file system access
+    debugPrint('⚠️ Provider manager failed, falling back to direct file access for "$title"');
     final path = await _getBookPath(title);
-    final file = File(path);
-
-    if (path.endsWith('.docx')) {
-      final bytes = await file.readAsBytes();
-      return Isolate.run(() => docxToText(bytes, title));
-    } else {
-      return file.readAsString();
+    if (path.startsWith('error:')) {
+      throw Exception('Book not found: $title');
     }
+    
+    final file = File(path);
+    return file.readAsString();
   }
 
   /// Saves text content to a book file.
@@ -576,123 +288,7 @@ class FileSystemData {
   /// Only supports plain text files (.txt). DOCX files cannot be edited.
   /// Creates a backup of the original file before saving.
   Future<void> saveBookText(String title, String content) async {
-    final path = await _getBookPath(title);
-    final file = File(path);
-
-    // Only allow saving to text files, not DOCX
-    if (path.endsWith('.docx')) {
-      throw Exception(
-          'Cannot save to DOCX files. Only text files are supported.');
-    }
-
-    // Create backup of original file
-    final backupPath = '$path.backup.${DateTime.now().millisecondsSinceEpoch}';
-    await file.copy(backupPath);
-
-    try {
-      // Save the new content
-      await file.writeAsString(content, encoding: utf8);
-
-      // Clean up old backups after successful save
-      await _cleanupOldBackups(path);
-    } catch (e) {
-      // If save fails, restore from backup
-      final backupFile = File(backupPath);
-      if (await backupFile.exists()) {
-        await backupFile.copy(path);
-      }
-      rethrow;
-    }
-  }
-
-  /// Cleans up old backup files for a given file path.
-  /// Keeps only the most recent 3 backups, deletes older ones.
-  Future<void> _cleanupOldBackups(String originalPath) async {
-    try {
-      final directory = Directory(originalPath).parent;
-      final baseName = originalPath.split(Platform.pathSeparator).last;
-
-      // Find all backup files for this document
-      final backupFiles = <File>[];
-      await for (final entity in directory.list()) {
-        if (entity is File) {
-          final fileName = entity.path.split(Platform.pathSeparator).last;
-          if (fileName.startsWith('$baseName.backup.')) {
-            backupFiles.add(entity);
-          }
-        }
-      }
-
-      // Sort by timestamp (newest first)
-      backupFiles.sort((a, b) {
-        final aTime = _getBackupTimestamp(a.path);
-        final bTime = _getBackupTimestamp(b.path);
-        return bTime.compareTo(aTime); // Descending order
-      });
-
-      // Keep only the first 3 (most recent)
-      for (int i = 3; i < backupFiles.length; i++) {
-        try {
-          await backupFiles[i].delete();
-          debugPrint('Deleted old backup: ${backupFiles[i].path}');
-        } catch (e) {
-          debugPrint('Failed to delete backup ${backupFiles[i].path}: $e');
-        }
-      }
-    } catch (e) {
-      debugPrint('Error during backup cleanup: $e');
-    }
-  }
-
-  /// Extracts timestamp from backup filename
-  int _getBackupTimestamp(String backupPath) {
-    try {
-      final fileName = backupPath.split(Platform.pathSeparator).last;
-      final timestampStr = fileName.split('.backup.').last;
-      return int.parse(timestampStr);
-    } catch (e) {
-      return 0; // Return 0 for files that can't be parsed
-    }
-  }
-
-  /// Manual cleanup of old backup files across the entire library
-  Future<int> cleanupAllOldBackups() async {
-    int deletedCount = 0;
-    try {
-      final libraryDir =
-          Directory('$libraryPath${Platform.pathSeparator}אוצריא');
-      
-      // בדיקה שהתיקייה קיימת לפני ניסיון לגשת אליה
-      if (!libraryDir.existsSync()) {
-        debugPrint('Library directory does not exist, skipping cleanup');
-        return 0;
-      }
-
-      await for (final entity in libraryDir.list(recursive: true)) {
-        if (entity is File) {
-          final fileName = entity.path.split(Platform.pathSeparator).last;
-          if (fileName.contains('.backup.')) {
-            // Check if this backup is old (older than 7 days)
-            final timestamp = _getBackupTimestamp(entity.path);
-            final backupDate = DateTime.fromMillisecondsSinceEpoch(timestamp);
-            final daysOld = DateTime.now().difference(backupDate).inDays;
-
-            if (daysOld > 7) {
-              try {
-                await entity.delete();
-                deletedCount++;
-              } catch (e) {
-                debugPrint('Failed to delete backup ${entity.path}: $e');
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error during global backup cleanup: $e');
-    }
-
-    return deletedCount;
+    await _providerManager.fileSystemProvider.saveBookText(title, content);
   }
 
   /// Retrieves the content of a specific link within a book.
@@ -754,34 +350,15 @@ class FileSystemData {
 
   /// Retrieves the table of contents for a book.
   ///
-  /// Parses the book content to extract headings and create a hierarchical
-  /// table of contents structure.
-  /// 
-  /// First checks if the book is in the database. If found, retrieves TOC from DB.
-  /// Otherwise, falls back to parsing the file content.
+  /// Uses LibraryProviderManager to get TOC from the appropriate provider.
   Future<List<TocEntry>> getBookToc(String title) async {
-    // Check cache first
-    bool? isInDb = _bookInDbCache[title];
+    final toc = await _providerManager.getBookToc(title);
+    if (toc != null && toc.isNotEmpty) {
+      return toc;
+    }
     
-    // If not in cache, check database
-    if (isInDb == null) {
-      isInDb = await _sqliteProvider.isBookInDatabase(title);
-      _bookInDbCache[title] = isInDb;
-    }
-
-    // If book is in database, get TOC from there
-    if (isInDb) {
-      debugPrint('📑 Loading TOC for "$title" from DATABASE');
-      final toc = await _sqliteProvider.getBookTocFromDb(title);
-      if (toc != null && toc.isNotEmpty) {
-        return toc;
-      }
-      // If failed to get from DB or empty, fall back to parsing file
-      debugPrint('⚠️ Failed to load TOC from DB or empty, falling back to file parsing for "$title"');
-    }
-
-    // Fall back to parsing file content
-    debugPrint('📄 Parsing TOC for "$title" from FILE');
+    // Fallback to parsing from text
+    debugPrint('⚠️ Provider manager failed, falling back to text parsing for "$title"');
     return _parseToc(getBookText(title));
   }
 

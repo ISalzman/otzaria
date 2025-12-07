@@ -36,7 +36,7 @@ class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
     setState(() => _isProcessing = true);
 
     try {
-      final sqliteProvider = FileSystemData.instance.sqliteProvider;
+      final sqliteProvider = FileSystemData.instance.databaseProvider.sqliteProvider;
       
       // Check if database exists
       if (!await sqliteProvider.databaseExists()) {
@@ -134,7 +134,7 @@ class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
           throw Exception('הקובץ לא נמצא');
         }
 
-        final sqliteProvider = FileSystemData.instance.sqliteProvider;
+        final sqliteProvider = FileSystemData.instance.databaseProvider.sqliteProvider;
         await sqliteProvider.importDatabase(sourcePath);
 
         // Reload stats

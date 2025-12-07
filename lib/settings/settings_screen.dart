@@ -23,9 +23,6 @@ import 'package:otzaria/settings/gematria_settings_dialog.dart';
 import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
-import 'package:otzaria/file_sync/database_migration_bloc.dart';
-import 'package:otzaria/file_sync/database_migration_event.dart';
-import 'package:otzaria/file_sync/database_migration_dialog.dart';
 import 'package:otzaria/ui/database_generation_screen.dart';
 import 'dart:async';
 
@@ -941,54 +938,6 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                           disabledLabel: 'קבלת עדכונים על גרסאות יציבות בלבד',
                           leading: const Icon(FluentIcons.bug_24_regular),
                           activeColor: Theme.of(context).cardColor,
-                        ),
-                        SimpleSettingsTile(
-                          title: 'טעינת תקיות למסד נתונים',
-                          subtitle: 'העבר ספרים מתקיות לתוך מסד הנתונים',
-                          leading: const Icon(FluentIcons.database_24_regular),
-                          onTap: () async {
-                            // Show folder picker
-                            String? folderPath = await FilePicker.platform.getDirectoryPath(
-                              dialogTitle: 'בחר תקייה להעברה למסד נתונים',
-                            );
-                            
-                            if (folderPath == null) return;
-                            
-                            if (!context.mounted) return;
-                            
-                            // Show confirmation dialog
-                            final confirmed = await showConfirmationDialog(
-                              context: context,
-                              title: 'העברת תקייה למסד נתונים?',
-                              content: 'כל הספרים בתקייה שנבחרה יועברו למסד הנתונים.\n'
-                                  'הקבצים המקוריים יועתקו לתקייה "קבצים שטופלו".\n'
-                                  'מבנה התקיות המקורי יישמר.\n'
-                                  'האם להמשיך?',
-                            );
-                            
-                            if (confirmed != true || !context.mounted) return;
-                            
-                            // Import the necessary files
-                            final migrationBloc = context.read<DatabaseMigrationBloc>();
-                            
-                            // Trigger folder migration
-                            migrationBloc.add(MigrateFolderToDatabase(folderPath));
-                            
-                            // Show migration dialog
-                            await showDialog(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (dialogContext) => BlocProvider.value(
-                                value: migrationBloc,
-                                child: const DatabaseMigrationDialog(),
-                              ),
-                            );
-                            
-                            // Refresh library after migration
-                            if (context.mounted) {
-                              context.read<LibraryBloc>().add(LoadLibrary());
-                            }
-                          },
                         ),
                         SimpleSettingsTile(
                           title: 'יצירת מסד נתונים',
