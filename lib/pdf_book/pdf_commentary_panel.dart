@@ -305,7 +305,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     final currentLine = widget.tab.currentTextLineNumber!;
 
     // מציאת טווח השורות של העמוד הנוכחי
-    int startLine = currentLine + 1;
+    int startLine = currentLine;
     int endLine = startLine;
 
     if (widget.tab.pdfHeadings != null) {
@@ -336,6 +336,19 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             widget.tab.activeCommentators
                 .contains(utils.getTitleFromPath(link.path2)))
         .toList();
+
+    // מיון הקישורים קודם לפי שם הספר ואז לפי מספר השורה
+    // כך כל הקישורים של אותו מפרש יהיו ביחד ויקובצו נכון
+    relevantLinks.sort((a, b) {
+      // קודם לפי שם הספר
+      final titleA = utils.getTitleFromPath(a.path2);
+      final titleB = utils.getTitleFromPath(b.path2);
+      final titleCompare = titleA.compareTo(titleB);
+      if (titleCompare != 0) return titleCompare;
+
+      // אם אותו ספר, לפי מספר השורה
+      return a.index1.compareTo(b.index1);
+    });
 
     debugPrint('Found ${relevantLinks.length} relevant links');
 
@@ -522,7 +535,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     final currentLine = widget.tab.currentTextLineNumber!;
 
     // מציאת טווח השורות של העמוד הנוכחי
-    int startLine = currentLine + 1;
+    int startLine = currentLine;
     int endLine = startLine;
 
     if (widget.tab.pdfHeadings != null) {
@@ -548,6 +561,9 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             link.start == null &&
             link.end == null)
         .toList();
+
+    // מיון הקישורים לפי מספר השורה
+    relevantLinks.sort((a, b) => a.index1.compareTo(b.index1));
 
     if (relevantLinks.isEmpty) {
       return Center(
