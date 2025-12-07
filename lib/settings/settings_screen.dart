@@ -946,7 +946,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         if (!state.isOfflineMode)
                           SwitchSettingsTile(
                             settingKey: 'key-dev-channel',
-                            title: 'עדכון לגירסאות מפתחים',
+                            title: 'עדכון לגרסאות מפתחים',
                             enabledLabel:
                                 'קבלת עדכונים על גרסאות בדיקה, ייתכנו באגים וחוסר יציבות',
                             disabledLabel: 'קבלת עדכונים על גרסאות יציבות בלבד',
