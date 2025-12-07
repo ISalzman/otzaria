@@ -788,7 +788,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         SwitchSettingsTile(
                           title: 'סינכרון הספרייה באופן אוטומטי',
                           leading: Icon(FluentIcons.arrow_sync_24_regular),
-                          settingKey: 'key-auto-sync',
+                          settingKey: SettingsRepository.keyAutoSync,
                           defaultValue: true,
                           enabledLabel:
                               'מאגר הספרים המובנה יתעדכן אוטומטית מאתר אוצריא',
