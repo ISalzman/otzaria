@@ -21,6 +21,7 @@ import 'package:otzaria/settings/library_settings_dialog.dart';
 import 'package:otzaria/settings/calendar_settings_dialog.dart';
 import 'package:otzaria/settings/gematria_settings_dialog.dart';
 import 'package:otzaria/settings/backup_service.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
 import 'dart:async';
@@ -782,16 +783,18 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                     titleAlignment: Alignment.centerRight,
                     titleTextStyle: const TextStyle(fontSize: 25),
                     children: [
-                      SwitchSettingsTile(
-                        title: 'סינכרון הספרייה באופן אוטומטי',
-                        leading: Icon(FluentIcons.arrow_sync_24_regular),
-                        settingKey: 'key-auto-sync',
-                        defaultValue: true,
-                        enabledLabel:
-                            'מאגר הספרים המובנה יתעדכן אוטומטית מאתר אוצריא',
-                        disabledLabel: 'מאגר הספרים לא יתעדכן אוטומטית.',
-                        activeColor: Theme.of(context).cardColor,
-                      ),
+                      // הצגת ההגדרה רק אם מצב אופליין לא מופעל
+                      if (!state.isOfflineMode)
+                        SwitchSettingsTile(
+                          title: 'סינכרון הספרייה באופן אוטומטי',
+                          leading: Icon(FluentIcons.arrow_sync_24_regular),
+                          settingKey: SettingsRepository.keyAutoSync,
+                          defaultValue: true,
+                          enabledLabel:
+                              'מאגר הספרים המובנה יתעדכן אוטומטית מאתר אוצריא',
+                          disabledLabel: 'מאגר הספרים לא יתעדכן אוטומטית.',
+                          activeColor: Theme.of(context).cardColor,
+                        ),
                       const SizedBox(height: 16),
                       _buildColumns(2, [
                         SwitchSettingsTile(
@@ -939,15 +942,32 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                           ),
                         ]),
                       if (!(Platform.isAndroid || Platform.isIOS))
-                        SwitchSettingsTile(
-                          settingKey: 'key-dev-channel',
-                          title: 'עדכון לגרסאות מפתחים',
-                          enabledLabel:
-                              'קבלת עדכונים על גרסאות בדיקה, ייתכנו באגים וחוסר יציבות',
-                          disabledLabel: 'קבלת עדכונים על גרסאות יציבות בלבד',
-                          leading: const Icon(FluentIcons.bug_24_regular),
-                          activeColor: Theme.of(context).cardColor,
-                        ),
+                        // הצגת ההגדרה רק אם מצב אופליין לא מופעל
+                        if (!state.isOfflineMode)
+                          SwitchSettingsTile(
+                            settingKey: 'key-dev-channel',
+                            title: 'עדכון לגרסאות מפתחים',
+                            enabledLabel:
+                                'קבלת עדכונים על גרסאות בדיקה, ייתכנו באגים וחוסר יציבות',
+                            disabledLabel: 'קבלת עדכונים על גרסאות יציבות בלבד',
+                            leading: const Icon(FluentIcons.bug_24_regular),
+                            activeColor: Theme.of(context).cardColor,
+                          ),
+                      // הגדרת מצב אופליין - תמיד מוצגת
+                      SwitchSettingsTile(
+                        settingKey: SettingsRepository.keyOfflineMode,
+                        title: 'מצב אופליין',
+                        enabledLabel:
+                            'התוכנה מנותקת לגמרי מהרשת, כל התכונות המקוונות מושבתות',
+                        disabledLabel: 'התוכנה יכולה להתחבר לרשת',
+                        leading: const Icon(FluentIcons.wifi_off_24_regular),
+                        defaultValue: false,
+                        activeColor: Theme.of(context).cardColor,
+                        onChange: (value) {
+                          // עדכון המצב דרך ה-Bloc כדי לרענן את כל הממשק
+                          context.read<SettingsBloc>().add(UpdateOfflineMode(value));
+                        },
+                      ),
                       SimpleSettingsTile(
                         title: 'איפוס הגדרות',
                         subtitle:

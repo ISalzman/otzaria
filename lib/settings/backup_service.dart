@@ -6,6 +6,7 @@ import 'package:logging/logging.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/history/history_repository.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/workspaces/workspace_repository.dart';
 import 'package:otzaria/workspaces/workspace.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_storage.dart';
@@ -117,33 +118,33 @@ class BackupService {
   /// Backup all settings
   static Future<Map<String, dynamic>> _backupSettings() async {
     final settingsKeys = [
-      'key-dark-mode',
-      'key-swatch-color',
-      'key-padding-size',
-      'key-font-size',
-      'key-font-family',
-      'key-show-otzar-hachochma',
-      'key-show-hebrew-books',
-      'key-show-external-books',
-      'key-show-teamim',
-      'key-use-fast-search',
-      'key-replace-holy-names',
-      'key-auto-index-update',
-      'key-default-nikud',
-      'key-remove-nikud-tanach',
-      'key-default-sidebar-open',
-      'key-pin-sidebar',
-      'key-sidebar-width',
-      'key-facet-filtering-width',
-      'key-calendar-type',
-      'key-selected-city',
-      'key-calendar-events',
-      'key-copy-with-headers',
-      'key-copy-header-format',
-      'key-library-path',
-      'key-hebrew-books-path',
-      'key-dev-channel',
-      'key-auto-sync',
+      SettingsRepository.keyDarkMode,
+      SettingsRepository.keySwatchColor,
+      SettingsRepository.keyFontSize,
+      SettingsRepository.keyFontFamily,
+      SettingsRepository.keyShowOtzarHachochma,
+      SettingsRepository.keyShowHebrewBooks,
+      SettingsRepository.keyShowExternalBooks,
+      SettingsRepository.keyShowTeamim,
+      SettingsRepository.keyUseFastSearch,
+      SettingsRepository.keyReplaceHolyNames,
+      SettingsRepository.keyAutoUpdateIndex,
+      SettingsRepository.keyDefaultNikud,
+      SettingsRepository.keyRemoveNikudFromTanach,
+      SettingsRepository.keyDefaultSidebarOpen,
+      SettingsRepository.keyPinSidebar,
+      SettingsRepository.keySidebarWidth,
+      SettingsRepository.keyFacetFilteringWidth,
+      SettingsRepository.keyCalendarType,
+      SettingsRepository.keySelectedCity,
+      SettingsRepository.keyCalendarEvents,
+      SettingsRepository.keyCopyWithHeaders,
+      SettingsRepository.keyCopyHeaderFormat,
+      SettingsRepository.keyLibraryPath,
+      SettingsRepository.keyHebrewBooksPath,
+      SettingsRepository.keyDevChannel,
+      SettingsRepository.keyAutoSync,
+      SettingsRepository.keyOfflineMode,
     ];
 
     final settings = <String, dynamic>{};
