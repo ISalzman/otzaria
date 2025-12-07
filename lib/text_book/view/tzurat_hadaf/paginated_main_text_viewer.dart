@@ -85,7 +85,7 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
       }
       String strippedData = _stripHtmlTags(data);
 
-      final painter = _NonLinearTextPainter(
+      final painter = NonLinearTextPainter(
         text: strippedData,
         style: textStyle,
         textDirection: textDirection,

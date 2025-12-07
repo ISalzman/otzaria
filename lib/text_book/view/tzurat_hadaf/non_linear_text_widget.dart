@@ -14,7 +14,7 @@ class NonLinearText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final painter = _NonLinearTextPainter(
+      final painter = NonLinearTextPainter(
         text: text,
         style: style,
         textDirection: Directionality.of(context),
@@ -33,12 +33,12 @@ class NonLinearText extends StatelessWidget {
   }
 }
 
-class _NonLinearTextPainter extends CustomPainter {
+class NonLinearTextPainter extends CustomPainter {
   final String text;
   final TextStyle style;
   final TextDirection textDirection;
 
-  _NonLinearTextPainter({
+  NonLinearTextPainter({
     required this.text,
     required this.style,
     required this.textDirection,
@@ -171,7 +171,7 @@ class _NonLinearTextPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _NonLinearTextPainter oldDelegate) {
+  bool shouldRepaint(covariant NonLinearTextPainter oldDelegate) {
     return oldDelegate.text != text ||
         oldDelegate.style != style ||
         oldDelegate.textDirection != textDirection;
