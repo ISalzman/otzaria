@@ -56,8 +56,8 @@ class _NonLinearTextPainter extends CustomPainter {
         words.sublist(wordIndex),
         availableWidth,
       );
-      final line = lineInfo.item1;
-      final wordsInLine = lineInfo.item2;
+      final line = lineInfo.$1;
+      final wordsInLine = lineInfo.$2;
 
       // Paint the line
       final textSpan = TextSpan(text: line, style: style);

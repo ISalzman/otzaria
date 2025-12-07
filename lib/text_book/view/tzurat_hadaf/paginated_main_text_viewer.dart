@@ -5,8 +5,9 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/text_book/view/tzurat_hadaf/non_linear_text_widget.dart';
-import 'package:otzaria/utils/text_with_inline_links.dart';
+import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/text_book/bloc/text_book_event.dart';
 
 
 class PaginatedMainTextViewer extends StatefulWidget {
