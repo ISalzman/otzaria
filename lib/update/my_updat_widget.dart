@@ -78,13 +78,8 @@ class MyUpdatWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Don't show update widget in debug mode or offline mode
-    if (kDebugMode) {
-      return child;
-    }
-    
-    // Check if offline mode is enabled
     final isOfflineMode = Settings.getValue<bool>('key-offline-mode') ?? false;
-    if (isOfflineMode) {
+    if (kDebugMode || isOfflineMode) {
       return child;
     }
 

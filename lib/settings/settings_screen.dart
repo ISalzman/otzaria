@@ -783,7 +783,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                     titleTextStyle: const TextStyle(fontSize: 25),
                     children: [
                       // הצגת ההגדרה רק אם מצב אופליין לא מופעל
-                      if (!(Settings.getValue<bool>('key-offline-mode') ?? false))
+                      if (!state.isOfflineMode)
                         SwitchSettingsTile(
                           title: 'סינכרון הספרייה באופן אוטומטי',
                           leading: Icon(FluentIcons.arrow_sync_24_regular),
@@ -942,7 +942,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         ]),
                       if (!(Platform.isAndroid || Platform.isIOS))
                         // הצגת ההגדרה רק אם מצב אופליין לא מופעל
-                        if (!(Settings.getValue<bool>('key-offline-mode') ?? false))
+                        if (!state.isOfflineMode)
                           SwitchSettingsTile(
                             settingKey: 'key-dev-channel',
                             title: 'עדכון לגירסאות מפתחים',
@@ -965,7 +965,6 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         onChange: (value) {
                           // עדכון המצב דרך ה-Bloc כדי לרענן את כל הממשק
                           context.read<SettingsBloc>().add(UpdateOfflineMode(value));
-                          setState(() {});
                         },
                       ),
                       SimpleSettingsTile(

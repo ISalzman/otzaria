@@ -9,6 +9,9 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
   final FileSyncRepository repository;
   Timer? _progressTimer;
 
+  // Getter לבדיקת מצב אופליין
+  bool get _isOffline => Settings.getValue<bool>('key-offline-mode') ?? false;
+
   FileSyncBloc({required this.repository}) : super(const FileSyncState()) {
     on<StartSync>(_onStartSync);
     on<StopSync>(_onStopSync);
@@ -16,9 +19,8 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
     on<ResetState>(_onResetState);
 
     // Check for auto-sync setting and offline mode
-    final isOfflineMode = Settings.getValue<bool>('key-offline-mode') ?? false;
     final isAutoSync = Settings.getValue<bool>('key-auto-sync') ?? false;
-    if (isAutoSync && !isOfflineMode) {
+    if (isAutoSync && !_isOffline) {
       add(const StartSync());
     }
   }
@@ -26,8 +28,7 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
   Future<void> _onStartSync(
       StartSync event, Emitter<FileSyncState> emit) async {
     // Check if offline mode is enabled
-    final isOfflineMode = Settings.getValue<bool>('key-offline-mode') ?? false;
-    if (isOfflineMode) {
+    if (_isOffline) {
       emit(state.copyWith(
         status: FileSyncStatus.initial,
         message: 'מצב אופליין מופעל',
