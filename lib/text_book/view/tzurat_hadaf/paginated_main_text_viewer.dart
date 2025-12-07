@@ -168,6 +168,7 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
                 fontSize: state.fontSize,
                 fontFamily: settingsState.fontFamily,
                 height: 1.5,
+                color: Colors.black, // Explicitly set color for diagnosis
               ),
             );
           },
