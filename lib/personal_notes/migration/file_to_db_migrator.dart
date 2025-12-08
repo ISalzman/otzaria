@@ -1,12 +1,14 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:logging/logging.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_storage.dart';
 
 /// Migrates personal notes from the old file-based storage (TXT + JSON)
 /// to the new SQLite database.
 class FileToDbMigrator {
+  static final Logger _logger = Logger('FileToDbMigrator');
+
   /// Run migration from file storage to SQLite database.
   /// This should be called once during app initialization.
   /// 
@@ -16,15 +18,23 @@ class FileToDbMigrator {
     try {
       final migrator = FileToDbMigrator();
       final summary = await migrator.migrate();
-      if (summary.success) {
-        if (summary.hasMigratedNotes) {
-          debugPrint('Personal notes migration: ${summary.summaryText}');
-        }
-        // Cleanup old files after successful migration
-        await migrator.cleanupOldFiles();
+      
+      if (summary.hasMigratedNotes) {
+        _logger.info('Personal notes migration: ${summary.summaryText}');
       }
-    } catch (e) {
-      debugPrint('Personal notes migration failed: $e');
+      
+      // Only cleanup old files if ALL notes were migrated successfully
+      // If any book failed, keep the old files to prevent data loss
+      if (summary.success && !summary.hasFailures) {
+        await migrator.cleanupOldFiles();
+      } else if (summary.hasFailures) {
+        _logger.warning(
+          'Keeping old note files because ${summary.failedBooks.length} books failed to migrate: '
+          '${summary.failedBooks.keys.join(", ")}'
+        );
+      }
+    } catch (e, s) {
+      _logger.severe('Personal notes migration failed', e, s);
     }
   }
 
@@ -96,8 +106,9 @@ class FileToDbMigrator {
       if (await dir.exists()) {
         await dir.delete(recursive: true);
       }
-    } catch (e) {
-      // Ignore errors during cleanup
+    } catch (e, s) {
+      _logger.warning('Failed to cleanup old note files', e, s);
+      // Continue anyway - cleanup failure is not critical
     }
   }
 }

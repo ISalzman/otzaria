@@ -349,8 +349,12 @@ class BackupService {
         if (entry.containsKey('notes')) {
           final notesList = entry['notes'] as List<dynamic>;
           for (final noteData in notesList) {
-            final note = _noteFromBackupJson(noteData as Map<String, dynamic>);
-            await database.insertNote(note);
+            try {
+              final note = _noteFromBackupJson(noteData as Map<String, dynamic>);
+              await database.insertNote(note);
+            } catch (e) {
+              _logger.warning('Failed to restore single note from backup: $e');
+            }
           }
         }
         // Handle legacy format (file-based backup) for backward compatibility
