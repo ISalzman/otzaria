@@ -157,12 +157,17 @@ class PersonalNotesService {
       );
     }
 
-    // Use displayTitle for matching - it contains normalized words from the line
+    // Check if displayTitle exists in the current line (anywhere, not just at the start)
+    // This handles cases where user selected text from the middle of the line
+    if (_displayTitleExistsInLine(note.displayTitle, lines[lineIndex])) {
+      // Location is still valid - no change needed
+      return note;
+    }
+
+    // Fallback: check if line start matches (for notes without selected text)
     final actualDisplayTitle =
         extractDisplayTextFromLines(lines, note.lineNumber!, excludeBookTitle: bookId);
-
     if (_displayTitleMatches(note.displayTitle, actualDisplayTitle)) {
-      // Location is still valid - no change needed
       return note;
     }
 
@@ -186,6 +191,20 @@ class PersonalNotesService {
     );
   }
 
+  /// Check if the displayTitle text exists anywhere in the line
+  bool _displayTitleExistsInLine(String? displayTitle, String lineContent) {
+    if (displayTitle == null || displayTitle.isEmpty) {
+      return false;
+    }
+    
+    // Normalize both strings for comparison (remove diacritics)
+    final normalizedTitle = removeHebrewDiacritics(displayTitle);
+    final normalizedLine = removeHebrewDiacritics(lineContent);
+    
+    // Check if the title exists in the line
+    return normalizedLine.contains(normalizedTitle);
+  }
+
   _LineMatch? _searchNearby(
     List<String> lines,
     int centerLine,
@@ -203,6 +222,14 @@ class PersonalNotesService {
         continue;
       }
 
+      final lineIndex = candidateLine - 1;
+      
+      // First check if displayTitle exists anywhere in the line
+      if (_displayTitleExistsInLine(referenceTitle, lines[lineIndex])) {
+        return _LineMatch(line: candidateLine);
+      }
+      
+      // Fallback: check line start match
       final candidateTitle = extractDisplayTextFromLines(lines, candidateLine, excludeBookTitle: bookId);
       if (_displayTitleMatches(referenceTitle, candidateTitle)) {
         return _LineMatch(line: candidateLine);
@@ -220,21 +247,10 @@ class PersonalNotesService {
       return false;
     }
     
-    // Split into words and compare
     final storedWords = stored.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
     final actualWords = actual.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
     
-    if (storedWords.isEmpty) {
-      return actualWords.isEmpty;
-    }
-    
-    // Count matching words
-    final storedSet = storedWords.toSet();
-    final actualSet = actualWords.toSet();
-    final matches = storedSet.intersection(actualSet).length;
-    
-    // Require at least 80% match
-    return matches / storedWords.length >= 0.8;
+    return computeWordOverlapRatio(storedWords, actualWords) >= 0.8;
   }
 
   String _generateId() {
