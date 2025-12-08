@@ -56,6 +56,7 @@ void main() {
         'libraryShowPreview': true,
         'enablePerBookSettings': true,
         'shortcuts': <String, String>{},
+        'isOfflineMode': false,
       };
 
       blocTest<SettingsBloc, SettingsState>(
@@ -102,6 +103,7 @@ void main() {
             shortcuts: const {},
             enablePerBookSettings:
                 mockSettings['enablePerBookSettings'] as bool,
+            isOfflineMode: mockSettings['isOfflineMode'] as bool? ?? false,
           ),
         ],
         verify: (_) {
