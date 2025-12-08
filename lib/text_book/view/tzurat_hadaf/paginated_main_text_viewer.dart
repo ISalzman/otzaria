@@ -8,6 +8,7 @@ import 'package:otzaria/text_book/view/tzurat_hadaf/non_linear_text_widget.dart'
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
+import 'dart:async';
 
 class PaginatedMainTextViewer extends StatefulWidget {
   final TextBookLoaded textBookState;
@@ -25,10 +26,53 @@ class PaginatedMainTextViewer extends StatefulWidget {
 }
 
 class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
+  final ScrollController _scrollController = ScrollController();
+  Timer? _scrollTimer;
+  int? _lastVisibleIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollTimer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    _scrollTimer?.cancel();
+    _scrollTimer = Timer(const Duration(milliseconds: 300), () {
+      _updateVisibleIndex();
+    });
+  }
+
+  void _updateVisibleIndex() {
+    if (!mounted) return;
+    
+    final scrollOffset = _scrollController.offset;
+    final itemHeight = 50.0; // Approximate height per item
+    final visibleIndex = (scrollOffset / itemHeight).floor();
+    
+    print('Scroll offset: $scrollOffset, Visible index: $visibleIndex');
+    
+    if (visibleIndex != _lastVisibleIndex && 
+        visibleIndex >= 0 && 
+        visibleIndex < widget.textBookState.content.length) {
+      _lastVisibleIndex = visibleIndex;
+      print('Updating selected index to: $visibleIndex');
+      context.read<TextBookBloc>().add(UpdateSelectedIndex(visibleIndex));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ListView.builder(
+      controller: _scrollController,
       itemCount: widget.textBookState.content.length,
       itemBuilder: (context, index) => _buildLine(index, theme),
     );

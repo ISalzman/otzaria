@@ -25,119 +25,146 @@ class CommentaryViewer extends StatefulWidget {
 }
 
 class _CommentaryViewerState extends State<CommentaryViewer> {
-  final Map<int, String> _contentCache = {};
-  bool _isLoading = false;
-  Timer? _debounce;
+  String? _fullContent;
+  final Map<int, int> _indexToLineMap = {};
+  final ScrollController _scrollController = ScrollController();
+  final Map<int, GlobalKey> _lineKeys = {};
 
   @override
   void initState() {
     super.initState();
-    _fetchCommentaryWindow();
+    _loadFullCommentary();
   }
 
   @override
   void didUpdateWidget(CommentaryViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.commentatorName != widget.commentatorName) {
-      _contentCache.clear();
-      _fetchCommentaryWindow();
+      _loadFullCommentary();
     } else if (oldWidget.selectedIndex != widget.selectedIndex) {
-      // Debounce fetching to avoid rapid firing while scrolling
-      if (_debounce?.isActive ?? false) _debounce!.cancel();
-      _debounce = Timer(const Duration(milliseconds: 200), () {
-        _fetchCommentaryWindow();
-      });
+      _scrollToSelected();
     }
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _fetchCommentaryWindow() async {
-    if (widget.commentatorName == null || widget.selectedIndex == null) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+  Future<void> _loadFullCommentary() async {
+    if (widget.commentatorName == null) {
+      setState(() {
+        _fullContent = null;
+        _indexToLineMap.clear();
+      });
       return;
     }
 
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-      });
-    }
-
-    final int centerIndex = widget.selectedIndex!;
-    final int windowSize = 5;
-    final int start = (centerIndex - windowSize).clamp(0, widget.textBookState.content.length - 1);
-    final int end = (centerIndex + windowSize).clamp(0, widget.textBookState.content.length - 1);
-
     final repo = context.read<TextBookBloc>().repository;
-
-    for (int i = start; i <= end; i++) {
-      if (_contentCache.containsKey(i)) {
-        continue; // Already cached
-      }
-
-      try {
-        final link = widget.textBookState.links.firstWhere(
-          (link) =>
-              link.index1 == i + 1 &&
-              utils.getTitleFromPath(link.path2) == widget.commentatorName,
-        );
-
-        final book = TextBook(title: utils.getTitleFromPath(link.path2));
-        final commentaryContent = await repo.getBookContent(book);
-        final lines = commentaryContent.split('\n');
-        
-        if (link.index2 > 0 && link.index2 <= lines.length) {
-          _contentCache[i] = lines[link.index2 - 1];
-        } else {
-          _contentCache[i] = 'התוכן לא נמצא';
-        }
-      } catch (e) {
-        // Cache that no commentary was found for this index
-        _contentCache[i] = ''; 
+    
+    // Build map of main text index to commentary line
+    _indexToLineMap.clear();
+    print('Building index map for commentator: ${widget.commentatorName}');
+    print('Total links: ${widget.textBookState.links.length}');
+    
+    for (final link in widget.textBookState.links) {
+      final linkTitle = utils.getTitleFromPath(link.path2);
+      if (linkTitle == widget.commentatorName) {
+        _indexToLineMap[link.index1 - 1] = link.index2 - 1;
+        print('Mapped main index ${link.index1 - 1} -> commentary line ${link.index2 - 1}');
       }
     }
+    
+    print('Index map size: ${_indexToLineMap.length}');
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
+    try {
+      final book = TextBook(title: widget.commentatorName!);
+      final content = await repo.getBookContent(book);
+      if (mounted) {
+        setState(() {
+          _fullContent = content;
+        });
+        _scrollToSelected();
+      }
+    } catch (e) {
+      print('Error loading commentary: $e');
+      if (mounted) {
+        setState(() {
+          _fullContent = '';
+        });
+      }
+    }
+  }
+
+  void _scrollToSelected() {
+    print('Commentary [${widget.commentatorName}]: selectedIndex=${widget.selectedIndex}, map size=${_indexToLineMap.length}');
+    
+    if (widget.selectedIndex == null || !_indexToLineMap.containsKey(widget.selectedIndex)) {
+      print('Commentary [${widget.commentatorName}]: No scroll - selectedIndex: ${widget.selectedIndex}, has mapping: ${_indexToLineMap.containsKey(widget.selectedIndex ?? -1)}');
+      return;
+    }
+
+    final lineIndex = _indexToLineMap[widget.selectedIndex];
+    print('Commentary [${widget.commentatorName}]: Scrolling to line $lineIndex for main text index ${widget.selectedIndex}');
+    
+    if (lineIndex != null && _lineKeys.containsKey(lineIndex)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final key = _lineKeys[lineIndex];
+        if (key?.currentContext != null) {
+          Scrollable.ensureVisible(
+            key!.currentContext!,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        }
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final content = _contentCache[widget.selectedIndex];
-
-    if (_isLoading && content == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (content != null && content.isNotEmpty) {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(8.0),
+    if (_fullContent == null) {
+      return Center(
         child: Text(
-          _stripHtmlTags(content),
-          style: TextStyle(fontSize: widget.textBookState.fontSize * 0.8),
-          textDirection: TextDirection.rtl,
-          textAlign: TextAlign.justify,
+          widget.commentatorName ?? 'בחר מפרש',
+          style: const TextStyle(color: Colors.grey),
         ),
       );
     }
 
-    return Center(
-      child: Text(
-        widget.commentatorName ?? 'בחר מפרש',
-        style: const TextStyle(color: Colors.grey),
-      ),
+    if (_fullContent!.isEmpty) {
+      return const Center(child: Text('התוכן לא נמצא'));
+    }
+
+    final lines = _fullContent!.split('\n');
+    final selectedLineIndex = widget.selectedIndex != null 
+        ? _indexToLineMap[widget.selectedIndex]
+        : null;
+
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(8.0),
+      itemCount: lines.length,
+      itemBuilder: (context, index) {
+        _lineKeys[index] = GlobalKey();
+        final isSelected = index == selectedLineIndex;
+        
+        return Container(
+          key: _lineKeys[index],
+          color: isSelected ? Colors.yellow.withAlpha(100) : null,
+          padding: const EdgeInsets.symmetric(vertical: 2.0),
+          child: Text(
+            _stripHtmlTags(lines[index]),
+            style: TextStyle(
+              fontSize: widget.textBookState.fontSize * 0.8,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.justify,
+          ),
+        );
+      },
     );
   }
 
