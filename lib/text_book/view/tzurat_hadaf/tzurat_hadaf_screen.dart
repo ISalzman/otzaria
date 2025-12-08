@@ -19,7 +19,6 @@ class TzuratHadafScreen extends StatefulWidget {
 }
 
 class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
-  String? _topCommentator;
   String? _leftCommentator;
   String? _rightCommentator;
   String? _bottomCommentator;
@@ -41,7 +40,6 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
         final config = json.decode(configString) as Map<String, dynamic>;
         if (mounted) {
           setState(() {
-            _topCommentator = config['top'];
             _leftCommentator = config['left'];
             _rightCommentator = config['right'];
             _bottomCommentator = config['bottom'];
@@ -86,21 +84,48 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
           ),
           body: Column(
             children: [
-              // Top Commentary Area
-              Expanded(
-                flex: 1,
-                child: CommentaryViewer(
-                  commentatorName: _topCommentator,
-                  selectedIndex: state.selectedIndex,
-                  textBookState: state,
+              // Headers Row
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: Center(
+                        child: Text(
+                          _leftCommentator ?? '',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Center(
+                        child: Text(
+                          state.book.title,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 1,
+                      child: Center(
+                        child: Text(
+                          _rightCommentator ?? '',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              // Middle Section
+              const Divider(height: 1),
+              // Main Content Row
               Expanded(
                 flex: 3,
                 child: Row(
                   children: [
-                    // Left Commentary Area
+                    // Left Commentary
                     Expanded(
                       flex: 1,
                       child: CommentaryViewer(
@@ -109,7 +134,7 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                         textBookState: state,
                       ),
                     ),
-                    // Main Text Area
+                    // Main Text
                     Expanded(
                       flex: 2,
                       child: Container(
@@ -124,7 +149,7 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                         ),
                       ),
                     ),
-                    // Right Commentary Area
+                    // Right Commentary
                     Expanded(
                       flex: 1,
                       child: CommentaryViewer(
@@ -136,15 +161,16 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                   ],
                 ),
               ),
-              // Bottom Commentary Area
-              Expanded(
-                flex: 1,
-                child: CommentaryViewer(
-                  commentatorName: _bottomCommentator,
-                  selectedIndex: state.selectedIndex,
-                  textBookState: state,
+              // Bottom Commentary
+              if (_bottomCommentator != null)
+                Expanded(
+                  flex: 1,
+                  child: CommentaryViewer(
+                    commentatorName: _bottomCommentator,
+                    selectedIndex: state.selectedIndex,
+                    textBookState: state,
+                  ),
                 ),
-              ),
             ],
           ),
         );

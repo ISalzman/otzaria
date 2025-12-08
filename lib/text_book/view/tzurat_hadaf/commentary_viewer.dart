@@ -125,9 +125,10 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(8.0),
         child: Text(
-          content,
+          _stripHtmlTags(content),
           style: TextStyle(fontSize: widget.textBookState.fontSize * 0.8),
           textDirection: TextDirection.rtl,
+          textAlign: TextAlign.justify,
         ),
       );
     }
@@ -138,5 +139,9 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
         style: const TextStyle(color: Colors.grey),
       ),
     );
+  }
+
+  String _stripHtmlTags(String html) {
+    return html.replaceAll(RegExp(r'<[^>]*>'), '');
   }
 }

@@ -452,7 +452,9 @@ class FileSystemData {
       List<String> paths = [];
       final files = await Directory(path).list(recursive: true).toList();
       for (var file in files) {
-        paths.add(file.path);
+        if (file is File && !file.path.toLowerCase().endsWith('.pdf')) {
+          paths.add(file.path);
+        }
       }
       return paths;
     });

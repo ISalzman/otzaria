@@ -17,7 +17,6 @@ class TzuratHadafDialog extends StatefulWidget {
 }
 
 class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
-  String? _topCommentator;
   String? _leftCommentator;
   String? _rightCommentator;
   String? _bottomCommentator;
@@ -36,7 +35,6 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
       try {
         final config = json.decode(configString) as Map<String, dynamic>;
         setState(() {
-          _topCommentator = config['top'];
           _leftCommentator = config['left'];
           _rightCommentator = config['right'];
           _bottomCommentator = config['bottom'];
@@ -49,7 +47,6 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
 
   void _saveConfiguration() {
     final config = {
-      'top': _topCommentator,
       'left': _leftCommentator,
       'right': _rightCommentator,
       'bottom': _bottomCommentator,
@@ -66,9 +63,6 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildCommentatorSelector('מפרש עליון', _topCommentator, (value) {
-              setState(() => _topCommentator = value);
-            }),
             _buildCommentatorSelector('מפרש שמאלי', _leftCommentator, (value) {
               setState(() => _leftCommentator = value);
             }),
