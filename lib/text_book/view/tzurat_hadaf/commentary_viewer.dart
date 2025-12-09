@@ -1,8 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/links.dart';
-import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -65,7 +63,7 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
     setState(() {
       _relevantLinks = links;
     });
-    
+
     _scrollToSelected();
   }
 
@@ -112,14 +110,16 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
       itemCount: _relevantLinks.length,
       itemBuilder: (context, index) {
         final link = _relevantLinks[index];
-        final isSelected = widget.selectedIndex != null && 
-                          link.index1 - 1 == widget.selectedIndex;
-        
+        final isSelected = widget.selectedIndex != null &&
+            link.index1 - 1 == widget.selectedIndex;
+
         return FutureBuilder<String>(
           future: link.content,
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
-              return const SizedBox(height: 50, child: Center(child: CircularProgressIndicator()));
+              return const SizedBox(
+                  height: 50,
+                  child: Center(child: CircularProgressIndicator()));
             }
 
             return BlocBuilder<SettingsBloc, SettingsState>(
@@ -131,21 +131,24 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
                 if (widget.textBookState.removeNikud) {
                   displayText = utils.removeVolwels(displayText);
                 }
-                
+
                 return Container(
                   width: double.infinity,
                   margin: const EdgeInsets.symmetric(vertical: 2.0),
                   padding: const EdgeInsets.all(8.0),
-                  decoration: isSelected ? BoxDecoration(
-                    color: Colors.yellow.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(4),
-                  ) : null,
+                  decoration: isSelected
+                      ? BoxDecoration(
+                          color: Colors.yellow.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(4),
+                        )
+                      : null,
                   child: HtmlWidget(
                     '<div style="text-align: justify; direction: rtl;">$displayText</div>',
                     textStyle: TextStyle(
                       fontSize: widget.textBookState.fontSize * 0.8,
                       fontFamily: settingsState.commentatorsFontFamily,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
                     ),
                   ),
                 );

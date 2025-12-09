@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
 
 class NonLinearText extends StatelessWidget {
   final String text;

@@ -63,3 +63,7 @@ installer/otzaria-0.9.71-windows.exe
 installer/otzaria-0.9.71-windows-full.exe
 pubspec.lock
 flutter/
+
+seforim.db
+seforim.db-wal
+seforim.db-shm
