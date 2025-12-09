@@ -28,13 +28,22 @@ class UpdateSeedColor extends SettingsEvent {
   List<Object?> get props => [seedColor];
 }
 
-class UpdatePaddingSize extends SettingsEvent {
-  final double paddingSize;
+class UpdateDarkSeedColor extends SettingsEvent {
+  final Color darkSeedColor;
 
-  const UpdatePaddingSize(this.paddingSize);
+  const UpdateDarkSeedColor(this.darkSeedColor);
 
   @override
-  List<Object?> get props => [paddingSize];
+  List<Object?> get props => [darkSeedColor];
+}
+
+class UpdateTextMaxWidth extends SettingsEvent {
+  final double textMaxWidth;
+
+  const UpdateTextMaxWidth(this.textMaxWidth);
+
+  @override
+  List<Object?> get props => [textMaxWidth];
 }
 
 class UpdateFontSize extends SettingsEvent {
@@ -62,6 +71,15 @@ class UpdateCommentatorsFontFamily extends SettingsEvent {
 
   @override
   List<Object?> get props => [commentatorsFontFamily];
+}
+
+class UpdateCommentatorsFontSize extends SettingsEvent {
+  final double commentatorsFontSize;
+
+  const UpdateCommentatorsFontSize(this.commentatorsFontSize);
+
+  @override
+  List<Object?> get props => [commentatorsFontSize];
 }
 
 class UpdateShowOtzarHachochma extends SettingsEvent {
@@ -181,6 +199,15 @@ class UpdateFacetFilteringWidth extends SettingsEvent {
   List<Object?> get props => [facetFilteringWidth];
 }
 
+class UpdateCommentaryPaneWidth extends SettingsEvent {
+  final double commentaryPaneWidth;
+
+  const UpdateCommentaryPaneWidth(this.commentaryPaneWidth);
+
+  @override
+  List<Object?> get props => [commentaryPaneWidth];
+}
+
 class UpdateCopyWithHeaders extends SettingsEvent {
   final String copyWithHeaders;
 
@@ -243,4 +270,22 @@ class UpdateShortcut extends SettingsEvent {
 
   @override
   List<Object?> get props => [key, value];
+}
+
+class UpdateEnablePerBookSettings extends SettingsEvent {
+  final bool enablePerBookSettings;
+
+  const UpdateEnablePerBookSettings(this.enablePerBookSettings);
+
+  @override
+  List<Object?> get props => [enablePerBookSettings];
+}
+
+class UpdateOfflineMode extends SettingsEvent {
+  final bool isOfflineMode;
+
+  const UpdateOfflineMode(this.isOfflineMode);
+
+  @override
+  List<Object?> get props => [isOfflineMode];
 }

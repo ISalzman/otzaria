@@ -46,10 +46,24 @@ class FileSystemData {
   /// Reads the library from the configured path and combines it with metadata
   /// to create a full [Library] object containing all categories and books.
   Future<Library> getLibrary() async {
+    // בדיקה שהתיקייה הראשית קיימת
+    final rootDir = Directory(libraryPath);
+    if (!rootDir.existsSync()) {
+      debugPrint('Library root directory does not exist: $libraryPath');
+      return Library(categories: []);
+    }
+
+    // בדיקה שתיקיית אוצריא קיימת
+    final otzariaPath = '$libraryPath${Platform.pathSeparator}אוצריא';
+    final otzariaDir = Directory(otzariaPath);
+    if (!otzariaDir.existsSync()) {
+      debugPrint('Otzaria directory does not exist: $otzariaPath');
+      return Library(categories: []);
+    }
+
     titleToPath = _getTitleToPath();
     metadata = _getMetadata();
-    return _getLibraryFromDirectory(
-        '$libraryPath${Platform.pathSeparator}אוצריא', await metadata);
+    return _getLibraryFromDirectory(otzariaPath, await metadata);
   }
 
   /// Recursively builds the library structure from a directory.
@@ -107,7 +121,14 @@ class FileSystemData {
                   category: category,
                   path: entity.path,
                   author: metadata[title]?['author'],
+                  heCategories: metadata[title]?['heCategories'],
+                  heEra: metadata[title]?['heEra'],
+                  compDateStringHe: metadata[title]?['compDateStringHe'],
+                  compPlaceStringHe: metadata[title]?['compPlaceStringHe'],
+                  pubDateStringHe: metadata[title]?['pubDateStringHe'],
+                  pubPlaceStringHe: metadata[title]?['pubPlaceStringHe'],
                   heShortDesc: metadata[title]?['heShortDesc'],
+                  heDesc: metadata[title]?['heDesc'],
                   pubDate: metadata[title]?['pubDate'],
                   pubPlace: metadata[title]?['pubPlace'],
                   order: metadata[title]?['order'] ?? 999,
@@ -124,7 +145,14 @@ class FileSystemData {
                   title: title,
                   category: category,
                   author: metadata[title]?['author'],
+                  heCategories: metadata[title]?['heCategories'],
+                  heEra: metadata[title]?['heEra'],
+                  compDateStringHe: metadata[title]?['compDateStringHe'],
+                  compPlaceStringHe: metadata[title]?['compPlaceStringHe'],
+                  pubDateStringHe: metadata[title]?['pubDateStringHe'],
+                  pubPlaceStringHe: metadata[title]?['pubPlaceStringHe'],
                   heShortDesc: metadata[title]?['heShortDesc'],
+                  heDesc: metadata[title]?['heDesc'],
                   pubDate: metadata[title]?['pubDate'],
                   pubPlace: metadata[title]?['pubPlace'],
                   order: metadata[title]?['order'] ?? 999,
@@ -401,6 +429,12 @@ class FileSystemData {
       final libraryDir =
           Directory('$libraryPath${Platform.pathSeparator}אוצריא');
 
+      // בדיקה שהתיקייה קיימת לפני ניסיון לגשת אליה
+      if (!libraryDir.existsSync()) {
+        debugPrint('Library directory does not exist, skipping cleanup');
+        return 0;
+      }
+
       await for (final entity in libraryDir.list(recursive: true)) {
         if (entity is File) {
           final fileName = entity.path.split(Platform.pathSeparator).last;
@@ -521,6 +555,14 @@ class FileSystemData {
       final row = tempMetadata[i] as Map<String, dynamic>;
       metadata[row['title'].replaceAll('"', '')] = {
         'author': row['author'] ?? '',
+        'heCategories': row['heCategories'] is List
+            ? (row['heCategories'] as List).join(', ')
+            : row['heCategories'] ?? '',
+        'heEra': row['heEra'] ?? '',
+        'compDateStringHe': row['compDateStringHe'] ?? '',
+        'compPlaceStringHe': row['compPlaceStringHe'] ?? '',
+        'pubDateStringHe': row['pubDateStringHe'] ?? '',
+        'pubPlaceStringHe': row['pubPlaceStringHe'] ?? '',
         'heDesc': row['heDesc'] ?? '',
         'heShortDesc': row['heShortDesc'] ?? '',
         'pubDate': row['pubDate'] ?? '',
@@ -529,6 +571,11 @@ class FileSystemData {
             ? [row['title'].toString()]
             : row['extraTitles'].map<String>((e) => e.toString()).toList()
                 as List<String>,
+        'extraTitlesHe': row['extraTitlesHe'] is List
+            ? (row['extraTitlesHe'] as List)
+                .map<String>((e) => e.toString())
+                .toList()
+            : [],
         'order': row['order'] == null || row['order'] == ''
             ? 999
             : row['order'].runtimeType == double

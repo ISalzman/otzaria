@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/pdf_headings.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -28,7 +30,7 @@ class PdfBookTab extends OpenedTab {
 
   String searchText;
 
-  List<PdfTextRangeWithFragments>? pdfSearchMatches;
+  List<PdfPageTextRange>? pdfSearchMatches;
   int? pdfSearchCurrentMatchIndex;
 
   final currentTitle = ValueNotifier<String>("");
@@ -38,6 +40,18 @@ class PdfBookTab extends OpenedTab {
 
   ///a flag that tells if the left pane should be pinned on scrolling
   final pinLeftPane = ValueNotifier<bool>(false);
+
+  /// PDF headings mapping for commentaries and links
+  PdfHeadings? pdfHeadings;
+
+  /// Links for the current book
+  List<Link> links = [];
+
+  /// Active commentators to show
+  List<String> activeCommentators = [];
+
+  /// Current line number in text (based on PDF heading)
+  int? currentTextLineNumber;
 
   /// Creates a new instance of [PdfBookTab].
   ///
@@ -50,10 +64,26 @@ class PdfBookTab extends OpenedTab {
     this.searchText = '',
     this.pdfSearchMatches,
     this.pdfSearchCurrentMatchIndex,
-  }) : super(book.title) {
+    bool isPinned = false,
+  }) : super(book.title, isPinned: isPinned) {
     showLeftPane = ValueNotifier<bool>(openLeftPane);
     searchController.text = searchText;
     pinLeftPane.value = Settings.getValue<bool>('key-pin-sidebar') ?? false;
+  }
+
+  /// מתודה להוספת listener לעדכון מספר העמוד
+  /// צריך לקרוא לזה אחרי שה-controller מוכן
+  void setupPageTracking() {
+    pdfViewerController.addListener(_updatePageNumber);
+  }
+
+  void _updatePageNumber() {
+    if (pdfViewerController.isReady) {
+      final newPage = pdfViewerController.pageNumber;
+      if (newPage != null && newPage != pageNumber) {
+        pageNumber = newPage;
+      }
+    }
   }
 
   /// Creates a new instance of [PdfBookTab] from a JSON map.
@@ -67,7 +97,21 @@ class PdfBookTab extends OpenedTab {
         book:
             PdfBook(title: getTitleFromPath(json['path']), path: json['path']),
         pageNumber: json['pageNumber'],
-        openLeftPane: shouldOpenLeftPane);
+        openLeftPane: shouldOpenLeftPane,
+        isPinned: json['isPinned'] ?? false);
+  }
+
+  /// Cleanup when the tab is disposed
+  @override
+  void dispose() {
+    pdfViewerController.removeListener(_updatePageNumber);
+    searchController.dispose();
+    outline.dispose();
+    documentRef.dispose();
+    currentTitle.dispose();
+    showLeftPane.dispose();
+    pinLeftPane.dispose();
+    super.dispose();
   }
 
   /// Converts the [PdfBookTab] instance into a JSON map.
@@ -75,10 +119,15 @@ class PdfBookTab extends OpenedTab {
   /// The JSON map contains 'path', 'pageNumber' and 'type' keys.
   @override
   Map<String, dynamic> toJson() {
+    // שמירת מספר העמוד הנוכחי - אם ה-controller מוכן, נשתמש בו, אחרת נשתמש ב-pageNumber השמור
+    final currentPage = pdfViewerController.isReady
+        ? (pdfViewerController.pageNumber ?? pageNumber)
+        : pageNumber;
+
     return {
       'path': book.path,
-      'pageNumber':
-          (pdfViewerController.isReady ? pdfViewerController.pageNumber : 1),
+      'pageNumber': currentPage,
+      'isPinned': isPinned,
       'type': 'PdfBookTab'
     };
   }

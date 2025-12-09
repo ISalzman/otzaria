@@ -20,15 +20,17 @@ class AddPersonalNote extends PersonalNotesEvent {
   final String bookId;
   final int lineNumber;
   final String content;
+  final String? selectedText;
 
   const AddPersonalNote({
     required this.bookId,
     required this.lineNumber,
     required this.content,
+    this.selectedText,
   });
 
   @override
-  List<Object?> get props => [bookId, lineNumber, content];
+  List<Object?> get props => [bookId, lineNumber, content, selectedText];
 }
 
 class UpdatePersonalNote extends PersonalNotesEvent {
@@ -74,6 +76,4 @@ class RepositionPersonalNote extends PersonalNotesEvent {
   List<Object?> get props => [bookId, noteId, lineNumber];
 }
 
-class ConvertLegacyNotes extends PersonalNotesEvent {
-  const ConvertLegacyNotes();
-}
+

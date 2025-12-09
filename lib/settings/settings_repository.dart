@@ -6,11 +6,13 @@ import 'package:otzaria/utils/settings_wrapper.dart';
 class SettingsRepository {
   static const String keyDarkMode = 'key-dark-mode';
   static const String keySwatchColor = 'key-swatch-color';
-  static const String keyPaddingSize = 'key-padding-size';
+  static const String keyDarkSwatchColor = 'key-dark-swatch-color';
+  static const String keyTextMaxWidth = 'key-text-max-width';
   static const String keyFontSize = 'key-font-size';
   static const String keyFontFamily = 'key-font-family';
   static const String keyCommentatorsFontFamily =
       'key-commentators-font-family';
+  static const String keyCommentatorsFontSize = 'key-commentators-font-size';
   static const String keyShowOtzarHachochma = 'key-show-otzar-hachochma';
   static const String keyShowHebrewBooks = 'key-show-hebrew-books';
   static const String keyShowExternalBooks = 'key-show-external-books';
@@ -24,6 +26,7 @@ class SettingsRepository {
   static const String keyPinSidebar = 'key-pin-sidebar';
   static const String keySidebarWidth = 'key-sidebar-width';
   static const String keyFacetFilteringWidth = 'key-facet-filtering-width';
+  static const String keyCommentaryPaneWidth = 'key-commentary-pane-width';
   static const String keyCalendarType = 'key-calendar-type';
   static const String keySelectedCity = 'key-selected-city';
   static const String keyCalendarEvents = 'key-calendar-events';
@@ -32,6 +35,20 @@ class SettingsRepository {
   static const String keyIsFullscreen = 'key-is-fullscreen';
   static const String keyLibraryViewMode = 'key-library-view-mode';
   static const String keyLibraryShowPreview = 'key-library-show-preview';
+  static const String keyEnablePerBookSettings = 'key-enable-per-book-settings';
+  static const String keyOfflineMode = 'key-offline-mode';
+  static const String keyAutoSync = 'key-auto-sync';
+  static const String keyLibraryPath = 'key-library-path';
+  static const String keyHebrewBooksPath = 'key-hebrew-books-path';
+  static const String keyDevChannel = 'key-dev-channel';
+
+  // Calendar Notification Settings
+  static const String keyCalendarNotificationsEnabled =
+      'key-calendar-notifications-enabled';
+  static const String keyCalendarNotificationTime =
+      'key-calendar-notification-time';
+  static const String keyCalendarNotificationSound =
+      'key-calendar-notification-sound';
 
   final SettingsWrapper _settings;
 
@@ -47,9 +64,13 @@ class SettingsRepository {
       'seedColor': ColorUtils.colorFromString(
         _settings.getValue<String>(keySwatchColor, defaultValue: '#ff2c1b02'),
       ),
-      'paddingSize':
-          _settings.getValue<double>(keyPaddingSize, defaultValue: 10),
-      'fontSize': _settings.getValue<double>(keyFontSize, defaultValue: 16),
+      'darkSeedColor': ColorUtils.colorFromString(
+        _settings.getValue<String>(keyDarkSwatchColor,
+            defaultValue: '#ffce93d8'),
+      ),
+      'textMaxWidth':
+          _settings.getValue<double>(keyTextMaxWidth, defaultValue: -1),
+      'fontSize': _settings.getValue<double>(keyFontSize, defaultValue: 25),
       'fontFamily': _settings.getValue<String>(
         keyFontFamily,
         defaultValue: 'FrankRuhlCLM',
@@ -57,6 +78,10 @@ class SettingsRepository {
       'commentatorsFontFamily': _settings.getValue<String>(
         keyCommentatorsFontFamily,
         defaultValue: 'NotoRashiHebrew',
+      ),
+      'commentatorsFontSize': _settings.getValue<double>(
+        keyCommentatorsFontSize,
+        defaultValue: 22,
       ),
       'showOtzarHachochma': _settings.getValue<bool>(
         keyShowOtzarHachochma,
@@ -106,6 +131,8 @@ class SettingsRepository {
           _settings.getValue<double>(keySidebarWidth, defaultValue: 300),
       'facetFilteringWidth':
           _settings.getValue<double>(keyFacetFilteringWidth, defaultValue: 235),
+      'commentaryPaneWidth':
+          _settings.getValue<double>(keyCommentaryPaneWidth, defaultValue: 400),
       'calendarType': _settings.getValue<String>(
         keyCalendarType,
         defaultValue: 'combined',
@@ -139,6 +166,28 @@ class SettingsRepository {
         defaultValue: true,
       ),
       'shortcuts': await getShortcuts(),
+      'enablePerBookSettings': _settings.getValue<bool>(
+        keyEnablePerBookSettings,
+        defaultValue: true,
+      ),
+      'isOfflineMode': _settings.getValue<bool>(
+        keyOfflineMode,
+        defaultValue: false,
+      ),
+
+      // Calendar Notification Settings
+      'calendarNotificationsEnabled': _settings.getValue<bool>(
+        keyCalendarNotificationsEnabled,
+        defaultValue: true,
+      ),
+      'calendarNotificationTime': _settings.getValue<int>(
+        keyCalendarNotificationTime,
+        defaultValue: 60,
+      ),
+      'calendarNotificationSound': _settings.getValue<bool>(
+        keyCalendarNotificationSound,
+        defaultValue: true,
+      ),
     };
   }
 
@@ -150,8 +199,13 @@ class SettingsRepository {
     await _settings.setValue(keySwatchColor, ColorUtils.colorToString(value));
   }
 
-  Future<void> updatePaddingSize(double value) async {
-    await _settings.setValue(keyPaddingSize, value);
+  Future<void> updateDarkSeedColor(Color value) async {
+    await _settings.setValue(
+        keyDarkSwatchColor, ColorUtils.colorToString(value));
+  }
+
+  Future<void> updateTextMaxWidth(double value) async {
+    await _settings.setValue(keyTextMaxWidth, value);
   }
 
   Future<void> updateFontSize(double value) async {
@@ -164,6 +218,10 @@ class SettingsRepository {
 
   Future<void> updateCommentatorsFontFamily(String value) async {
     await _settings.setValue(keyCommentatorsFontFamily, value);
+  }
+
+  Future<void> updateCommentatorsFontSize(double value) async {
+    await _settings.setValue(keyCommentatorsFontSize, value);
   }
 
   Future<void> updateShowOtzarHachochma(bool value) async {
@@ -218,6 +276,10 @@ class SettingsRepository {
     await _settings.setValue(keyFacetFilteringWidth, value);
   }
 
+  Future<void> updateCommentaryPaneWidth(double value) async {
+    await _settings.setValue(keyCommentaryPaneWidth, value);
+  }
+
   Future<void> updateCalendarType(String value) async {
     await _settings.setValue(keyCalendarType, value);
   }
@@ -248,6 +310,27 @@ class SettingsRepository {
 
   Future<void> updateLibraryShowPreview(bool value) async {
     await _settings.setValue(keyLibraryShowPreview, value);
+  }
+
+  Future<void> updateEnablePerBookSettings(bool value) async {
+    await _settings.setValue(keyEnablePerBookSettings, value);
+  }
+
+  Future<void> updateOfflineMode(bool value) async {
+    await _settings.setValue(keyOfflineMode, value);
+  }
+
+  // Calendar Notification Settings
+  Future<void> updateCalendarNotificationsEnabled(bool value) async {
+    await _settings.setValue(keyCalendarNotificationsEnabled, value);
+  }
+
+  Future<void> updateCalendarNotificationTime(int value) async {
+    await _settings.setValue(keyCalendarNotificationTime, value);
+  }
+
+  Future<void> updateCalendarNotificationSound(bool value) async {
+    await _settings.setValue(keyCalendarNotificationSound, value);
   }
 
   Future<Map<String, String>> getShortcuts() async {
@@ -312,9 +395,12 @@ class SettingsRepository {
   Future<void> _writeDefaultsToStorage() async {
     await _settings.setValue(keyDarkMode, false);
     await _settings.setValue(keySwatchColor, '#ff2c1b02');
-    await _settings.setValue(keyPaddingSize, 10.0);
-    await _settings.setValue(keyFontSize, 16.0);
+    await _settings.setValue(keyDarkSwatchColor, '#ffce93d8');
+    await _settings.setValue(keyTextMaxWidth, -1.0);
+    await _settings.setValue(keyFontSize, 25.0);
     await _settings.setValue(keyFontFamily, 'FrankRuhlCLM');
+    await _settings.setValue(keyCommentatorsFontFamily, 'NotoRashiHebrew');
+    await _settings.setValue(keyCommentatorsFontSize, 22.0);
     await _settings.setValue(keyShowOtzarHachochma, false);
     await _settings.setValue(keyShowHebrewBooks, false);
     await _settings.setValue(keyShowExternalBooks, false);
@@ -328,6 +414,7 @@ class SettingsRepository {
     await _settings.setValue(keyPinSidebar, false);
     await _settings.setValue(keySidebarWidth, 300.0);
     await _settings.setValue(keyFacetFilteringWidth, 235.0);
+    await _settings.setValue(keyCommentaryPaneWidth, 400.0);
     await _settings.setValue(keyCalendarType, 'combined');
     await _settings.setValue(keySelectedCity, 'ירושלים');
     await _settings.setValue(keyCalendarEvents, '[]');
@@ -336,6 +423,12 @@ class SettingsRepository {
     await _settings.setValue(keyIsFullscreen, false);
     await _settings.setValue(keyLibraryViewMode, 'grid');
     await _settings.setValue(keyLibraryShowPreview, true);
+    await _settings.setValue(keyEnablePerBookSettings, true);
+
+    // Calendar Notification Settings
+    await _settings.setValue(keyCalendarNotificationsEnabled, true);
+    await _settings.setValue(keyCalendarNotificationTime, 60);
+    await _settings.setValue(keyCalendarNotificationSound, true);
 
     // Mark as initialized
     await _settings.setValue('settings_initialized', true);

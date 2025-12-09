@@ -43,7 +43,7 @@ import 'package:otzaria/app_bloc_observer.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
-import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
+import 'package:otzaria/personal_notes/migration/file_to_db_migrator.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -54,9 +54,15 @@ import 'package:shamor_zachor/services/shamor_zachor_service_factory.dart';
 import 'package:shamor_zachor/services/dynamic_data_loader_service.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/settings/backup_service.dart';
+import 'package:otzaria/services/sources_books_service.dart';
+import 'package:pdfrx/pdfrx.dart';
+import 'package:otzaria/services/notification_service.dart';
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
+
+/// Getter for accessing the window listener from other parts of the app
+AppWindowListener? get appWindowListener => _appWindowListener;
 
 // Global reference to the dynamic data loader service for Shamor Zachor
 DynamicDataLoaderService? _shamorZachorDataLoader;
@@ -93,12 +99,14 @@ void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Check for single instance
-  FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
-  bool isFirstInstance = await flutterSingleInstance.isFirstInstance();
-  if (!isFirstInstance) {
-    // If not the first instance, exit the app
-    exit(0);
+  // Check for single instance - skip on Apple platforms (macOS/iOS) due to sandbox restrictions
+  if (!Platform.isMacOS && !Platform.isIOS) {
+    FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
+    bool isFirstInstance = await flutterSingleInstance.isFirstInstance();
+    if (!isFirstInstance) {
+      // If not the first instance, exit the app
+      exit(0);
+    }
   }
 
   // Initialize bloc observer for debugging
@@ -150,8 +158,7 @@ void main() async {
                   findRefRepository: FindRefRepository(
                       dataRepository: DataRepository.instance))),
           BlocProvider<PersonalNotesBloc>(
-            create: (context) =>
-                PersonalNotesBloc()..add(const ConvertLegacyNotes()),
+            create: (context) => PersonalNotesBloc(),
           ),
           BlocProvider<BookmarkBloc>(
             create: (context) => BookmarkBloc(BookmarkRepository()),
@@ -220,6 +227,18 @@ Future<void> initialize() async {
   await initHive();
   await createDirs();
   await loadCerts();
+  
+  // Migrate personal notes from file storage to SQLite database
+  await FileToDbMigrator.runMigration();
+
+  // נדרש לטעינת PDF דרך pdfrx: הגדרת תקיית cache
+  try {
+    final cacheDir = await getTemporaryDirectory();
+    Pdfrx.getCacheDirectory = () => cacheDir.path;
+    debugPrint('Pdfrx cache directory set to: ${cacheDir.path}');
+  } catch (e) {
+    debugPrint('Failed to set Pdfrx cache directory: $e');
+  }
 
   // Initialize Shamor Zachor dynamic data loader
   try {
@@ -244,6 +263,25 @@ Future<void> initialize() async {
       debugPrint('Failed to perform automatic backup: $e');
     }
     // Continue without backup if it fails
+  }
+
+  // Load SourcesBooks.csv data into memory
+  try {
+    await SourcesBooksService().loadSourcesBooks();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('Failed to load SourcesBooks.csv: $e');
+    }
+    // Continue without sources data if it fails
+  }
+
+  // Initialize Notification Service
+  try {
+    await NotificationService().init();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('Failed to initialize notification service: $e');
+    }
   }
 }
 
@@ -285,6 +323,9 @@ Future<void> loadCerts() async {
 /// Clean up resources when the app is closing
 void cleanup() {
   _appWindowListener?.dispose();
+
+  // Clear SourcesBooks data from memory
+  SourcesBooksService().clearData();
 }
 
 // Note: TOC parsing helper moved to lib/utils/toc_parser.dart for reuse

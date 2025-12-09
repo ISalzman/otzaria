@@ -110,7 +110,7 @@ class _CommentaryContentState extends State<CommentaryContent> {
                   return HtmlWidget(
                     '<div style="text-align: justify; direction: rtl;">$displayText</div>',
                     textStyle: TextStyle(
-                      fontSize: widget.fontSize / 1.2,
+                      fontSize: settingsState.commentatorsFontSize,
                       fontFamily: settingsState.commentatorsFontFamily,
                     ),
                   );
@@ -130,7 +130,7 @@ class _CommentaryContentState extends State<CommentaryContent> {
   /// בניית skeleton loading לתוכן פרשנות - שלוש שורות
   Widget _buildSkeletonLoading(BuildContext context) {
     final baseColor = Theme.of(context).colorScheme.surfaceContainerHighest;
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(

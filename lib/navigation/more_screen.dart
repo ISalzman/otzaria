@@ -24,7 +24,7 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
   late final SettingsRepository _settingsRepository;
   final GlobalKey<GematriaSearchScreenState> _gematriaKey =
       GlobalKey<GematriaSearchScreenState>();
-  late final PageController _pageController;
+  late final List<Widget> _pages;
 
   // Title for the ShamorZachor section (dynamic from the package)
   String _shamorZachorTitle = 'זכור ושמור';
@@ -41,7 +41,20 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
     super.initState();
     _settingsRepository = SettingsRepository();
     _calendarCubit = CalendarCubit(settingsRepository: _settingsRepository);
-    _pageController = PageController(initialPage: 0);
+
+    // יצירת הדפים פעם אחת ב-initState
+    _pages = [
+      BlocProvider.value(
+        value: _calendarCubit,
+        child: const CalendarWidget(),
+      ),
+      ShamorZachorWidget(
+        onTitleChanged: _updateShamorZachorTitle,
+      ),
+      const MeasurementConverterScreen(),
+      const PersonalNotesManagerScreen(),
+      GematriaSearchScreen(key: _gematriaKey),
+    ];
   }
 
   /// Reset to calendar page - public method for external access
@@ -50,18 +63,23 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
       setState(() {
         _selectedIndex = 0;
       });
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(0);
-      }
     }
   }
 
-
+  Widget _buildCenteredLabel(String text) {
+    return SizedBox(
+      width: 74,
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 11),
+      ),
+    );
+  }
 
   @override
   void dispose() {
     _calendarCubit.close();
-    _pageController.dispose();
     super.dispose();
   }
 
@@ -85,113 +103,58 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
         centerTitle: true,
         actions: _getActions(context, _selectedIndex),
       ),
-      body: OrientationBuilder(
-        builder: (context, orientation) {
-          if (isSmallScreen) {
-            // במסכים קטנים - השתמש ב-BottomNavigationBar
-            return Column(
+      body: isSmallScreen
+          ? IndexedStack(
+              index: _selectedIndex,
+              children: _pages,
+            )
+          : Row(
               children: [
-                Expanded(
-                  child: PageView(
-                    scrollDirection: orientation == Orientation.landscape
-                        ? Axis.vertical
-                        : Axis.horizontal,
-                    physics: const NeverScrollableScrollPhysics(),
-                    controller: _pageController,
-                    onPageChanged: (index) {
+                SizedBox(
+                  width: 74,
+                  child: NavigationRail(
+                    selectedIndex: _selectedIndex,
+                    onDestinationSelected: (int index) {
                       setState(() {
                         _selectedIndex = index;
                       });
                     },
-                    children: [
-                      BlocProvider.value(
-                        value: _calendarCubit,
-                        child: const CalendarWidget(),
+                    labelType: NavigationRailLabelType.all,
+                    minWidth: 74,
+                    destinations: [
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        label: _buildCenteredLabel('לוח שנה'),
                       ),
-                      ShamorZachorWidget(
-                        onTitleChanged: _updateShamorZachorTitle,
+                      NavigationRailDestination(
+                        icon: const ImageIcon(
+                            AssetImage('assets/icon/זכור ושמור.png')),
+                        label: _buildCenteredLabel('זכור ושמור'),
                       ),
-                      const MeasurementConverterScreen(),
-                      const PersonalNotesManagerScreen(),
-                      GematriaSearchScreen(key: _gematriaKey),
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.straighten),
+                        label: _buildCenteredLabel('מדות ושיעורים'),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(FluentIcons.note_24_regular),
+                        label: _buildCenteredLabel('הערות אישיות'),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(FluentIcons.calculator_24_regular),
+                        label: _buildCenteredLabel('גימטריות'),
+                      ),
                     ],
                   ),
                 ),
-              ],
-            );
-          }
-          // במסכים רחבים - השתמש ב-NavigationRail
-          return Row(
-            children: [
-              NavigationRail(
-                selectedIndex: _selectedIndex,
-                onDestinationSelected: (int index) {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
-                  if (_pageController.hasClients) {
-                    _pageController.animateToPage(
-                      index,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  }
-                },
-                labelType: NavigationRailLabelType.all,
-                destinations: const [
-                  NavigationRailDestination(
-                    icon: Icon(Icons.calendar_month_outlined),
-                    label: Text('לוח שנה'),
+                const VerticalDivider(thickness: 1, width: 1),
+                Expanded(
+                  child: IndexedStack(
+                    index: _selectedIndex,
+                    children: _pages,
                   ),
-                  NavigationRailDestination(
-                    icon: ImageIcon(AssetImage('assets/icon/זכור ושמור.png')),
-                    label: Text('זכור ושמור'),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(Icons.straighten),
-                    label: Text('מדות ושיעורים'),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(FluentIcons.note_24_regular),
-                    label: Text('הערות אישיות'),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(FluentIcons.calculator_24_regular),
-                    label: Text('גימטריות'),
-                  ),
-                ],
-              ),
-              const VerticalDivider(thickness: 1, width: 1),
-              Expanded(
-                child: PageView(
-                  scrollDirection: orientation == Orientation.landscape
-                      ? Axis.vertical
-                      : Axis.horizontal,
-                  physics: const NeverScrollableScrollPhysics(),
-                  controller: _pageController,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _selectedIndex = index;
-                    });
-                  },
-                  children: [
-                    BlocProvider.value(
-                      value: _calendarCubit,
-                      child: const CalendarWidget(),
-                    ),
-                    ShamorZachorWidget(
-                      onTitleChanged: _updateShamorZachorTitle,
-                    ),
-                    const MeasurementConverterScreen(),
-                    const PersonalNotesManagerScreen(),
-                    GematriaSearchScreen(key: _gematriaKey),
-                  ],
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+              ],
+            ),
       bottomNavigationBar: isSmallScreen
           ? BottomNavigationBar(
               currentIndex: _selectedIndex,
@@ -199,13 +162,6 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
                 setState(() {
                   _selectedIndex = index;
                 });
-                if (_pageController.hasClients) {
-                  _pageController.animateToPage(
-                    index,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
-                }
               },
               type: BottomNavigationBarType.fixed,
               selectedFontSize: 11,
@@ -216,7 +172,8 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
                   label: 'לוח שנה',
                 ),
                 BottomNavigationBarItem(
-                  icon: ImageIcon(AssetImage('assets/icon/זכור ושמור.png'), size: 20),
+                  icon: ImageIcon(AssetImage('assets/icon/זכור ושמור.png'),
+                      size: 20),
                   label: 'זכור ושמור',
                 ),
                 BottomNavigationBarItem(
@@ -288,6 +245,4 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
         return null;
     }
   }
-
-
 }
