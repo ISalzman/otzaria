@@ -109,7 +109,7 @@ class SqliteDataProvider {
       final book = await _repository.getBookByTitle(title);
       if (book == null) return null;
       
-      final migrationTocEntries = await _repository.getBookToc(book.id);
+      final migrationTocEntries = await _repository.getBookTocs(book.id);
       
       // Convert migration TOC entries to otzaria TOC entries
       final Map<int, TocEntry> idToEntry = {};

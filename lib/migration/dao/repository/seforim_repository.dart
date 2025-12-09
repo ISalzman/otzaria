@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:logging/logging.dart';
+import 'package:otzaria/migration/dao/drift/toc_dao.dart';
 
 import '../../core/models/author.dart';
 import '../../core/models/book.dart';
@@ -1013,6 +1014,9 @@ class SeforimRepository {
   }
 
   // --- Table of Contents ---
+  Future<List<TocEntry>> getBookTocs(int bookId) async {
+    return _database.tocDao.selectByBookId(bookId);
+  }
 
   Future<TocEntry?> getTocEntry(int id) async {
     final db = await _database.database;
@@ -1023,6 +1027,7 @@ class SeforimRepository {
 
   Future<List<TocEntry>> getBookToc(int bookId) async {
     final db = await _database.database;
+    
     final result = await db.rawQuery('SELECT * FROM tocEntry WHERE bookId = ? ORDER BY level, textId', [bookId]);
     return result.map((row) => TocEntry.fromMap(row)).toList();
   }

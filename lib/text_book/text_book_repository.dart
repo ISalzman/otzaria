@@ -40,7 +40,7 @@ class TextBookRepository {
     // Filter commentators asynchronously
     List<String> availableCommentators = [];
     for (String title in commentatorTitles) {
-      if (await _fileSystem.bookExists(title)) {
+      if (await _fileSystem.bookExists(title+"_links")) {
         availableCommentators.add(title);
       }
     }
