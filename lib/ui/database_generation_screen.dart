@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -8,6 +9,7 @@ import '../migration/dao/drift/database.dart';
 import '../migration/dao/repository/seforim_repository.dart';
 import '../migration/generator/progress_generator.dart';
 import '../data/constants/database_constants.dart';
+import '../core/app_paths.dart';
 
 enum DuplicateBookStrategy {
   skip,
@@ -42,11 +44,34 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   IndexCreationMode _indexMode = IndexCreationMode.withIndexes;
 
   @override
+  void initState() {
+    super.initState();
+    _loadDefaultLibraryPath();
+  }
+
+  @override
   void dispose() {
     _progressSubscription?.cancel();
     _timer?.cancel();
     _generator?.dispose();
     super.dispose();
+  }
+
+  /// Load the default library path from settings and auto-select it
+  Future<void> _loadDefaultLibraryPath() async {
+    try {
+      final libraryPath = await AppPaths.getLibraryPath();
+      final dbPath = '$libraryPath/${DatabaseConstants.databaseFileName}';
+      
+      setState(() {
+        _selectedLibraryPath = libraryPath;
+        _selectedDbPath = dbPath;
+      });
+      
+      _logger.info('Auto-loaded library path: $libraryPath');
+    } catch (e, stackTrace) {
+      _logger.warning('Error loading default library path', e, stackTrace);
+    }
   }
 
   void _resetToInitialState() {
@@ -66,11 +91,55 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   Future<void> _selectLibraryFolder() async {
     try {
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'בחר תיקיית אוצריא',
+        dialogTitle: 'בחר תיקיית אוצריא (תיקיית האב)',
       );
       
       if (selectedDirectory != null) {
         _logger.info('Selected library folder: $selectedDirectory');
+        
+        // Verify that the selected directory contains the required structure
+        final otzariaDir = Directory('$selectedDirectory/${DatabaseConstants.otzariaFolderName}');
+        final linksDir = Directory('$selectedDirectory/links');
+        final metadataFile = File('$selectedDirectory/metadata.json');
+        
+        if (!await otzariaDir.exists()) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('התיקייה "${DatabaseConstants.otzariaFolderName}" לא נמצאה בתיקייה שנבחרה'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+        
+        // Show warnings for missing optional components
+        if (!await linksDir.exists()) {
+          _logger.warning('Links directory not found in selected folder');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('אזהרה: תיקיית "links" לא נמצאה - לא יהיו קישורים בין ספרים'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
+        }
+        
+        if (!await metadataFile.exists()) {
+          _logger.warning('metadata.json not found in selected folder');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('אזהרה: קובץ metadata.json לא נמצא - לא יהיה מידע נוסף על הספרים'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
+        }
         
         // Auto-set DB path to database file in the selected folder
         final dbPath = '$selectedDirectory/${DatabaseConstants.databaseFileName}';
@@ -127,7 +196,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     if (_selectedDbPath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('יש לבחור תיקיית אוצריא תחילה'),
+          content: Text('יש לבחור תיקיית אוצריא (תיקיית האב) תחילה'),
           backgroundColor: Colors.red,
         ),
       );
@@ -223,7 +292,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       _logger.warning('Cannot start generation: missing library path or database path');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('יש לבחור תיקיית אוצריא'),
+          content: Text('יש לבחור תיקיית אוצריא (תיקיית האב)'),
           backgroundColor: Colors.red,
         ),
       );
@@ -344,7 +413,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                         
                         // Library folder selection
                         _buildPathSelector(
-                          label: 'תיקיית אוצריא',
+                          label: 'תיקיית אוצריא (תיקיית האב)',
                           path: _selectedLibraryPath,
                           onTap: _selectLibraryFolder,
                           icon: Icons.folder_open,
@@ -741,8 +810,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
               // Info text
               if (_progress.phase == GenerationPhase.idle)
                 Text(
-                  'בחר תיקיית אוצריא.\n'
-                  'מסד הנתונים ייווצר אוטומטית בתיקייה (${DatabaseConstants.databaseFileName}).\n'
+                  'בחר את תיקיית האב של אוצריא (שמכילה את התיקיות "אוצריא" ו-"links").\n'
+                  'מסד הנתונים ייווצר אוטומטית בתיקייה זו (${DatabaseConstants.databaseFileName}).\n'
                   'אם הקובץ קיים, הוא ישמש למסד הנתונים.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.grey[600],

@@ -134,12 +134,8 @@ class ProgressDatabaseGenerator extends DatabaseGenerator {
 
   @override
   Future<void> processLinks() async {
-    // Check if links directory is in sourceDirectory or in parent directory
-    Directory linksDir = Directory(path.join(sourceDirectory, 'links'));
-    if (!await linksDir.exists() && path.basename(sourceDirectory) == 'אוצריא') {
-      // If user selected "אוצריא" directory, look for links in parent
-      linksDir = Directory(path.join(path.dirname(sourceDirectory), 'links'));
-    }
+    // links directory should be in sourceDirectory (the parent folder)
+    final linksDir = Directory(path.join(sourceDirectory, 'links'));
     
     if (await linksDir.exists()) {
       _totalLinks = await linksDir.list().where((e) => e is File && path.extension(e.path) == '.json').length;

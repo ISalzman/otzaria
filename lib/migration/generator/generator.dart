@@ -112,17 +112,12 @@ class DatabaseGenerator {
       await _loadSourcesFromManifest();
       await _precreateSourceEntries();
 
-      // Process hierarchy
-      String libraryPath;
-      if (path.basename(sourceDirectory) == 'אוצריא') {
-        libraryPath = sourceDirectory;
-      } else {
-        libraryPath = path.join(sourceDirectory, 'אוצריא');
-      }
+      // Process hierarchy - expect sourceDirectory to be the parent folder containing "אוצריא"
+      final libraryPath = path.join(sourceDirectory, 'אוצריא');
       
       final libraryDir = Directory(libraryPath);
       if (!await libraryDir.exists()) {
-        throw StateError('התיקייה "אוצריא" לא נמצאה. נא לבחור את התיקייה "אוצריא" או את התיקייה האב שלה.');
+        throw StateError('התיקייה "אוצריא" לא נמצאה בתיקייה שנבחרה. נא לבחור את תיקיית האב של אוצריא.');
       }
 
       _libraryRoot = libraryPath;
@@ -183,15 +178,11 @@ class DatabaseGenerator {
   ///
   /// Returns a map of book titles to their metadata
   Future<Map<String, BookMetadata>> loadMetadata() async {
-    // Check if metadata.json is in sourceDirectory or in parent directory
-    File metadataFile = File(path.join(sourceDirectory, 'metadata.json'));
-    if (!await metadataFile.exists() && path.basename(sourceDirectory) == 'אוצריא') {
-      // If user selected "אוצריא" directory, look for metadata.json in parent
-      metadataFile = File(path.join(path.dirname(sourceDirectory), 'metadata.json'));
-    }
+    // metadata.json should be in sourceDirectory (the parent folder)
+    final metadataFile = File(path.join(sourceDirectory, 'metadata.json'));
     
     if (!await metadataFile.exists()) {
-      _log.warning('Metadata file metadata.json not found');
+      _log.warning('Metadata file metadata.json not found in $sourceDirectory');
       return {};
     }
 
@@ -649,15 +640,11 @@ class DatabaseGenerator {
   /// Processes all link files in the links directory.
   /// Links connect lines between different books.
   Future<void> processLinks() async {
-    // Check if links directory is in sourceDirectory or in parent directory
-    Directory linksDir = Directory(path.join(sourceDirectory, 'links'));
-    if (!await linksDir.exists() && path.basename(sourceDirectory) == 'אוצריא') {
-      // If user selected "אוצריא" directory, look for links in parent
-      linksDir = Directory(path.join(path.dirname(sourceDirectory), 'links'));
-    }
+    // links directory should be in sourceDirectory (the parent folder)
+    final linksDir = Directory(path.join(sourceDirectory, 'links'));
     
     if (!await linksDir.exists()) {
-      _log.warning('Links directory not found');
+      _log.warning('Links directory not found in $sourceDirectory');
       return;
     }
 
@@ -891,12 +878,11 @@ class DatabaseGenerator {
   /// Loads files_manifest.json and builds mapping from library-relative path to source name
   Future<void> _loadSourcesFromManifest() async {
     _manifestSourcesByRel.clear();
-    final primary = File(path.join(sourceDirectory, 'files_manifest.json'));
-    final fallback = File('otzaria-library/files_manifest.json');
-    final manifestFile = await primary.exists() ? primary : (await fallback.exists() ? fallback : null);
+    // files_manifest.json should be in sourceDirectory (the parent folder)
+    final manifestFile = File(path.join(sourceDirectory, 'files_manifest.json'));
     
-    if (manifestFile == null) {
-      _log.warning('files_manifest.json not found; assigning source \'Unknown\' to all books');
+    if (!await manifestFile.exists()) {
+      _log.warning('files_manifest.json not found in $sourceDirectory; assigning source \'Unknown\' to all books');
       return;
     }
     
@@ -1112,8 +1098,8 @@ class DatabaseGenerator {
   /// Reads the priority list from file and returns normalized relative paths under the library root.
   Future<List<String>> _loadPriorityList() async {
     try {
-      // priority.txt is typically in the parent directory of sourceDirectory
-      final priorityPath = path.join(path.dirname(sourceDirectory), 'priority.txt');
+      // priority.txt should be in sourceDirectory (the parent folder)
+      final priorityPath = path.join(sourceDirectory, 'priority.txt');
       final priorityFile = File(priorityPath);
       
       if (!await priorityFile.exists()) {
@@ -1200,12 +1186,12 @@ class DatabaseGenerator {
 
   /// Fetches and sanitizes acronym terms for a given book title from acronym.json.
   ///
-  /// The acronym.json file is expected to be in the parent directory of [sourceDirectory].
+  /// The acronym.json file is expected to be in sourceDirectory (the parent folder).
   /// [title] The book title to look up.
   /// Returns a list of sanitized acronym terms, or empty list if not found.
   Future<List<String>> fetchAcronymsForTitle(String title) async {
-    // Determine the path to acronym.json (in parent of sourceDirectory)
-    final acronymPath = path.join(path.dirname(sourceDirectory), 'acronym.json');
+    // acronym.json should be in sourceDirectory (the parent folder)
+    final acronymPath = path.join(sourceDirectory, 'acronym.json');
     
     try {
       // Load acronym data if not already cached
