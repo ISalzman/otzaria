@@ -21,7 +21,7 @@ class PaginatedMainTextViewer extends StatefulWidget {
   });
 
   @override
-  _PaginatedMainTextViewerState createState() =>
+  State<PaginatedMainTextViewer> createState() =>
       _PaginatedMainTextViewerState();
 }
 
@@ -52,18 +52,15 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
 
   void _updateVisibleIndex() {
     if (!mounted) return;
-    
+
     final scrollOffset = _scrollController.offset;
     final itemHeight = 50.0; // Approximate height per item
     final visibleIndex = (scrollOffset / itemHeight).floor();
-    
-    print('Scroll offset: $scrollOffset, Visible index: $visibleIndex');
-    
-    if (visibleIndex != _lastVisibleIndex && 
-        visibleIndex >= 0 && 
+
+    if (visibleIndex != _lastVisibleIndex &&
+        visibleIndex >= 0 &&
         visibleIndex < widget.textBookState.content.length) {
       _lastVisibleIndex = visibleIndex;
-      print('Updating selected index to: $visibleIndex');
       context.read<TextBookBloc>().add(UpdateSelectedIndex(visibleIndex));
     }
   }
@@ -82,7 +79,7 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
     final state = widget.textBookState;
     final isSelected = state.selectedIndex == index;
     final isHighlighted = state.highlightedLine == index;
-    
+
     final backgroundColor = () {
       if (isHighlighted) {
         return theme.colorScheme.secondaryContainer.withAlpha(100);

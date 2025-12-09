@@ -69,7 +69,8 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
             _buildCommentatorSelector('מפרש ימני', _rightCommentator, (value) {
               setState(() => _rightCommentator = value);
             }),
-            _buildCommentatorSelector('מפרש תחתון', _bottomCommentator, (value) {
+            _buildCommentatorSelector('מפרש תחתון', _bottomCommentator,
+                (value) {
               setState(() => _bottomCommentator = value);
             }),
           ],
@@ -102,7 +103,7 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: DropdownButtonFormField<String>(
-        value: currentValue,
+        initialValue: currentValue,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
