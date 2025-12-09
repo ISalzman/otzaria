@@ -63,10 +63,10 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildCommentatorSelector('מפרש שמאלי', _leftCommentator, (value) {
+            _buildCommentatorSelector('מפרש ימני', _leftCommentator, (value) {
               setState(() => _leftCommentator = value);
             }),
-            _buildCommentatorSelector('מפרש ימני', _rightCommentator, (value) {
+            _buildCommentatorSelector('מפרש שמאלי', _rightCommentator, (value) {
               setState(() => _rightCommentator = value);
             }),
             _buildCommentatorSelector('מפרש תחתון', _bottomCommentator,
