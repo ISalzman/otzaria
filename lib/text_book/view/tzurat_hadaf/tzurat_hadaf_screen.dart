@@ -62,26 +62,6 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
         }
 
         return Scaffold(
-          appBar: AppBar(
-            title: Text('צורת הדף: ${state.book.title}'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.settings),
-                onPressed: () async {
-                  final result = await showDialog<bool>(
-                    context: context,
-                    builder: (dialogContext) => TzuratHadafDialog(
-                      availableCommentators: state.availableCommentators,
-                      bookTitle: state.book.title,
-                    ),
-                  );
-                  if (result == true && mounted) {
-                    _loadConfiguration();
-                  }
-                },
-              ),
-            ],
-          ),
           body: Column(
             children: [
               // Headers Row
@@ -100,11 +80,37 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                     ),
                     Expanded(
                       flex: 2,
-                      child: Center(
-                        child: Text(
-                          state.book.title,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Center(
+                            child: Text(
+                              state.book.title,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                          ),
+                          Positioned(
+                            top: -6,
+                            right: 0,
+                            child: IconButton(
+                              icon: const Icon(Icons.settings),
+                              onPressed: () async {
+                                final result = await showDialog<bool>(
+                                  context: context,
+                                  builder: (dialogContext) => TzuratHadafDialog(
+                                    availableCommentators:
+                                        state.availableCommentators,
+                                    bookTitle: state.book.title,
+                                  ),
+                                );
+                                if (result == true && mounted) {
+                                  _loadConfiguration();
+                                }
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Expanded(
