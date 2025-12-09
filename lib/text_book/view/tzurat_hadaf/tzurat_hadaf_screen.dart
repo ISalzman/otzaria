@@ -8,6 +8,7 @@ import 'package:otzaria/text_book/view/tzurat_hadaf/tzurat_hadaf_dialog.dart';
 import 'package:otzaria/text_book/view/tzurat_hadaf/paginated_main_text_viewer.dart';
 import 'package:otzaria/text_book/view/tzurat_hadaf/commentary_viewer.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/models/books.dart';
 
 class TzuratHadafScreen extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
@@ -33,12 +34,77 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
     _loadConfiguration();
   }
 
+  Map<String, String?> _getDefaultCommentators(TextBook book) {
+    final categoryPath = book.category?.path ?? '';
+
+    // שים לב: בגלל RTL, 'right' מוצג בשמאל ו-'left' מוצג בימין
+    // תנ"ך - תורה
+    if (categoryPath.contains('תנך') && categoryPath.contains('תורה')) {
+      final bookTitle = book.title;
+      return {
+        'right': 'רמבן על $bookTitle', // יוצג בשמאל
+        'left': 'רשי על $bookTitle', // יוצג בימין
+        'bottom': 'אור החיים על $bookTitle',
+      };
+    }
+
+    // משנה
+    if (categoryPath.contains('משנה')) {
+      final bookTitle = book.title;
+      return {
+        'right': 'תוספות יום טוב על $bookTitle', // יוצג בשמאל
+        'left': 'ברטנורא על $bookTitle', // יוצג בימין
+        'bottom': 'עיקר תוספות יום טוב על $bookTitle',
+      };
+    }
+
+    // תלמוד בבלי
+    if (categoryPath.contains('תלמוד בבלי')) {
+      final bookTitle = book.title;
+      return {
+        'right': 'תוספות על $bookTitle', // יוצג בשמאל
+        'left': 'רשי על $bookTitle', // יוצג בימין
+        'bottom': null,
+      };
+    }
+
+    // תלמוד ירושלמי
+    if (categoryPath.contains('תלמוד ירושלמי')) {
+      final bookTitle = book.title;
+      return {
+        'right': 'נועם ירושלמי על $bookTitle', // יוצג בשמאל
+        'left': 'פני משה על תלמוד ירושלמי $bookTitle', // יוצג בימין
+        'bottom': null,
+      };
+    }
+
+    // דוגמאות לברירות מחדל נוספות:
+    //
+    // // תנ"ך - נביאים
+    // if (categoryPath.contains('תנ"ך') && categoryPath.contains('נביאים')) {
+    //   final bookTitle = book.title;
+    //   return {
+    //     'right': 'מצודת דוד על $bookTitle',    // יוצג בשמאל
+    //     'left': 'רש"י על $bookTitle',          // יוצג בימין
+    //     'bottom': 'מלבי"ם על $bookTitle',
+    //   };
+    // }
+
+    // אם אין ברירת מחדל, החזר ערכים ריקים
+    return {
+      'right': null,
+      'left': null,
+      'bottom': null,
+    };
+  }
+
   void _loadConfiguration() {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
     final settingsKey = 'tzurat_hadaf_config_${state.book.title}';
     final configString = Settings.getValue<String>(settingsKey);
+
     if (configString != null) {
       try {
         final config = json.decode(configString) as Map<String, dynamic>;
@@ -51,6 +117,16 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
         }
       } catch (e) {
         // malformed JSON
+      }
+    } else {
+      // אם אין הגדרה שמורה, השתמש בברירות מחדל
+      final defaults = _getDefaultCommentators(state.book);
+      if (mounted) {
+        setState(() {
+          _leftCommentator = defaults['left'];
+          _rightCommentator = defaults['right'];
+          _bottomCommentator = defaults['bottom'];
+        });
       }
     }
   }
