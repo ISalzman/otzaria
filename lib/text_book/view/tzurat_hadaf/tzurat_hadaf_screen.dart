@@ -23,6 +23,10 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
   String? _rightCommentator;
   String? _bottomCommentator;
 
+  double _leftWidth = 200.0;
+  double _rightWidth = 200.0;
+  double _bottomHeight = 150.0;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -69,17 +73,19 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(
                   children: [
-                    Expanded(
-                      flex: 1,
-                      child: Center(
-                        child: Text(
-                          _leftCommentator ?? '',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                    if (_leftCommentator != null) ...[
+                      SizedBox(
+                        width: _leftWidth,
+                        child: Center(
+                          child: Text(
+                            _leftCommentator ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                    ],
                     Expanded(
-                      flex: 2,
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
@@ -113,40 +119,53 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                         ],
                       ),
                     ),
-                    Expanded(
-                      flex: 1,
-                      child: Center(
-                        child: Text(
-                          _rightCommentator ?? '',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                    if (_rightCommentator != null) ...[
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: _rightWidth,
+                        child: Center(
+                          child: Text(
+                            _rightCommentator ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
               const Divider(height: 1),
               // Main Content Row
               Expanded(
-                flex: 3,
                 child: Row(
                   children: [
                     // Left Commentary
-                    Expanded(
-                      flex: 1,
-                      child: CommentaryViewer(
-                        commentatorName: _leftCommentator,
-                        selectedIndex: state.selectedIndex,
-                        textBookState: state,
+                    if (_leftCommentator != null) ...[
+                      SizedBox(
+                        width: _leftWidth,
+                        child: CommentaryViewer(
+                          commentatorName: _leftCommentator,
+                          selectedIndex: state.selectedIndex,
+                          textBookState: state,
+                        ),
                       ),
-                    ),
+                      _ResizableDivider(
+                        isVertical: true,
+                        onDrag: (delta) {
+                          setState(() {
+                            _leftWidth =
+                                (_leftWidth - delta).clamp(100.0, 500.0);
+                          });
+                        },
+                      ),
+                    ],
                     // Main Text
                     Expanded(
-                      flex: 2,
                       child: Container(
                         margin: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.blue),
+                          border: Border.all(
+                              color: Theme.of(context).colorScheme.primary),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: PaginatedMainTextViewer(
@@ -156,31 +175,103 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                       ),
                     ),
                     // Right Commentary
-                    Expanded(
-                      flex: 1,
-                      child: CommentaryViewer(
-                        commentatorName: _rightCommentator,
-                        selectedIndex: state.selectedIndex,
-                        textBookState: state,
+                    if (_rightCommentator != null) ...[
+                      _ResizableDivider(
+                        isVertical: true,
+                        onDrag: (delta) {
+                          setState(() {
+                            _rightWidth =
+                                (_rightWidth + delta).clamp(100.0, 500.0);
+                          });
+                        },
                       ),
-                    ),
+                      SizedBox(
+                        width: _rightWidth,
+                        child: CommentaryViewer(
+                          commentatorName: _rightCommentator,
+                          selectedIndex: state.selectedIndex,
+                          textBookState: state,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
               // Bottom Commentary
-              if (_bottomCommentator != null)
-                Expanded(
-                  flex: 1,
+              if (_bottomCommentator != null) ...[
+                _ResizableDivider(
+                  isVertical: false,
+                  onDrag: (delta) {
+                    setState(() {
+                      _bottomHeight =
+                          (_bottomHeight + delta).clamp(100.0, 400.0);
+                    });
+                  },
+                ),
+                SizedBox(
+                  height: _bottomHeight,
                   child: CommentaryViewer(
                     commentatorName: _bottomCommentator,
                     selectedIndex: state.selectedIndex,
                     textBookState: state,
                   ),
                 ),
+              ],
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _ResizableDivider extends StatefulWidget {
+  final bool isVertical;
+  final Function(double) onDrag;
+
+  const _ResizableDivider({
+    required this.isVertical,
+    required this.onDrag,
+  });
+
+  @override
+  State<_ResizableDivider> createState() => _ResizableDividerState();
+}
+
+class _ResizableDividerState extends State<_ResizableDivider> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: widget.isVertical
+          ? SystemMouseCursors.resizeColumn
+          : SystemMouseCursors.resizeRow,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onPanUpdate: (details) {
+          widget.onDrag(
+            widget.isVertical ? details.delta.dx : details.delta.dy,
+          );
+        },
+        child: Container(
+          width: widget.isVertical ? 8 : null,
+          height: widget.isVertical ? null : 8,
+          color: _isHovered
+              ? Colors.grey.withValues(alpha: 0.3)
+              : Colors.transparent,
+          child: _isHovered
+              ? Center(
+                  child: Container(
+                    width: widget.isVertical ? 2 : null,
+                    height: widget.isVertical ? null : 2,
+                    color: Colors.grey,
+                  ),
+                )
+              : null,
+        ),
+      ),
     );
   }
 }
