@@ -146,7 +146,7 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
             children: [
               // Headers Row
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
                   children: [
                     if (_leftCommentator != null) ...[
@@ -156,7 +156,8 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                           alignment: Alignment.center,
                           child: Text(
                             _leftCommentator ?? '',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 14),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -171,14 +172,16 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                             child: Text(
                               state.book.title,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16),
+                                  fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                           ),
                           Positioned(
-                            top: -6,
+                            top: -0,
                             right: 0,
                             child: IconButton(
-                              icon: const Icon(Icons.settings),
+                              icon: const Icon(Icons.settings, size: 20),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
                               onPressed: () async {
                                 final result = await showDialog<bool>(
                                   context: context,
@@ -205,7 +208,8 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                           alignment: Alignment.center,
                           child: Text(
                             _rightCommentator ?? '',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 14),
                             textAlign: TextAlign.center,
                           ),
                         ),

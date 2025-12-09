@@ -258,6 +258,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       emit(currentState.copyWith(
         showTzuratHadafView: event.show,
         selectedIndex: currentState.selectedIndex,
+        // סגור את חלונית הניווט/חיפוש כשעוברים לצורת הדף
+        showLeftPane: event.show ? false : currentState.showLeftPane,
       ));
     }
   }
