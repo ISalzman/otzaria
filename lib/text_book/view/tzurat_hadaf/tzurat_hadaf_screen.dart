@@ -251,6 +251,7 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                         child: PaginatedMainTextViewer(
                           textBookState: state,
                           openBookCallback: widget.openBookCallback,
+                          scrollController: state.scrollController,
                         ),
                       ),
                     ),

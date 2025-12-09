@@ -180,6 +180,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                 ),
                 child: InkWell(
                   onTap: () {
+                    // תמיד השתמש ב-scrollController - זה עובד גם בצורת הדף
                     widget.scrollControler.scrollTo(
                       index: result.index,
                       duration: const Duration(milliseconds: 250),

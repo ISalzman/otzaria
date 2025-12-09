@@ -4,20 +4,23 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
-import 'package:otzaria/text_book/view/tzurat_hadaf/non_linear_text_widget.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
-import 'dart:async';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
+import 'package:otzaria/utils/html_link_handler.dart';
 
 class PaginatedMainTextViewer extends StatefulWidget {
   final TextBookLoaded textBookState;
   final Function(OpenedTab) openBookCallback;
+  final ItemScrollController scrollController;
 
   const PaginatedMainTextViewer({
     super.key,
     required this.textBookState,
     required this.openBookCallback,
+    required this.scrollController,
   });
 
   @override
@@ -26,50 +29,12 @@ class PaginatedMainTextViewer extends StatefulWidget {
 }
 
 class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
-  final ScrollController _scrollController = ScrollController();
-  Timer? _scrollTimer;
-  int? _lastVisibleIndex;
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    _scrollTimer?.cancel();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    _scrollTimer?.cancel();
-    _scrollTimer = Timer(const Duration(milliseconds: 300), () {
-      _updateVisibleIndex();
-    });
-  }
-
-  void _updateVisibleIndex() {
-    if (!mounted) return;
-
-    final scrollOffset = _scrollController.offset;
-    final itemHeight = 50.0; // Approximate height per item
-    final visibleIndex = (scrollOffset / itemHeight).floor();
-
-    if (visibleIndex != _lastVisibleIndex &&
-        visibleIndex >= 0 &&
-        visibleIndex < widget.textBookState.content.length) {
-      _lastVisibleIndex = visibleIndex;
-      context.read<TextBookBloc>().add(UpdateSelectedIndex(visibleIndex));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ListView.builder(
-      controller: _scrollController,
+    return ScrollablePositionedList.builder(
+      itemScrollController: widget.scrollController,
+      itemPositionsListener: widget.textBookState.positionsListener,
       itemCount: widget.textBookState.content.length,
       itemBuilder: (context, index) => _buildLine(index, theme),
     );
@@ -115,25 +80,35 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
             }
 
             // Highlight search text
-            String processedData = utils.highLight(data, state.searchText);
+            String processedData = state.removeNikud
+                ? utils.highLight(
+                    utils.removeVolwels('$data\n'), state.searchText)
+                : utils.highLight('$data\n', state.searchText);
             processedData = utils.formatTextWithParentheses(processedData);
 
-            return NonLinearText(
-              text: _stripHtmlTags(processedData),
-              style: TextStyle(
+            return HtmlWidget(
+              '''
+              <div style="text-align: justify; direction: rtl;">
+                $processedData
+              </div>
+              ''',
+              key: ValueKey('html_tzurat_hadaf_$index'),
+              textStyle: TextStyle(
                 fontSize: state.fontSize,
                 fontFamily: settingsState.fontFamily,
                 height: 1.5,
-                color: theme.colorScheme.onSurface,
               ),
+              onTapUrl: (url) async {
+                return await HtmlLinkHandler.handleLink(
+                  context,
+                  url,
+                  (tab) => widget.openBookCallback(tab),
+                );
+              },
             );
           },
         ),
       ),
     );
-  }
-
-  String _stripHtmlTags(String html) {
-    return html.replaceAll(RegExp(r'<[^>]*>'), '');
   }
 }
