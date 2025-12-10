@@ -1,6 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/text_book/view/tzurat_hadaf/utils/tzurat_hadaf_settings_manager.dart';
 
 class TzuratHadafDialog extends StatefulWidget {
   final List<String> availableCommentators;
@@ -22,8 +21,6 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
   String? _bottomCommentator;
   String? _bottomRightCommentator;
 
-  String get _settingsKey => 'tzurat_hadaf_config_${widget.bookTitle}';
-
   @override
   void initState() {
     super.initState();
@@ -31,19 +28,15 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
   }
 
   void _loadConfiguration() {
-    final configString = Settings.getValue<String>(_settingsKey);
-    if (configString != null) {
-      try {
-        final config = json.decode(configString) as Map<String, dynamic>;
-        setState(() {
-          _leftCommentator = config['left'];
-          _rightCommentator = config['right'];
-          _bottomCommentator = config['bottom'];
-          _bottomRightCommentator = config['bottomRight'];
-        });
-      } catch (e) {
-        // Handle error or ignore if JSON is malformed
-      }
+    final config =
+        TzuratHadafSettingsManager.loadConfiguration(widget.bookTitle);
+    if (config != null) {
+      setState(() {
+        _leftCommentator = config['left'];
+        _rightCommentator = config['right'];
+        _bottomCommentator = config['bottom'];
+        _bottomRightCommentator = config['bottomRight'];
+      });
     }
   }
 
@@ -54,8 +47,7 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
       'bottom': _bottomCommentator,
       'bottomRight': _bottomRightCommentator,
     };
-    final configString = json.encode(config);
-    Settings.setValue<String>(_settingsKey, configString);
+    TzuratHadafSettingsManager.saveConfiguration(widget.bookTitle, config);
   }
 
   @override
@@ -76,8 +68,8 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
                 (value) {
               setState(() => _bottomCommentator = value);
             }),
-            _buildCommentatorSelector('מפרש תחתון שמאלי', _bottomRightCommentator,
-                (value) {
+            _buildCommentatorSelector(
+                'מפרש תחתון שמאלי', _bottomRightCommentator, (value) {
               setState(() => _bottomRightCommentator = value);
             }),
           ],

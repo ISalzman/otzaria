@@ -1,12 +1,11 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/tzurat_hadaf/tzurat_hadaf_dialog.dart';
 import 'package:otzaria/text_book/view/tzurat_hadaf/paginated_main_text_viewer.dart';
 import 'package:otzaria/text_book/view/tzurat_hadaf/commentary_viewer.dart';
+import 'package:otzaria/text_book/view/tzurat_hadaf/utils/tzurat_hadaf_settings_manager.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
 
@@ -104,22 +103,17 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
-    final settingsKey = 'tzurat_hadaf_config_${state.book.title}';
-    final configString = Settings.getValue<String>(settingsKey);
+    final config =
+        TzuratHadafSettingsManager.loadConfiguration(state.book.title);
 
-    if (configString != null) {
-      try {
-        final config = json.decode(configString) as Map<String, dynamic>;
-        if (mounted) {
-          setState(() {
-            _leftCommentator = config['left'];
-            _rightCommentator = config['right'];
-            _bottomCommentator = config['bottom'];
-            _bottomRightCommentator = config['bottomRight'];
-          });
-        }
-      } catch (e) {
-        // malformed JSON
+    if (config != null) {
+      if (mounted) {
+        setState(() {
+          _leftCommentator = config['left'];
+          _rightCommentator = config['right'];
+          _bottomCommentator = config['bottom'];
+          _bottomRightCommentator = config['bottomRight'];
+        });
       }
     } else {
       // אם אין הגדרה שמורה, השתמש בברירות מחדל
@@ -211,7 +205,8 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                                   onPressed: () async {
                                     final result = await showDialog<bool>(
                                       context: context,
-                                      builder: (dialogContext) => TzuratHadafDialog(
+                                      builder: (dialogContext) =>
+                                          TzuratHadafDialog(
                                         availableCommentators:
                                             state.availableCommentators,
                                         bookTitle: state.book.title,
@@ -252,7 +247,8 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                 ),
               ),
               // Bottom Commentary
-              if (_bottomCommentator != null || _bottomRightCommentator != null) ...[
+              if (_bottomCommentator != null ||
+                  _bottomRightCommentator != null) ...[
                 _ResizableDivider(
                   isVertical: false,
                   onDrag: (delta) {

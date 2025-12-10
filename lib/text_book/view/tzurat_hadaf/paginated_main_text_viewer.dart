@@ -10,6 +10,8 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:otzaria/utils/html_link_handler.dart';
+import 'package:otzaria/text_book/view/tzurat_hadaf/widgets/search_header.dart';
+import 'package:otzaria/text_book/view/tzurat_hadaf/mixins/searchable_list_mixin.dart';
 
 class PaginatedMainTextViewer extends StatefulWidget {
   final TextBookLoaded textBookState;
@@ -28,11 +30,8 @@ class PaginatedMainTextViewer extends StatefulWidget {
       _PaginatedMainTextViewerState();
 }
 
-class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
-  String _searchQuery = '';
-  bool _isSearchFocused = false;
+class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer>
+    with SearchableListMixin {
   bool _userSelectedManually = false;
   List<int> _filteredIndices = [];
 
@@ -43,8 +42,6 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
     // Listen to scroll position changes and update selected index
     widget.textBookState.positionsListener.itemPositions
         .addListener(_onScrollChanged);
-    _searchController.addListener(_onSearchChanged);
-    _searchFocusNode.addListener(_onFocusChanged);
   }
 
   @override
@@ -61,39 +58,27 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
   void dispose() {
     widget.textBookState.positionsListener.itemPositions
         .removeListener(_onScrollChanged);
-    _searchController.dispose();
-    _searchFocusNode.dispose();
     super.dispose();
   }
 
-  void _onSearchChanged() {
-    setState(() {
-      _searchQuery = _searchController.text;
-      _updateFilteredIndices();
-    });
+  @override
+  void updateFilteredItems() {
+    _updateFilteredIndices();
   }
 
   void _updateFilteredIndices() {
-    if (_searchQuery.isEmpty) {
+    if (searchQuery.isEmpty) {
       _filteredIndices =
           List.generate(widget.textBookState.content.length, (i) => i);
     } else {
-      final searchableQuery = utils.removeVolwels(_searchQuery.toLowerCase());
       _filteredIndices = [];
       for (int i = 0; i < widget.textBookState.content.length; i++) {
         final data = widget.textBookState.content[i];
-        final searchableContent = utils.removeVolwels(data.toLowerCase());
-        if (searchableContent.contains(searchableQuery)) {
+        if (matchesSearch(data, searchQuery)) {
           _filteredIndices.add(i);
         }
       }
     }
-  }
-
-  void _onFocusChanged() {
-    setState(() {
-      _isSearchFocused = _searchFocusNode.hasFocus;
-    });
   }
 
   void _onScrollChanged() {
@@ -123,73 +108,11 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
     final theme = Theme.of(context);
     return Column(
       children: [
-        // Search header for main text
-        Container(
-          padding: const EdgeInsets.all(12.0),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withAlpha(128),
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // Title centered
-              Center(
-                child: Text(
-                  widget.textBookState.book.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              // Search at bottom left
-              Positioned(
-                bottom: -12,
-                left: 0,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: _isSearchFocused ? 80 : 50,
-                  height: 24,
-                  child: TextField(
-                    controller: _searchController,
-                    focusNode: _searchFocusNode,
-                    style: const TextStyle(fontSize: 10),
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      hintText: 'חיפוש',
-                      hintStyle: TextStyle(
-                        fontSize: 9,
-                        color: Colors.grey[600],
-                      ),
-                      border: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.grey[400]!),
-                      ),
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 1,
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 2,
-                        vertical: 0,
-                      ),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        SearchHeader(
+          title: widget.textBookState.book.title,
+          searchController: searchController,
+          searchFocusNode: searchFocusNode,
         ),
-        // Content
         Expanded(
           child: ScrollablePositionedList.builder(
             itemScrollController: widget.scrollController,
@@ -253,11 +176,11 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
                 : utils.highLight('$data\n', state.searchText);
 
             // Apply local search highlighting
-            if (_searchQuery.isNotEmpty) {
+            if (searchQuery.isNotEmpty) {
               processedData = state.removeNikud
                   ? utils.highLight(
-                      processedData, utils.removeVolwels(_searchQuery))
-                  : utils.highLight(processedData, _searchQuery);
+                      processedData, utils.removeVolwels(searchQuery))
+                  : utils.highLight(processedData, searchQuery);
             }
 
             processedData = utils.formatTextWithParentheses(processedData);

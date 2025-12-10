@@ -10,6 +10,8 @@ import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/text_book/view/tzurat_hadaf/widgets/search_header.dart';
+import 'package:otzaria/text_book/view/tzurat_hadaf/mixins/searchable_list_mixin.dart';
 
 class CommentaryViewer extends StatefulWidget {
   final String? commentatorName;
@@ -27,14 +29,11 @@ class CommentaryViewer extends StatefulWidget {
   State<CommentaryViewer> createState() => _CommentaryViewerState();
 }
 
-class _CommentaryViewerState extends State<CommentaryViewer> {
+class _CommentaryViewerState extends State<CommentaryViewer>
+    with SearchableListMixin {
   final ItemScrollController _scrollController = ItemScrollController();
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
   List<Link> _relevantLinks = [];
   List<Link> _filteredLinks = [];
-  String _searchQuery = '';
-  bool _isSearchFocused = false;
   final Map<String, List<String>> _loadedBooks =
       {}; // Cache for loaded book contents
 
@@ -42,40 +41,22 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
   void initState() {
     super.initState();
     _loadLinks();
-    _searchController.addListener(_onSearchChanged);
-    _searchFocusNode.addListener(_onFocusChanged);
   }
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
-  }
-
-  void _onFocusChanged() {
-    setState(() {
-      _isSearchFocused = _searchFocusNode.hasFocus;
-    });
-  }
-
-  void _onSearchChanged() async {
-    _searchQuery = _searchController.text;
+  void updateFilteredItems() async {
     await _filterLinks();
-    setState(() {});
   }
 
   Future<void> _filterLinks() async {
-    if (_searchQuery.isEmpty) {
+    if (searchQuery.isEmpty) {
       _filteredLinks = _relevantLinks;
     } else {
-      final searchableQuery = utils.removeVolwels(_searchQuery.toLowerCase());
       final filtered = <Link>[];
 
       for (final link in _relevantLinks) {
         final content = await _getContentForLink(link);
-        final searchableContent = utils.removeVolwels(content.toLowerCase());
-        if (searchableContent.contains(searchableQuery)) {
+        if (matchesSearch(content, searchQuery)) {
           filtered.add(link);
         }
       }
@@ -180,73 +161,12 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
 
     return Column(
       children: [
-        // Search header
-        Container(
-          padding: const EdgeInsets.all(12.0),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withAlpha(128),
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // Title centered
-              Center(
-                child: Text(
-                  widget.commentatorName!,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              // Search at bottom left
-              Positioned(
-                bottom: -12,
-                left: 0,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: _isSearchFocused ? 80 : 50,
-                  height: 24,
-                  child: TextField(
-                    controller: _searchController,
-                    focusNode: _searchFocusNode,
-                    style: const TextStyle(fontSize: 10),
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      hintText: 'חיפוש',
-                      hintStyle: TextStyle(
-                        fontSize: 9,
-                        color: Colors.grey[600],
-                      ),
-                      border: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.grey[400]!),
-                      ),
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 1,
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 2,
-                        vertical: 0,
-                      ),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        SearchHeader(
+          title: widget.commentatorName!,
+          searchController: searchController,
+          searchFocusNode: searchFocusNode,
+          titleFontSize: 12,
         ),
-        // Content
         Expanded(
           child: ScrollablePositionedList.builder(
             itemScrollController: _scrollController,
@@ -282,9 +202,8 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
                       }
 
                       // Highlight search text
-                      if (_searchQuery.isNotEmpty) {
-                        displayText =
-                            utils.highLight(displayText, _searchQuery);
+                      if (searchQuery.isNotEmpty) {
+                        displayText = utils.highLight(displayText, searchQuery);
                       }
 
                       final backgroundColor = () {
