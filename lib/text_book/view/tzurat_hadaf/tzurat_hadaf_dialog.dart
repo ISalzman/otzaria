@@ -20,6 +20,7 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
   String? _leftCommentator;
   String? _rightCommentator;
   String? _bottomCommentator;
+  String? _bottomRightCommentator;
 
   String get _settingsKey => 'tzurat_hadaf_config_${widget.bookTitle}';
 
@@ -38,6 +39,7 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
           _leftCommentator = config['left'];
           _rightCommentator = config['right'];
           _bottomCommentator = config['bottom'];
+          _bottomRightCommentator = config['bottomRight'];
         });
       } catch (e) {
         // Handle error or ignore if JSON is malformed
@@ -50,6 +52,7 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
       'left': _leftCommentator,
       'right': _rightCommentator,
       'bottom': _bottomCommentator,
+      'bottomRight': _bottomRightCommentator,
     };
     final configString = json.encode(config);
     Settings.setValue<String>(_settingsKey, configString);
@@ -69,9 +72,13 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
             _buildCommentatorSelector('מפרש שמאלי', _rightCommentator, (value) {
               setState(() => _rightCommentator = value);
             }),
-            _buildCommentatorSelector('מפרש תחתון', _bottomCommentator,
+            _buildCommentatorSelector('מפרש תחתון ימני', _bottomCommentator,
                 (value) {
               setState(() => _bottomCommentator = value);
+            }),
+            _buildCommentatorSelector('מפרש תחתון שמאלי', _bottomRightCommentator,
+                (value) {
+              setState(() => _bottomRightCommentator = value);
             }),
           ],
         ),
