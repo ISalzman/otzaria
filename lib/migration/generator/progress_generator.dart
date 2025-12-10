@@ -11,10 +11,9 @@ import 'generator.dart';
 class ProgressDatabaseGenerator extends DatabaseGenerator {
   final _progressController = StreamController<GenerationProgress>.broadcast();
   final bool createIndexes;
-  
+
   Stream<GenerationProgress> get progressStream => _progressController.stream;
-  
-  int _totalBooks = 0;
+
   int _processedBooks = 0;
   int _totalLinks = 0;
   int _processedLinks = 0;
@@ -37,9 +36,9 @@ class ProgressDatabaseGenerator extends DatabaseGenerator {
           phase: GenerationPhase.processingBooks,
           currentBook: _currentBookTitle,
           processedBooks: _processedBooks,
-          totalBooks: _totalBooks,
+          totalBooks: totalBooksToProcess,
           message: 'מעבד: $_currentBookTitle',
-          progress: _totalBooks > 0 ? 0.1 + (0.5 * (_processedBooks / _totalBooks)) : 0.1,
+          progress: totalBooksToProcess > 0 ? 0.1 + (0.5 * (_processedBooks / totalBooksToProcess)) : 0.1,
         ));
       }
     });
@@ -74,7 +73,7 @@ class ProgressDatabaseGenerator extends DatabaseGenerator {
           phase: GenerationPhase.finalizing,
           message: 'הושלם ללא אינדקסים - ניתן ליצור אותם מאוחר יותר',
           processedBooks: _processedBooks,
-          totalBooks: _totalBooks,
+          totalBooks: totalBooksToProcess,
           processedLinks: _processedLinks,
           totalLinks: _totalLinks,
           progress: 0.95,
@@ -118,7 +117,7 @@ class ProgressDatabaseGenerator extends DatabaseGenerator {
       phase: GenerationPhase.processingLinks,
       currentBook: bookTitle,
       processedBooks: _processedBooks,
-      totalBooks: _totalBooks,
+      totalBooks: totalBooksToProcess,
       processedLinks: _processedLinks,
       message: 'מעבד קישורים: $bookTitle',
       progress: 0.6 + (0.3 * (_processedLinks / (_totalLinks > 0 ? _totalLinks : 1))),
@@ -129,8 +128,6 @@ class ProgressDatabaseGenerator extends DatabaseGenerator {
     
     return result;
   }
-
-
 
   @override
   Future<void> processLinks() async {
