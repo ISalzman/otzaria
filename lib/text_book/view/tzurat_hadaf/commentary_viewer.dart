@@ -27,21 +27,31 @@ class CommentaryViewer extends StatefulWidget {
 class _CommentaryViewerState extends State<CommentaryViewer> {
   final ItemScrollController _scrollController = ItemScrollController();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   List<Link> _relevantLinks = [];
   List<Link> _filteredLinks = [];
   String _searchQuery = '';
+  bool _isSearchFocused = false;
 
   @override
   void initState() {
     super.initState();
     _loadLinks();
     _searchController.addListener(_onSearchChanged);
+    _searchFocusNode.addListener(_onFocusChanged);
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onFocusChanged() {
+    setState(() {
+      _isSearchFocused = _searchFocusNode.hasFocus;
+    });
   }
 
   void _onSearchChanged() {
@@ -135,13 +145,13 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
       children: [
         // Search header
         Container(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.all(12.0),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withAlpha(128),
+            color: const Color(0xFFFCFCF5), // צבע רקע בהיר
             border: Border(
               bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
+                color: const Color(0xFFE0D8C0),
+                width: 1,
               ),
             ),
           ),
@@ -151,16 +161,19 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
                 child: Text(
                   widget.commentatorName!,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Color(0xFFA88B68), // צבע זהב/חום
                   ),
                 ),
               ),
-              SizedBox(
-                width: 100,
-                height: 28,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: _isSearchFocused ? 140 : 100,
+                height: 32,
                 child: TextField(
                   controller: _searchController,
+                  focusNode: _searchFocusNode,
                   style: const TextStyle(fontSize: 12),
                   decoration: InputDecoration(
                     hintText: 'חפש...',
@@ -171,14 +184,15 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
                     border: UnderlineInputBorder(
                       borderSide: BorderSide(color: Colors.grey[400]!),
                     ),
-                    focusedBorder: UnderlineInputBorder(
+                    focusedBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(
-                        color: Theme.of(context).colorScheme.primary,
+                        color: Color(0xFFA88B68),
+                        width: 2,
                       ),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 2,
+                      horizontal: 6,
+                      vertical: 4,
                     ),
                     isDense: true,
                   ),
@@ -189,75 +203,89 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
         ),
         // Content
         Expanded(
-          child: ScrollablePositionedList.builder(
-            itemScrollController: _scrollController,
-            padding: const EdgeInsets.all(8.0),
-            itemCount: _filteredLinks.length,
-            itemBuilder: (context, index) {
-              final link = _filteredLinks[index];
-              final isSelected = widget.selectedIndex != null &&
-                  link.index1 - 1 == widget.selectedIndex;
+          child: Container(
+            color: const Color(0xFFFCFCF5), // רקע בהיר לטורי הצד
+            child: ScrollablePositionedList.builder(
+              itemScrollController: _scrollController,
+              padding: const EdgeInsets.all(8.0),
+              itemCount: _filteredLinks.length,
+              itemBuilder: (context, index) {
+                final link = _filteredLinks[index];
+                final isSelected = widget.selectedIndex != null &&
+                    link.index1 - 1 == widget.selectedIndex;
 
-              return FutureBuilder<String>(
-                future: link.content,
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const SizedBox(
-                        height: 50,
-                        child: Center(child: CircularProgressIndicator()));
-                  }
-
-                  final content = snapshot.data!;
-                  
-                  // Filter by search query
-                  if (_searchQuery.isNotEmpty) {
-                    final searchableContent = utils.removeVolwels(content.toLowerCase());
-                    final searchableQuery = utils.removeVolwels(_searchQuery.toLowerCase());
-                    if (!searchableContent.contains(searchableQuery)) {
-                      return const SizedBox.shrink(); // Hide non-matching items
+                return FutureBuilder<String>(
+                  future: link.content,
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const SizedBox(
+                          height: 50,
+                          child: Center(child: CircularProgressIndicator()));
                     }
-                  }
 
-                  return BlocBuilder<SettingsBloc, SettingsState>(
-                    builder: (context, settingsState) {
-                      String displayText = content;
-                      if (settingsState.replaceHolyNames) {
-                        displayText = utils.replaceHolyNames(displayText);
+                    final content = snapshot.data!;
+                    
+                    // Filter by search query
+                    if (_searchQuery.isNotEmpty) {
+                      final searchableContent = utils.removeVolwels(content.toLowerCase());
+                      final searchableQuery = utils.removeVolwels(_searchQuery.toLowerCase());
+                      if (!searchableContent.contains(searchableQuery)) {
+                        return const SizedBox.shrink(); // Hide non-matching items
                       }
-                      if (widget.textBookState.removeNikud) {
-                        displayText = utils.removeVolwels(displayText);
-                      }
+                    }
 
-                      // Highlight search text
-                      if (_searchQuery.isNotEmpty) {
-                        displayText = utils.highLight(displayText, _searchQuery);
-                      }
+                    return BlocBuilder<SettingsBloc, SettingsState>(
+                      builder: (context, settingsState) {
+                        String displayText = content;
+                        if (settingsState.replaceHolyNames) {
+                          displayText = utils.replaceHolyNames(displayText);
+                        }
+                        if (widget.textBookState.removeNikud) {
+                          displayText = utils.removeVolwels(displayText);
+                        }
 
-                      return Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.symmetric(vertical: 2.0),
-                        padding: const EdgeInsets.all(8.0),
-                        decoration: isSelected
-                            ? BoxDecoration(
-                                color: Colors.yellow.withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(4),
-                              )
-                            : null,
-                        child: HtmlWidget(
-                          '<div style="text-align: justify; direction: rtl;">$displayText</div>',
-                          textStyle: TextStyle(
-                            fontSize: widget.textBookState.fontSize * 0.8,
-                            fontFamily: settingsState.commentatorsFontFamily,
-                            fontWeight:
-                                isSelected ? FontWeight.bold : FontWeight.normal,
+                        // Highlight search text
+                        if (_searchQuery.isNotEmpty) {
+                          displayText = utils.highLight(displayText, _searchQuery);
+                        }
+
+                        return Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.symmetric(vertical: 3.0),
+                          padding: const EdgeInsets.all(10.0),
+                          decoration: BoxDecoration(
+                            color: isSelected 
+                                ? const Color(0xFFFFF9C4) // צהוב עדין להדגשה
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: const Color(0xFFE0D8C0),
+                              width: 0.5,
+                            ),
+                            boxShadow: isSelected ? [
+                              BoxShadow(
+                                color: Colors.black.withAlpha(25),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ] : null,
                           ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-            },
+                          child: HtmlWidget(
+                            '<div style="text-align: justify; direction: rtl; line-height: 1.5;">$displayText</div>',
+                            textStyle: TextStyle(
+                              fontSize: widget.textBookState.fontSize * 0.8,
+                              fontFamily: settingsState.commentatorsFontFamily,
+                              fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                              color: const Color(0xFF444444),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ),
       ],
