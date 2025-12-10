@@ -115,30 +115,25 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         }
         
         // Show warnings for missing optional components
+        final warnings = <String>[];
         if (!await linksDir.exists()) {
           _logger.warning('Links directory not found in selected folder');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('אזהרה: תיקיית "links" לא נמצאה - לא יהיו קישורים בין ספרים'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 4),
-              ),
-            );
-          }
+          warnings.add('תיקיית "links" לא נמצאה - לא יהיו קישורים בין ספרים');
         }
         
         if (!await metadataFile.exists()) {
           _logger.warning('metadata.json not found in selected folder');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('אזהרה: קובץ metadata.json לא נמצא - לא יהיה מידע נוסף על הספרים'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 4),
-              ),
-            );
-          }
+          warnings.add('קובץ "metadata.json" לא נמצא - לא יהיה מידע נוסף על הספרים');
+        }
+        
+        if (warnings.isNotEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('אזהרות:\n${warnings.join('\n')}'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 6),
+            ),
+          );
         }
         
         // Auto-set DB path to database file in the selected folder
