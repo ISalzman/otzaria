@@ -72,11 +72,11 @@ class _TzuratHadafDialogState extends State<TzuratHadafDialog> {
             _buildCommentatorSelector('מפרש שמאלי', _rightCommentator, (value) {
               setState(() => _rightCommentator = value);
             }),
-            _buildCommentatorSelector('מפרש תחתון', _bottomCommentator,
+            _buildCommentatorSelector('מפרש תחתון ימני', _bottomCommentator,
                 (value) {
               setState(() => _bottomCommentator = value);
             }),
-            _buildCommentatorSelector('מפרש תחתון ימני', _bottomRightCommentator,
+            _buildCommentatorSelector('מפרש תחתון שמאלי', _bottomRightCommentator,
                 (value) {
               setState(() => _bottomRightCommentator = value);
             }),
