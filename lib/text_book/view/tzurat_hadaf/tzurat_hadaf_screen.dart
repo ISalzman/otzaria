@@ -148,81 +148,6 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
         return Scaffold(
           body: Column(
             children: [
-              // Headers Row
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    if (_leftCommentator != null) ...[
-                      SizedBox(
-                        width: _leftWidth,
-                        child: Align(
-                          alignment: Alignment.center,
-                          child: Text(
-                            _leftCommentator ?? '',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Expanded(
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Center(
-                            child: Text(
-                              state.book.title,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                          ),
-                          Positioned(
-                            top: -0,
-                            right: 0,
-                            child: IconButton(
-                              icon: const Icon(Icons.settings, size: 20),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () async {
-                                final result = await showDialog<bool>(
-                                  context: context,
-                                  builder: (dialogContext) => TzuratHadafDialog(
-                                    availableCommentators:
-                                        state.availableCommentators,
-                                    bookTitle: state.book.title,
-                                  ),
-                                );
-                                if (result == true && mounted) {
-                                  _loadConfiguration();
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (_rightCommentator != null) ...[
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: _rightWidth,
-                        child: Align(
-                          alignment: Alignment.center,
-                          child: Text(
-                            _rightCommentator ?? '',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
               // Main Content Row
               Expanded(
                 child: Row(
@@ -256,10 +181,50 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                               color: Theme.of(context).colorScheme.primary),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: PaginatedMainTextViewer(
-                          textBookState: state,
-                          openBookCallback: widget.openBookCallback,
-                          scrollController: state.scrollController,
+                        child: Stack(
+                          children: [
+                            PaginatedMainTextViewer(
+                              textBookState: state,
+                              openBookCallback: widget.openBookCallback,
+                              scrollController: state.scrollController,
+                            ),
+                            // Settings button
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withAlpha(230),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withAlpha(25),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: IconButton(
+                                  icon: const Icon(Icons.settings, size: 18),
+                                  padding: const EdgeInsets.all(6),
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () async {
+                                    final result = await showDialog<bool>(
+                                      context: context,
+                                      builder: (dialogContext) => TzuratHadafDialog(
+                                        availableCommentators:
+                                            state.availableCommentators,
+                                        bookTitle: state.book.title,
+                                      ),
+                                    );
+                                    if (result == true && mounted) {
+                                      _loadConfiguration();
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
