@@ -11,7 +11,6 @@ import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/view/tzurat_hadaf/widgets/search_header.dart';
-import 'package:otzaria/text_book/view/tzurat_hadaf/mixins/searchable_list_mixin.dart';
 
 class CommentaryViewer extends StatefulWidget {
   final String? commentatorName;
@@ -29,11 +28,9 @@ class CommentaryViewer extends StatefulWidget {
   State<CommentaryViewer> createState() => _CommentaryViewerState();
 }
 
-class _CommentaryViewerState extends State<CommentaryViewer>
-    with SearchableListMixin {
+class _CommentaryViewerState extends State<CommentaryViewer> {
   final ItemScrollController _scrollController = ItemScrollController();
   List<Link> _relevantLinks = [];
-  List<Link> _filteredLinks = [];
   final Map<String, List<String>> _loadedBooks =
       {}; // Cache for loaded book contents
 
@@ -41,28 +38,6 @@ class _CommentaryViewerState extends State<CommentaryViewer>
   void initState() {
     super.initState();
     _loadLinks();
-  }
-
-  @override
-  void updateFilteredItems() async {
-    await _filterLinks();
-  }
-
-  Future<void> _filterLinks() async {
-    if (searchQuery.isEmpty) {
-      _filteredLinks = _relevantLinks;
-    } else {
-      final filtered = <Link>[];
-
-      for (final link in _relevantLinks) {
-        final content = await _getContentForLink(link);
-        if (matchesSearch(content, searchQuery)) {
-          filtered.add(link);
-        }
-      }
-
-      _filteredLinks = filtered;
-    }
   }
 
   Future<String> _getContentForLink(Link link) async {
@@ -101,7 +76,6 @@ class _CommentaryViewerState extends State<CommentaryViewer>
     if (widget.commentatorName == null) {
       setState(() {
         _relevantLinks = [];
-        _filteredLinks = [];
       });
       return;
     }
@@ -116,17 +90,16 @@ class _CommentaryViewerState extends State<CommentaryViewer>
 
     setState(() {
       _relevantLinks = links;
-      _filterLinks();
     });
 
     _scrollToSelected();
   }
 
   void _scrollToSelected() {
-    if (widget.selectedIndex == null || _filteredLinks.isEmpty) return;
+    if (widget.selectedIndex == null || _relevantLinks.isEmpty) return;
 
     // Find first link that matches the selected index
-    final targetIndex = _filteredLinks.indexWhere(
+    final targetIndex = _relevantLinks.indexWhere(
       (link) => link.index1 - 1 == widget.selectedIndex,
     );
 
@@ -163,17 +136,15 @@ class _CommentaryViewerState extends State<CommentaryViewer>
       children: [
         SearchHeader(
           title: widget.commentatorName!,
-          searchController: searchController,
-          searchFocusNode: searchFocusNode,
-          titleFontSize: 12,
+          titleFontSize: 14,
         ),
         Expanded(
           child: ScrollablePositionedList.builder(
             itemScrollController: _scrollController,
             padding: const EdgeInsets.all(8.0),
-            itemCount: _filteredLinks.length,
+            itemCount: _relevantLinks.length,
             itemBuilder: (context, index) {
-              final link = _filteredLinks[index];
+              final link = _relevantLinks[index];
               final lineIndex = link.index1 - 1;
               final isSelected = widget.selectedIndex != null &&
                   lineIndex == widget.selectedIndex;
@@ -199,11 +170,6 @@ class _CommentaryViewerState extends State<CommentaryViewer>
                       }
                       if (widget.textBookState.removeNikud) {
                         displayText = utils.removeVolwels(displayText);
-                      }
-
-                      // Highlight search text
-                      if (searchQuery.isNotEmpty) {
-                        displayText = utils.highLight(displayText, searchQuery);
                       }
 
                       final backgroundColor = () {

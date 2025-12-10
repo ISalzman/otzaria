@@ -11,7 +11,6 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:otzaria/utils/html_link_handler.dart';
 import 'package:otzaria/text_book/view/tzurat_hadaf/widgets/search_header.dart';
-import 'package:otzaria/text_book/view/tzurat_hadaf/mixins/searchable_list_mixin.dart';
 
 class PaginatedMainTextViewer extends StatefulWidget {
   final TextBookLoaded textBookState;
@@ -30,28 +29,15 @@ class PaginatedMainTextViewer extends StatefulWidget {
       _PaginatedMainTextViewerState();
 }
 
-class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer>
-    with SearchableListMixin {
+class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
   bool _userSelectedManually = false;
-  List<int> _filteredIndices = [];
 
   @override
   void initState() {
     super.initState();
-    _updateFilteredIndices();
     // Listen to scroll position changes and update selected index
     widget.textBookState.positionsListener.itemPositions
         .addListener(_onScrollChanged);
-  }
-
-  @override
-  void didUpdateWidget(PaginatedMainTextViewer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Update filtered indices if content changed
-    if (oldWidget.textBookState.content.length !=
-        widget.textBookState.content.length) {
-      _updateFilteredIndices();
-    }
   }
 
   @override
@@ -59,26 +45,6 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer>
     widget.textBookState.positionsListener.itemPositions
         .removeListener(_onScrollChanged);
     super.dispose();
-  }
-
-  @override
-  void updateFilteredItems() {
-    _updateFilteredIndices();
-  }
-
-  void _updateFilteredIndices() {
-    if (searchQuery.isEmpty) {
-      _filteredIndices =
-          List.generate(widget.textBookState.content.length, (i) => i);
-    } else {
-      _filteredIndices = [];
-      for (int i = 0; i < widget.textBookState.content.length; i++) {
-        final data = widget.textBookState.content[i];
-        if (matchesSearch(data, searchQuery)) {
-          _filteredIndices.add(i);
-        }
-      }
-    }
   }
 
   void _onScrollChanged() {
@@ -110,16 +76,13 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer>
       children: [
         SearchHeader(
           title: widget.textBookState.book.title,
-          searchController: searchController,
-          searchFocusNode: searchFocusNode,
         ),
         Expanded(
           child: ScrollablePositionedList.builder(
             itemScrollController: widget.scrollController,
             itemPositionsListener: widget.textBookState.positionsListener,
-            itemCount: _filteredIndices.length,
-            itemBuilder: (context, index) =>
-                _buildLine(_filteredIndices[index], theme),
+            itemCount: widget.textBookState.content.length,
+            itemBuilder: (context, index) => _buildLine(index, theme),
           ),
         ),
       ],
@@ -169,19 +132,11 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer>
               data = utils.removeVolwels(data);
             }
 
-            // Highlight search text (both global and local)
+            // Highlight search text
             String processedData = state.removeNikud
                 ? utils.highLight(
                     utils.removeVolwels('$data\n'), state.searchText)
                 : utils.highLight('$data\n', state.searchText);
-
-            // Apply local search highlighting
-            if (searchQuery.isNotEmpty) {
-              processedData = state.removeNikud
-                  ? utils.highLight(
-                      processedData, utils.removeVolwels(searchQuery))
-                  : utils.highLight(processedData, searchQuery);
-            }
 
             processedData = utils.formatTextWithParentheses(processedData);
 
