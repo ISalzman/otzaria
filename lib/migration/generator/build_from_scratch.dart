@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:logging/logging.dart';
 
-import '../dao/drift/database.dart';
+import '../dao/daos/database.dart';
 import '../dao/repository/seforim_repository.dart';
 import 'generator.dart';
 
