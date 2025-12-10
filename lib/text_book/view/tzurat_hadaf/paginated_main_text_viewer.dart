@@ -116,7 +116,7 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
               ),
               // Search at bottom left
               Positioned(
-                bottom: -4,
+                bottom: -6,
                 left: 0,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
