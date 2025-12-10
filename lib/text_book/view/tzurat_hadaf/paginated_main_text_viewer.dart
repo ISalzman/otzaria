@@ -177,7 +177,7 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
         return theme.colorScheme.secondaryContainer.withAlpha(100);
       }
       if (isSelected) {
-        return theme.colorScheme.primaryContainer.withAlpha(50);
+        return theme.colorScheme.primaryContainer.withAlpha(30);
       }
       return null;
     }();

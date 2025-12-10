@@ -260,7 +260,7 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
                         padding: const EdgeInsets.all(8.0),
                         decoration: isSelected
                             ? BoxDecoration(
-                                color: Colors.yellow.withValues(alpha: 0.4),
+                                color: Colors.blue.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(4),
                               )
                             : null,
