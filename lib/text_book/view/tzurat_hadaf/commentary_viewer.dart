@@ -147,11 +147,11 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
         Container(
           padding: const EdgeInsets.all(12.0),
           decoration: BoxDecoration(
-            color: const Color(0xFFFCFCF5), // צבע רקע בהיר
+            color: Theme.of(context).colorScheme.surface.withAlpha(128),
             border: Border(
               bottom: BorderSide(
-                color: const Color(0xFFE0D8C0),
-                width: 1,
+                color: Theme.of(context).dividerColor,
+                width: 0.5,
               ),
             ),
           ),
@@ -164,7 +164,6 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
-                    color: Color(0xFFA88B68), // צבע זהב/חום
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -191,9 +190,9 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
                       border: UnderlineInputBorder(
                         borderSide: BorderSide(color: Colors.grey[400]!),
                       ),
-                      focusedBorder: const UnderlineInputBorder(
+                      focusedBorder: UnderlineInputBorder(
                         borderSide: BorderSide(
-                          color: Color(0xFFA88B68),
+                          color: Theme.of(context).colorScheme.primary,
                           width: 1,
                         ),
                       ),
@@ -211,89 +210,75 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
         ),
         // Content
         Expanded(
-          child: Container(
-            color: const Color(0xFFFCFCF5), // רקע בהיר לטורי הצד
-            child: ScrollablePositionedList.builder(
-              itemScrollController: _scrollController,
-              padding: const EdgeInsets.all(8.0),
-              itemCount: _filteredLinks.length,
-              itemBuilder: (context, index) {
-                final link = _filteredLinks[index];
-                final isSelected = widget.selectedIndex != null &&
-                    link.index1 - 1 == widget.selectedIndex;
+          child: ScrollablePositionedList.builder(
+            itemScrollController: _scrollController,
+            padding: const EdgeInsets.all(8.0),
+            itemCount: _filteredLinks.length,
+            itemBuilder: (context, index) {
+              final link = _filteredLinks[index];
+              final isSelected = widget.selectedIndex != null &&
+                  link.index1 - 1 == widget.selectedIndex;
 
-                return FutureBuilder<String>(
-                  future: link.content,
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const SizedBox(
-                          height: 50,
-                          child: Center(child: CircularProgressIndicator()));
+              return FutureBuilder<String>(
+                future: link.content,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const SizedBox(
+                        height: 50,
+                        child: Center(child: CircularProgressIndicator()));
+                  }
+
+                  final content = snapshot.data!;
+                  
+                  // Filter by search query
+                  if (_searchQuery.isNotEmpty) {
+                    final searchableContent = utils.removeVolwels(content.toLowerCase());
+                    final searchableQuery = utils.removeVolwels(_searchQuery.toLowerCase());
+                    if (!searchableContent.contains(searchableQuery)) {
+                      return const SizedBox.shrink(); // Hide non-matching items
                     }
+                  }
 
-                    final content = snapshot.data!;
-                    
-                    // Filter by search query
-                    if (_searchQuery.isNotEmpty) {
-                      final searchableContent = utils.removeVolwels(content.toLowerCase());
-                      final searchableQuery = utils.removeVolwels(_searchQuery.toLowerCase());
-                      if (!searchableContent.contains(searchableQuery)) {
-                        return const SizedBox.shrink(); // Hide non-matching items
+                  return BlocBuilder<SettingsBloc, SettingsState>(
+                    builder: (context, settingsState) {
+                      String displayText = content;
+                      if (settingsState.replaceHolyNames) {
+                        displayText = utils.replaceHolyNames(displayText);
                       }
-                    }
+                      if (widget.textBookState.removeNikud) {
+                        displayText = utils.removeVolwels(displayText);
+                      }
 
-                    return BlocBuilder<SettingsBloc, SettingsState>(
-                      builder: (context, settingsState) {
-                        String displayText = content;
-                        if (settingsState.replaceHolyNames) {
-                          displayText = utils.replaceHolyNames(displayText);
-                        }
-                        if (widget.textBookState.removeNikud) {
-                          displayText = utils.removeVolwels(displayText);
-                        }
+                      // Highlight search text
+                      if (_searchQuery.isNotEmpty) {
+                        displayText = utils.highLight(displayText, _searchQuery);
+                      }
 
-                        // Highlight search text
-                        if (_searchQuery.isNotEmpty) {
-                          displayText = utils.highLight(displayText, _searchQuery);
-                        }
-
-                        return Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.symmetric(vertical: 3.0),
-                          padding: const EdgeInsets.all(10.0),
-                          decoration: BoxDecoration(
-                            color: isSelected 
-                                ? const Color(0xFFFFF9C4) // צהוב עדין להדגשה
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: const Color(0xFFE0D8C0),
-                              width: 0.5,
-                            ),
-                            boxShadow: isSelected ? [
-                              BoxShadow(
-                                color: Colors.black.withAlpha(25),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ] : null,
+                      return Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.symmetric(vertical: 2.0),
+                        padding: const EdgeInsets.all(8.0),
+                        decoration: isSelected
+                            ? BoxDecoration(
+                                color: Colors.yellow.withValues(alpha: 0.4),
+                                borderRadius: BorderRadius.circular(4),
+                              )
+                            : null,
+                        child: HtmlWidget(
+                          '<div style="text-align: justify; direction: rtl;">$displayText</div>',
+                          textStyle: TextStyle(
+                            fontSize: widget.textBookState.fontSize * 0.8,
+                            fontFamily: settingsState.commentatorsFontFamily,
+                            fontWeight:
+                                isSelected ? FontWeight.bold : FontWeight.normal,
                           ),
-                          child: HtmlWidget(
-                            '<div style="text-align: justify; direction: rtl; line-height: 1.5;">$displayText</div>',
-                            textStyle: TextStyle(
-                              fontSize: widget.textBookState.fontSize * 0.8,
-                              fontFamily: settingsState.commentatorsFontFamily,
-                              fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
-                              color: const Color(0xFF444444),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
           ),
         ),
       ],

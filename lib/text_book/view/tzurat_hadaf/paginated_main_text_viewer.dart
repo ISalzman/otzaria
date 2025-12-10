@@ -86,11 +86,11 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
         Container(
           padding: const EdgeInsets.all(12.0),
           decoration: BoxDecoration(
-            color: const Color(0xFFFDFAF2), // צבע דף קרם
+            color: Theme.of(context).colorScheme.surface.withAlpha(128),
             border: Border(
               bottom: BorderSide(
-                color: const Color(0xFFE0D8C0),
-                width: 1,
+                color: Theme.of(context).dividerColor,
+                width: 0.5,
               ),
             ),
           ),
@@ -103,7 +103,6 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: Color(0xFFA88B68), // צבע זהב/חום
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -130,9 +129,9 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
                       border: UnderlineInputBorder(
                         borderSide: BorderSide(color: Colors.grey[400]!),
                       ),
-                      focusedBorder: const UnderlineInputBorder(
+                      focusedBorder: UnderlineInputBorder(
                         borderSide: BorderSide(
-                          color: Color(0xFFA88B68),
+                          color: Theme.of(context).colorScheme.primary,
                           width: 1,
                         ),
                       ),
@@ -226,17 +225,12 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
 
             return Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFFDFAF2), // צבע דף קרם
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: const Color(0xFFE0D8C0), // גבול עדין
-                  width: 0.5,
-                ),
               ),
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.all(8.0),
               child: HtmlWidget(
                 '''
-                <div style="text-align: justify; direction: rtl; line-height: 1.6;">
+                <div style="text-align: justify; direction: rtl;">
                   $processedData
                 </div>
                 ''',
@@ -244,8 +238,7 @@ class _PaginatedMainTextViewerState extends State<PaginatedMainTextViewer> {
                 textStyle: TextStyle(
                   fontSize: state.fontSize,
                   fontFamily: settingsState.fontFamily,
-                  height: 1.6,
-                  color: const Color(0xFF2C2C2C), // צבע טקסט כהה
+                  height: 1.5,
                 ),
                 onTapUrl: (url) async {
                   return await HtmlLinkHandler.handleLink(
