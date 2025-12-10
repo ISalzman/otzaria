@@ -155,48 +155,56 @@ class _CommentaryViewerState extends State<CommentaryViewer> {
               ),
             ),
           ),
-          child: Row(
+          child: Column(
             children: [
-              Expanded(
-                child: Text(
-                  widget.commentatorName!,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Color(0xFFA88B68), // צבע זהב/חום
-                  ),
+              // Title centered
+              Text(
+                widget.commentatorName!,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: Color(0xFFA88B68), // צבע זהב/חום
                 ),
+                textAlign: TextAlign.center,
               ),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: _isSearchFocused ? 100 : 60,
-                height: 28,
-                child: TextField(
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
-                  style: const TextStyle(fontSize: 11),
-                  decoration: InputDecoration(
-                    hintText: 'חיפוש',
-                    hintStyle: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey[600],
-                    ),
-                    border: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.grey[400]!),
-                    ),
-                    focusedBorder: const UnderlineInputBorder(
-                      borderSide: BorderSide(
-                        color: Color(0xFFA88B68),
-                        width: 1.5,
+              const SizedBox(height: 8),
+              // Search at bottom
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: _isSearchFocused ? 100 : 60,
+                    height: 28,
+                    child: TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      style: const TextStyle(fontSize: 11),
+                      textAlign: TextAlign.center,
+                      decoration: InputDecoration(
+                        hintText: 'חיפוש',
+                        hintStyle: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                        ),
+                        border: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.grey[400]!),
+                        ),
+                        focusedBorder: const UnderlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Color(0xFFA88B68),
+                            width: 1.5,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        isDense: true,
                       ),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 2,
-                    ),
-                    isDense: true,
                   ),
-                ),
+                ],
               ),
             ],
           ),
