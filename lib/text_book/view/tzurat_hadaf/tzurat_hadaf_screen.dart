@@ -23,6 +23,7 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
   String? _leftCommentator;
   String? _rightCommentator;
   String? _bottomCommentator;
+  String? _bottomRightCommentator;
 
   double _leftWidth = 200.0;
   double _rightWidth = 200.0;
@@ -95,6 +96,7 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
       'right': null,
       'left': null,
       'bottom': null,
+      'bottomRight': null,
     };
   }
 
@@ -113,6 +115,7 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
             _leftCommentator = config['left'];
             _rightCommentator = config['right'];
             _bottomCommentator = config['bottom'];
+            _bottomRightCommentator = config['bottomRight'];
           });
         }
       } catch (e) {
@@ -126,6 +129,7 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
           _leftCommentator = defaults['left'];
           _rightCommentator = defaults['right'];
           _bottomCommentator = defaults['bottom'];
+          _bottomRightCommentator = defaults['bottomRight'];
         });
       }
     }
@@ -283,7 +287,7 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                 ),
               ),
               // Bottom Commentary
-              if (_bottomCommentator != null) ...[
+              if (_bottomCommentator != null || _bottomRightCommentator != null) ...[
                 _ResizableDivider(
                   isVertical: false,
                   onDrag: (delta) {
@@ -295,11 +299,38 @@ class _TzuratHadafScreenState extends State<TzuratHadafScreen> {
                 ),
                 SizedBox(
                   height: _bottomHeight,
-                  child: CommentaryViewer(
-                    commentatorName: _bottomCommentator,
-                    selectedIndex: state.selectedIndex,
-                    textBookState: state,
-                  ),
+                  child: _bottomRightCommentator != null
+                      ? Row(
+                          children: [
+                            if (_bottomCommentator != null) ...[
+                              Expanded(
+                                child: CommentaryViewer(
+                                  commentatorName: _bottomCommentator,
+                                  selectedIndex: state.selectedIndex,
+                                  textBookState: state,
+                                ),
+                              ),
+                              _ResizableDivider(
+                                isVertical: true,
+                                onDrag: (delta) {
+                                  // אפשר להוסיף כאן שליטה ברוחב אם רוצים
+                                },
+                              ),
+                            ],
+                            Expanded(
+                              child: CommentaryViewer(
+                                commentatorName: _bottomRightCommentator,
+                                selectedIndex: state.selectedIndex,
+                                textBookState: state,
+                              ),
+                            ),
+                          ],
+                        )
+                      : CommentaryViewer(
+                          commentatorName: _bottomCommentator,
+                          selectedIndex: state.selectedIndex,
+                          textBookState: state,
+                        ),
                 ),
               ],
             ],
