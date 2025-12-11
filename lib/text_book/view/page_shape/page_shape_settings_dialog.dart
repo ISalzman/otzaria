@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/utils/text_manipulation.dart' as utils;
 
 /// דיאלוג הגדרות צורת הדף - בחירת מפרשים לכל מיקום
 class PageShapeSettingsDialog extends StatefulWidget {
@@ -30,11 +33,14 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   String? _rightCommentator;
   String? _bottomCommentator;
   String? _bottomRightCommentator;
+  List<CommentatorGroup> _groups = [];
+  bool _isLoadingGroups = true;
 
   @override
   void initState() {
     super.initState();
     _loadCurrentSettings();
+    _loadCommentatorGroups();
   }
 
   void _loadCurrentSettings() {
@@ -45,6 +51,60 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _bottomCommentator = widget.currentBottom;
       _bottomRightCommentator = widget.currentBottomRight;
     });
+  }
+
+  Future<void> _loadCommentatorGroups() async {
+    // חלוקת המפרשים לפי דורות
+    final eras = await utils.splitByEra(widget.availableCommentators);
+
+    // יצירת קבוצות מפרשים לפי דורות
+    final known = <String>{
+      ...?eras['תורה שבכתב'],
+      ...?eras['חז"ל'],
+      ...?eras['ראשונים'],
+      ...?eras['אחרונים'],
+      ...?eras['מחברי זמננו'],
+    };
+
+    final others = (eras['מפרשים נוספים'] ?? [])
+        .toSet()
+        .union(widget.availableCommentators
+            .where((c) => !known.contains(c))
+            .toList()
+            .toSet())
+        .toList();
+
+    if (mounted) {
+      setState(() {
+        _groups = [
+          CommentatorGroup(
+            title: 'תורה שבכתב',
+            commentators: eras['תורה שבכתב'] ?? const [],
+          ),
+          CommentatorGroup(
+            title: 'חז"ל',
+            commentators: eras['חז"ל'] ?? const [],
+          ),
+          CommentatorGroup(
+            title: 'ראשונים',
+            commentators: eras['ראשונים'] ?? const [],
+          ),
+          CommentatorGroup(
+            title: 'אחרונים',
+            commentators: eras['אחרונים'] ?? const [],
+          ),
+          CommentatorGroup(
+            title: 'מחברי זמננו',
+            commentators: eras['מחברי זמננו'] ?? const [],
+          ),
+          CommentatorGroup(
+            title: 'שאר מפרשים',
+            commentators: others,
+          ),
+        ];
+        _isLoadingGroups = false;
+      });
+    }
   }
 
   Future<void> _saveSettings() async {
@@ -132,27 +192,249 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       children: [
         Text(label, style: const TextStyle(fontSize: 14)),
         const SizedBox(height: 4),
-        DropdownButtonFormField<String?>(
-          value: value,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-          items: [
-            const DropdownMenuItem<String?>(
-              value: null,
-              child: Text('ללא מפרש'),
+        InkWell(
+          onTap: () => _showCommentatorPicker(value, onChanged),
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              suffixIcon: Icon(Icons.arrow_drop_down),
             ),
-            ...widget.availableCommentators.map(
-              (commentator) => DropdownMenuItem<String?>(
-                value: commentator,
-                child: Text(commentator),
+            child: Text(
+              value ?? 'ללא מפרש',
+              style: TextStyle(
+                color: value == null
+                    ? Theme.of(context).hintColor
+                    : Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showCommentatorPicker(
+    String? currentValue,
+    ValueChanged<String?> onChanged,
+  ) async {
+    if (_isLoadingGroups) {
+      return;
+    }
+
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (context) => _CommentatorPickerDialog(
+        groups: _groups,
+        currentValue: currentValue,
+        availableCommentators: widget.availableCommentators,
+      ),
+    );
+
+    if (result != null) {
+      onChanged(result == '__NONE__' ? null : result);
+    }
+  }
+}
+
+/// דיאלוג בחירת מפרש עם חיפוש וקיבוץ
+class _CommentatorPickerDialog extends StatefulWidget {
+  final List<CommentatorGroup> groups;
+  final String? currentValue;
+  final List<String> availableCommentators;
+
+  const _CommentatorPickerDialog({
+    required this.groups,
+    required this.currentValue,
+    required this.availableCommentators,
+  });
+
+  @override
+  State<_CommentatorPickerDialog> createState() =>
+      _CommentatorPickerDialogState();
+}
+
+class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  List<String> _filteredCommentators = [];
+  List<CommentatorGroup> _filteredGroups = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _updateFilteredList();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _updateFilteredList() {
+    final query = _searchController.text.trim();
+
+    if (query.isEmpty) {
+      // אין חיפוש - מציג את כל הקבוצות
+      setState(() {
+        _filteredGroups = widget.groups
+            .where((group) => group.commentators.isNotEmpty)
+            .toList();
+        _filteredCommentators = [];
+      });
+    } else {
+      // יש חיפוש - מסנן את המפרשים
+      final filtered =
+          widget.availableCommentators.where((c) => c.contains(query)).toList();
+      setState(() {
+        _filteredCommentators = filtered;
+        _filteredGroups = [];
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: SizedBox(
+        width: 500,
+        height: 600,
+        child: Column(
+          children: [
+            // כותרת
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'בחר מפרש',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            const Divider(height: 1),
+
+            // שדה חיפוש
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: "חיפוש מפרש...",
+                  prefixIcon: const Icon(FluentIcons.search_24_regular),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            _updateFilteredList();
+                          },
+                          icon: const Icon(FluentIcons.dismiss_24_regular),
+                        )
+                      : null,
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                ),
+                onChanged: (_) => _updateFilteredList(),
+              ),
+            ),
+
+            // רשימת המפרשים
+            Expanded(
+              child: _searchController.text.isEmpty
+                  ? _buildGroupedList()
+                  : _buildFilteredList(),
+            ),
+
+            // כפתורים
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('ביטול'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop('__NONE__'),
+                    child: const Text('ללא מפרש'),
+                  ),
+                ],
               ),
             ),
           ],
-          onChanged: onChanged,
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildGroupedList() {
+    return ListView.builder(
+      itemCount: _filteredGroups.length,
+      itemBuilder: (context, groupIndex) {
+        final group = _filteredGroups[groupIndex];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // כותרת קבוצה
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+              child: Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text(
+                      group.title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: Divider()),
+                ],
+              ),
+            ),
+            // מפרשי הקבוצה
+            ...group.commentators
+                .map((commentator) => _buildCommentatorTile(commentator)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildFilteredList() {
+    if (_filteredCommentators.isEmpty) {
+      return const Center(
+        child: Text('לא נמצאו מפרשים'),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _filteredCommentators.length,
+      itemBuilder: (context, index) {
+        return _buildCommentatorTile(_filteredCommentators[index]);
+      },
+    );
+  }
+
+  Widget _buildCommentatorTile(String commentator) {
+    final isSelected = commentator == widget.currentValue;
+
+    return ListTile(
+      title: Text(commentator),
+      selected: isSelected,
+      trailing: isSelected ? const Icon(Icons.check) : null,
+      onTap: () => Navigator.of(context).pop(commentator),
     );
   }
 }
