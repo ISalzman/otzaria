@@ -352,12 +352,17 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       final bookContent = await book.text;
       final lines = bookContent.split('\n');
 
+      if (!mounted) return;
+
       // טעינת הקישורים הרלוונטיים למפרש זה
       final state = context.read<TextBookBloc>().state;
       if (state is TextBookLoaded) {
+        // סינון קישורים לפי שם המפרש ולפי סוג הקישור (commentary/targum)
         _relevantLinks = state.links.where((link) {
           final linkTitle = utils.getTitleFromPath(link.path2);
-          return linkTitle == widget.commentatorName;
+          return linkTitle == widget.commentatorName &&
+              (link.connectionType == 'commentary' ||
+                  link.connectionType == 'targum');
         }).toList();
       }
 
@@ -365,6 +370,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         setState(() {
           _content = lines;
           _isLoading = false;
+          _lastSyncedIndex = null; // איפוס לסנכרון ראשוני
         });
 
         // סנכרון ראשוני
@@ -415,8 +421,13 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     // חישוב האינדקס היעד במפרש
     final targetIndex = CommentarySyncHelper.getCommentaryTargetIndex(bestLink);
 
-    // אם אין קישור או שכבר סונכרנו לאינדקס הזה - לא צריך לגלול
-    if (targetIndex == null || targetIndex == _lastSyncedIndex) {
+    // אם אין קישור - לא מזיזים את המפרש
+    if (targetIndex == null) {
+      return;
+    }
+
+    // אם כבר סונכרנו לאינדקס הזה - לא צריך לגלול שוב
+    if (targetIndex == _lastSyncedIndex) {
       return;
     }
 
@@ -426,11 +437,11 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         _scrollController.scrollTo(
           index: targetIndex,
           duration: const Duration(milliseconds: 300),
-          alignment: 0.1, // קצת מתחת לראש החלון
+          alignment: 0.0, // בראש החלון
         );
         _lastSyncedIndex = targetIndex;
       } catch (e) {
-        debugPrint('Error scrolling commentary: $e');
+        debugPrint('Error scrolling commentary ${widget.commentatorName}: $e');
       }
     }
   }
