@@ -148,6 +148,90 @@ class _AboutScreenState extends State<AboutScreen> {
     );
   }
 
+  Widget _buildBookEditorsList() {
+    final bookEditors = [
+      {
+        'name': 'יעקב כהן',
+        'url': 'https://github.com/example1',
+      },
+      {
+        'name': 'דוד לוי',
+        'url': 'https://github.com/example2',
+      },
+      {
+        'name': 'משה אברהם',
+        'url': 'https://github.com/example3',
+      },
+      {
+        'name': 'שמואל יצחק',
+        'url': 'https://github.com/example4',
+      },
+      {
+        'name': 'אליהו רפאל',
+        'url': 'https://github.com/example5',
+      },
+    ];
+
+    if (bookEditors.isEmpty) {
+      return const Text(
+        'רשימה זו תתמלא בהמשך',
+        style: TextStyle(
+          fontSize: 14,
+          fontStyle: FontStyle.italic,
+          color: Colors.grey,
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // במסכים קטנים, הצג בעמודה
+        if (constraints.maxWidth < 500) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: bookEditors
+                .map((editor) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          const Icon(FluentIcons.book_24_regular,
+                              size: 16, color: Colors.grey),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildContributor(
+                                editor['name']!, editor['url']!),
+                          ),
+                        ],
+                      ),
+                    ))
+                .toList(),
+          );
+        }
+        // במסכים רחבים, השתמש ב-Wrap
+        return Wrap(
+          spacing: 40,
+          runSpacing: 12,
+          children: bookEditors
+              .map((editor) => SizedBox(
+                    width: 220,
+                    child: Row(
+                      children: [
+                        const Icon(FluentIcons.book_24_regular,
+                            size: 16, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildContributor(
+                              editor['name']!, editor['url']!),
+                        ),
+                      ],
+                    ),
+                  ))
+              .toList(),
+        );
+      },
+    );
+  }
+
   Widget _buildTechnicalDetails() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -764,6 +848,18 @@ class _AboutScreenState extends State<AboutScreen> {
                 _buildDevelopersList(),
                 const SizedBox(height: 32),
 
+                // רשימת מהדירי ספרים
+                const Text(
+                  'מהדירי ספרים',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildBookEditorsList(),
+                const SizedBox(height: 32),
+
                 // פרטים טכניים
                 const Text(
                   'פרטים טכניים',
@@ -918,6 +1014,15 @@ class _AboutScreenState extends State<AboutScreen> {
           ),
           const SizedBox(height: 12),
           _buildDevelopersList(),
+          const SizedBox(height: 24),
+
+          // מהדירי ספרים
+          const Text(
+            'מהדירי ספרים',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          _buildBookEditorsList(),
           const SizedBox(height: 24),
 
           // פרטים טכניים

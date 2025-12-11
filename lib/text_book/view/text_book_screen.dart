@@ -1033,13 +1033,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // Page Shape View Button
       ActionButtonData(
         widget: IconButton(
-          icon: const Icon(FluentIcons.book_open_24_regular),
+          icon: Icon(state.showPageShapeView
+              ? FluentIcons.book_open_24_filled
+              : FluentIcons.book_open_24_regular),
           tooltip: 'צורת הדף',
           onPressed: () => context.read<TextBookBloc>().add(
                 TogglePageShapeView(!state.showPageShapeView),
               ),
         ),
-        icon: FluentIcons.book_open_24_regular,
+        icon: state.showPageShapeView
+            ? FluentIcons.book_open_24_filled
+            : FluentIcons.book_open_24_regular,
         tooltip: 'צורת הדף',
         onPressed: () => context.read<TextBookBloc>().add(
               TogglePageShapeView(!state.showPageShapeView),
