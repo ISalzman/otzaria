@@ -276,10 +276,14 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           _contentCache[keyStr] = link.content;
         }
 
-        // עדכון מצב ההרחבה עם setState בטוח
+        // עדכון מצב ההרחבה עם setState בטוח - דוחה עד אחרי הבנייה
         if (_expanded[keyStr] != isExpanded) {
-          setState(() {
-            _expanded[keyStr] = isExpanded;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _expanded[keyStr] = isExpanded;
+              });
+            }
           });
         }
       },
