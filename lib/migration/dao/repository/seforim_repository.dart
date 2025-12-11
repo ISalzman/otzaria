@@ -11,6 +11,7 @@ import '../../core/models/pub_place.dart';
 import '../../core/models/search_result.dart';
 import '../../core/models/source.dart';
 import '../../core/models/toc_entry.dart';
+import '../../core/models/toc_text.dart';
 import '../../core/models/topic.dart';
 import '../daos/connection_type_dao.dart';
 import '../daos/database.dart';
@@ -61,10 +62,10 @@ class SeforimRepository {
   /// Maps a line to the TOC entry it belongs to. Upserts on conflict.
   Future<void> upsertLineToc(int lineId, int tocEntryId) async {
     final db = await _database.database;
-    await db.rawInsert('''
-      INSERT OR REPLACE INTO line_toc (lineId, tocEntryId)
-      VALUES (?, ?)
-    ''', [lineId, tocEntryId]);
+    await db.rawInsert(
+      'INSERT OR REPLACE INTO line_toc (lineId, tocEntryId) VALUES (?, ?)',
+      [lineId, tocEntryId]
+    );
   }
 
   /// Bulk upsert line→toc mappings
@@ -73,10 +74,10 @@ class SeforimRepository {
     final db = await _database.database;
     final batch = db.batch();
     for (final pair in pairs) {
-      batch.rawInsert('''
-        INSERT OR REPLACE INTO line_toc (lineId, tocEntryId)
-        VALUES (?, ?)
-      ''', [pair.lineId, pair.tocId]);
+      batch.rawInsert(
+        'INSERT OR REPLACE INTO line_toc (lineId, tocEntryId) VALUES (?, ?)',
+        [pair.lineId, pair.tocId]
+      );
     }
     await batch.commit(noResult: true);
   }
@@ -84,10 +85,12 @@ class SeforimRepository {
   /// Gets the tocEntryId associated with a line via the mapping table.
   Future<int?> getTocEntryIdForLine(int lineId) async {
     final db = await _database.database;
-    final result = await db
-        .rawQuery('SELECT tocEntryId FROM line_toc WHERE lineId = ?', [lineId]);
+    final result = await db.rawQuery(
+      'SELECT tocEntryId FROM line_toc WHERE lineId = ?',
+      [lineId]
+    );
     if (result.isEmpty) return null;
-    return result.first['tocEntryId'] as int?;
+    return result.first['tocEntryId'] as int;
   }
 
   /// Gets the TocEntry model associated with a line via the mapping table.
@@ -99,19 +102,16 @@ class SeforimRepository {
 
   /// Returns the TOC entry whose heading line is the given line id, or null if not a TOC heading.
   Future<TocEntry?> getHeadingTocEntryByLineId(int lineId) async {
-    final db = await _database.database;
-    final result =
-        await db.rawQuery('SELECT * FROM tocEntry WHERE lineId = ?', [lineId]);
-    if (result.isEmpty) return null;
-    return TocEntry.fromMap(result.first);
+    return await _database.tocDao.selectByLineId(lineId);
   }
 
   /// Returns all line ids that belong to the given TOC entry (section), ordered by lineIndex.
   Future<List<int>> getLineIdsForTocEntry(int tocEntryId) async {
     final db = await _database.database;
     final result = await db.rawQuery(
-        'SELECT lineId FROM line_toc WHERE tocEntryId = ? ORDER BY lineId',
-        [tocEntryId]);
+      'SELECT lineId FROM line_toc WHERE tocEntryId = ? ORDER BY lineId',
+      [tocEntryId]
+    );
     return result.map((row) => row['lineId'] as int).toList();
   }
 
@@ -261,21 +261,14 @@ class SeforimRepository {
   /// @param id The ID of the category to retrieve
   /// @return The category if found, null otherwise
   Future<Category?> getCategory(int id) async {
-    final db = await _database.database;
-    final result =
-        await db.rawQuery('SELECT * FROM category WHERE id = ?', [id]);
-    if (result.isEmpty) return null;
-    return Category.fromJson(result.first);
+    return await _database.categoryDao.getCategoryById(id);
   }
 
   /// Retrieves all root categories (categories without a parent).
   ///
   /// @return A list of root categories
   Future<List<Category>> getRootCategories() async {
-    final db = await _database.database;
-    final result = await db.rawQuery(
-        'SELECT * FROM category WHERE parentId IS NULL ORDER BY title');
-    return result.map((row) => Category.fromJson(row)).toList();
+    return await _database.categoryDao.getRootCategories();
   }
 
   /// Retrieves all child categories of a parent category.
@@ -283,10 +276,7 @@ class SeforimRepository {
   /// @param parentId The ID of the parent category
   /// @return A list of child categories
   Future<List<Category>> getCategoryChildren(int parentId) async {
-    final db = await _database.database;
-    final result = await db.rawQuery(
-        'SELECT * FROM category WHERE parentId = ? ORDER BY title', [parentId]);
-    return result.map((row) => Category.fromJson(row)).toList();
+    return await _database.categoryDao.getCategoriesByParentId(parentId);
   }
 
   /// Inserts a category into the database.
@@ -319,11 +309,8 @@ class SeforimRepository {
       }
 
       // Try the insertion
-      final db = await _database.database;
-      final insertedId = await db.rawInsert('''
-        INSERT INTO category (parentId, title, level)
-        VALUES (?, ?, ?)
-      ''', [category.parentId, category.title, category.level]);
+      final insertedId = await _database.categoryDao.insertCategory(
+          category.parentId, category.title, category.level);
 
       _logger.fine('Repository: Category inserted with ID: $insertedId');
 
@@ -374,12 +361,11 @@ class SeforimRepository {
   }
 
   Future<List<Category>> _getCategoriesByParent(int? parentId) async {
-    final db = await _database.database;
-    final result = parentId != null
-        ? await db
-            .rawQuery('SELECT * FROM category WHERE parentId = ?', [parentId])
-        : await db.rawQuery('SELECT * FROM category WHERE parentId IS NULL');
-    return result.map((row) => Category.fromJson(row)).toList();
+    if (parentId != null) {
+      return await _database.categoryDao.getCategoriesByParentId(parentId);
+    } else {
+      return await _database.categoryDao.getRootCategories();
+    }
   }
 
   // --- Books ---
@@ -502,14 +488,11 @@ class SeforimRepository {
   // Get an author by name, returns null if not found
   Future<Author?> getAuthorByName(String name) async {
     _logger.fine('Looking for author with name: $name');
-    final db = await _database.database;
-    final result = await db
-        .rawQuery('SELECT * FROM author WHERE name = ? LIMIT 1', [name]);
-    if (result.isEmpty) {
+    final author = await _database.authorDao.getAuthorByName(name);
+    if (author == null) {
       _logger.fine('Author not found: $name');
       return null;
     }
-    final author = Author.fromJson(result.first);
     _logger.fine('Found author with ID: ${author.id}');
     return author;
   }
@@ -519,61 +502,32 @@ class SeforimRepository {
     _logger.fine('Inserting author: $name');
 
     // Check if author already exists
-    final existingAuthor = await getAuthorByName(name);
-    if (existingAuthor != null) {
-      _logger.fine('Author already exists with ID: ${existingAuthor.id}');
-      return existingAuthor.id;
+    final existingId = await _database.authorDao.getAuthorIdByName(name);
+    if (existingId != null) {
+      _logger.fine('Author already exists with ID: $existingId');
+      return existingId;
     }
 
     // Insert the author
-    final db = await _database.database;
-    final authorId =
-        await db.rawInsert('INSERT INTO author (name) VALUES (?)', [name]);
-
-    // If lastInsertRowId returns 0, it might be because the insertion was ignored due to a conflict
-    // Try to get the ID by name
-    if (authorId == 0) {
-      final insertedAuthor = await getAuthorByName(name);
-      if (insertedAuthor != null) {
-        _logger
-            .fine('Found author after insertion with ID: ${insertedAuthor.id}');
-        return insertedAuthor.id;
-      }
-
-      // If we can't find the author by name, try to insert it again with a different method
-      _logger.fine('Author not found after insertion, trying insertAndGetId');
-      final retryAuthorId = await db
-          .rawInsert('INSERT OR IGNORE INTO author (name) VALUES (?)', [name]);
-      if (retryAuthorId != 0) {
-        _logger.fine('Found author after retry with ID: $retryAuthorId');
-        return retryAuthorId;
-      }
-
-      // Check again
-      final retryAuthor = await getAuthorByName(name);
-      if (retryAuthor != null) {
-        _logger.fine('Found author after retry with ID: ${retryAuthor.id}');
-        return retryAuthor.id;
-      }
-
-      // If all else fails, return a dummy ID that will be used for this session only
-      // This allows the process to continue without throwing an exception
-      _logger.warning(
-          'Could not insert author \'$name\' after multiple attempts, using temporary ID');
-      return 999999;
+    await _database.authorDao.insertAuthor(name);
+    
+    // Get the ID by name (handles INSERT OR IGNORE case)
+    final insertedId = await _database.authorDao.getAuthorIdByName(name);
+    if (insertedId != null) {
+      _logger.fine('Author inserted with ID: $insertedId');
+      return insertedId;
     }
 
-    _logger.fine('Author inserted with ID: $authorId');
-    return authorId;
+    // If all else fails, return a dummy ID that will be used for this session only
+    _logger.warning(
+        'Could not insert author \'$name\' after multiple attempts, using temporary ID');
+    return 999999;
   }
 
   // Link an author to a book
   Future<void> linkAuthorToBook(int authorId, int bookId) async {
     _logger.fine('Linking author $authorId to book $bookId');
-    final db = await _database.database;
-    await db.rawInsert(
-        'INSERT OR IGNORE INTO book_author (bookId, authorId) VALUES (?, ?)',
-        [bookId, authorId]);
+    await _database.authorDao.linkBookAuthor(bookId, authorId);
     _logger.fine('Linked author $authorId to book $bookId');
   }
 
@@ -597,14 +551,11 @@ class SeforimRepository {
   // Get a topic by name, returns null if not found
   Future<Topic?> getTopicByName(String name) async {
     _logger.fine('Looking for topic with name: $name');
-    final db = await _database.database;
-    final result =
-        await db.rawQuery('SELECT * FROM topic WHERE name = ? LIMIT 1', [name]);
-    if (result.isEmpty) {
+    final topic = await _database.topicDao.getTopicByName(name);
+    if (topic == null) {
       _logger.fine('Topic not found: $name');
       return null;
     }
-    final topic = Topic.fromJson(result.first);
     _logger.fine('Found topic with ID: ${topic.id}');
     return topic;
   }
@@ -612,14 +563,11 @@ class SeforimRepository {
   // Get a publication place by name, returns null if not found
   Future<PubPlace?> getPubPlaceByName(String name) async {
     _logger.fine('Looking for publication place with name: $name');
-    final db = await _database.database;
-    final result = await db
-        .rawQuery('SELECT * FROM pub_place WHERE name = ? LIMIT 1', [name]);
-    if (result.isEmpty) {
+    final pubPlace = await _database.pubPlaceDao.getPubPlaceByName(name);
+    if (pubPlace == null) {
       _logger.fine('Publication place not found: $name');
       return null;
     }
-    final pubPlace = PubPlace.fromJson(result.first);
     _logger.fine('Found publication place with ID: ${pubPlace.id}');
     return pubPlace;
   }
@@ -627,14 +575,11 @@ class SeforimRepository {
   // Get a publication date by date, returns null if not found
   Future<PubDate?> getPubDateByDate(String date) async {
     _logger.fine('Looking for publication date with date: $date');
-    final db = await _database.database;
-    final result = await db
-        .rawQuery('SELECT * FROM pub_date WHERE date = ? LIMIT 1', [date]);
-    if (result.isEmpty) {
+    final pubDate = await _database.pubDateDao.getPubDateByDate(date);
+    if (pubDate == null) {
       _logger.fine('Publication date not found: $date');
       return null;
     }
-    final pubDate = PubDate.fromJson(result.first);
     _logger.fine('Found publication date with ID: ${pubDate.id}');
     return pubDate;
   }
@@ -644,61 +589,32 @@ class SeforimRepository {
     _logger.fine('Inserting topic: $name');
 
     // Check if topic already exists
-    final existingTopic = await getTopicByName(name);
-    if (existingTopic != null) {
-      _logger.fine('Topic already exists with ID: ${existingTopic.id}');
-      return existingTopic.id;
+    final existingId = await _database.topicDao.getTopicIdByName(name);
+    if (existingId != null) {
+      _logger.fine('Topic already exists with ID: $existingId');
+      return existingId;
     }
 
     // Insert the topic
-    final db = await _database.database;
-    final topicId =
-        await db.rawInsert('INSERT INTO topic (name) VALUES (?)', [name]);
-
-    // If lastInsertRowId returns 0, it might be because the insertion was ignored due to a conflict
-    // Try to get the ID by name
-    if (topicId == 0) {
-      final insertedTopic = await getTopicByName(name);
-      if (insertedTopic != null) {
-        _logger
-            .fine('Found topic after insertion with ID: ${insertedTopic.id}');
-        return insertedTopic.id;
-      }
-
-      // If we can't find the topic by name, try to insert it again with a different method
-      _logger.fine('Topic not found after insertion, trying insertAndGetId');
-      final retryTopicId = await db
-          .rawInsert('INSERT OR IGNORE INTO topic (name) VALUES (?)', [name]);
-      if (retryTopicId != 0) {
-        _logger.fine('Found topic after retry with ID: $retryTopicId');
-        return retryTopicId;
-      }
-
-      // Check again
-      final retryTopic = await getTopicByName(name);
-      if (retryTopic != null) {
-        _logger.fine('Found topic after retry with ID: ${retryTopic.id}');
-        return retryTopic.id;
-      }
-
-      // If all else fails, return a dummy ID that will be used for this session only
-      // This allows the process to continue without throwing an exception
-      _logger.warning(
-          'Could not insert topic \'$name\' after multiple attempts, using temporary ID');
-      return 999999;
+    await _database.topicDao.insertTopic(name);
+    
+    // Get the ID by name (handles INSERT OR IGNORE case)
+    final insertedId = await _database.topicDao.getTopicIdByName(name);
+    if (insertedId != null) {
+      _logger.fine('Topic inserted with ID: $insertedId');
+      return insertedId;
     }
 
-    _logger.fine('Topic inserted with ID: $topicId');
-    return topicId;
+    // If all else fails, return a dummy ID that will be used for this session only
+    _logger.warning(
+        'Could not insert topic \'$name\' after multiple attempts, using temporary ID');
+    return 999999;
   }
 
   // Link a topic to a book
   Future<void> linkTopicToBook(int topicId, int bookId) async {
     _logger.fine('Linking topic $topicId to book $bookId');
-    final db = await _database.database;
-    await db.rawInsert(
-        'INSERT OR IGNORE INTO book_topic (bookId, topicId) VALUES (?, ?)',
-        [bookId, topicId]);
+    await _database.topicDao.linkBookTopic(bookId, topicId);
     _logger.fine('Linked topic $topicId to book $bookId');
   }
 
@@ -715,29 +631,19 @@ class SeforimRepository {
     }
 
     // Insert the publication place
-    final db = await _database.database;
-    final pubPlaceId =
-        await db.rawInsert('INSERT INTO pub_place (name) VALUES (?)', [name]);
-
-    // If lastInsertRowId returns 0, it might be because the insertion was ignored due to a conflict
-    // Try to get the ID by name
-    if (pubPlaceId == 0) {
-      final insertedPubPlace = await getPubPlaceByName(name);
-      if (insertedPubPlace != null) {
-        _logger.fine(
-            'Found publication place after insertion with ID: ${insertedPubPlace.id}');
-        return insertedPubPlace.id;
-      }
-
-      // If all else fails, return a dummy ID that will be used for this session only
-      // This allows the process to continue without throwing an exception
-      _logger.warning(
-          'Could not insert publication place \'$name\' after multiple attempts, using temporary ID');
-      return 999999;
+    await _database.pubPlaceDao.insertPubPlace(name);
+    
+    // Get the ID by name (handles INSERT OR IGNORE case)
+    final insertedPubPlace = await getPubPlaceByName(name);
+    if (insertedPubPlace != null) {
+      _logger.fine('Publication place inserted with ID: ${insertedPubPlace.id}');
+      return insertedPubPlace.id;
     }
 
-    _logger.fine('Publication place inserted with ID: $pubPlaceId');
-    return pubPlaceId;
+    // If all else fails, return a dummy ID that will be used for this session only
+    _logger.warning(
+        'Could not insert publication place \'$name\' after multiple attempts, using temporary ID');
+    return 999999;
   }
 
   // Insert a publication date and return its ID
@@ -753,48 +659,32 @@ class SeforimRepository {
     }
 
     // Insert the publication date
-    final db = await _database.database;
-    final pubDateId =
-        await db.rawInsert('INSERT INTO pub_date (date) VALUES (?)', [date]);
-
-    // If lastInsertRowId returns 0, it might be because the insertion was ignored due to a conflict
-    // Try to get the ID by date
-    if (pubDateId == 0) {
-      final insertedPubDate = await getPubDateByDate(date);
-      if (insertedPubDate != null) {
-        _logger.fine(
-            'Found publication date after insertion with ID: ${insertedPubDate.id}');
-        return insertedPubDate.id;
-      }
-
-      // If all else fails, return a dummy ID that will be used for this session only
-      // This allows the process to continue without throwing an exception
-      _logger.warning(
-          'Could not insert publication date \'$date\' after multiple attempts, using temporary ID');
-      return 999999;
+    await _database.pubDateDao.insertPubDate(date);
+    
+    // Get the ID by date (handles INSERT OR IGNORE case)
+    final insertedPubDate = await getPubDateByDate(date);
+    if (insertedPubDate != null) {
+      _logger.fine('Publication date inserted with ID: ${insertedPubDate.id}');
+      return insertedPubDate.id;
     }
 
-    _logger.fine('Publication date inserted with ID: $pubDateId');
-    return pubDateId;
+    // If all else fails, return a dummy ID that will be used for this session only
+    _logger.warning(
+        'Could not insert publication date \'$date\' after multiple attempts, using temporary ID');
+    return 999999;
   }
 
   // Link a publication place to a book
   Future<void> linkPubPlaceToBook(int pubPlaceId, int bookId) async {
     _logger.fine('Linking publication place $pubPlaceId to book $bookId');
-    final db = await _database.database;
-    await db.rawInsert(
-        'INSERT OR IGNORE INTO book_pub_place (bookId, pubPlaceId) VALUES (?, ?)',
-        [bookId, pubPlaceId]);
+    await _database.pubPlaceDao.linkBookPubPlace(bookId, pubPlaceId);
     _logger.fine('Linked publication place $pubPlaceId to book $bookId');
   }
 
   // Link a publication date to a book
   Future<void> linkPubDateToBook(int pubDateId, int bookId) async {
     _logger.fine('Linking publication date $pubDateId to book $bookId');
-    final db = await _database.database;
-    await db.rawInsert(
-        'INSERT OR IGNORE INTO book_pub_date (bookId, pubDateId) VALUES (?, ?)',
-        [bookId, pubDateId]);
+    await _database.pubDateDao.linkBookPubDate(bookId, pubDateId);
     _logger.fine('Linked publication date $pubDateId to book $bookId');
   }
 
@@ -924,8 +814,10 @@ class SeforimRepository {
   /// Returns a Source by name, or null if not found.
   Future<Source?> getSourceByName(String name) async {
     final db = await _database.database;
-    final result =
-        await db.rawQuery('SELECT * FROM source WHERE name = ?', [name]);
+    final result = await db.rawQuery(
+      'SELECT * FROM source WHERE name = ?',
+      [name]
+    );
     if (result.isEmpty) return null;
     return Source.fromJson(result.first);
   }
@@ -937,8 +829,10 @@ class SeforimRepository {
     if (existing != null) return existing.id;
 
     final db = await _database.database;
-    final id =
-        await db.rawInsert('INSERT INTO source (name) VALUES (?)', [name]);
+    final id = await db.rawInsert(
+      'INSERT INTO source (name) VALUES (?)',
+      [name]
+    );
     if (id == 0) {
       // Try to read back just in case
       final again = await getSourceByName(name);
@@ -961,29 +855,15 @@ class SeforimRepository {
   // --- Lines ---
 
   Future<Line?> getLine(int id) async {
-    final db = await _database.database;
-    final result = await db.rawQuery('SELECT * FROM line WHERE id = ?', [id]);
-    if (result.isEmpty) return null;
-    return Line.fromJson(result.first);
+    return await _database.lineDao.getLineById(id);
   }
 
   Future<Line?> getLineByIndex(int bookId, int lineIndex) async {
-    final db = await _database.database;
-    final result = await db.rawQuery(
-        'SELECT * FROM line WHERE bookId = ? AND lineIndex = ?',
-        [bookId, lineIndex]);
-    if (result.isEmpty) return null;
-    return Line.fromJson(result.first);
+    return await _database.lineDao.selectByBookIdAndIndex(bookId, lineIndex);
   }
 
   Future<List<Line>> getLines(int bookId, int startIndex, int endIndex) async {
-    final db = await _database.database;
-    final result = await db.rawQuery('''
-      SELECT * FROM line
-      WHERE bookId = ? AND lineIndex >= ? AND lineIndex <= ?
-      ORDER BY lineIndex
-    ''', [bookId, startIndex, endIndex]);
-    return result.map((row) => Line.fromJson(row)).toList();
+    return await _database.lineDao.selectByBookIdRange(bookId, startIndex, endIndex);
   }
 
   /// Gets the previous line for a given book and line index.
@@ -1013,21 +893,13 @@ class SeforimRepository {
 
     // Use the ID from the line object if it's greater than 0
     if (line.id > 0) {
-      final db = await _database.database;
-      await db.rawInsert('''
-        INSERT INTO line (id, bookId, lineIndex, content)
-        VALUES (?, ?, ?, ?)
-      ''', [line.id, line.bookId, line.lineIndex, line.content]);
+      await _database.lineDao.insertWithId(line);
       _logger.fine(
           'Repository inserted line with explicit ID: ${line.id} and bookId: ${line.bookId}');
       return line.id;
     } else {
       // Fall back to auto-generated ID if line.id is 0
-      final db = await _database.database;
-      final lineId = await db.rawInsert('''
-        INSERT INTO line (bookId, lineIndex, content)
-        VALUES (?, ?, ?)
-      ''', [line.bookId, line.lineIndex, line.content]);
+      final lineId = await _database.lineDao.insertLine(line);
       _logger.fine(
           'Repository inserted line with auto-generated ID: $lineId and bookId: ${line.bookId}');
 
@@ -1056,14 +928,21 @@ class SeforimRepository {
     _logger.fine('Batch inserting ${lines.length} lines');
     final db = await _database.database;
     final batch = db.batch();
-
+    
     for (final line in lines) {
-      batch.rawInsert('''
-        INSERT INTO line (id, bookId, lineIndex, content)
-        VALUES (?, ?, ?, ?)
-      ''', [line.id, line.bookId, line.lineIndex, line.content]);
+      if (line.id > 0) {
+        batch.rawInsert(
+          'INSERT OR IGNORE INTO line (id, bookId, lineIndex, content) VALUES (?, ?, ?, ?)',
+          [line.id, line.bookId, line.lineIndex, line.content]
+        );
+      } else {
+        batch.rawInsert(
+          'INSERT INTO line (bookId, lineIndex, content) VALUES (?, ?, ?)',
+          [line.bookId, line.lineIndex, line.content]
+        );
+      }
     }
-
+    
     await batch.commit(noResult: true);
     _logger.fine('Batch inserted ${lines.length} lines');
   }
@@ -1071,9 +950,7 @@ class SeforimRepository {
   Future<void> updateLineTocEntry(int lineId, int tocEntryId) async {
     _logger
         .fine('Repository updating line $lineId with tocEntryId: $tocEntryId');
-    final db = await _database.database;
-    await db.rawUpdate(
-        'UPDATE line SET tocEntryId = ? WHERE id = ?', [tocEntryId, lineId]);
+    await _database.lineDao.updateTocEntryId(lineId, tocEntryId);
     _logger
         .fine('Repository updated line $lineId with tocEntryId: $tocEntryId');
   }
@@ -1084,36 +961,19 @@ class SeforimRepository {
   }
 
   Future<TocEntry?> getTocEntry(int id) async {
-    final db = await _database.database;
-    final result =
-        await db.rawQuery('SELECT * FROM tocEntry WHERE id = ?', [id]);
-    if (result.isEmpty) return null;
-    return TocEntry.fromMap(result.first);
+    return await _database.tocDao.selectTocById(id);
   }
 
   Future<List<TocEntry>> getBookToc(int bookId) async {
-    final db = await _database.database;
-
-    final result = await db.rawQuery(
-        'SELECT * FROM tocEntry WHERE bookId = ? ORDER BY level, textId',
-        [bookId]);
-    return result.map((row) => TocEntry.fromMap(row)).toList();
+    return await _database.tocDao.selectByBookId(bookId);
   }
 
   Future<List<TocEntry>> getBookRootToc(int bookId) async {
-    final db = await _database.database;
-    final result = await db.rawQuery(
-        'SELECT * FROM tocEntry WHERE bookId = ? AND parentId IS NULL ORDER BY textId',
-        [bookId]);
-    return result.map((row) => TocEntry.fromMap(row)).toList();
+    return await _database.tocDao.selectRootByBookId(bookId);
   }
 
   Future<List<TocEntry>> getTocChildren(int parentId) async {
-    final db = await _database.database;
-    final result = await db.rawQuery(
-        'SELECT * FROM tocEntry WHERE parentId = ? ORDER BY textId',
-        [parentId]);
-    return result.map((row) => TocEntry.fromMap(row)).toList();
+    return await _database.tocDao.selectChildren(parentId);
   }
 
   // --- TocText methods ---
@@ -1121,9 +981,8 @@ class SeforimRepository {
   // Returns all distinct tocText values using generated SQLDelight query
   Future<List<String>> getAllTocTexts() async {
     _logger.fine('Getting all tocText values (using generated query)');
-    final db = await _database.database;
-    final result = await db.rawQuery('SELECT text FROM tocText ORDER BY text');
-    return result.map((row) => row['text'] as String).toList();
+    final tocTexts = await _database.tocTextDao.selectAll();
+    return tocTexts.map((t) => t.text).toList();
   }
 
   // Get or create a tocText entry and return its ID
@@ -1137,11 +996,8 @@ class SeforimRepository {
     try {
       // Check if the text already exists
       _logger.fine('Checking if text already exists in database');
-      final db = await _database.database;
-      final existingResult =
-          await db.rawQuery('SELECT id FROM tocText WHERE text = ?', [text]);
-      if (existingResult.isNotEmpty) {
-        final existingId = existingResult.first['id'] as int;
+      final existingId = await _database.tocTextDao.selectIdByText(text);
+      if (existingId > 0) {
         _logger.fine(
             'Found existing tocText entry with ID: $existingId for text: \'$truncatedText\'');
         return existingId;
@@ -1150,49 +1006,25 @@ class SeforimRepository {
       // Insert the text
       _logger.fine(
           'Text not found, inserting new tocText entry for: \'$truncatedText\'');
-      final textId = await db
-          .rawInsert('INSERT OR IGNORE INTO tocText (text) VALUES (?)', [text]);
+      final tocText = TocText(id: 0, text: text);
+      await _database.tocTextDao.insert(tocText);
 
       // Get the ID of the inserted text
-      _logger.fine('lastInsertRowId() returned: $textId');
-
-      // If lastInsertRowId returns 0, it's likely because the text already exists (due to INSERT OR IGNORE)
-      // This is expected behavior, not an error, so we'll try to get the ID by text
-      if (textId == 0) {
-        // Log at debug level since this is expected behavior when text already exists
+      final insertedId = await _database.tocTextDao.selectIdByText(text);
+      if (insertedId > 0) {
         _logger.fine(
-            'lastInsertRowId() returned 0 for tocText insertion (likely due to INSERT OR IGNORE). Text: \'$truncatedText\', Length: ${text.length}. Trying to get ID by text.');
-
-        // Try to find the text that was just inserted or that already existed
-        final insertedResult =
-            await db.rawQuery('SELECT id FROM tocText WHERE text = ?', [text]);
-        if (insertedResult.isNotEmpty) {
-          final insertedId = insertedResult.first['id'] as int;
-          _logger.fine(
-              'Found tocText with ID: $insertedId for text: \'$truncatedText\'');
-          return insertedId;
-        }
-
-        // If we can't find the text by exact match, this is unexpected and should be logged as an error
-        // Count total tocTexts for debugging
-        final totalTocTextsResult =
-            await db.rawQuery('SELECT COUNT(*) FROM tocText');
-        final totalTocTexts = totalTocTextsResult.first.values.first as int;
-
-        // Log more details about the failure
-        // Changed from error to warning level to reduce unnecessary error logs
-        _logger.warning(
-            'Failed to insert tocText and couldn\'t find it after insertion. This is unexpected since the text should either be inserted or already exist. Text: \'$truncatedText\', Length: ${text.length}, Total TocTexts: $totalTocTexts');
-
-        throw Exception(
-            'Failed to insert tocText \'$truncatedText\' - insertion returned ID 0 and couldn\'t find text afterward. This is unexpected since the text should either be inserted or already exist. Context: textLength=${text.length}, totalTocTexts=$totalTocTexts');
+            'Created new tocText entry with ID: $insertedId for text: \'$truncatedText\'');
+        return insertedId;
       }
 
-      _logger.fine(
-          'Created new tocText entry with ID: $textId for text: \'$truncatedText\'');
-      return textId;
+      // If we can't find the text by exact match, this is unexpected
+      final totalTocTexts = await _database.tocTextDao.countAll();
+      _logger.warning(
+          'Failed to insert tocText and couldn\'t find it after insertion. Text: \'$truncatedText\', Length: ${text.length}, Total TocTexts: $totalTocTexts');
+
+      throw Exception(
+          'Failed to insert tocText \'$truncatedText\' - couldn\'t find text afterward. Context: textLength=${text.length}, totalTocTexts=$totalTocTexts');
     } catch (e) {
-      // Changed from error to warning level to reduce unnecessary error logs
       _logger.warning(
           'Exception in getOrCreateTocText for text: \'$truncatedText\', Length: ${text.length}}. Error: ${e.toString()}');
       rethrow;
@@ -1207,60 +1039,44 @@ class SeforimRepository {
     final textId = entry.textId ?? await _getOrCreateTocText(entry.text);
     _logger.fine('Using tocText ID: $textId for text: ${entry.text}');
 
+    final entryWithTextId = TocEntry(
+      id: entry.id,
+      bookId: entry.bookId,
+      parentId: entry.parentId,
+      textId: textId,
+      text: entry.text,
+      level: entry.level,
+      lineId: entry.lineId,
+      lineIndex: entry.lineIndex,
+      isLastChild: entry.isLastChild,
+      hasChildren: entry.hasChildren,
+    );
+
     // Use the ID from the entry object if it's greater than 0
     if (entry.id > 0) {
-      final db = await _database.database;
-      await db.rawInsert('''
-        INSERT INTO tocEntry (id, bookId, parentId, textId, level, lineId, isLastChild, hasChildren)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ''', [
-        entry.id,
-        entry.bookId,
-        entry.parentId,
-        textId,
-        entry.level,
-        entry.lineId,
-        entry.isLastChild ? 1 : 0,
-        entry.hasChildren ? 1 : 0
-      ]);
+      await _database.tocDao.insertWithId(entryWithTextId);
       _logger.fine(
           'Repository inserted TOC entry with explicit ID: ${entry.id}, bookId: ${entry.bookId}, lineId: ${entry.lineId}, hasChildren: ${entry.hasChildren}');
       return entry.id;
     } else {
       // Fall back to auto-generated ID if entry.id is 0
-      final db = await _database.database;
-      final tocId = await db.rawInsert('''
-        INSERT INTO tocEntry (bookId, parentId, textId, level, lineId, isLastChild, hasChildren)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      ''', [
-        entry.bookId,
-        entry.parentId,
-        textId,
-        entry.level,
-        entry.lineId,
-        entry.isLastChild ? 1 : 0,
-        entry.hasChildren ? 1 : 0
-      ]);
+      final tocId = await _database.tocDao.insertTocEntry(entryWithTextId);
       _logger.fine(
           'Repository inserted TOC entry with auto-generated ID: $tocId, bookId: ${entry.bookId}, lineId: ${entry.lineId}, hasChildren: ${entry.hasChildren}');
 
       // Check if insertion failed
       if (tocId == 0) {
         // Try to find a matching TOC entry by bookId and text
-        final existingResult = await db.rawQuery(
-            'SELECT * FROM tocEntry WHERE bookId = ?', [entry.bookId]);
-        final matchingEntry = existingResult.firstWhere(
-          (row) =>
-              TocEntry.fromJson(row).text == entry.text &&
-              TocEntry.fromJson(row).level == entry.level,
-          orElse: () => <String, dynamic>{},
+        final existingEntries = await _database.tocDao.selectByBookId(entry.bookId);
+        final matchingEntry = existingEntries.firstWhere(
+          (e) => e.text == entry.text && e.level == entry.level,
+          orElse: () => TocEntry(id: 0, bookId: 0, parentId: null, textId: 0, text: '', level: 0, lineId: null, lineIndex: null, isLastChild: false, hasChildren: false),
         );
 
-        if (matchingEntry.isNotEmpty) {
-          final existingTocEntry = TocEntry.fromMap(matchingEntry);
+        if (matchingEntry.id > 0) {
           _logger.fine(
-              'Found matching TOC entry after failed insertion, returning existing ID: ${existingTocEntry.id}');
-          return existingTocEntry.id;
+              'Found matching TOC entry after failed insertion, returning existing ID: ${matchingEntry.id}');
+          return matchingEntry.id;
         }
 
         throw Exception(
@@ -1276,8 +1092,6 @@ class SeforimRepository {
     if (entries.isEmpty) return;
 
     _logger.fine('Batch inserting ${entries.length} TOC entries');
-    final db = await _database.database;
-    final batch = db.batch();
 
     // Pre-create all tocText entries
     final textIds = <String, int>{};
@@ -1287,30 +1101,65 @@ class SeforimRepository {
       }
     }
 
-    for (final entry in entries) {
+    // Create entries with textIds
+    final entriesWithTextIds = entries.map((entry) {
       final textId = textIds[entry.text];
       if (textId == null) {
         _logger.warning(
             'Text ID not found for TOC entry text: ${entry.text}, skipping entry');
-        continue;
+        return null;
       }
-      batch.rawInsert('''
-        INSERT INTO tocEntry (id, bookId, parentId, textId, level, lineId, isLastChild, hasChildren)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ''', [
-        entry.id,
-        entry.bookId,
-        entry.parentId,
-        textId,
-        entry.level,
-        entry.lineId,
-        entry.isLastChild ? 1 : 0,
-        entry.hasChildren ? 1 : 0
-      ]);
-    }
+      return TocEntry(
+        id: entry.id,
+        bookId: entry.bookId,
+        parentId: entry.parentId,
+        textId: textId,
+        text: entry.text,
+        level: entry.level,
+        lineId: entry.lineId,
+        lineIndex: entry.lineIndex,
+        isLastChild: entry.isLastChild,
+        hasChildren: entry.hasChildren,
+      );
+    }).whereType<TocEntry>().toList();
 
+    // Batch insert using raw SQL
+    final db = await _database.database;
+    final batch = db.batch();
+    
+    for (final entry in entriesWithTextIds) {
+      if (entry.id > 0) {
+        batch.rawInsert('''
+          INSERT OR IGNORE INTO tocEntry (id, bookId, parentId, textId, level, lineId, isLastChild, hasChildren)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', [
+          entry.id,
+          entry.bookId,
+          entry.parentId,
+          entry.textId,
+          entry.level,
+          entry.lineId,
+          entry.isLastChild ? 1 : 0,
+          entry.hasChildren ? 1 : 0,
+        ]);
+      } else {
+        batch.rawInsert('''
+          INSERT INTO tocEntry (bookId, parentId, textId, level, lineId, isLastChild, hasChildren)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', [
+          entry.bookId,
+          entry.parentId,
+          entry.textId,
+          entry.level,
+          entry.lineId,
+          entry.isLastChild ? 1 : 0,
+          entry.hasChildren ? 1 : 0,
+        ]);
+      }
+    }
+    
     await batch.commit(noResult: true);
-    _logger.fine('Batch inserted ${entries.length} TOC entries');
+    _logger.fine('Batch inserted ${entriesWithTextIds.length} TOC entries');
   }
 
   // Nouvelle méthode pour mettre à jour hasChildren
@@ -1318,9 +1167,7 @@ class SeforimRepository {
       int tocEntryId, bool hasChildren) async {
     _logger.fine(
         'Repository updating TOC entry $tocEntryId with hasChildren: $hasChildren');
-    final db = await _database.database;
-    await db.rawUpdate('UPDATE tocEntry SET hasChildren = ? WHERE id = ?',
-        [hasChildren ? 1 : 0, tocEntryId]);
+    await _database.tocDao.updateHasChildren(tocEntryId, hasChildren);
     _logger.fine(
         'Repository updated TOC entry $tocEntryId with hasChildren: $hasChildren');
   }
@@ -1328,9 +1175,7 @@ class SeforimRepository {
   Future<void> updateTocEntryLineId(int tocEntryId, int lineId) async {
     _logger
         .fine('Repository updating TOC entry $tocEntryId with lineId: $lineId');
-    final db = await _database.database;
-    await db.rawUpdate(
-        'UPDATE tocEntry SET lineId = ? WHERE id = ?', [lineId, tocEntryId]);
+    await _database.tocDao.updateLineId(tocEntryId, lineId);
     _logger
         .fine('Repository updated TOC entry $tocEntryId with lineId: $lineId');
   }
@@ -1339,9 +1184,7 @@ class SeforimRepository {
       int tocEntryId, bool isLastChild) async {
     _logger.fine(
         'Repository updating TOC entry $tocEntryId with isLastChild: $isLastChild');
-    final db = await _database.database;
-    await db.rawUpdate('UPDATE tocEntry SET isLastChild = ? WHERE id = ?',
-        [isLastChild ? 1 : 0, tocEntryId]);
+    await _database.tocDao.updateIsLastChild(tocEntryId, isLastChild);
     _logger.fine(
         'Repository updated TOC entry $tocEntryId with isLastChild: $isLastChild');
   }

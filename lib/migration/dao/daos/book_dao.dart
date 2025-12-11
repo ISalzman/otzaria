@@ -1,18 +1,21 @@
 import 'package:sqflite/sqflite.dart';
 import '../../core/models/book.dart';
+import '../sqflite/query_loader.dart';
 import 'database.dart';
 
 class BookDao {
   final MyDatabase _db;
+  late final Map<String, String> _queries;
 
-  BookDao(this._db);
+  BookDao(this._db) {
+    _queries = QueryLoader.loadQueries('BookQueries.sq');
+  }
 
   Future<Database> get database => _db.database;
 
   Future<List<Book>> getAllBooks() async {
     final db = await database;
-    final result =
-        await db.rawQuery('SELECT * FROM book ORDER BY orderIndex, title');
+    final result = await db.rawQuery(_queries['selectAll']!);
     return result.map((row) => Book.fromJson(row)).toList();
   }
 
@@ -22,8 +25,7 @@ class BookDao {
     final db = await database;
 
     // Get all books
-    final books =
-        await db.rawQuery('SELECT * FROM book ORDER BY orderIndex, title');
+    final books = await db.rawQuery(_queries['selectAll']!);
 
     if (books.isEmpty) return [];
 
@@ -117,36 +119,27 @@ class BookDao {
 
   Future<Book?> getBookById(int id) async {
     final db = await database;
-    final result = await db.rawQuery('SELECT * FROM book WHERE id = ?', [id]);
+    final result = await db.rawQuery(_queries['selectById']!, [id]);
     if (result.isEmpty) return null;
     return Book.fromJson(result.first);
   }
 
   Future<List<Book>> getBooksByCategory(int categoryId) async {
     final db = await database;
-    final result = await db.rawQuery(
-        'SELECT * FROM book WHERE categoryId = ? ORDER BY orderIndex, title',
-        [categoryId]);
+    final result = await db.rawQuery(_queries['selectByCategoryId']!, [categoryId]);
     return result.map((row) => Book.fromJson(row)).toList();
   }
 
   Future<Book?> getBookByTitle(String title) async {
     final db = await database;
-    final result = await db
-        .rawQuery('SELECT * FROM book WHERE title = ? LIMIT 1', [title]);
+    final result = await db.rawQuery(_queries['selectByTitle']!, [title]);
     if (result.isEmpty) return null;
     return Book.fromJson(result.first);
   }
 
   Future<List<Book>> getBooksByAuthor(String authorName) async {
     final db = await database;
-    final result = await db.rawQuery('''
-      SELECT b.* FROM book b
-      JOIN book_author ba ON b.id = ba.bookId
-      JOIN author a ON ba.authorId = a.id
-      WHERE a.name LIKE ?
-      ORDER BY b.orderIndex, b.title
-    ''', ['%$authorName%']);
+    final result = await db.rawQuery(_queries['selectByAuthor']!, ['%$authorName%']);
     return result.map((row) => Book.fromJson(row)).toList();
   }
 
@@ -160,18 +153,15 @@ class BookDao {
       bool isBaseBook,
       String? notesContent) async {
     final db = await database;
-    return await db.rawInsert('''
-      INSERT INTO book (categoryId, sourceId, title, heShortDesc, orderIndex, totalLines, isBaseBook,notesContent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', [
+    return await db.rawInsert(_queries['insert']!, [
       categoryId,
       sourceId,
       title,
       heShortDesc,
+      notesContent,
       orderIndex,
       totalLines,
       (isBaseBook ? 1 : 0),
-      notesContent
     ]);
   }
 
@@ -186,45 +176,33 @@ class BookDao {
       bool isBaseBook,
       String? notesContent) async {
     final db = await database;
-    return await db.rawInsert('''
-      INSERT INTO book (id, categoryId, sourceId, title, heShortDesc, orderIndex, totalLines, isBaseBook,notesContent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', [
+    return await db.rawInsert(_queries['insertWithId']!, [
       id,
       categoryId,
       sourceId,
       title,
       heShortDesc,
+      notesContent,
       orderIndex,
       totalLines,
       (isBaseBook ? 1 : 0),
-      notesContent
     ]);
   }
 
   Future<int> updateBookTotalLines(int id, int totalLines) async {
     final db = await database;
-    return await db.rawUpdate(
-        'UPDATE book SET totalLines = ? WHERE id = ?', [totalLines, id]);
+    return await db.rawUpdate(_queries['updateTotalLines']!, [totalLines, id]);
   }
 
   Future<int> updateBookCategoryId(int id, int categoryId) async {
     final db = await database;
-    return await db.rawUpdate(
-        'UPDATE book SET categoryId = ? WHERE id = ?', [categoryId, id]);
+    return await db.rawUpdate(_queries['updateCategoryId']!, [categoryId, id]);
   }
 
   Future<int> updateBookConnectionFlags(int id, bool hasTargum,
       bool hasReference, bool hasCommentary, bool hasOther) async {
     final db = await database;
-    return await db.rawUpdate('''
-      UPDATE book SET
-          hasTargumConnection = ?,
-          hasReferenceConnection = ?,
-          hasCommentaryConnection = ?,
-          hasOtherConnection = ?
-      WHERE id = ?
-    ''', [
+    return await db.rawUpdate(_queries['updateConnectionFlags']!, [
       hasTargum ? 1 : 0,
       hasReference ? 1 : 0,
       hasCommentary ? 1 : 0,
@@ -235,29 +213,28 @@ class BookDao {
 
   Future<int> deleteBook(int id) async {
     final db = await database;
-    return await db.rawDelete('DELETE FROM book WHERE id = ?', [id]);
+    return await db.rawDelete(_queries['delete']!, [id]);
   }
 
   Future<int> countBooksByCategory(int categoryId) async {
     final db = await database;
-    final result = await db.rawQuery(
-        'SELECT COUNT(*) FROM book WHERE categoryId = ?', [categoryId]);
+    final result = await db.rawQuery(_queries['countByCategoryId']!, [categoryId]);
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
   Future<int> countAllBooks() async {
     final db = await database;
-    final result = await db.rawQuery('SELECT COUNT(*) FROM book');
+    final result = await db.rawQuery(_queries['countAll']!);
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
   Future<int?> getMaxBookId() async {
     final db = await database;
-    final result = await db.rawQuery('SELECT MAX(id) FROM book');
+    final result = await db.rawQuery(_queries['getMaxId']!);
     return Sqflite.firstIntValue(result);
   }
 
-  // Search functionality
+  // Search functionality - kept inline due to dynamic LIKE pattern
   Future<List<Book>> searchBooks(String query) async {
     final db = await database;
     final result = await db.rawQuery('''

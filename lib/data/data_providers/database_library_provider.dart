@@ -164,7 +164,6 @@ class DatabaseLibraryProvider implements LibraryProvider {
     debugPrint('💾 Building library catalog from database...');
 
     final repository = _sqliteProvider.repository!;
-    final db = await repository.database.database;
 
     // OPTIMIZATION 1: Load all books with relations in a single optimized query
     final allDbBooks =
@@ -180,10 +179,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
     debugPrint('💾 Loaded ${allDbBooks.length} books');
 
     // OPTIMIZATION 2: Load all categories at once and build a parent-child map
-    final allCategoriesData = await db.rawQuery('SELECT * FROM category');
-    final allCategories = allCategoriesData
-        .map((row) => db_models.Category.fromJson(row))
-        .toList();
+    final allCategories =
+        await repository.database.categoryDao.getAllCategories();
 
     final categoriesByParent = <int?, List<db_models.Category>>{};
     for (final cat in allCategories) {
