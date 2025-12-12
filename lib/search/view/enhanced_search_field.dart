@@ -396,7 +396,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                       },
                       decoration: InputDecoration(
                         border: const OutlineInputBorder(),
-                        hintText: "חפש כאן..",
+                        hintText: "חפש כאן...",
                         labelText: "לחיפוש הקש אנטר או לחץ על סמל החיפוש",
                         prefixIcon: IconButton(
                           onPressed: _performSearch,
