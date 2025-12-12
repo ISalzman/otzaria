@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -14,6 +15,7 @@ import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 /// מייצג קבוצת קטעי פירוש רצופים מאותו ספר
@@ -87,6 +89,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _showFilterTab = false;
+  String? _savedSelectedText;
+  late final GlobalKey<SelectionAreaState> _selectionKey;
 
   @override
   void initState() {
@@ -96,6 +100,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       vsync: this,
       initialIndex: widget.initialTabIndex ?? 0,
     );
+    _selectionKey = GlobalKey<SelectionAreaState>();
   }
 
   @override
@@ -112,6 +117,68 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// העתקת טקסט מעוצב (HTML) ללוח
+  Future<void> _copyFormattedText() async {
+    await ContextMenuUtils.copyFormattedText(
+      context: context,
+      savedSelectedText: _savedSelectedText,
+      fontSize: widget.fontSize,
+    );
+  }
+
+  /// העתקת כל הטקסט הנראה בפאנל
+  Future<void> _copyAllVisibleText() async {
+    final selection = _selectionKey.currentState?.selectableRegion;
+    if (selection == null) return;
+
+    // בחירת כל הטקסט
+    selection.selectAll();
+
+    // המתנה קצרה לעדכון הבחירה
+    await Future.delayed(const Duration(milliseconds: 50));
+
+    // העתקה
+    await _copyFormattedText();
+  }
+
+  /// בניית תפריט הקשר כללי
+  ctx.ContextMenu _buildContextMenu() {
+    return ctx.ContextMenu(
+      entries: [
+        ctx.MenuItem(
+          label: 'העתק',
+          icon: FluentIcons.copy_24_regular,
+          enabled: _savedSelectedText != null &&
+              _savedSelectedText!.trim().isNotEmpty,
+          onSelected: _copyFormattedText,
+        ),
+        ctx.MenuItem(
+          label: 'העתק את כל הטקסט',
+          icon: FluentIcons.document_copy_24_regular,
+          onSelected: _copyAllVisibleText,
+        ),
+        ctx.MenuItem(
+          label: 'בחר את כל הטקסט',
+          icon: FluentIcons.select_all_on_24_regular,
+          onSelected: () =>
+              _selectionKey.currentState?.selectableRegion.selectAll(),
+        ),
+      ],
+    );
+  }
+
+  /// בניית תפריט הקשר למפרש ספציפי
+  ctx.ContextMenu _buildCommentaryContextMenu(Link link) {
+    return ContextMenuUtils.buildCommentaryContextMenu(
+      context: context,
+      link: link,
+      openBookCallback: widget.openBookCallback,
+      fontSize: widget.fontSize,
+      savedSelectedText: _savedSelectedText,
+      onCopySelected: _copyFormattedText,
+    );
   }
 
   @override
@@ -237,17 +304,28 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         ),
         // תוכן הכרטיסיות - עטוף ב-SelectionArea כדי לאפשר בחירת טקסט
         Expanded(
-          child: SelectionArea(
-            child: _showFilterTab
-                ? _buildCommentatorsFilter()
-                : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildCommentariesView(),
-                      _buildLinksView(),
-                      _buildNotesView(),
-                    ],
-                  ),
+          child: ctx.ContextMenuRegion(
+            contextMenu: _buildContextMenu(),
+            child: SelectionArea(
+              key: _selectionKey,
+              onSelectionChanged: (selection) {
+                if (selection != null && selection.plainText.isNotEmpty) {
+                  setState(() {
+                    _savedSelectedText = selection.plainText;
+                  });
+                }
+              },
+              child: _showFilterTab
+                  ? _buildCommentatorsFilter()
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildCommentariesView(),
+                        _buildLinksView(),
+                        _buildNotesView(),
+                      ],
+                    ),
+            ),
           ),
         ),
       ],
@@ -489,26 +567,29 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             ),
           ),
           children: group.links.map((link) {
-            return ListTile(
-              contentPadding: const EdgeInsets.only(right: 32.0, left: 16.0),
-              title: Text(
-                link.heRef,
-                style: TextStyle(
-                  fontSize: settingsState.commentatorsFontSize - 4,
-                  fontWeight: FontWeight.normal,
-                  fontFamily: settingsState.commentatorsFontFamily,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.5),
+            return ctx.ContextMenuRegion(
+              contextMenu: _buildCommentaryContextMenu(link),
+              child: ListTile(
+                contentPadding: const EdgeInsets.only(right: 32.0, left: 16.0),
+                title: Text(
+                  link.heRef,
+                  style: TextStyle(
+                    fontSize: settingsState.commentatorsFontSize - 4,
+                    fontWeight: FontWeight.normal,
+                    fontFamily: settingsState.commentatorsFontFamily,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
+                  ),
                 ),
-              ),
-              subtitle: PdfCommentaryContent(
-                key: ValueKey(
-                    '${link.path2}_${link.index2}_${widget.tab.currentTextLineNumber}'),
-                link: link,
-                fontSize: widget.fontSize,
-                openBookCallback: widget.openBookCallback,
+                subtitle: PdfCommentaryContent(
+                  key: ValueKey(
+                      '${link.path2}_${link.index2}_${widget.tab.currentTextLineNumber}'),
+                  link: link,
+                  fontSize: widget.fontSize,
+                  openBookCallback: widget.openBookCallback,
+                ),
               ),
             );
           }).toList(),
@@ -595,73 +676,78 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     final keyStr = '${link.path2}_${link.index2}';
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
-        return ExpansionTile(
-          key: PageStorageKey(keyStr),
-          maintainState: true,
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
-          title: Text(
-            link.heRef,
-            style: TextStyle(
-              fontSize: settingsState.commentatorsFontSize - 2,
-              fontWeight: FontWeight.w600,
-              fontFamily: settingsState.commentatorsFontFamily,
-            ),
-          ),
-          subtitle: Text(
-            utils.getTitleFromPath(link.path2),
-            style: TextStyle(
-              fontSize: settingsState.commentatorsFontSize - 4,
-              fontFamily: settingsState.commentatorsFontFamily,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.7),
-            ),
-          ),
-          children: [
-            GestureDetector(
-              onTap: () {
-                // פתיחת הספר בלחיצה על הקישור
-                widget.openBookCallback(
-                  TextBookTab(
-                    book: TextBook(
-                      title: utils.getTitleFromPath(link.path2),
-                    ),
-                    index: link.index2 - 1,
-                    openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                            false) ||
-                        (Settings.getValue<bool>('key-default-sidebar-open') ??
-                            false),
-                  ),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: FutureBuilder<String>(
-                  future: link.content,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      debugPrint(
-                          'Error loading link content: ${snapshot.error}');
-                      debugPrint('Stack trace: ${snapshot.stackTrace}');
-                      return Text('שגיאה: ${snapshot.error}');
-                    }
-                    return Text(
-                      utils.stripHtmlIfNeeded(snapshot.data ?? ''),
-                      style: TextStyle(
-                        fontSize: widget.fontSize * 0.75,
-                        fontFamily: 'FrankRuhlCLM',
-                      ),
-                    );
-                  },
-                ),
+        return ctx.ContextMenuRegion(
+          contextMenu: _buildCommentaryContextMenu(link),
+          child: ExpansionTile(
+            key: PageStorageKey(keyStr),
+            maintainState: true,
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
+            title: Text(
+              link.heRef,
+              style: TextStyle(
+                fontSize: settingsState.commentatorsFontSize - 2,
+                fontWeight: FontWeight.w600,
+                fontFamily: settingsState.commentatorsFontFamily,
               ),
             ),
-          ],
+            subtitle: Text(
+              utils.getTitleFromPath(link.path2),
+              style: TextStyle(
+                fontSize: settingsState.commentatorsFontSize - 4,
+                fontFamily: settingsState.commentatorsFontFamily,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.7),
+              ),
+            ),
+            children: [
+              GestureDetector(
+                onTap: () {
+                  // פתיחת הספר בלחיצה על הקישור
+                  widget.openBookCallback(
+                    TextBookTab(
+                      book: TextBook(
+                        title: utils.getTitleFromPath(link.path2),
+                      ),
+                      index: link.index2 - 1,
+                      openLeftPane:
+                          (Settings.getValue<bool>('key-pin-sidebar') ??
+                                  false) ||
+                              (Settings.getValue<bool>(
+                                      'key-default-sidebar-open') ??
+                                  false),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: FutureBuilder<String>(
+                    future: link.content,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        debugPrint(
+                            'Error loading link content: ${snapshot.error}');
+                        debugPrint('Stack trace: ${snapshot.stackTrace}');
+                        return Text('שגיאה: ${snapshot.error}');
+                      }
+                      return Text(
+                        utils.stripHtmlIfNeeded(snapshot.data ?? ''),
+                        style: TextStyle(
+                          fontSize: widget.fontSize * 0.75,
+                          fontFamily: 'FrankRuhlCLM',
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

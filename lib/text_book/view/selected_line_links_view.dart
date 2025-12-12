@@ -3,6 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
+import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -12,6 +13,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/context_menu_utils.dart';
 
 /// Widget שמציג את הקישורים של השורה הנבחרת בלבד
 class SelectedLineLinksView extends StatefulWidget {
@@ -40,6 +42,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   Future<List<Link>>? _filteredLinksFuture;
   String _lastSearchKey = '';
   final Set<String> _linksWithSearchResults = {}; // קישורים עם תוצאות חיפוש
+  String? _savedSelectedText; // טקסט נבחר לתפריט הקשר
 
   @override
   void dispose() {
@@ -233,72 +236,86 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
 
   Widget _buildExpansionTile(Link link) {
     final keyStr = '${link.path2}_${link.index2}';
-    return ExpansionTile(
-      key: PageStorageKey(keyStr),
-      maintainState: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
-      title: BlocBuilder<SettingsBloc, SettingsState>(
-        builder: (context, settingsState) {
-          String displayTitle = link.heRef;
-          if (settingsState.replaceHolyNames) {
-            displayTitle = utils.replaceHolyNames(displayTitle);
-          }
-          return Text(
-            displayTitle,
-            style: TextStyle(
-              fontSize: widget.fontSize * 0.75,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'FrankRuhlCLM',
-            ),
-          );
-        },
+    return ctx.ContextMenuRegion(
+      contextMenu: ContextMenuUtils.buildCommentaryContextMenu(
+        context: context,
+        link: link,
+        openBookCallback: widget.openBookCallback,
+        fontSize: widget.fontSize,
+        savedSelectedText: _savedSelectedText,
+        onCopySelected: () => ContextMenuUtils.copyFormattedText(
+          context: context,
+          savedSelectedText: _savedSelectedText,
+          fontSize: widget.fontSize,
+        ),
       ),
-      subtitle: BlocBuilder<SettingsBloc, SettingsState>(
-        builder: (context, settingsState) {
-          String displaySubtitle = utils.getTitleFromPath(link.path2);
-          if (settingsState.replaceHolyNames) {
-            displaySubtitle = utils.replaceHolyNames(displaySubtitle);
-          }
-          return Text(
-            displaySubtitle,
-            style: TextStyle(
-              fontSize: widget.fontSize * 0.65,
-              fontFamily: 'FrankRuhlCLM',
-              color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
-            ),
-          );
-        },
-      ),
-      onExpansionChanged: (isExpanded) {
-        // טוען תוכן רק אם נפתח ועדיין לא נטען
-        if (isExpanded && !_contentCache.containsKey(keyStr)) {
-          _contentCache[keyStr] = link.content;
-        }
-
-        // עדכון מצב ההרחבה עם setState בטוח - דוחה עד אחרי הבנייה
-        if (_expanded[keyStr] != isExpanded) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() {
-                _expanded[keyStr] = isExpanded;
-              });
+      child: ExpansionTile(
+        key: PageStorageKey(keyStr),
+        maintainState: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
+        title: BlocBuilder<SettingsBloc, SettingsState>(
+          builder: (context, settingsState) {
+            String displayTitle = link.heRef;
+            if (settingsState.replaceHolyNames) {
+              displayTitle = utils.replaceHolyNames(displayTitle);
             }
-          });
-        }
-      },
-      children: [
-        if (_expanded[keyStr] == true)
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: FutureBuilder<String>(
-              future: _contentCache[keyStr],
-              builder: (context, snapshot) =>
-                  _buildLinkContentWidget(link, snapshot),
+            return Text(
+              displayTitle,
+              style: TextStyle(
+                fontSize: widget.fontSize * 0.75,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'FrankRuhlCLM',
+              ),
+            );
+          },
+        ),
+        subtitle: BlocBuilder<SettingsBloc, SettingsState>(
+          builder: (context, settingsState) {
+            String displaySubtitle = utils.getTitleFromPath(link.path2);
+            if (settingsState.replaceHolyNames) {
+              displaySubtitle = utils.replaceHolyNames(displaySubtitle);
+            }
+            return Text(
+              displaySubtitle,
+              style: TextStyle(
+                fontSize: widget.fontSize * 0.65,
+                fontFamily: 'FrankRuhlCLM',
+                color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
+              ),
+            );
+          },
+        ),
+        onExpansionChanged: (isExpanded) {
+          // טוען תוכן רק אם נפתח ועדיין לא נטען
+          if (isExpanded && !_contentCache.containsKey(keyStr)) {
+            _contentCache[keyStr] = link.content;
+          }
+
+          // עדכון מצב ההרחבה עם setState בטוח - דוחה עד אחרי הבנייה
+          if (_expanded[keyStr] != isExpanded) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _expanded[keyStr] = isExpanded;
+                });
+              }
+            });
+          }
+        },
+        children: [
+          if (_expanded[keyStr] == true)
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: FutureBuilder<String>(
+                future: _contentCache[keyStr],
+                builder: (context, snapshot) =>
+                    _buildLinkContentWidget(link, snapshot),
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 

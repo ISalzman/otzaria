@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
@@ -10,6 +11,7 @@ import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 /// מייצג קבוצת קטעי פירוש רצופים מאותו ספר
@@ -101,6 +103,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       {}; // מעקב אחרי מצב כל ExpansionTile
   final Map<String, ExpansibleController> _controllers =
       {}; // controllers לכל ExpansionTile
+  String? _savedSelectedText; // טקסט נבחר לתפריט הקשר
 
   String _getLinkKey(Link link) => '${link.path2}_${link.index2}';
 
@@ -267,11 +270,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
           // תיקון שגיאת לינט: שימוש במשתנה שאינו nullable
           final ScrollableState scrollable = Scrollable.of(itemContext);
-          
+
           // תיקון שגיאת לינט: בדיקת mounted ל-scrollable לפני גישה ל-context שלו
           if (!scrollable.mounted) return;
-          
-          final RenderObject? viewportRenderObj = scrollable.context.findRenderObject();
+
+          final RenderObject? viewportRenderObj =
+              scrollable.context.findRenderObject();
           if (viewportRenderObj is! RenderBox) return;
           final RenderBox viewportBox = viewportRenderObj;
 
@@ -386,42 +390,56 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         },
       ),
       children: group.links.map((link) {
-        return ListTile(
-          key: _itemKeys[_getLinkKey(link)],
-          contentPadding: const EdgeInsets.only(right: 32.0, left: 16.0),
-          title: BlocBuilder<SettingsBloc, SettingsState>(
-            builder: (context, settingsState) {
-              String displayTitle = link.heRef;
-              if (settingsState.replaceHolyNames) {
-                displayTitle = utils.replaceHolyNames(displayTitle);
-              }
-
-              return Text(
-                displayTitle,
-                style: TextStyle(
-                  fontSize: widget.fontSize * 0.75,
-                  fontWeight: FontWeight.normal,
-                  fontFamily: 'FrankRuhlCLM',
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.5),
-                ),
-              );
-            },
-          ),
-          subtitle: CommentaryContent(
-            key: ValueKey('${link.path2}_${link.index2}_$indexesKey'),
+        return ctx.ContextMenuRegion(
+          contextMenu: ContextMenuUtils.buildCommentaryContextMenu(
+            context: context,
             link: link,
-            fontSize: widget.fontSize,
             openBookCallback: widget.openBookCallback,
-            removeNikud: state.removeNikud,
-            searchQuery: widget.showSearch ? _searchQuery : '',
-            currentSearchIndex:
-                widget.showSearch ? _getItemSearchIndex(link) : 0,
-            onSearchResultsCountChanged: widget.showSearch
-                ? (count) => _updateSearchResultsCount(link, count)
-                : null,
+            fontSize: widget.fontSize,
+            savedSelectedText: _savedSelectedText,
+            onCopySelected: () => ContextMenuUtils.copyFormattedText(
+              context: context,
+              savedSelectedText: _savedSelectedText,
+              fontSize: widget.fontSize,
+            ),
+          ),
+          child: ListTile(
+            key: _itemKeys[_getLinkKey(link)],
+            contentPadding: const EdgeInsets.only(right: 32.0, left: 16.0),
+            title: BlocBuilder<SettingsBloc, SettingsState>(
+              builder: (context, settingsState) {
+                String displayTitle = link.heRef;
+                if (settingsState.replaceHolyNames) {
+                  displayTitle = utils.replaceHolyNames(displayTitle);
+                }
+
+                return Text(
+                  displayTitle,
+                  style: TextStyle(
+                    fontSize: widget.fontSize * 0.75,
+                    fontWeight: FontWeight.normal,
+                    fontFamily: 'FrankRuhlCLM',
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
+                  ),
+                );
+              },
+            ),
+            subtitle: CommentaryContent(
+              key: ValueKey('${link.path2}_${link.index2}_$indexesKey'),
+              link: link,
+              fontSize: widget.fontSize,
+              openBookCallback: widget.openBookCallback,
+              removeNikud: state.removeNikud,
+              searchQuery: widget.showSearch ? _searchQuery : '',
+              currentSearchIndex:
+                  widget.showSearch ? _getItemSearchIndex(link) : 0,
+              onSearchResultsCountChanged: widget.showSearch
+                  ? (count) => _updateSearchResultsCount(link, count)
+                  : null,
+            ),
           ),
         );
       }).toList(),
