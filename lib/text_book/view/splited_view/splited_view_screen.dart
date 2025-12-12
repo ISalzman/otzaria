@@ -70,6 +70,10 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
             !_paneOpen) {
           _paneOpen = true;
         }
+        // אם עוברים למצב של מפרשים מתחת הטקסט (showSplitView = false), סוגרים את הפאנל הימני
+        if (!widget.showSplitView && _paneOpen) {
+          _paneOpen = false;
+        }
       });
     }
   }
