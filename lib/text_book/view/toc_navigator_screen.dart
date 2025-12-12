@@ -4,6 +4,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/ref_helper.dart';
@@ -150,11 +151,20 @@ class _TocViewerState extends State<TocViewer>
                 _isManuallyScrolling = false;
                 _lastScrolledTocIndex = null;
               });
-              widget.scrollController.scrollTo(
-                index: entry.index,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.ease,
-              );
+              final state = context.read<TextBookBloc>().state;
+              if (state is TextBookLoaded && state.showTzuratHadafView) {
+                // במצב צורת הדף, השתמש ב-UpdateSelectedIndex
+                context
+                    .read<TextBookBloc>()
+                    .add(UpdateSelectedIndex(entry.index));
+              } else {
+                // במצב רגיל, השתמש ב-scrollController
+                widget.scrollController.scrollTo(
+                  index: entry.index,
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.ease,
+                );
+              }
               if (Platform.isAndroid) {
                 widget.closeLeftPaneCallback();
               }
@@ -204,6 +214,7 @@ class _TocViewerState extends State<TocViewer>
         _isManuallyScrolling = false;
         _lastScrolledTocIndex = null;
       });
+      // תמיד השתמש ב-scrollController - זה עובד גם בצורת הדף
       widget.scrollController.scrollTo(
         index: entry.index,
         duration: const Duration(milliseconds: 250),
@@ -228,7 +239,7 @@ class _TocViewerState extends State<TocViewer>
               ((state.selectedIndex != null &&
                       state.selectedIndex == entry.index) ||
                   autoIndex == entry.index);
-          
+
           return InkWell(
             onTap: navigateToEntry,
             child: Container(
@@ -265,7 +276,8 @@ class _TocViewerState extends State<TocViewer>
                       entry.text,
                       style: TextStyle(
                         fontSize: 14,
-                        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                        fontWeight:
+                            selected ? FontWeight.w600 : FontWeight.normal,
                       ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 2,

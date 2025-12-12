@@ -73,3 +73,5 @@ pubspec.lock
 flutter/
 
 seforim.db
+seforim.db-wal
+seforim.db-shm

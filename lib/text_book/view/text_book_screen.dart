@@ -1023,10 +1023,30 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         widget: _buildSplitViewButton(context, state),
         icon: FluentIcons.panel_left_24_regular,
         tooltip: state.showSplitView
-            ? 'הצגת מפרשים מתחת הטקסט'
-            : 'הצגת מפרשים בצד הטקסט',
+            ? 'הצג מפרשים מתחת הטקסט'
+            : 'הצג מפרשים בצד הטקסט',
         onPressed: () => context.read<TextBookBloc>().add(
               ToggleSplitView(!state.showSplitView),
+            ),
+      ),
+
+      // Page Shape View Button
+      ActionButtonData(
+        widget: IconButton(
+          icon: Icon(state.showPageShapeView
+              ? FluentIcons.book_open_24_filled
+              : FluentIcons.book_open_24_regular),
+          tooltip: 'צורת הדף',
+          onPressed: () => context.read<TextBookBloc>().add(
+                TogglePageShapeView(!state.showPageShapeView),
+              ),
+        ),
+        icon: state.showPageShapeView
+            ? FluentIcons.book_open_24_filled
+            : FluentIcons.book_open_24_regular,
+        tooltip: 'צורת הדף',
+        onPressed: () => context.read<TextBookBloc>().add(
+              TogglePageShapeView(!state.showPageShapeView),
             ),
       ),
 
@@ -1412,8 +1432,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       tooltip: widget.isInCombinedView
           ? 'בתצוגה משולבת, מפרשים תמיד מתחת הטקסט'
           : (state.showSplitView
-              ? 'הצגת מפרשים מתחת הטקסט'
-              : 'הצגת מפרשים בצד הטקסט'),
+              ? 'הצג מפרשים מתחת הטקסט'
+              : 'הצג מפרשים בצד הטקסט'),
     );
   }
 

@@ -50,6 +50,8 @@ class TextBookLoaded extends TextBookState {
   final List<String> content;
   final double fontSize;
   final bool showSplitView;
+  final bool showTzuratHadafView;
+  final bool showPageShapeView;
   final List<String> activeCommentators;
   final List<CommentatorGroup> commentatorGroups;
   final List<String> availableCommentators;
@@ -85,6 +87,8 @@ class TextBookLoaded extends TextBookState {
     required this.content,
     required this.fontSize,
     required this.showSplitView,
+    this.showTzuratHadafView = false,
+    this.showPageShapeView = false,
     required this.activeCommentators,
     required this.commentatorGroups,
     required this.availableCommentators,
@@ -124,6 +128,8 @@ class TextBookLoaded extends TextBookState {
       fontSize: 25.0, // Default font size
       showLeftPane: showLeftPane,
       showSplitView: splitView,
+      showTzuratHadafView: false,
+      showPageShapeView: false,
       activeCommentators: commentators ?? const [],
       commentatorGroups: const [],
       availableCommentators: const [],
@@ -155,6 +161,8 @@ class TextBookLoaded extends TextBookState {
     double? fontSize,
     bool? showLeftPane,
     bool? showSplitView,
+    bool? showTzuratHadafView,
+    bool? showPageShapeView,
     List<String>? activeCommentators,
     List<CommentatorGroup>? commentatorGroups,
     List<String>? availableCommentators,
@@ -187,6 +195,8 @@ class TextBookLoaded extends TextBookState {
       fontSize: fontSize ?? this.fontSize,
       showLeftPane: showLeftPane ?? this.showLeftPane,
       showSplitView: showSplitView ?? this.showSplitView,
+      showTzuratHadafView: showTzuratHadafView ?? this.showTzuratHadafView,
+      showPageShapeView: showPageShapeView ?? this.showPageShapeView,
       activeCommentators: activeCommentators ?? this.activeCommentators,
       commentatorGroups: commentatorGroups ?? this.commentatorGroups,
       availableCommentators:
@@ -223,6 +233,8 @@ class TextBookLoaded extends TextBookState {
         fontSize,
         showLeftPane,
         showSplitView,
+        showTzuratHadafView,
+        showPageShapeView,
         activeCommentators.length,
         commentatorGroups,
         availableCommentators.length,
