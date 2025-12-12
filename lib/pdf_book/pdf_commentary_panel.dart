@@ -235,18 +235,20 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             ],
           ),
         ),
-        // תוכן הכרטיסיות
+        // תוכן הכרטיסיות - עטוף ב-SelectionArea כדי לאפשר בחירת טקסט
         Expanded(
-          child: _showFilterTab
-              ? _buildCommentatorsFilter()
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildCommentariesView(),
-                    _buildLinksView(),
-                    _buildNotesView(),
-                  ],
-                ),
+          child: SelectionArea(
+            child: _showFilterTab
+                ? _buildCommentatorsFilter()
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildCommentariesView(),
+                      _buildLinksView(),
+                      _buildNotesView(),
+                    ],
+                  ),
+          ),
         ),
       ],
     );
