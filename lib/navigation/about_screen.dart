@@ -150,46 +150,39 @@ class _AboutScreenState extends State<AboutScreen> {
         'name': 'דורש טוב',
         'url': 'https://mitmachim.top/user/%D7%93%D7%95%D7%A8%D7%A9-%D7%98%D7%95%D7%91',
       },
-      {
-        'name': 'מרדכי פינק',
-        'url': '',
-      },
-      {
-        'name': 'זקצ',
-        'url': '',
-      },
-      {
-        'name': 'דוד בנדל',
-        'url': '',
-      },
+      // {
+      //   'name': 'מרדכי פינק',
+      // },
+      // {
+      //   'name': 'זקצ',
+      // },
+      // {
+      //   'name': 'דוד בנדל',
+      // },
       {
         'name': 'דאנציג',
         'url': 'https://mitmachim.top/user/%D7%93%D7%90%D7%A0%D7%A6%D7%99%D7%92',
       },
-      {
-        'name': 'ישי אשכנזי',
-        'url': '',
-      },
+      // {
+      //   'name': 'ישי אשכנזי',
+      // },
       {
         'name': '333',
         'url': 'https://mitmachim.top/user/333',
       },
-      {
-        'name': 'יעקב אייזנשטיין',
-        'url': '',
-      },
-      {
-        'name': 'יצחק זאב הוכמן',
-        'url': '',
-      },
+      // {
+      //   'name': 'יעקב אייזנשטיין',
+      // },
+      // {
+      //   'name': 'יצחק זאב הוכמן',
+      // },
     ];
 
     // מהדירים שההדירו בין 5 ל-10 ספרים
     final regularEditors = [
-      {
-        'name': 'מוטיו',
-        'url': '',
-      },
+      // {
+      //   'name': 'מוטיו',
+      // },
       {
         'name': 'דוד משה 1',
         'url': 'https://mitmachim.top/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1',
@@ -225,7 +218,7 @@ class _AboutScreenState extends State<AboutScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: _buildContributor(
-                                  editor['name']!, editor['url']!),
+                                  editor['name']!, editor['url'] ?? ''),
                             ),
                           ],
                         ),
@@ -247,7 +240,7 @@ class _AboutScreenState extends State<AboutScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: _buildContributor(
-                                editor['name']!, editor['url']!),
+                                editor['name']!, editor['url'] ?? ''),
                           ),
                         ],
                       ),
@@ -265,7 +258,7 @@ class _AboutScreenState extends State<AboutScreen> {
         Text(
           'מהדירים שההדירו 10 ספרים ומעלה',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 13,
             fontWeight: FontWeight.w600,
             color: Colors.grey[700],
           ),
@@ -278,7 +271,7 @@ class _AboutScreenState extends State<AboutScreen> {
         Text(
           'מהדירים שההדירו בין 5 ל-10 ספרים',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 13,
             fontWeight: FontWeight.w600,
             color: Colors.grey[700],
           ),
@@ -302,7 +295,7 @@ class _AboutScreenState extends State<AboutScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'באם גם אתם ערכתם ספרים ושמכם אינו מופיע ברשימה, וכן אם אתם מעוניינים בשינוי כלשהו, אנא פנו למייל המערכת',
+                  'באם גם אתם ערכתם ספרים ושמכם אינו מופיע ברשימה, וכן אם אתם מעוניינים בשינוי כלשהו,\nאנא פנו למייל המערכת',
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.grey[700],
