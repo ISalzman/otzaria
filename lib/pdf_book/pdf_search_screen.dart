@@ -243,7 +243,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
           widget.textSearcher.matches.isEmpty,
       onSearchTextChanged: (_) => _searchTextUpdated(),
       resetSearchCallback: () => widget.textSearcher.resetTextSearch(),
-      hintText: 'חפש כאן..',
+      hintText: 'חפש כאן...',
     );
   }
 

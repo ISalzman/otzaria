@@ -228,7 +228,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         _searchTextUpdated();
       },
       resetSearchCallback: () {},
-      hintText: 'חפש כאן..',
+      hintText: 'חפש כאן...',
     );
   }
 

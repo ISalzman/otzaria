@@ -1112,13 +1112,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // 5) First Page Button
         ActionButtonData(
           widget: IconButton(
-            icon: const Icon(FluentIcons.arrow_previous_24_regular),
-            tooltip: 'תחילת הספר',
+            icon: const Icon(FluentIcons.arrow_previous_24_filled),
+            tooltip: 'תחילת הספר (CTRL + HOME)',
             onPressed: () =>
                 widget.tab.pdfViewerController.goToPage(pageNumber: 1),
           ),
-          icon: FluentIcons.arrow_previous_24_regular,
-          tooltip: 'תחילת הספר',
+          icon: FluentIcons.arrow_previous_24_filled,
+          tooltip: 'תחילת הספר (CTRL + HOME)',
           onPressed: () =>
               widget.tab.pdfViewerController.goToPage(pageNumber: 1),
         ),
@@ -1193,12 +1193,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.arrow_next_24_filled),
-            tooltip: 'סוף הספר',
+            tooltip: 'סוף הספר (CTRL + END)',
             onPressed: () => widget.tab.pdfViewerController
                 .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
           ),
           icon: FluentIcons.arrow_next_24_filled,
-          tooltip: 'סוף הספר',
+          tooltip: 'סוף הספר (CTRL + END)',
           onPressed: () => widget.tab.pdfViewerController
               .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
         ),
@@ -1213,13 +1213,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       if (widget.isInCombinedView) ...[
         ActionButtonData(
           widget: IconButton(
-            icon: const Icon(FluentIcons.arrow_previous_24_regular),
-            tooltip: 'תחילת הספר',
+            icon: const Icon(FluentIcons.arrow_previous_24_filled),
+            tooltip: 'תחילת הספר (CTRL + HOME)',
             onPressed: () =>
                 widget.tab.pdfViewerController.goToPage(pageNumber: 1),
           ),
-          icon: FluentIcons.arrow_previous_24_regular,
-          tooltip: 'תחילת הספר',
+          icon: FluentIcons.arrow_previous_24_filled,
+          tooltip: 'תחילת הספר (CTRL + HOME)',
           onPressed: () =>
               widget.tab.pdfViewerController.goToPage(pageNumber: 1),
         ),
@@ -1280,12 +1280,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.arrow_next_24_filled),
-            tooltip: 'סוף הספר',
+            tooltip: 'סוף הספר (CTRL + END)',
             onPressed: () => widget.tab.pdfViewerController
                 .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
           ),
           icon: FluentIcons.arrow_next_24_filled,
-          tooltip: 'סוף הספר',
+          tooltip: 'סוף הספר (CTRL + END)',
           onPressed: () => widget.tab.pdfViewerController
               .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
         ),

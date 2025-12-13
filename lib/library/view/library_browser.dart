@@ -36,6 +36,7 @@ import 'package:otzaria/settings/library_settings_dialog.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class LibraryBrowser extends StatefulWidget {
   const LibraryBrowser({super.key});
@@ -55,18 +56,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   bool _showPreview = true; // האם להציג את התצוגה המקדימה
   ViewMode _viewMode = ViewMode.grid; // מצב תצוגה: רשת או רשימה
   final Set<String> _expandedCategories = {}; // קטגוריות שנפתחו בתצוגת רשימה
-  
+
   // FileSyncBloc יווצר פעם אחת בלבד
   late final FileSyncBloc _fileSyncBloc;
-  
-
 
   @override
   void initState() {
     super.initState();
     context.read<LibraryBloc>().add(LoadLibrary());
     _loadViewPreferences();
-    
+
     // יצירת FileSyncBloc פעם אחת בלבד
     _fileSyncBloc = FileSyncBloc(
       repository: FileSyncRepository(
@@ -75,7 +74,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         branch: "main",
       ),
     );
-    
   }
 
   void _loadViewPreferences() {
@@ -98,7 +96,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   Widget build(BuildContext context) {
     super.build(context);
 
-    
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         return BlocBuilder<LibraryBloc, LibraryState>(
@@ -316,7 +313,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           return Row(
             children: [
               Expanded(
-                child: TextField(
+                child: RtlTextField(
                   controller: focusRepository.librarySearchController,
                   focusNode:
                       context.read<FocusRepository>().librarySearchFocusNode,

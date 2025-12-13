@@ -813,7 +813,8 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         ),
                         SwitchSettingsTile(
                           title: 'עדכון אינדקס אוטומטי',
-                          leading: const Icon(FluentIcons.arrow_clockwise_24_regular),
+                          leading: const Icon(
+                              FluentIcons.arrow_clockwise_24_regular),
                           settingKey: 'key-auto-index-update',
                           defaultValue: state.autoUpdateIndex,
                           enabledLabel: 'אינדקס החיפוש יתעדכן אוטומטית',
@@ -855,10 +856,8 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                   }
                                 } else {
                                   // התחלת עדכון האינדקס ללא מחיקה
-                                  final library = context
-                                      .read<LibraryBloc>()
-                                      .state
-                                      .library;
+                                  final library =
+                                      context.read<LibraryBloc>().state.library;
                                   if (library != null) {
                                     context
                                         .read<IndexingBloc>()
@@ -877,19 +876,19 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                             final result = await showConfirmationDialog(
                               context: context,
                               title: 'איפוס אינדקס',
-                              content: 'האם למחוק את אינדקס החיפוש? תצטרך לבנות אותו מחדש כדי להשתמש בחיפוש.',
+                              content:
+                                  'האם למחוק את אינדקס החיפוש? תצטרך לבנות אותו מחדש כדי להשתמש בחיפוש.',
                             );
                             if (!context.mounted) return;
                             if (result == true) {
                               // רק מחיקת האינדקס, ללא התחלה מחדש
-                              context
-                                  .read<IndexingBloc>()
-                                  .add(ClearIndex());
+                              context.read<IndexingBloc>().add(ClearIndex());
                             }
                           },
                         ),
                       ]),
-                      if (!(Platform.isAndroid || Platform.isIOS)) const SizedBox(height: 16),
+                      if (!(Platform.isAndroid || Platform.isIOS))
+                        const SizedBox(height: 16),
                       if (!(Platform.isAndroid || Platform.isIOS))
                         _buildColumns(2, [
                           SimpleSettingsTile(
@@ -915,7 +914,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                             },
                           ),
                           Tooltip(
-                            message: 'במידה וקיימים ברשותכם ספרים ממאגר זה',
+                            message: 'במידה וקיימים ברשותך ספרים ממאגר זה',
                             child: SimpleSettingsTile(
                               title: 'מיקום ספרי היברובוקס',
                               subtitle: Settings.getValue<String>(
@@ -965,7 +964,9 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         activeColor: Theme.of(context).cardColor,
                         onChange: (value) {
                           // עדכון המצב דרך ה-Bloc כדי לרענן את כל הממשק
-                          context.read<SettingsBloc>().add(UpdateOfflineMode(value));
+                          context
+                              .read<SettingsBloc>()
+                              .add(UpdateOfflineMode(value));
                         },
                       ),
                       SimpleSettingsTile(
