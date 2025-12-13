@@ -48,7 +48,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
   Widget _buildDevelopersList() {
     final developers = [
-      {'name': 'sivan22','url': 'https://github.com/Sivan22'},
+      {'name': 'sivan22', 'url': 'https://github.com/Sivan22'},
       {'name': 'Y.PL.', 'url': 'https://github.com/Y-PLONI'},
       {'name': 'YOSEFTT', 'url': 'https://github.com/YOSEFTT'},
       {'name': 'zevisvei', 'url': 'https://github.com/zevisvei'},

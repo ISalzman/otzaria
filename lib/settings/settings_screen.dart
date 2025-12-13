@@ -955,7 +955,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                       // הגדרת מצב אופליין - תמיד מוצגת
                       SwitchSettingsTile(
                         settingKey: SettingsRepository.keyOfflineMode,
-                        title: 'חיבור לרשת',
+                        title: 'מצב חיבור לרשת',
                         enabledLabel:
                             'התוכנה מנותקת לגמרי מהרשת, כל התכונות המקוונות מושבתות',
                         disabledLabel: 'התוכנה יכולה להתחבר לרשת',
