@@ -2190,18 +2190,34 @@ class _TimesAndEventsTabViewState extends State<_TimesAndEventsTabView>
                               ),
                             ),
                             const SizedBox(height: 8),
-                            InkWell(
-                              onTap: () =>
-                                  _openCalendarCalculationPage(context),
-                              child: Text(
-                                'שים לב! הזמנים שונים מהותית מהלוח \'עיתים לבינה\'!',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(context).primaryColor,
-                                  decoration: TextDecoration.underline,
-                                ),
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  const TextSpan(
+                                    text: 'שים לב! ',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                  WidgetSpan(
+                                    child: InkWell(
+                                      onTap: () =>
+                                          _openCalendarCalculationPage(context),
+                                      child: Text(
+                                        'הזמנים שונים',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Theme.of(context).primaryColor,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const TextSpan(
+                                    text: ' מהותית מהלוח \'עיתים לבינה\'!',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ],
                               ),
+                              textAlign: TextAlign.center,
                             ),
                           ],
                         ),
