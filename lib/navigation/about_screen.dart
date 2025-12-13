@@ -29,6 +29,17 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Widget _buildContributor(String name, String url) {
+    final hasUrl = url.isNotEmpty;
+
+    if (!hasUrl) {
+      return Text(
+        name,
+        style: TextStyle(
+          color: Colors.grey[700],
+        ),
+      );
+    }
+
     return InkWell(
       onTap: () async {
         final uri = Uri.parse(url);
@@ -40,7 +51,6 @@ class _AboutScreenState extends State<AboutScreen> {
         name,
         style: const TextStyle(
           color: Colors.blue,
-          decoration: TextDecoration.underline,
         ),
       ),
     );
