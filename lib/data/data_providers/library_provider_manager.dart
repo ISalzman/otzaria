@@ -7,7 +7,7 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/links.dart';
 
 /// Manages multiple library providers and coordinates book loading.
-/// 
+///
 /// This class is responsible for:
 /// - Initializing all providers
 /// - Loading books from all providers
@@ -59,16 +59,18 @@ class LibraryProviderManager {
         await provider.initialize();
         debugPrint('✅ Initialized provider: ${provider.displayName}');
       } catch (e) {
-        debugPrint('⚠️ Failed to initialize provider ${provider.displayName}: $e');
+        debugPrint(
+            '⚠️ Failed to initialize provider ${provider.displayName}: $e');
       }
     }
 
     _isInitialized = true;
-    debugPrint('📚 LibraryProviderManager initialized with ${_providers.length} providers');
+    debugPrint(
+        '📚 LibraryProviderManager initialized with ${_providers.length} providers');
   }
 
   /// Loads all books from all providers.
-  /// 
+  ///
   /// Returns a map of category name -> list of books.
   /// Books from higher priority providers take precedence.
   Future<Map<String, List<Book>>> loadAllBooks(
@@ -95,7 +97,8 @@ class LibraryProviderManager {
           for (final book in categoryBooks) {
             // Skip if already loaded from higher priority provider
             if (loadedTitles.contains(book.title)) {
-              debugPrint('⏭️ Skipping "${book.title}" - already loaded from ${_bookToProvider[book.title]?.displayName}');
+              debugPrint(
+                  '⏭️ Skipping "${book.title}" - already loaded from ${_bookToProvider[book.title]?.displayName}');
               continue;
             }
 
@@ -105,7 +108,8 @@ class LibraryProviderManager {
           }
         }
 
-        debugPrint('📚 Loaded ${books.values.expand((b) => b).length} books from ${provider.displayName}');
+        debugPrint(
+            '📚 Loaded ${books.values.expand((b) => b).length} books from ${provider.displayName}');
       } catch (e) {
         debugPrint('⚠️ Error loading books from ${provider.displayName}: $e');
       }
@@ -190,7 +194,7 @@ class LibraryProviderManager {
     // Try to find the provider for the target book
     final targetTitle = link.path2.split('/').last.replaceAll('.txt', '');
     final provider = _bookToProvider[targetTitle];
-    
+
     if (provider != null) {
       return await provider.getLinkContent(link);
     }
@@ -233,11 +237,11 @@ class LibraryProviderManager {
   }
 
   /// Builds a unified library catalog from all providers.
-  /// 
+  ///
   /// This method delegates to the highest priority provider that is initialized.
   /// The database provider builds from the database structure,
   /// while the file system provider builds from the folder hierarchy.
-  /// 
+  ///
   /// [metadata] - Book metadata for enriching book information
   /// [rootPath] - The root path of the library (e.g., 'אוצריא' folder)
   Future<Library> buildLibraryCatalog(
@@ -251,11 +255,12 @@ class LibraryProviderManager {
       if (provider.isInitialized) {
         debugPrint('📚 Building catalog from ${provider.displayName}');
         final library = await provider.buildLibraryCatalog(metadata, rootPath);
-        
+
         // Update book to provider mapping
         _updateBookToProviderMapping(library, provider);
-        
-        debugPrint('✅ Library catalog built with ${library.subCategories.length} top-level categories');
+
+        debugPrint(
+            '✅ Library catalog built with ${library.subCategories.length} top-level categories');
         return library;
       }
     }
@@ -265,18 +270,30 @@ class LibraryProviderManager {
   }
 
   /// Updates the book to provider mapping from a library catalog.
-  void _updateBookToProviderMapping(Library library, LibraryProvider provider) {
+  /// Maps books to the appropriate provider based on their type:
+  /// - TextBooks that are in the database -> DatabaseLibraryProvider
+  /// - PdfBooks and other file-based books -> FileSystemLibraryProvider
+  void _updateBookToProviderMapping(
+      Library library, LibraryProvider primaryProvider) {
     _bookToProvider.clear();
-    _mapBooksRecursive(library, provider);
+    _mapBooksRecursive(library, primaryProvider);
   }
 
   /// Recursively maps all books in a category to their provider.
-  void _mapBooksRecursive(Category category, LibraryProvider provider) {
+  /// PdfBooks are always mapped to FileSystemLibraryProvider since they're file-based.
+  /// TextBooks are mapped to the primary provider (usually Database).
+  void _mapBooksRecursive(Category category, LibraryProvider primaryProvider) {
     for (final book in category.books) {
-      _bookToProvider[book.title] = provider;
+      if (book is PdfBook) {
+        // PDF books are always file-based
+        _bookToProvider[book.title] = fileSystemProvider;
+      } else {
+        // TextBooks use the primary provider (Database if available)
+        _bookToProvider[book.title] = primaryProvider;
+      }
     }
     for (final subCat in category.subCategories) {
-      _mapBooksRecursive(subCat, provider);
+      _mapBooksRecursive(subCat, primaryProvider);
     }
   }
 }

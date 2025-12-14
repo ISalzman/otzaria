@@ -76,19 +76,29 @@ void _openDafYomiBookInCategory(BuildContext context, String tractate,
     }
   }
 
-  // מחפש את הספר בקטגוריה הספציפית
+  // מחפש את הספר בקטגוריה הספציפית - מעדיף PDF על TXT
   Book? book;
+  Book? textBookFallback;
   final allBooksInCategory = talmudCategory.getAllBooks();
 
-  // חיפוש מדויק יותר
+  // חיפוש מדויק יותר - מעדיף PDF
   for (var bookInCategory in allBooksInCategory) {
     if (bookInCategory.title == tractate ||
         bookInCategory.title.contains(tractate) ||
         tractate.contains(bookInCategory.title)) {
-      book = bookInCategory;
-      break;
+      if (bookInCategory is PdfBook) {
+        // מצאנו PDF - זה מה שאנחנו רוצים
+        book = bookInCategory;
+        break;
+      } else {
+        // שומרים את ה-TextBook כגיבוי (רק אם עוד לא שמרנו)
+        textBookFallback ??= bookInCategory;
+      }
     }
   }
+
+  // אם לא מצאנו PDF, נשתמש ב-TextBook
+  book ??= textBookFallback;
 
   if (book != null) {
     await _openBook(context, book, daf);

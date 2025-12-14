@@ -1356,40 +1356,38 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildPdfButton(BuildContext context, TextBookLoaded state) {
-    return FutureBuilder(
+    return FutureBuilder<Book?>(
       future: DataRepository.instance.library.then(
         (library) => library.findBookByTitle(state.book.title, PdfBook),
       ),
-      builder: (context, snapshot) => snapshot.hasData
-          ? IconButton(
-              icon: const Icon(FluentIcons.document_pdf_24_regular),
-              tooltip: 'פתח ספר במהדורה מודפסת ',
-              onPressed: () async {
-                final currentIndex = state
-                        .positionsListener.itemPositions.value.isNotEmpty
+      builder: (context, snapshot) {
+        // Show button only if PDF book exists (snapshot.data is not null)
+        final pdfBook = snapshot.data;
+        if (pdfBook == null) {
+          return const SizedBox.shrink();
+        }
+
+        return IconButton(
+          icon: const Icon(FluentIcons.document_pdf_24_regular),
+          tooltip: 'פתח ספר במהדורה מודפסת ',
+          onPressed: () async {
+            final currentIndex =
+                state.positionsListener.itemPositions.value.isNotEmpty
                     ? state.positionsListener.itemPositions.value.first.index
                     : 0;
-                widget.tab.index = currentIndex;
+            widget.tab.index = currentIndex;
 
-                final library = await DataRepository.instance.library;
-                if (!context.mounted) return;
+            final index = await textToPdfPage(
+              state.book,
+              currentIndex,
+            );
 
-                final book = library.findBookByTitle(state.book.title, PdfBook);
-                if (book == null) {
-                  return;
-                }
+            if (!context.mounted) return;
 
-                final index = await textToPdfPage(
-                  state.book,
-                  currentIndex,
-                );
-
-                if (!context.mounted) return;
-
-                openBook(context, book, index ?? 1, '', ignoreHistory: true);
-              },
-            )
-          : const SizedBox.shrink(),
+            openBook(context, pdfBook, index ?? 1, '', ignoreHistory: true);
+          },
+        );
+      },
     );
   }
 
