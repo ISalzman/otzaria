@@ -166,9 +166,10 @@ class _AboutScreenState extends State<AboutScreen> {
       // {
       //   'name': 'זקצ',
       // },
-      // {
-      //   'name': 'דוד בנדל',
-      // },
+      {
+        'name': 'קטנטן',
+        'url': 'https://mitmachim.top/user/%D7%A7%D7%98%D7%A0%D7%98%D7%9F',
+      },
       {
         'name': 'דאנציג',
         'url': 'https://mitmachim.top/user/%D7%93%D7%90%D7%A0%D7%A6%D7%99%D7%92',
