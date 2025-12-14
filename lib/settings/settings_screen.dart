@@ -138,6 +138,52 @@ class _MySettingsScreenState extends State<MySettingsScreen>
     );
   }
 
+  /// בונה את הווידג'ט של מצב חיבור לרשת - מציג שתי אפשרויות (אונליין/אופליין)
+  /// במקום מתג הפעלה/כיבוי, כך ששתי האפשרויות נראות כ"פעילות"
+  Widget _buildNetworkModeTile(BuildContext context, SettingsState state) {
+    final isOffline = state.isOfflineMode;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final cardColor = Theme.of(context).cardColor;
+
+    return _SettingsTile(
+      leading: const Icon(FluentIcons.globe_24_regular),
+      title: 'מצב חיבור לרשת',
+      subtitle: isOffline
+          ? 'התוכנה מנותקת לגמרי מהרשת, כל התכונות המקוונות מושבתות'
+          : 'התוכנה יכולה להתחבר לרשת',
+      trailing: SegmentedButton<bool>(
+        segments: const [
+          ButtonSegment<bool>(
+            value: false,
+            label: Text('מקוון'),
+            icon: Icon(FluentIcons.wifi_1_24_regular),
+          ),
+          ButtonSegment<bool>(
+            value: true,
+            label: Text('מנותק'),
+            icon: Icon(FluentIcons.wifi_off_24_regular),
+          ),
+        ],
+        selected: {isOffline},
+        onSelectionChanged: (Set<bool> newSelection) {
+          final value = newSelection.first;
+          Settings.setValue(SettingsRepository.keyOfflineMode, value);
+          context.read<SettingsBloc>().add(UpdateOfflineMode(value));
+        },
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+            (Set<WidgetState> states) {
+              if (states.contains(WidgetState.selected)) {
+                return primaryColor.withValues(alpha: 0.2);
+              }
+              return cardColor;
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -953,22 +999,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                             activeColor: Theme.of(context).cardColor,
                           ),
                       // הגדרת מצב אופליין - תמיד מוצגת
-                      SwitchSettingsTile(
-                        settingKey: SettingsRepository.keyOfflineMode,
-                        title: 'מצב חיבור לרשת',
-                        enabledLabel:
-                            'התוכנה מנותקת לגמרי מהרשת, כל התכונות המקוונות מושבתות',
-                        disabledLabel: 'התוכנה יכולה להתחבר לרשת',
-                        leading: const Icon(FluentIcons.wifi_off_24_regular),
-                        defaultValue: false,
-                        activeColor: Theme.of(context).cardColor,
-                        onChange: (value) {
-                          // עדכון המצב דרך ה-Bloc כדי לרענן את כל הממשק
-                          context
-                              .read<SettingsBloc>()
-                              .add(UpdateOfflineMode(value));
-                        },
-                      ),
+                      _buildNetworkModeTile(context, state),
                       SimpleSettingsTile(
                         title: 'איפוס הגדרות',
                         subtitle:
@@ -1274,6 +1305,46 @@ class _MarginSliderPreviewState extends State<MarginSliderPreview> {
           ],
         );
       },
+    );
+  }
+}
+
+/// ווידג'ט מותאם אישית שמחקה את הסגנון של flutter_settings_screens
+class _SettingsTile extends StatelessWidget {
+  final Widget? leading;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  const _SettingsTile({
+    this.leading,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      child: Column(
+        children: [
+          ListTile(
+            leading: leading,
+            title: Text(title),
+            subtitle: subtitle != null
+                ? Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                    ),
+                  )
+                : null,
+            trailing: trailing,
+          ),
+          const Divider(height: 0),
+        ],
+      ),
     );
   }
 }
