@@ -33,6 +33,8 @@ import 'package:otzaria/widgets/ad_popup_dialog.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/main.dart' show appWindowListener;
 import 'package:otzaria/migration/sync/background_sync_initializer.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/library/bloc/library_event.dart';
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
@@ -104,10 +106,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
         if (result.addedBooks > 0 ||
             result.updatedBooks > 0 ||
             result.addedLinks > 0) {
-          // Refresh library if books were added/updated
-          context.read<NavigationBloc>().refreshLibrary();
-          debugPrint('📚 סנכרון קבצים: ${result.addedBooks} ספרים חדשים, '
+          debugPrint('📚 סנכרון קבצים הושלם: ${result.addedBooks} ספרים חדשים, '
               '${result.updatedBooks} עודכנו, ${result.addedLinks} קישורים');
+
+          // Refresh the library browser to show new books
+          try {
+            context.read<LibraryBloc>().add(RefreshLibrary());
+          } catch (e) {
+            debugPrint('Could not refresh library: $e');
+          }
         }
       },
     );
