@@ -519,37 +519,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
-  /// שמירת הגדרות פר-ספר
-  Future<void> _savePerBookSettings() async {
-    final settingsBloc = context.read<SettingsBloc>();
-    if (!settingsBloc.state.enablePerBookSettings) {
-      debugPrint('💾 Per-book settings disabled, not saving');
-      return;
-    }
-
-    final textBookBloc = context.read<TextBookBloc>();
-    final currentState = textBookBloc.state;
-
-    if (currentState is! TextBookLoaded) {
-      debugPrint('💾 TextBook not loaded yet, cannot save settings');
-      return;
-    }
-
-    final settings = TextBookPerBookSettings(
-      fontSize: currentState.fontSize,
-      commentatorsBelow: !currentState.showSplitView,
-      removeNikud: currentState.removeNikud,
-    );
-
-    debugPrint('💾 Saving settings for "${widget.tab.book.title}":');
-    debugPrint('   fontSize: ${settings.fontSize}');
-    debugPrint('   commentatorsBelow: ${settings.commentatorsBelow}');
-    debugPrint('   removeNikud: ${settings.removeNikud}');
-
-    await settings.save(widget.tab.book.title);
-    debugPrint('💾 Settings saved successfully!');
-  }
-
   /// איפוס הגדרות פר-ספר
   Future<void> _resetPerBookSettings() async {
     await TextBookPerBookSettings.delete(widget.tab.book.title);
@@ -1025,9 +994,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         tooltip: state.showSplitView
             ? 'הצג מפרשים מתחת הטקסט'
             : 'הצג מפרשים בצד הטקסט',
-        onPressed: () => context.read<TextBookBloc>().add(
-              ToggleSplitView(!state.showSplitView),
-            ),
+        onPressed: () async {
+          final newValue = !state.showSplitView;
+          context.read<TextBookBloc>().add(ToggleSplitView(newValue));
+          await _savePerBookSettingsDirectly(context, state,
+              showSplitView: newValue);
+        },
       ),
 
       // Page Shape View Button
@@ -1057,8 +1029,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ? FluentIcons.text_font_24_regular
             : FluentIcons.text_font_info_24_regular,
         tooltip: state.removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
-        onPressed: () =>
-            context.read<TextBookBloc>().add(ToggleNikud(!state.removeNikud)),
+        onPressed: () async {
+          final newValue = !state.removeNikud;
+          context.read<TextBookBloc>().add(ToggleNikud(newValue));
+          // שמירה עם הערך החדש
+          await _savePerBookSettingsDirectly(context, state,
+              removeNikud: newValue);
+        },
       ),
 
       // 4) Search Button
@@ -1078,9 +1055,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         widget: _buildZoomInButton(context, state),
         icon: FluentIcons.zoom_in_24_regular,
         tooltip: 'הגדלת טקסט',
-        onPressed: () => context.read<TextBookBloc>().add(
-              UpdateFontSize(min(50.0, state.fontSize + 3)),
-            ),
+        onPressed: () async {
+          final newSize = min(50.0, state.fontSize + 3);
+          context.read<TextBookBloc>().add(UpdateFontSize(newSize));
+          await _savePerBookSettingsDirectly(context, state, fontSize: newSize);
+        },
       ),
 
       // 6) Zoom Out Button
@@ -1088,9 +1067,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         widget: _buildZoomOutButton(context, state),
         icon: FluentIcons.zoom_out_24_regular,
         tooltip: 'הקטנת טקסט',
-        onPressed: () => context.read<TextBookBloc>().add(
-              UpdateFontSize(max(15.0, state.fontSize - 3)),
-            ),
+        onPressed: () async {
+          final newSize = max(15.0, state.fontSize - 3);
+          context.read<TextBookBloc>().add(UpdateFontSize(newSize));
+          await _savePerBookSettingsDirectly(context, state, fontSize: newSize);
+        },
       ),
 
       // 7) Navigation Buttons - רק אם לא בתצוגה משולבת
@@ -1417,11 +1398,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // בתצוגה משולבת, הכפתור מושבת (מפרשים תמיד מתחת)
       onPressed: widget.isInCombinedView
           ? null
-          : () {
-              context.read<TextBookBloc>().add(
-                    ToggleSplitView(!state.showSplitView),
-                  );
-              _savePerBookSettings();
+          : () async {
+              final newValue = !state.showSplitView;
+              context.read<TextBookBloc>().add(ToggleSplitView(newValue));
+              await _savePerBookSettingsDirectly(context, state,
+                  showSplitView: newValue);
             },
       icon: RotatedBox(
         quarterTurns: state.showSplitView
@@ -1439,9 +1420,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   Widget _buildNikudButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
-      onPressed: () {
-        context.read<TextBookBloc>().add(ToggleNikud(!state.removeNikud));
-        _savePerBookSettings();
+      onPressed: () async {
+        final newValue = !state.removeNikud;
+        context.read<TextBookBloc>().add(ToggleNikud(newValue));
+        // שמירה עם הערך החדש
+        await _savePerBookSettingsDirectly(context, state,
+            removeNikud: newValue);
       },
       icon: Icon(state.removeNikud
           ? FluentIcons.text_font_24_regular
@@ -1492,11 +1476,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       icon: const Icon(FluentIcons.zoom_in_24_regular),
       tooltip: 'הגדלת טקסט (CTRL + +)',
-      onPressed: () {
-        context.read<TextBookBloc>().add(
-              UpdateFontSize(min(50.0, state.fontSize + 3)),
-            );
-        _savePerBookSettings();
+      onPressed: () async {
+        final newSize = min(50.0, state.fontSize + 3);
+        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
+        await _savePerBookSettingsDirectly(context, state, fontSize: newSize);
       },
     );
   }
@@ -1505,11 +1488,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       icon: const Icon(FluentIcons.zoom_out_24_regular),
       tooltip: 'הקטנת טקסט (CTRL + -)',
-      onPressed: () {
-        context.read<TextBookBloc>().add(
-              UpdateFontSize(max(15.0, state.fontSize - 3)),
-            );
-        _savePerBookSettings();
+      onPressed: () async {
+        final newSize = max(15.0, state.fontSize - 3);
+        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
+        await _savePerBookSettingsDirectly(context, state, fontSize: newSize);
       },
     );
   }
@@ -2017,6 +1999,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 UpdateFontSize((state.fontSize * details.scale).clamp(15, 60)),
               );
         },
+        onScaleEnd: (details) {
+          // שמירת גודל הגופן בסיום המחווה
+          final textBookBloc = context.read<TextBookBloc>();
+          final currentState = textBookBloc.state;
+          if (currentState is TextBookLoaded) {
+            _savePerBookSettingsDirectly(context, currentState,
+                fontSize: currentState.fontSize);
+          }
+        },
         child: NotificationListener<UserScrollNotification>(
           onNotification: (scrollNotification) {
             if (!(state.pinLeftPane ||
@@ -2289,21 +2280,22 @@ bool _handleGlobalKeyEvent(
       // הגדלת טקסט (Ctrl++ או Ctrl+=)
       case LogicalKeyboardKey.equal:
       case LogicalKeyboardKey.add:
-        context.read<TextBookBloc>().add(
-              UpdateFontSize(min(50.0, state.fontSize + 3)),
-            );
+        final newSize = min(50.0, state.fontSize + 3);
+        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
+        _savePerBookSettingsDirectly(context, state, fontSize: newSize);
         return true;
 
       // הקטנת טקסט (Ctrl+-)
       case LogicalKeyboardKey.minus:
-        context.read<TextBookBloc>().add(
-              UpdateFontSize(max(15.0, state.fontSize - 3)),
-            );
+        final newSize = max(15.0, state.fontSize - 3);
+        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
+        _savePerBookSettingsDirectly(context, state, fontSize: newSize);
         return true;
 
       // איפוס גודל טקסט (Ctrl+0)
       case LogicalKeyboardKey.digit0:
         context.read<TextBookBloc>().add(const UpdateFontSize(25.0));
+        _savePerBookSettingsDirectly(context, state, fontSize: 25.0);
         return true;
     }
   }
@@ -2356,6 +2348,29 @@ bool _handleGlobalKeyEvent(
   }
 
   return false;
+}
+
+/// Helper function to save per-book settings directly from global functions
+Future<void> _savePerBookSettingsDirectly(
+  BuildContext context,
+  TextBookLoaded state, {
+  double? fontSize,
+  bool? showSplitView,
+  bool? removeNikud,
+}) async {
+  final settingsBloc = context.read<SettingsBloc>();
+  if (!settingsBloc.state.enablePerBookSettings) {
+    return;
+  }
+
+  final settings = TextBookPerBookSettings(
+    fontSize: fontSize ?? state.fontSize,
+    commentatorsBelow:
+        showSplitView != null ? !showSplitView : !state.showSplitView,
+    removeNikud: removeNikud ?? state.removeNikud,
+  );
+
+  await settings.save(state.book.title);
 }
 
 /// Helper function to add bookmark from keyboard shortcut
