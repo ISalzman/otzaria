@@ -36,6 +36,8 @@ import 'package:otzaria/settings/library_settings_dialog.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/migration/sync/file_sync_service.dart';
 
 class LibraryBrowser extends StatefulWidget {
   const LibraryBrowser({super.key});
@@ -55,27 +57,28 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   bool _showPreview = true; // האם להציג את התצוגה המקדימה
   ViewMode _viewMode = ViewMode.grid; // מצב תצוגה: רשת או רשימה
   final Set<String> _expandedCategories = {}; // קטגוריות שנפתחו בתצוגת רשימה
-  
+
   // FileSyncBloc יווצר פעם אחת בלבד
   late final FileSyncBloc _fileSyncBloc;
-  
-
 
   @override
   void initState() {
     super.initState();
     context.read<LibraryBloc>().add(LoadLibrary());
     _loadViewPreferences();
-    
+
     // יצירת FileSyncBloc פעם אחת בלבד
     _fileSyncBloc = FileSyncBloc(
       repository: FileSyncRepository(
         githubOwner: "Y-PLONI",
         repositoryName: "otzaria-library",
         branch: "main",
+        // Callback to delete book from DB when removed from GitHub
+        onDeleteBookFromDb: _deleteBookFromDb,
+        // Callback to sync new files to DB after GitHub sync completes
+        onSyncCompleted: _syncFilesToDb,
       ),
     );
-    
   }
 
   void _loadViewPreferences() {
@@ -88,6 +91,44 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     });
   }
 
+  /// Delete a book from the database when it's removed from GitHub
+  Future<bool> _deleteBookFromDb(String filePath) async {
+    try {
+      final repository = SqliteDataProvider.instance.repository;
+      if (repository == null) return false;
+
+      final syncService = await FileSyncService.getInstance(repository);
+      if (syncService == null) return false;
+
+      return await syncService.deleteBookByFilePath(filePath);
+    } catch (e) {
+      debugPrint('Error deleting book from DB: $e');
+      return false;
+    }
+  }
+
+  /// Sync new files to the database after GitHub sync completes
+  Future<void> _syncFilesToDb() async {
+    try {
+      final repository = SqliteDataProvider.instance.repository;
+      if (repository == null) return;
+
+      final syncService = await FileSyncService.getInstance(repository);
+      if (syncService == null) return;
+
+      final result = await syncService.syncFiles();
+      debugPrint(
+          '📚 DB sync after GitHub: ${result.addedBooks} added, ${result.updatedBooks} updated');
+
+      // Refresh the library to show new books
+      if (mounted && (result.addedBooks > 0 || result.updatedBooks > 0)) {
+        context.read<LibraryBloc>().add(RefreshLibrary());
+      }
+    } catch (e) {
+      debugPrint('Error syncing files to DB: $e');
+    }
+  }
+
   @override
   void dispose() {
     _fileSyncBloc.close();
@@ -98,7 +139,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   Widget build(BuildContext context) {
     super.build(context);
 
-    
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         return BlocBuilder<LibraryBloc, LibraryState>(

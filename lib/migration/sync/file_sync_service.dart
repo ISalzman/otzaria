@@ -83,6 +83,35 @@ class FileSyncService {
   /// Check if sync is currently running
   bool get isSyncing => _isSyncing;
 
+  /// Get the repository for external access
+  SeforimRepository get repository => _repository;
+
+  /// Delete a book from the database by its file path
+  /// This is used when a file is removed from GitHub sync
+  Future<bool> deleteBookByFilePath(String filePath) async {
+    try {
+      // Extract the book title from the file path
+      final title = path.basenameWithoutExtension(filePath);
+      _log.info('Attempting to delete book from DB: $title');
+
+      // Find the book by title
+      final existingBook = await _repository.checkBookExists(title);
+      if (existingBook == null) {
+        _log.info('Book not found in DB, nothing to delete: $title');
+        return false;
+      }
+
+      // Delete the book completely (including lines, TOC, links, etc.)
+      await _repository.deleteBookCompletely(existingBook.id);
+      _log.info(
+          'Successfully deleted book from DB: $title (id: ${existingBook.id})');
+      return true;
+    } catch (e, stackTrace) {
+      _log.warning('Error deleting book from DB: $filePath', e, stackTrace);
+      return false;
+    }
+  }
+
   /// Main sync function - scans אוצריא and links folders for new files
   Future<FileSyncResult> syncFiles({
     void Function(double progress, String message)? onProgress,
