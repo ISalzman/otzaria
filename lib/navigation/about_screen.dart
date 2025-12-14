@@ -29,6 +29,17 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Widget _buildContributor(String name, String url) {
+    final hasUrl = url.isNotEmpty;
+
+    if (!hasUrl) {
+      return Text(
+        name,
+        style: TextStyle(
+          color: Colors.grey[700],
+        ),
+      );
+    }
+
     return InkWell(
       onTap: () async {
         final uri = Uri.parse(url);
@@ -40,7 +51,6 @@ class _AboutScreenState extends State<AboutScreen> {
         name,
         style: const TextStyle(
           color: Colors.blue,
-          decoration: TextDecoration.underline,
         ),
       ),
     );
@@ -48,31 +58,14 @@ class _AboutScreenState extends State<AboutScreen> {
 
   Widget _buildDevelopersList() {
     final developers = [
-      {
-        'name': 'sivan22',
-        'url': 'https://github.com/Sivan22',
-      },
+      {'name': 'sivan22', 'url': 'https://github.com/Sivan22'},
       {'name': 'Y.PL.', 'url': 'https://github.com/Y-PLONI'},
       {'name': 'YOSEFTT', 'url': 'https://github.com/YOSEFTT'},
       {'name': 'zevisvei', 'url': 'https://github.com/zevisvei'},
-      {
-        'name': 'evel-avalim',
-        'url': 'https://github.com/evel-avalim',
-      },
-      {
-        'name': 'userbot',
-        'url': 'https://github.com/userbot000',
-      },
-      {
-        'name': 'mosh-dvd',
-        'url': 'https://github.com/mosh-dvd',
-        'description': 'ממפתחי ממשק צורת הדף'
-      },
-      {
-        'name': 'NHLOCAL',
-        'url': 'https://github.com/NHLOCAL/Shamor-Zachor',
-        'description': 'פיתוח "זכור ושמור"'
-      },
+      {'name': 'evel-avalim', 'url': 'https://github.com/evel-avalim'},
+      {'name': 'userbot', 'url': 'https://github.com/userbot000'},
+      {'name': 'mosh-dvd', 'url': 'https://github.com/mosh-dvd', 'description': 'ממפתחי ממשק צורת הדף'},
+      {'name': 'NHLOCAL', 'url': 'https://github.com/NHLOCAL/Shamor-Zachor', 'description': "מפתח 'זכור ושמור'"},
     ];
 
     return LayoutBuilder(
@@ -149,49 +142,107 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Widget _buildBookEditorsList() {
-    final bookEditors = [
+    // מהדירים שההדירו 10 ספרים ומעלה
+    final topEditors = [
       {
-        'name': 'יעקב כהן',
-        'url': 'https://github.com/example1',
+        'name': 'י. פל',
+        'url': 'https://mitmachim.top/user/%D7%99.-%D7%A4%D7%9C',
       },
       {
-        'name': 'דוד לוי',
-        'url': 'https://github.com/example2',
+        'name': 'sivan22',
+        'url': 'https://mitmachim.top/user/sivan22',
       },
       {
-        'name': 'משה אברהם',
-        'url': 'https://github.com/example3',
+        'name': 'יהודי צעיר',
+        'url': 'https://mitmachim.top/user/%D7%99%D7%94%D7%95%D7%93%D7%99-%D7%A6%D7%A2%D7%99%D7%A8',
       },
       {
-        'name': 'שמואל יצחק',
-        'url': 'https://github.com/example4',
+        'name': 'דורש טוב',
+        'url': 'https://mitmachim.top/user/%D7%93%D7%95%D7%A8%D7%A9-%D7%98%D7%95%D7%91',
+      },
+      // {
+      //   'name': 'מרדכי פינק',
+      // },
+      // {
+      //   'name': 'זקצ',
+      // },
+      // {
+      //   'name': 'דוד בנדל',
+      // },
+      {
+        'name': 'דאנציג',
+        'url': 'https://mitmachim.top/user/%D7%93%D7%90%D7%A0%D7%A6%D7%99%D7%92',
+      },
+      // {
+      //   'name': 'ישי אשכנזי',
+      // },
+      {
+        'name': '333',
+        'url': 'https://mitmachim.top/user/333',
+      },
+      // {
+      //   'name': 'יעקב אייזנשטיין',
+      // },
+      // {
+      //   'name': 'יצחק זאב הוכמן',
+      // },
+    ];
+
+    // מהדירים שההדירו בין 5 ל-10 ספרים
+    final regularEditors = [
+      {
+        'name': 'מוטיו',
       },
       {
-        'name': 'אליהו רפאל',
-        'url': 'https://github.com/example5',
+        'name': 'דוד משה 1',
+        'url': 'https://mitmachim.top/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1',
+      },
+      {
+        'name': 'איש צדיק מידי',
+        'url': 'https://mitmachim.top/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99',
+      },
+      {
+        'name': 'שני אנשים',
+        'url': 'https://mitmachim.top/user/%D7%A9%D7%A0%D7%99-%D7%90%D7%A0%D7%A9%D7%99%D7%9D',
+      },      
+      {
+        'name': 'יאיר דניאל',
+        'url': 'https://mitmachim.top/user/%D7%99%D7%90%D7%99%D7%A8-%D7%93%D7%A0%D7%99%D7%90%D7%9C',
       },
     ];
 
-    if (bookEditors.isEmpty) {
-      return const Text(
-        'רשימה זו תתמלא בהמשך',
-        style: TextStyle(
-          fontSize: 14,
-          fontStyle: FontStyle.italic,
-          color: Colors.grey,
-        ),
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // במסכים קטנים, הצג בעמודה
-        if (constraints.maxWidth < 500) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: bookEditors
-                .map((editor) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
+    Widget buildEditorsList(List<Map<String, String>> editors) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          // במסכים קטנים, הצג בעמודה
+          if (constraints.maxWidth < 500) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: editors
+                  .map((editor) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            const Icon(FluentIcons.book_24_regular,
+                                size: 16, color: Colors.grey),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _buildContributor(
+                                  editor['name']!, editor['url'] ?? ''),
+                            ),
+                          ],
+                        ),
+                      ))
+                  .toList(),
+            );
+          }
+          // במסכים רחבים, השתמש ב-Wrap
+          return Wrap(
+            spacing: 40,
+            runSpacing: 12,
+            children: editors
+                .map((editor) => SizedBox(
+                      width: 220,
                       child: Row(
                         children: [
                           const Icon(FluentIcons.book_24_regular,
@@ -199,36 +250,72 @@ class _AboutScreenState extends State<AboutScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: _buildContributor(
-                                editor['name']!, editor['url']!),
+                                editor['name']!, editor['url'] ?? ''),
                           ),
                         ],
                       ),
                     ))
                 .toList(),
           );
-        }
-        // במסכים רחבים, השתמש ב-Wrap
-        return Wrap(
-          spacing: 40,
-          runSpacing: 12,
-          children: bookEditors
-              .map((editor) => SizedBox(
-                    width: 220,
-                    child: Row(
-                      children: [
-                        const Icon(FluentIcons.book_24_regular,
-                            size: 16, color: Colors.grey),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _buildContributor(
-                              editor['name']!, editor['url']!),
-                        ),
-                      ],
-                    ),
-                  ))
-              .toList(),
-        );
-      },
+        },
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // קטגוריה ראשונה: 10 ספרים ומעלה
+        Text(
+          'מהדירים שההדירו 10 ספרים ומעלה',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 12),
+        buildEditorsList(topEditors),
+        const SizedBox(height: 24),
+
+        // קטגוריה שנייה: 5-10 ספרים
+        Text(
+          'מהדירים שההדירו בין 5 ל-10 ספרים',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 12),
+        buildEditorsList(regularEditors),
+        const SizedBox(height: 16),
+
+        // הודעה בסוף הרשימה
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blue.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              const Icon(FluentIcons.info_24_regular,
+                  size: 18, color: Colors.blue),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'באם גם אתם ערכתם ספרים ושמכם אינו מופיע ברשימה, וכן אם אתם מעוניינים בשינוי כלשהו,\nאנא פנו למייל המערכת',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
