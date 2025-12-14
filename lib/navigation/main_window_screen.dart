@@ -32,6 +32,7 @@ import 'package:otzaria/navigation/calendar_cubit.dart';
 import 'package:otzaria/widgets/ad_popup_dialog.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/main.dart' show appWindowListener;
+import 'package:otzaria/migration/sync/background_sync_initializer.dart';
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
@@ -87,6 +88,29 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     // Setup fullscreen sync with window manager
     _setupFullscreenSync();
+
+    // Start background file sync after app is loaded
+    // This runs in the background without blocking the UI
+    _initializeBackgroundSync();
+  }
+
+  /// Initialize background file sync
+  /// This scans אוצריא and links folders for new files and adds them to the DB
+  void _initializeBackgroundSync() {
+    BackgroundSyncInitializer.initializeAfterDelay(
+      delaySeconds: 5, // Wait 5 seconds after app startup
+      onComplete: (result) {
+        if (!mounted) return;
+        if (result.addedBooks > 0 ||
+            result.updatedBooks > 0 ||
+            result.addedLinks > 0) {
+          // Refresh library if books were added/updated
+          context.read<NavigationBloc>().refreshLibrary();
+          debugPrint('📚 סנכרון קבצים: ${result.addedBooks} ספרים חדשים, '
+              '${result.updatedBooks} עודכנו, ${result.addedLinks} קישורים');
+        }
+      },
+    );
   }
 
   /// Setup synchronization between window fullscreen state and settings
