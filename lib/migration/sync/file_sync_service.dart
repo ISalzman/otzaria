@@ -489,11 +489,6 @@ class FileSyncService {
       if (entity is File && path.extension(entity.path) == '.txt') {
         final title = path.basenameWithoutExtension(entity.path);
 
-        // Skip notes files
-        if (title.startsWith('הערות על ')) {
-          continue;
-        }
-
         // Add all TXT files - _processNewFile will handle add vs update logic
         // based on the full category path, not just the title
         newFiles.add(entity.path);
