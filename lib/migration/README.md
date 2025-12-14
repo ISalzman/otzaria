@@ -124,8 +124,120 @@ final toc = await sqliteProvider.getBookTocFromDb('שם הספר');
 - כל הפעולות מבוצעות בצורה אסינכרונית
 - יש תמיכה מלאה ב-transactions לביצועים מיטביים
 
+## מנגנון קטגוריות - תיאור מעמיק
+
+### הקמה ראשונית של מסד הנתונים
+
+בעת יצירת ה-DB לראשונה, המערכת מקבלת כקלט את **הנתיב הראשי לתיקיית אוצריא**.
+
+#### בניית היררכיית הקטגוריות:
+1. **קטגוריות ראשיות** - כל התיקיות תחת תיקיית אוצריא הן קטגוריות ראשיות (parentId = null)
+2. **קטגוריות משנה** - נבנות לפי ההיררכיה של התיקיות במערכת הקבצים
+3. **מזהי קטגוריות** - מספר רץ (auto-increment) המוקצה לכל קטגוריה חדשה
+
+#### מבנה טבלת `category`:
+| עמודה | תיאור |
+|--------|--------|
+| `id` | מזהה ייחודי (מספר רץ) |
+| `parentId` | מזהה קטגוריית האב (null לקטגוריות ראשיות) |
+| `name` | שם הקטגוריה |
+
+#### דוגמה למבנה:
+```
+אוצריא/
+├── לימוד יומי/         → category(id=1, parentId=null, name="לימוד יומי")
+│   └── חוק לישראל/     → category(id=2, parentId=1, name="חוק לישראל")
+
+```
+
+### ניקוי לאחר בניית ה-DB
+
+לאחר סיום בניית מסד הנתונים:
+- ✅ **קבצי TXT** - נמחקים (התוכן כבר במסד)
+- ✅ **תיקיות ריקות** - נמחקות
+- ❌ **קבצי PDF** - נשארים במקומם תחת ההיררכיה המקורית
+
+### זיהוי שינויים ועדכונים
+
+כאשר המערכת מזהה קובץ TXT חדש תחת תיקיית אוצריא, היא מבצעת:
+
+#### שלב 1: בדיקת קיום הקטגוריה
+המערכת בודקת האם קיימת קטגוריה מתאימה לפי **שרשרת ההיררכיה המלאה**.
+
+**דוגמה:**
+```
+נתיב קובץ: אוצריא\לימוד יומי\חוק לישראל\חק לישראל - בראשית.txt
+```
+
+המערכת מחפשת:
+1. האם קיימת קטגוריה "חוק לישראל"?
+2. האם הקטגוריה הזו נמצאת תחת "לימוד יומי"?
+
+#### שלב 2: החלטה - עדכון או הוספה
+
+| מצב | פעולה |
+|-----|-------|
+| **קטגוריה קיימת + ספר קיים** | עדכון תוכן הספר והכותרות |
+| **קטגוריה קיימת + ספר חדש** | הוספת הספר לקטגוריה הקיימת |
+| **קטגוריה לא קיימת** | יצירת קטגוריה חדשה + הוספת הספר |
+
+#### שלב 3: הוספת קטגוריה חדשה
+
+אם נדרשת קטגוריה חדשה:
+
+```dart
+// 1. שליפת המזהה הגבוה ביותר הקיים
+final maxId = await db.rawQuery('SELECT MAX(id) FROM category');
+
+// 2. יצירת מזהה חדש
+final newId = maxId + 1;
+
+// 3. הוספת הקטגוריה עם הפניה לקטגוריית האב
+await db.insert('category', {
+  'id': newId,
+  'parentId': parentCategoryId,
+  'name': categoryName
+});
+```
+
+### אלגוריתם מלא לזיהוי קטגוריה
+
+```dart
+Future<int> findOrCreateCategory(List<String> pathParts) async {
+  int? currentParentId = null;
+  
+  for (final part in pathParts) {
+    // חיפוש קטגוריה קיימת עם אותו שם ואב
+    final existing = await db.query('category',
+      where: 'name = ? AND parentId ${currentParentId == null ? 'IS NULL' : '= ?'}',
+      whereArgs: currentParentId == null ? [part] : [part, currentParentId]
+    );
+    
+    if (existing.isNotEmpty) {
+      // קטגוריה קיימת - המשך לרמה הבאה
+      currentParentId = existing.first['id'] as int;
+    } else {
+      // קטגוריה לא קיימת - צור חדשה
+      final maxId = await getMaxCategoryId();
+      final newId = maxId + 1;
+      
+      await db.insert('category', {
+        'id': newId,
+        'parentId': currentParentId,
+        'name': part
+      });
+      
+      currentParentId = newId;
+    }
+  }
+  
+  return currentParentId!;
+}
+```
+
 ## תיעוד נוסף
 
 לתיעוד מפורט יותר, ראה:
 - `generator/README.md` - תיעוד על תהליך ההמרה
 - `dao/repository/seforim_repository.dart` - תיעוד API מלא
+- `CATEGORY_SYNC_PLAN.md` - תכנון מפורט למימוש סנכרון קטגוריות
