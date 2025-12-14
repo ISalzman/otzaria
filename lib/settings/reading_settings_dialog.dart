@@ -251,7 +251,7 @@ void showReadingSettingsDialog(BuildContext context) {
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
-                                          'גודל גופן מפרשים',
+                                          'גודל גופן מפרשים וקישורים',
                                           style: Theme.of(context)
                                               .textTheme
                                               .titleMedium,

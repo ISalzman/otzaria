@@ -735,12 +735,16 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                         debugPrint('Stack trace: ${snapshot.stackTrace}');
                         return Text('שגיאה: ${snapshot.error}');
                       }
-                      return Text(
-                        utils.stripHtmlIfNeeded(snapshot.data ?? ''),
-                        style: TextStyle(
-                          fontSize: widget.fontSize * 0.75,
-                          fontFamily: 'FrankRuhlCLM',
-                        ),
+                      return BlocBuilder<SettingsBloc, SettingsState>(
+                        builder: (context, settingsState) {
+                          return Text(
+                            utils.stripHtmlIfNeeded(snapshot.data ?? ''),
+                            style: TextStyle(
+                              fontSize: settingsState.commentatorsFontSize,
+                              fontFamily: settingsState.commentatorsFontFamily,
+                            ),
+                          );
+                        },
                       );
                     },
                   ),

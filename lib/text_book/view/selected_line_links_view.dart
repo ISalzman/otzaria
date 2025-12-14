@@ -264,9 +264,9 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
             return Text(
               displayTitle,
               style: TextStyle(
-                fontSize: widget.fontSize * 0.75,
+                fontSize: settingsState.commentatorsFontSize - 2,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'FrankRuhlCLM',
+                fontFamily: settingsState.commentatorsFontFamily,
               ),
             );
           },
@@ -280,8 +280,8 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
             return Text(
               displaySubtitle,
               style: TextStyle(
-                fontSize: widget.fontSize * 0.65,
-                fontFamily: 'FrankRuhlCLM',
+                fontSize: settingsState.commentatorsFontSize - 4,
+                fontFamily: settingsState.commentatorsFontFamily,
                 color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
               ),
             );
@@ -331,22 +331,30 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
     }
 
     if (snapshot.hasError) {
-      return Text(
-        'שגיאה בטעינת התוכן: ${snapshot.error}',
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.error,
-          fontSize: widget.fontSize * 0.9,
-        ),
+      return BlocBuilder<SettingsBloc, SettingsState>(
+        builder: (context, settingsState) {
+          return Text(
+            'שגיאה בטעינת התוכן: ${snapshot.error}',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: settingsState.commentatorsFontSize,
+            ),
+          );
+        },
       );
     }
 
     if (!snapshot.hasData || snapshot.data!.isEmpty) {
-      return Text(
-        'אין תוכן זמין',
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurface.withAlpha(150),
-          fontSize: widget.fontSize * 0.9,
-        ),
+      return BlocBuilder<SettingsBloc, SettingsState>(
+        builder: (context, settingsState) {
+          return Text(
+            'אין תוכן זמין',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface.withAlpha(150),
+              fontSize: settingsState.commentatorsFontSize,
+            ),
+          );
+        },
       );
     }
 
@@ -395,9 +403,9 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           return HtmlWidget(
             cleanContent,
             textStyle: TextStyle(
-              fontSize: widget.fontSize * 0.75,
+              fontSize: settingsState.commentatorsFontSize,
               height: 1.5,
-              fontFamily: 'FrankRuhlCLM',
+              fontFamily: settingsState.commentatorsFontFamily,
             ),
           );
         } else {
@@ -405,9 +413,9 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           return Text(
             cleanContent,
             style: TextStyle(
-              fontSize: widget.fontSize * 0.75,
+              fontSize: settingsState.commentatorsFontSize,
               height: 1.5,
-              fontFamily: 'FrankRuhlCLM',
+              fontFamily: settingsState.commentatorsFontFamily,
             ),
             textAlign: TextAlign.justify,
             textDirection: TextDirection.rtl,
