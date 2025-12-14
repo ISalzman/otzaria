@@ -2363,11 +2363,51 @@ Future<void> _savePerBookSettingsDirectly(
     return;
   }
 
+  // טעינת ההגדרות הקיימות
+  final existingSettings = await TextBookPerBookSettings.load(state.book.title);
+
+  // קבלת ברירות המחדל הגלובליות
+  final defaultFontSize = settingsBloc.state.fontSize;
+  final defaultRemoveNikud = settingsBloc.state.defaultRemoveNikud;
+  final defaultShowSplitView =
+      Settings.getValue<bool>('key-splited-view') ?? false;
+
+  // בניית הגדרות חדשות - רק שדות ששונו מברירת המחדל
+  double? newFontSize = existingSettings?.fontSize;
+  bool? newCommentatorsBelow = existingSettings?.commentatorsBelow;
+  bool? newRemoveNikud = existingSettings?.removeNikud;
+
+  // עדכון רק השדה שהשתנה
+  if (fontSize != null) {
+    // אם הערך שווה לברירת המחדל, מוחקים את השדה
+    newFontSize = (fontSize == defaultFontSize) ? null : fontSize;
+  }
+
+  if (showSplitView != null) {
+    final commentatorsBelow = !showSplitView;
+    // אם הערך שווה לברירת המחדל, מוחקים את השדה
+    newCommentatorsBelow =
+        (showSplitView == defaultShowSplitView) ? null : commentatorsBelow;
+  }
+
+  if (removeNikud != null) {
+    // אם הערך שווה לברירת המחדל, מוחקים את השדה
+    newRemoveNikud = (removeNikud == defaultRemoveNikud) ? null : removeNikud;
+  }
+
+  // אם כל השדות null, מוחקים את הקובץ כולו
+  if (newFontSize == null &&
+      newCommentatorsBelow == null &&
+      newRemoveNikud == null) {
+    await TextBookPerBookSettings.delete(state.book.title);
+    return;
+  }
+
+  // שמירת ההגדרות המעודכנות
   final settings = TextBookPerBookSettings(
-    fontSize: fontSize ?? state.fontSize,
-    commentatorsBelow:
-        showSplitView != null ? !showSplitView : !state.showSplitView,
-    removeNikud: removeNikud ?? state.removeNikud,
+    fontSize: newFontSize,
+    commentatorsBelow: newCommentatorsBelow,
+    removeNikud: newRemoveNikud,
   );
 
   await settings.save(state.book.title);

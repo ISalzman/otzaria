@@ -1,7 +1,9 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/settings/per_book_settings.dart';
 
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsRepository _repository;
@@ -139,6 +141,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateFontSize(event.fontSize);
     emit(state.copyWith(fontSize: event.fontSize));
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
   }
 
   Future<void> _onUpdateFontFamily(
@@ -228,6 +233,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateDefaultRemoveNikud(event.defaultRemoveNikud);
     emit(state.copyWith(defaultRemoveNikud: event.defaultRemoveNikud));
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
   }
 
   Future<void> _onUpdateRemoveNikudFromTanach(
@@ -352,6 +360,17 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       state.copyWith(
         shortcuts: Map<String, String>.unmodifiable(shortcuts),
       ),
+    );
+  }
+
+  /// ניקוי קבצי per_book_settings שהפכו למיותרים
+  void _cleanupRedundantPerBookSettings() {
+    // הרצה אסינכרונית ללא המתנה כדי לא לחסום את ה-UI
+    PerBookSettings.cleanupRedundantSettings(
+      defaultFontSize: state.fontSize,
+      defaultRemoveNikud: state.defaultRemoveNikud,
+      defaultShowSplitView:
+          Settings.getValue<bool>('key-splited-view') ?? false,
     );
   }
 }

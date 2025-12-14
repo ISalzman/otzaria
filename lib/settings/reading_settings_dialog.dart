@@ -623,6 +623,14 @@ void showReadingSettingsDialog(BuildContext context) {
                         onChanged: (value) {
                           setState(() {
                             Settings.setValue<bool>('key-splited-view', value);
+                            // ניקוי קבצי per_book_settings מיותרים
+                            final settingsBloc = context.read<SettingsBloc>();
+                            PerBookSettings.cleanupRedundantSettings(
+                              defaultFontSize: settingsBloc.state.fontSize,
+                              defaultRemoveNikud:
+                                  settingsBloc.state.defaultRemoveNikud,
+                              defaultShowSplitView: value,
+                            );
                           });
                         },
                       );
