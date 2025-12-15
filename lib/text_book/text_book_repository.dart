@@ -2,6 +2,7 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/data/book_locator.dart';
 
 class TextBookRepository {
   final FileSystemData _fileSystem;
@@ -32,8 +33,11 @@ class TextBookRepository {
       return [];
     }
 
-    // מקבל את ה-book מה-DB לפי שם
-    final dbBook = await repository.getBookByTitle(book.title);
+    // מקבל את ה-book מה-DB לפי שם וקטגוריה
+    final dbBook = await BookLocator.getBookFromDatabase(
+      book.title,
+      category: book.category,
+    );
     if (dbBook == null) {
       return [];
     }
