@@ -14,6 +14,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'dart:async';
 
 /// מסך תצוגת צורת הדף - מציג את הטקסט המרכזי עם מפרשים מסביב
@@ -86,21 +87,23 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                   Expanded(
                     child: Row(
                       children: [
-                        // Left Commentary with label
+                        // Left Commentary with label (label on outer edge - first in RTL)
                         if (_leftCommentator != null) ...[
-                          RotatedBox(
-                            quarterTurns: 1,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 2, horizontal: 1),
-                              child: Text(
-                                _leftCommentator!,
-                                style: const TextStyle(
-                                  fontSize: 14,
+                          SizedBox(
+                            width: 20,
+                            child: Center(
+                              child: RotatedBox(
+                                quarterTurns: 1,
+                                child: Text(
+                                  _leftCommentator!,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
+                          const SizedBox(width: 4),
                           SizedBox(
                             width: MediaQuery.of(context).size.width * 0.17,
                             child: _CommentaryPane(
@@ -124,7 +127,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                             isMainText: true,
                           ),
                         ),
-                    // Right Commentary with label
+                    // Right Commentary with label (label on outer edge - last in RTL)
                     if (_rightCommentator != null) ...[
                       _ResizableDivider(
                         isVertical: true,
@@ -137,15 +140,17 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                           openBookCallback: widget.openBookCallback,
                         ),
                       ),
-                      RotatedBox(
-                        quarterTurns: 3,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 2, horizontal: 1),
-                          child: Text(
-                            _rightCommentator!,
-                            style: const TextStyle(
-                              fontSize: 14,
+                      const SizedBox(width: 4),
+                      SizedBox(
+                        width: 20,
+                        child: Center(
+                          child: RotatedBox(
+                            quarterTurns: 3,
+                            child: Text(
+                              _rightCommentator!,
+                              style: const TextStyle(
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                         ),
@@ -157,7 +162,43 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
               // Bottom Commentary - גובה קבוע של 27% מהמסך
               if (_bottomCommentator != null ||
                   _bottomRightCommentator != null) ...[
-                const SizedBox(height: 16), // רווח בין החלק העליון לתחתון
+                // קווים מתחת למפרשים העליונים - באמצע הרווח
+                SizedBox(
+                  height: 16,
+                  child: Row(
+                    children: [
+                      // קו מתחת למפרש השמאלי
+                      if (_leftCommentator != null)
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width * 0.17 + 30, // רוחב המפרש + הכותרת
+                          child: Center(
+                            child: FractionallySizedBox(
+                              widthFactor: 0.5,
+                              child: Container(
+                                height: 1,
+                                color: Theme.of(context).dividerColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                      const Spacer(),
+                      // קו מתחת למפרש הימני
+                      if (_rightCommentator != null)
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width * 0.17 + 30, // רוחב המפרש + הכותרת
+                          child: Center(
+                            child: FractionallySizedBox(
+                              widthFactor: 0.5,
+                              child: Container(
+                                height: 1,
+                                color: Theme.of(context).dividerColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                 SizedBox(
                   height: MediaQuery.of(context).size.height * 0.27,
                   child: Column(
@@ -167,23 +208,26 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                             ? Row(
                                 children: [
                                   if (_bottomCommentator != null) ...[
-                                    RotatedBox(
-                                      quarterTurns: 1,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 2, horizontal: 1),
-                                        child: Text(
-                                          _bottomCommentator!,
-                                          style: const TextStyle(
-                                            fontSize: 14,
+                                    SizedBox(
+                                      width: 20,
+                                      child: Center(
+                                        child: RotatedBox(
+                                          quarterTurns: 1,
+                                          child: Text(
+                                            _bottomCommentator!,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
+                                    const SizedBox(width: 4),
                                     Expanded(
                                       child: _CommentaryPane(
                                         commentatorName: _bottomCommentator!,
                                         openBookCallback: widget.openBookCallback,
+                                        isBottom: true,
                                       ),
                                     ),
                                     _ResizableDivider(
@@ -195,17 +239,20 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                     child: _CommentaryPane(
                                       commentatorName: _bottomRightCommentator!,
                                       openBookCallback: widget.openBookCallback,
+                                      isBottom: true,
                                     ),
                                   ),
-                                  RotatedBox(
-                                    quarterTurns: 3,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 2, horizontal: 1),
-                                      child: Text(
-                                        _bottomRightCommentator!,
-                                        style: const TextStyle(
-                                          fontSize: 14,
+                                  const SizedBox(width: 4),
+                                  SizedBox(
+                                    width: 20,
+                                    child: Center(
+                                      child: RotatedBox(
+                                        quarterTurns: 3,
+                                        child: Text(
+                                          _bottomRightCommentator!,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -214,23 +261,26 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                               )
                             : Row(
                                 children: [
-                                  RotatedBox(
-                                    quarterTurns: 1,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 2, horizontal: 1),
-                                      child: Text(
-                                        _bottomCommentator!,
-                                        style: const TextStyle(
-                                          fontSize: 14,
+                                  SizedBox(
+                                    width: 20,
+                                    child: Center(
+                                      child: RotatedBox(
+                                        quarterTurns: 1,
+                                        child: Text(
+                                          _bottomCommentator!,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(width: 4),
                                   Expanded(
                                     child: _CommentaryPane(
                                       commentatorName: _bottomCommentator!,
                                       openBookCallback: widget.openBookCallback,
+                                      isBottom: true,
                                     ),
                                   ),
                                 ],
@@ -293,10 +343,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 class _CommentaryPane extends StatefulWidget {
   final String commentatorName;
   final Function(OpenedTab) openBookCallback;
+  final bool isBottom; // האם זה מפרש תחתון
 
   const _CommentaryPane({
     required this.commentatorName,
     required this.openBookCallback,
+    this.isBottom = false,
   });
 
   @override
@@ -439,17 +491,13 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     }
 
     // גלילה למיקום הנכון במפרש
-    if (targetIndex >= 0 && targetIndex < _content!.length) {
-      try {
-        _scrollController.scrollTo(
-          index: targetIndex,
-          duration: const Duration(milliseconds: 300),
-          alignment: 0.0, // בראש החלון
-        );
-        _lastSyncedIndex = targetIndex;
-      } catch (e) {
-        debugPrint('Error scrolling commentary ${widget.commentatorName}: $e');
-      }
+    if (targetIndex >= 0 && targetIndex < _content!.length && _scrollController.isAttached) {
+      _scrollController.scrollTo(
+        index: targetIndex,
+        duration: const Duration(milliseconds: 300),
+        alignment: 0.0, // בראש החלון
+      );
+      _lastSyncedIndex = targetIndex;
     }
   }
 
@@ -482,10 +530,15 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
+            // מפרשים תחתונים משתמשים בגופן מההגדרות, עליונים בגופן הרגיל
+            final bottomFont = Settings.getValue<String>('page_shape_bottom_font') ?? 'KeterYG';
+            final fontFamily = widget.isBottom
+                ? bottomFont
+                : settingsState.commentatorsFontFamily;
             return SimpleTextViewer(
               content: _content!,
               fontSize: 16, // גופן קבוע למפרשים בצורת הדף
-              fontFamily: settingsState.commentatorsFontFamily,
+              fontFamily: fontFamily,
               openBookCallback: widget.openBookCallback,
               scrollController: _scrollController,
               positionsListener: _positionsListener,

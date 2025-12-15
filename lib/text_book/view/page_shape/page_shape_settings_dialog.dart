@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
@@ -34,8 +35,23 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   String? _rightCommentator;
   String? _bottomCommentator;
   String? _bottomRightCommentator;
+  String _bottomFontFamily = 'KeterYG'; // גופן ברירת מחדל למפרשים תחתונים
   List<CommentatorGroup> _groups = [];
   bool _isLoadingGroups = true;
+
+  // רשימת הגופנים הזמינים - כמו בהגדרות הרגילות
+  static const List<Map<String, String>> _availableFonts = [
+    {'value': 'KeterYG', 'label': 'כתר'},
+    {'value': 'Shofar', 'label': 'שופר'},
+    {'value': 'NotoSerifHebrew', 'label': 'נוטו'},
+    {'value': 'Tinos', 'label': 'טינוס'},
+    {'value': 'NotoRashiHebrew', 'label': 'רש"י'},
+    {'value': 'Candara', 'label': 'קנדרה'},
+    {'value': 'roboto', 'label': 'רובוטו'},
+    {'value': 'Calibri', 'label': 'קליברי'},
+    {'value': 'Arial', 'label': 'אריאל'},
+    {'value': 'TaameyAshkenaz', 'label': 'טעמי אשכנז'},
+  ];
 
   @override
   void initState() {
@@ -51,6 +67,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _rightCommentator = widget.currentRight;
       _bottomCommentator = widget.currentBottom;
       _bottomRightCommentator = widget.currentBottomRight;
+      _bottomFontFamily = Settings.getValue<String>('page_shape_bottom_font') ?? 'KeterYG';
     });
   }
 
@@ -118,6 +135,8 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
         'bottomRight': _bottomRightCommentator,
       },
     );
+    // שמירת הגופן של המפרשים התחתונים (הגדרה גלובלית)
+    await Settings.setValue<String>('page_shape_bottom_font', _bottomFontFamily);
   }
 
   @override
@@ -160,6 +179,32 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                 value: _bottomRightCommentator,
                 onChanged: (value) =>
                     setState(() => _bottomRightCommentator = value),
+              ),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 12),
+              const Text(
+                'גופן מפרשים תחתונים:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: _bottomFontFamily,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                items: _availableFonts.map((font) {
+                  return DropdownMenuItem<String>(
+                    value: font['value'],
+                    child: Text(font['label']!, style: TextStyle(fontFamily: font['value'])),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _bottomFontFamily = value);
+                  }
+                },
               ),
             ],
           ),
