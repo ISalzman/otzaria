@@ -40,6 +40,9 @@ class _MySettingsScreenState extends State<MySettingsScreen>
   @override
   bool get wantKeepAlive => true;
 
+  // מפתח לשמירת מיקום הגלילה בהגדרת מצב חיבור לרשת
+  final GlobalKey _networkModeTileKey = GlobalKey();
+
   Widget _buildSettingsCard({
     required BuildContext context,
     required String title,
@@ -145,42 +148,64 @@ class _MySettingsScreenState extends State<MySettingsScreen>
     final primaryColor = Theme.of(context).colorScheme.primary;
     final cardColor = Theme.of(context).cardColor;
 
-    return _SettingsTile(
-      leading: const Icon(FluentIcons.globe_24_regular),
-      title: 'מצב חיבור לרשת',
-      subtitle: isOffline
-          ? 'התוכנה מנותקת לגמרי מהרשת, כל התכונות המקוונות מושבתות'
-          : 'התוכנה יכולה להתחבר לרשת',
-      trailing: SegmentedButton<bool>(
-        segments: const [
-          ButtonSegment<bool>(
-            value: false,
-            label: Text('מקוון'),
-            icon: Icon(FluentIcons.wifi_1_24_regular),
-          ),
-          ButtonSegment<bool>(
-            value: true,
-            label: Text('מנותק'),
-            icon: Icon(FluentIcons.wifi_off_24_regular),
-          ),
-        ],
-        selected: {isOffline},
-        onSelectionChanged: (Set<bool> newSelection) {
-          context.read<SettingsBloc>().add(UpdateOfflineMode(newSelection.first));
-        },
-        style: ButtonStyle(
-          shape: WidgetStateProperty.all(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+    return KeyedSubtree(
+      key: _networkModeTileKey,
+      child: _SettingsTile(
+        leading: const Icon(FluentIcons.globe_24_regular),
+        title: 'מצב חיבור לרשת',
+        subtitle: isOffline
+            ? 'התוכנה מנותקת לגמרי מהרשת, כל התכונות המקוונות מושבתות'
+            : 'התוכנה יכולה להתחבר לרשת',
+        trailing: SegmentedButton<bool>(
+          segments: [
+            ButtonSegment<bool>(
+              value: false,
+              label: const Text(
+                'מקוון',
+                style: TextStyle(fontSize: 14, letterSpacing: 0),
+              ),
+              icon: const Icon(FluentIcons.wifi_1_24_regular),
             ),
-          ),
-          backgroundColor: WidgetStateProperty.resolveWith<Color?>(
-            (Set<WidgetState> states) {
-              if (states.contains(WidgetState.selected)) {
-                return primaryColor.withValues(alpha: 0.2);
+            ButtonSegment<bool>(
+              value: true,
+              label: const Text(
+                'מנותק',
+                style: TextStyle(fontSize: 14, letterSpacing: 0),
+              ),
+              icon: const Icon(FluentIcons.wifi_off_24_regular),
+            ),
+          ],
+          selected: {isOffline},
+          onSelectionChanged: (Set<bool> newSelection) {
+            context
+                .read<SettingsBloc>()
+                .add(UpdateOfflineMode(newSelection.first));
+
+            // גלילה לאלמנט הזה אחרי שהמסך מתעדכן
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (_networkModeTileKey.currentContext != null) {
+                Scrollable.ensureVisible(
+                  _networkModeTileKey.currentContext!,
+                  duration: const Duration(milliseconds: 200),
+                  alignment: 0.0,
+                );
               }
-              return cardColor;
-            },
+            });
+          },
+          style: ButtonStyle(
+            shape: WidgetStateProperty.all(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+              (Set<WidgetState> states) {
+                if (states.contains(WidgetState.selected)) {
+                  return primaryColor.withValues(alpha: 0.2);
+                }
+                return cardColor;
+              },
+            ),
           ),
         ),
       ),
@@ -1305,6 +1330,8 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
   Widget _buildCommonActions() {
     final autoBackupFrequency =
         Settings.getValue<String>('key-auto-backup-frequency') ?? 'none';
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final cardColor = Theme.of(context).cardColor;
 
     return Column(
       children: [
@@ -1325,6 +1352,14 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
                     RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
+                  ),
+                  backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+                    (Set<WidgetState> states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return primaryColor.withValues(alpha: 0.2);
+                      }
+                      return cardColor;
+                    },
                   ),
                 ),
                 segments: const [
@@ -1387,47 +1422,61 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
       children: [
         _buildCommonActions(),
         const SizedBox(height: 16),
-        Column(
-          children: [
-            ListTile(
-              leading: const Icon(FluentIcons.options_24_regular),
-              title: Text(
-                'בחר מה לגבות',
-                style: TextStyle(
-                  fontSize: 16, // התאם לפי הצורך
-                  letterSpacing: -0.1, // רווח בין אותיות - 0 = רגיל, שלילי = צפוף יותר
-                ),
-              ),
-              trailing: SegmentedButton<int>(
-                style: ButtonStyle(
-                  shape: WidgetStateProperty.all(
-                    RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8), // עיגול הפינות - הקטן למספר קטן יותר
+        Builder(
+          builder: (context) {
+            final primaryColor = Theme.of(context).colorScheme.primary;
+            final cardColor = Theme.of(context).cardColor;
+            return Column(
+              children: [
+                ListTile(
+                  leading: const Icon(FluentIcons.options_24_regular),
+                  title: Text(
+                    'בחר מה לגבות',
+                    style: TextStyle(
+                      fontSize: 16,
+                      letterSpacing: -0.1, // רווח בין אותיות - 0 = רגיל, שלילי = צפוף יותר
                     ),
                   ),
+                  trailing: SegmentedButton<int>(
+                    style: ButtonStyle(
+                      shape: WidgetStateProperty.all(
+                        RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+                        (Set<WidgetState> states) {
+                          if (states.contains(WidgetState.selected)) {
+                            return primaryColor.withValues(alpha: 0.2);
+                          }
+                          return cardColor;
+                        },
+                      ),
+                    ),
+                    segments: const [
+                      ButtonSegment<int>(
+                        value: 0,
+                        label: Text('גבה הכל'),
+                        icon: Icon(FluentIcons.checkmark_circle_24_regular),
+                      ),
+                      ButtonSegment<int>(
+                        value: 1,
+                        label: Text('מותאם אישית'),
+                        icon: Icon(FluentIcons.options_24_regular),
+                      ),
+                    ],
+                    selected: {_selectedBackupMode},
+                    onSelectionChanged: (Set<int> newSelection) {
+                      setState(() {
+                        _selectedBackupMode = newSelection.first;
+                      });
+                    },
+                  ),
                 ),
-                segments: const [
-                  ButtonSegment<int>(
-                    value: 0,
-                    label: Text('גבה הכל'),
-                    icon: Icon(FluentIcons.checkmark_circle_24_regular),
-                  ),
-                  ButtonSegment<int>(
-                    value: 1,
-                    label: Text('מותאם אישית'),
-                    icon: Icon(FluentIcons.options_24_regular),
-                  ),
-                ],
-                selected: {_selectedBackupMode},
-                onSelectionChanged: (Set<int> newSelection) {
-                  setState(() {
-                    _selectedBackupMode = newSelection.first;
-                  });
-                },
-              ),
-            ),
-            const Divider(height: 0),
-          ],
+                const Divider(height: 0),
+              ],
+            );
+          },
         ),
         if (_selectedBackupMode == 1) ...[
           Padding(
