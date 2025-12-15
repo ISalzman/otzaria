@@ -2274,6 +2274,65 @@ class LineTocMapping {
   });
 }
 
+/// Result of getting max IDs from database tables
+class MaxIdsResult {
+  final int maxBookId;
+  final int maxLineId;
+  final int maxTocId;
+  final int maxCategoryId;
+
+  const MaxIdsResult({
+    required this.maxBookId,
+    required this.maxLineId,
+    required this.maxTocId,
+    required this.maxCategoryId,
+  });
+}
+
+/// Extension methods for file sync operations
+extension FileSyncRepository on SeforimRepository {
+  /// Gets the maximum IDs from all relevant tables in a single query.
+  /// Used for initializing ID counters in file sync operations.
+  Future<MaxIdsResult> getMaxIds() async {
+    final db = await database.database;
+    final result = await db.rawQuery('''
+      SELECT 
+        (SELECT COALESCE(MAX(id), 0) FROM book) as maxBookId,
+        (SELECT COALESCE(MAX(id), 0) FROM line) as maxLineId,
+        (SELECT COALESCE(MAX(id), 0) FROM tocEntry) as maxTocId,
+        (SELECT COALESCE(MAX(id), 0) FROM category) as maxCatId
+    ''');
+
+    return MaxIdsResult(
+      maxBookId: result.first['maxBookId'] as int,
+      maxLineId: result.first['maxLineId'] as int,
+      maxTocId: result.first['maxTocId'] as int,
+      maxCategoryId: result.first['maxCatId'] as int,
+    );
+  }
+
+  /// Deletes all lines for a specific book.
+  /// Used when updating book content.
+  Future<void> deleteBookLines(int bookId) async {
+    final db = await database.database;
+    await db.rawDelete('DELETE FROM line WHERE bookId = ?', [bookId]);
+  }
+
+  /// Deletes all TOC entries for a specific book.
+  /// Used when updating book content.
+  Future<void> deleteBookTocEntries(int bookId) async {
+    final db = await database.database;
+    await db.rawDelete('DELETE FROM tocEntry WHERE bookId = ?', [bookId]);
+  }
+
+  /// Clears book content (lines and TOC entries) for updating.
+  /// Preserves book metadata.
+  Future<void> clearBookContent(int bookId) async {
+    await deleteBookLines(bookId);
+    await deleteBookTocEntries(bookId);
+  }
+}
+
 /// Extension methods for book acronyms
 extension BookAcronymRepository on SeforimRepository {
   /// Bulk inserts acronym terms for a book.

@@ -207,25 +207,13 @@ class FileSyncService {
 
   /// Initialize ID counters from database
   Future<void> _initializeIdCounters() async {
-    final db = await _repository.database.database;
+    // Use repository extension method to get max IDs
+    final maxIds = await _repository.getMaxIds();
 
-    // Get max book ID
-    final bookResult = await db.rawQuery('SELECT MAX(id) as maxId FROM book');
-    _nextBookId = ((bookResult.first['maxId'] as int?) ?? 0) + 1;
-
-    // Get max line ID
-    final lineResult = await db.rawQuery('SELECT MAX(id) as maxId FROM line');
-    _nextLineId = ((lineResult.first['maxId'] as int?) ?? 0) + 1;
-
-    // Get max TOC entry ID
-    final tocResult =
-        await db.rawQuery('SELECT MAX(id) as maxId FROM tocEntry');
-    _nextTocEntryId = ((tocResult.first['maxId'] as int?) ?? 0) + 1;
-
-    // Get max category ID
-    final catResult =
-        await db.rawQuery('SELECT MAX(id) as maxId FROM category');
-    _nextCategoryId = ((catResult.first['maxId'] as int?) ?? 0) + 1;
+    _nextBookId = maxIds.maxBookId + 1;
+    _nextLineId = maxIds.maxLineId + 1;
+    _nextTocEntryId = maxIds.maxTocId + 1;
+    _nextCategoryId = maxIds.maxCategoryId + 1;
 
     _log.info('Initialized ID counters: book=$_nextBookId, line=$_nextLineId, '
         'toc=$_nextTocEntryId, category=$_nextCategoryId');
@@ -369,6 +357,7 @@ class FileSyncService {
     if (_bookTitleToId.isNotEmpty) return; // Already loaded
 
     _log.info('Loading books cache for link processing...');
+    // Use repository's getAllBooks method
     final books = await _repository.getAllBooks();
     for (final book in books) {
       _bookTitleToId[book.title] = book.id;
@@ -380,11 +369,13 @@ class FileSyncService {
   Future<void> _loadBookLinesCache(int bookId) async {
     if (_bookLineIndexToId.containsKey(bookId)) return;
 
+    // Use repository methods to get book and lines
     final book = await _repository.getBook(bookId);
     final totalLines = book?.totalLines ?? 0;
     final arr = List<int>.filled(totalLines, 0);
 
     if (totalLines > 0) {
+      // Use repository's getLines method
       final lines = await _repository.getLines(bookId, 0, totalLines - 1);
       for (final ln in lines) {
         final idx = ln.lineIndex;
@@ -483,7 +474,7 @@ class FileSyncService {
             connectionType: ConnectionType.fromString(linkData.connectionType),
           ));
 
-          // Insert in batches of 1000
+          // Insert in batches of 1000 using repository batch method
           if (linksToInsert.length >= 1000) {
             await _repository.insertLinksBatch(linksToInsert);
             linksToInsert.clear();
@@ -493,7 +484,7 @@ class FileSyncService {
         }
       }
 
-      // Insert remaining links
+      // Insert remaining links using repository batch method
       if (linksToInsert.isNotEmpty) {
         await _repository.insertLinksBatch(linksToInsert);
       }
@@ -617,20 +608,20 @@ class FileSyncService {
       if (existingCategory != null) {
         currentParentId = existingCategory.id;
       } else {
-        // Create new category
-        final newCategoryId = _nextCategoryId++;
+        // Create new category using repository method
+        // Repository's insertCategory handles duplicates and returns existing ID if found
         final category = Category(
-          id: newCategoryId,
+          id: _nextCategoryId++,
           parentId: currentParentId,
           title: categoryName,
           level: level,
         );
 
-        await _repository.insertCategory(category);
-        currentParentId = newCategoryId;
+        final insertedId = await _repository.insertCategory(category);
+        currentParentId = insertedId;
         categoriesCreated++;
 
-        _log.info('Created new category: $categoryName (id: $newCategoryId)');
+        _log.info('Created new category: $categoryName (id: $insertedId)');
       }
     }
 
@@ -642,57 +633,41 @@ class FileSyncService {
 
   /// Find a category by name and parent ID
   Future<Category?> _findCategory(String name, int? parentId) async {
-    final db = await _repository.database.database;
+    // Use repository methods to get categories by parent
+    final categories = parentId == null
+        ? await _repository.getRootCategories()
+        : await _repository.getCategoryChildren(parentId);
 
-    final result = await db.rawQuery(
-      parentId == null
-          ? 'SELECT * FROM category WHERE title = ? AND parentId IS NULL'
-          : 'SELECT * FROM category WHERE title = ? AND parentId = ?',
-      parentId == null ? [name] : [name, parentId],
-    );
-
-    if (result.isEmpty) return null;
-
-    return Category(
-      id: result.first['id'] as int,
-      parentId: result.first['parentId'] as int?,
-      title: result.first['title'] as String,
-      level: result.first['level'] as int,
-    );
+    // Find category with matching name
+    for (final cat in categories) {
+      if (cat.title == name) {
+        return cat;
+      }
+    }
+    return null;
   }
 
   /// Find a book in a specific category
   Future<Book?> _findBookInCategory(String title, int categoryId) async {
-    final db = await _repository.database.database;
+    // Use repository method to get books by category
+    final books = await _repository.getBooksByCategory(categoryId);
 
-    final result = await db.rawQuery(
-      'SELECT * FROM book WHERE title = ? AND categoryId = ?',
-      [title, categoryId],
-    );
-
-    if (result.isEmpty) return null;
-
-    return Book(
-      id: result.first['id'] as int,
-      categoryId: result.first['categoryId'] as int,
-      sourceId: result.first['sourceId'] as int,
-      title: result.first['title'] as String,
-      heShortDesc: result.first['heShortDesc'] as String?,
-      order: (result.first['orderIndex'] as num?)?.toDouble() ?? 999.0,
-      totalLines: result.first['totalLines'] as int? ?? 0,
-      isBaseBook: (result.first['isBaseBook'] as int?) == 1,
-    );
+    // Find book with matching title
+    for (final book in books) {
+      if (book.title == title) {
+        return book;
+      }
+    }
+    return null;
   }
 
   /// Update content of an existing book
   Future<void> _updateBookContent(int bookId, String filePath) async {
     _log.info('Updating book content for ID: $bookId');
 
-    final db = await _repository.database.database;
-
-    // Delete existing lines and TOC entries
-    await db.rawDelete('DELETE FROM line WHERE bookId = ?', [bookId]);
-    await db.rawDelete('DELETE FROM tocEntry WHERE bookId = ?', [bookId]);
+    // Clear existing book content using repository extension method
+    // This preserves the book metadata but replaces content
+    await _repository.clearBookContent(bookId);
 
     // Read and process new content
     final file = File(filePath);
@@ -702,7 +677,7 @@ class FileSyncService {
     // Process lines and TOC entries
     await _processBookLines(bookId, lines);
 
-    // Update total lines
+    // Update total lines using repository method
     await _repository.updateBookTotalLines(bookId, lines.length);
 
     _log.info('Updated book $bookId with ${lines.length} lines');
@@ -721,10 +696,10 @@ class FileSyncService {
     final content = await file.readAsString(encoding: utf8);
     final lines = content.split('\n');
 
-    // Get or create default source
+    // Get or create default source using repository method
     final sourceId = await _getOrCreateDefaultSource();
 
-    // Create book
+    // Create book using repository method
     final bookId = _nextBookId++;
     final book = Book(
       id: bookId,
@@ -736,12 +711,13 @@ class FileSyncService {
       isBaseBook: false,
     );
 
+    // Repository's insertBook handles the insertion
     await _repository.insertBook(book);
 
     // Process lines and TOC entries
     await _processBookLines(bookId, lines);
 
-    // Update total lines
+    // Update total lines using repository method
     await _repository.updateBookTotalLines(bookId, lines.length);
 
     _log.info(
@@ -750,32 +726,9 @@ class FileSyncService {
 
   /// Get or create a default source for user-added books
   Future<int> _getOrCreateDefaultSource() async {
-    final db = await _repository.database.database;
-
     const sourceName = 'user_added';
-
-    // Check if source exists
-    final result = await db.rawQuery(
-      'SELECT id FROM source WHERE name = ?',
-      [sourceName],
-    );
-
-    if (result.isNotEmpty) {
-      return result.first['id'] as int;
-    }
-
-    // Create new source
-    await db.rawInsert(
-      'INSERT INTO source (name) VALUES (?)',
-      [sourceName],
-    );
-
-    final newResult = await db.rawQuery(
-      'SELECT id FROM source WHERE name = ?',
-      [sourceName],
-    );
-
-    return newResult.first['id'] as int;
+    // Use repository method to insert source (handles existing check internally)
+    return await _repository.insertSource(sourceName);
   }
 
   /// Process book lines and create TOC entries
@@ -837,7 +790,7 @@ class FileSyncService {
         ));
       }
 
-      // Flush batches
+      // Flush batches using repository batch methods
       if (linesBatch.length >= batchSize) {
         await _repository.insertLinesBatch(linesBatch);
         linesBatch.clear();
@@ -848,7 +801,7 @@ class FileSyncService {
       }
     }
 
-    // Flush remaining
+    // Flush remaining using repository batch methods
     if (tocEntriesBatch.isNotEmpty) {
       await _repository.insertTocEntriesBatch(tocEntriesBatch);
     }
