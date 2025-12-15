@@ -82,14 +82,27 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
             children: [
               Column(
                 children: [
-                  // Main Content Row - 65% מגובה המסך
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.55,
+                  // Main Content Row - מתרחב לפי השטח הפנוי
+                  Expanded(
                     child: Row(
                       children: [
-                        // Left Commentary
+                        // Left Commentary with label
                         if (_leftCommentator != null) ...[
-                          Expanded(
+                          RotatedBox(
+                            quarterTurns: 1,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 2, horizontal: 1),
+                              child: Text(
+                                _leftCommentator!,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: MediaQuery.of(context).size.width * 0.17,
                             child: _CommentaryPane(
                               commentatorName: _leftCommentator!,
                               openBookCallback: widget.openBookCallback,
@@ -100,9 +113,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                             onDrag: (delta) {},
                           ),
                         ],
-                        // Main Text - שימוש ב-SimpleTextViewer!
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width * 0.62,
+                        // Main Text - מתרחב לפי השטח הפנוי
+                        Expanded(
                           child: SimpleTextViewer(
                             content: state.content,
                             fontSize: state.fontSize,
@@ -112,54 +124,120 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                             isMainText: true,
                           ),
                         ),
-                    // Right Commentary
+                    // Right Commentary with label
                     if (_rightCommentator != null) ...[
                       _ResizableDivider(
                         isVertical: true,
                         onDrag: (delta) {},
                       ),
-                      Expanded(
+                      SizedBox(
+                        width: MediaQuery.of(context).size.width * 0.17,
                         child: _CommentaryPane(
                           commentatorName: _rightCommentator!,
                           openBookCallback: widget.openBookCallback,
+                        ),
+                      ),
+                      RotatedBox(
+                        quarterTurns: 3,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 2, horizontal: 1),
+                          child: Text(
+                            _rightCommentator!,
+                            style: const TextStyle(
+                              fontSize: 14,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ],
                 ),
               ),
-              // Bottom Commentary
+              // Bottom Commentary - גובה קבוע של 27% מהמסך
               if (_bottomCommentator != null ||
                   _bottomRightCommentator != null) ...[
                 const SizedBox(height: 16), // רווח בין החלק העליון לתחתון
-                Expanded(
-                  child: _bottomRightCommentator != null
-                      ? Row(
-                          children: [
-                            if (_bottomCommentator != null) ...[
-                              Expanded(
-                                child: _CommentaryPane(
-                                  commentatorName: _bottomCommentator!,
-                                  openBookCallback: widget.openBookCallback,
-                                ),
+                SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.27,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: _bottomRightCommentator != null
+                            ? Row(
+                                children: [
+                                  if (_bottomCommentator != null) ...[
+                                    RotatedBox(
+                                      quarterTurns: 1,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 2, horizontal: 1),
+                                        child: Text(
+                                          _bottomCommentator!,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: _CommentaryPane(
+                                        commentatorName: _bottomCommentator!,
+                                        openBookCallback: widget.openBookCallback,
+                                      ),
+                                    ),
+                                    _ResizableDivider(
+                                      isVertical: true,
+                                      onDrag: (delta) {},
+                                    ),
+                                  ],
+                                  Expanded(
+                                    child: _CommentaryPane(
+                                      commentatorName: _bottomRightCommentator!,
+                                      openBookCallback: widget.openBookCallback,
+                                    ),
+                                  ),
+                                  RotatedBox(
+                                    quarterTurns: 3,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 2, horizontal: 1),
+                                      child: Text(
+                                        _bottomRightCommentator!,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                children: [
+                                  RotatedBox(
+                                    quarterTurns: 1,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 2, horizontal: 1),
+                                      child: Text(
+                                        _bottomCommentator!,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _CommentaryPane(
+                                      commentatorName: _bottomCommentator!,
+                                      openBookCallback: widget.openBookCallback,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              _ResizableDivider(
-                                isVertical: true,
-                                onDrag: (delta) {},
-                              ),
-                            ],
-                            Expanded(
-                              child: _CommentaryPane(
-                                commentatorName: _bottomRightCommentator!,
-                                openBookCallback: widget.openBookCallback,
-                              ),
-                            ),
-                          ],
-                        )
-                      : _CommentaryPane(
-                          commentatorName: _bottomCommentator!,
-                          openBookCallback: widget.openBookCallback,
-                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ],
