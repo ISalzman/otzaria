@@ -313,7 +313,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                 padding: const EdgeInsets.all(6),
                 constraints: const BoxConstraints(),
                 onPressed: () async {
-                  final result = await showDialog<bool>(
+                  final hadChanges = await showDialog<bool>(
                     context: context,
                     builder: (dialogContext) => PageShapeSettingsDialog(
                       availableCommentators: state.availableCommentators,
@@ -324,7 +324,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                       currentBottomRight: _bottomRightCommentator,
                     ),
                   );
-                  if (result == true && mounted) {
+                  // טעינה מחדש אם היו שינויים
+                  if (hadChanges == true && mounted) {
                     _loadConfiguration();
                   }
                 },
