@@ -182,7 +182,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                 .add(UpdateOfflineMode(newSelection.first));
 
             // גלילה לאלמנט הזה אחרי שהמסך מתעדכן
-            Future.delayed(const Duration(milliseconds: 100), () {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
               if (_networkModeTileKey.currentContext != null) {
                 Scrollable.ensureVisible(
                   _networkModeTileKey.currentContext!,
@@ -1166,16 +1166,19 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
 
   _BackupMode _selectedBackupMode = _BackupMode.all;
 
+  // פונקציית עזר לבדיקה האם לכלול סוג נתונים בגיבוי
+  bool _shouldInclude(String key) {
+    return _selectedBackupMode == _BackupMode.all || (Settings.getValue<bool>(key) ?? true);
+  }
+
   // פונקציה ליצירת גיבוי
   Future<void> _createBackup() async {
-    bool includeAll = _selectedBackupMode == _BackupMode.all;
-
-    final includeSettings = includeAll || (Settings.getValue<bool>(_keyBackupSettings) ?? true);
-    final includeBookmarks = includeAll || (Settings.getValue<bool>(_keyBackupBookmarks) ?? true);
-    final includeHistory = includeAll || (Settings.getValue<bool>(_keyBackupHistory) ?? true);
-    final includeNotes = includeAll || (Settings.getValue<bool>(_keyBackupNotes) ?? true);
-    final includeWorkspaces = includeAll || (Settings.getValue<bool>(_keyBackupWorkspaces) ?? true);
-    final includeShamorZachor = includeAll || (Settings.getValue<bool>(_keyBackupShamorZachor) ?? true);
+    final includeSettings = _shouldInclude(_keyBackupSettings);
+    final includeBookmarks = _shouldInclude(_keyBackupBookmarks);
+    final includeHistory = _shouldInclude(_keyBackupHistory);
+    final includeNotes = _shouldInclude(_keyBackupNotes);
+    final includeWorkspaces = _shouldInclude(_keyBackupWorkspaces);
+    final includeShamorZachor = _shouldInclude(_keyBackupShamorZachor);
 
     try {
       final backupPath = await BackupService.createBackup(
@@ -1270,12 +1273,13 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
           ],
         ),
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('שגיאה בשחזור הגיבוי: $e'),
+          content: Text('שגיאה בשחזור הגיבוי: $e\n\nStack trace: ${stackTrace.toString().substring(0, 200)}'),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 10),
         ),
       );
     }
