@@ -1209,6 +1209,10 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
                 final dir = Directory(file.parent.path);
                 if (Platform.isWindows) {
                   await Process.run('explorer', [dir.path]);
+                } else if (Platform.isMacOS) {
+                  await Process.run('open', [dir.path]);
+                } else if (Platform.isLinux) {
+                  await Process.run('xdg-open', [dir.path]);
                 }
               },
             ),
@@ -1227,7 +1231,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('שגיאה ביצירת הגיבוי:\n$e\n\nStack trace:\n${stackTrace.toString().substring(0, 200)}'),
+          content: Text('שגיאה ביצירת הגיבוי:\n$e\n\nStack trace:\n${stackTrace.toString().substring(0, math.min(stackTrace.toString().length, 200))}'),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 10),
         ),
@@ -1252,7 +1256,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
       context: context,
       title: 'שחזור מגיבוי?',
       content: 'פעולה זו תחליף את הנתונים הקיימים בנתונים מהגיבוי. האם להמשיך?',
-      confirmColor: Colors.blue,
+      isDangerous: true,
     );
 
     if (confirmed != true) return;
@@ -1272,7 +1276,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
               onPressed: () {
                 if (Platform.isAndroid || Platform.isIOS) {
                   SystemNavigator.pop();
-                } else {
+                } else if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
                   windowManager.close();
                 }
               },
@@ -1285,7 +1289,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('שגיאה בשחזור הגיבוי: $e\n\nStack trace: ${stackTrace.toString().substring(0, 200)}'),
+          content: Text('שגיאה בשחזור הגיבוי: $e\n\nStack trace: ${stackTrace.toString().substring(0, math.min(stackTrace.toString().length, 200))}'),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 10),
         ),
