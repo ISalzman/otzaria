@@ -710,6 +710,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   _openBookInReader(book, index);
                 }
               },
+              onBookDeleted: () {
+                // רענון הספרייה לאחר מחיקת ספר
+                context.read<LibraryBloc>().add(RefreshLibrary());
+              },
             ),
           ),
         );
