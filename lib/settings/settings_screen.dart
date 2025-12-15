@@ -169,6 +169,11 @@ class _MySettingsScreenState extends State<MySettingsScreen>
           context.read<SettingsBloc>().add(UpdateOfflineMode(newSelection.first));
         },
         style: ButtonStyle(
+          shape: WidgetStateProperty.all(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
           backgroundColor: WidgetStateProperty.resolveWith<Color?>(
             (Set<WidgetState> states) {
               if (states.contains(WidgetState.selected)) {
@@ -582,245 +587,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                     ],
                   ),
                   const SizedBox(height: 24),
-                  SettingsGroup(
-                    title: 'גיבוי',
-                    titleAlignment: Alignment.centerRight,
-                    titleTextStyle: const TextStyle(fontSize: 25),
-                    children: [
-                      SettingsGroup(
-                        title: 'גבה את:',
-                        titleAlignment: Alignment.centerRight,
-                        children: [
-                          _buildColumns(3, [
-                            SwitchSettingsTile(
-                              settingKey: 'key-backup-settings',
-                              title: 'הגדרות',
-                              subtitle: 'כולל את כלל הגדרות התוכנה',
-                              leading:
-                                  const Icon(FluentIcons.settings_24_regular),
-                              defaultValue: true,
-                              activeColor: Theme.of(context).cardColor,
-                            ),
-                            SwitchSettingsTile(
-                              settingKey: 'key-backup-bookmarks',
-                              title: 'סימניות',
-                              subtitle: 'כל הסימניות שנשמרו',
-                              leading:
-                                  const Icon(FluentIcons.bookmark_24_regular),
-                              defaultValue: true,
-                              activeColor: Theme.of(context).cardColor,
-                            ),
-                            SwitchSettingsTile(
-                              settingKey: 'key-backup-history',
-                              title: 'היסטוריה',
-                              subtitle: 'היסטוריית הלימוד',
-                              leading:
-                                  const Icon(FluentIcons.history_24_regular),
-                              defaultValue: true,
-                              activeColor: Theme.of(context).cardColor,
-                            ),
-                            SwitchSettingsTile(
-                              settingKey: 'key-backup-notes',
-                              title: 'הערות אישיות',
-                              subtitle: 'כל ההערות האישיות שלך',
-                              leading: const Icon(FluentIcons.note_24_regular),
-                              defaultValue: true,
-                              activeColor: Theme.of(context).cardColor,
-                            ),
-                            SwitchSettingsTile(
-                              settingKey: 'key-backup-workspaces',
-                              title: 'שולחנות עבודה',
-                              subtitle: 'כל שולחנות העבודה',
-                              leading: const Icon(FluentIcons.grid_24_regular),
-                              defaultValue: true,
-                              activeColor: Theme.of(context).cardColor,
-                            ),
-                            SwitchSettingsTile(
-                              settingKey: 'key-backup-shamor-zachor',
-                              title: 'זכור ושמור',
-                              subtitle: 'ספרים ומעקב לימוד',
-                              leading: const Icon(FluentIcons.book_24_regular),
-                              defaultValue: true,
-                              activeColor: Theme.of(context).cardColor,
-                            ),
-                          ]),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      DropDownSettingsTile<String>(
-                        settingKey: 'key-auto-backup-frequency',
-                        title: 'גיבוי אוטומטי',
-                        leading:
-                            const Icon(FluentIcons.calendar_clock_24_regular),
-                        selected: 'none',
-                        values: const {
-                          'none': 'ללא',
-                          'weekly': 'כל שבוע',
-                          'monthly': 'כל חודש',
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: SimpleSettingsTile(
-                              title: 'צור גיבוי עכשיו',
-                              subtitle: 'שמור גיבוי של הנתונים שנבחרו',
-                              leading: const Icon(
-                                  FluentIcons.arrow_upload_24_regular),
-                              onTap: () async {
-                                final includeSettings = Settings.getValue<bool>(
-                                        'key-backup-settings') ??
-                                    true;
-                                final includeBookmarks =
-                                    Settings.getValue<bool>(
-                                            'key-backup-bookmarks') ??
-                                        true;
-                                final includeHistory = Settings.getValue<bool>(
-                                        'key-backup-history') ??
-                                    true;
-                                final includeNotes = Settings.getValue<bool>(
-                                        'key-backup-notes') ??
-                                    true;
-                                final includeWorkspaces =
-                                    Settings.getValue<bool>(
-                                            'key-backup-workspaces') ??
-                                        true;
-                                final includeShamorZachor =
-                                    Settings.getValue<bool>(
-                                            'key-backup-shamor-zachor') ??
-                                        true;
-
-                                try {
-                                  final backupPath =
-                                      await BackupService.createBackup(
-                                    includeSettings: includeSettings,
-                                    includeBookmarks: includeBookmarks,
-                                    includeHistory: includeHistory,
-                                    includeNotes: includeNotes,
-                                    includeWorkspaces: includeWorkspaces,
-                                    includeShamorZachor: includeShamorZachor,
-                                  );
-
-                                  // Verify file was created
-                                  final file = File(backupPath);
-                                  final fileExists = await file.exists();
-                                  final fileSize =
-                                      fileExists ? await file.length() : 0;
-
-                                  if (!context.mounted) return;
-
-                                  if (fileExists) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('הגיבוי נשמר בהצלחה!\n'
-                                            'נתיב: $backupPath\n'
-                                            'גודל: ${(fileSize / 1024).toStringAsFixed(1)} KB'),
-                                        duration: const Duration(seconds: 5),
-                                        action: SnackBarAction(
-                                          label: 'פתח תיקייה',
-                                          onPressed: () async {
-                                            final dir =
-                                                Directory(file.parent.path);
-                                            if (Platform.isWindows) {
-                                              await Process.run(
-                                                  'explorer', [dir.path]);
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                    );
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                            'שגיאה: הקובץ לא נוצר בנתיב:\n$backupPath'),
-                                        backgroundColor: Colors.orange,
-                                        duration: const Duration(seconds: 5),
-                                      ),
-                                    );
-                                  }
-                                } catch (e, stackTrace) {
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'שגיאה ביצירת הגיבוי:\n$e\n\nStack trace:\n${stackTrace.toString().substring(0, 200)}'),
-                                      backgroundColor: Colors.red,
-                                      duration: const Duration(seconds: 10),
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: SimpleSettingsTile(
-                              title: 'שחזר מגיבוי',
-                              subtitle: 'בחר קובץ גיבוי לשחזור',
-                              leading: const Icon(
-                                  FluentIcons.arrow_download_24_regular),
-                              onTap: () async {
-                                String? filePath = await FilePicker.platform
-                                    .pickFiles(
-                                      type: FileType.custom,
-                                      allowedExtensions: ['json'],
-                                      dialogTitle: 'בחר קובץ גיבוי',
-                                    )
-                                    .then(
-                                        (result) => result?.files.single.path);
-
-                                if (filePath == null) return;
-
-                                if (!context.mounted) return;
-                                final confirmed = await showConfirmationDialog(
-                                  context: context,
-                                  title: 'שחזור מגיבוי?',
-                                  content:
-                                      'פעולה זו תחליף את הנתונים הקיימים בנתונים מהגיבוי. האם להמשיך?',
-                                  confirmColor: Colors.blue,
-                                );
-
-                                if (confirmed != true) return;
-
-                                try {
-                                  await BackupService.restoreFromBackup(
-                                      filePath);
-
-                                  if (!context.mounted) return;
-                                  await showDialog<void>(
-                                    context: context,
-                                    barrierDismissible: false,
-                                    builder: (context) => AlertDialog(
-                                      title: const Text('השחזור הושלם'),
-                                      content: const Text(
-                                        'הנתונים שוחזרו בהצלחה. יש להפעיל מחדש את התוכנה.',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => exit(0),
-                                          child: const Text('סגור את התוכנה'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                } catch (e) {
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('שגיאה בשחזור הגיבוי: $e'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                  _BackupSettingsSection(),
                   const SizedBox(height: 24),
                   SettingsGroup(
                     title: 'כללי',
@@ -1328,11 +1095,20 @@ class _SettingsTile extends StatelessWidget {
         children: [
           ListTile(
             leading: leading,
-            title: Text(title),
+            title: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                letterSpacing: -0.1,
+              ),
+            ),
             subtitle: subtitle != null
                 ? Text(
                     subtitle!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 13),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 13,
+                          letterSpacing: -0.1,
+                        ),
                   )
                 : null,
             trailing: trailing,
@@ -1340,6 +1116,326 @@ class _SettingsTile extends StatelessWidget {
           const Divider(height: 0),
         ],
       ),
+    );
+  }
+}
+
+/// ווידג'ט הגדרות גיבוי
+class _BackupSettingsSection extends StatefulWidget {
+  @override
+  State<_BackupSettingsSection> createState() => _BackupSettingsSectionState();
+}
+
+class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
+  // 0 = גבה הכל, 1 = מותאם אישית
+  int _selectedBackupMode = 0;
+
+  // פונקציה ליצירת גיבוי
+  Future<void> _createBackup() async {
+    bool includeAll = _selectedBackupMode == 0;
+    
+    final includeSettings = includeAll || (Settings.getValue<bool>('key-backup-settings') ?? true);
+    final includeBookmarks = includeAll || (Settings.getValue<bool>('key-backup-bookmarks') ?? true);
+    final includeHistory = includeAll || (Settings.getValue<bool>('key-backup-history') ?? true);
+    final includeNotes = includeAll || (Settings.getValue<bool>('key-backup-notes') ?? true);
+    final includeWorkspaces = includeAll || (Settings.getValue<bool>('key-backup-workspaces') ?? true);
+    final includeShamorZachor = includeAll || (Settings.getValue<bool>('key-backup-shamor-zachor') ?? true);
+
+    try {
+      final backupPath = await BackupService.createBackup(
+        includeSettings: includeSettings,
+        includeBookmarks: includeBookmarks,
+        includeHistory: includeHistory,
+        includeNotes: includeNotes,
+        includeWorkspaces: includeWorkspaces,
+        includeShamorZachor: includeShamorZachor,
+      );
+
+      final file = File(backupPath);
+      final fileExists = await file.exists();
+      final fileSize = fileExists ? await file.length() : 0;
+
+      if (!mounted) return;
+
+      if (fileExists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('הגיבוי נשמר בהצלחה!\nנתיב: $backupPath\nגודל: ${(fileSize / 1024).toStringAsFixed(1)} KB'),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'פתח תיקייה',
+              onPressed: () async {
+                final dir = Directory(file.parent.path);
+                if (Platform.isWindows) {
+                  await Process.run('explorer', [dir.path]);
+                }
+              },
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('שגיאה: הקובץ לא נוצר בנתיב:\n$backupPath'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('שגיאה ביצירת הגיבוי:\n$e\n\nStack trace:\n${stackTrace.toString().substring(0, 200)}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 10),
+        ),
+      );
+    }
+  }
+
+  // פונקציה לשחזור מגיבוי
+  Future<void> _restoreBackup() async {
+    String? filePath = await FilePicker.platform
+        .pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['json'],
+          dialogTitle: 'בחר קובץ גיבוי',
+        )
+        .then((result) => result?.files.single.path);
+
+    if (filePath == null) return;
+
+    if (!mounted) return;
+    final confirmed = await showConfirmationDialog(
+      context: context,
+      title: 'שחזור מגיבוי?',
+      content: 'פעולה זו תחליף את הנתונים הקיימים בנתונים מהגיבוי. האם להמשיך?',
+      confirmColor: Colors.blue,
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await BackupService.restoreFromBackup(filePath);
+
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('השחזור הושלם'),
+          content: const Text('הנתונים שוחזרו בהצלחה. יש להפעיל מחדש את התוכנה.'),
+          actions: [
+            TextButton(
+              onPressed: () => exit(0),
+              child: const Text('סגור את התוכנה'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('שגיאה בשחזור הגיבוי: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // בניית רשימת האפשרויות לבחירה מה לגבות
+  Widget _buildBackupOptions() {
+    return Column(
+      children: [
+        SwitchSettingsTile(
+          settingKey: 'key-backup-settings',
+          title: 'הגדרות',
+          subtitle: 'כולל את כלל הגדרות התוכנה',
+          leading: const Icon(FluentIcons.settings_24_regular),
+          defaultValue: true,
+          activeColor: Theme.of(context).cardColor,
+        ),
+        SwitchSettingsTile(
+          settingKey: 'key-backup-bookmarks',
+          title: 'סימניות',
+          subtitle: 'כל הסימניות שנשמרו',
+          leading: const Icon(FluentIcons.bookmark_24_regular),
+          defaultValue: true,
+          activeColor: Theme.of(context).cardColor,
+        ),
+        SwitchSettingsTile(
+          settingKey: 'key-backup-history',
+          title: 'היסטוריה',
+          subtitle: 'היסטוריית הלימוד',
+          leading: const Icon(FluentIcons.history_24_regular),
+          defaultValue: true,
+          activeColor: Theme.of(context).cardColor,
+        ),
+        SwitchSettingsTile(
+          settingKey: 'key-backup-notes',
+          title: 'הערות אישיות',
+          subtitle: 'כל ההערות האישיות שלך',
+          leading: const Icon(FluentIcons.note_24_regular),
+          defaultValue: true,
+          activeColor: Theme.of(context).cardColor,
+        ),
+        SwitchSettingsTile(
+          settingKey: 'key-backup-workspaces',
+          title: 'שולחנות עבודה',
+          subtitle: 'כל שולחנות העבודה',
+          leading: const Icon(FluentIcons.grid_24_regular),
+          defaultValue: true,
+          activeColor: Theme.of(context).cardColor,
+        ),
+        SwitchSettingsTile(
+          settingKey: 'key-backup-shamor-zachor',
+          title: 'זכור ושמור',
+          subtitle: 'ספרים ומעקב לימוד',
+          leading: const Icon(FluentIcons.book_24_regular),
+          defaultValue: true,
+          activeColor: Theme.of(context).cardColor,
+        ),
+      ],
+    );
+  }
+
+  // הפעולות המשותפות (גיבוי אוטומטי, צור גיבוי, שחזר)
+  Widget _buildCommonActions() {
+    final autoBackupFrequency =
+        Settings.getValue<String>('key-auto-backup-frequency') ?? 'none';
+
+    return Column(
+      children: [
+        Column(
+          children: [
+            ListTile(
+              leading: const Icon(FluentIcons.calendar_clock_24_regular),
+              title: Text(
+                'גיבוי אוטומטי',
+                style: const TextStyle(
+                  fontSize: 16,
+                  letterSpacing: 0,
+                ),
+              ),
+              trailing: SegmentedButton<String>(
+                style: ButtonStyle(
+                  shape: WidgetStateProperty.all(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                segments: const [
+                  ButtonSegment<String>(
+                    value: 'none',
+                    label: Text('ללא'),
+                  ),
+                  ButtonSegment<String>(
+                    value: 'weekly',
+                    label: Text('כל שבוע'),
+                  ),
+                  ButtonSegment<String>(
+                    value: 'monthly',
+                    label: Text('כל חודש'),
+                  ),
+                ],
+                selected: {autoBackupFrequency},
+                onSelectionChanged: (Set<String> newSelection) {
+                  Settings.setValue<String>(
+                      'key-auto-backup-frequency', newSelection.first);
+                  setState(() {});
+                },
+              ),
+            ),
+            const Divider(height: 0),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: SimpleSettingsTile(
+                title: 'צור גיבוי עכשיו',
+                subtitle: 'שמור גיבוי של הנתונים שנבחרו',
+                leading: const Icon(FluentIcons.arrow_upload_24_regular),
+                onTap: _createBackup,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: SimpleSettingsTile(
+                title: 'שחזר מגיבוי',
+                subtitle: 'בחר קובץ גיבוי לשחזור',
+                leading: const Icon(FluentIcons.arrow_download_24_regular),
+                onTap: _restoreBackup,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsGroup(
+      title: 'גיבוי',
+      titleAlignment: Alignment.centerRight,
+      titleTextStyle: const TextStyle(fontSize: 25),
+      children: [
+        _buildCommonActions(),
+        const SizedBox(height: 16),
+        Column(
+          children: [
+            ListTile(
+              leading: const Icon(FluentIcons.options_24_regular),
+              title: Text(
+                'בחר מה לגבות',
+                style: TextStyle(
+                  fontSize: 16, // התאם לפי הצורך
+                  letterSpacing: -0.1, // רווח בין אותיות - 0 = רגיל, שלילי = צפוף יותר
+                ),
+              ),
+              trailing: SegmentedButton<int>(
+                style: ButtonStyle(
+                  shape: WidgetStateProperty.all(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8), // עיגול הפינות - הקטן למספר קטן יותר
+                    ),
+                  ),
+                ),
+                segments: const [
+                  ButtonSegment<int>(
+                    value: 0,
+                    label: Text('גבה הכל'),
+                    icon: Icon(FluentIcons.checkmark_circle_24_regular),
+                  ),
+                  ButtonSegment<int>(
+                    value: 1,
+                    label: Text('מותאם אישית'),
+                    icon: Icon(FluentIcons.options_24_regular),
+                  ),
+                ],
+                selected: {_selectedBackupMode},
+                onSelectionChanged: (Set<int> newSelection) {
+                  setState(() {
+                    _selectedBackupMode = newSelection.first;
+                  });
+                },
+              ),
+            ),
+            const Divider(height: 0),
+          ],
+        ),
+        if (_selectedBackupMode == 1) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 48, right: 48),
+            child: _buildBackupOptions(),
+          ),
+        ],
+      ],
     );
   }
 }
