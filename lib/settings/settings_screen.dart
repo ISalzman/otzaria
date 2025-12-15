@@ -1146,6 +1146,9 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
+/// מצבי גיבוי אפשריים
+enum _BackupMode { all, custom }
+
 /// ווידג'ט הגדרות גיבוי
 class _BackupSettingsSection extends StatefulWidget {
   @override
@@ -1153,19 +1156,27 @@ class _BackupSettingsSection extends StatefulWidget {
 }
 
 class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
-  // 0 = גבה הכל, 1 = מותאם אישית
-  int _selectedBackupMode = 0;
+  // מפתחות הגדרות גיבוי
+  static const _keyBackupSettings = 'key-backup-settings';
+  static const _keyBackupBookmarks = 'key-backup-bookmarks';
+  static const _keyBackupHistory = 'key-backup-history';
+  static const _keyBackupNotes = 'key-backup-notes';
+  static const _keyBackupWorkspaces = 'key-backup-workspaces';
+  static const _keyBackupShamorZachor = 'key-backup-shamor-zachor';
+  static const _keyAutoBackupFrequency = 'key-auto-backup-frequency';
+
+  _BackupMode _selectedBackupMode = _BackupMode.all;
 
   // פונקציה ליצירת גיבוי
   Future<void> _createBackup() async {
-    bool includeAll = _selectedBackupMode == 0;
-    
-    final includeSettings = includeAll || (Settings.getValue<bool>('key-backup-settings') ?? true);
-    final includeBookmarks = includeAll || (Settings.getValue<bool>('key-backup-bookmarks') ?? true);
-    final includeHistory = includeAll || (Settings.getValue<bool>('key-backup-history') ?? true);
-    final includeNotes = includeAll || (Settings.getValue<bool>('key-backup-notes') ?? true);
-    final includeWorkspaces = includeAll || (Settings.getValue<bool>('key-backup-workspaces') ?? true);
-    final includeShamorZachor = includeAll || (Settings.getValue<bool>('key-backup-shamor-zachor') ?? true);
+    bool includeAll = _selectedBackupMode == _BackupMode.all;
+
+    final includeSettings = includeAll || (Settings.getValue<bool>(_keyBackupSettings) ?? true);
+    final includeBookmarks = includeAll || (Settings.getValue<bool>(_keyBackupBookmarks) ?? true);
+    final includeHistory = includeAll || (Settings.getValue<bool>(_keyBackupHistory) ?? true);
+    final includeNotes = includeAll || (Settings.getValue<bool>(_keyBackupNotes) ?? true);
+    final includeWorkspaces = includeAll || (Settings.getValue<bool>(_keyBackupWorkspaces) ?? true);
+    final includeShamorZachor = includeAll || (Settings.getValue<bool>(_keyBackupShamorZachor) ?? true);
 
     try {
       final backupPath = await BackupService.createBackup(
@@ -1276,7 +1287,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
     return Column(
       children: [
         SwitchSettingsTile(
-          settingKey: 'key-backup-settings',
+          settingKey: _keyBackupSettings,
           title: 'הגדרות',
           subtitle: 'כולל את כלל הגדרות התוכנה',
           leading: const Icon(FluentIcons.settings_24_regular),
@@ -1284,7 +1295,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
           activeColor: Theme.of(context).cardColor,
         ),
         SwitchSettingsTile(
-          settingKey: 'key-backup-bookmarks',
+          settingKey: _keyBackupBookmarks,
           title: 'סימניות',
           subtitle: 'כל הסימניות שנשמרו',
           leading: const Icon(FluentIcons.bookmark_24_regular),
@@ -1292,7 +1303,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
           activeColor: Theme.of(context).cardColor,
         ),
         SwitchSettingsTile(
-          settingKey: 'key-backup-history',
+          settingKey: _keyBackupHistory,
           title: 'היסטוריה',
           subtitle: 'היסטוריית הלימוד',
           leading: const Icon(FluentIcons.history_24_regular),
@@ -1300,7 +1311,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
           activeColor: Theme.of(context).cardColor,
         ),
         SwitchSettingsTile(
-          settingKey: 'key-backup-notes',
+          settingKey: _keyBackupNotes,
           title: 'הערות אישיות',
           subtitle: 'כל ההערות האישיות שלך',
           leading: const Icon(FluentIcons.note_24_regular),
@@ -1308,7 +1319,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
           activeColor: Theme.of(context).cardColor,
         ),
         SwitchSettingsTile(
-          settingKey: 'key-backup-workspaces',
+          settingKey: _keyBackupWorkspaces,
           title: 'שולחנות עבודה',
           subtitle: 'כל שולחנות העבודה',
           leading: const Icon(FluentIcons.grid_24_regular),
@@ -1316,7 +1327,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
           activeColor: Theme.of(context).cardColor,
         ),
         SwitchSettingsTile(
-          settingKey: 'key-backup-shamor-zachor',
+          settingKey: _keyBackupShamorZachor,
           title: 'זכור ושמור',
           subtitle: 'ספרים ומעקב לימוד',
           leading: const Icon(FluentIcons.book_24_regular),
@@ -1330,7 +1341,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
   // הפעולות המשותפות (גיבוי אוטומטי, צור גיבוי, שחזר)
   Widget _buildCommonActions() {
     final autoBackupFrequency =
-        Settings.getValue<String>('key-auto-backup-frequency') ?? 'none';
+        Settings.getValue<String>(_keyAutoBackupFrequency) ?? 'none';
     final primaryColor = Theme.of(context).colorScheme.primary;
     final cardColor = Theme.of(context).cardColor;
 
@@ -1380,7 +1391,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
                 selected: {autoBackupFrequency},
                 onSelectionChanged: (Set<String> newSelection) {
                   Settings.setValue<String>(
-                      'key-auto-backup-frequency', newSelection.first);
+                      _keyAutoBackupFrequency, newSelection.first);
                   setState(() {});
                 },
               ),
@@ -1438,7 +1449,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
                       letterSpacing: -0.1, // רווח בין אותיות - 0 = רגיל, שלילי = צפוף יותר
                     ),
                   ),
-                  trailing: SegmentedButton<int>(
+                  trailing: SegmentedButton<_BackupMode>(
                     style: ButtonStyle(
                       shape: WidgetStateProperty.all(
                         RoundedRectangleBorder(
@@ -1455,19 +1466,19 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
                       ),
                     ),
                     segments: const [
-                      ButtonSegment<int>(
-                        value: 0,
+                      ButtonSegment<_BackupMode>(
+                        value: _BackupMode.all,
                         label: Text('גבה הכל'),
                         icon: Icon(FluentIcons.checkmark_circle_24_regular),
                       ),
-                      ButtonSegment<int>(
-                        value: 1,
+                      ButtonSegment<_BackupMode>(
+                        value: _BackupMode.custom,
                         label: Text('מותאם אישית'),
                         icon: Icon(FluentIcons.options_24_regular),
                       ),
                     ],
                     selected: {_selectedBackupMode},
-                    onSelectionChanged: (Set<int> newSelection) {
+                    onSelectionChanged: (Set<_BackupMode> newSelection) {
                       setState(() {
                         _selectedBackupMode = newSelection.first;
                       });
@@ -1479,7 +1490,7 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
             );
           },
         ),
-        if (_selectedBackupMode == 1) ...[
+        if (_selectedBackupMode == _BackupMode.custom) ...[
           Padding(
             padding: const EdgeInsets.only(left: 48, right: 48),
             child: _buildBackupOptions(),
