@@ -14,15 +14,17 @@ class AppFonts {
   static const String editorFont = 'TaameyAshkenaz';
 
   /// רשימת כל הגופנים הזמינים לבחירה ב-UI
+  /// הערה: Candara, roboto, Calibri, Arial הם גופני מערכת ולא קיימים בתיקיית fonts
   static const List<FontInfo> availableFonts = [
-    FontInfo(value: 'TaameyDavidCLM', label: 'דוד'),
-    FontInfo(value: 'FrankRuhlCLM', label: 'פרנק-רוהל'),
+    FontInfo(value: 'TaameyDavidCLM', label: 'טעמי דוד'),
+    FontInfo(value: 'FrankRuhlCLM', label: 'פרנק רוהל'),
     FontInfo(value: 'TaameyAshkenaz', label: 'טעמי אשכנז'),
     FontInfo(value: 'KeterYG', label: 'כתר'),
     FontInfo(value: 'Shofar', label: 'שופר'),
-    FontInfo(value: 'NotoSerifHebrew', label: 'נוטו'),
+    FontInfo(value: 'NotoSerifHebrew', label: 'נוטו סריף'),
     FontInfo(value: 'Tinos', label: 'טינוס'),
-    FontInfo(value: 'NotoRashiHebrew', label: 'רש"י'),
+    FontInfo(value: 'NotoRashiHebrew', label: 'נוטו רש"י'),
+    FontInfo(value: 'Rubik', label: 'רוביק'),
     FontInfo(value: 'Candara', label: 'קנדרה'),
     FontInfo(value: 'roboto', label: 'רובוטו'),
     FontInfo(value: 'Calibri', label: 'קליברי'),
@@ -30,28 +32,29 @@ class AppFonts {
   ];
 
   /// מיפוי גופנים לנתיבי קבצים (לשימוש בהדפסה)
+  /// הערה: רק גופנים עם קבצים בתיקיית fonts נתמכים בהדפסה
   static const Map<String, String> fontPaths = {
-    'Tinos': 'fonts/Tinos-Regular.ttf',
     'TaameyDavidCLM': 'fonts/TaameyDavidCLM-Medium.ttf',
-    'TaameyAshkenaz': 'fonts/TaameyAshkenaz-Medium.ttf',
-    'NotoSerifHebrew': 'fonts/NotoSerifHebrew-VariableFont_wdth,wght.ttf',
     'FrankRuhlCLM': 'fonts/FrankRuehlCLM-Medium.ttf',
+    'TaameyAshkenaz': 'fonts/TaameyAshkenaz-Medium.ttf',
     'KeterYG': 'fonts/KeterYG-Medium.ttf',
     'Shofar': 'fonts/ShofarRegular.ttf',
+    'NotoSerifHebrew': 'fonts/NotoSerifHebrew-VariableFont_wdth,wght.ttf',
+    'Tinos': 'fonts/Tinos-Regular.ttf',
     'NotoRashiHebrew': 'fonts/NotoRashiHebrew-VariableFont_wght.ttf',
     'Rubik': 'fonts/Rubik-VariableFont_wght.ttf',
   };
 
   /// מיפוי גופנים לשמות בעברית (לשימוש בהדפסה)
   static const Map<String, String> fontLabels = {
-    'Tinos': 'טינוס',
     'TaameyDavidCLM': 'טעמי דוד',
-    'TaameyAshkenaz': 'טעמי אשכנז',
-    'NotoSerifHebrew': 'נוטו סריף עברית',
     'FrankRuhlCLM': 'פרנק רוהל',
+    'TaameyAshkenaz': 'טעמי אשכנז',
     'KeterYG': 'כתר',
     'Shofar': 'שופר',
-    'NotoRashiHebrew': 'נוטו רש"י עברית',
+    'NotoSerifHebrew': 'נוטו סריף',
+    'Tinos': 'טינוס',
+    'NotoRashiHebrew': 'נוטו רש"י',
     'Rubik': 'רוביק',
   };
 
