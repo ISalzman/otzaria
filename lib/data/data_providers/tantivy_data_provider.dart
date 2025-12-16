@@ -15,6 +15,9 @@ class TantivyDataProvider {
   late Future<SearchEngine> engine;
   late Future<ReferenceSearchEngine> refEngine;
 
+  /// Track if index is being reopened to prevent concurrent reopens
+  bool _isReopening = false;
+
   static final TantivyDataProvider _singleton = TantivyDataProvider();
   static TantivyDataProvider instance = _singleton;
 
@@ -45,63 +48,78 @@ class TantivyDataProvider {
   }
 
   void reopenIndex() async {
-    String indexPath = await AppPaths.getIndexPath();
-    String refIndexPath = await AppPaths.getRefIndexPath();
+    // Prevent concurrent reopens that would cause lock conflicts
+    if (_isReopening) {
+      debugPrint('⚠️ Index reopen already in progress, skipping...');
+      return;
+    }
 
-    engine = Future.value(SearchEngine(path: indexPath));
+    _isReopening = true;
+    debugPrint('🔄 Reopening search index...');
 
-    refEngine = Future(() {
-      try {
-        return ReferenceSearchEngine(path: refIndexPath);
-      } catch (e) {
-        if (e.toString() ==
-            "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
-          resetIndex(indexPath);
-          reopenIndex();
-          throw Exception('Index reset required, please try again');
-        } else {
-          rethrow;
-        }
-      }
-    });
-    //test the engine
-    engine.then((value) {
-      try {
-        // Test the search engine
-        value
-            .search(
-                regexTerms: ['a'],
-                limit: 10,
-                slop: 0,
-                maxExpansions: 10,
-                facets: ["/"],
-                order: ResultsOrder.catalogue)
-            .then((results) {
-          // Engine test successful
-        }).catchError((e) {
-          // Log engine test error
-        });
-      } catch (e) {
-        // Log sync engine test error
-        if (e.toString() ==
-            "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
-          resetIndex(indexPath);
-          reopenIndex();
-        } else {
-          rethrow;
-        }
-      }
-    });
     try {
-      booksDone = Hive.box(
-        name: 'books_indexed',
-        directory: await AppPaths.getIndexPath(),
-      )
-          .get('key-books-done', defaultValue: [])
-          .map<String>((e) => e.toString())
-          .toList() as List<String>;
-    } catch (e) {
-      booksDone = [];
+      String indexPath = await AppPaths.getIndexPath();
+      String refIndexPath = await AppPaths.getRefIndexPath();
+
+      engine = Future.value(SearchEngine(path: indexPath));
+
+      refEngine = Future(() {
+        try {
+          return ReferenceSearchEngine(path: refIndexPath);
+        } catch (e) {
+          if (e.toString() ==
+              "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
+            resetIndex(indexPath);
+            reopenIndex();
+            throw Exception('Index reset required, please try again');
+          } else {
+            rethrow;
+          }
+        }
+      });
+      //test the engine
+      engine.then((value) {
+        try {
+          // Test the search engine
+          value
+              .search(
+                  regexTerms: ['a'],
+                  limit: 10,
+                  slop: 0,
+                  maxExpansions: 10,
+                  facets: ["/"],
+                  order: ResultsOrder.catalogue)
+              .then((results) {
+            // Engine test successful
+          }).catchError((e) {
+            // Log engine test error
+          });
+        } catch (e) {
+          // Log sync engine test error
+          if (e.toString() ==
+              "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
+            resetIndex(indexPath);
+            reopenIndex();
+          } else {
+            rethrow;
+          }
+        }
+      });
+      try {
+        booksDone = Hive.box(
+          name: 'books_indexed',
+          directory: await AppPaths.getIndexPath(),
+        )
+            .get('key-books-done', defaultValue: [])
+            .map<String>((e) => e.toString())
+            .toList() as List<String>;
+      } catch (e) {
+        booksDone = [];
+      }
+
+      debugPrint('✅ Search index reopened successfully');
+    } finally {
+      _isReopening = false;
     }
   }
 
