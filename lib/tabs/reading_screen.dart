@@ -41,6 +41,15 @@ const double _kAppBarControlsWidth = 125.0;
 const int _kActionButtonsCount = 2; // fullscreen + settings
 const double _kActionButtonWidth = 56.0;
 
+/// סגנון משותף לכפתורי האייקון בשורת הכותרת
+final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
+  minimumSize: const Size(32, 32),
+  padding: EdgeInsets.zero,
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(8),
+  ),
+);
+
 class _ReadingScreenState extends State<ReadingScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   // האם יש אוברפלואו בטאבים (גלילה)? משמש לקביעת placeholder לדינמיות מרכוז/התפרשות
@@ -133,26 +142,14 @@ class _ReadingScreenState extends State<ReadingScreen>
                           tooltip:
                               'הצג היסטוריה (${historyShortcut.toUpperCase()})',
                           onPressed: () => _showHistoryDialog(context),
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(32, 32),
-                            padding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
+                          style: _kIconButtonStyle,
                         ),
                         IconButton(
                           icon: const Icon(FluentIcons.bookmark_24_regular, size: 18),
                           tooltip:
                               'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
                           onPressed: () => _showBookmarksDialog(context),
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(32, 32),
-                            padding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
+                          style: _kIconButtonStyle,
                         ),
                         // קו מפריד
                         Container(
@@ -167,13 +164,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                           tooltip:
                               'החלף שולחן עבודה (${workspaceShortcut.toUpperCase()})',
                           onPressed: () => _showSaveWorkspaceDialog(context),
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(32, 32),
-                            padding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
+                          style: _kIconButtonStyle,
                         ),
                       ],
                     ),
@@ -200,13 +191,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                               await FullscreenHelper.toggleFullscreen(
                                   context, newFullscreenState);
                             },
-                            style: IconButton.styleFrom(
-                              minimumSize: const Size(32, 32),
-                              padding: EdgeInsets.zero,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
+                            style: _kIconButtonStyle,
                           );
                         },
                       ),
@@ -217,17 +202,12 @@ class _ReadingScreenState extends State<ReadingScreen>
                           icon: const Icon(FluentIcons.settings_24_regular, size: 18),
                           tooltip: 'הגדרות תצוגת הספרים',
                           onPressed: () => showReadingSettingsDialog(context),
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(32, 32),
-                            padding: EdgeInsets.zero,
-                            foregroundColor:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                            backgroundColor: Theme.of(context)
+                          style: _kIconButtonStyle.copyWith(
+                            foregroundColor: WidgetStatePropertyAll(
+                                Theme.of(context).colorScheme.onSurfaceVariant),
+                            backgroundColor: WidgetStatePropertyAll(Theme.of(context)
                                 .colorScheme
-                                .surfaceContainerHighest,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                                .surfaceContainerHighest),
                           ),
                         ),
                       ),
@@ -327,26 +307,14 @@ class _ReadingScreenState extends State<ReadingScreen>
                         tooltip:
                             'הצג היסטוריה (${historyShortcut.toUpperCase()})',
                         onPressed: () => _showHistoryDialog(context),
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(32, 32),
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
+                        style: _kIconButtonStyle,
                       ),
                       IconButton(
                         icon: const Icon(FluentIcons.bookmark_24_regular, size: 18),
                         tooltip:
                             'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
                         onPressed: () => _showBookmarksDialog(context),
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(32, 32),
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
+                        style: _kIconButtonStyle,
                       ),
                       // קו מפריד
                       Container(
@@ -361,13 +329,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                         tooltip:
                             'החלף שולחן עבודה (${workspaceShortcut.toUpperCase()})',
                         onPressed: () => _showSaveWorkspaceDialog(context),
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(32, 32),
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
+                        style: _kIconButtonStyle,
                       ),
                     ],
                   ),
@@ -418,13 +380,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                             await FullscreenHelper.toggleFullscreen(
                                 context, newFullscreenState);
                           },
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(32, 32),
-                            padding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
+                          style: _kIconButtonStyle,
                         );
                       },
                     ),
@@ -435,17 +391,12 @@ class _ReadingScreenState extends State<ReadingScreen>
                         icon: const Icon(FluentIcons.settings_24_regular, size: 18),
                         tooltip: 'הגדרות תצוגת הספרים',
                         onPressed: () => showReadingSettingsDialog(context),
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(32, 32),
-                          padding: EdgeInsets.zero,
-                          foregroundColor:
-                              Theme.of(context).colorScheme.onSurfaceVariant,
-                          backgroundColor: Theme.of(context)
+                        style: _kIconButtonStyle.copyWith(
+                          foregroundColor: WidgetStatePropertyAll(
+                              Theme.of(context).colorScheme.onSurfaceVariant),
+                          backgroundColor: WidgetStatePropertyAll(Theme.of(context)
                               .colorScheme
-                              .surfaceContainerHighest,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                              .surfaceContainerHighest),
                         ),
                       ),
                     ),
@@ -696,7 +647,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 8.0),
                           child: DefaultTextStyle(
                             style: TextStyle(
-                              color: Colors.black,
+                              color: Theme.of(context).colorScheme.onSurface,
                               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                               fontSize: 14,
                             ),

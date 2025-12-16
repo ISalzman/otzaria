@@ -17,6 +17,11 @@ import 'package:otzaria/settings/settings_state.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'dart:async';
 
+/// קבועים לחישוב רוחב חלוניות המפרשים
+const double _kCommentaryPaneWidthFactor = 0.17;
+/// רוחב הכותרת האנכית + רווחים (20 לכותרת + 4 לרווח + 6 למפריד)
+const double _kCommentaryLabelAndSpacingWidth = 30.0;
+
 /// מסך תצוגת צורת הדף - מציג את הטקסט המרכזי עם מפרשים מסביב
 class PageShapeScreen extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
@@ -105,15 +110,14 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                           ),
                           const SizedBox(width: 4),
                           SizedBox(
-                            width: MediaQuery.of(context).size.width * 0.17,
+                            width: MediaQuery.of(context).size.width * _kCommentaryPaneWidthFactor,
                             child: _CommentaryPane(
                               commentatorName: _leftCommentator!,
                               openBookCallback: widget.openBookCallback,
                             ),
                           ),
-                          _ResizableDivider(
+                          const _ResizableDivider(
                             isVertical: true,
-                            onDrag: (delta) {},
                           ),
                         ],
                         // Main Text - מתרחב לפי השטח הפנוי
@@ -129,12 +133,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                         ),
                     // Right Commentary with label (label on outer edge - last in RTL)
                     if (_rightCommentator != null) ...[
-                      _ResizableDivider(
+                      const _ResizableDivider(
                         isVertical: true,
-                        onDrag: (delta) {},
                       ),
                       SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.17,
+                        width: MediaQuery.of(context).size.width * _kCommentaryPaneWidthFactor,
                         child: _CommentaryPane(
                           commentatorName: _rightCommentator!,
                           openBookCallback: widget.openBookCallback,
@@ -170,7 +173,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                       // קו מתחת למפרש השמאלי
                       if (_leftCommentator != null)
                         SizedBox(
-                          width: MediaQuery.of(context).size.width * 0.17 + 30, // רוחב המפרש + הכותרת
+                          width: MediaQuery.of(context).size.width * _kCommentaryPaneWidthFactor + _kCommentaryLabelAndSpacingWidth,
                           child: Center(
                             child: FractionallySizedBox(
                               widthFactor: 0.5,
@@ -185,7 +188,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                       // קו מתחת למפרש הימני
                       if (_rightCommentator != null)
                         SizedBox(
-                          width: MediaQuery.of(context).size.width * 0.17 + 30, // רוחב המפרש + הכותרת
+                          width: MediaQuery.of(context).size.width * _kCommentaryPaneWidthFactor + _kCommentaryLabelAndSpacingWidth,
                           child: Center(
                             child: FractionallySizedBox(
                               widthFactor: 0.5,
@@ -230,9 +233,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                         isBottom: true,
                                       ),
                                     ),
-                                    _ResizableDivider(
+                                    const _ResizableDivider(
                                       isVertical: true,
-                                      onDrag: (delta) {},
                                     ),
                                   ],
                                   Expanded(
@@ -555,11 +557,12 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
 class _ResizableDivider extends StatefulWidget {
   final bool isVertical;
-  final Function(double) onDrag;
+  /// אם null, המפריד יהיה רק ויזואלי ללא אפשרות גרירה
+  final Function(double)? onDrag;
 
   const _ResizableDivider({
     required this.isVertical,
-    required this.onDrag,
+    this.onDrag,
   });
 
   @override
@@ -571,6 +574,15 @@ class _ResizableDividerState extends State<_ResizableDivider> {
 
   @override
   Widget build(BuildContext context) {
+    // אם אין onDrag, מציגים מפריד פשוט ללא אינטראקציה
+    if (widget.onDrag == null) {
+      return Container(
+        width: widget.isVertical ? 8 : null,
+        height: widget.isVertical ? null : 8,
+        color: Colors.transparent,
+      );
+    }
+
     return MouseRegion(
       cursor: widget.isVertical
           ? SystemMouseCursors.resizeColumn
@@ -579,7 +591,7 @@ class _ResizableDividerState extends State<_ResizableDivider> {
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
         onPanUpdate: (details) {
-          widget.onDrag(
+          widget.onDrag!(
             widget.isVertical ? details.delta.dx : details.delta.dy,
           );
         },
