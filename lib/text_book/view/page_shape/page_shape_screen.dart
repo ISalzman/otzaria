@@ -358,12 +358,8 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       final newHighlightEnabled =
           PageShapeSettingsManager.getHighlightSetting(state.book.title);
       if (newHighlightEnabled != _highlightEnabled) {
-        setState(() {
-          _highlightEnabled = newHighlightEnabled;
-          if (!_highlightEnabled) {
-            _highlightedIndices = {};
-          }
-        });
+        _highlightEnabled = newHighlightEnabled;
+        _updateHighlights(state);
       }
     }
   }
@@ -375,6 +371,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     if (state is TextBookLoaded) {
       _highlightEnabled =
           PageShapeSettingsManager.getHighlightSetting(state.book.title);
+      _updateHighlights(state);
     }
 
     _blocSubscription = context.read<TextBookBloc>().stream.listen((state) {
