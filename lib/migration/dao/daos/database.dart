@@ -16,6 +16,7 @@ import 'search_dao.dart';
 import 'toc_dao.dart';
 import 'toc_text_dao.dart';
 import 'topic_dao.dart';
+import '../sqflite/query_loader.dart';
 
 class MyDatabase {
   static Database? _database;
@@ -45,8 +46,6 @@ class MyDatabase {
   TocDao? _tocDao;
   TocTextDao? _tocTextDao;
   TopicDao? _topicDao;
-
-
 
   AuthorDao get authorDao => _authorDao!;
   BookDao get bookDao => _bookDao!;
@@ -82,6 +81,8 @@ class MyDatabase {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
+    // Initialize QueryLoader before creating DAOs
+    await QueryLoader.initialize();
     _database = await _initDatabase();
     _initializeDaos();
     return _database!;
@@ -140,7 +141,7 @@ class MyDatabase {
 
   void _initializeDaos() {
     if (_authorDao != null) return; // Already initialized
-    
+
     _authorDao = AuthorDao(this);
     _bookDao = BookDao(this);
     _bookHasLinksDao = BookHasLinksDao(this);

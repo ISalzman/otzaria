@@ -1,34 +1,65 @@
-import 'dart:io';
-import 'package:path/path.dart' as p;
+import 'package:flutter/services.dart' show rootBundle;
 
 /// Utility class to load and parse SQL query files (.sq)
 class QueryLoader {
   static final Map<String, Map<String, String>> _queryCache = {};
+  static bool _initialized = false;
 
-  /// Get the base directory for SQL query files
-  static String _getBaseDirectory() {
-    // Get the current working directory and navigate to the sqflite directory
-    final currentDir = Directory.current.path;
-    // Assuming the script is run from the project root, navigate to lib/migration/dao/sqflite
-    return p.join(currentDir, 'lib', 'migration', 'dao', 'sqflite');
+  /// Initialize the query loader by preloading all query files
+  /// Must be called before using loadQueries
+  static Future<void> initialize() async {
+    if (_initialized) return;
+
+    final queryFiles = [
+      'AcronymQueries.sq',
+      'AuthorQueries.sq',
+      'BookHasLinksQueries.sq',
+      'BookQueries.sq',
+      'CategoryClosureQueries.sq',
+      'CategoryQueries.sq',
+      'ConnectionTypeQueries.sq',
+      'Database.sq',
+      'LineQueries.sq',
+      'LineTocQueries.sq',
+      'LinkQueries.sq',
+      'PubDateQueries.sq',
+      'PubPlaceQueries.sq',
+      'SearchQueries.sq',
+      'SourceQueries.sq',
+      'TocQueries.sq',
+      'TocTextQueries.sq',
+      'TopicQueries.sq',
+    ];
+
+    for (final fileName in queryFiles) {
+      await _loadQueryFile(fileName);
+    }
+    _initialized = true;
   }
 
-  /// Load queries from a .sq file
+  /// Load a single query file from assets
+  static Future<void> _loadQueryFile(String fileName) async {
+    final assetPath = 'lib/migration/dao/sqflite/$fileName';
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final queries = _parseQueries(content);
+      _queryCache[fileName] = queries;
+    } catch (e) {
+      throw Exception('Query file not found: $assetPath - $e');
+    }
+  }
+
+  /// Load queries from a .sq file (synchronous, requires initialize() to be called first)
   static Map<String, String> loadQueries(String fileName) {
-    final fullPath = p.join(_getBaseDirectory(), fileName);
-
-    if (_queryCache.containsKey(fullPath)) {
-      return _queryCache[fullPath]!;
+    if (!_initialized) {
+      throw StateError(
+          'QueryLoader not initialized. Call QueryLoader.initialize() first.');
     }
 
-    final file = File(fullPath);
-    if (!file.existsSync()) {
-      throw FileSystemException('Query file not found: $fullPath');
+    final queries = _queryCache[fileName];
+    if (queries == null) {
+      throw Exception('Query file not found in cache: $fileName');
     }
-
-    final content = file.readAsStringSync();
-    final queries = _parseQueries(content);
-    _queryCache[fullPath] = queries;
     return queries;
   }
 
