@@ -170,6 +170,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     debugPrint('💾 Building library catalog from database...');
 
+    // CRITICAL: Clear cache before rebuilding to ensure fresh data
+    _cachedTitles.clear();
+    _titlesCached = false;
+
     final repository = _sqliteProvider.repository!;
 
     // OPTIMIZATION 1: Load all books with relations in a single optimized query

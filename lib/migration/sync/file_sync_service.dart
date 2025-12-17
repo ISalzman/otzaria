@@ -190,13 +190,8 @@ class FileSyncService {
       // Delete the folder category and all its contents from DB
       await _deleteCategoryRecursive(folderCategory.id);
 
-      // Check if "ספרים אישיים" is now empty and delete it if so
-      final remainingFolders =
-          await _repository.getCategoryChildren(personalCategory.id);
-      if (remainingFolders.isEmpty) {
-        await _repository.deleteCategory(personalCategory.id);
-        _log.info('Deleted empty "ספרים אישיים" category');
-      }
+      // Clean up empty parent categories up to "ספרים אישיים"
+      await _cleanupEmptyParentCategories(personalCategory.id);
 
       onProgress?.call(1.0, 'השחזור הושלם');
       _log.info(
@@ -308,6 +303,46 @@ class FileSyncService {
 
     // Finally, delete this category
     await _repository.deleteCategory(categoryId);
+  }
+
+  /// Clean up empty parent categories recursively
+  /// Starts from a category and checks if it's empty, if so deletes it
+  /// and continues up the hierarchy
+  Future<void> _cleanupEmptyParentCategories(int categoryId) async {
+    // Get the category to check its parent
+    final category = await _repository.getCategory(categoryId);
+    if (category == null) return;
+
+    // Check if this category has any children (books or subcategories)
+    final books = await _repository.getBooksByCategory(categoryId);
+    final subCategories = await _repository.getCategoryChildren(categoryId);
+
+    // If category is empty, delete it and check parent
+    if (books.isEmpty && subCategories.isEmpty) {
+      final parentId = category.parentId;
+      await _repository.deleteCategory(categoryId);
+      _log.info('Deleted empty category: ${category.title}');
+
+      // If there's a parent, check if it's now empty too
+      if (parentId != null) {
+        await _cleanupEmptyParentCategories(parentId);
+      }
+    }
+  }
+
+  /// Delete a folder from the database (without restoring files)
+  /// Used when removing a folder from the app completely
+  Future<void> deleteFolderFromDatabase(
+      int folderCategoryId, int personalCategoryId) async {
+    _log.info('Deleting folder category from DB: $folderCategoryId');
+
+    // Delete the folder category and all its contents
+    await _deleteCategoryRecursive(folderCategoryId);
+
+    // Clean up empty parent categories
+    await _cleanupEmptyParentCategories(personalCategoryId);
+
+    _log.info('Folder deleted from DB');
   }
 
   /// Main sync function - scans אוצריא and links folders for new files

@@ -12,6 +12,7 @@ import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
+import 'package:otzaria/migration/core/models/category.dart';
 
 /// Widget להוספה וניהול תיקיות מותאמות אישית
 class CustomFoldersTile extends StatefulWidget {
@@ -81,14 +82,28 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
   }
 
   Future<void> _removeFolder(CustomFolder folder) async {
+    String dialogContent;
+    if (folder.addToDatabase) {
+      dialogContent = 'האם להסיר את התיקייה "${folder.name}" מהרשימה?\n'
+          'התיקייה תימחק גם ממסד הנתונים.';
+    } else {
+      dialogContent = 'האם להסיר את התיקייה "${folder.name}" מהרשימה?\n'
+          'הקבצים עצמם לא יימחקו.';
+    }
+
     final confirmed = await showConfirmationDialog(
       context: context,
       title: 'הסרת תיקייה',
-      content: 'האם להסיר את התיקייה "${folder.name}" מהרשימה?\n'
-          'הקבצים עצמם לא יימחקו.',
+      content: dialogContent,
+      isDangerous: folder.addToDatabase,
     );
 
     if (confirmed == true) {
+      // אם התיקייה הייתה ב-DB, מחק אותה משם
+      if (folder.addToDatabase) {
+        await _deleteFolderFromDatabase(folder);
+      }
+
       setState(() {
         _folders = CustomFoldersManager.removeFolder(_folders, folder.path);
       });
@@ -98,6 +113,53 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       if (mounted) {
         context.read<LibraryBloc>().add(RefreshLibrary());
       }
+    }
+  }
+
+  /// מחיקת תיקייה מה-DB (בלי שחזור קבצים)
+  Future<void> _deleteFolderFromDatabase(CustomFolder folder) async {
+    try {
+      final sqliteProvider = SqliteDataProvider.instance;
+      if (!sqliteProvider.isInitialized) {
+        await sqliteProvider.initialize();
+      }
+
+      final repository = sqliteProvider.repository;
+      if (repository == null) return;
+
+      // מצא את קטגוריית "ספרים אישיים"
+      final rootCategories = await repository.getRootCategories();
+      Category? personalCategory;
+      for (final cat in rootCategories) {
+        if (cat.title == 'ספרים אישיים') {
+          personalCategory = cat;
+          break;
+        }
+      }
+
+      if (personalCategory == null) return;
+
+      // מצא את קטגוריית התיקייה
+      final folderCategories =
+          await repository.getCategoryChildren(personalCategory.id);
+      Category? folderCategory;
+      for (final cat in folderCategories) {
+        if (cat.title == folder.name) {
+          folderCategory = cat;
+          break;
+        }
+      }
+
+      if (folderCategory == null) return;
+
+      // מחק את התיקייה וכל תוכנה מה-DB
+      final syncService = await FileSyncService.getInstance(repository);
+      if (syncService != null) {
+        await syncService.deleteFolderFromDatabase(
+            folderCategory.id, personalCategory.id);
+      }
+    } catch (e) {
+      debugPrint('Error deleting folder from DB: $e');
     }
   }
 
@@ -284,6 +346,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
             _folders.isEmpty
                 ? 'לחץ להוספת תיקיות אישיות'
                 : '${_folders.length} תיקיות',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
