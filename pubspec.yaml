@@ -62,7 +62,7 @@ dependencies:
   msix: ^3.16.12
   path_provider: ^2.1.5
   html: ^0.15.1
-  pdfrx: ^2.2.16
+  pdfrx: ^2.2.18
   url_launcher: ^6.3.1
   flutter_widget_from_html: ^0.17.0
   scrollable_positioned_list: ^0.3.8
@@ -103,7 +103,7 @@ dependencies:
     git:
       url: https://github.com/Sivan22/otzaria_search_engine
       ref: use-regex
-  flutter_archive: ^6.0.3
+  flutter_archive: ^6.0.4
   window_manager: ^0.5.1
   flutter_spinbox: ^0.13.1
   toggle_switch: ^2.3.0
@@ -111,7 +111,7 @@ dependencies:
   synchronized: ^3.3.1
   sqflite_common_ffi: ^2.3.6
   sqlite3_flutter_libs: 0.5.40
-  shared_preferences: ^2.5.3
+  shared_preferences: ^2.5.4
   super_clipboard: ^0.9.1
   flutter_local_notifications: ^19.5.0
   timezone: ^0.10.1
