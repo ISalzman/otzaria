@@ -114,6 +114,38 @@ class _ScrollableTabBarWithArrowsState
   void _scrollLeft() => _scrollBy(-150);
   void _scrollRight() => _scrollBy(150);
 
+  /// בונה כפתור חץ לגלילה
+  Widget _buildArrowButton({
+    required String keyValue,
+    required bool canScroll,
+    required VoidCallback onPressed,
+    required IconData icon,
+    required String tooltip,
+  }) {
+    return SizedBox(
+      width: 36,
+      height: 32,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 200),
+        opacity: canScroll ? 1.0 : 0.0,
+        child: IgnorePointer(
+          ignoring: !canScroll,
+          child: IconButton(
+            key: ValueKey(keyValue),
+            onPressed: onPressed,
+            icon: Icon(icon),
+            iconSize: 20,
+            constraints: const BoxConstraints(
+              minWidth: 32,
+              minHeight: 32,
+            ),
+            tooltip: tooltip,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool hasOverflow = _canScrollLeft || _canScrollRight;
@@ -124,27 +156,12 @@ class _ScrollableTabBarWithArrowsState
       children: [
         // חץ שמאלי – מוסתר לגמרי אם אין גלילה והאפשרות מופעלת
         if (showArrows)
-          SizedBox(
-            width: 36,
-            height: 32,
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: _canScrollLeft ? 1.0 : 0.0,
-              child: IgnorePointer(
-                ignoring: !_canScrollLeft,
-                child: IconButton(
-                  key: const ValueKey('left-arrow'),
-                  onPressed: _scrollLeft,
-                  icon: const Icon(FluentIcons.chevron_left_24_regular),
-                  iconSize: 20,
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
-                  ),
-                  tooltip: 'גלול שמאלה',
-                ),
-              ),
-            ),
+          _buildArrowButton(
+            keyValue: 'left-arrow',
+            canScroll: _canScrollLeft,
+            onPressed: _scrollLeft,
+            icon: FluentIcons.chevron_left_24_regular,
+            tooltip: 'גלול שמאלה',
           ),
         // TabBar משופר עם עיצוב יפה יותר
         Expanded(
@@ -199,27 +216,12 @@ class _ScrollableTabBarWithArrowsState
         ),
         // חץ ימני – מוסתר לגמרי אם אין גלילה והאפשרות מופעלת
         if (showArrows)
-          SizedBox(
-            width: 36,
-            height: 32,
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: _canScrollRight ? 1.0 : 0.0,
-              child: IgnorePointer(
-                ignoring: !_canScrollRight,
-                child: IconButton(
-                  key: const ValueKey('right-arrow'),
-                  onPressed: _scrollRight,
-                  icon: const Icon(FluentIcons.chevron_right_24_regular),
-                  iconSize: 20,
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
-                  ),
-                  tooltip: 'גלול ימינה',
-                ),
-              ),
-            ),
+          _buildArrowButton(
+            keyValue: 'right-arrow',
+            canScroll: _canScrollRight,
+            onPressed: _scrollRight,
+            icon: FluentIcons.chevron_right_24_regular,
+            tooltip: 'גלול ימינה',
           ),
       ],
     );
