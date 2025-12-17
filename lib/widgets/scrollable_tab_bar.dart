@@ -117,15 +117,13 @@ class _ScrollableTabBarWithArrowsState
   @override
   Widget build(BuildContext context) {
     final bool hasOverflow = _canScrollLeft || _canScrollRight;
-    final bool showLeftArrow =
-        !widget.hideArrowsWhenNotScrollable || hasOverflow;
-    final bool showRightArrow =
+    final bool showArrows =
         !widget.hideArrowsWhenNotScrollable || hasOverflow;
 
     return Row(
       children: [
         // חץ שמאלי – מוסתר לגמרי אם אין גלילה והאפשרות מופעלת
-        if (showLeftArrow)
+        if (showArrows)
           SizedBox(
             width: 36,
             height: 32,
@@ -200,7 +198,7 @@ class _ScrollableTabBarWithArrowsState
           ),
         ),
         // חץ ימני – מוסתר לגמרי אם אין גלילה והאפשרות מופעלת
-        if (showRightArrow)
+        if (showArrows)
           SizedBox(
             width: 36,
             height: 32,

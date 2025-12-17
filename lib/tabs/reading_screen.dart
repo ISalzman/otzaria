@@ -38,6 +38,7 @@ class ReadingScreen extends StatefulWidget {
 }
 
 const double _kAppBarControlsWidth = 125.0;
+const double _kAppBarControlsWidthRightAligned = 105.0;
 const int _kActionButtonsCount = 2; // fullscreen + settings
 const double _kActionButtonWidth = 56.0;
 
@@ -298,7 +299,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                       'appbar_${historyShortcut}_${bookmarksShortcut}_${workspaceShortcut}_$closeTabShortcut'),
                   // רוחב מצומצם יותר כשהיישור לימין כדי להצמיד את הטאבים
                   leadingWidth: settingsState.alignTabsToRight
-                      ? 105.0
+                      ? _kAppBarControlsWidthRightAligned
                       : _kAppBarControlsWidth,
                   leading: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -356,7 +357,8 @@ class _ReadingScreenState extends State<ReadingScreen>
                         }
                       },
                       tabs: state.tabs
-                          .map((tab) => _buildTab(context, tab, state))
+                          .map((tab) =>
+                              _buildTab(context, tab, state, settingsState))
                           .toList(),
                     ),
                   ),
@@ -499,7 +501,8 @@ class _ReadingScreenState extends State<ReadingScreen>
     return const SizedBox.shrink();
   }
 
-  Widget _buildTab(BuildContext context, OpenedTab tab, TabsState state) {
+  Widget _buildTab(BuildContext context, OpenedTab tab, TabsState state,
+      SettingsState settingsState) {
     final index = state.tabs.indexOf(tab);
     final isSelected = index == state.currentTabIndex;
     final closeTabShortcut =
@@ -645,11 +648,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                     // הסרת padding ימני מהטאב הראשון כשהיישור לימין
                     padding: EdgeInsets.only(
                         left: 6,
-                        right: (index == 0 &&
-                                context
-                                    .read<SettingsBloc>()
-                                    .state
-                                    .alignTabsToRight)
+                        right: (index == 0 && settingsState.alignTabsToRight)
                             ? 0
                             : 6,
                         top: 0,
