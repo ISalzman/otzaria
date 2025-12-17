@@ -15,7 +15,8 @@ import 'package:otzaria/settings/settings_repository.dart';
 /// Library provider that loads books from the SQLite database.
 class DatabaseLibraryProvider implements LibraryProvider {
   final SqliteDataProvider _sqliteProvider = SqliteDataProvider.instance;
-  final Set<String> _cachedTitles = {};
+  final Set<String> _cachedTitles = {}; // Only DB books
+  final Set<String> _fileOnlyTitles = {}; // Books only in file system
   bool _titlesCached = false;
 
   /// Singleton instance
@@ -121,6 +122,12 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   @override
   Future<Set<String>> getAvailableBookTitles() async {
+    // Return only books that are actually in the database, not file-only books
+    return await getDatabaseOnlyBookTitles();
+  }
+
+  /// Gets book titles that are ONLY in the database (not including file-only books)
+  Future<Set<String>> getDatabaseOnlyBookTitles() async {
     if (_titlesCached) {
       return Set.from(_cachedTitles);
     }
@@ -146,6 +153,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
   /// Clears the cached titles (call when database changes)
   void clearCache() {
     _cachedTitles.clear();
+    _fileOnlyTitles.clear();
     _titlesCached = false;
     debugPrint('💾 Database cache cleared');
   }
@@ -172,6 +180,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     // CRITICAL: Clear cache before rebuilding to ensure fresh data
     _cachedTitles.clear();
+    _fileOnlyTitles.clear();
     _titlesCached = false;
 
     final repository = _sqliteProvider.repository!;
@@ -468,7 +477,11 @@ class DatabaseLibraryProvider implements LibraryProvider {
       if (_cachedTitles.contains(title)) {
         return null;
       }
-      _cachedTitles.add(title);
+      // Check if already added as file-only book
+      if (_fileOnlyTitles.contains(title)) {
+        return null;
+      }
+      _fileOnlyTitles.add(title);
 
       return TextBook(
         title: title,

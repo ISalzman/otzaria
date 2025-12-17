@@ -139,17 +139,25 @@ class LibraryProviderManager {
   Future<String?> getBookText(String title) async {
     final provider = _bookToProvider[title];
     if (provider != null) {
+      debugPrint('📖 Loading "$title" from ${provider.displayName}');
       return await provider.getBookText(title);
     }
 
     // Fallback: try each provider
+    debugPrint('⚠️ Book "$title" not in cache, searching providers...');
     for (final p in _providers) {
       if (await p.hasBook(title)) {
+        debugPrint('✅ Found "$title" in ${p.displayName}');
         final text = await p.getBookText(title);
-        if (text != null) return text;
+        if (text != null) {
+          // Cache the provider for future use
+          _bookToProvider[title] = p;
+          return text;
+        }
       }
     }
 
+    debugPrint('❌ Book "$title" not found in any provider');
     return null;
   }
 
@@ -164,7 +172,11 @@ class LibraryProviderManager {
     for (final p in _providers) {
       if (await p.hasBook(title)) {
         final toc = await p.getBookToc(title);
-        if (toc != null && toc.isNotEmpty) return toc;
+        if (toc != null && toc.isNotEmpty) {
+          // Cache the provider for future use
+          _bookToProvider[title] = p;
+          return toc;
+        }
       }
     }
 
@@ -257,7 +269,7 @@ class LibraryProviderManager {
         final library = await provider.buildLibraryCatalog(metadata, rootPath);
 
         // Update book to provider mapping
-        _updateBookToProviderMapping(library, provider);
+        await _updateBookToProviderMapping(library, provider);
 
         debugPrint(
             '✅ Library catalog built with ${library.subCategories.length} top-level categories');
@@ -273,27 +285,44 @@ class LibraryProviderManager {
   /// Maps books to the appropriate provider based on their type:
   /// - TextBooks that are in the database -> DatabaseLibraryProvider
   /// - PdfBooks and other file-based books -> FileSystemLibraryProvider
-  void _updateBookToProviderMapping(
-      Library library, LibraryProvider primaryProvider) {
+  Future<void> _updateBookToProviderMapping(
+      Library library, LibraryProvider primaryProvider) async {
     _bookToProvider.clear();
-    _mapBooksRecursive(library, primaryProvider);
+    await _mapBooksRecursive(library, primaryProvider);
   }
 
   /// Recursively maps all books in a category to their provider.
   /// PdfBooks are always mapped to FileSystemLibraryProvider since they're file-based.
-  /// TextBooks are mapped to the primary provider (usually Database).
-  void _mapBooksRecursive(Category category, LibraryProvider primaryProvider) {
+  /// TextBooks are mapped based on whether they exist in the database or file system.
+  Future<void> _mapBooksRecursive(
+      Category category, LibraryProvider primaryProvider) async {
+    // Get all DB book titles once for efficiency
+    final dbTitles = await databaseProvider.getAvailableBookTitles();
+
+    _mapBooksRecursiveWithCache(category, primaryProvider, dbTitles);
+  }
+
+  /// Helper method that uses cached DB titles for efficient mapping
+  void _mapBooksRecursiveWithCache(Category category,
+      LibraryProvider primaryProvider, Set<String> dbTitles) {
     for (final book in category.books) {
       if (book is PdfBook) {
         // PDF books are always file-based
         _bookToProvider[book.title] = fileSystemProvider;
       } else {
-        // TextBooks use the primary provider (Database if available)
-        _bookToProvider[book.title] = primaryProvider;
+        // For TextBooks, check if the title is in the DB cache
+        // This is important because some TextBooks are only in the file system
+        if (dbTitles.contains(book.title)) {
+          _bookToProvider[book.title] = databaseProvider;
+        } else {
+          _bookToProvider[book.title] = fileSystemProvider;
+          debugPrint(
+              '📁 Mapped file-only book: "${book.title}" -> ${fileSystemProvider.displayName}');
+        }
       }
     }
     for (final subCat in category.subCategories) {
-      _mapBooksRecursive(subCat, primaryProvider);
+      _mapBooksRecursiveWithCache(subCat, primaryProvider, dbTitles);
     }
   }
 }
