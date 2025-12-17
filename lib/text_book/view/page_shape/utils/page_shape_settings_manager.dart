@@ -12,12 +12,14 @@ class PageShapeSettingsManager {
       return null;
     }
 
-    // פורמט: "left:רשי,right:תוספות,bottom:מהרש"א,bottomRight:null"
-    final parts = savedConfig.split(',');
+    // פורמט: "left|רשי||right|תוספות||bottom|מהרש"א||bottomRight|null"
+    // משתמשים ב-|| כמפריד בין שדות ו-| כמפריד בין מפתח לערך
+    // כדי לתמוך בשמות ספרים עם פסיקים
+    final parts = savedConfig.split('||');
     final config = <String, String?>{};
 
     for (final part in parts) {
-      final keyValue = part.split(':');
+      final keyValue = part.split('|');
       if (keyValue.length == 2) {
         final key = keyValue[0];
         final value = keyValue[1] == 'null' ? null : keyValue[1];
@@ -33,14 +35,14 @@ class PageShapeSettingsManager {
     String bookTitle,
     Map<String, String?> config,
   ) async {
-    // המרה לפורמט: "left:רשי,right:תוספות,bottom:מהרש"א,bottomRight:null"
+    // פורמט: "left|רשי||right|תוספות||bottom|מהרש"א||bottomRight|null"
     final parts = <String>[];
 
     config.forEach((key, value) {
-      parts.add('$key:${value ?? 'null'}');
+      parts.add('$key|${value ?? 'null'}');
     });
 
-    final savedConfig = parts.join(',');
+    final savedConfig = parts.join('||');
     await Settings.setValue<String>('page_shape_$bookTitle', savedConfig);
   }
 
@@ -54,5 +56,34 @@ class PageShapeSettingsManager {
   /// ברירת מחדל: false (כבוי)
   static bool getHighlightSetting(String bookTitle) {
     return Settings.getValue<bool>('$_highlightPrefix$bookTitle') ?? false;
+  }
+
+  static const String _visibilityPrefix = 'page_shape_visibility_';
+
+  /// שמירת הגדרות הצגת טורים עבור ספר מסוים
+  static Future<void> saveColumnVisibility(
+    String bookTitle,
+    Map<String, bool> visibility,
+  ) async {
+    // שמירה נפרדת לכל טור - פשוט ובטוח יותר
+    await Settings.setValue<bool>(
+        '${_visibilityPrefix}left_$bookTitle', visibility['left'] ?? true);
+    await Settings.setValue<bool>(
+        '${_visibilityPrefix}right_$bookTitle', visibility['right'] ?? true);
+    await Settings.setValue<bool>(
+        '${_visibilityPrefix}bottom_$bookTitle', visibility['bottom'] ?? true);
+  }
+
+  /// טעינת הגדרות הצגת טורים עבור ספר מסוים
+  /// ברירת מחדל: כל הטורים מוצגים
+  static Map<String, bool> getColumnVisibility(String bookTitle) {
+    return {
+      'left':
+          Settings.getValue<bool>('${_visibilityPrefix}left_$bookTitle') ?? true,
+      'right':
+          Settings.getValue<bool>('${_visibilityPrefix}right_$bookTitle') ?? true,
+      'bottom':
+          Settings.getValue<bool>('${_visibilityPrefix}bottom_$bookTitle') ?? true,
+    };
   }
 }

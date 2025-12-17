@@ -37,6 +37,10 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   List<CommentatorGroup> _groups = [];
   bool _isLoadingGroups = true;
   bool _highlightRelatedCommentators = false;
+  // הגדרות הסתרת טורים
+  bool _showLeftColumn = true;
+  bool _showRightColumn = true;
+  bool _showBottomRow = true;
 
   @override
   void initState() {
@@ -54,6 +58,12 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _bottomRightCommentator = widget.currentBottomRight;
       _highlightRelatedCommentators =
           PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
+      // טעינת הגדרות הסתרת טורים
+      final visibility =
+          PageShapeSettingsManager.getColumnVisibility(widget.bookTitle);
+      _showLeftColumn = visibility['left'] ?? true;
+      _showRightColumn = visibility['right'] ?? true;
+      _showBottomRow = visibility['bottom'] ?? true;
     });
   }
 
@@ -125,6 +135,14 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       widget.bookTitle,
       _highlightRelatedCommentators,
     );
+    await PageShapeSettingsManager.saveColumnVisibility(
+      widget.bookTitle,
+      {
+        'left': _showLeftColumn,
+        'right': _showRightColumn,
+        'bottom': _showBottomRow,
+      },
+    );
   }
 
   @override
@@ -151,7 +169,28 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                   setState(() => _highlightRelatedCommentators = value);
                 },
               ),
-              const SizedBox(height: 16),
+              const Divider(),
+              Row(
+                children: [
+                  const Text('הצג: ', style: TextStyle(fontSize: 14)),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('ימין'),
+                    selected: _showLeftColumn,
+                    onSelected: (value) =>
+                        setState(() => _showLeftColumn = value),
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('שמאל'),
+                    selected: _showRightColumn,
+                    onSelected: (value) =>
+                        setState(() => _showRightColumn = value),
+                  ),
+                ],
+              ),
+              const Divider(),
+              const SizedBox(height: 8),
               _buildCommentatorDropdown(
                 label: 'מפרש ימני',
                 value: _leftCommentator,

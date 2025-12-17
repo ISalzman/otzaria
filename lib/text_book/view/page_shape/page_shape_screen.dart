@@ -39,6 +39,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   double? _rightWidth;
   double? _bottomHeight;
 
+  // הגדרות הצגת טורים
+  bool _showLeftColumn = true;
+  bool _showRightColumn = true;
+  bool _showBottomRow = true;
+
   int _settingsVersion = 0; // מונה לעדכון widgets
 
   @override
@@ -104,6 +109,17 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         });
       }
     }
+
+    // טעינת הגדרות הצגת טורים
+    final visibility =
+        PageShapeSettingsManager.getColumnVisibility(state.book.title);
+    if (mounted) {
+      setState(() {
+        _showLeftColumn = visibility['left'] ?? true;
+        _showRightColumn = visibility['right'] ?? true;
+        _showBottomRow = visibility['bottom'] ?? true;
+      });
+    }
   }
 
   /// פתיחת דיאלוג הגדרות מפרשים
@@ -145,30 +161,32 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                 child: Row(
                   children: [
                     // Left Commentary
-                    SizedBox(
-                      width: _leftWidth,
-                      child: _leftCommentator != null
-                          ? _CommentaryPane(
-                              key: ValueKey('left_$_settingsVersion'),
-                              commentatorName: _leftCommentator!,
-                              openBookCallback: widget.openBookCallback,
-                            )
-                          : _EmptyCommentaryPane(
-                              position: 'left',
-                              onSelectCommentator: () =>
-                                  _openSettingsDialog(state),
-                            ),
-                    ),
-                    _ResizableDivider(
-                      isVertical: true,
-                      onDrag: (delta) {
-                        setState(() {
-                          _leftWidth = (_leftWidth! - delta).clamp(
-                              100.0, MediaQuery.of(context).size.width * 0.5);
-                        });
-                      },
-                      onDragEnd: _saveSizes,
-                    ),
+                    if (_showLeftColumn) ...[
+                      SizedBox(
+                        width: _leftWidth,
+                        child: _leftCommentator != null
+                            ? _CommentaryPane(
+                                key: ValueKey('left_$_settingsVersion'),
+                                commentatorName: _leftCommentator!,
+                                openBookCallback: widget.openBookCallback,
+                              )
+                            : _EmptyCommentaryPane(
+                                position: 'left',
+                                onSelectCommentator: () =>
+                                    _openSettingsDialog(state),
+                              ),
+                      ),
+                      _ResizableDivider(
+                        isVertical: true,
+                        onDrag: (delta) {
+                          setState(() {
+                            _leftWidth = (_leftWidth! - delta).clamp(
+                                100.0, MediaQuery.of(context).size.width * 0.5);
+                          });
+                        },
+                        onDragEnd: _saveSizes,
+                      ),
+                    ],
                     // Main Text - שימוש ב-SimpleTextViewer!
                     Expanded(
                       child: Container(
@@ -240,36 +258,39 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                       ),
                     ),
                     // Right Commentary
-                    _ResizableDivider(
-                      isVertical: true,
-                      onDrag: (delta) {
-                        setState(() {
-                          _rightWidth = (_rightWidth! + delta).clamp(
-                              100.0, MediaQuery.of(context).size.width * 0.5);
-                        });
-                      },
-                      onDragEnd: _saveSizes,
-                    ),
-                    SizedBox(
-                      width: _rightWidth,
-                      child: _rightCommentator != null
-                          ? _CommentaryPane(
-                              key: ValueKey('right_$_settingsVersion'),
-                              commentatorName: _rightCommentator!,
-                              openBookCallback: widget.openBookCallback,
-                            )
-                          : _EmptyCommentaryPane(
-                              position: 'right',
-                              onSelectCommentator: () =>
-                                  _openSettingsDialog(state),
-                            ),
-                    ),
+                    if (_showRightColumn) ...[
+                      _ResizableDivider(
+                        isVertical: true,
+                        onDrag: (delta) {
+                          setState(() {
+                            _rightWidth = (_rightWidth! + delta).clamp(
+                                100.0, MediaQuery.of(context).size.width * 0.5);
+                          });
+                        },
+                        onDragEnd: _saveSizes,
+                      ),
+                      SizedBox(
+                        width: _rightWidth,
+                        child: _rightCommentator != null
+                            ? _CommentaryPane(
+                                key: ValueKey('right_$_settingsVersion'),
+                                commentatorName: _rightCommentator!,
+                                openBookCallback: widget.openBookCallback,
+                              )
+                            : _EmptyCommentaryPane(
+                                position: 'right',
+                                onSelectCommentator: () =>
+                                    _openSettingsDialog(state),
+                              ),
+                      ),
+                    ],
                   ],
                 ),
               ),
               // Bottom Commentary
-              if (_bottomCommentator != null ||
-                  _bottomRightCommentator != null) ...[
+              if (_showBottomRow &&
+                  (_bottomCommentator != null ||
+                      _bottomRightCommentator != null)) ...[
                 _ResizableDivider(
                   isVertical: false,
                   onDrag: (delta) {
