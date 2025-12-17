@@ -47,6 +47,11 @@ import 'package:shamor_zachor/models/book_model.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 
+// קבועים למצבי תצוגה (למניעת magic strings)
+const String _viewModeSplit = 'split';
+const String _viewModeBelow = 'below';
+const String _viewModePage = 'page';
+
 class TextBookViewerBloc extends StatefulWidget {
   final void Function(OpenedTab) openBookCallback;
   final TextBookTab tab;
@@ -74,6 +79,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   int? _sidebarTabIndex; // אינדקס הכרטיסייה בסרגל הצדי
   bool _isInitialFocusDone = false;
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
+  final GlobalKey _viewModeMenuKey = GlobalKey(); // מפתח לתפריט בחירת התצוגה
 
   // משתנים לשמירת נתונים כבדים שנטענים ברקע
   Future<Map<String, dynamic>>? _preloadedHeavyData;
@@ -989,10 +995,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       // 2) View Mode Dropdown (מאחד את Split View ו-Page Shape View)
       ActionButtonData(
-        widget: _buildViewModeDropdown(context, state),
+        widget: _buildViewModeDropdown(context, state, key: _viewModeMenuKey),
         icon: _getViewModeIcon(state),
         tooltip: _getViewModeTooltip(state),
-        onPressed: () {}, // התפריט נפתח בלחיצה על הכפתור עצמו
+        onPressed: () {
+          // פתיחת התפריט באופן פרוגרמטי (למקרה שהכפתור עבר לתפריט overflow)
+          final dynamic menuState = _viewModeMenuKey.currentState;
+          menuState?.showButtonMenu();
+        },
       ),
 
       // 3) Nikud Button
@@ -1370,12 +1380,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   IconData _getViewModeIcon(TextBookLoaded state) {
     if (state.showPageShapeView) {
       return FluentIcons.book_open_24_filled;
-    } else if (state.showSplitView) {
-      return FluentIcons.panel_left_24_regular;
-    } else {
-      // מפרשים מתחת - משתמשים באותו אייקון מסובב
-      return FluentIcons.panel_left_24_regular;
     }
+    // מפרשים בצד/מתחת - אותו אייקון (הסיבוב מתבצע מחוץ לפונקציה)
+    return FluentIcons.panel_left_24_regular;
   }
 
   /// קבלת ה-tooltip למצב התצוגה הנוכחי
@@ -1390,7 +1397,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   /// בניית תפריט נפתח לבחירת מצב תצוגה
-  Widget _buildViewModeDropdown(BuildContext context, TextBookLoaded state) {
+  Widget _buildViewModeDropdown(BuildContext context, TextBookLoaded state,
+      {Key? key}) {
     // אייקון מסובב כשמפרשים מתחת
     final iconWidget = state.showPageShapeView
         ? Icon(_getViewModeIcon(state))
@@ -1400,6 +1408,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           );
 
     return PopupMenuButton<String>(
+      key: key,
       tooltip: 'בחירת תצוגה',
       icon: iconWidget,
       enabled: !widget.isInCombinedView,
@@ -1407,8 +1416,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         final bloc = context.read<TextBookBloc>();
 
         // קביעת מצב היעד לפי הבחירה
-        final bool isPage = value == 'page';
-        final bool isSplit = value == 'split';
+        final bool isPage = value == _viewModePage;
+        final bool isSplit = value == _viewModeSplit;
 
         // עדכון תצוגת צורת הדף במידת הצורך
         if (isPage != state.showPageShapeView) {
@@ -1454,14 +1463,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
         return [
           buildItem(
-            value: 'split',
+            value: _viewModeSplit,
             text: 'מפרשים בצד',
             icon: Icon(FluentIcons.panel_left_24_regular,
                 color: isSplit ? primaryColor : null),
             isSelected: isSplit,
           ),
           buildItem(
-            value: 'below',
+            value: _viewModeBelow,
             text: 'מפרשים מתחת',
             icon: RotatedBox(
               quarterTurns: 3,
@@ -1471,7 +1480,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             isSelected: isBelow,
           ),
           buildItem(
-            value: 'page',
+            value: _viewModePage,
             text: 'צורת הדף',
             icon: Icon(FluentIcons.book_open_24_regular,
                 color: isPage ? primaryColor : null),
