@@ -41,6 +41,7 @@ class SettingsRepository {
   static const String keyLibraryPath = 'key-library-path';
   static const String keyHebrewBooksPath = 'key-hebrew-books-path';
   static const String keyDevChannel = 'key-dev-channel';
+  static const String keyCustomFolders = 'key-custom-folders';
 
   // Calendar Notification Settings
   static const String keyCalendarNotificationsEnabled =

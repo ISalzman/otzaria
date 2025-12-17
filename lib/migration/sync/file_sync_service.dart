@@ -12,6 +12,8 @@ import '../core/models/line.dart';
 import '../core/models/link.dart';
 import '../core/models/toc_entry.dart';
 import '../dao/repository/seforim_repository.dart';
+import '../../settings/custom_folders/custom_folder.dart';
+import '../../settings/settings_repository.dart';
 
 /// Result of a file sync operation
 class FileSyncResult {
@@ -112,6 +114,202 @@ class FileSyncService {
     }
   }
 
+  /// Restore files from DB for a custom folder
+  /// This exports books from the "ספרים אישיים" category back to files
+  /// and then deletes them from the database.
+  ///
+  /// [folder] - The custom folder to restore
+  /// [onProgress] - Progress callback for UI updates
+  ///
+  /// Returns the number of books restored
+  Future<RestoreFolderResult> restoreFolderFromDatabase(
+    CustomFolder folder, {
+    void Function(double progress, String message)? onProgress,
+  }) async {
+    _log.info('Restoring folder from DB: ${folder.name}');
+    int restoredBooks = 0;
+    int restoredCategories = 0;
+    final errors = <String>[];
+
+    try {
+      // Find the "ספרים אישיים" root category
+      final rootCategories = await _repository.getRootCategories();
+      Category? personalCategory;
+      for (final cat in rootCategories) {
+        if (cat.title == 'ספרים אישיים') {
+          personalCategory = cat;
+          break;
+        }
+      }
+
+      if (personalCategory == null) {
+        _log.info('No "ספרים אישיים" category found in DB');
+        return RestoreFolderResult(
+          restoredBooks: 0,
+          restoredCategories: 0,
+          errors: ['לא נמצאה קטגוריית "ספרים אישיים" במסד הנתונים'],
+        );
+      }
+
+      // Find the folder's category under "ספרים אישיים"
+      final folderCategories =
+          await _repository.getCategoryChildren(personalCategory.id);
+      Category? folderCategory;
+      for (final cat in folderCategories) {
+        if (cat.title == folder.name) {
+          folderCategory = cat;
+          break;
+        }
+      }
+
+      if (folderCategory == null) {
+        _log.info('Folder category not found in DB: ${folder.name}');
+        return RestoreFolderResult(
+          restoredBooks: 0,
+          restoredCategories: 0,
+          errors: ['התיקייה "${folder.name}" לא נמצאה במסד הנתונים'],
+        );
+      }
+
+      onProgress?.call(0.1, 'מייצא ספרים מהמסד...');
+
+      // Recursively restore all books and subcategories
+      final result = await _restoreCategoryRecursive(
+        folderCategory,
+        folder.path,
+        onProgress,
+        0.1,
+        0.8,
+      );
+      restoredBooks = result.books;
+      restoredCategories = result.categories;
+      errors.addAll(result.errors);
+
+      onProgress?.call(0.9, 'מוחק נתונים מהמסד...');
+
+      // Delete the folder category and all its contents from DB
+      await _deleteCategoryRecursive(folderCategory.id);
+
+      // Check if "ספרים אישיים" is now empty and delete it if so
+      final remainingFolders =
+          await _repository.getCategoryChildren(personalCategory.id);
+      if (remainingFolders.isEmpty) {
+        await _repository.deleteCategory(personalCategory.id);
+        _log.info('Deleted empty "ספרים אישיים" category');
+      }
+
+      onProgress?.call(1.0, 'השחזור הושלם');
+      _log.info(
+          'Restored $restoredBooks books and $restoredCategories categories from DB');
+    } catch (e, stackTrace) {
+      _log.severe('Error restoring folder from DB', e, stackTrace);
+      errors.add('שגיאה בשחזור: $e');
+    }
+
+    return RestoreFolderResult(
+      restoredBooks: restoredBooks,
+      restoredCategories: restoredCategories,
+      errors: errors,
+    );
+  }
+
+  /// Recursively restore a category and its contents to files
+  Future<_RestoreResult> _restoreCategoryRecursive(
+    Category category,
+    String targetPath,
+    void Function(double progress, String message)? onProgress,
+    double progressStart,
+    double progressEnd,
+  ) async {
+    int books = 0;
+    int categories = 0;
+    final errors = <String>[];
+
+    // Ensure the target directory exists
+    final targetDir = Directory(targetPath);
+    if (!await targetDir.exists()) {
+      await targetDir.create(recursive: true);
+      categories++;
+    }
+
+    // Get books in this category
+    final categoryBooks = await _repository.getBooksByCategory(category.id);
+
+    // Restore each book
+    for (int i = 0; i < categoryBooks.length; i++) {
+      final book = categoryBooks[i];
+      try {
+        await _restoreBookToFile(book, targetPath);
+        books++;
+
+        final progress = progressStart +
+            (progressEnd - progressStart) * (i / categoryBooks.length) * 0.5;
+        onProgress?.call(progress, 'משחזר: ${book.title}');
+      } catch (e) {
+        _log.warning('Error restoring book ${book.title}: $e');
+        errors.add('שגיאה בשחזור "${book.title}": $e');
+      }
+    }
+
+    // Get and restore subcategories
+    final subCategories = await _repository.getCategoryChildren(category.id);
+    for (int i = 0; i < subCategories.length; i++) {
+      final subCat = subCategories[i];
+      final subPath = path.join(targetPath, subCat.title);
+
+      final subResult = await _restoreCategoryRecursive(
+        subCat,
+        subPath,
+        onProgress,
+        progressStart + (progressEnd - progressStart) * 0.5,
+        progressEnd,
+      );
+
+      books += subResult.books;
+      categories += subResult.categories + 1;
+      errors.addAll(subResult.errors);
+    }
+
+    return _RestoreResult(books: books, categories: categories, errors: errors);
+  }
+
+  /// Restore a single book to a file
+  Future<void> _restoreBookToFile(Book book, String targetPath) async {
+    // Get all lines for the book
+    final lines = await _repository.getLines(book.id, 0, book.totalLines - 1);
+
+    // Sort lines by index
+    lines.sort((a, b) => a.lineIndex.compareTo(b.lineIndex));
+
+    // Build the file content
+    final content = lines.map((line) => line.content).join('\n');
+
+    // Write to file
+    final filePath = path.join(targetPath, '${book.title}.txt');
+    final file = File(filePath);
+    await file.writeAsString(content, encoding: utf8);
+
+    _log.info('Restored book to file: $filePath');
+  }
+
+  /// Recursively delete a category and all its contents from DB
+  Future<void> _deleteCategoryRecursive(int categoryId) async {
+    // First, delete all books in this category
+    final books = await _repository.getBooksByCategory(categoryId);
+    for (final book in books) {
+      await _repository.deleteBookCompletely(book.id);
+    }
+
+    // Then, recursively delete subcategories
+    final subCategories = await _repository.getCategoryChildren(categoryId);
+    for (final subCat in subCategories) {
+      await _deleteCategoryRecursive(subCat.id);
+    }
+
+    // Finally, delete this category
+    await _repository.deleteCategory(categoryId);
+  }
+
   /// Main sync function - scans אוצריא and links folders for new files
   Future<FileSyncResult> syncFiles({
     void Function(double progress, String message)? onProgress,
@@ -159,6 +357,16 @@ class FileSyncService {
         skippedFiles += otzariaResult.skippedFiles;
         errors.addAll(otzariaResult.errors);
       }
+
+      // Scan custom folders that are marked for DB sync
+      _reportProgress(0.4, 'סורק תיקיות מותאמות אישית...');
+      final customFoldersResult = await _scanAndSyncCustomFolders();
+      addedBooks += customFoldersResult.addedBooks;
+      updatedBooks += customFoldersResult.updatedBooks;
+      addedCategories += customFoldersResult.addedCategories;
+      deletedFiles += customFoldersResult.deletedFiles;
+      skippedFiles += customFoldersResult.skippedFiles;
+      errors.addAll(customFoldersResult.errors);
 
       // Scan links folder for JSON files only
       final linksPath = path.join(libraryPath, 'links');
@@ -284,6 +492,200 @@ class FileSyncService {
       skippedFiles: skippedFiles,
       errors: errors,
     );
+  }
+
+  /// Scan custom folders that are marked for DB sync
+  /// Custom folders are stored under the "ספרים אישיים" category
+  Future<FileSyncResult> _scanAndSyncCustomFolders() async {
+    int addedBooks = 0;
+    int updatedBooks = 0;
+    int addedCategories = 0;
+    int deletedFiles = 0;
+    int skippedFiles = 0;
+    final errors = <String>[];
+
+    // Load custom folders from settings
+    final customFoldersJson =
+        Settings.getValue<String>(SettingsRepository.keyCustomFolders);
+    final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
+
+    // Filter only folders marked for DB sync
+    final foldersToSync = customFolders.where((f) => f.addToDatabase).toList();
+
+    if (foldersToSync.isEmpty) {
+      _log.info('No custom folders marked for DB sync');
+      return const FileSyncResult();
+    }
+
+    _log.info('Found ${foldersToSync.length} custom folders to sync');
+
+    for (final folder in foldersToSync) {
+      final folderDir = Directory(folder.path);
+      if (!await folderDir.exists()) {
+        _log.warning('Custom folder does not exist: ${folder.path}');
+        errors.add('תיקייה לא קיימת: ${folder.name}');
+        continue;
+      }
+
+      _log.info('Scanning custom folder: ${folder.path}');
+
+      // Scan for TXT files in this custom folder
+      final result = await _scanAndSyncCustomFolder(folder);
+      addedBooks += result.addedBooks;
+      updatedBooks += result.updatedBooks;
+      addedCategories += result.addedCategories;
+      deletedFiles += result.deletedFiles;
+      skippedFiles += result.skippedFiles;
+      errors.addAll(result.errors);
+    }
+
+    return FileSyncResult(
+      addedBooks: addedBooks,
+      updatedBooks: updatedBooks,
+      addedCategories: addedCategories,
+      deletedFiles: deletedFiles,
+      skippedFiles: skippedFiles,
+      errors: errors,
+    );
+  }
+
+  /// Scan a single custom folder and sync its files to DB
+  /// Files are placed under "ספרים אישיים" -> folder name -> subfolders
+  Future<FileSyncResult> _scanAndSyncCustomFolder(CustomFolder folder) async {
+    int addedBooks = 0;
+    int updatedBooks = 0;
+    int addedCategories = 0;
+    int deletedFiles = 0;
+    int skippedFiles = 0;
+    final errors = <String>[];
+
+    // Find all TXT files in the custom folder
+    final newFiles = await _findNewTxtFiles(folder.path);
+
+    if (newFiles.isEmpty) {
+      _log.info('No TXT files found in custom folder: ${folder.name}');
+      return const FileSyncResult();
+    }
+
+    _log.info(
+        'Found ${newFiles.length} TXT files in custom folder: ${folder.name}');
+
+    for (final filePath in newFiles) {
+      try {
+        // Process file with custom category path prefix
+        final result = await _processCustomFolderFile(filePath, folder);
+        if (result.wasAdded) {
+          addedBooks++;
+          addedCategories += result.categoriesCreated;
+        } else if (result.wasUpdated) {
+          updatedBooks++;
+        } else {
+          skippedFiles++;
+        }
+
+        // Delete the TXT file after successful processing
+        if (result.wasAdded || result.wasUpdated) {
+          try {
+            await File(filePath).delete();
+            deletedFiles++;
+            _log.info('Deleted processed file: ${path.basename(filePath)}');
+          } catch (e) {
+            _log.warning('Failed to delete file $filePath: $e');
+          }
+        }
+      } catch (e, stackTrace) {
+        _log.warning(
+            'Error processing custom folder file $filePath', e, stackTrace);
+        errors.add('Error processing ${path.basename(filePath)}: $e');
+      }
+    }
+
+    // Clean up empty directories after processing
+    await _removeEmptyDirectories(folder.path);
+
+    return FileSyncResult(
+      addedBooks: addedBooks,
+      updatedBooks: updatedBooks,
+      addedCategories: addedCategories,
+      deletedFiles: deletedFiles,
+      skippedFiles: skippedFiles,
+      errors: errors,
+    );
+  }
+
+  /// Process a file from a custom folder
+  /// Creates category hierarchy: ספרים אישיים -> folder name -> subfolders
+  Future<_FileProcessResult> _processCustomFolderFile(
+    String filePath,
+    CustomFolder folder,
+  ) async {
+    final title = path.basenameWithoutExtension(filePath);
+    _log.info('Processing custom folder file: $title');
+
+    // Build category path: ספרים אישיים -> folder name -> relative path
+    final categoryPath = _buildCustomFolderCategoryPath(filePath, folder);
+
+    if (categoryPath.isEmpty) {
+      _log.warning('Could not build category path for: $filePath');
+      return const _FileProcessResult(wasAdded: false, wasUpdated: false);
+    }
+
+    // Find or create category chain
+    int categoriesCreated = 0;
+    final categoryResult = await _findOrCreateCategoryChain(categoryPath);
+    final categoryId = categoryResult.categoryId;
+    categoriesCreated = categoryResult.categoriesCreated;
+
+    // Check if book already exists in this category
+    final existingBook = await _findBookInCategory(title, categoryId);
+
+    if (existingBook != null) {
+      // Update existing book
+      await _updateBookContent(existingBook.id, filePath);
+      _log.info('Updated existing book in custom folder: $title');
+      return _FileProcessResult(
+        wasAdded: false,
+        wasUpdated: true,
+        categoriesCreated: categoriesCreated,
+      );
+    }
+
+    // Add new book
+    await _addNewBook(filePath, categoryId, title);
+    return _FileProcessResult(
+      wasAdded: true,
+      wasUpdated: false,
+      categoriesCreated: categoriesCreated,
+    );
+  }
+
+  /// Build category path for a custom folder file
+  /// Returns: ["ספרים אישיים", folder.name, ...subfolders]
+  List<String> _buildCustomFolderCategoryPath(
+    String filePath,
+    CustomFolder folder,
+  ) {
+    final result = <String>['ספרים אישיים', folder.name];
+
+    // Get relative path within the custom folder
+    final normalizedFile = path.normalize(filePath);
+    final normalizedBase = path.normalize(folder.path);
+
+    if (normalizedFile.startsWith(normalizedBase)) {
+      String relativePath = normalizedFile.substring(normalizedBase.length);
+      if (relativePath.startsWith(path.separator)) {
+        relativePath = relativePath.substring(1);
+      }
+
+      // Split into parts and remove the filename
+      final parts = path.split(relativePath);
+      if (parts.length > 1) {
+        // Add subdirectories (excluding the filename)
+        result.addAll(parts.sublist(0, parts.length - 1));
+      }
+    }
+
+    return result;
   }
 
   /// Scan links folder and sync JSON files to database
@@ -875,6 +1277,32 @@ class _CategoryResult {
   const _CategoryResult({
     required this.categoryId,
     required this.categoriesCreated,
+  });
+}
+
+/// Result of restoring a folder from DB
+class RestoreFolderResult {
+  final int restoredBooks;
+  final int restoredCategories;
+  final List<String> errors;
+
+  const RestoreFolderResult({
+    this.restoredBooks = 0,
+    this.restoredCategories = 0,
+    this.errors = const [],
+  });
+}
+
+/// Internal result for recursive restore
+class _RestoreResult {
+  final int books;
+  final int categories;
+  final List<String> errors;
+
+  const _RestoreResult({
+    this.books = 0,
+    this.categories = 0,
+    this.errors = const [],
   });
 }
 

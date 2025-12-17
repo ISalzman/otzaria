@@ -25,6 +25,7 @@ import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
 import 'package:otzaria/ui/database_generation_screen.dart';
+import 'package:otzaria/settings/custom_folders/custom_folders_tile.dart';
 import 'dart:async';
 
 class MySettingsScreen extends StatefulWidget {
@@ -941,6 +942,8 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                             ),
                           ),
                         ]),
+                      if (!(Platform.isAndroid || Platform.isIOS))
+                        const CustomFoldersTile(),
                       if (!(Platform.isAndroid || Platform.isIOS))
                         // הצגת ההגדרה רק אם מצב אופליין לא מופעל
                         if (!state.isOfflineMode)

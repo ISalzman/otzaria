@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
@@ -8,6 +9,8 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/migration/core/models/category.dart' as db_models;
 import 'package:otzaria/migration/core/models/book.dart' as db_models;
 import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:otzaria/settings/custom_folders/custom_folder.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 /// Library provider that loads books from the SQLite database.
 class DatabaseLibraryProvider implements LibraryProvider {
@@ -264,8 +267,58 @@ class DatabaseLibraryProvider implements LibraryProvider {
       (count) => booksAdded += count,
     );
 
+    // Also scan custom folders that are NOT marked for DB sync
+    final customFoldersAdded = await _mergeCustomFolders(
+      library,
+      categoryPathMap,
+      metadata,
+    );
+    booksAdded += customFoldersAdded;
+
     _titlesCached = true;
-    debugPrint('📁 Added $booksAdded books from file system');
+    debugPrint(
+        '📁 Added $booksAdded books from file system (including $customFoldersAdded from custom folders)');
+    return booksAdded;
+  }
+
+  /// Merges books from custom folders that are NOT marked for DB sync.
+  /// These folders are displayed under "ספרים אישיים" category.
+  Future<int> _mergeCustomFolders(
+    Library library,
+    Map<String, Category> categoryPathMap,
+    Map<String, Map<String, dynamic>> metadata,
+  ) async {
+    int booksAdded = 0;
+
+    final customFoldersJson =
+        Settings.getValue<String>(SettingsRepository.keyCustomFolders);
+    final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
+
+    // Only load folders NOT marked for DB sync
+    final foldersToLoad = customFolders.where((f) => !f.addToDatabase).toList();
+
+    if (foldersToLoad.isEmpty) return 0;
+
+    debugPrint('📁 Merging ${foldersToLoad.length} custom folders');
+
+    for (final folder in foldersToLoad) {
+      final folderDir = Directory(folder.path);
+      if (!await folderDir.exists()) {
+        debugPrint('⚠️ Custom folder does not exist: ${folder.path}');
+        continue;
+      }
+
+      // Scan with category path: ספרים אישיים -> folder name
+      await _scanAndMergeDirectory(
+        folderDir,
+        library,
+        categoryPathMap,
+        metadata,
+        ['ספרים אישיים', folder.name],
+        (count) => booksAdded += count,
+      );
+    }
+
     return booksAdded;
   }
 

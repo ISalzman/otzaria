@@ -63,9 +63,8 @@ class SeforimRepository {
   Future<void> upsertLineToc(int lineId, int tocEntryId) async {
     final db = await _database.database;
     await db.rawInsert(
-      'INSERT OR REPLACE INTO line_toc (lineId, tocEntryId) VALUES (?, ?)',
-      [lineId, tocEntryId]
-    );
+        'INSERT OR REPLACE INTO line_toc (lineId, tocEntryId) VALUES (?, ?)',
+        [lineId, tocEntryId]);
   }
 
   /// Bulk upsert line→toc mappings
@@ -75,9 +74,8 @@ class SeforimRepository {
     final batch = db.batch();
     for (final pair in pairs) {
       batch.rawInsert(
-        'INSERT OR REPLACE INTO line_toc (lineId, tocEntryId) VALUES (?, ?)',
-        [pair.lineId, pair.tocId]
-      );
+          'INSERT OR REPLACE INTO line_toc (lineId, tocEntryId) VALUES (?, ?)',
+          [pair.lineId, pair.tocId]);
     }
     await batch.commit(noResult: true);
   }
@@ -85,10 +83,8 @@ class SeforimRepository {
   /// Gets the tocEntryId associated with a line via the mapping table.
   Future<int?> getTocEntryIdForLine(int lineId) async {
     final db = await _database.database;
-    final result = await db.rawQuery(
-      'SELECT tocEntryId FROM line_toc WHERE lineId = ?',
-      [lineId]
-    );
+    final result = await db
+        .rawQuery('SELECT tocEntryId FROM line_toc WHERE lineId = ?', [lineId]);
     if (result.isEmpty) return null;
     return result.first['tocEntryId'] as int;
   }
@@ -109,9 +105,8 @@ class SeforimRepository {
   Future<List<int>> getLineIdsForTocEntry(int tocEntryId) async {
     final db = await _database.database;
     final result = await db.rawQuery(
-      'SELECT lineId FROM line_toc WHERE tocEntryId = ? ORDER BY lineId',
-      [tocEntryId]
-    );
+        'SELECT lineId FROM line_toc WHERE tocEntryId = ? ORDER BY lineId',
+        [tocEntryId]);
     return result.map((row) => row['lineId'] as int).toList();
   }
 
@@ -309,8 +304,8 @@ class SeforimRepository {
       }
 
       // Try the insertion
-      final insertedId = await _database.categoryDao.insertCategory(
-          category.parentId, category.title, category.level);
+      final insertedId = await _database.categoryDao
+          .insertCategory(category.parentId, category.title, category.level);
 
       _logger.fine('Repository: Category inserted with ID: $insertedId');
 
@@ -510,7 +505,7 @@ class SeforimRepository {
 
     // Insert the author
     await _database.authorDao.insertAuthor(name);
-    
+
     // Get the ID by name (handles INSERT OR IGNORE case)
     final insertedId = await _database.authorDao.getAuthorIdByName(name);
     if (insertedId != null) {
@@ -597,7 +592,7 @@ class SeforimRepository {
 
     // Insert the topic
     await _database.topicDao.insertTopic(name);
-    
+
     // Get the ID by name (handles INSERT OR IGNORE case)
     final insertedId = await _database.topicDao.getTopicIdByName(name);
     if (insertedId != null) {
@@ -632,11 +627,12 @@ class SeforimRepository {
 
     // Insert the publication place
     await _database.pubPlaceDao.insertPubPlace(name);
-    
+
     // Get the ID by name (handles INSERT OR IGNORE case)
     final insertedPubPlace = await getPubPlaceByName(name);
     if (insertedPubPlace != null) {
-      _logger.fine('Publication place inserted with ID: ${insertedPubPlace.id}');
+      _logger
+          .fine('Publication place inserted with ID: ${insertedPubPlace.id}');
       return insertedPubPlace.id;
     }
 
@@ -660,7 +656,7 @@ class SeforimRepository {
 
     // Insert the publication date
     await _database.pubDateDao.insertPubDate(date);
-    
+
     // Get the ID by date (handles INSERT OR IGNORE case)
     final insertedPubDate = await getPubDateByDate(date);
     if (insertedPubDate != null) {
@@ -814,10 +810,8 @@ class SeforimRepository {
   /// Returns a Source by name, or null if not found.
   Future<Source?> getSourceByName(String name) async {
     final db = await _database.database;
-    final result = await db.rawQuery(
-      'SELECT * FROM source WHERE name = ?',
-      [name]
-    );
+    final result =
+        await db.rawQuery('SELECT * FROM source WHERE name = ?', [name]);
     if (result.isEmpty) return null;
     return Source.fromJson(result.first);
   }
@@ -829,10 +823,8 @@ class SeforimRepository {
     if (existing != null) return existing.id;
 
     final db = await _database.database;
-    final id = await db.rawInsert(
-      'INSERT INTO source (name) VALUES (?)',
-      [name]
-    );
+    final id =
+        await db.rawInsert('INSERT INTO source (name) VALUES (?)', [name]);
     if (id == 0) {
       // Try to read back just in case
       final again = await getSourceByName(name);
@@ -863,7 +855,8 @@ class SeforimRepository {
   }
 
   Future<List<Line>> getLines(int bookId, int startIndex, int endIndex) async {
-    return await _database.lineDao.selectByBookIdRange(bookId, startIndex, endIndex);
+    return await _database.lineDao
+        .selectByBookIdRange(bookId, startIndex, endIndex);
   }
 
   /// Gets the previous line for a given book and line index.
@@ -928,21 +921,19 @@ class SeforimRepository {
     _logger.fine('Batch inserting ${lines.length} lines');
     final db = await _database.database;
     final batch = db.batch();
-    
+
     for (final line in lines) {
       if (line.id > 0) {
         batch.rawInsert(
-          'INSERT OR IGNORE INTO line (id, bookId, lineIndex, content) VALUES (?, ?, ?, ?)',
-          [line.id, line.bookId, line.lineIndex, line.content]
-        );
+            'INSERT OR IGNORE INTO line (id, bookId, lineIndex, content) VALUES (?, ?, ?, ?)',
+            [line.id, line.bookId, line.lineIndex, line.content]);
       } else {
         batch.rawInsert(
-          'INSERT INTO line (bookId, lineIndex, content) VALUES (?, ?, ?)',
-          [line.bookId, line.lineIndex, line.content]
-        );
+            'INSERT INTO line (bookId, lineIndex, content) VALUES (?, ?, ?)',
+            [line.bookId, line.lineIndex, line.content]);
       }
     }
-    
+
     await batch.commit(noResult: true);
     _logger.fine('Batch inserted ${lines.length} lines');
   }
@@ -1067,10 +1058,21 @@ class SeforimRepository {
       // Check if insertion failed
       if (tocId == 0) {
         // Try to find a matching TOC entry by bookId and text
-        final existingEntries = await _database.tocDao.selectByBookId(entry.bookId);
+        final existingEntries =
+            await _database.tocDao.selectByBookId(entry.bookId);
         final matchingEntry = existingEntries.firstWhere(
           (e) => e.text == entry.text && e.level == entry.level,
-          orElse: () => TocEntry(id: 0, bookId: 0, parentId: null, textId: 0, text: '', level: 0, lineId: null, lineIndex: null, isLastChild: false, hasChildren: false),
+          orElse: () => TocEntry(
+              id: 0,
+              bookId: 0,
+              parentId: null,
+              textId: 0,
+              text: '',
+              level: 0,
+              lineId: null,
+              lineIndex: null,
+              isLastChild: false,
+              hasChildren: false),
         );
 
         if (matchingEntry.id > 0) {
@@ -1102,31 +1104,34 @@ class SeforimRepository {
     }
 
     // Create entries with textIds
-    final entriesWithTextIds = entries.map((entry) {
-      final textId = textIds[entry.text];
-      if (textId == null) {
-        _logger.warning(
-            'Text ID not found for TOC entry text: ${entry.text}, skipping entry');
-        return null;
-      }
-      return TocEntry(
-        id: entry.id,
-        bookId: entry.bookId,
-        parentId: entry.parentId,
-        textId: textId,
-        text: entry.text,
-        level: entry.level,
-        lineId: entry.lineId,
-        lineIndex: entry.lineIndex,
-        isLastChild: entry.isLastChild,
-        hasChildren: entry.hasChildren,
-      );
-    }).whereType<TocEntry>().toList();
+    final entriesWithTextIds = entries
+        .map((entry) {
+          final textId = textIds[entry.text];
+          if (textId == null) {
+            _logger.warning(
+                'Text ID not found for TOC entry text: ${entry.text}, skipping entry');
+            return null;
+          }
+          return TocEntry(
+            id: entry.id,
+            bookId: entry.bookId,
+            parentId: entry.parentId,
+            textId: textId,
+            text: entry.text,
+            level: entry.level,
+            lineId: entry.lineId,
+            lineIndex: entry.lineIndex,
+            isLastChild: entry.isLastChild,
+            hasChildren: entry.hasChildren,
+          );
+        })
+        .whereType<TocEntry>()
+        .toList();
 
     // Batch insert using raw SQL
     final db = await _database.database;
     final batch = db.batch();
-    
+
     for (final entry in entriesWithTextIds) {
       if (entry.id > 0) {
         batch.rawInsert('''
@@ -1157,7 +1162,7 @@ class SeforimRepository {
         ]);
       }
     }
-    
+
     await batch.commit(noResult: true);
     _logger.fine('Batch inserted ${entriesWithTextIds.length} TOC entries');
   }
@@ -2221,6 +2226,23 @@ class SeforimRepository {
     await _database.bookDao.deleteBook(bookId);
 
     _logger.info('Book $bookId deleted completely');
+  }
+
+  /// Deletes a category from the database.
+  /// Note: Make sure to delete all books and subcategories first!
+  Future<void> deleteCategory(int categoryId) async {
+    _logger.info('Deleting category: $categoryId');
+
+    // Delete from category_closure table
+    final db = await _database.database;
+    await db.rawDelete(
+        'DELETE FROM category_closure WHERE ancestor = ? OR descendant = ?',
+        [categoryId, categoryId]);
+
+    // Delete the category itself
+    await _database.categoryDao.deleteCategory(categoryId);
+
+    _logger.info('Category $categoryId deleted');
   }
 }
 
