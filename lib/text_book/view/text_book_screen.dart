@@ -1404,115 +1404,81 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       icon: iconWidget,
       enabled: !widget.isInCombinedView,
       onSelected: (value) async {
-        switch (value) {
-          case 'split':
-            // מפרשים בצד הטקסט
-            if (state.showPageShapeView) {
-              context.read<TextBookBloc>().add(const TogglePageShapeView(false));
-            }
-            if (!state.showSplitView) {
-              context.read<TextBookBloc>().add(const ToggleSplitView(true));
-              await _savePerBookSettingsDirectly(context, state, showSplitView: true);
-            }
-            break;
-          case 'below':
-            // מפרשים מתחת הטקסט
-            if (state.showPageShapeView) {
-              context.read<TextBookBloc>().add(const TogglePageShapeView(false));
-            }
-            if (state.showSplitView) {
-              context.read<TextBookBloc>().add(const ToggleSplitView(false));
-              await _savePerBookSettingsDirectly(context, state, showSplitView: false);
-            }
-            break;
-          case 'page':
-            // צורת הדף
-            if (!state.showPageShapeView) {
-              context.read<TextBookBloc>().add(const TogglePageShapeView(true));
-            }
-            break;
+        final bloc = context.read<TextBookBloc>();
+
+        // קביעת מצב היעד לפי הבחירה
+        final bool isPage = value == 'page';
+        final bool isSplit = value == 'split';
+
+        // עדכון תצוגת צורת הדף במידת הצורך
+        if (isPage != state.showPageShapeView) {
+          bloc.add(TogglePageShapeView(isPage));
+        }
+
+        // עדכון תצוגת המפרשים במידת הצורך (רק במצבים שאינם 'צורת הדף')
+        if (!isPage && isSplit != state.showSplitView) {
+          bloc.add(ToggleSplitView(isSplit));
+          await _savePerBookSettingsDirectly(context, state,
+              showSplitView: isSplit);
         }
       },
-      itemBuilder: (context) => [
-        PopupMenuItem<String>(
-          value: 'split',
-          child: Row(
-            children: [
-              Icon(
-                FluentIcons.panel_left_24_regular,
-                color: (!state.showPageShapeView && state.showSplitView)
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'מפרשים בצד',
-                style: (!state.showPageShapeView && state.showSplitView)
-                    ? TextStyle(color: Theme.of(context).colorScheme.primary)
-                    : null,
-              ),
-              if (!state.showPageShapeView && state.showSplitView) ...[
-                const Spacer(),
-                Icon(FluentIcons.checkmark_24_regular,
-                    size: 16, color: Theme.of(context).colorScheme.primary),
+      itemBuilder: (context) {
+        final primaryColor = Theme.of(context).colorScheme.primary;
+        final isSplit = !state.showPageShapeView && state.showSplitView;
+        final isBelow = !state.showPageShapeView && !state.showSplitView;
+        final isPage = state.showPageShapeView;
+
+        PopupMenuItem<String> buildItem({
+          required String value,
+          required String text,
+          required Widget icon,
+          required bool isSelected,
+        }) {
+          final style = isSelected ? TextStyle(color: primaryColor) : null;
+          return PopupMenuItem<String>(
+            value: value,
+            child: Row(
+              children: [
+                icon,
+                const SizedBox(width: 12),
+                Text(text, style: style),
+                if (isSelected) ...[
+                  const Spacer(),
+                  Icon(FluentIcons.checkmark_24_regular,
+                      size: 16, color: primaryColor),
+                ],
               ],
-            ],
+            ),
+          );
+        }
+
+        return [
+          buildItem(
+            value: 'split',
+            text: 'מפרשים בצד',
+            icon: Icon(FluentIcons.panel_left_24_regular,
+                color: isSplit ? primaryColor : null),
+            isSelected: isSplit,
           ),
-        ),
-        PopupMenuItem<String>(
-          value: 'below',
-          child: Row(
-            children: [
-              RotatedBox(
-                quarterTurns: 3, // מסובב 270 מעלות להראות מתחת
-                child: Icon(
-                  FluentIcons.panel_left_24_regular,
-                  color: (!state.showPageShapeView && !state.showSplitView)
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'מפרשים מתחת',
-                style: (!state.showPageShapeView && !state.showSplitView)
-                    ? TextStyle(color: Theme.of(context).colorScheme.primary)
-                    : null,
-              ),
-              if (!state.showPageShapeView && !state.showSplitView) ...[
-                const Spacer(),
-                Icon(FluentIcons.checkmark_24_regular,
-                    size: 16, color: Theme.of(context).colorScheme.primary),
-              ],
-            ],
+          buildItem(
+            value: 'below',
+            text: 'מפרשים מתחת',
+            icon: RotatedBox(
+              quarterTurns: 3,
+              child: Icon(FluentIcons.panel_left_24_regular,
+                  color: isBelow ? primaryColor : null),
+            ),
+            isSelected: isBelow,
           ),
-        ),
-        PopupMenuItem<String>(
-          value: 'page',
-          child: Row(
-            children: [
-              Icon(
-                FluentIcons.book_open_24_regular,
-                color: state.showPageShapeView
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'צורת הדף',
-                style: state.showPageShapeView
-                    ? TextStyle(color: Theme.of(context).colorScheme.primary)
-                    : null,
-              ),
-              if (state.showPageShapeView) ...[
-                const Spacer(),
-                Icon(FluentIcons.checkmark_24_regular,
-                    size: 16, color: Theme.of(context).colorScheme.primary),
-              ],
-            ],
+          buildItem(
+            value: 'page',
+            text: 'צורת הדף',
+            icon: Icon(FluentIcons.book_open_24_regular,
+                color: isPage ? primaryColor : null),
+            isSelected: isPage,
           ),
-        ),
-      ],
+        ];
+      },
     );
   }
 
