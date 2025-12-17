@@ -106,6 +106,27 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     }
   }
 
+  /// פתיחת דיאלוג הגדרות מפרשים
+  Future<void> _openSettingsDialog(TextBookLoaded state) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => PageShapeSettingsDialog(
+        availableCommentators: state.availableCommentators,
+        bookTitle: state.book.title,
+        currentLeft: _leftCommentator,
+        currentRight: _rightCommentator,
+        currentBottom: _bottomCommentator,
+        currentBottomRight: _bottomRightCommentator,
+      ),
+    );
+    if (result == true && mounted) {
+      _loadConfiguration();
+      setState(() {
+        _settingsVersion++;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<TextBookBloc, TextBookState>(
@@ -124,26 +145,30 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                 child: Row(
                   children: [
                     // Left Commentary
-                    if (_leftCommentator != null) ...[
-                      SizedBox(
-                        width: _leftWidth,
-                        child: _CommentaryPane(
-                          key: ValueKey('left_$_settingsVersion'),
-                          commentatorName: _leftCommentator!,
-                          openBookCallback: widget.openBookCallback,
-                        ),
-                      ),
-                      _ResizableDivider(
-                        isVertical: true,
-                        onDrag: (delta) {
-                          setState(() {
-                            _leftWidth = (_leftWidth! - delta).clamp(
-                                100.0, MediaQuery.of(context).size.width * 0.5);
-                          });
-                        },
-                        onDragEnd: _saveSizes,
-                      ),
-                    ],
+                    SizedBox(
+                      width: _leftWidth,
+                      child: _leftCommentator != null
+                          ? _CommentaryPane(
+                              key: ValueKey('left_$_settingsVersion'),
+                              commentatorName: _leftCommentator!,
+                              openBookCallback: widget.openBookCallback,
+                            )
+                          : _EmptyCommentaryPane(
+                              position: 'left',
+                              onSelectCommentator: () =>
+                                  _openSettingsDialog(state),
+                            ),
+                    ),
+                    _ResizableDivider(
+                      isVertical: true,
+                      onDrag: (delta) {
+                        setState(() {
+                          _leftWidth = (_leftWidth! - delta).clamp(
+                              100.0, MediaQuery.of(context).size.width * 0.5);
+                        });
+                      },
+                      onDragEnd: _saveSizes,
+                    ),
                     // Main Text - שימוש ב-SimpleTextViewer!
                     Expanded(
                       child: Container(
@@ -215,26 +240,30 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                       ),
                     ),
                     // Right Commentary
-                    if (_rightCommentator != null) ...[
-                      _ResizableDivider(
-                        isVertical: true,
-                        onDrag: (delta) {
-                          setState(() {
-                            _rightWidth = (_rightWidth! + delta).clamp(
-                                100.0, MediaQuery.of(context).size.width * 0.5);
-                          });
-                        },
-                        onDragEnd: _saveSizes,
-                      ),
-                      SizedBox(
-                        width: _rightWidth,
-                        child: _CommentaryPane(
-                          key: ValueKey('right_$_settingsVersion'),
-                          commentatorName: _rightCommentator!,
-                          openBookCallback: widget.openBookCallback,
-                        ),
-                      ),
-                    ],
+                    _ResizableDivider(
+                      isVertical: true,
+                      onDrag: (delta) {
+                        setState(() {
+                          _rightWidth = (_rightWidth! + delta).clamp(
+                              100.0, MediaQuery.of(context).size.width * 0.5);
+                        });
+                      },
+                      onDragEnd: _saveSizes,
+                    ),
+                    SizedBox(
+                      width: _rightWidth,
+                      child: _rightCommentator != null
+                          ? _CommentaryPane(
+                              key: ValueKey('right_$_settingsVersion'),
+                              commentatorName: _rightCommentator!,
+                              openBookCallback: widget.openBookCallback,
+                            )
+                          : _EmptyCommentaryPane(
+                              position: 'right',
+                              onSelectCommentator: () =>
+                                  _openSettingsDialog(state),
+                            ),
+                    ),
                   ],
                 ),
               ),
@@ -610,6 +639,38 @@ class _ResizableDividerState extends State<_ResizableDivider> {
                   ),
                 )
               : null,
+        ),
+      ),
+    );
+  }
+}
+
+/// חלונית ריקה עם כפתור בחירת מפרש
+class _EmptyCommentaryPane extends StatelessWidget {
+  final String position;
+  final VoidCallback onSelectCommentator;
+
+  const _EmptyCommentaryPane({
+    required this.position,
+    required this.onSelectCommentator,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withAlpha(50),
+        ),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Center(
+        child: TextButton.icon(
+          onPressed: onSelectCommentator,
+          icon: const Icon(Icons.add),
+          label: const Text('בחר מפרש'),
         ),
       ),
     );
