@@ -370,14 +370,11 @@ $textWithBreaks
 
     final theme = Theme.of(context);
     final backgroundColor = () {
-      if (isCommentaryHighlighted) {
-        // צבע הדגשה למפרש קשור - כמו השורה הנבחרת
-        return theme.colorScheme.primary.withAlpha((0.08 * 255).round());
-      }
       if (isHighlighted) {
         return theme.colorScheme.secondaryContainer.withAlpha((0.4 * 255).round());
       }
-      if (isSelected) {
+      if (isCommentaryHighlighted || isSelected) {
+        // צבע הדגשה למפרש קשור - כמו השורה הנבחרת
         return theme.colorScheme.primary.withAlpha((0.08 * 255).round());
       }
       return null;

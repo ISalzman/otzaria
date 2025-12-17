@@ -357,8 +357,10 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     if (state is TextBookLoaded) {
       final newHighlightEnabled =
           PageShapeSettingsManager.getHighlightSetting(state.book.title);
-      if (newHighlightEnabled != _highlightEnabled) {
-        _highlightEnabled = newHighlightEnabled;
+      final highlightChanged = newHighlightEnabled != _highlightEnabled;
+      _highlightEnabled = newHighlightEnabled;
+      // עדכון הדגשות - גם בטעינה ראשונית וגם כשההגדרה משתנה
+      if (highlightChanged || _highlightedIndices.isEmpty) {
         _updateHighlights(state);
       }
     }
@@ -367,12 +369,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   /// הגדרת מאזין לשינויים ב-Bloc
   void _setupBlocListener() {
     // טעינת הגדרת הדגשה ראשונית
-    final state = context.read<TextBookBloc>().state;
-    if (state is TextBookLoaded) {
-      _highlightEnabled =
-          PageShapeSettingsManager.getHighlightSetting(state.book.title);
-      _updateHighlights(state);
-    }
+    _updateHighlightSettings();
 
     _blocSubscription = context.read<TextBookBloc>().stream.listen((state) {
       if (state is TextBookLoaded && mounted) {
@@ -399,13 +396,11 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     );
     final mainLineNumber = logicalIndex + 1;
 
-    // מציאת כל הקישורים לשורה זו
-    final relevantLinks = _relevantLinks.where((link) {
-      return link.index1 == mainLineNumber;
-    }).toList();
-
-    final newHighlights =
-        relevantLinks.map((link) => link.index2 - 1).toSet();
+    // מציאת כל הקישורים לשורה זו והמרה ישירה ל-Set
+    final newHighlights = _relevantLinks
+        .where((link) => link.index1 == mainLineNumber)
+        .map((link) => link.index2 - 1)
+        .toSet();
 
     if (!const SetEquality().equals(newHighlights, _highlightedIndices)) {
       setState(() {
