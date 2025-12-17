@@ -8,6 +8,8 @@ class ScrollableTabBarWithArrows extends StatefulWidget {
   final TabAlignment? tabAlignment;
   // מאפשר לדעת אם יש גלילה אופקית (יש Overflow)
   final ValueChanged<bool>? onOverflowChanged;
+  // האם להסתיר את החיצים כשאין גלילה (לצמצום רווחים)
+  final bool hideArrowsWhenNotScrollable;
 
   const ScrollableTabBarWithArrows({
     super.key,
@@ -15,6 +17,7 @@ class ScrollableTabBarWithArrows extends StatefulWidget {
     required this.tabs,
     this.tabAlignment,
     this.onOverflowChanged,
+    this.hideArrowsWhenNotScrollable = false,
   });
 
   @override
@@ -113,31 +116,38 @@ class _ScrollableTabBarWithArrowsState
 
   @override
   Widget build(BuildContext context) {
+    final bool hasOverflow = _canScrollLeft || _canScrollRight;
+    final bool showLeftArrow =
+        !widget.hideArrowsWhenNotScrollable || hasOverflow;
+    final bool showRightArrow =
+        !widget.hideArrowsWhenNotScrollable || hasOverflow;
+
     return Row(
       children: [
-        // חץ שמאלי – משמרים מקום קבוע כדי למנוע קפיצות ברוחב
-        SizedBox(
-          width: 36,
-          height: 32,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity: _canScrollLeft ? 1.0 : 0.0,
-            child: IgnorePointer(
-              ignoring: !_canScrollLeft,
-              child: IconButton(
-                key: const ValueKey('left-arrow'),
-                onPressed: _scrollLeft,
-                icon: const Icon(FluentIcons.chevron_left_24_regular),
-                iconSize: 20,
-                constraints: const BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
+        // חץ שמאלי – מוסתר לגמרי אם אין גלילה והאפשרות מופעלת
+        if (showLeftArrow)
+          SizedBox(
+            width: 36,
+            height: 32,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: _canScrollLeft ? 1.0 : 0.0,
+              child: IgnorePointer(
+                ignoring: !_canScrollLeft,
+                child: IconButton(
+                  key: const ValueKey('left-arrow'),
+                  onPressed: _scrollLeft,
+                  icon: const Icon(FluentIcons.chevron_left_24_regular),
+                  iconSize: 20,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  tooltip: 'גלול שמאלה',
                 ),
-                tooltip: 'גלול שמאלה',
               ),
             ),
           ),
-        ),
         // TabBar משופר עם עיצוב יפה יותר
         Expanded(
           child: NotificationListener<ScrollMetricsNotification>(
@@ -189,29 +199,30 @@ class _ScrollableTabBarWithArrowsState
             ),
           ),
         ),
-        // חץ ימני – משמרים מקום קבוע כדי למנוע קפיצות ברוחב
-        SizedBox(
-          width: 36,
-          height: 32,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity: _canScrollRight ? 1.0 : 0.0,
-            child: IgnorePointer(
-              ignoring: !_canScrollRight,
-              child: IconButton(
-                key: const ValueKey('right-arrow'),
-                onPressed: _scrollRight,
-                icon: const Icon(FluentIcons.chevron_right_24_regular),
-                iconSize: 20,
-                constraints: const BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
+        // חץ ימני – מוסתר לגמרי אם אין גלילה והאפשרות מופעלת
+        if (showRightArrow)
+          SizedBox(
+            width: 36,
+            height: 32,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: _canScrollRight ? 1.0 : 0.0,
+              child: IgnorePointer(
+                ignoring: !_canScrollRight,
+                child: IconButton(
+                  key: const ValueKey('right-arrow'),
+                  onPressed: _scrollRight,
+                  icon: const Icon(FluentIcons.chevron_right_24_regular),
+                  iconSize: 20,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  tooltip: 'גלול ימינה',
                 ),
-                tooltip: 'גלול ימינה',
               ),
             ),
           ),
-        ),
       ],
     );
   }

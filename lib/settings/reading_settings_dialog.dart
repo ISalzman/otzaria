@@ -428,6 +428,37 @@ void showReadingSettingsDialog(BuildContext context) {
                       ),
                     ),
 
+                  // כותרת: הגדרות טאבים
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10.0, horizontal: 16.0),
+                    decoration: BoxDecoration(
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
+                    child: const Text(
+                      'הגדרות טאבים',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      textAlign: TextAlign.start,
+                    ),
+                  ),
+
+                  // יישור טאבים לימין
+                  SwitchListTile(
+                    title: const Text('יישור טאבים לימין'),
+                    subtitle: Text(settingsState.alignTabsToRight
+                        ? 'הטאבים יוצגו בצד ימין'
+                        : 'הטאבים יוצגו במרכז'),
+                    value: settingsState.alignTabsToRight,
+                    onChanged: (value) {
+                      context
+                          .read<SettingsBloc>()
+                          .add(UpdateAlignTabsToRight(value));
+                    },
+                  ),
+
                   // כותרת: התנהגות סרגל צד
                   Container(
                     width: double.infinity,

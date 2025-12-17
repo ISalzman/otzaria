@@ -296,8 +296,10 @@ class _ReadingScreenState extends State<ReadingScreen>
                   toolbarHeight: 36, // הקטנת גובה ה-AppBar
                   key: ValueKey(
                       'appbar_${historyShortcut}_${bookmarksShortcut}_${workspaceShortcut}_$closeTabShortcut'),
-                  // 1. משתמשים בקבוע שהגדרנו עבור הרוחב
-                  leadingWidth: _kAppBarControlsWidth,
+                  // רוחב מצומצם יותר כשהיישור לימין כדי להצמיד את הטאבים
+                  leadingWidth: settingsState.alignTabsToRight
+                      ? 105.0
+                      : _kAppBarControlsWidth,
                   leading: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -341,8 +343,13 @@ class _ReadingScreenState extends State<ReadingScreen>
                         const BoxConstraints(maxHeight: 32),
                     child: ScrollableTabBarWithArrows(
                       controller: controller,
-                      // ממורכז את שורת הטאבים
-                      tabAlignment: TabAlignment.center,
+                      // יישור הטאבים לפי הגדרת המשתמש
+                      tabAlignment: settingsState.alignTabsToRight
+                          ? TabAlignment.start
+                          : TabAlignment.center,
+                      // הסתרת החיצים כשאין גלילה ויישור לימין - למניעת רווחים מיותרים
+                      hideArrowsWhenNotScrollable:
+                          settingsState.alignTabsToRight,
                       onOverflowChanged: (overflow) {
                         if (mounted) {
                           setState(() => _tabsOverflow = overflow);
@@ -635,8 +642,18 @@ class _ReadingScreenState extends State<ReadingScreen>
                     // גובה מופחת של הטאבים
                     constraints:
                         const BoxConstraints(maxHeight: 32),
-                    padding: const EdgeInsets.only(
-                        left: 6, right: 6, top: 0, bottom: 0),
+                    // הסרת padding ימני מהטאב הראשון כשהיישור לימין
+                    padding: EdgeInsets.only(
+                        left: 6,
+                        right: (index == 0 &&
+                                context
+                                    .read<SettingsBloc>()
+                                    .state
+                                    .alignTabsToRight)
+                            ? 0
+                            : 6,
+                        top: 0,
+                        bottom: 0),
                     child: CustomPaint(
                       painter: isSelected
                           ? _TabBackgroundPainter(
