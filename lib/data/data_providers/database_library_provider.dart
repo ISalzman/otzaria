@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -373,8 +373,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
   ) async {
     final dirName = dir.path.split(Platform.pathSeparator).last;
 
-    // Skip special directories
-    if (dirName == 'אודות התוכנה' || dirName == 'links') return;
+    // Skip special directories (except in debug mode)
+    if (!kDebugMode && (dirName == 'אודות התוכנה' || dirName == 'links'))
+      return;
 
     await for (FileSystemEntity entity in dir.list()) {
       try {

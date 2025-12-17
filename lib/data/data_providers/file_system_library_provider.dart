@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/models/books.dart';
@@ -124,8 +124,8 @@ class FileSystemLibraryProvider implements LibraryProvider {
   ) async {
     final dirName = dir.path.split(Platform.pathSeparator).last;
 
-    // Skip special directories
-    if (dirName == 'אודות התוכנה') return;
+    // Skip special directories (except in debug mode)
+    if (!kDebugMode && dirName == 'אודות התוכנה') return;
 
     await for (FileSystemEntity entity in dir.list()) {
       try {

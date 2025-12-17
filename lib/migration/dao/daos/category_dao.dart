@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:sqflite/sqflite.dart';
 import '../../core/models/category.dart';
 import '../sqflite/query_loader.dart';
@@ -16,7 +17,13 @@ class CategoryDao {
   Future<List<Category>> getAllCategories() async {
     final db = await database;
     final result = await db.rawQuery(_queries['selectAll']!);
-    return result.map((row) => Category.fromJson(row)).toList();
+    final categories = result.map((row) => Category.fromJson(row)).toList();
+
+    // Filter out special categories (except in debug mode)
+    if (!kDebugMode) {
+      return categories.where((cat) => cat.title != 'אודות התוכנה').toList();
+    }
+    return categories;
   }
 
   Future<Category?> getCategoryById(int id) async {
@@ -29,7 +36,13 @@ class CategoryDao {
   Future<List<Category>> getRootCategories() async {
     final db = await database;
     final result = await db.rawQuery(_queries['selectRoot']!);
-    return result.map((row) => Category.fromJson(row)).toList();
+    final categories = result.map((row) => Category.fromJson(row)).toList();
+
+    // Filter out special categories (except in debug mode)
+    if (!kDebugMode) {
+      return categories.where((cat) => cat.title != 'אודות התוכנה').toList();
+    }
+    return categories;
   }
 
   Future<List<Category>> getCategoriesByParentId(int parentId) async {
@@ -43,7 +56,8 @@ class CategoryDao {
     return await db.rawInsert(_queries['insert']!, [parentId, title, level]);
   }
 
-  Future<int> insertCategoryAndGetId(int? parentId, String title, int level) async {
+  Future<int> insertCategoryAndGetId(
+      int? parentId, String title, int level) async {
     final db = await database;
     await db.rawInsert(_queries['insert']!, [parentId, title, level]);
     final result = await db.rawQuery(_queries['lastInsertRowId']!);
