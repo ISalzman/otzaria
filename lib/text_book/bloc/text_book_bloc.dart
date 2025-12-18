@@ -13,6 +13,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/text_book/editing/repository/overrides_repository.dart';
 import 'package:otzaria/text_book/editing/models/section_identifier.dart';
 
@@ -101,7 +102,35 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     try {
-      final content = await _repository.getBookContent(book);
+      // Check if book is from database - if so, load preview first for instant display
+      final sqliteProvider = SqliteDataProvider.instance;
+      final isFromDb = await sqliteProvider.isBookInDatabase(book.title);
+      String content;
+
+      if (isFromDb && state is TextBookInitial) {
+        // Load quick preview (40 lines) for instant display
+        final preview = await sqliteProvider.getBookQuickPreview(
+          book.title,
+          visibleIndices.first,
+        );
+
+        if (preview != null && preview.isNotEmpty) {
+          debugPrint(
+              '⚡ Showing quick preview, loading full book in background...');
+          content = preview;
+
+          // Load full book in background
+          _loadFullBookInBackground(book, emit, event, visibleIndices,
+              searchText, showLeftPane, commentators);
+        } else {
+          // Preview failed, load full book normally
+          content = await _repository.getBookContent(book);
+        }
+      } else {
+        // Not from DB or preserving state - load normally
+        content = await _repository.getBookContent(book);
+      }
+
       final links = await _repository.getBookLinks(book);
       final tableOfContents = await _repository.getTableOfContents(book);
 
@@ -751,6 +780,49 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     return super.close();
+  }
+
+  /// Loads the full book in the background and updates the state
+  void _loadFullBookInBackground(
+    TextBook book,
+    Emitter<TextBookState> emit,
+    LoadContent event,
+    List<int> visibleIndices,
+    String searchText,
+    bool showLeftPane,
+    List<String> commentators,
+  ) async {
+    try {
+      debugPrint('📚 Loading full book in background...');
+
+      // Load full content
+      final fullContent = await _repository.getBookContent(book);
+
+      // Check if still in the same book (user might have navigated away)
+      if (isClosed || state is! TextBookLoaded) {
+        debugPrint('⚠️ Bloc closed or state changed, aborting background load');
+        return;
+      }
+
+      final currentState = state as TextBookLoaded;
+      if (currentState.book.title != book.title) {
+        debugPrint(
+            '⚠️ User navigated to different book, aborting background load');
+        return;
+      }
+
+      debugPrint('✅ Full book loaded, updating state...');
+
+      // Update state with full content
+      emit(currentState.copyWith(
+        content: fullContent.split('\n'),
+      ));
+
+      debugPrint('✅ State updated with full book content');
+    } catch (e) {
+      debugPrint('❌ Error loading full book in background: $e');
+      // Don't emit error - user already has preview
+    }
   }
 
   List<CommentatorGroup> _buildCommentatorGroups(
