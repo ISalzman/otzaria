@@ -63,6 +63,27 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     _scrollController = widget.scrollController ?? ItemScrollController();
     _positionsListener =
         widget.positionsListener ?? ItemPositionsListener.create();
+
+    // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
+    if (widget.isMainText) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentPosition();
+      });
+    }
+  }
+
+  /// גלילה למיקום הנוכחי (selectedIndex או visibleIndices)
+  void _scrollToCurrentPosition() {
+    final bloc = context.read<TextBookBloc>();
+    final state = bloc.state;
+    if (state is TextBookLoaded && _scrollController.isAttached) {
+      final targetIndex = state.selectedIndex ??
+          (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : null);
+
+      if (targetIndex != null && targetIndex < widget.content.length) {
+        _scrollController.jumpTo(index: targetIndex);
+      }
+    }
   }
 
   /// תפריט הקשר - מעתיק מהתצוגה הרגילה
@@ -371,7 +392,8 @@ $textWithBreaks
     final theme = Theme.of(context);
     final backgroundColor = () {
       if (isHighlighted) {
-        return theme.colorScheme.secondaryContainer.withAlpha((0.4 * 255).round());
+        return theme.colorScheme.secondaryContainer
+            .withAlpha((0.4 * 255).round());
       }
       if (isCommentaryHighlighted || isSelected) {
         // צבע הדגשה למפרש קשור - כמו השורה הנבחרת

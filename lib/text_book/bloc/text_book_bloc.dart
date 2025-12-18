@@ -279,6 +279,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         // סגור את חלונית הניווט/חיפוש כשעוברים לצורת הדף
         showLeftPane: event.show ? false : currentState.showLeftPane,
       ));
+
+      // כשיוצאים ממצב צורת הדף למצב רגיל, גלול למיקום הנוכחי
+      if (!event.show && currentState.selectedIndex != null) {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (scrollController.isAttached) {
+            scrollController.scrollTo(
+              index: currentState.selectedIndex!,
+              duration: const Duration(milliseconds: 300),
+            );
+          }
+        });
+      }
     }
   }
 
