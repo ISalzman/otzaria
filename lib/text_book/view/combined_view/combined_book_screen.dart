@@ -850,22 +850,26 @@ $textWithBreaks
 
                         String data = widget.data[index];
 
-                        // הוספת קישורים מבוססי תווים
+                        // הוספת קישורים מבוססי תווים לפני כל עיבוד אחר
+                        // כי start/end מתייחסים לטקסט המקורי
                         String dataWithLinks = data;
-                        try {
-                          final linksForLine = state.links
-                              .where((link) =>
-                                  link.index1 == index + 1 &&
-                                  link.start != null &&
-                                  link.end != null)
-                              .toList();
+                        if (settingsState.enableHtmlLinks) {
+                          try {
+                            final linksForLine = state.links
+                                .where((link) =>
+                                    link.index1 == index + 1 &&
+                                    link.start != null &&
+                                    link.end != null)
+                                .toList();
 
-                          if (linksForLine.isNotEmpty) {
-                            dataWithLinks =
-                                addInlineLinksToText(data, linksForLine);
+                            if (linksForLine.isNotEmpty) {
+                              dataWithLinks =
+                                  addInlineLinksToText(data, linksForLine);
+                            }
+                          } catch (e) {
+                            // אם יש שגיאה, פשוט נשתמש בטקסט המקורי
+                            dataWithLinks = data;
                           }
-                        } catch (e) {
-                          dataWithLinks = data;
                         }
 
                         // עיבודים נוספים
