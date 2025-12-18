@@ -530,6 +530,22 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   // --- Notification Settings ---
   Future<void> changeCalendarNotificationsEnabled(bool enabled) async {
+    if (enabled) {
+      // בקש הרשאות לפני הפעלת התראות
+      final notificationService = NotificationService();
+      if (!notificationService.isInitialized) {
+        await notificationService.init();
+      }
+      final hasPermission = await notificationService.requestPermissions();
+
+      // אם אין הרשאה, אל תפעיל את ההתראות
+      if (!hasPermission) {
+        emit(state.copyWith(calendarNotificationsEnabled: false));
+        await _settingsRepository.updateCalendarNotificationsEnabled(false);
+        return;
+      }
+    }
+
     emit(state.copyWith(calendarNotificationsEnabled: enabled));
     await _settingsRepository.updateCalendarNotificationsEnabled(enabled);
     // Reschedule only if enabling/disabling notifications
