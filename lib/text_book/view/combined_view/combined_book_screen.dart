@@ -709,13 +709,26 @@ $textWithBreaks
                   });
                 }
               },
-              child: ProgressiveScroll(
-                focusNode: _focusNode,
-                maxSpeed: 10000.0,
-                curve: 10.0,
-                accelerationFactor: 5,
-                scrollController: widget.tab.mainOffsetController,
-                child: buildOuterList(state),
+              child: Directionality(
+                textDirection: widget.isPreviewMode
+                    ? TextDirection.ltr
+                    : TextDirection.rtl,
+                child: Scrollbar(
+                  thumbVisibility: widget.isPreviewMode,
+                  thickness: 8.0,
+                  radius: const Radius.circular(4.0),
+                  child: Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: ProgressiveScroll(
+                      focusNode: _focusNode,
+                      maxSpeed: 10000.0,
+                      curve: 10.0,
+                      accelerationFactor: 5,
+                      scrollController: widget.tab.mainOffsetController,
+                      child: buildOuterList(state),
+                    ),
+                  ),
+                ),
               ),
             );
           },

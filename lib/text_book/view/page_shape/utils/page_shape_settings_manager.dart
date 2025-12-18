@@ -62,7 +62,7 @@ class PageShapeSettingsManager {
 
   /// פונקציית עזר ליצירת מפתח visibility
   static String _visibilityKey(String column, String bookTitle) =>
-      '${_visibilityPrefix}${column}_$bookTitle';
+      '$_visibilityPrefix${column}_$bookTitle';
 
   /// שמירת הגדרות הצגת טורים עבור ספר מסוים
   static Future<void> saveColumnVisibility(
@@ -82,9 +82,12 @@ class PageShapeSettingsManager {
   /// ברירת מחדל: כל הטורים מוצגים
   static Map<String, bool> getColumnVisibility(String bookTitle) {
     return {
-      'left': Settings.getValue<bool>(_visibilityKey('left', bookTitle)) ?? true,
-      'right': Settings.getValue<bool>(_visibilityKey('right', bookTitle)) ?? true,
-      'bottom': Settings.getValue<bool>(_visibilityKey('bottom', bookTitle)) ?? true,
+      'left':
+          Settings.getValue<bool>(_visibilityKey('left', bookTitle)) ?? true,
+      'right':
+          Settings.getValue<bool>(_visibilityKey('right', bookTitle)) ?? true,
+      'bottom':
+          Settings.getValue<bool>(_visibilityKey('bottom', bookTitle)) ?? true,
     };
   }
 }
