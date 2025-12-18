@@ -84,3 +84,12 @@ class UpdateFacetCounts extends SearchEvent {
   final Map<String, int> facetCounts;
   UpdateFacetCounts(this.facetCounts);
 }
+
+// Event לטעינת תוצאות נוספות
+class LoadMoreResults extends SearchEvent {
+  final Map<String, String>? customSpacing;
+  final Map<int, List<String>>? alternativeWords;
+  final Map<String, Map<String, bool>>? searchOptions;
+  LoadMoreResults(
+      {this.customSpacing, this.alternativeWords, this.searchOptions});
+}
