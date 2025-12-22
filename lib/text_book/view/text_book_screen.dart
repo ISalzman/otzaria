@@ -82,6 +82,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
   final GlobalKey _viewModeMenuKey = GlobalKey(); // מפתח לתפריט בחירת התצוגה
 
+  // Key עבור PageShapeScreen - שינוי המפתח יגרום לבנייה מחדש
+  Key _pageShapeKey = UniqueKey();
+
   // משתנים לשמירת נתונים כבדים שנטענים ברקע
   Future<Map<String, dynamic>>? _preloadedHeavyData;
   bool _isLoadingHeavyData = false;
@@ -887,7 +890,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       scrolledUnderElevation: 0,
       centerTitle: false,
       title: _buildTitle(state),
-      leadingWidth: state.showPageShapeView ? 96 : null, // רוחב מורחב לשני כפתורים
+      leadingWidth:
+          state.showPageShapeView ? 96 : null, // רוחב מורחב לשני כפתורים
       leading: state.showPageShapeView
           ? Row(
               mainAxisSize: MainAxisSize.min,
@@ -902,7 +906,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   /// כפתור הגדרות צורת הדף
-  Widget _buildPageShapeSettingsButton(BuildContext context, TextBookLoaded state) {
+  Widget _buildPageShapeSettingsButton(
+      BuildContext context, TextBookLoaded state) {
     return IconButton(
       icon: const Icon(Icons.settings, size: 20),
       tooltip: 'הגדרות צורת הדף',
@@ -918,10 +923,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             currentBottomRight: null,
           ),
         );
-        // אם היו שינויים, נטען מחדש את ההגדרות
+        // אם היו שינויים, נשנה את המפתח כדי לגרום ל-PageShapeScreen להיבנות מחדש
         if (hadChanges == true && mounted) {
-          // ה-PageShapeScreen יטען מחדש את ההגדרות אוטומטית
-          setState(() {});
+          setState(() {
+            _pageShapeKey = UniqueKey();
+          });
         }
       },
     );
@@ -2147,6 +2153,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               searchTextController: TextEditingValue(text: state.searchText),
               tab: widget.tab,
               initialSidebarTabIndex: _sidebarTabIndex,
+              pageShapeKey: _pageShapeKey,
             ),
           ),
         ),
