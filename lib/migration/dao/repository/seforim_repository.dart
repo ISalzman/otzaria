@@ -2362,40 +2362,36 @@ extension BookAcronymRepository on SeforimRepository {
   /// [bookId] The ID of the book
   /// [terms] List of acronym terms to associate with the book
   Future<void> bulkInsertBookAcronyms(int bookId, List<String> terms) async {
-    if (terms.isEmpty) return;
-
-    final db = await _database.database;
-    final batch = db.batch();
-
-    for (final term in terms) {
-      batch.rawInsert('''
-        INSERT OR IGNORE INTO book_acronym (bookId, term)
-        VALUES (?, ?)
-      ''', [bookId, term]);
-    }
-
-    await batch.commit(noResult: true);
+    await _database.bookAcronymDao.bulkInsertAcronyms(bookId, terms);
   }
 
   /// Gets all acronym terms for a book.
   Future<List<String>> getBookAcronyms(int bookId) async {
-    final db = await _database.database;
-    final result = await db
-        .rawQuery('SELECT term FROM book_acronym WHERE bookId = ?', [bookId]);
-    return result.map((row) => row['term'] as String).toList();
+    return await _database.bookAcronymDao.getTermsByBookId(bookId);
   }
 
   /// Searches for books by acronym term.
-  Future<List<int>> searchBooksByAcronym(String term) async {
-    final db = await _database.database;
-    final result = await db.rawQuery(
-        'SELECT bookId FROM book_acronym WHERE term LIKE ?', ['%$term%']);
-    return result.map((row) => row['bookId'] as int).toList();
+  Future<List<int>> searchBooksByAcronym(String term, {int? limit}) async {
+    return await _database.bookAcronymDao.searchBooksByAcronym(term, limit: limit);
   }
 
   /// Deletes all acronyms for a book.
   Future<void> deleteBookAcronyms(int bookId) async {
-    final db = await _database.database;
-    await db.rawDelete('DELETE FROM book_acronym WHERE bookId = ?', [bookId]);
+    await _database.bookAcronymDao.deleteByBookId(bookId);
+  }
+
+  /// Inserts a single acronym term for a book.
+  Future<void> insertBookAcronym(int bookId, String term) async {
+    await _database.bookAcronymDao.insertAcronym(bookId, term);
+  }
+
+  /// Gets all book IDs that have a specific acronym term (exact match).
+  Future<List<int>> getBookIdsByAcronym(String term) async {
+    return await _database.bookAcronymDao.getBookIdsByTerm(term);
+  }
+
+  /// Counts the number of acronym terms for a specific book.
+  Future<int> countBookAcronyms(int bookId) async {
+    return await _database.bookAcronymDao.countByBookId(bookId);
   }
 }

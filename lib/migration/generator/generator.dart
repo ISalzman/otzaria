@@ -1101,12 +1101,12 @@ class DatabaseGenerator {
   /// Reads the priority list from file and returns normalized relative paths under the library root.
   Future<List<String>> _loadPriorityList() async {
     try {
-      // priority.txt should be in sourceDirectory (the parent folder)
-      final priorityPath = path.join(sourceDirectory, 'priority.txt');
+      // priority should be in "אודות התוכנה" subdirectory
+      final priorityPath = path.join(sourceDirectory, 'אודות התוכנה', 'priority');
       final priorityFile = File(priorityPath);
       
       if (!await priorityFile.exists()) {
-        _log.fine('priority.txt not found at $priorityPath');
+        _log.fine('priority not found at $priorityPath');
         return [];
       }
       
@@ -1189,12 +1189,12 @@ class DatabaseGenerator {
 
   /// Fetches and sanitizes acronym terms for a given book title from acronym.json.
   ///
-  /// The acronym.json file is expected to be in sourceDirectory (the parent folder).
+  /// The acronym.json file is expected to be in "אודות התוכנה" subdirectory.
   /// [title] The book title to look up.
   /// Returns a list of sanitized acronym terms, or empty list if not found.
   Future<List<String>> fetchAcronymsForTitle(String title) async {
-    // acronym.json should be in sourceDirectory (the parent folder)
-    final acronymPath = path.join(sourceDirectory, 'acronym.json');
+    // acronym.json should be in "אודות התוכנה" subdirectory
+    final acronymPath = path.join(sourceDirectory, 'אודות התוכנה', 'acronym.json');
     
     try {
       // Load acronym data if not already cached

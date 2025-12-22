@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart' as sqflite_ffi;
 import 'package:path/path.dart' as p;
 
 import 'author_dao.dart';
+import 'book_acronym_dao.dart';
 import 'book_dao.dart';
 import 'book_has_links_dao.dart';
 import 'category_dao.dart';
@@ -34,6 +35,7 @@ class MyDatabase {
 
   // DAOs
   AuthorDao? _authorDao;
+  BookAcronymDao? _bookAcronymDao;
   BookDao? _bookDao;
   BookHasLinksDao? _bookHasLinksDao;
   CategoryDao? _categoryDao;
@@ -48,6 +50,7 @@ class MyDatabase {
   TopicDao? _topicDao;
 
   AuthorDao get authorDao => _authorDao!;
+  BookAcronymDao get bookAcronymDao => _bookAcronymDao!;
   BookDao get bookDao => _bookDao!;
   BookHasLinksDao get bookHasLinksDao => _bookHasLinksDao!;
   CategoryDao get categoryDao => _categoryDao!;
@@ -143,6 +146,7 @@ class MyDatabase {
     if (_authorDao != null) return; // Already initialized
 
     _authorDao = AuthorDao(this);
+    _bookAcronymDao = BookAcronymDao(this);
     _bookDao = BookDao(this);
     _bookHasLinksDao = BookHasLinksDao(this);
     _categoryDao = CategoryDao(this);
