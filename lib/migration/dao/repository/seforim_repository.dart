@@ -363,6 +363,18 @@ class SeforimRepository {
     }
   }
 
+  /// Gets a category by its title.
+  Future<Category?> getCategoryByTitle(String title) async {
+    return await _database.categoryDao.getCategoryByTitle(title);
+  }
+
+  /// Gets a category by its title and parent ID.
+  Future<Category?> getCategoryByTitleAndParent(
+      String title, int? parentId) async {
+    return await _database.categoryDao
+        .getCategoryByTitleAndParent(title, parentId);
+  }
+
   // --- Books ---
 
   /// Retrieves a book by its ID, including all related data (authors, topics, etc.).
@@ -842,6 +854,107 @@ class SeforimRepository {
     _logger.fine('Updating book $bookId with categoryId: $categoryId');
     await _database.bookDao.updateBookCategoryId(bookId, categoryId);
     _logger.fine('Updated book $bookId with categoryId: $categoryId');
+  }
+
+  // --- External Books ---
+
+  /// Inserts an external book (file-based book with metadata only in DB).
+  /// External books have isExternal=1 and store file path, type, size, and last modified.
+  /// Also creates TOC entries for the book if it's a text file.
+  ///
+  /// @param categoryId The category ID for the book
+  /// @param title The book title
+  /// @param filePath The full path to the file
+  /// @param fileType The file type (pdf, txt, docx, etc.)
+  /// @param fileSize The file size in bytes
+  /// @param lastModified The last modified timestamp (milliseconds since epoch)
+  /// @param heShortDesc Optional short description
+  /// @param orderIndex Optional order index (defaults to 999)
+  /// @param tocEntries Optional list of TOC entries to create
+  /// @return The ID of the inserted book
+  Future<int> insertExternalBook({
+    required int categoryId,
+    required String title,
+    required String filePath,
+    required String fileType,
+    required int fileSize,
+    required int lastModified,
+    String? heShortDesc,
+    double orderIndex = 999,
+    List<TocEntry>? tocEntries,
+  }) async {
+    _logger.fine('Inserting external book: $title (type: $fileType)');
+
+    // Get or create a source for external books
+    final sourceId = await insertSource('external');
+
+    final bookId = await _database.bookDao.insertExternalBook(
+      categoryId: categoryId,
+      sourceId: sourceId,
+      title: title,
+      heShortDesc: heShortDesc,
+      orderIndex: orderIndex,
+      filePath: filePath,
+      fileType: fileType,
+      fileSize: fileSize,
+      lastModified: lastModified,
+    );
+
+    _logger.fine('Inserted external book with ID: $bookId');
+
+    // Insert TOC entries if provided
+    if (tocEntries != null && tocEntries.isNotEmpty) {
+      await _insertTocEntriesForExternalBook(bookId, tocEntries);
+    }
+
+    return bookId;
+  }
+
+  /// Updates an external book's metadata (file size and last modified).
+  Future<void> updateExternalBookMetadata(
+      int bookId, int fileSize, int lastModified) async {
+    _logger.fine('Updating external book metadata: bookId=$bookId');
+    await _database.bookDao
+        .updateExternalMetadata(bookId, fileSize, lastModified);
+  }
+
+  /// Gets an external book by its file path.
+  Future<Book?> getExternalBookByFilePath(String filePath) async {
+    return await _database.bookDao.getBookByFilePath(filePath);
+  }
+
+  /// Gets all external books.
+  Future<List<Book>> getAllExternalBooks() async {
+    return await _database.bookDao.getExternalBooks();
+  }
+
+  /// Inserts TOC entries for an external book.
+  /// Creates toc_text entries and toc_entry entries.
+  Future<void> _insertTocEntriesForExternalBook(
+      int bookId, List<TocEntry> entries) async {
+    _logger.fine(
+        'Inserting ${entries.length} TOC entries for external book $bookId');
+
+    for (final entry in entries) {
+      // Create toc_text entry
+      final textId = await _getOrCreateTocText(entry.text);
+
+      // Create toc_entry with the book ID
+      final tocEntry = TocEntry(
+        id: 0,
+        bookId: bookId,
+        parentId: entry.parentId,
+        textId: textId,
+        level: entry.level,
+        lineId: entry.lineId,
+        isLastChild: entry.isLastChild,
+        hasChildren: entry.hasChildren,
+      );
+
+      await _database.tocDao.insertTocEntry(tocEntry);
+    }
+
+    _logger.fine('Inserted TOC entries for external book $bookId');
   }
 
   // --- Lines ---
@@ -2372,7 +2485,8 @@ extension BookAcronymRepository on SeforimRepository {
 
   /// Searches for books by acronym term.
   Future<List<int>> searchBooksByAcronym(String term, {int? limit}) async {
-    return await _database.bookAcronymDao.searchBooksByAcronym(term, limit: limit);
+    return await _database.bookAcronymDao
+        .searchBooksByAcronym(term, limit: limit);
   }
 
   /// Deletes all acronyms for a book.

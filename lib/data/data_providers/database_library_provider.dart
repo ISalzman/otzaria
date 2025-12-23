@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
@@ -8,7 +9,9 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/migration/core/models/category.dart' as db_models;
 import 'package:otzaria/migration/core/models/book.dart' as db_models;
+import 'package:otzaria/migration/core/models/toc_entry.dart' as db_models;
 import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/settings/custom_folders/custom_folder.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 
@@ -363,6 +366,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
   }
 
   /// Recursively scans a directory and merges non-DB books into the library.
+  /// External books (files not in DB) are added to the database with isExternal=1.
   Future<void> _scanAndMergeDirectory(
     Directory dir,
     Library library,
@@ -374,8 +378,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
     final dirName = dir.path.split(Platform.pathSeparator).last;
 
     // Skip special directories (except in debug mode)
-    if (!kDebugMode && (dirName == 'אודות התוכנה' || dirName == 'links'))
+    if (!kDebugMode && (dirName == 'אודות התוכנה' || dirName == 'links')) {
       return;
+    }
 
     await for (FileSystemEntity entity in dir.list()) {
       try {
@@ -402,19 +407,25 @@ class DatabaseLibraryProvider implements LibraryProvider {
             continue;
           }
 
-          final book =
-              _createBookFromFileIfNotInDb(entity, metadata, currentPath);
+          // Find or create the category for this book
+          final category = _findOrCreateCategory(
+            currentPath,
+            library,
+            categoryPathMap,
+            metadata,
+          );
+
+          // Try to add the book as external to DB and get the Book object
+          final book = await _addExternalBookToDb(
+            entity,
+            metadata,
+            currentPath,
+            category,
+          );
+
           if (book != null) {
             debugPrint(
-                '📁 Found non-DB book: ${book.title} at path: ${currentPath.join("/")}');
-
-            // Find or create the category for this book
-            final category = _findOrCreateCategory(
-              currentPath,
-              library,
-              categoryPathMap,
-              metadata,
-            );
+                '📁 Added external book: ${book.title} at path: ${currentPath.join("/")}');
 
             // Set the category on the book
             final bookWithCategory =
@@ -433,17 +444,19 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
   }
 
-  /// Creates a book from a file only if it's not already loaded.
-  /// PDF files are always added (even if a TextBook with same name exists in DB).
-  /// TXT/DOCX files are only added if not already in DB.
-  /// Returns null if the book should be skipped or file type is not supported.
-  Book? _createBookFromFileIfNotInDb(
+  /// Adds an external book to the database if it doesn't exist.
+  /// Returns the Book object if added/updated, null if already exists as internal book.
+  Future<Book?> _addExternalBookToDb(
     File file,
     Map<String, Map<String, dynamic>> metadata,
     List<String> categoryPath,
-  ) {
+    Category category,
+  ) async {
     final path = file.path.toLowerCase();
     final title = getTitleFromPath(file.path);
+    final fileStat = await file.stat();
+    final fileSize = fileStat.size;
+    final lastModified = fileStat.modified.millisecondsSinceEpoch;
 
     final topics = categoryPath.join(', ');
     String finalTopics = topics;
@@ -451,15 +464,112 @@ class DatabaseLibraryProvider implements LibraryProvider {
       finalTopics = '$topics, ${title.split(' על ')[1]}';
     }
 
+    // Determine file type
+    String fileType;
     if (path.endsWith('.pdf')) {
-      // PDF files are ALWAYS from file system, never in DB
-      // Use a unique key for PDF to allow same title as TextBook
-      final pdfKey = '${title}_PDF';
-      if (_cachedTitles.contains(pdfKey)) {
-        return null; // Already added this PDF
-      }
-      _cachedTitles.add(pdfKey);
+      fileType = 'pdf';
+    } else if (path.endsWith('.txt')) {
+      fileType = 'txt';
+    } else if (path.endsWith('.docx')) {
+      fileType = 'docx';
+    } else {
+      return null;
+    }
 
+    // For PDF files, use a unique key to allow same title as TextBook
+    final cacheKey = fileType == 'pdf' ? '${title}_PDF' : title;
+
+    // Check if already in cache (internal book)
+    if (_cachedTitles.contains(cacheKey)) {
+      return null;
+    }
+
+    // Check if already added as file-only book
+    if (_fileOnlyTitles.contains(cacheKey)) {
+      return null;
+    }
+
+    // Check if the book already exists in DB (as external book)
+    final repository = _sqliteProvider.repository;
+    if (repository != null) {
+      final existingBook =
+          await repository.getExternalBookByFilePath(file.path);
+
+      if (existingBook != null) {
+        // Book exists - check if we need to update metadata
+        if (existingBook.fileSize != fileSize ||
+            existingBook.lastModified != lastModified) {
+          await repository.updateExternalBookMetadata(
+            existingBook.id,
+            fileSize,
+            lastModified,
+          );
+          debugPrint('📁 Updated external book metadata: $title');
+        }
+
+        // Add to cache and return the book
+        _fileOnlyTitles.add(cacheKey);
+
+        if (fileType == 'pdf') {
+          return PdfBook(
+            title: title,
+            path: file.path,
+            author: metadata[title]?['author'],
+            heShortDesc: metadata[title]?['heShortDesc'],
+            pubDate: metadata[title]?['pubDate'],
+            pubPlace: metadata[title]?['pubPlace'],
+            order: metadata[title]?['order'] ?? 999,
+            topics: finalTopics,
+          );
+        } else {
+          return TextBook(
+            title: title,
+            author: metadata[title]?['author'],
+            heShortDesc: metadata[title]?['heShortDesc'],
+            pubDate: metadata[title]?['pubDate'],
+            pubPlace: metadata[title]?['pubPlace'],
+            order: metadata[title]?['order'] ?? 999,
+            topics: finalTopics,
+            extraTitles: metadata[title]?['extraTitles'],
+          );
+        }
+      }
+
+      // Book doesn't exist - add it to DB
+      try {
+        // Get or create category in DB
+        final categoryId = await _getOrCreateCategoryInDb(categoryPath);
+
+        // Parse TOC for text files
+        List<db_models.TocEntry>? tocEntries;
+        if (fileType == 'txt') {
+          tocEntries = await _parseTocForExternalBook(file, categoryId);
+        }
+
+        // Insert the external book
+        await repository.insertExternalBook(
+          categoryId: categoryId,
+          title: title,
+          filePath: file.path,
+          fileType: fileType,
+          fileSize: fileSize,
+          lastModified: lastModified,
+          heShortDesc: metadata[title]?['heShortDesc'],
+          orderIndex: (metadata[title]?['order'] ?? 999).toDouble(),
+          tocEntries: tocEntries,
+        );
+
+        debugPrint('📁 Inserted external book to DB: $title (type: $fileType)');
+      } catch (e) {
+        debugPrint('⚠️ Failed to insert external book to DB: $title - $e');
+      }
+    }
+
+    // Add to cache
+    _fileOnlyTitles.add(cacheKey);
+
+    // Return the appropriate book type
+    if (fileType == 'pdf') {
       return PdfBook(
         title: title,
         path: file.path,
@@ -470,20 +580,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         order: metadata[title]?['order'] ?? 999,
         topics: finalTopics,
       );
-    }
-
-    // For TXT/DOCX files - only add if not already in DB
-    if (path.endsWith('.txt') || path.endsWith('.docx')) {
-      // Check if TextBook with this title already exists in DB
-      if (_cachedTitles.contains(title)) {
-        return null;
-      }
-      // Check if already added as file-only book
-      if (_fileOnlyTitles.contains(title)) {
-        return null;
-      }
-      _fileOnlyTitles.add(title);
-
+    } else {
       return TextBook(
         title: title,
         author: metadata[title]?['author'],
@@ -495,8 +592,125 @@ class DatabaseLibraryProvider implements LibraryProvider {
         extraTitles: metadata[title]?['extraTitles'],
       );
     }
+  }
 
-    return null;
+  /// Gets or creates a category in the database for the given path.
+  /// Returns the category ID.
+  Future<int> _getOrCreateCategoryInDb(List<String> categoryPath) async {
+    final repository = _sqliteProvider.repository;
+    if (repository == null) {
+      return 1; // Default category ID
+    }
+
+    if (categoryPath.isEmpty) {
+      // Return default category
+      final defaultCategory =
+          await repository.getCategoryByTitle('ללא קטגוריה');
+      if (defaultCategory != null) {
+        return defaultCategory.id;
+      }
+      // Create default category if it doesn't exist
+      return await repository.insertCategory(
+        db_models.Category(
+          id: 0,
+          title: 'ללא קטגוריה',
+          parentId: null,
+          level: 0,
+        ),
+      );
+    }
+
+    int? parentId;
+    int categoryId = 1;
+    int level = 0;
+
+    for (final part in categoryPath) {
+      // Try to find existing category
+      final existingCategory =
+          await repository.getCategoryByTitleAndParent(part, parentId);
+
+      if (existingCategory != null) {
+        categoryId = existingCategory.id;
+        parentId = existingCategory.id;
+        level = existingCategory.level + 1;
+      } else {
+        // Create new category
+        categoryId = await repository.insertCategory(
+          db_models.Category(
+            id: 0,
+            title: part,
+            parentId: parentId,
+            level: level,
+          ),
+        );
+        parentId = categoryId;
+        level++;
+      }
+    }
+
+    return categoryId;
+  }
+
+  /// Parses TOC entries for an external text book.
+  /// Returns a list of TocEntry objects ready for insertion.
+  Future<List<db_models.TocEntry>?> _parseTocForExternalBook(
+    File file,
+    int bookId,
+  ) async {
+    try {
+      final content = await file.readAsString();
+
+      // Parse TOC using the existing TocParser
+      final tocEntries =
+          await Isolate.run(() => TocParser.parseEntriesFromContent(content));
+
+      if (tocEntries.isEmpty) {
+        return null;
+      }
+
+      // Convert to DB TocEntry format
+      final dbEntries = <db_models.TocEntry>[];
+      _convertTocEntriesToDb(tocEntries, dbEntries, bookId, null);
+
+      return dbEntries;
+    } catch (e) {
+      debugPrint('⚠️ Failed to parse TOC for external book: $e');
+      return null;
+    }
+  }
+
+  /// Recursively converts TocEntry objects to DB format.
+  void _convertTocEntriesToDb(
+    List<TocEntry> entries,
+    List<db_models.TocEntry> dbEntries,
+    int bookId,
+    int? parentId,
+  ) {
+    for (int i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      final isLastChild = i == entries.length - 1;
+      final hasChildren = entry.children.isNotEmpty;
+
+      final dbEntry = db_models.TocEntry(
+        id: 0,
+        bookId: bookId,
+        parentId: parentId,
+        text: entry.text,
+        level: entry.level,
+        lineId: entry.index, // Using index as lineId for external books
+        isLastChild: isLastChild,
+        hasChildren: hasChildren,
+      );
+
+      dbEntries.add(dbEntry);
+
+      // Process children recursively
+      // Note: We can't set the actual parentId here since we don't have the inserted ID yet
+      // The repository will handle this during insertion
+      if (hasChildren) {
+        _convertTocEntriesToDb(entry.children, dbEntries, bookId, null);
+      }
+    }
   }
 
   /// Finds an existing category or creates a new one in the hierarchy.
@@ -792,6 +1006,154 @@ class DatabaseLibraryProvider implements LibraryProvider {
     } catch (e) {
       debugPrint('⚠️ Error loading link content from database: $e');
       return 'שגיאה בטעינת תוכן המפרש: $e';
+    }
+  }
+
+  /// Scans a custom folder and adds all books as external books to the database.
+  /// This is called when a new custom folder is added.
+  ///
+  /// [folderPath] - The full path to the folder to scan
+  /// [folderName] - The display name of the folder
+  /// [repository] - The repository to use for database operations
+  Future<void> scanAndAddExternalBooksFromFolder(
+    String folderPath,
+    String folderName,
+    dynamic repository,
+  ) async {
+    debugPrint('📁 Scanning custom folder for external books: $folderPath');
+
+    final dir = Directory(folderPath);
+    if (!await dir.exists()) {
+      debugPrint('⚠️ Folder does not exist: $folderPath');
+      return;
+    }
+
+    // Load metadata (empty map if not available)
+    final metadata = <String, Map<String, dynamic>>{};
+
+    // Scan the folder recursively
+    await _scanFolderForExternalBooks(
+      dir,
+      repository,
+      metadata,
+      ['ספרים אישיים', folderName],
+    );
+
+    debugPrint('📁 Finished scanning custom folder: $folderPath');
+  }
+
+  /// Recursively scans a folder and adds external books to the database.
+  Future<void> _scanFolderForExternalBooks(
+    Directory dir,
+    dynamic repository,
+    Map<String, Map<String, dynamic>> metadata,
+    List<String> categoryPath,
+  ) async {
+    await for (FileSystemEntity entity in dir.list()) {
+      try {
+        await entity.stat();
+
+        if (entity is Directory) {
+          final subDirName = entity.path.split(Platform.pathSeparator).last;
+          final newPath = [...categoryPath, subDirName];
+          await _scanFolderForExternalBooks(
+            entity,
+            repository,
+            metadata,
+            newPath,
+          );
+        } else if (entity is File) {
+          final fileName =
+              entity.path.split(Platform.pathSeparator).last.toLowerCase();
+          // Only process supported file types
+          if (!fileName.endsWith('.pdf') &&
+              !fileName.endsWith('.txt') &&
+              !fileName.endsWith('.docx')) {
+            continue;
+          }
+
+          await _addSingleExternalBookToDb(
+            entity,
+            repository,
+            metadata,
+            categoryPath,
+          );
+        }
+      } catch (e) {
+        debugPrint('⚠️ Skipping inaccessible entity: ${entity.path}');
+        continue;
+      }
+    }
+  }
+
+  /// Adds a single external book to the database.
+  Future<void> _addSingleExternalBookToDb(
+    File file,
+    dynamic repository,
+    Map<String, Map<String, dynamic>> metadata,
+    List<String> categoryPath,
+  ) async {
+    final path = file.path.toLowerCase();
+    final title = getTitleFromPath(file.path);
+    final fileStat = await file.stat();
+    final fileSize = fileStat.size;
+    final lastModified = fileStat.modified.millisecondsSinceEpoch;
+
+    // Determine file type
+    String fileType;
+    if (path.endsWith('.pdf')) {
+      fileType = 'pdf';
+    } else if (path.endsWith('.txt')) {
+      fileType = 'txt';
+    } else if (path.endsWith('.docx')) {
+      fileType = 'docx';
+    } else {
+      return;
+    }
+
+    // Check if the book already exists in DB (by file path)
+    final existingBook = await repository.getExternalBookByFilePath(file.path);
+    if (existingBook != null) {
+      // Book exists - check if we need to update metadata
+      if (existingBook.fileSize != fileSize ||
+          existingBook.lastModified != lastModified) {
+        await repository.updateExternalBookMetadata(
+          existingBook.id,
+          fileSize,
+          lastModified,
+        );
+        debugPrint('📁 Updated external book metadata: $title');
+      }
+      return;
+    }
+
+    // Book doesn't exist - add it to DB
+    try {
+      // Get or create category in DB
+      final categoryId = await _getOrCreateCategoryInDb(categoryPath);
+
+      // Parse TOC for text files
+      List<db_models.TocEntry>? tocEntries;
+      if (fileType == 'txt') {
+        tocEntries = await _parseTocForExternalBook(file, categoryId);
+      }
+
+      // Insert the external book
+      await repository.insertExternalBook(
+        categoryId: categoryId,
+        title: title,
+        filePath: file.path,
+        fileType: fileType,
+        fileSize: fileSize,
+        lastModified: lastModified,
+        heShortDesc: metadata[title]?['heShortDesc'],
+        orderIndex: (metadata[title]?['order'] ?? 999).toDouble(),
+        tocEntries: tocEntries,
+      );
+
+      debugPrint('📁 Inserted external book to DB: $title (type: $fileType)');
+    } catch (e) {
+      debugPrint('⚠️ Failed to insert external book to DB: $title - $e');
     }
   }
 }

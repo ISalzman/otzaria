@@ -10,6 +10,7 @@ import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/migration/core/models/category.dart';
@@ -67,6 +68,9 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       });
       await _saveFolders();
 
+      // סריקת הספרים בתיקייה והוספתם ל-DB כספרים חיצוניים
+      await _scanAndAddExternalBooks(path);
+
       // רענון הספרייה כדי להציג את הספרים החדשים
       if (mounted) {
         context.read<LibraryBloc>().add(RefreshLibrary());
@@ -78,6 +82,37 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
             content: Text(
                 'התיקייה "${path.split(Platform.pathSeparator).last}" נוספה בהצלחה')),
       );
+    }
+  }
+
+  /// סריקת תיקייה והוספת הספרים שבה ל-DB כספרים חיצוניים
+  Future<void> _scanAndAddExternalBooks(String folderPath) async {
+    try {
+      final sqliteProvider = SqliteDataProvider.instance;
+      if (!sqliteProvider.isInitialized) {
+        await sqliteProvider.initialize();
+      }
+
+      final repository = sqliteProvider.repository;
+      if (repository == null) {
+        debugPrint('Repository not available for scanning external books');
+        return;
+      }
+
+      // קבלת שם התיקייה
+      final folderName = folderPath.split(Platform.pathSeparator).last;
+
+      // סריקת הספרים בתיקייה והוספתם ל-DB
+      final dbProvider = DatabaseLibraryProvider.instance;
+      await dbProvider.scanAndAddExternalBooksFromFolder(
+        folderPath,
+        folderName,
+        repository,
+      );
+
+      debugPrint('Finished scanning external books from: $folderPath');
+    } catch (e) {
+      debugPrint('Error scanning external books: $e');
     }
   }
 

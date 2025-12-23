@@ -79,4 +79,24 @@ class CategoryDao {
     final result = await db.rawQuery(_queries['countAll']!);
     return Sqflite.firstIntValue(result) ?? 0;
   }
+
+  /// Gets a category by its title.
+  Future<Category?> getCategoryByTitle(String title) async {
+    final db = await database;
+    final result = await db.rawQuery(_queries['selectByTitle']!, [title]);
+    if (result.isEmpty) return null;
+    return Category.fromJson(result.first);
+  }
+
+  /// Gets a category by its title and parent ID.
+  Future<Category?> getCategoryByTitleAndParent(
+      String title, int? parentId) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      _queries['selectByTitleAndParent']!,
+      [title, parentId, parentId],
+    );
+    if (result.isEmpty) return null;
+    return Category.fromJson(result.first);
+  }
 }
