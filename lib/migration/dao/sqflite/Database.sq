@@ -73,6 +73,16 @@ CREATE TABLE IF NOT EXISTS book (
     orderIndex INTEGER NOT NULL DEFAULT 999,
     totalLines INTEGER NOT NULL DEFAULT 0,
     isBaseBook INTEGER NOT NULL DEFAULT 0,
+    -- Book type: 0 = internal (content loaded in DB), 1 = external (metadata only)
+    isExternal INTEGER NOT NULL DEFAULT 0,
+    -- File path for external books (null for internal books)
+    filePath TEXT,
+    -- File type for external books (pdf, epub, txt, etc.)
+    fileType TEXT,
+    -- File size in bytes for external books
+    fileSize INTEGER,
+    -- Last modified timestamp for external books
+    lastModified INTEGER,
     hasTargumConnection INTEGER NOT NULL DEFAULT 0,
     hasReferenceConnection INTEGER NOT NULL DEFAULT 0,
     hasCommentaryConnection INTEGER NOT NULL DEFAULT 0,
@@ -85,6 +95,8 @@ CREATE INDEX IF NOT EXISTS idx_book_category ON book(categoryId);
 CREATE INDEX IF NOT EXISTS idx_book_title ON book(title);
 CREATE INDEX IF NOT EXISTS idx_book_order ON book(orderIndex);
 CREATE INDEX IF NOT EXISTS idx_book_source ON book(sourceId);
+CREATE INDEX IF NOT EXISTS idx_book_external ON book(isExternal);
+CREATE INDEX IF NOT EXISTS idx_book_file_type ON book(fileType);
 
 -- Book-publication place junction table
 CREATE TABLE IF NOT EXISTS book_pub_place (

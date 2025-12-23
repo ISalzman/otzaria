@@ -245,6 +245,11 @@ class MyDatabase {
           orderIndex INTEGER NOT NULL DEFAULT 999,
           totalLines INTEGER NOT NULL DEFAULT 0,
           isBaseBook INTEGER NOT NULL DEFAULT 0,
+          isExternal INTEGER NOT NULL DEFAULT 0,
+          filePath TEXT,
+          fileType TEXT,
+          fileSize INTEGER,
+          lastModified INTEGER,
           hasTargumConnection INTEGER NOT NULL DEFAULT 0,
           hasReferenceConnection INTEGER NOT NULL DEFAULT 0,
           hasCommentaryConnection INTEGER NOT NULL DEFAULT 0,
@@ -257,6 +262,8 @@ class MyDatabase {
       'CREATE INDEX IF NOT EXISTS idx_book_title ON book(title);',
       'CREATE INDEX IF NOT EXISTS idx_book_order ON book(orderIndex);',
       'CREATE INDEX IF NOT EXISTS idx_book_source ON book(sourceId);',
+      'CREATE INDEX IF NOT EXISTS idx_book_external ON book(isExternal);',
+      'CREATE INDEX IF NOT EXISTS idx_book_file_type ON book(fileType);',
 
       // Book-publication place junction table
       '''

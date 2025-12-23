@@ -17,11 +17,6 @@ enum DuplicateBookStrategy {
   ask,
 }
 
-enum IndexCreationMode {
-  withIndexes,
-  withoutIndexes,
-}
-
 class DatabaseGenerationScreen extends StatefulWidget {
   const DatabaseGenerationScreen({super.key});
 
@@ -40,8 +35,15 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   
   String? _selectedLibraryPath;
   String? _selectedDbPath;
-  DuplicateBookStrategy _duplicateStrategy = DuplicateBookStrategy.ask;
-  IndexCreationMode _indexMode = IndexCreationMode.withIndexes;
+  final DuplicateBookStrategy _duplicateStrategy = DuplicateBookStrategy.replace; // Always replace duplicates
+  
+  // File validation status
+  bool _dbFileExists = false;
+  bool _priorityFileExists = false;
+  bool _acronymFileExists = false;
+  bool _linksDirectoryExists = false;
+  final List<Map<String, String>> _duplicateBooks = []; // Store book info with path
+  final Map<String, String> _duplicateReasons = {};
 
   @override
   void initState() {
@@ -68,9 +70,14 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         _selectedDbPath = dbPath;
       });
       
+      // Check file status immediately after loading the path
+      await _checkFileStatus();
+      
       _logger.info('Auto-loaded library path: $libraryPath');
     } catch (e, stackTrace) {
       _logger.warning('Error loading default library path', e, stackTrace);
+      // If no default path, still check file status to show "select path" message
+      await _checkFileStatus();
     }
   }
 
@@ -99,8 +106,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         
         // Verify that the selected directory contains the required structure
         final otzariaDir = Directory('$selectedDirectory/${DatabaseConstants.otzariaFolderName}');
-        final linksDir = Directory('$selectedDirectory/links');
-        final metadataFile = File('$selectedDirectory/metadata.json');
         
         if (!await otzariaDir.exists()) {
           if (mounted) {
@@ -114,28 +119,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
           return;
         }
         
-        // Show warnings for missing optional components
-        final warnings = <String>[];
-        if (!await linksDir.exists()) {
-          _logger.warning('Links directory not found in selected folder');
-          warnings.add('תיקיית "links" לא נמצאה - לא יהיו קישורים בין ספרים');
-        }
-        
-        if (!await metadataFile.exists()) {
-          _logger.warning('metadata.json not found in selected folder');
-          warnings.add('קובץ "metadata.json" לא נמצא - לא יהיה מידע נוסף על הספרים');
-        }
-        
-        if (warnings.isNotEmpty && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('אזהרות:\n${warnings.join('\n')}'),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 6),
-            ),
-          );
-        }
-        
         // Auto-set DB path to database file in the selected folder
         final dbPath = '$selectedDirectory/${DatabaseConstants.databaseFileName}';
         
@@ -143,6 +126,9 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
           _selectedLibraryPath = selectedDirectory;
           _selectedDbPath = dbPath;
         });
+        
+        // Check file status after setting paths
+        await _checkFileStatus();
         
         _logger.info('Auto-set database path: $dbPath');
       }
@@ -159,126 +145,72 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     }
   }
 
-  // Removed - DB path is now auto-set based on library folder
-
-  Future<bool> _askUserAboutDuplicate(String bookTitle) async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text('ספר קיים'),
-          content: Text('הספר "$bookTitle" כבר קיים במסד הנתונים.\nהאם להחליף אותו?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('דלג'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('החלף'),
-            ),
-          ],
-        ),
-      ),
-    );
-    
-    return result ?? false;
-  }
-
-  Future<void> _createIndexesOnly() async {
-    if (_selectedDbPath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('יש לבחור תיקיית אוצריא (תיקיית האב) תחילה'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text('יצירת אינדקסים'),
-          content: const Text(
-            'האם ליצור אינדקסים למסד הנתונים?\n\n'
-            'תהליך זה עשוי לקחת מספר דקות תלוי בגודל מסד הנתונים.\n\n'
-            'אינדקסים משפרים משמעותית את מהירות החיפוש והניווט.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('ביטול'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('צור אינדקסים'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() {
-      _progress = GenerationProgress(
-        phase: GenerationPhase.initializing,
-        message: 'יוצר אינדקסים...',
-        progress: 0.0,
-      );
-      _startTime = DateTime.now();
-    });
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_startTime != null) {
-        setState(() {
-          _elapsed = DateTime.now().difference(_startTime!);
-        });
-      }
-    });
+  /// Check the status of required files and directories
+  Future<void> _checkFileStatus() async {
+    if (_selectedLibraryPath == null) return;
 
     try {
-      MyDatabase.initialize();
-      final database = MyDatabase.withPath(_selectedDbPath!);
-      final repository = SeforimRepository(database);
-      await repository.ensureInitialized();
+      // Check if DB file exists in Otzaria directory
+      final dbFileInOtzaria = File('$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/${DatabaseConstants.databaseFileName}');
+      _dbFileExists = await dbFileInOtzaria.exists();
+      _logger.info('Checking DB file: ${dbFileInOtzaria.path} - exists: $_dbFileExists');
 
-      setState(() {
-        _progress = GenerationProgress(
-          phase: GenerationPhase.finalizing,
-          message: 'יוצר אינדקסים...',
-          progress: 0.5,
-        );
-      });
-
-      await repository.createOptimizationIndexes();
-      await repository.close();
-
-      setState(() {
-        _progress = GenerationProgress.complete();
-      });
-
-      _timer?.cancel();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('אינדקסים נוצרו בהצלחה!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      // Check priority file in "About Software" directory
+      _priorityFileExists = false;
+      _acronymFileExists = false;
+      
+      final aboutSoftwareDirHeb = Directory('$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/אודות התוכנה');
+      
+      if (await aboutSoftwareDirHeb.exists()) {
+        final priorityFile = File('${aboutSoftwareDirHeb.path}/priority');
+        _priorityFileExists = await priorityFile.exists();
+        _logger.info('Checking priority file (Hebrew): ${priorityFile.path} - exists: $_priorityFileExists');
+        
+        final acronymFile = File('${aboutSoftwareDirHeb.path}/acronym.json');
+        _acronymFileExists = await acronymFile.exists();
+        _logger.info('Checking acronym file (Hebrew): ${acronymFile.path} - exists: $_acronymFileExists');
+      } else {
+        _logger.info('About Software directory not found in either Hebrew or English');
       }
+
+      // Check links directory
+      final linksDir = Directory('$_selectedLibraryPath/links');
+      _linksDirectoryExists = await linksDir.exists();
+      _logger.info('Checking links directory: ${linksDir.path} - exists: $_linksDirectoryExists');
+
+      setState(() {});
+    
     } catch (e, stackTrace) {
-      _logger.severe('Error creating indexes', e, stackTrace);
-      setState(() {
-        _progress = GenerationProgress.error(e.toString());
-      });
-      _timer?.cancel();
+      _logger.warning('Error checking file status', e, stackTrace);
+    }
+  }
+
+  // Removed - DB path is now auto-set based on library folder
+
+  /// Backup existing database file if it exists
+  Future<void> _backupExistingDatabase() async {
+    if (_selectedLibraryPath == null) return;
+    
+    final dbFileInOtzaria = File('$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/${DatabaseConstants.databaseFileName}');
+    if (await dbFileInOtzaria.exists()) {
+      try {
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final backupPath = '${dbFileInOtzaria.path}.backup_$timestamp';
+        await dbFileInOtzaria.copy(backupPath);
+        _logger.info('Database backed up to: $backupPath');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('מסד הנתונים הקיים גובה ל: ${backupPath.split('/').last}'),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } catch (e, stackTrace) {
+        _logger.warning('Failed to backup existing database', e, stackTrace);
+      }
     }
   }
 
@@ -298,7 +230,9 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     _logger.info('Library path: $_selectedLibraryPath');
     _logger.info('Database path: $_selectedDbPath');
     _logger.info('Duplicate strategy: $_duplicateStrategy');
-    _logger.info('Index mode: $_indexMode');
+
+    // Backup existing database if it exists
+    await _backupExistingDatabase();
 
     setState(() {
       _progress = GenerationProgress(
@@ -307,6 +241,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       );
       _startTime = DateTime.now();
       _elapsed = Duration.zero;
+      _duplicateBooks.clear();
+      _duplicateReasons.clear();
     });
 
     // Start timer
@@ -324,25 +260,24 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       final repository = SeforimRepository(database);
       await repository.ensureInitialized();
 
-      // Create callback based on selected strategy
-      Future<bool> Function(String)? duplicateCallback;
-      switch (_duplicateStrategy) {
-        case DuplicateBookStrategy.skip:
-          duplicateCallback = (title) async => false;
-          break;
-        case DuplicateBookStrategy.replace:
-          duplicateCallback = (title) async => true;
-          break;
-        case DuplicateBookStrategy.ask:
-          duplicateCallback = _askUserAboutDuplicate;
-          break;
+      // Always replace duplicates and track them
+      Future<bool> duplicateCallback(String title) async {
+        // Try to extract path information from the title or use a generic path
+        final bookInfo = {
+          'title': title,
+          'path': 'נתיב לא זמין', // We'll improve this later if needed
+          'reason': 'ספר קיים הוחלף'
+        };
+        _duplicateBooks.add(bookInfo);
+        _duplicateReasons[title] = 'ספר קיים הוחלף';
+        return true; // Always replace
       }
 
       _generator = ProgressDatabaseGenerator(
         _selectedLibraryPath!,
         repository,
         onDuplicateBook: duplicateCallback,
-        createIndexes: _indexMode == IndexCreationMode.withIndexes,
+        createIndexes: true, // Always create indexes
       );
 
       _progressSubscription = _generator!.progressStream.listen(
@@ -364,6 +299,11 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       await repository.close();
 
       _timer?.cancel();
+      
+      // Show duplicate books report if any were found
+      if (_duplicateBooks.isNotEmpty) {
+        _showDuplicateReport();
+      }
     } catch (e, stackTrace) {
       final errorMsg = e.toString();
       _logger.severe('Error during generation: $errorMsg', e, stackTrace);
@@ -372,6 +312,200 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       });
       _timer?.cancel();
     }
+  }
+
+  /// Show report of duplicate books that were replaced
+  void _showDuplicateReport() {
+    // Create report text for copying
+    final reportText = StringBuffer();
+    reportText.writeln('דוח ספרים כפולים - ${_duplicateBooks.length} ספרים הוחלפו:');
+    reportText.writeln('=' * 50);
+    
+    for (int i = 0; i < _duplicateBooks.length; i++) {
+      final bookInfo = _duplicateBooks[i];
+      final title = bookInfo['title'] ?? 'לא ידוע';
+      final path = bookInfo['path'] ?? 'נתיב לא זמין';
+      final reason = bookInfo['reason'] ?? 'לא ידוע';
+      
+      reportText.writeln('${i + 1}. $title');
+      reportText.writeln('   נתיב: $path');
+      reportText.writeln('   סיבה: $reason');
+      reportText.writeln();
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.library_books, color: Colors.orange),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('דוח ספרים כפולים')),
+              IconButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: reportText.toString()));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('הדוח הועתק ללוח'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.copy),
+                tooltip: 'העתק דוח',
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'נמצאו ${_duplicateBooks.length} ספרים כפולים שהוחלפו במהלך יצירת מסד הנתונים',
+                          style: TextStyle(
+                            color: Colors.blue[800],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _duplicateBooks.length,
+                    itemBuilder: (context, index) {
+                      final bookInfo = _duplicateBooks[index];
+                      final title = bookInfo['title'] ?? 'לא ידוע';
+                      final path = bookInfo['path'] ?? 'נתיב לא זמין';
+                      final reason = bookInfo['reason'] ?? 'לא ידוע';
+                      
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange[100],
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '${index + 1}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.orange[800],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      title,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(Icons.folder_outlined, 
+                                       size: 16, 
+                                       color: Colors.grey[600]),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      'נתיב: $path',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(Icons.info_outline, 
+                                       size: 16, 
+                                       color: Colors.grey[600]),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    reason,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton.icon(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: reportText.toString()));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('הדוח הועתק ללוח'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.copy, size: 18),
+              label: const Text('העתק דוח'),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('סגור'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -442,107 +576,68 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                             ),
                           ),
                         
+                        // File status section - always show
                         const SizedBox(height: 16),
                         const Divider(),
                         const SizedBox(height: 16),
                         
-                        // Index creation mode
                         Text(
-                          'יצירת אינדקסים',
+                          'בדיקת קבצים נדרשים',
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'אינדקסים משפרים את מהירות החיפוש אך מאריכים את זמן היצירה',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[600],
+                        const SizedBox(height: 12),
+                        
+                        if (_selectedLibraryPath != null) ...[
+                          _buildDbStatusItem(
+                            'קובץ מסד נתונים (אוצריא)',
+                            _dbFileExists,
+                            _dbFileExists ? 'קיים - הקובץ הישן יגובה ויווצר קובץ חדש' : 'לא קיים - יווצר קובץ חדש',
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        
-                        // ignore: deprecated_member_use
-                        RadioListTile<IndexCreationMode>(
-                          title: const Text('עם אינדקסים (מומלץ)'),
-                          subtitle: const Text('מהיר יותר בשימוש, אך לוקח יותר זמן ליצירה'),
-                          value: IndexCreationMode.withIndexes,
-                          // ignore: deprecated_member_use
-                          groupValue: _indexMode,
-                          // ignore: deprecated_member_use
-                          onChanged: (value) {
-                            setState(() {
-                              _indexMode = value!;
-                            });
-                          },
-                        ),
-                        // ignore: deprecated_member_use
-                        RadioListTile<IndexCreationMode>(
-                          title: const Text('בלי אינדקסים'),
-                          subtitle: const Text('יצירה מהירה, אך חיפוש איטי יותר'),
-                          value: IndexCreationMode.withoutIndexes,
-                          // ignore: deprecated_member_use
-                          groupValue: _indexMode,
-                          // ignore: deprecated_member_use
-                          onChanged: (value) {
-                            setState(() {
-                              _indexMode = value!;
-                            });
-                          },
-                        ),
-                        
-                        const SizedBox(height: 16),
-                        const Divider(),
-                        const SizedBox(height: 16),
-                        
-                        // Duplicate strategy
-                        Text(
-                          'טיפול בספרים קיימים',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                          
+                          _buildFileStatusItem(
+                            'קובץ priority (אודות התוכנה)',
+                            _priorityFileExists,
+                            _priorityFileExists ? 'קיים' : 'לא קיים',
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        
-                        // ignore: deprecated_member_use
-                        RadioListTile<DuplicateBookStrategy>(
-                          title: const Text('שאל בכל פעם'),
-                          value: DuplicateBookStrategy.ask,
-                          // ignore: deprecated_member_use
-                          groupValue: _duplicateStrategy,
-                          // ignore: deprecated_member_use
-                          onChanged: (value) {
-                            setState(() {
-                              _duplicateStrategy = value!;
-                            });
-                          },
-                        ),
-                        // ignore: deprecated_member_use
-                        RadioListTile<DuplicateBookStrategy>(
-                          title: const Text('דלג על ספרים קיימים'),
-                          value: DuplicateBookStrategy.skip,
-                          // ignore: deprecated_member_use
-                          groupValue: _duplicateStrategy,
-                          // ignore: deprecated_member_use
-                          onChanged: (value) {
-                            setState(() {
-                              _duplicateStrategy = value!;
-                            });
-                          },
-                        ),
-                        // ignore: deprecated_member_use
-                        RadioListTile<DuplicateBookStrategy>(
-                          title: const Text('החלף ספרים קיימים'),
-                          value: DuplicateBookStrategy.replace,
-                          // ignore: deprecated_member_use
-                          groupValue: _duplicateStrategy,
-                          // ignore: deprecated_member_use
-                          onChanged: (value) {
-                            setState(() {
-                              _duplicateStrategy = value!;
-                            });
-                          },
-                        ),
+                          
+                          _buildFileStatusItem(
+                            'קובץ acronym.json (אודות התוכנה)',
+                            _acronymFileExists,
+                            _acronymFileExists ? 'קיים' : 'לא קיים',
+                          ),
+                          
+                          _buildFileStatusItem(
+                            'תיקיית links',
+                            _linksDirectoryExists,
+                            _linksDirectoryExists ? 'קיימת - יווצרו קישורים' : 'לא קיימת - לא ייווצרו קישורים',
+                          ),
+                        ] else ...[
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.orange[200]!),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber, color: Colors.orange[700], size: 24),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'יש לבחור תיקיית אוצריא כדי לבדוק את סטטוס הקבצים הנדרשים',
+                                    style: TextStyle(
+                                      color: Colors.orange[800],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -759,30 +854,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                     ),
                   ],
                 ),
-              ] else if (_progress.isComplete && _indexMode == IndexCreationMode.withoutIndexes) ...[
-                // Show option to create indexes after completion
-                Column(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _createIndexesOnly,
-                      icon: const Icon(Icons.add_chart),
-                      label: const Text('צור אינדקסים עכשיו'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'מומלץ ליצור אינדקסים לשיפור ביצועי החיפוש',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.orange[700],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
               ] else
                 ElevatedButton(
                   onPressed: _progress.phase == GenerationPhase.idle ||
@@ -807,7 +878,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                 Text(
                   'בחר את תיקיית האב של אוצריא (שמכילה את התיקיות "אוצריא" ו-"links").\n'
                   'מסד הנתונים ייווצר אוטומטית בתיקייה זו (${DatabaseConstants.databaseFileName}).\n'
-                  'אם הקובץ קיים, הוא ישמש למסד הנתונים.',
+                  'אינדקסים ייווצרו תמיד לשיפור ביצועי החיפוש.\n'
+                  'ספרים כפולים יוחלפו תמיד ויוצג דוח לאחר היצירה.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.grey[600],
                   ),
@@ -828,6 +900,74 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDbStatusItem(String label, bool exists, String description) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(
+            Icons.storage,
+            color: Colors.blue,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFileStatusItem(String label, bool exists, String description) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(
+            exists ? Icons.check_circle : Icons.cancel,
+            color: exists ? Colors.green : Colors.red,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
