@@ -47,6 +47,8 @@ import 'package:shamor_zachor/models/book_model.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 
 // קבועים למצבי תצוגה (למניעת magic strings)
 const String _viewModeSplit = 'split';
@@ -912,15 +914,23 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       icon: const Icon(Icons.settings, size: 20),
       tooltip: 'הגדרות צורת הדף',
       onPressed: () async {
+        // טעינת ההגדרות הנוכחיות
+        final config =
+            PageShapeSettingsManager.loadConfiguration(state.book.title);
+
+        // אם אין הגדרות שמורות, נשתמש בברירות מחדל
+        final currentSettings =
+            config ?? DefaultCommentators.getDefaults(state.book);
+
         final hadChanges = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => PageShapeSettingsDialog(
             availableCommentators: state.availableCommentators,
             bookTitle: state.book.title,
-            currentLeft: null, // יטען מההגדרות
-            currentRight: null,
-            currentBottom: null,
-            currentBottomRight: null,
+            currentLeft: currentSettings['left'],
+            currentRight: currentSettings['right'],
+            currentBottom: currentSettings['bottom'],
+            currentBottomRight: currentSettings['bottomRight'],
           ),
         );
         // אם היו שינויים, נשנה את המפתח כדי לגרום ל-PageShapeScreen להיבנות מחדש

@@ -611,12 +611,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                       await document.loadOutline();
 
                                   // 1.5. שחזור מצב הזום אם נשמר קודם
-                                  if (widget.tab.savedZoom != null && widget.tab.savedZoom != 1.0) {
+                                  if (widget.tab.savedZoom != null &&
+                                      widget.tab.savedZoom != 1.0) {
                                     // המתנה קצרה לוודא שה-viewer מוכן לחלוטין
-                                    await Future.delayed(const Duration(milliseconds: 100));
-                                    if (mounted && widget.tab.pdfViewerController.isReady) {
+                                    // הערה: ספריית pdfrx לא מספקת callback או stream שמציין שה-viewer
+                                    // סיים את כל תהליכי האתחול והרינדור הראשוני. לכן משתמשים ב-delay
+                                    // קצר בשילוב עם בדיקת isReady. זהו פתרון סביר עד שהספרייה תספק
+                                    // דרך דטרמיניסטית יותר לדעת מתי בטוח לקרוא ל-setZoom.
+                                    await Future.delayed(
+                                        const Duration(milliseconds: 100));
+                                    if (mounted &&
+                                        widget
+                                            .tab.pdfViewerController.isReady) {
                                       widget.tab.pdfViewerController.setZoom(
-                                        widget.tab.pdfViewerController.centerPosition,
+                                        widget.tab.pdfViewerController
+                                            .centerPosition,
                                         widget.tab.savedZoom!,
                                       );
                                     }
