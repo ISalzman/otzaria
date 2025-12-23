@@ -13,7 +13,6 @@ import 'package:otzaria/core/app_paths.dart';
 class TantivyDataProvider {
   /// Instance of the search engine pointing to the index directory
   late Future<SearchEngine> engine;
-  late Future<ReferenceSearchEngine> refEngine;
 
   /// Track if index is being reopened to prevent concurrent reopens
   bool _isReopening = false;
@@ -59,24 +58,8 @@ class TantivyDataProvider {
 
     try {
       String indexPath = await AppPaths.getIndexPath();
-      String refIndexPath = await AppPaths.getRefIndexPath();
 
       engine = Future.value(SearchEngine(path: indexPath));
-
-      refEngine = Future(() {
-        try {
-          return ReferenceSearchEngine(path: refIndexPath);
-        } catch (e) {
-          if (e.toString() ==
-              "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
-            resetIndex(indexPath);
-            reopenIndex();
-            throw Exception('Index reset required, please try again');
-          } else {
-            rethrow;
-          }
-        }
-      });
       //test the engine
       engine.then((value) {
         try {
@@ -218,16 +201,6 @@ class TantivyDataProvider {
     yield results;
   }
 
-  Future<List<ReferenceSearchResult>> searchRefs(
-      String reference, int limit, bool fuzzy) async {
-    final engine = await refEngine;
-    return engine.search(
-        query: reference,
-        limit: limit,
-        fuzzy: fuzzy,
-        order: ResultsOrder.relevance);
-  }
-
   /// ספירה מקבצת של תוצאות עבור מספר facets בבת אחת - לשיפור ביצועים
   Future<Map<String, int>> countTextsForMultipleFacets(
       String query, List<String> books, List<String> facets,
@@ -305,8 +278,6 @@ class TantivyDataProvider {
     isIndexing.value = false;
     final index = await engine;
     await index.clear();
-    final refIndex = await refEngine;
-    await refIndex.clear();
     booksDone.clear();
     await saveBooksDoneToDisk();
   }

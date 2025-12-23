@@ -2508,4 +2508,152 @@ extension BookAcronymRepository on SeforimRepository {
   Future<int> countBookAcronyms(int bookId) async {
     return await _database.bookAcronymDao.countByBookId(bookId);
   }
+
+  /// Searches for books by title or acronym for reference finding.
+  /// Returns a list of maps containing book info and TOC entries.
+  ///
+  /// [query] - The search query (book name or acronym)
+  /// [limit] - Maximum number of results to return
+  Future<List<Map<String, dynamic>>> searchBooksForReference(String query,
+      {int limit = 100}) async {
+    if (query.isEmpty) return [];
+
+    final db = await _database.database;
+    final results = <Map<String, dynamic>>[];
+    final seenBookIds = <int>{};
+
+    // Normalize query for matching
+    final normalizedQuery = query.trim().toLowerCase();
+    final queryPattern = '%$normalizedQuery%';
+
+    // 1. Search by book title (LIKE search)
+    final titleResults = await db.rawQuery('''
+        SELECT b.id, b.title, b.categoryId, b.filePath, b.fileType
+        FROM book b
+        WHERE LOWER(b.title) LIKE ?
+        ORDER BY 
+          CASE WHEN LOWER(b.title) = ? THEN 0
+               WHEN LOWER(b.title) LIKE ? THEN 1
+               ELSE 2 END,
+          b.orderIndex
+        LIMIT ?
+      ''', [queryPattern, normalizedQuery, '$normalizedQuery%', limit]);
+
+    for (final row in titleResults) {
+      final bookId = row['id'] as int;
+      if (seenBookIds.add(bookId)) {
+        results.add({
+          'bookId': bookId,
+          'title': row['title'] as String,
+          'categoryId': row['categoryId'] as int,
+          'filePath': row['filePath'] as String? ?? '',
+          'fileType': row['fileType'] as String? ?? 'txt',
+          'matchType': 'title',
+        });
+      }
+    }
+
+    // 2. Search by acronym
+    final acronymResults = await db.rawQuery('''
+        SELECT DISTINCT b.id, b.title, b.categoryId, b.filePath, b.fileType, ba.term
+        FROM book_acronym ba
+        JOIN book b ON ba.bookId = b.id
+        WHERE LOWER(ba.term) LIKE ?
+        ORDER BY 
+          CASE WHEN LOWER(ba.term) = ? THEN 0
+               WHEN LOWER(ba.term) LIKE ? THEN 1
+               ELSE 2 END,
+          b.orderIndex
+        LIMIT ?
+      ''', [queryPattern, normalizedQuery, '$normalizedQuery%', limit]);
+
+    for (final row in acronymResults) {
+      final bookId = row['id'] as int;
+      if (seenBookIds.add(bookId)) {
+        results.add({
+          'bookId': bookId,
+          'title': row['title'] as String,
+          'categoryId': row['categoryId'] as int,
+          'filePath': row['filePath'] as String? ?? '',
+          'fileType': row['fileType'] as String? ?? 'txt',
+          'matchType': 'acronym',
+          'matchedTerm': row['term'] as String,
+        });
+      }
+    }
+
+    return results.take(limit).toList();
+  }
+
+  /// Gets TOC entries for a book that match a reference query.
+  /// Returns entries with their full path (e.g., "פרק א" -> "בראשית פרק א")
+  ///
+  /// [bookId] - The book ID
+  /// [bookTitle] - The book title (for building full reference)
+  /// [queryTokens] - Optional tokens to filter TOC entries
+  Future<List<Map<String, dynamic>>> getTocEntriesForReference(
+      int bookId, String bookTitle,
+      {List<String>? queryTokens}) async {
+    final db = await _database.database;
+
+    // Get all TOC entries for the book
+    final tocEntries = await db.rawQuery('''
+        SELECT t.id, t.text, t.level, t.lineIndex, t.parentId
+        FROM toc_entry t
+        WHERE t.bookId = ?
+        ORDER BY t.lineIndex, t.level
+      ''', [bookId]);
+
+    if (tocEntries.isEmpty) {
+      // If no TOC, return just the book itself
+      return [
+        {
+          'reference': bookTitle,
+          'segment': 0,
+          'level': 0,
+        }
+      ];
+    }
+
+    final results = <Map<String, dynamic>>[];
+
+    // Build a map of parent IDs to their text for building full paths
+    final parentTexts = <int, String>{};
+    for (final entry in tocEntries) {
+      parentTexts[entry['id'] as int] = entry['text'] as String;
+    }
+
+    for (final entry in tocEntries) {
+      final text = entry['text'] as String;
+      final level = entry['level'] as int;
+      final lineIndex = entry['lineIndex'] as int? ?? 0;
+      final parentId = entry['parentId'] as int?;
+
+      // Build full reference path
+      String fullRef = bookTitle;
+      if (text.isNotEmpty) {
+        // Add parent path if exists
+        if (parentId != null && parentTexts.containsKey(parentId)) {
+          fullRef = '$bookTitle ${parentTexts[parentId]} $text';
+        } else {
+          fullRef = '$bookTitle $text';
+        }
+      }
+
+      // Filter by query tokens if provided
+      if (queryTokens != null && queryTokens.isNotEmpty) {
+        final refLower = fullRef.toLowerCase();
+        final matches = queryTokens.every((token) => refLower.contains(token));
+        if (!matches) continue;
+      }
+
+      results.add({
+        'reference': fullRef,
+        'segment': lineIndex,
+        'level': level,
+      });
+    }
+
+    return results;
+  }
 }
