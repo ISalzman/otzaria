@@ -308,6 +308,10 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             contextMenu: _buildContextMenu(),
             child: SelectionArea(
               key: _selectionKey,
+              contextMenuBuilder: (context, selectableRegionState) {
+                // מבטל את התפריט הרגיל של Flutter כי יש ContextMenuRegion
+                return const SizedBox.shrink();
+              },
               onSelectionChanged: (selection) {
                 if (selection != null && selection.plainText.isNotEmpty) {
                   setState(() {
@@ -837,7 +841,14 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
 
 class _CollapsibleCommentaryGroupState
     extends State<_CollapsibleCommentaryGroup> {
-  bool _isExpanded = true;
+  late bool _isExpanded;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // שמירת מצב ההרחבה ב-PageStorage כדי לשמור אותו בגלילה
+    _isExpanded = PageStorage.of(context).readState(context) as bool? ?? true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -849,6 +860,7 @@ class _CollapsibleCommentaryGroupState
           onTap: () {
             setState(() {
               _isExpanded = !_isExpanded;
+              PageStorage.of(context).writeState(context, _isExpanded);
             });
           },
           child: Padding(
@@ -884,33 +896,36 @@ class _CollapsibleCommentaryGroupState
         // תוכן המפרשים - מוצג רק כשמורחב
         if (_isExpanded)
           ...widget.group.links.map((link) {
-            return Padding(
-              padding: const EdgeInsets.only(
-                  right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    link.heRef,
-                    style: TextStyle(
-                      fontSize: widget.settingsState.commentatorsFontSize - 4,
-                      fontWeight: FontWeight.normal,
-                      fontFamily: widget.settingsState.commentatorsFontFamily,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.5),
+            return ctx.ContextMenuRegion(
+              contextMenu: widget.buildContextMenu(link),
+              child: Padding(
+                padding: const EdgeInsets.only(
+                    right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      link.heRef,
+                      style: TextStyle(
+                        fontSize: widget.settingsState.commentatorsFontSize - 4,
+                        fontWeight: FontWeight.normal,
+                        fontFamily: widget.settingsState.commentatorsFontFamily,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.5),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  PdfCommentaryContent(
-                    key: ValueKey(
-                        '${link.path2}_${link.index2}_${widget.tab.currentTextLineNumber}'),
-                    link: link,
-                    fontSize: widget.fontSize,
-                    openBookCallback: widget.openBookCallback,
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    PdfCommentaryContent(
+                      key: ValueKey(
+                          '${link.path2}_${link.index2}_${widget.tab.currentTextLineNumber}'),
+                      link: link,
+                      fontSize: widget.fontSize,
+                      openBookCallback: widget.openBookCallback,
+                    ),
+                  ],
+                ),
               ),
             );
           }),

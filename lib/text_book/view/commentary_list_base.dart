@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -11,6 +12,7 @@ import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
@@ -468,30 +470,39 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 // יצירת מפתח ייחודי לאינדקסים הנוכחיים
                 final indexesKey = currentIndexes.join(',');
 
-                return ProgressiveScroll(
-                  scrollController: scrollController,
-                  maxSpeed: 10000.0,
-                  curve: 10.0,
-                  accelerationFactor: 5,
-                  child: ScrollablePositionedList.builder(
-                    itemScrollController: _itemScrollController,
-                    itemPositionsListener: _itemPositionsListener,
-                    initialScrollIndex:
-                        _lastScrollIndex.clamp(0, groups.length - 1),
-                    key: PageStorageKey(
-                        'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
-                    physics: const ClampingScrollPhysics(),
-                    scrollOffsetController: scrollController,
-                    shrinkWrap: widget.shrinkWrap,
-                    itemCount: groups.length,
-                    itemBuilder: (context, groupIndex) {
-                      final group = groups[groupIndex];
-                      return _buildCommentaryGroupTile(
-                        group: group,
-                        state: state,
-                        indexesKey: indexesKey,
-                      );
-                    },
+                return SelectionArea(
+                  onSelectionChanged: (selection) {
+                    if (selection != null && selection.plainText.isNotEmpty) {
+                      setState(() {
+                        _savedSelectedText = selection.plainText;
+                      });
+                    }
+                  },
+                  child: ProgressiveScroll(
+                    scrollController: scrollController,
+                    maxSpeed: 10000.0,
+                    curve: 10.0,
+                    accelerationFactor: 5,
+                    child: ScrollablePositionedList.builder(
+                      itemScrollController: _itemScrollController,
+                      itemPositionsListener: _itemPositionsListener,
+                      initialScrollIndex:
+                          _lastScrollIndex.clamp(0, groups.length - 1),
+                      key: PageStorageKey(
+                          'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
+                      physics: const ClampingScrollPhysics(),
+                      scrollOffsetController: scrollController,
+                      shrinkWrap: widget.shrinkWrap,
+                      itemCount: groups.length,
+                      itemBuilder: (context, groupIndex) {
+                        final group = groups[groupIndex];
+                        return _buildCommentaryGroupTile(
+                          group: group,
+                          state: state,
+                          indexesKey: indexesKey,
+                        );
+                      },
+                    ),
                   ),
                 );
               },
@@ -909,51 +920,65 @@ class _CollapsibleCommentaryGroupState
         // תוכן המפרשים - מוצג רק כשמורחב
         if (_isExpanded)
           ...widget.group.links.map((link) {
-            return Padding(
-              key: widget.itemKeys[widget.getLinkKey(link)],
-              padding: const EdgeInsets.only(
-                  right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  BlocBuilder<SettingsBloc, SettingsState>(
-                    builder: (context, settingsState) {
-                      String displayTitle = link.heRef;
-                      if (settingsState.replaceHolyNames) {
-                        displayTitle = utils.replaceHolyNames(displayTitle);
-                      }
-                      return Text(
-                        displayTitle,
-                        style: TextStyle(
-                          fontSize: widget.fontSize * 0.75,
-                          fontWeight: FontWeight.normal,
-                          fontFamily: AppFonts.defaultFont,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.5),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 4),
-                  CommentaryContent(
-                    key: ValueKey(
-                        '${link.path2}_${link.index2}_${widget.indexesKey}'),
-                    link: link,
-                    fontSize: widget.fontSize,
-                    openBookCallback: widget.openBookCallback,
-                    removeNikud: widget.removeNikud,
-                    searchQuery: widget.showSearch ? widget.searchQuery : '',
-                    currentSearchIndex: widget.showSearch
-                        ? widget.getItemSearchIndex(link)
-                        : 0,
-                    onSearchResultsCountChanged: widget.showSearch
-                        ? (count) =>
-                            widget.updateSearchResultsCount(link, count)
-                        : null,
-                  ),
-                ],
+            return ctx.ContextMenuRegion(
+              contextMenu: ContextMenuUtils.buildCommentaryContextMenu(
+                context: context,
+                link: link,
+                openBookCallback: widget.openBookCallback,
+                fontSize: widget.fontSize,
+                savedSelectedText: widget.savedSelectedText,
+                onCopySelected: () => ContextMenuUtils.copyFormattedText(
+                  context: context,
+                  savedSelectedText: widget.savedSelectedText,
+                  fontSize: widget.fontSize,
+                ),
+              ),
+              child: Padding(
+                key: widget.itemKeys[widget.getLinkKey(link)],
+                padding: const EdgeInsets.only(
+                    right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BlocBuilder<SettingsBloc, SettingsState>(
+                      builder: (context, settingsState) {
+                        String displayTitle = link.heRef;
+                        if (settingsState.replaceHolyNames) {
+                          displayTitle = utils.replaceHolyNames(displayTitle);
+                        }
+                        return Text(
+                          displayTitle,
+                          style: TextStyle(
+                            fontSize: widget.fontSize * 0.75,
+                            fontWeight: FontWeight.normal,
+                            fontFamily: AppFonts.defaultFont,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.5),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    CommentaryContent(
+                      key: ValueKey(
+                          '${link.path2}_${link.index2}_${widget.indexesKey}'),
+                      link: link,
+                      fontSize: widget.fontSize,
+                      openBookCallback: widget.openBookCallback,
+                      removeNikud: widget.removeNikud,
+                      searchQuery: widget.showSearch ? widget.searchQuery : '',
+                      currentSearchIndex: widget.showSearch
+                          ? widget.getItemSearchIndex(link)
+                          : 0,
+                      onSearchResultsCountChanged: widget.showSearch
+                          ? (count) =>
+                              widget.updateSearchResultsCount(link, count)
+                          : null,
+                    ),
+                  ],
+                ),
               ),
             );
           }),
