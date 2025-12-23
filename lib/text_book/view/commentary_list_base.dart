@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -12,7 +11,6 @@ import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
-import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
@@ -350,20 +348,25 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       _expansionStates[groupKey] = _allExpanded;
     }
 
-    // יוצר controller אם לא קיים
-    if (!_controllers.containsKey(groupKey)) {
-      _controllers[groupKey] = ExpansibleController();
-    }
-
     final isExpanded = _expansionStates[groupKey] ?? _allExpanded;
 
-    return ExpansionTile(
+    return _CollapsibleCommentaryGroup(
       key: PageStorageKey(groupKey),
-      controller: _controllers[groupKey],
-      maintainState: true,
-      initiallyExpanded: isExpanded,
-      onExpansionChanged: (isExpanded) {
-        _expansionStates[groupKey] = isExpanded;
+      group: group,
+      isExpanded: isExpanded,
+      fontSize: widget.fontSize,
+      openBookCallback: widget.openBookCallback,
+      removeNikud: state.removeNikud,
+      showSearch: widget.showSearch,
+      searchQuery: _searchQuery,
+      getItemSearchIndex: _getItemSearchIndex,
+      updateSearchResultsCount: _updateSearchResultsCount,
+      itemKeys: _itemKeys,
+      getLinkKey: _getLinkKey,
+      indexesKey: indexesKey,
+      savedSelectedText: _savedSelectedText,
+      onExpansionChanged: (expanded) {
+        _expansionStates[groupKey] = expanded;
         // בודק אם כל המפרשים פתוחים או סגורים ומעדכן את המצב הגלובלי
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -373,78 +376,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           }
         });
       },
-      backgroundColor: Colors.transparent,
-      collapsedBackgroundColor: Colors.transparent,
-      title: BlocBuilder<SettingsBloc, SettingsState>(
-        builder: (context, settingsState) {
-          String displayTitle = group.bookTitle;
-          if (settingsState.replaceHolyNames) {
-            displayTitle = utils.replaceHolyNames(displayTitle);
-          }
-          return Text(
-            displayTitle,
-            style: TextStyle(
-              fontSize: widget.fontSize * 0.85,
-              fontWeight: FontWeight.bold,
-              fontFamily: AppFonts.defaultFont,
-            ),
-          );
-        },
-      ),
-      children: group.links.map((link) {
-        return ctx.ContextMenuRegion(
-          contextMenu: ContextMenuUtils.buildCommentaryContextMenu(
-            context: context,
-            link: link,
-            openBookCallback: widget.openBookCallback,
-            fontSize: widget.fontSize,
-            savedSelectedText: _savedSelectedText,
-            onCopySelected: () => ContextMenuUtils.copyFormattedText(
-              context: context,
-              savedSelectedText: _savedSelectedText,
-              fontSize: widget.fontSize,
-            ),
-          ),
-          child: ListTile(
-            key: _itemKeys[_getLinkKey(link)],
-            contentPadding: const EdgeInsets.only(right: 32.0, left: 16.0),
-            title: BlocBuilder<SettingsBloc, SettingsState>(
-              builder: (context, settingsState) {
-                String displayTitle = link.heRef;
-                if (settingsState.replaceHolyNames) {
-                  displayTitle = utils.replaceHolyNames(displayTitle);
-                }
-
-                return Text(
-                  displayTitle,
-                  style: TextStyle(
-                    fontSize: widget.fontSize * 0.75,
-                    fontWeight: FontWeight.normal,
-                    fontFamily: AppFonts.defaultFont,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
-                  ),
-                );
-              },
-            ),
-            subtitle: CommentaryContent(
-              key: ValueKey('${link.path2}_${link.index2}_$indexesKey'),
-              link: link,
-              fontSize: widget.fontSize,
-              openBookCallback: widget.openBookCallback,
-              removeNikud: state.removeNikud,
-              searchQuery: widget.showSearch ? _searchQuery : '',
-              currentSearchIndex:
-                  widget.showSearch ? _getItemSearchIndex(link) : 0,
-              onSearchResultsCountChanged: widget.showSearch
-                  ? (count) => _updateSearchResultsCount(link, count)
-                  : null,
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -861,6 +792,173 @@ class _SkeletonLine extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(4),
       ),
+    );
+  }
+}
+
+/// Widget מותאם אישית להצגת קבוצת מפרשים עם אפשרות כיווץ/הרחבה
+/// שלא מפריע לבחירת טקסט והעתקה (במקום ExpansionTile)
+class _CollapsibleCommentaryGroup extends StatefulWidget {
+  final CommentaryGroup group;
+  final bool isExpanded;
+  final double fontSize;
+  final Function(TextBookTab) openBookCallback;
+  final bool removeNikud;
+  final bool showSearch;
+  final String searchQuery;
+  final int Function(Link) getItemSearchIndex;
+  final void Function(Link, int) updateSearchResultsCount;
+  final Map<String, GlobalKey> itemKeys;
+  final String Function(Link) getLinkKey;
+  final String indexesKey;
+  final String? savedSelectedText;
+  final void Function(bool) onExpansionChanged;
+
+  const _CollapsibleCommentaryGroup({
+    super.key,
+    required this.group,
+    required this.isExpanded,
+    required this.fontSize,
+    required this.openBookCallback,
+    required this.removeNikud,
+    required this.showSearch,
+    required this.searchQuery,
+    required this.getItemSearchIndex,
+    required this.updateSearchResultsCount,
+    required this.itemKeys,
+    required this.getLinkKey,
+    required this.indexesKey,
+    required this.savedSelectedText,
+    required this.onExpansionChanged,
+  });
+
+  @override
+  State<_CollapsibleCommentaryGroup> createState() =>
+      _CollapsibleCommentaryGroupState();
+}
+
+class _CollapsibleCommentaryGroupState
+    extends State<_CollapsibleCommentaryGroup> {
+  late bool _isExpanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _isExpanded = widget.isExpanded;
+  }
+
+  @override
+  void didUpdateWidget(_CollapsibleCommentaryGroup oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isExpanded != widget.isExpanded) {
+      _isExpanded = widget.isExpanded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // כותרת הקבוצה - ניתנת ללחיצה להרחבה/כיווץ
+        InkWell(
+          onTap: () {
+            setState(() {
+              _isExpanded = !_isExpanded;
+            });
+            widget.onExpansionChanged(_isExpanded);
+          },
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            child: Row(
+              children: [
+                Icon(
+                  _isExpanded
+                      ? Icons.keyboard_arrow_down
+                      : Icons.keyboard_arrow_left,
+                  size: 20,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: BlocBuilder<SettingsBloc, SettingsState>(
+                    builder: (context, settingsState) {
+                      String displayTitle = widget.group.bookTitle;
+                      if (settingsState.replaceHolyNames) {
+                        displayTitle = utils.replaceHolyNames(displayTitle);
+                      }
+                      return Text(
+                        displayTitle,
+                        style: TextStyle(
+                          fontSize: widget.fontSize * 0.85,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: AppFonts.defaultFont,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // תוכן המפרשים - מוצג רק כשמורחב
+        if (_isExpanded)
+          ...widget.group.links.map((link) {
+            return Padding(
+              key: widget.itemKeys[widget.getLinkKey(link)],
+              padding: const EdgeInsets.only(
+                  right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  BlocBuilder<SettingsBloc, SettingsState>(
+                    builder: (context, settingsState) {
+                      String displayTitle = link.heRef;
+                      if (settingsState.replaceHolyNames) {
+                        displayTitle = utils.replaceHolyNames(displayTitle);
+                      }
+                      return Text(
+                        displayTitle,
+                        style: TextStyle(
+                          fontSize: widget.fontSize * 0.75,
+                          fontWeight: FontWeight.normal,
+                          fontFamily: AppFonts.defaultFont,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.5),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  CommentaryContent(
+                    key: ValueKey(
+                        '${link.path2}_${link.index2}_${widget.indexesKey}'),
+                    link: link,
+                    fontSize: widget.fontSize,
+                    openBookCallback: widget.openBookCallback,
+                    removeNikud: widget.removeNikud,
+                    searchQuery: widget.showSearch ? widget.searchQuery : '',
+                    currentSearchIndex: widget.showSearch
+                        ? widget.getItemSearchIndex(link)
+                        : 0,
+                    onSearchResultsCountChanged: widget.showSearch
+                        ? (count) =>
+                            widget.updateSearchResultsCount(link, count)
+                        : null,
+                  ),
+                ],
+              ),
+            );
+          }),
+        const Divider(height: 1),
+      ],
     );
   }
 }
