@@ -70,6 +70,7 @@ class TextBookTab extends OpenedTab {
         openLeftPane,
         commentators ?? [],
         searchText,
+        splitedView,
       ),
       scrollController: scrollController,
       positionsListener: positionsListener,
@@ -103,13 +104,20 @@ class TextBookTab extends OpenedTab {
         (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
             (Settings.getValue<bool>('key-default-sidebar-open') ?? false);
 
+    // שחזור מצב התצוגה המפוצלת מה-JSON
+    final bool splitedView = json['splitedView'] ??
+        (Settings.getValue<bool>('key-splited-view') ?? false);
+
+    debugPrint(
+        'DEBUG: טעינת טאב ${json['title']} עם splitedView: $splitedView (מ-JSON: ${json['splitedView']})');
+
     return TextBookTab(
       index: json['initalIndex'],
       book: TextBook(
         title: json['title'],
       ),
       commentators: List<String>.from(json['commentators']),
-      splitedView: json['splitedView'],
+      splitedView: splitedView,
       openLeftPane: shouldOpenLeftPane,
       isPinned: json['isPinned'] ?? false,
     );
@@ -135,14 +143,14 @@ class TextBookTab extends OpenedTab {
         // עדכון גם את ה-index של הטאב עצמו כדי שישמר
         index = currentIndex;
         debugPrint(
-            'DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex (מתוך visibleIndices)');
+            'DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex, splitedView: $splitedView (מתוך visibleIndices)');
       } else {
         debugPrint(
-            'DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex (ברירת מחדל)');
+            'DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex, splitedView: $splitedView (ברירת מחדל)');
       }
     } else {
       debugPrint(
-          'DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex (state לא loaded)');
+          'DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex, splitedView: $splitedView (state לא loaded)');
     }
 
     return {

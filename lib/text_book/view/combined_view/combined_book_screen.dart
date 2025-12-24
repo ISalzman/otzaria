@@ -713,10 +713,11 @@ $textWithBreaks
                 textDirection: widget.isPreviewMode
                     ? TextDirection.ltr
                     : TextDirection.rtl,
-                child: Scrollbar(
-                  thumbVisibility: widget.isPreviewMode,
-                  thickness: 8.0,
-                  radius: const Radius.circular(4.0),
+                child: ScrollConfiguration(
+                  // מונע בעיות של Scrollbar עם ScrollController לא מחובר
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    scrollbars: false,
+                  ),
                   child: Directionality(
                     textDirection: TextDirection.rtl,
                     child: ProgressiveScroll(
@@ -936,6 +937,7 @@ $textWithBreaks
             isSelected &&
             _hasCommentaries(state, index))
           _CommentaryCard(
+            key: ValueKey('commentary_card_$index'),
             index: index,
             textSize: widget.textSize,
             openBookCallback: widget.openBookCallback,
@@ -977,6 +979,7 @@ class _CommentaryCard extends StatefulWidget {
   final double viewportHeight;
 
   const _CommentaryCard({
+    super.key,
     required this.index,
     required this.textSize,
     required this.openBookCallback,
@@ -1039,6 +1042,7 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: maxHeight,
+                    minHeight: 50, // מינימום גובה למניעת בעיות layout
                   ),
                   child: CommentaryListBase(
                     key: _commentaryKey,

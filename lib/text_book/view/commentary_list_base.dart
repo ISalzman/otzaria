@@ -96,6 +96,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   final ItemPositionsListener _itemPositionsListener =
       ItemPositionsListener.create();
   final Map<String, GlobalKey> _itemKeys = {};
+  String _lastIndexesKey = ''; // שומר את ה-indexesKey האחרון
   int _currentSearchIndex = 0;
   int _totalSearchResults = 0;
   final Map<String, int> _searchResultsPerLink = {};
@@ -360,7 +361,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     return ExpansionTile(
       key: PageStorageKey(groupKey),
       controller: _controllers[groupKey],
-      maintainState: true,
+      maintainState: false, // שינוי ל-false כדי למנוע בעיות ScrollController
       initiallyExpanded: isExpanded,
       onExpansionChanged: (isExpanded) {
         _expansionStates[groupKey] = isExpanded;
@@ -392,6 +393,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         },
       ),
       children: group.links.map((link) {
+        final linkKey = _getLinkKey(link);
+        // משתמש ב-GlobalKey רק אם יש חיפוש פעיל, אחרת ValueKey
+        final Key? columnKey = (widget.showSearch && _searchQuery.isNotEmpty)
+            ? _itemKeys[linkKey]
+            : ValueKey('${linkKey}_$indexesKey');
+
         return ctx.ContextMenuRegion(
           contextMenu: ContextMenuUtils.buildCommentaryContextMenu(
             context: context,
@@ -405,42 +412,50 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               fontSize: widget.fontSize,
             ),
           ),
-          child: ListTile(
-            key: _itemKeys[_getLinkKey(link)],
-            contentPadding: const EdgeInsets.only(right: 32.0, left: 16.0),
-            title: BlocBuilder<SettingsBloc, SettingsState>(
-              builder: (context, settingsState) {
-                String displayTitle = link.heRef;
-                if (settingsState.replaceHolyNames) {
-                  displayTitle = utils.replaceHolyNames(displayTitle);
-                }
+          child: Padding(
+            padding: const EdgeInsets.only(
+                right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
+            child: Column(
+              key: columnKey,
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                BlocBuilder<SettingsBloc, SettingsState>(
+                  builder: (context, settingsState) {
+                    String displayTitle = link.heRef;
+                    if (settingsState.replaceHolyNames) {
+                      displayTitle = utils.replaceHolyNames(displayTitle);
+                    }
 
-                return Text(
-                  displayTitle,
-                  style: TextStyle(
-                    fontSize: widget.fontSize * 0.75,
-                    fontWeight: FontWeight.normal,
-                    fontFamily: AppFonts.defaultFont,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
-                  ),
-                );
-              },
-            ),
-            subtitle: CommentaryContent(
-              key: ValueKey('${link.path2}_${link.index2}_$indexesKey'),
-              link: link,
-              fontSize: widget.fontSize,
-              openBookCallback: widget.openBookCallback,
-              removeNikud: state.removeNikud,
-              searchQuery: widget.showSearch ? _searchQuery : '',
-              currentSearchIndex:
-                  widget.showSearch ? _getItemSearchIndex(link) : 0,
-              onSearchResultsCountChanged: widget.showSearch
-                  ? (count) => _updateSearchResultsCount(link, count)
-                  : null,
+                    return Text(
+                      displayTitle,
+                      style: TextStyle(
+                        fontSize: widget.fontSize * 0.75,
+                        fontWeight: FontWeight.normal,
+                        fontFamily: AppFonts.defaultFont,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.5),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 4),
+                CommentaryContent(
+                  key: ValueKey('${link.path2}_${link.index2}_$indexesKey'),
+                  link: link,
+                  fontSize: widget.fontSize,
+                  openBookCallback: widget.openBookCallback,
+                  removeNikud: state.removeNikud,
+                  searchQuery: widget.showSearch ? _searchQuery : '',
+                  currentSearchIndex:
+                      widget.showSearch ? _getItemSearchIndex(link) : 0,
+                  onSearchResultsCountChanged: widget.showSearch
+                      ? (count) => _updateSearchResultsCount(link, count)
+                      : null,
+                ),
+              ],
             ),
           ),
         );
@@ -523,44 +538,62 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 // שומר את הסדר של ה-links לצורך חישוב אינדקס החיפוש
                 _orderedLinks = data;
 
-                // מנקה מפתחות ישנים ומכין מפתחות חדשים
-                final currentLinkKeys = data.map((l) => _getLinkKey(l)).toSet();
-                _itemKeys.removeWhere(
-                    (key, value) => !currentLinkKeys.contains(key));
-                for (final key in currentLinkKeys) {
-                  _itemKeys.putIfAbsent(key, () => GlobalKey());
+                // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+                final indexesKey = currentIndexes.join(',');
+
+                // אם ה-indexesKey השתנה, מנקה את כל ה-keys הישנים
+                if (_lastIndexesKey != indexesKey) {
+                  _itemKeys.clear();
+                  _lastIndexesKey = indexesKey;
+                }
+
+                // מנקה מפתחות ישנים - רק אם יש חיפוש פעיל
+                if (widget.showSearch && _searchQuery.isNotEmpty) {
+                  final currentLinkKeys =
+                      data.map((l) => _getLinkKey(l)).toSet();
+                  _itemKeys.removeWhere(
+                      (key, value) => !currentLinkKeys.contains(key));
+                  for (final key in currentLinkKeys) {
+                    _itemKeys.putIfAbsent(key, () => GlobalKey());
+                  }
+                } else {
+                  // אם אין חיפוש, לא צריך GlobalKeys
+                  _itemKeys.clear();
                 }
 
                 // מקבץ את הקישורים לקבוצות רצופות
                 final groups = _groupConsecutiveLinks(data);
-
-                // יצירת מפתח ייחודי לאינדקסים הנוכחיים
-                final indexesKey = currentIndexes.join(',');
 
                 return ProgressiveScroll(
                   scrollController: scrollController,
                   maxSpeed: 10000.0,
                   curve: 10.0,
                   accelerationFactor: 5,
-                  child: ScrollablePositionedList.builder(
-                    itemScrollController: _itemScrollController,
-                    itemPositionsListener: _itemPositionsListener,
-                    initialScrollIndex:
-                        _lastScrollIndex.clamp(0, groups.length - 1),
-                    key: PageStorageKey(
-                        'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
-                    physics: const ClampingScrollPhysics(),
-                    scrollOffsetController: scrollController,
-                    shrinkWrap: widget.shrinkWrap,
-                    itemCount: groups.length,
-                    itemBuilder: (context, groupIndex) {
-                      final group = groups[groupIndex];
-                      return _buildCommentaryGroupTile(
-                        group: group,
-                        state: state,
-                        indexesKey: indexesKey,
-                      );
-                    },
+                  child: ScrollConfiguration(
+                    // מסיר את ה-Scrollbar האוטומטי שגורם לבעיות
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      scrollbars: false,
+                    ),
+                    child: ScrollablePositionedList.builder(
+                      itemScrollController: _itemScrollController,
+                      itemPositionsListener: _itemPositionsListener,
+                      initialScrollIndex:
+                          _lastScrollIndex.clamp(0, groups.length - 1),
+                      key: PageStorageKey(
+                          'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
+                      physics: const ClampingScrollPhysics(),
+                      scrollOffsetController: scrollController,
+                      shrinkWrap: widget.shrinkWrap,
+                      itemCount: groups.length,
+                      itemBuilder: (context, groupIndex) {
+                        final group = groups[groupIndex];
+                        return _buildCommentaryGroupTile(
+                          group: group,
+                          state: state,
+                          indexesKey: indexesKey,
+                        );
+                      },
+                    ),
                   ),
                 );
               },
@@ -684,12 +717,19 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                           for (var key in _expansionStates.keys) {
                             _expansionStates[key] = _allExpanded;
                           }
-                          // משתמש ב-controllers לפתיחה/סגירה
+                        });
+                        // משתמש ב-controllers לפתיחה/סגירה אחרי ה-build
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
                           for (var controller in _controllers.values) {
-                            if (_allExpanded) {
-                              controller.expand();
-                            } else {
-                              controller.collapse();
+                            try {
+                              if (_allExpanded) {
+                                controller.expand();
+                              } else {
+                                controller.collapse();
+                              }
+                            } catch (e) {
+                              debugPrint('Error toggling controller: $e');
                             }
                           }
                         });
@@ -767,12 +807,19 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         for (var key in _expansionStates.keys) {
                           _expansionStates[key] = _allExpanded;
                         }
-                        // משתמש ב-controllers לפתיחה/סגירה
+                      });
+                      // משתמש ב-controllers לפתיחה/סגירה אחרי ה-build
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
                         for (var controller in _controllers.values) {
-                          if (_allExpanded) {
-                            controller.expand();
-                          } else {
-                            controller.collapse();
+                          try {
+                            if (_allExpanded) {
+                              controller.expand();
+                            } else {
+                              controller.collapse();
+                            }
+                          } catch (e) {
+                            debugPrint('Error toggling controller: $e');
                           }
                         }
                       });

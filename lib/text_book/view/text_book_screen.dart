@@ -656,14 +656,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     });
                   }
 
+                  debugPrint(
+                      'DEBUG: LoadContent נקרא עם showSplitView: ${state.splitedView} (isInCombinedView: ${widget.isInCombinedView})');
+
                   context.read<TextBookBloc>().add(
                         LoadContent(
                           fontSize: settingsState.fontSize,
                           // בתצוגה משולבת, מפרשים תמיד מתחת (showSplitView = false)
+                          // אחרת, משתמשים בערך שנשמר ב-state של הטאב
                           showSplitView: widget.isInCombinedView
                               ? false
-                              : (Settings.getValue<bool>('key-splited-view') ??
-                                  false),
+                              : state.splitedView,
                           removeNikud: settingsState.defaultRemoveNikud,
                           // בתצוגה משולבת, חלונית הצד תמיד סגורה
                           forceCloseLeftPane: widget.isInCombinedView,

@@ -208,6 +208,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                       children: [
                         // כרטיסיית המפרשים - מציגה את תוכן המפרשים הפעילים
                         CommentaryListBase(
+                          key: const ValueKey('commentary_list_tabbed'),
                           openBookCallback: widget.openBookCallback,
                           fontSize: widget.fontSize,
                           showSearch: widget.showSearch,

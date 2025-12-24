@@ -19,13 +19,14 @@ abstract class TextBookState extends Equatable {
 
 class TextBookInitial extends TextBookState {
   final String searchText;
+  final bool splitedView;
 
   const TextBookInitial(
       super.book, super.index, super.showLeftPane, super.commentators,
-      [this.searchText = '']);
+      [this.searchText = '', this.splitedView = true]);
 
   @override
-  List<Object?> get props => [book.title, searchText];
+  List<Object?> get props => [book.title, searchText, splitedView];
 }
 
 class TextBookLoading extends TextBookState {
