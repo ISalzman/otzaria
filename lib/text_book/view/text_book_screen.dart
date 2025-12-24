@@ -46,6 +46,9 @@ import 'package:shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:shamor_zachor/models/book_model.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
+import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 
 // קבועים למצבי תצוגה (למניעת magic strings)
 const String _viewModeSplit = 'split';
@@ -80,6 +83,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   bool _isInitialFocusDone = false;
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
   final GlobalKey _viewModeMenuKey = GlobalKey(); // מפתח לתפריט בחירת התצוגה
+
+  // Key עבור PageShapeScreen - שינוי המפתח יגרום לבנייה מחדש
+  Key _pageShapeKey = UniqueKey();
 
   // משתנים לשמירת נתונים כבדים שנטענים ברקע
   Future<Map<String, dynamic>>? _preloadedHeavyData;
@@ -650,14 +656,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     });
                   }
 
+                  debugPrint(
+                      'DEBUG: LoadContent נקרא עם showSplitView: ${state.splitedView} (isInCombinedView: ${widget.isInCombinedView})');
+
                   context.read<TextBookBloc>().add(
                         LoadContent(
                           fontSize: settingsState.fontSize,
                           // בתצוגה משולבת, מפרשים תמיד מתחת (showSplitView = false)
+                          // אחרת, משתמשים בערך שנשמר ב-state של הטאב
                           showSplitView: widget.isInCombinedView
                               ? false
-                              : (Settings.getValue<bool>('key-splited-view') ??
-                                  false),
+                              : state.splitedView,
                           removeNikud: settingsState.defaultRemoveNikud,
                           // בתצוגה משולבת, חלונית הצד תמיד סגורה
                           forceCloseLeftPane: widget.isInCombinedView,
@@ -886,8 +895,54 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       scrolledUnderElevation: 0,
       centerTitle: false,
       title: _buildTitle(state),
-      leading: _buildMenuButton(context, state),
+      leadingWidth:
+          state.showPageShapeView ? 96 : null, // רוחב מורחב לשני כפתורים
+      leading: state.showPageShapeView
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildMenuButton(context, state),
+                _buildPageShapeSettingsButton(context, state),
+              ],
+            )
+          : _buildMenuButton(context, state),
       actions: _buildActions(context, state, wideScreen),
+    );
+  }
+
+  /// כפתור הגדרות צורת הדף
+  Widget _buildPageShapeSettingsButton(
+      BuildContext context, TextBookLoaded state) {
+    return IconButton(
+      icon: const Icon(Icons.settings, size: 20),
+      tooltip: 'הגדרות צורת הדף',
+      onPressed: () async {
+        // טעינת ההגדרות הנוכחיות
+        final config =
+            PageShapeSettingsManager.loadConfiguration(state.book.title);
+
+        // אם אין הגדרות שמורות, נשתמש בברירות מחדל
+        final currentSettings =
+            config ?? DefaultCommentators.getDefaults(state.book);
+
+        final hadChanges = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => PageShapeSettingsDialog(
+            availableCommentators: state.availableCommentators,
+            bookTitle: state.book.title,
+            currentLeft: currentSettings['left'],
+            currentRight: currentSettings['right'],
+            currentBottom: currentSettings['bottom'],
+            currentBottomRight: currentSettings['bottomRight'],
+          ),
+        );
+        // אם היו שינויים, נשנה את המפתח כדי לגרום ל-PageShapeScreen להיבנות מחדש
+        if (hadChanges == true && mounted) {
+          setState(() {
+            _pageShapeKey = UniqueKey();
+          });
+        }
+      },
     );
   }
 
@@ -2111,6 +2166,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               searchTextController: TextEditingValue(text: state.searchText),
               tab: widget.tab,
               initialSidebarTabIndex: _sidebarTabIndex,
+              pageShapeKey: _pageShapeKey,
             ),
           ),
         ),

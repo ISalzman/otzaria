@@ -13,6 +13,7 @@ import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
+import 'package:otzaria/utils/context_menu_utils.dart';
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -46,6 +47,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   late double _leftPaneWidth;
   bool _isResizing = false;
   bool _isHovering = false; // מצב ריחוף על הטאב
+  String? _savedSelectedText; // טקסט נבחר לתפריט הקשר
 
   @override
   void initState() {
@@ -163,6 +165,17 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   ContextMenu _buildContextMenu(TextBookLoaded state) {
     return ContextMenu(
       entries: [
+        MenuItem(
+          label: 'העתק',
+          icon: FluentIcons.copy_24_regular,
+          enabled: _savedSelectedText != null &&
+              _savedSelectedText!.trim().isNotEmpty,
+          onSelected: () => ContextMenuUtils.copyFormattedText(
+            context: context,
+            savedSelectedText: _savedSelectedText,
+            fontSize: state.fontSize,
+          ),
+        ),
         MenuItem(label: 'חיפוש', onSelected: () => widget.openLeftPaneTab(1)),
         const MenuDivider(),
         MenuItem(
@@ -275,6 +288,18 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                       contextMenu: _buildContextMenu(state),
                       child: SelectionArea(
                         key: _selectionKey,
+                        contextMenuBuilder: (context, selectableRegionState) {
+                          // מבטל את התפריט הרגיל של Flutter כי יש ContextMenuRegion
+                          return const SizedBox.shrink();
+                        },
+                        onSelectionChanged: (selection) {
+                          if (selection != null &&
+                              selection.plainText.isNotEmpty) {
+                            setState(() {
+                              _savedSelectedText = selection.plainText;
+                            });
+                          }
+                        },
                         child: TabbedCommentaryPanel(
                           fontSize: state.fontSize,
                           openBookCallback: widget.openBookCallback,
