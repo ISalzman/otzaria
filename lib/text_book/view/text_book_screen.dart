@@ -1318,15 +1318,20 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           widget: _buildPrintButton(context, state),
           icon: FluentIcons.print_24_regular,
           tooltip: 'הדפסה',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => PrintingScreen(
-                data: Future.value(state.content.join('\n')),
-                startLine: state.visibleIndices.first,
-                removeNikud: state.removeNikud,
+          onPressed: () {
+            final settingsState = context.read<SettingsBloc>().state;
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => PrintingScreen(
+                  data: Future.value(state.content.join('\n')),
+                  startLine: state.visibleIndices.first,
+                  removeNikud: state.removeNikud,
+                  removeTaamim: !settingsState.showTeamim,
+                  tableOfContents: state.tableOfContents,
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
 
       // 8) מקור הספר וזכויות יוצרים - לא בתצוגה משולבת
@@ -1374,15 +1379,20 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               widget: const SizedBox.shrink(),
               icon: FluentIcons.print_24_regular,
               tooltip: 'הדפסה',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => PrintingScreen(
-                    data: Future.value(state.content.join('\n')),
-                    startLine: state.visibleIndices.first,
-                    removeNikud: state.removeNikud,
+              onPressed: () {
+                final settingsState = context.read<SettingsBloc>().state;
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => PrintingScreen(
+                      data: Future.value(state.content.join('\n')),
+                      startLine: state.visibleIndices.first,
+                      removeNikud: state.removeNikud,
+                      removeTaamim: !settingsState.showTeamim,
+                      tableOfContents: state.tableOfContents,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
             ActionButtonData(
               widget: const SizedBox.shrink(),
@@ -1691,15 +1701,20 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       icon: const Icon(FluentIcons.print_24_regular),
       tooltip: 'הדפסה (${shortcut.toUpperCase()})',
-      onPressed: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => PrintingScreen(
-            data: Future.value(state.content.join('\n')),
-            startLine: state.visibleIndices.first,
-            removeNikud: state.removeNikud,
+      onPressed: () {
+        final settingsState = context.read<SettingsBloc>().state;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PrintingScreen(
+              data: Future.value(state.content.join('\n')),
+              startLine: state.visibleIndices.first,
+              removeNikud: state.removeNikud,
+              removeTaamim: !settingsState.showTeamim,
+              tableOfContents: state.tableOfContents,
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -2398,12 +2413,15 @@ bool _handleGlobalKeyEvent(
 
   // הדפסה
   if (ShortcutHelper.matchesShortcut(event, printShortcut)) {
+    final settingsState = context.read<SettingsBloc>().state;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => PrintingScreen(
           data: Future.value(state.content.join('\n')),
           startLine: state.visibleIndices.first,
           removeNikud: state.removeNikud,
+          removeTaamim: !settingsState.showTeamim,
+          tableOfContents: state.tableOfContents,
         ),
       ),
     );
