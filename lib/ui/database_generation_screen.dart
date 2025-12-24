@@ -71,8 +71,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       final libraryPath = await AppPaths.getLibraryPath();
       final dbPath = DatabaseConstants.getDatabasePathForLibrary(libraryPath);
       
-      final dbPath = '$libraryPath/${DatabaseConstants.databaseFileName}';
-
       setState(() {
         _selectedLibraryPath = libraryPath;
         _selectedDbPath = dbPath;
@@ -131,12 +129,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         
         // Auto-set DB path to database file in the Otzaria folder
         final dbPath = DatabaseConstants.getDatabasePathForLibrary(selectedDirectory);
-        
-
-        // Auto-set DB path to database file in the selected folder
-        final dbPath =
-            '$selectedDirectory/${DatabaseConstants.databaseFileName}';
-
+  
         setState(() {
           _selectedLibraryPath = selectedDirectory;
           _selectedDbPath = dbPath;
@@ -234,10 +227,10 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         // Create backup with readable date format
         final now = DateTime.now();
         final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
-        final backupPath = '${dbFile.path}.backup_$dateStr';
+        final backupPath = '${dbFileInOtzaria.path}.backup_$dateStr';
         
         // Copy the existing file to backup
-        await dbFile.copy(backupPath);
+        await dbFileInOtzaria.copy(backupPath);
         _logger.info('Database backed up to: $backupPath');
 
         if (mounted) {
