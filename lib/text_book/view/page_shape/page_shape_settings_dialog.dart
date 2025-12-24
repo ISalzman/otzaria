@@ -42,6 +42,11 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   bool _isLoadingGroups = true;
   bool _hasChanges = false; // האם היו שינויים שצריך לשמור
   bool _highlightRelatedCommentators = false;
+  Map<String, bool> _columnVisibility = {
+    'left': true,
+    'right': true,
+    'bottom': true,
+  };
 
   @override
   void initState() {
@@ -61,6 +66,8 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
           AppFonts.defaultFont;
       _highlightRelatedCommentators =
           PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
+      _columnVisibility =
+          PageShapeSettingsManager.getColumnVisibility(widget.bookTitle);
     });
   }
 
@@ -153,6 +160,15 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     _saveSettings();
   }
 
+  void _toggleColumnVisibility(String column, bool visible) {
+    setState(() {
+      _columnVisibility[column] = visible;
+      _hasChanges = true;
+    });
+    PageShapeSettingsManager.saveColumnVisibility(
+        widget.bookTitle, _columnVisibility);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -189,6 +205,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                 value: _leftCommentator,
                 onChanged: (value) =>
                     _onCommentatorChanged(value, (v) => _leftCommentator = v),
+                visibilityKey: 'left',
               ),
               const SizedBox(height: 12),
               _buildCommentatorDropdown(
@@ -196,6 +213,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                 value: _rightCommentator,
                 onChanged: (value) =>
                     _onCommentatorChanged(value, (v) => _rightCommentator = v),
+                visibilityKey: 'right',
               ),
               const SizedBox(height: 12),
               _buildCommentatorDropdown(
@@ -269,30 +287,61 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     required String label,
     required String? value,
     required ValueChanged<String?> onChanged,
+    String? visibilityKey,
   }) {
+    final isVisible = visibilityKey != null
+        ? (_columnVisibility[visibilityKey] ?? true)
+        : true;
+
     return Row(
       children: [
+        // כפתור הצגה/הסתרה
+        if (visibilityKey != null)
+          IconButton(
+            icon: Icon(
+              isVisible ? Icons.visibility : Icons.visibility_off,
+              size: 20,
+              color: isVisible
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+            tooltip: isVisible ? 'הסתר טור' : 'הצג טור',
+            onPressed: () => _toggleColumnVisibility(visibilityKey, !isVisible),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
         SizedBox(
-          width: 140,
-          child: Text(label, style: const TextStyle(fontSize: 15)),
+          width: visibilityKey != null ? 108 : 140,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              color: isVisible
+                  ? null
+                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+          ),
         ),
         Expanded(
-          child: InkWell(
-            onTap: () => _showCommentatorPicker(value, onChanged),
-            child: InputDecorator(
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                suffixIcon: Icon(Icons.arrow_drop_down, size: 20),
-              ),
-              child: Text(
-                value ?? 'ללא מפרש',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: value == null
-                      ? Theme.of(context).hintColor
-                      : Theme.of(context).textTheme.bodyLarge?.color,
+          child: Opacity(
+            opacity: isVisible ? 1.0 : 0.5,
+            child: InkWell(
+              onTap: isVisible ? () => _showCommentatorPicker(value, onChanged) : null,
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  suffixIcon: Icon(Icons.arrow_drop_down, size: 20),
+                ),
+                child: Text(
+                  value ?? 'ללא מפרש',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: value == null
+                        ? Theme.of(context).hintColor
+                        : Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
                 ),
               ),
             ),

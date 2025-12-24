@@ -102,7 +102,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         const ctx.MenuDivider(),
         // הערות אישיות
         ctx.MenuItem(
-          label: 'הוסף הערה אישית לשורה זו',
+          label: 'הוסף הערה אישית ',
           icon: FluentIcons.note_add_24_regular,
           onSelected: () => _createNoteForCurrentLine(index),
         ),
