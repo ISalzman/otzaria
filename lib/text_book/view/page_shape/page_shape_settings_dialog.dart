@@ -42,6 +42,11 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   bool _isLoadingGroups = true;
   bool _hasChanges = false; // האם היו שינויים שצריך לשמור
   bool _highlightRelatedCommentators = false;
+  Map<String, bool> _columnVisibility = {
+    'left': true,
+    'right': true,
+    'bottom': true,
+  };
 
   @override
   void initState() {
@@ -61,6 +66,8 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
           AppFonts.defaultFont;
       _highlightRelatedCommentators =
           PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
+      _columnVisibility =
+          PageShapeSettingsManager.getColumnVisibility(widget.bookTitle);
     });
   }
 
@@ -153,6 +160,15 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     _saveSettings();
   }
 
+  void _showColumn(String column) {
+    setState(() {
+      _columnVisibility[column] = true;
+      _hasChanges = true;
+    });
+    PageShapeSettingsManager.saveColumnVisibility(
+        widget.bookTitle, _columnVisibility);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -182,6 +198,40 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                   _saveSettings();
                 },
               ),
+              // הצגת טורים מוסתרים
+              if (_columnVisibility.values.any((v) => !v)) ...[
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text(
+                  'טורים מוסתרים:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (_columnVisibility['left'] == false)
+                      ActionChip(
+                        avatar: const Icon(Icons.visibility, size: 18),
+                        label: const Text('הצג טור ימני'),
+                        onPressed: () => _showColumn('left'),
+                      ),
+                    if (_columnVisibility['right'] == false)
+                      ActionChip(
+                        avatar: const Icon(Icons.visibility, size: 18),
+                        label: const Text('הצג טור שמאלי'),
+                        onPressed: () => _showColumn('right'),
+                      ),
+                    if (_columnVisibility['bottom'] == false)
+                      ActionChip(
+                        avatar: const Icon(Icons.visibility, size: 18),
+                        label: const Text('הצג טור תחתון'),
+                        onPressed: () => _showColumn('bottom'),
+                      ),
+                  ],
+                ),
+              ],
               const Divider(),
               const SizedBox(height: 8),
               _buildCommentatorDropdown(

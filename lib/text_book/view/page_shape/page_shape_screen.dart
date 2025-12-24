@@ -7,6 +7,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_mana
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/commentary_sync_helper.dart';
+import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -43,6 +44,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   double? _leftWidth;
   double? _rightWidth;
   double? _bottomHeight;
+
+  // הגדרות הצגת טורים
+  Map<String, bool> _columnVisibility = {
+    'left': true,
+    'right': true,
+    'bottom': true,
+  };
 
   @override
   void didChangeDependencies() {
@@ -84,6 +92,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     if (state is! TextBookLoaded) return;
 
     final config = PageShapeSettingsManager.loadConfiguration(state.book.title);
+    _columnVisibility = PageShapeSettingsManager.getColumnVisibility(state.book.title);
 
     if (config != null) {
       if (mounted) {
@@ -108,6 +117,86 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     }
   }
 
+  /// הסתרת טור
+  void _hideColumn(String column) {
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded) return;
+
+    setState(() {
+      _columnVisibility[column] = false;
+    });
+    PageShapeSettingsManager.saveColumnVisibility(state.book.title, _columnVisibility);
+  }
+
+  /// בניית widget למצב ריק של טור
+  Widget _buildEmptyColumnContent({
+    required String columnName,
+    required VoidCallback onSelectCommentator,
+    required VoidCallback onHideColumn,
+  }) {
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              onPressed: onSelectCommentator,
+              icon: const Icon(Icons.book_outlined),
+              label: const Text('בחר מפרש'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: onHideColumn,
+              icon: const Icon(Icons.visibility_off_outlined, size: 18),
+              label: const Text('הסתר טור זה'),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// פתיחת דיאלוג בחירת מפרש לטור ספציפי
+  Future<void> _openCommentatorSelector(String column) async {
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded) return;
+
+    // קבלת רשימת המפרשים הזמינים
+    final availableCommentators = state.links
+        .where((link) =>
+            link.connectionType == 'commentary' ||
+            link.connectionType == 'targum')
+        .map((link) => utils.getTitleFromPath(link.path2))
+        .toSet()
+        .toList();
+
+    if (availableCommentators.isEmpty) return;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => PageShapeSettingsDialog(
+        availableCommentators: availableCommentators,
+        bookTitle: state.book.title,
+        currentLeft: _leftCommentator,
+        currentRight: _rightCommentator,
+        currentBottom: _bottomCommentator,
+        currentBottomRight: _bottomRightCommentator,
+      ),
+    );
+
+    // אם היו שינויים, טען מחדש את ההגדרות
+    if (result == true) {
+      _loadConfiguration();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<TextBookBloc, TextBookState>(
@@ -126,40 +215,62 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                 child: Row(
                   children: [
                     // Left Commentary with label (label on outer edge - first in RTL)
-                    if (_leftCommentator != null) ...[
-                          SizedBox(
-                            width: 20,
-                            child: Center(
-                              child: RotatedBox(
-                                quarterTurns: 1,
-                                child: Text(
-                                  _leftCommentator!,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                  ),
+                    if (_columnVisibility['left'] == true) ...[
+                      if (_leftCommentator != null) ...[
+                        SizedBox(
+                          width: 20,
+                          child: Center(
+                            child: RotatedBox(
+                              quarterTurns: 1,
+                              child: Text(
+                                _leftCommentator!,
+                                style: const TextStyle(
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          SizedBox(
-                            width: _leftWidth ?? MediaQuery.of(context).size.width * _kCommentaryPaneWidthFactor,
-                            child: _CommentaryPane(
-                              commentatorName: _leftCommentator!,
-                              openBookCallback: widget.openBookCallback,
-                            ),
+                        ),
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          width: _leftWidth ?? MediaQuery.of(context).size.width * _kCommentaryPaneWidthFactor,
+                          child: _CommentaryPane(
+                            commentatorName: _leftCommentator!,
+                            openBookCallback: widget.openBookCallback,
                           ),
-                          _ResizableDivider(
-                            isVertical: true,
-                            onDrag: (delta) {
-                              setState(() {
-                                _leftWidth = ((_leftWidth ?? 0) - delta).clamp(
-                                    80.0, MediaQuery.of(context).size.width * 0.4);
-                              });
-                            },
-                            onDragEnd: _saveSizes,
+                        ),
+                        _ResizableDivider(
+                          isVertical: true,
+                          onDrag: (delta) {
+                            setState(() {
+                              _leftWidth = ((_leftWidth ?? 0) - delta).clamp(
+                                  80.0, MediaQuery.of(context).size.width * 0.4);
+                            });
+                          },
+                          onDragEnd: _saveSizes,
+                        ),
+                      ] else ...[
+                        // מצב ריק - אין מפרש נבחר
+                        SizedBox(
+                          width: _leftWidth ?? MediaQuery.of(context).size.width * _kCommentaryPaneWidthFactor,
+                          child: _buildEmptyColumnContent(
+                            columnName: 'left',
+                            onSelectCommentator: () => _openCommentatorSelector('left'),
+                            onHideColumn: () => _hideColumn('left'),
                           ),
-                        ],
+                        ),
+                        _ResizableDivider(
+                          isVertical: true,
+                          onDrag: (delta) {
+                            setState(() {
+                              _leftWidth = ((_leftWidth ?? 0) - delta).clamp(
+                                  80.0, MediaQuery.of(context).size.width * 0.4);
+                            });
+                          },
+                          onDragEnd: _saveSizes,
+                        ),
+                      ],
+                    ],
                         // Main Text - מתרחב לפי השטח הפנוי
                         Expanded(
                           child: SimpleTextViewer(
@@ -172,39 +283,61 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                           ),
                         ),
                         // Right Commentary with label (label on outer edge - last in RTL)
-                        if (_rightCommentator != null) ...[
-                          _ResizableDivider(
-                            isVertical: true,
-                            onDrag: (delta) {
-                              setState(() {
-                                _rightWidth = ((_rightWidth ?? 0) + delta).clamp(
-                                    80.0, MediaQuery.of(context).size.width * 0.4);
-                              });
-                            },
-                            onDragEnd: _saveSizes,
-                          ),
-                          SizedBox(
-                            width: _rightWidth ?? MediaQuery.of(context).size.width * _kCommentaryPaneWidthFactor,
-                            child: _CommentaryPane(
-                              commentatorName: _rightCommentator!,
-                              openBookCallback: widget.openBookCallback,
+                        if (_columnVisibility['right'] == true) ...[
+                          if (_rightCommentator != null) ...[
+                            _ResizableDivider(
+                              isVertical: true,
+                              onDrag: (delta) {
+                                setState(() {
+                                  _rightWidth = ((_rightWidth ?? 0) + delta).clamp(
+                                      80.0, MediaQuery.of(context).size.width * 0.4);
+                                });
+                              },
+                              onDragEnd: _saveSizes,
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          SizedBox(
-                            width: 20,
-                            child: Center(
-                              child: RotatedBox(
-                                quarterTurns: 3,
-                                child: Text(
-                                  _rightCommentator!,
-                                  style: const TextStyle(
-                                    fontSize: 14,
+                            SizedBox(
+                              width: _rightWidth ?? MediaQuery.of(context).size.width * _kCommentaryPaneWidthFactor,
+                              child: _CommentaryPane(
+                                commentatorName: _rightCommentator!,
+                                openBookCallback: widget.openBookCallback,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            SizedBox(
+                              width: 20,
+                              child: Center(
+                                child: RotatedBox(
+                                  quarterTurns: 3,
+                                  child: Text(
+                                    _rightCommentator!,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
+                          ] else ...[
+                            // מצב ריק - אין מפרש נבחר
+                            _ResizableDivider(
+                              isVertical: true,
+                              onDrag: (delta) {
+                                setState(() {
+                                  _rightWidth = ((_rightWidth ?? 0) + delta).clamp(
+                                      80.0, MediaQuery.of(context).size.width * 0.4);
+                                });
+                              },
+                              onDragEnd: _saveSizes,
+                            ),
+                            SizedBox(
+                              width: _rightWidth ?? MediaQuery.of(context).size.width * _kCommentaryPaneWidthFactor,
+                              child: _buildEmptyColumnContent(
+                                columnName: 'right',
+                                onSelectCommentator: () => _openCommentatorSelector('right'),
+                                onHideColumn: () => _hideColumn('right'),
+                              ),
+                            ),
+                          ],
                         ],
                       ],
                     ),
