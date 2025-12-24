@@ -70,7 +70,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     try {
       final libraryPath = await AppPaths.getLibraryPath();
       final dbPath = DatabaseConstants.getDatabasePathForLibrary(libraryPath);
-      
+
       setState(() {
         _selectedLibraryPath = libraryPath;
         _selectedDbPath = dbPath;
@@ -126,10 +126,11 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
           }
           return;
         }
-        
+
         // Auto-set DB path to database file in the Otzaria folder
-        final dbPath = DatabaseConstants.getDatabasePathForLibrary(selectedDirectory);
-  
+        final dbPath =
+            DatabaseConstants.getDatabasePathForLibrary(selectedDirectory);
+
         setState(() {
           _selectedLibraryPath = selectedDirectory;
           _selectedDbPath = dbPath;
@@ -226,9 +227,10 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       try {
         // Create backup with readable date format
         final now = DateTime.now();
-        final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
+        final dateStr =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
         final backupPath = '${dbFileInOtzaria.path}.backup_$dateStr';
-        
+
         // Copy the existing file to backup
         await dbFileInOtzaria.copy(backupPath);
         _logger.info('Database backed up to: $backupPath');
@@ -317,7 +319,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         } catch (e) {
           // Ignore error, use default name
         }
-        
+
         final bookInfo = {
           'title': title,
           'path': 'נתיב לא זמין', // We'll improve this later if needed
@@ -565,7 +567,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final content = Directionality(
+    return Directionality(
       textDirection: TextDirection.rtl,
       child: SingleChildScrollView(
         child: Padding(
@@ -983,15 +985,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         ),
       ),
     );
-
-    // Return with Scaffold
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('יצירת מסד נתונים'),
-        centerTitle: true,
-      ),
-      body: content,
-    );
   }
 
   Widget _buildDbStatusItem(String label, bool exists, String description) {
@@ -1145,7 +1138,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Icon(Icons.arrow_back_ios, size: 16, color: Colors.grey[600]),
               ],
             ),
           ),
