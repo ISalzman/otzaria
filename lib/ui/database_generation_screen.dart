@@ -651,6 +651,13 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                               'קובץ מסד נתונים קיים',
                               'קובץ DB כבר קיים במיקום היעד - לא ניתן ליצור מסד נתונים נוסף',
                             ),
+                          _buildDbStatusItem(
+                            'קובץ מסד נתונים (בתיקיית אוצריא)',
+                            _dbFileExists,
+                            _dbFileExists
+                                ? 'קיים - הקובץ הישן יגובה ויווצר קובץ חדש'
+                                : 'לא קיים - יווצר קובץ חדש',
+                          ),
                           // Check if Otzaria folder exists
                           _buildFileStatusItem(
                             'תיקיית אוצריא',
@@ -659,29 +666,22 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                                 ? 'קיימת'
                                 : 'לא קיימת - נדרשת ליצירת מסד הנתונים',
                           ),
-                          _buildDbStatusItem(
-                            'קובץ מסד נתונים (אוצריא)',
-                            _dbFileExists,
-                            _dbFileExists
-                                ? 'קיים - הקובץ הישן יגובה ויווצר קובץ חדש'
-                                : 'לא קיים - יווצר קובץ חדש',
-                          ),
-                          _buildFileStatusItem(
-                            'קובץ priority (אודות התוכנה)',
-                            _priorityFileExists,
-                            _priorityFileExists ? 'קיים' : 'לא קיים',
-                          ),
-                          _buildFileStatusItem(
-                            'קובץ acronym.json (אודות התוכנה)',
-                            _acronymFileExists,
-                            _acronymFileExists ? 'קיים' : 'לא קיים',
-                          ),
                           _buildFileStatusItem(
                             'תיקיית links',
                             _linksDirectoryExists,
                             _linksDirectoryExists
                                 ? 'קיימת - יווצרו קישורים'
                                 : 'לא קיימת - לא ייווצרו קישורים',
+                          ),
+                          _buildFileStatusItem(
+                            'קובץ priority (בתיקיית אודות התוכנה)',
+                            _priorityFileExists,
+                            _priorityFileExists ? 'קיים' : 'לא קיים',
+                          ),
+                          _buildFileStatusItem(
+                            'קובץ acronym.json (בתיקיית אודות התוכנה)',
+                            _acronymFileExists,
+                            _acronymFileExists ? 'קיים' : 'לא קיים',
                           ),
                         ] else ...[
                           Container(
