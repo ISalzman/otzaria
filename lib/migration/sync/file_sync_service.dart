@@ -418,6 +418,15 @@ class FileSyncService {
         errors.addAll(linksResult.errors);
       }
 
+      // Check for acronym.json file and update book_acronym table if found
+      _reportProgress(0.85, 'בודק קובץ acronym.json...');
+      final acronymResult = await _checkAndProcessAcronymFile(libraryPath);
+      if (acronymResult.processed) {
+        _log.info(
+            'Processed acronym.json: ${acronymResult.updatedBooks} books updated, ${acronymResult.newTerms} new terms');
+      }
+      errors.addAll(acronymResult.errors);
+
       // Rebuild category closure if categories were added
       if (addedCategories > 0) {
         _reportProgress(0.95, 'מעדכן היררכיית קטגוריות...');
@@ -1289,6 +1298,136 @@ class FileSyncService {
     onProgress?.call(progress, message);
     _log.fine('Progress: ${(progress * 100).toStringAsFixed(1)}% - $message');
   }
+
+  /// Check for acronym.json file in "אודות התוכנה" folder and update book_acronym table
+  /// Updates existing books by matching book_title to book.title in the database
+  /// After processing, deletes the acronym.json file
+  Future<_AcronymProcessResult> _checkAndProcessAcronymFile(
+      String libraryPath) async {
+    final errors = <String>[];
+    int updatedBooks = 0;
+    int newTerms = 0;
+
+    try {
+      final acronymPath =
+          path.join(libraryPath, 'אוצריא', 'אודות התוכנה', 'acronym.json');
+      final acronymFile = File(acronymPath);
+
+      if (!await acronymFile.exists()) {
+        _log.fine('No acronym.json file found at $acronymPath');
+        return const _AcronymProcessResult(processed: false);
+      }
+
+      _log.info('Found acronym.json file, processing...');
+
+      // Read and parse the file
+      final content = await acronymFile.readAsString();
+      final decoded = jsonDecode(content);
+
+      // Convert to list format (handle both Map and List)
+      List<Map<String, dynamic>> acronymEntries = [];
+      if (decoded is List) {
+        acronymEntries = decoded.cast<Map<String, dynamic>>();
+      } else if (decoded is Map<String, dynamic>) {
+        // Convert map to list format
+        decoded.forEach((key, value) {
+          if (value is Map<String, dynamic>) {
+            acronymEntries.add(value);
+          }
+        });
+      }
+
+      _log.info('Loaded ${acronymEntries.length} acronym entries from file');
+
+      // Process each entry - match by book_title to find the book in DB
+      for (final entry in acronymEntries) {
+        final bookTitle = entry['book_title'] as String?;
+        final termsRaw = entry['terms'] as String?;
+
+        if (bookTitle == null || bookTitle.isEmpty) {
+          continue;
+        }
+
+        // Find the book by title in the database
+        final existingBook = await _repository.checkBookExists(bookTitle);
+        if (existingBook == null) {
+          _log.fine('Book not found in DB for acronym update: $bookTitle');
+          continue;
+        }
+
+        final bookId = existingBook.id;
+
+        // Parse terms (comma-separated)
+        final terms = (termsRaw == null || termsRaw.isEmpty)
+            ? <String>[]
+            : termsRaw
+                .split(',')
+                .map((t) => _sanitizeAcronymTerm(t))
+                .where((t) => t.isNotEmpty)
+                .toList();
+
+        // Full replacement: delete all existing terms and insert new ones
+        // This handles additions, removals, and updates
+        await _repository.deleteBookAcronyms(bookId);
+
+        if (terms.isNotEmpty) {
+          await _repository.bulkInsertBookAcronyms(bookId, terms);
+          newTerms += terms.length;
+        }
+
+        updatedBooks++;
+        _log.fine(
+            'Replaced acronym terms for book: $bookTitle (id: $bookId) with ${terms.length} terms');
+      }
+
+      // Delete the acronym.json file after successful processing
+      try {
+        await acronymFile.delete();
+        _log.info('Deleted acronym.json file after processing');
+      } catch (e) {
+        _log.warning('Failed to delete acronym.json file: $e');
+        errors.add('Failed to delete acronym.json: $e');
+      }
+
+      _log.info(
+          'Acronym processing complete: $updatedBooks books updated, $newTerms new terms added');
+
+      return _AcronymProcessResult(
+        processed: true,
+        updatedBooks: updatedBooks,
+        newTerms: newTerms,
+        errors: errors,
+      );
+    } catch (e, stackTrace) {
+      _log.warning('Error processing acronym.json', e, stackTrace);
+      errors.add('Error processing acronym.json: $e');
+      return _AcronymProcessResult(
+        processed: false,
+        errors: errors,
+      );
+    }
+  }
+
+  /// Sanitizes an acronym term by removing diacritics, maqaf, gershayim and geresh
+  String _sanitizeAcronymTerm(String raw) {
+    var s = raw.trim();
+    if (s.isEmpty) return '';
+
+    // Remove Hebrew diacritics (nikud) - Unicode range 0x0591-0x05C7
+    s = s.replaceAll(RegExp(r'[\u0591-\u05C7]'), '');
+
+    // Replace maqaf (Hebrew hyphen) with space
+    s = s.replaceAll('\u05BE', ' ');
+
+    // Remove Hebrew gershayim (״) and geresh (׳)
+    s = s.replaceAll('\u05F4', ''); // gershayim
+    s = s.replaceAll('\u05F3', ''); // geresh
+
+    // Clean up multiple spaces
+    s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    return s;
+  }
 }
 
 /// Result of processing a single file
@@ -1366,4 +1505,19 @@ class _LinkData {
       connectionType: json['Conection Type'] as String? ?? '',
     );
   }
+}
+
+/// Result of processing acronym.json file
+class _AcronymProcessResult {
+  final bool processed;
+  final int updatedBooks;
+  final int newTerms;
+  final List<String> errors;
+
+  const _AcronymProcessResult({
+    this.processed = false,
+    this.updatedBooks = 0,
+    this.newTerms = 0,
+    this.errors = const [],
+  });
 }

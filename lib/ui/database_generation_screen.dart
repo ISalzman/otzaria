@@ -353,6 +353,10 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       );
 
       await _generator!.generate();
+
+      // Delete acronym.json file after successful generation
+      await _deleteAcronymFileAfterGeneration();
+
       await repository.close();
 
       _timer?.cancel();
@@ -368,6 +372,26 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         _progress = GenerationProgress.error(errorMsg);
       });
       _timer?.cancel();
+    }
+  }
+
+  /// Delete acronym.json file after successful database generation
+  Future<void> _deleteAcronymFileAfterGeneration() async {
+    if (_selectedLibraryPath == null) return;
+
+    try {
+      final acronymPath =
+          '$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/אודות התוכנה/acronym.json';
+      final acronymFile = File(acronymPath);
+
+      if (await acronymFile.exists()) {
+        await acronymFile.delete();
+        _logger.info(
+            'Deleted acronym.json file after successful generation: $acronymPath');
+      }
+    } catch (e) {
+      _logger.warning('Failed to delete acronym.json file: $e');
+      // Don't fail the generation if we can't delete the file
     }
   }
 
