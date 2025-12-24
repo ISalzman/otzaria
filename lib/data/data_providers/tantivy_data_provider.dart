@@ -17,6 +17,7 @@ class TantivyDataProvider {
 
   /// Track if index is being reopened to prevent concurrent reopens
   bool _isReopening = false;
+  DateTime? _lastReopenTime;
 
   static final TantivyDataProvider _singleton = TantivyDataProvider();
   static TantivyDataProvider instance = _singleton;
@@ -44,7 +45,61 @@ class TantivyDataProvider {
   late List<String> booksDone = [];
 
   TantivyDataProvider() {
-    reopenIndex();
+    // Initialize engines as late futures to avoid immediate creation
+    engine = _initializeEngine();
+    refEngine = _initializeRefEngine();
+    _loadBooksDone();
+  }
+
+  Future<SearchEngine> _initializeEngine() async {
+    try {
+      String indexPath = await AppPaths.getIndexPath();
+      return SearchEngine(path: indexPath);
+    } catch (e) {
+      debugPrint('❌ Failed to initialize search engine: $e');
+      rethrow;
+    }
+  }
+
+  Future<ReferenceSearchEngine> _initializeRefEngine() async {
+    try {
+      String refIndexPath = await AppPaths.getRefIndexPath();
+      return ReferenceSearchEngine(path: refIndexPath);
+    } catch (e) {
+      if (e.toString() ==
+          "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
+        String indexPath = await AppPaths.getIndexPath();
+        resetIndex(indexPath);
+        throw Exception('Index reset required, please try again');
+      } else {
+        debugPrint('❌ Failed to initialize reference engine: $e');
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> _loadBooksDone() async {
+    try {
+      booksDone = Hive.box(
+        name: 'books_indexed',
+        directory: await AppPaths.getIndexPath(),
+      )
+          .get('key-books-done', defaultValue: [])
+          .map<String>((e) => e.toString())
+          .toList() as List<String>;
+    } catch (e) {
+      booksDone = [];
+    }
+  }
+
+  Future<void> _handleSchemaError() async {
+    try {
+      String indexPath = await AppPaths.getIndexPath();
+      await resetIndex(indexPath);
+      reopenIndex();
+    } catch (e) {
+      debugPrint('❌ Error handling schema error: $e');
+    }
   }
 
   void reopenIndex() async {
@@ -54,29 +109,39 @@ class TantivyDataProvider {
       return;
     }
 
+    // Prevent too frequent reopens (less than 5 seconds apart)
+    if (_lastReopenTime != null && 
+        DateTime.now().difference(_lastReopenTime!).inSeconds < 5) {
+      debugPrint('⚠️ Index reopen too soon after last reopen, skipping...');
+      return;
+    }
+
     _isReopening = true;
+    _lastReopenTime = DateTime.now();
     debugPrint('🔄 Reopening search index...');
 
     try {
-      String indexPath = await AppPaths.getIndexPath();
-      String refIndexPath = await AppPaths.getRefIndexPath();
+      // Close existing engines first to release locks
+      try {
+        final existingEngine = await engine;
+        existingEngine.dispose();
+        debugPrint('🔒 Disposed existing search engine');
+      } catch (e) {
+        debugPrint('⚠️ Could not dispose existing engine: $e');
+      }
 
-      engine = Future.value(SearchEngine(path: indexPath));
+      try {
+        final existingRefEngine = await refEngine;
+        existingRefEngine.dispose();
+        debugPrint('🔒 Disposed existing reference engine');
+      } catch (e) {
+        debugPrint('⚠️ Could not dispose existing ref engine: $e');
+      }
 
-      refEngine = Future(() {
-        try {
-          return ReferenceSearchEngine(path: refIndexPath);
-        } catch (e) {
-          if (e.toString() ==
-              "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
-            resetIndex(indexPath);
-            reopenIndex();
-            throw Exception('Index reset required, please try again');
-          } else {
-            rethrow;
-          }
-        }
-      });
+      // Reinitialize engines
+      engine = _initializeEngine();
+      refEngine = _initializeRefEngine();
+
       //test the engine
       engine.then((value) {
         try {
@@ -91,31 +156,24 @@ class TantivyDataProvider {
                   order: ResultsOrder.catalogue)
               .then((results) {
             // Engine test successful
+            debugPrint('✅ Search engine test successful');
           }).catchError((e) {
-            // Log engine test error
+            debugPrint('❌ Engine test error: $e');
           });
         } catch (e) {
           // Log sync engine test error
+          debugPrint('❌ Sync engine test error: $e');
           if (e.toString() ==
               "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
-            resetIndex(indexPath);
-            reopenIndex();
+            // Handle schema error asynchronously
+            _handleSchemaError();
           } else {
             rethrow;
           }
         }
       });
-      try {
-        booksDone = Hive.box(
-          name: 'books_indexed',
-          directory: await AppPaths.getIndexPath(),
-        )
-            .get('key-books-done', defaultValue: [])
-            .map<String>((e) => e.toString())
-            .toList() as List<String>;
-      } catch (e) {
-        booksDone = [];
-      }
+
+      await _loadBooksDone();
 
       debugPrint('✅ Search index reopened successfully');
     } finally {
@@ -195,10 +253,29 @@ class TantivyDataProvider {
   }
 
   Future<void> resetIndex(String indexPath) async {
+    debugPrint('🔄 Resetting index at: $indexPath');
+    
+    // Close engines first to release locks
+    try {
+      await dispose();
+      debugPrint('🔒 Engines disposed before reset');
+    } catch (e) {
+      debugPrint('⚠️ Error disposing engines before reset: $e');
+    }
+
     Directory indexDirectory = Directory(indexPath);
-    Hive.box(name: 'books_indexed', directory: indexPath).close();
-    indexDirectory.deleteSync(recursive: true);
+    try {
+      Hive.box(name: 'books_indexed', directory: indexPath).close();
+    } catch (e) {
+      debugPrint('⚠️ Error closing Hive box: $e');
+    }
+    
+    if (indexDirectory.existsSync()) {
+      indexDirectory.deleteSync(recursive: true);
+    }
     indexDirectory.createSync(recursive: true);
+    
+    debugPrint('✅ Index reset completed');
   }
 
   /// Performs an asynchronous stream-based search operation across indexed texts.
@@ -309,5 +386,22 @@ class TantivyDataProvider {
     await refIndex.clear();
     booksDone.clear();
     await saveBooksDoneToDisk();
+  }
+
+  /// Dispose of resources and close engines
+  Future<void> dispose() async {
+    try {
+      final index = await engine;
+      index.dispose();
+    } catch (e) {
+      debugPrint('⚠️ Error disposing search engine: $e');
+    }
+    
+    try {
+      final refIndex = await refEngine;
+      refIndex.dispose();
+    } catch (e) {
+      debugPrint('⚠️ Error disposing reference engine: $e');
+    }
   }
 }
