@@ -1,12 +1,10 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/migration/dao/repository/seforim_repository.dart';
 import 'package:otzaria/migration/dao/daos/database.dart';
 import 'package:otzaria/migration/adapters/model_adapters.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
-import 'package:path/path.dart' as path;
 
 /// A data provider that manages SQLite database operations for the library.
 ///
@@ -17,7 +15,6 @@ import 'package:path/path.dart' as path;
 /// - Falling back to file system when data is not in database
 class SqliteDataProvider {
   late SeforimRepository _repository;
-  late String _libraryPath;
   late String _dbPath;
   bool _isInitialized = false;
 
@@ -35,9 +32,8 @@ class SqliteDataProvider {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    _libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
-    // Database is in the library root folder (parent of אוצריא)
-    _dbPath = path.join(_libraryPath, DatabaseConstants.databaseFileName);
+    // Use centralized database path
+    _dbPath = DatabaseConstants.getDatabasePath();
 
     debugPrint('Initializing SQLite database at: $_dbPath');
 

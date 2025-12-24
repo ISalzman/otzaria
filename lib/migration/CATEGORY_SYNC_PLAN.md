@@ -92,14 +92,18 @@ Future<int> findOrCreateCategory(List<String> categoryPath) async {
 ### מטרה
 קביעה האם הספר קיים ונדרש עדכון, או שזהו ספר חדש.
 
-### משימות
-- [ ] 4.1 יצירת פונקציה `findBookInCategory(String bookName, int categoryId)`
-- [ ] 4.2 החזרת מזהה הספר אם קיים, או null אם לא
+**עדכון חשוב**: הבדיקה משתנה מבדיקה לפי שם בלבד לבדיקה לפי שם **וקטגוריה**. 
+זה אומר שספר עם אותו שם יכול להיות בקטגוריות שונות ולא להיחשב כפול.
 
-### שאילתה
+### משימות
+- [x] 4.1 יצירת פונקציה `findBookInCategory(String bookName, int categoryId)`
+- [x] 4.2 החזרת מזהה הספר אם קיים, או null אם לא
+- [x] 4.3 עדכון הלוגיקה במערכת לבדיקה לפי שם וקטגוריה
+
+### שאילתה מעודכנת
 ```sql
 SELECT id FROM book 
-WHERE name = ? AND categoryId = ?
+WHERE title = ? AND categoryId = ?
 ```
 
 ---
@@ -221,6 +225,28 @@ Future<SyncResult> syncFilesToDatabase(
 - [ ] 9.4 בדיקת עדכון ספר קיים
 - [ ] 9.5 בדיקת מחיקת קבצים ותיקיות ריקות
 - [ ] 9.6 בדיקת אוצריא על קבצי PDF
+
+---
+
+## עדכון מימוש - בדיקת ספרים כפולים לפי קטגוריה
+
+### שינויים שבוצעו:
+
+1. **BookQueries.sq**: הוספת שאילתה `selectByTitleAndCategory` לבדיקת ספר לפי שם וקטגוריה
+2. **BookDao**: הוספת פונקציה `getBookByTitleAndCategory(String title, int categoryId)`
+3. **SeforimRepository**: 
+   - הוספת פונקציה `getBookByTitleAndCategory(String title, int categoryId)`
+   - הוספת פונקציה `checkBookExistsInCategory(String title, int categoryId)`
+4. **DatabaseGenerator**: 
+   - עדכון הcallback signature לקבל גם categoryId
+   - שינוי הבדיקה מ-`checkBookExists` ל-`checkBookExistsInCategory`
+5. **DatabaseGenerationScreen**: 
+   - עדכון הcallback לקבל categoryId ולהציג שם קטגוריה בדיווח
+   - עדכון הטקסט ההסבר למשתמש
+
+### התנאי החדש לספר כפול:
+ספר נחשב כפול רק אם יש ספר עם **אותו שם בדיוק** ב**אותה קטגוריה בדיוק**.
+זה מאפשר לספרים עם אותו שם להיות בקטגוריות שונות מבלי להיחשב כפולים.
 
 ---
 

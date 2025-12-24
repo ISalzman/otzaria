@@ -543,6 +543,23 @@ class SeforimRepository {
     );
   }
 
+  Future<Book?> getBookByTitleAndCategory(String title, int categoryId) async {
+    final bookData = await _database.bookDao.getBookByTitleAndCategory(title, categoryId);
+    if (bookData == null) return null;
+
+    final authors = await _getBookAuthors(bookData.id);
+    final topics = await _getBookTopics(bookData.id);
+    final pubPlaces = await _getBookPubPlaces(bookData.id);
+    final pubDates = await _getBookPubDates(bookData.id);
+
+    return bookData.copyWith(
+      authors: authors,
+      topics: topics,
+      pubPlaces: pubPlaces,
+      pubDates: pubDates,
+    );
+  }
+
   // Get a topic by name, returns null if not found
   Future<Topic?> getTopicByName(String name) async {
     _logger.fine('Looking for topic with name: $name');
@@ -2192,6 +2209,13 @@ class SeforimRepository {
   Future<Book?> checkBookExists(String title) async {
     _logger.fine('Checking if book exists: $title');
     return await _database.bookDao.getBookByTitle(title);
+  }
+
+  /// Checks if a book with the given title and category already exists in the database.
+  /// Returns the book if found, null otherwise.
+  Future<Book?> checkBookExistsInCategory(String title, int categoryId) async {
+    _logger.fine('Checking if book exists in category: $title (categoryId: $categoryId)');
+    return await _database.bookDao.getBookByTitleAndCategory(title, categoryId);
   }
 
   /// Deletes a book and all its related data (lines, TOC entries, links, etc.)

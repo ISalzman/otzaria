@@ -137,6 +137,13 @@ class BookDao {
     return Book.fromJson(result.first);
   }
 
+  Future<Book?> getBookByTitleAndCategory(String title, int categoryId) async {
+    final db = await database;
+    final result = await db.rawQuery(_queries['selectByTitleAndCategory']!, [title, categoryId]);
+    if (result.isEmpty) return null;
+    return Book.fromJson(result.first);
+  }
+
   Future<List<Book>> getBooksByAuthor(String authorName) async {
     final db = await database;
     final result = await db.rawQuery(_queries['selectByAuthor']!, ['%$authorName%']);

@@ -63,7 +63,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   Future<void> _loadDefaultLibraryPath() async {
     try {
       final libraryPath = await AppPaths.getLibraryPath();
-      final dbPath = '$libraryPath/${DatabaseConstants.databaseFileName}';
+      final dbPath = DatabaseConstants.getDatabasePathForLibrary(libraryPath);
       
       setState(() {
         _selectedLibraryPath = libraryPath;
@@ -119,8 +119,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
           return;
         }
         
-        // Auto-set DB path to database file in the selected folder
-        final dbPath = '$selectedDirectory/${DatabaseConstants.databaseFileName}';
+        // Auto-set DB path to database file in the Otzaria folder
+        final dbPath = DatabaseConstants.getDatabasePathForLibrary(selectedDirectory);
         
         setState(() {
           _selectedLibraryPath = selectedDirectory;
@@ -150,10 +150,14 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     if (_selectedLibraryPath == null) return;
 
     try {
-      // Check if DB file exists in Otzaria directory
-      final dbFileInOtzaria = File('$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/${DatabaseConstants.databaseFileName}');
-      _dbFileExists = await dbFileInOtzaria.exists();
-      _logger.info('Checking DB file: ${dbFileInOtzaria.path} - exists: $_dbFileExists');
+      // Check if DB file exists using the selected DB path
+      if (_selectedDbPath != null) {
+        final dbFile = File(_selectedDbPath!);
+        _dbFileExists = await dbFile.exists();
+        _logger.info('Checking DB file: ${dbFile.path} - exists: $_dbFileExists');
+      } else {
+        _dbFileExists = false;
+      }
 
       // Check priority file in "About Software" directory
       _priorityFileExists = false;
@@ -189,27 +193,44 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
   /// Backup existing database file if it exists
   Future<void> _backupExistingDatabase() async {
-    if (_selectedLibraryPath == null) return;
+    if (_selectedDbPath == null) return;
     
-    final dbFileInOtzaria = File('$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/${DatabaseConstants.databaseFileName}');
-    if (await dbFileInOtzaria.exists()) {
+    final dbFile = File(_selectedDbPath!);
+    if (await dbFile.exists()) {
       try {
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final backupPath = '${dbFileInOtzaria.path}.backup_$timestamp';
-        await dbFileInOtzaria.copy(backupPath);
+        // Create backup with readable date format
+        final now = DateTime.now();
+        final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
+        final backupPath = '${dbFile.path}.backup_$dateStr';
+        
+        // Copy the existing file to backup
+        await dbFile.copy(backupPath);
         _logger.info('Database backed up to: $backupPath');
+        
+        // Delete the original file so a new one can be created
+        await dbFile.delete();
+        _logger.info('Original database file deleted: ${dbFile.path}');
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('מסד הנתונים הקיים גובה ל: ${backupPath.split('/').last}'),
+              content: Text('מסד הנתונים הקיים גובה ל: ${backupPath.split('/').last}\nקובץ חדש ייווצר'),
               backgroundColor: Colors.blue,
-              duration: const Duration(seconds: 3),
+              duration: const Duration(seconds: 4),
             ),
           );
         }
       } catch (e, stackTrace) {
         _logger.warning('Failed to backup existing database', e, stackTrace);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('שגיאה בגיבוי מסד הנתונים: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     }
   }
@@ -261,15 +282,25 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       await repository.ensureInitialized();
 
       // Always replace duplicates and track them
-      Future<bool> duplicateCallback(String title) async {
-        // Try to extract path information from the title or use a generic path
+      Future<bool> duplicateCallback(String title, int categoryId) async {
+        // Get category name for better reporting
+        String categoryName = 'לא ידוע';
+        try {
+          final category = await repository.getCategory(categoryId);
+          if (category != null) {
+            categoryName = category.title;
+          }
+        } catch (e) {
+          // Ignore error, use default name
+        }
+        
         final bookInfo = {
           'title': title,
           'path': 'נתיב לא זמין', // We'll improve this later if needed
-          'reason': 'ספר קיים הוחלף'
+          'reason': 'ספר קיים הוחלף בקטגוריה: $categoryName'
         };
         _duplicateBooks.add(bookInfo);
-        _duplicateReasons[title] = 'ספר קיים הוחלף';
+        _duplicateReasons[title] = 'ספר קיים הוחלף בקטגוריה: $categoryName';
         return true; // Always replace
       }
 
@@ -879,7 +910,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                   'בחר את תיקיית האב של אוצריא (שמכילה את התיקיות "אוצריא" ו-"links").\n'
                   'מסד הנתונים ייווצר אוטומטית בתיקייה זו (${DatabaseConstants.databaseFileName}).\n'
                   'אינדקסים ייווצרו תמיד לשיפור ביצועי החיפוש.\n'
-                  'ספרים כפולים יוחלפו תמיד ויוצג דוח לאחר היצירה.',
+                  'ספרים כפולים (אותו שם באותה קטגוריה) יוחלפו תמיד ויוצג דוח לאחר היצירה.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.grey[600],
                   ),

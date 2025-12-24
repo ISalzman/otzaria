@@ -37,7 +37,8 @@ class DatabaseGenerator {
 
   /// Callback to handle duplicate books. Returns true to replace, false to skip.
   /// If null, duplicates will be skipped by default.
-  Future<bool> Function(String bookTitle)? onDuplicateBook;
+  /// Parameters: bookTitle, categoryId
+  Future<bool> Function(String bookTitle, int categoryId)? onDuplicateBook;
 
   /// Counter for book IDs
   int _nextBookId = 1;
@@ -315,15 +316,15 @@ class DatabaseGenerator {
       return;
     }
 
-    // Check for duplicates (for performance measurement)
+    // Check for duplicates in the same category (for performance measurement)
     _duplicateChecks++;
-    final existingBook = await repository.checkBookExists(title);
+    final existingBook = await repository.checkBookExistsInCategory(title, categoryId);
     if (existingBook != null) {
       _duplicatesFound++;
       
       // Call the callback if provided
       if (onDuplicateBook != null) {
-        final shouldReplace = await onDuplicateBook!(title);
+        final shouldReplace = await onDuplicateBook!(title, categoryId);
         if (!shouldReplace) {
           _processedBooksCount++;
           return;
