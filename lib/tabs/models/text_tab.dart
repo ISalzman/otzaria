@@ -55,6 +55,7 @@ class TextBookTab extends OpenedTab {
     this.commentators,
     bool openLeftPane = false,
     bool splitedView = true,
+    bool showPageShapeView = false,
     bool isPinned = false,
   }) : super(book.title, isPinned: isPinned) {
     debugPrint('DEBUG: TextBookTab נוצר עם אינדקס: $index לספר: ${book.title}');
@@ -64,13 +65,14 @@ class TextBookTab extends OpenedTab {
         fileSystem: FileSystemData.instance,
       ),
       overridesRepository: LocalOverridesRepository(),
-      initialState: TextBookInitial(
+      initialState: TextBookInitial.named(
         book,
         index,
         openLeftPane,
         commentators ?? [],
-        searchText,
-        splitedView,
+        searchText: searchText,
+        splitedView: splitedView,
+        showPageShapeView: showPageShapeView,
       ),
       scrollController: scrollController,
       positionsListener: positionsListener,
@@ -118,6 +120,7 @@ class TextBookTab extends OpenedTab {
       ),
       commentators: List<String>.from(json['commentators']),
       splitedView: splitedView,
+      showPageShapeView: json['showPageShapeView'] ?? false,
       openLeftPane: shouldOpenLeftPane,
       isPinned: json['isPinned'] ?? false,
     );
@@ -131,12 +134,14 @@ class TextBookTab extends OpenedTab {
   Map<String, dynamic> toJson() {
     List<String> commentators = [];
     bool splitedView = false;
+    bool showPageShapeView = false;
     int currentIndex = index; // שמירת האינדקס הנוכחי כברירת מחדל
 
     if (bloc.state is TextBookLoaded) {
       final loadedState = bloc.state as TextBookLoaded;
       commentators = loadedState.activeCommentators;
       splitedView = loadedState.showSplitView;
+      showPageShapeView = loadedState.showPageShapeView;
       // עדכון האינדקס מה-state הנטען - תמיד לוקחים את האינדקס האחרון שנראה
       if (loadedState.visibleIndices.isNotEmpty) {
         currentIndex = loadedState.visibleIndices.first;
@@ -158,6 +163,7 @@ class TextBookTab extends OpenedTab {
       'initalIndex': currentIndex,
       'commentators': commentators,
       'splitedView': splitedView,
+      'showPageShapeView': showPageShapeView,
       'isPinned': isPinned,
       'type': 'TextBookTab'
     };
