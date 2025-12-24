@@ -333,7 +333,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                       borderRadius: BorderRadius.all(Radius.circular(8.0)),
                     ),
                     hintText:
-                        'איתור ספר ב${state.currentCategory?.title ?? ""}',
+                        'איתור ספר או מחבר ב${state.currentCategory?.title ?? ""}',
                   ),
                   onChanged: (value) {
                     context.read<LibraryBloc>().add(UpdateSearchQuery(value));
