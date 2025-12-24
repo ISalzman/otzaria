@@ -8,7 +8,6 @@ on:
     branches:
       - main
       - dev
-      - migrationToDB
 
   pull_request:
     types: [opened, synchronize, reopened]

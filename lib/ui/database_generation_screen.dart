@@ -21,7 +21,8 @@ class DatabaseGenerationScreen extends StatefulWidget {
   const DatabaseGenerationScreen({super.key});
 
   @override
-  State<DatabaseGenerationScreen> createState() => _DatabaseGenerationScreenState();
+  State<DatabaseGenerationScreen> createState() =>
+      _DatabaseGenerationScreenState();
 }
 
 class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
@@ -32,17 +33,22 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   DateTime? _startTime;
   Timer? _timer;
   Duration _elapsed = Duration.zero;
-  
+
   String? _selectedLibraryPath;
   String? _selectedDbPath;
-  final DuplicateBookStrategy _duplicateStrategy = DuplicateBookStrategy.replace; // Always replace duplicates
-  
+  final DuplicateBookStrategy _duplicateStrategy =
+      DuplicateBookStrategy.replace; // Always replace duplicates
+
   // File validation status
   bool _dbFileExists = false;
+  bool _dbFileExistsAtTarget =
+      false; // DB file at target location (blocks generation)
+  bool _otzariaFolderExists = false; // Otzaria folder exists
   bool _priorityFileExists = false;
   bool _acronymFileExists = false;
   bool _linksDirectoryExists = false;
-  final List<Map<String, String>> _duplicateBooks = []; // Store book info with path
+  final List<Map<String, String>> _duplicateBooks =
+      []; // Store book info with path
   final Map<String, String> _duplicateReasons = {};
 
   @override
@@ -65,14 +71,16 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       final libraryPath = await AppPaths.getLibraryPath();
       final dbPath = DatabaseConstants.getDatabasePathForLibrary(libraryPath);
       
+      final dbPath = '$libraryPath/${DatabaseConstants.databaseFileName}';
+
       setState(() {
         _selectedLibraryPath = libraryPath;
         _selectedDbPath = dbPath;
       });
-      
+
       // Check file status immediately after loading the path
       await _checkFileStatus();
-      
+
       _logger.info('Auto-loaded library path: $libraryPath');
     } catch (e, stackTrace) {
       _logger.warning('Error loading default library path', e, stackTrace);
@@ -100,18 +108,20 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
         dialogTitle: 'בחר תיקיית אוצריא (תיקיית האב)',
       );
-      
+
       if (selectedDirectory != null) {
         _logger.info('Selected library folder: $selectedDirectory');
-        
+
         // Verify that the selected directory contains the required structure
-        final otzariaDir = Directory('$selectedDirectory/${DatabaseConstants.otzariaFolderName}');
-        
+        final otzariaDir = Directory(
+            '$selectedDirectory/${DatabaseConstants.otzariaFolderName}');
+
         if (!await otzariaDir.exists()) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('התיקייה "${DatabaseConstants.otzariaFolderName}" לא נמצאה בתיקייה שנבחרה'),
+                content: Text(
+                    'התיקייה "${DatabaseConstants.otzariaFolderName}" לא נמצאה בתיקייה שנבחרה'),
                 backgroundColor: Colors.red,
               ),
             );
@@ -122,14 +132,19 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         // Auto-set DB path to database file in the Otzaria folder
         final dbPath = DatabaseConstants.getDatabasePathForLibrary(selectedDirectory);
         
+
+        // Auto-set DB path to database file in the selected folder
+        final dbPath =
+            '$selectedDirectory/${DatabaseConstants.databaseFileName}';
+
         setState(() {
           _selectedLibraryPath = selectedDirectory;
           _selectedDbPath = dbPath;
         });
-        
+
         // Check file status after setting paths
         await _checkFileStatus();
-        
+
         _logger.info('Auto-set database path: $dbPath');
       }
     } catch (e, stackTrace) {
@@ -150,40 +165,57 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     if (_selectedLibraryPath == null) return;
 
     try {
-      // Check if DB file exists using the selected DB path
+      // Check if Otzaria folder exists
+      final otzariaDir = Directory(
+          '$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}');
+      _otzariaFolderExists = await otzariaDir.exists();
+      _logger.info(
+          'Checking Otzaria folder: ${otzariaDir.path} - exists: $_otzariaFolderExists');
+
+      // Check if DB file exists at target location (blocks generation)
       if (_selectedDbPath != null) {
-        final dbFile = File(_selectedDbPath!);
-        _dbFileExists = await dbFile.exists();
-        _logger.info('Checking DB file: ${dbFile.path} - exists: $_dbFileExists');
-      } else {
-        _dbFileExists = false;
+        final dbFileAtTarget = File(_selectedDbPath!);
+        _dbFileExistsAtTarget = await dbFileAtTarget.exists();
+        _logger.info(
+            'Checking DB file at target: $_selectedDbPath - exists: $_dbFileExistsAtTarget');
       }
+
+      // Check if DB file exists in Otzaria directory
+      final dbFileInOtzaria = File(
+          '$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/${DatabaseConstants.databaseFileName}');
+      _dbFileExists = await dbFileInOtzaria.exists();
+      _logger.info(
+          'Checking DB file: ${dbFileInOtzaria.path} - exists: $_dbFileExists');
 
       // Check priority file in "About Software" directory
       _priorityFileExists = false;
       _acronymFileExists = false;
-      
-      final aboutSoftwareDirHeb = Directory('$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/אודות התוכנה');
-      
+
+      final aboutSoftwareDirHeb = Directory(
+          '$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/אודות התוכנה');
+
       if (await aboutSoftwareDirHeb.exists()) {
         final priorityFile = File('${aboutSoftwareDirHeb.path}/priority');
         _priorityFileExists = await priorityFile.exists();
-        _logger.info('Checking priority file (Hebrew): ${priorityFile.path} - exists: $_priorityFileExists');
-        
+        _logger.info(
+            'Checking priority file (Hebrew): ${priorityFile.path} - exists: $_priorityFileExists');
+
         final acronymFile = File('${aboutSoftwareDirHeb.path}/acronym.json');
         _acronymFileExists = await acronymFile.exists();
-        _logger.info('Checking acronym file (Hebrew): ${acronymFile.path} - exists: $_acronymFileExists');
+        _logger.info(
+            'Checking acronym file (Hebrew): ${acronymFile.path} - exists: $_acronymFileExists');
       } else {
-        _logger.info('About Software directory not found in either Hebrew or English');
+        _logger.info(
+            'About Software directory not found in either Hebrew or English');
       }
 
       // Check links directory
       final linksDir = Directory('$_selectedLibraryPath/links');
       _linksDirectoryExists = await linksDir.exists();
-      _logger.info('Checking links directory: ${linksDir.path} - exists: $_linksDirectoryExists');
+      _logger.info(
+          'Checking links directory: ${linksDir.path} - exists: $_linksDirectoryExists');
 
       setState(() {});
-    
     } catch (e, stackTrace) {
       _logger.warning('Error checking file status', e, stackTrace);
     }
@@ -193,10 +225,11 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
   /// Backup existing database file if it exists
   Future<void> _backupExistingDatabase() async {
-    if (_selectedDbPath == null) return;
-    
-    final dbFile = File(_selectedDbPath!);
-    if (await dbFile.exists()) {
+    if (_selectedLibraryPath == null) return;
+
+    final dbFileInOtzaria = File(
+        '$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/${DatabaseConstants.databaseFileName}');
+    if (await dbFileInOtzaria.exists()) {
       try {
         // Create backup with readable date format
         final now = DateTime.now();
@@ -206,15 +239,12 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         // Copy the existing file to backup
         await dbFile.copy(backupPath);
         _logger.info('Database backed up to: $backupPath');
-        
-        // Delete the original file so a new one can be created
-        await dbFile.delete();
-        _logger.info('Original database file deleted: ${dbFile.path}');
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('מסד הנתונים הקיים גובה ל: ${backupPath.split('/').last}\nקובץ חדש ייווצר'),
+              content: Text(
+                  'מסד הנתונים הקיים גובה ל: ${backupPath.split('/').last}'),
               backgroundColor: Colors.blue,
               duration: const Duration(seconds: 4),
             ),
@@ -237,7 +267,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
   Future<void> _startGeneration() async {
     if (_selectedLibraryPath == null || _selectedDbPath == null) {
-      _logger.warning('Cannot start generation: missing library path or database path');
+      _logger.warning(
+          'Cannot start generation: missing library path or database path');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('יש לבחור תיקיית אוצריא (תיקיית האב)'),
@@ -330,7 +361,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       await repository.close();
 
       _timer?.cancel();
-      
+
       // Show duplicate books report if any were found
       if (_duplicateBooks.isNotEmpty) {
         _showDuplicateReport();
@@ -349,15 +380,16 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   void _showDuplicateReport() {
     // Create report text for copying
     final reportText = StringBuffer();
-    reportText.writeln('דוח ספרים כפולים - ${_duplicateBooks.length} ספרים הוחלפו:');
+    reportText
+        .writeln('דוח ספרים כפולים - ${_duplicateBooks.length} ספרים הוחלפו:');
     reportText.writeln('=' * 50);
-    
+
     for (int i = 0; i < _duplicateBooks.length; i++) {
       final bookInfo = _duplicateBooks[i];
       final title = bookInfo['title'] ?? 'לא ידוע';
       final path = bookInfo['path'] ?? 'נתיב לא זמין';
       final reason = bookInfo['reason'] ?? 'לא ידוע';
-      
+
       reportText.writeln('${i + 1}. $title');
       reportText.writeln('   נתיב: $path');
       reportText.writeln('   סיבה: $reason');
@@ -405,7 +437,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                      Icon(Icons.info_outline,
+                          color: Colors.blue[700], size: 20),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -428,7 +461,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                       final title = bookInfo['title'] ?? 'לא ידוע';
                       final path = bookInfo['path'] ?? 'נתיב לא זמין';
                       final reason = bookInfo['reason'] ?? 'לא ידוע';
-                      
+
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         child: Padding(
@@ -472,9 +505,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(Icons.folder_outlined, 
-                                       size: 16, 
-                                       color: Colors.grey[600]),
+                                  Icon(Icons.folder_outlined,
+                                      size: 16, color: Colors.grey[600]),
                                   const SizedBox(width: 4),
                                   Expanded(
                                     child: Text(
@@ -490,9 +522,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  Icon(Icons.info_outline, 
-                                       size: 16, 
-                                       color: Colors.grey[600]),
+                                  Icon(Icons.info_outline,
+                                      size: 16, color: Colors.grey[600]),
                                   const SizedBox(width: 4),
                                   Text(
                                     reason,
@@ -541,19 +572,14 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('יצירת מסד נתונים'),
-        centerTitle: true,
-      ),
-      body: Directionality(
-        textDirection: TextDirection.rtl,
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+    final content = Directionality(
+      textDirection: TextDirection.rtl,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               // Configuration section
               if (_progress.phase == GenerationPhase.idle) ...[
                 Card(
@@ -565,12 +591,13 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                       children: [
                         Text(
                           'הגדרות',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
                         const SizedBox(height: 16),
-                        
+
                         // Library folder selection
                         _buildPathSelector(
                           label: 'תיקיית אוצריא (תיקיית האב)',
@@ -578,9 +605,9 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                           onTap: _selectLibraryFolder,
                           icon: Icons.folder_open,
                         ),
-                        
+
                         const SizedBox(height: 8),
-                        
+
                         // Database path display (read-only)
                         if (_selectedDbPath != null)
                           Container(
@@ -592,7 +619,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                                Icon(Icons.info_outline,
+                                    color: Colors.blue[700], size: 20),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -606,43 +634,59 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                               ],
                             ),
                           ),
-                        
+
                         // File status section - always show
                         const SizedBox(height: 16),
                         const Divider(),
                         const SizedBox(height: 16),
-                        
+
                         Text(
                           'בדיקת קבצים נדרשים',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
                         const SizedBox(height: 12),
-                        
+
                         if (_selectedLibraryPath != null) ...[
+                          // Check if DB file already exists at target - blocks generation
+                          if (_dbFileExistsAtTarget)
+                            _buildBlockingStatusItem(
+                              'קובץ מסד נתונים קיים',
+                              'קובץ DB כבר קיים במיקום היעד - לא ניתן ליצור מסד נתונים נוסף',
+                            ),
+                          // Check if Otzaria folder exists
+                          _buildFileStatusItem(
+                            'תיקיית אוצריא',
+                            _otzariaFolderExists,
+                            _otzariaFolderExists
+                                ? 'קיימת'
+                                : 'לא קיימת - נדרשת ליצירת מסד הנתונים',
+                          ),
                           _buildDbStatusItem(
                             'קובץ מסד נתונים (אוצריא)',
                             _dbFileExists,
-                            _dbFileExists ? 'קיים - הקובץ הישן יגובה ויווצר קובץ חדש' : 'לא קיים - יווצר קובץ חדש',
+                            _dbFileExists
+                                ? 'קיים - הקובץ הישן יגובה ויווצר קובץ חדש'
+                                : 'לא קיים - יווצר קובץ חדש',
                           ),
-                          
                           _buildFileStatusItem(
                             'קובץ priority (אודות התוכנה)',
                             _priorityFileExists,
                             _priorityFileExists ? 'קיים' : 'לא קיים',
                           ),
-                          
                           _buildFileStatusItem(
                             'קובץ acronym.json (אודות התוכנה)',
                             _acronymFileExists,
                             _acronymFileExists ? 'קיים' : 'לא קיים',
                           ),
-                          
                           _buildFileStatusItem(
                             'תיקיית links',
                             _linksDirectoryExists,
-                            _linksDirectoryExists ? 'קיימת - יווצרו קישורים' : 'לא קיימת - לא ייווצרו קישורים',
+                            _linksDirectoryExists
+                                ? 'קיימת - יווצרו קישורים'
+                                : 'לא קיימת - לא ייווצרו קישורים',
                           ),
                         ] else ...[
                           Container(
@@ -654,7 +698,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.warning_amber, color: Colors.orange[700], size: 24),
+                                Icon(Icons.warning_amber,
+                                    color: Colors.orange[700], size: 24),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
@@ -675,7 +720,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                 ),
                 const SizedBox(height: 24),
               ],
-              
+
               // Status Card
               if (_progress.phase != GenerationPhase.idle)
                 Card(
@@ -695,14 +740,17 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                             const SizedBox(width: 16),
                             Text(
                               _progress.phase.displayName,
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 16),
-                        
+
                         // Progress bar
                         if (_progress.phase != GenerationPhase.error)
                           Column(
@@ -712,7 +760,9 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                                 minHeight: 8,
                                 backgroundColor: Colors.grey[200],
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                  _progress.isComplete ? Colors.green : Colors.blue,
+                                  _progress.isComplete
+                                      ? Colors.green
+                                      : Colors.blue,
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -722,46 +772,50 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                               ),
                             ],
                           ),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         // Current message
                         Text(
                           _progress.message,
                           style: Theme.of(context).textTheme.titleMedium,
                           textAlign: TextAlign.center,
                         ),
-                        
+
                         // Current book
                         if (_progress.currentBook.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Text(
                             'ספר נוכחי: ${_progress.currentBook}',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.blue[700],
-                              fontWeight: FontWeight.w500,
-                            ),
+                            style:
+                                Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      color: Colors.blue[700],
+                                      fontWeight: FontWeight.w500,
+                                    ),
                             textAlign: TextAlign.center,
                           ),
                         ],
-                        
+
                         // Elapsed time
                         if (_startTime != null && !_progress.isComplete) ...[
                           const SizedBox(height: 8),
                           Text(
                             'זמן שעבר: ${_formatDuration(_elapsed)}',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.grey[600],
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Colors.grey[600],
+                                ),
                           ),
                         ],
                       ],
                     ),
                   ),
                 ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Statistics Cards
               if (_progress.totalBooks > 0 || _progress.totalLinks > 0)
                 Row(
@@ -777,10 +831,10 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                           color: Colors.blue,
                         ),
                       ),
-                    
+
                     if (_progress.totalBooks > 0 && _progress.totalLinks > 0)
                       const SizedBox(width: 16),
-                    
+
                     // Links card
                     if (_progress.totalLinks > 0)
                       Expanded(
@@ -794,9 +848,9 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                       ),
                   ],
                 ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Error message
               if (_progress.error != null)
                 Container(
@@ -832,7 +886,8 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                       const SizedBox(height: 12),
                       ElevatedButton.icon(
                         onPressed: () {
-                          Clipboard.setData(ClipboardData(text: _progress.error!));
+                          Clipboard.setData(
+                              ClipboardData(text: _progress.error!));
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('השגיאה הועתקה ללוח'),
@@ -850,10 +905,9 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                     ],
                   ),
                 ),
-              
-              if (_progress.error != null)
-                const SizedBox(height: 16),
-              
+
+              if (_progress.error != null) const SizedBox(height: 16),
+
               // Action buttons
               if (_progress.error != null) ...[
                 Row(
@@ -887,23 +941,27 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                 ),
               ] else
                 ElevatedButton(
-                  onPressed: _progress.phase == GenerationPhase.idle ||
-                          _progress.phase == GenerationPhase.complete
+                  onPressed: (_progress.phase == GenerationPhase.idle ||
+                              _progress.phase == GenerationPhase.complete) &&
+                          !_dbFileExistsAtTarget &&
+                          _otzariaFolderExists
                       ? _startGeneration
                       : null,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: _progress.isComplete ? Colors.green : Colors.blue,
+                    backgroundColor:
+                        _progress.isComplete ? Colors.green : Colors.blue,
                     disabledBackgroundColor: Colors.grey[300],
                   ),
                   child: Text(
                     _getButtonText(),
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Info text
               if (_progress.phase == GenerationPhase.idle)
                 Text(
@@ -912,26 +970,34 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                   'אינדקסים ייווצרו תמיד לשיפור ביצועי החיפוש.\n'
                   'ספרים כפולים (אותו שם באותה קטגוריה) יוחלפו תמיד ויוצג דוח לאחר היצירה.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+                        color: Colors.grey[600],
+                      ),
                   textAlign: TextAlign.center,
                 ),
-              
+
               if (_progress.isComplete && _progress.error == null)
                 Text(
                   'מסד הנתונים נוצר בהצלחה!\n'
                   'זמן כולל: ${_formatDuration(_elapsed)}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.green[700],
-                    fontWeight: FontWeight.w500,
-                  ),
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w500,
+                      ),
                   textAlign: TextAlign.center,
                 ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
+    );
+
+    // Return with Scaffold
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('יצירת מסד נתונים'),
+        centerTitle: true,
+      ),
+      body: content,
     );
   }
 
@@ -1003,6 +1069,49 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     );
   }
 
+  Widget _buildBlockingStatusItem(String label, String description) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red[300]!),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.block,
+            color: Colors.red[700],
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red[800],
+                  ),
+                ),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.red[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPathSelector({
     required String label,
     required String? path,
@@ -1053,7 +1162,11 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   }
 
   String _getButtonText() {
-    if (_progress.phase == GenerationPhase.idle) {
+    if (_dbFileExistsAtTarget) {
+      return 'לא ניתן ליצור - קובץ DB כבר קיים';
+    } else if (!_otzariaFolderExists && _selectedLibraryPath != null) {
+      return 'לא ניתן ליצור - תיקיית אוצריא לא קיימת';
+    } else if (_progress.phase == GenerationPhase.idle) {
       return 'התחל יצירת מסד נתונים';
     } else if (_progress.isComplete && _progress.error == null) {
       return 'הושלם בהצלחה ✓';
@@ -1066,7 +1179,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);
-    
+
     if (hours > 0) {
       return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     } else {
@@ -1092,8 +1205,9 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percentage = total > 0 ? (current / total * 100).toStringAsFixed(0) : '0';
-    
+    final percentage =
+        total > 0 ? (current / total * 100).toStringAsFixed(0) : '0';
+
     return Card(
       elevation: 2,
       child: Padding(
@@ -1110,16 +1224,16 @@ class _StatCard extends StatelessWidget {
             Text(
               '$current / $total',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
             ),
             const SizedBox(height: 4),
             Text(
               '$percentage%',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey[600],
-              ),
+                    color: Colors.grey[600],
+                  ),
             ),
           ],
         ),
