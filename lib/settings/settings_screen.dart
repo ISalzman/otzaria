@@ -24,7 +24,6 @@ import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
-import 'package:otzaria/ui/database_generation_screen.dart';
 import 'package:otzaria/settings/custom_folders/custom_folders_tile.dart';
 import 'dart:async';
 
@@ -956,21 +955,6 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                             leading: const Icon(FluentIcons.bug_24_regular),
                             activeColor: Theme.of(context).cardColor,
                           ),
-                      if (!(Platform.isAndroid || Platform.isIOS))
-                        SimpleSettingsTile(
-                          title: 'יצירת מסד נתונים',
-                          subtitle: 'צור מסד נתונים חדש מתיקיית אוצריא',
-                          leading: const Icon(
-                              FluentIcons.database_arrow_right_24_regular),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const DatabaseGenerationScreen(),
-                              ),
-                            );
-                          },
-                        ),
                       // הגדרת מצב אופליין - תמיד מוצגת
                       SwitchSettingsTile(
                         settingKey: SettingsRepository.keyOfflineMode,

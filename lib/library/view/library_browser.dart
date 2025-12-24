@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -33,6 +34,7 @@ import 'package:otzaria/widgets/workspace_icon_button.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/settings/library_settings_dialog.dart';
+import 'package:otzaria/ui/database_generation_dialog.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -1199,6 +1201,19 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       // סינכרון - מוצג רק אם מצב אופליין לא מופעל
       if (!settingsState.isOfflineMode) _buildSyncActionButton(),
 
+      // יצירת מסד נתונים - מוצג רק במחשב (לא במובייל)
+      if (!(Platform.isAndroid || Platform.isIOS))
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.database_arrow_right_24_regular),
+            tooltip: 'יצירת מסד נתונים',
+            onPressed: () => showDatabaseGenerationDialog(context),
+          ),
+          icon: FluentIcons.database_arrow_right_24_regular,
+          tooltip: 'יצירת מסד נתונים',
+          onPressed: () => showDatabaseGenerationDialog(context),
+        ),
+
       // טעינה מחדש
       ActionButtonData(
         widget: IconButton(
@@ -1380,6 +1395,19 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
       // 4) סינכרון - מוצג רק אם מצב אופליין לא מופעל
       if (!settingsState.isOfflineMode) _buildSyncActionButton(),
+
+      // יצירת מסד נתונים - מוצג רק במחשב (לא במובייל)
+      if (!(Platform.isAndroid || Platform.isIOS))
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.database_arrow_right_24_regular),
+            tooltip: 'יצירת מסד נתונים',
+            onPressed: () => showDatabaseGenerationDialog(context),
+          ),
+          icon: FluentIcons.database_arrow_right_24_regular,
+          tooltip: 'יצירת מסד נתונים',
+          onPressed: () => showDatabaseGenerationDialog(context),
+        ),
 
       // 5) טעינה מחדש של רשימת הספרים
       ActionButtonData(
