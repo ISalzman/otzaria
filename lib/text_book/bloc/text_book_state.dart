@@ -30,14 +30,14 @@ class TextBookInitial extends TextBookState {
 
   // קונסטרקטור עם פרמטרים בשם
   const TextBookInitial.named(
-    TextBook book,
-    int index,
-    bool showLeftPane,
-    List<String> commentators, {
+    super.book,
+    super.index,
+    super.showLeftPane,
+    super.commentators, {
     this.searchText = '',
     this.splitedView = true,
     this.showPageShapeView = false,
-  }) : super(book, index, showLeftPane, commentators);
+  });
 
   @override
   List<Object?> get props =>

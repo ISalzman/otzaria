@@ -38,6 +38,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   String? _rightCommentator;
   String? _bottomCommentator;
   String? _bottomRightCommentator;
+  bool _isLoadingConfig = true;
 
   // גדלים לחלוניות - יחושבו לפי גודל המסך
   double? _leftWidth;
@@ -79,30 +80,39 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     }
   }
 
-  void _loadConfiguration() {
+  Future<void> _loadConfiguration() async {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
     final config = PageShapeSettingsManager.loadConfiguration(state.book.title);
+    
+    // DEBUG - הדפסת מידע על הספר והקטגוריה
+    debugPrint('=== DEBUG DefaultCommentators ===');
+    debugPrint('Book title: ${state.book.title}');
+    debugPrint('Saved config: $config');
 
     if (config != null) {
+      // יש הגדרה שמורה - להשתמש בה (גם אם ריקה)
       if (mounted) {
         setState(() {
           _leftCommentator = config['left'];
           _rightCommentator = config['right'];
           _bottomCommentator = config['bottom'];
           _bottomRightCommentator = config['bottomRight'];
+          _isLoadingConfig = false;
         });
       }
     } else {
-      // אם אין הגדרה שמורה, השתמש בברירות מחדל
-      final defaults = DefaultCommentators.getDefaults(state.book);
+      // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
+      final defaults = await DefaultCommentators.getDefaults(state.book);
+      debugPrint('Defaults from JSON: $defaults');
       if (mounted) {
         setState(() {
           _leftCommentator = defaults['left'];
           _rightCommentator = defaults['right'];
           _bottomCommentator = defaults['bottom'];
           _bottomRightCommentator = defaults['bottomRight'];
+          _isLoadingConfig = false;
         });
       }
     }
@@ -110,6 +120,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingConfig) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return BlocBuilder<TextBookBloc, TextBookState>(
       builder: (context, state) {
         if (state is! TextBookLoaded) {
