@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'database_generation_screen.dart';
 
 /// פונקציה להצגת דיאלוג יצירת מסד נתונים
+///
+/// הדיאלוג מאפשר למשתמש ליצור מסד נתונים חדש לספרייה
+/// כולל אפשרויות לבחירת ספרים, מעקב אחר התקדמות ועוד
 void showDatabaseGenerationDialog(BuildContext context) {
   showDialog(
     context: context,
