@@ -126,7 +126,8 @@ class BookDao {
 
   Future<List<Book>> getBooksByCategory(int categoryId) async {
     final db = await database;
-    final result = await db.rawQuery(_queries['selectByCategoryId']!, [categoryId]);
+    final result =
+        await db.rawQuery(_queries['selectByCategoryId']!, [categoryId]);
     return result.map((row) => Book.fromJson(row)).toList();
   }
 
@@ -146,7 +147,8 @@ class BookDao {
 
   Future<List<Book>> getBooksByAuthor(String authorName) async {
     final db = await database;
-    final result = await db.rawQuery(_queries['selectByAuthor']!, ['%$authorName%']);
+    final result =
+        await db.rawQuery(_queries['selectByAuthor']!, ['%$authorName%']);
     return result.map((row) => Book.fromJson(row)).toList();
   }
 
@@ -206,6 +208,56 @@ class BookDao {
     return await db.rawUpdate(_queries['updateCategoryId']!, [categoryId, id]);
   }
 
+  /// Inserts an external book (file-based book with metadata only in DB).
+  /// External books have isExternal=1 and store file path, type, size, and last modified.
+  Future<int> insertExternalBook({
+    required int categoryId,
+    required int sourceId,
+    required String title,
+    String? heShortDesc,
+    required double orderIndex,
+    required String filePath,
+    required String fileType,
+    required int fileSize,
+    required int lastModified,
+  }) async {
+    final db = await database;
+    return await db.rawInsert(_queries['insertExternal']!, [
+      categoryId,
+      sourceId,
+      title,
+      heShortDesc,
+      orderIndex,
+      filePath,
+      fileType,
+      fileSize,
+      lastModified,
+    ]);
+  }
+
+  /// Updates external book metadata (file size and last modified).
+  Future<int> updateExternalMetadata(
+      int id, int fileSize, int lastModified) async {
+    final db = await database;
+    return await db.rawUpdate(
+        _queries['updateExternalMetadata']!, [fileSize, lastModified, id]);
+  }
+
+  /// Gets all external books.
+  Future<List<Book>> getExternalBooks() async {
+    final db = await database;
+    final result = await db.rawQuery(_queries['selectExternal']!);
+    return result.map((row) => Book.fromJson(row)).toList();
+  }
+
+  /// Gets an external book by its file path.
+  Future<Book?> getBookByFilePath(String filePath) async {
+    final db = await database;
+    final result = await db.rawQuery(_queries['selectByFilePath']!, [filePath]);
+    if (result.isEmpty) return null;
+    return Book.fromJson(result.first);
+  }
+
   Future<int> updateBookConnectionFlags(int id, bool hasTargum,
       bool hasReference, bool hasCommentary, bool hasOther) async {
     final db = await database;
@@ -225,7 +277,8 @@ class BookDao {
 
   Future<int> countBooksByCategory(int categoryId) async {
     final db = await database;
-    final result = await db.rawQuery(_queries['countByCategoryId']!, [categoryId]);
+    final result =
+        await db.rawQuery(_queries['countByCategoryId']!, [categoryId]);
     return Sqflite.firstIntValue(result) ?? 0;
   }
 

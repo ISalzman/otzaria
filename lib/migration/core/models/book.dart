@@ -51,6 +51,21 @@ class Book {
   final bool hasCommentaryConnection;
   final bool hasOtherConnection;
 
+  /// Whether this book is external (file-based, metadata only in DB)
+  final bool isExternal;
+
+  /// File path for external books (null for internal books)
+  final String? filePath;
+
+  /// File type for external books (pdf, txt, docx, etc.)
+  final String? fileType;
+
+  /// File size in bytes for external books
+  final int? fileSize;
+
+  /// Last modified timestamp for external books (milliseconds since epoch)
+  final int? lastModified;
+
   const Book({
     this.id = 0,
     required this.categoryId,
@@ -69,6 +84,11 @@ class Book {
     this.hasReferenceConnection = false,
     this.hasCommentaryConnection = false,
     this.hasOtherConnection = false,
+    this.isExternal = false,
+    this.filePath,
+    this.fileType,
+    this.fileSize,
+    this.lastModified,
   });
 
   Book copyWith({
@@ -89,6 +109,11 @@ class Book {
     bool? hasReferenceConnection,
     bool? hasCommentaryConnection,
     bool? hasOtherConnection,
+    bool? isExternal,
+    String? filePath,
+    String? fileType,
+    int? fileSize,
+    int? lastModified,
   }) {
     return Book(
       id: id ?? this.id,
@@ -105,9 +130,16 @@ class Book {
       totalLines: totalLines ?? this.totalLines,
       isBaseBook: isBaseBook ?? this.isBaseBook,
       hasTargumConnection: hasTargumConnection ?? this.hasTargumConnection,
-      hasReferenceConnection: hasReferenceConnection ?? this.hasReferenceConnection,
-      hasCommentaryConnection: hasCommentaryConnection ?? this.hasCommentaryConnection,
+      hasReferenceConnection:
+          hasReferenceConnection ?? this.hasReferenceConnection,
+      hasCommentaryConnection:
+          hasCommentaryConnection ?? this.hasCommentaryConnection,
       hasOtherConnection: hasOtherConnection ?? this.hasOtherConnection,
+      isExternal: isExternal ?? this.isExternal,
+      filePath: filePath ?? this.filePath,
+      fileType: fileType ?? this.fileType,
+      fileSize: fileSize ?? this.fileSize,
+      lastModified: lastModified ?? this.lastModified,
     );
   }
 
@@ -117,19 +149,40 @@ class Book {
       categoryId: json['categoryId'] as int,
       sourceId: json['sourceId'] as int,
       title: json['title'] as String,
-      authors: (json['authors'] as List<dynamic>?)?.map((e) => Author.fromJson(e as Map<String, dynamic>)).toList() ?? [],
-      topics: (json['topics'] as List<dynamic>?)?.map((e) => Topic.fromJson(e as Map<String, dynamic>)).toList() ?? [],
-      pubPlaces: (json['pubPlaces'] as List<dynamic>?)?.map((e) => PubPlace.fromJson(e as Map<String, dynamic>)).toList() ?? [],
-      pubDates: (json['pubDates'] as List<dynamic>?)?.map((e) => PubDate.fromJson(e as Map<String, dynamic>)).toList() ?? [],
+      authors: (json['authors'] as List<dynamic>?)
+              ?.map((e) => Author.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      topics: (json['topics'] as List<dynamic>?)
+              ?.map((e) => Topic.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      pubPlaces: (json['pubPlaces'] as List<dynamic>?)
+              ?.map((e) => PubPlace.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      pubDates: (json['pubDates'] as List<dynamic>?)
+              ?.map((e) => PubDate.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
       heShortDesc: json['heShortDesc'] as String?,
       notesContent: json['notesContent'] as String?,
-      order: (json['order'] as num?)?.toDouble() ?? 999.0,
+      order: (json['orderIndex'] as num?)?.toDouble() ??
+          (json['order'] as num?)?.toDouble() ??
+          999.0,
       totalLines: json['totalLines'] as int? ?? 0,
       isBaseBook: safeBoolFromJson(json['isBaseBook'], false),
       hasTargumConnection: safeBoolFromJson(json['hasTargumConnection'], false),
-      hasReferenceConnection: safeBoolFromJson(json['hasReferenceConnection'], false),
-      hasCommentaryConnection: safeBoolFromJson(json['hasCommentaryConnection'], false),
+      hasReferenceConnection:
+          safeBoolFromJson(json['hasReferenceConnection'], false),
+      hasCommentaryConnection:
+          safeBoolFromJson(json['hasCommentaryConnection'], false),
       hasOtherConnection: safeBoolFromJson(json['hasOtherConnection'], false),
+      isExternal: safeBoolFromJson(json['isExternal'], false),
+      filePath: json['filePath'] as String?,
+      fileType: json['fileType'] as String?,
+      fileSize: json['fileSize'] as int?,
+      lastModified: json['lastModified'] as int?,
     );
   }
 
@@ -152,11 +205,16 @@ class Book {
       'hasReferenceConnection': hasReferenceConnection,
       'hasCommentaryConnection': hasCommentaryConnection,
       'hasOtherConnection': hasOtherConnection,
+      'isExternal': isExternal,
+      'filePath': filePath,
+      'fileType': fileType,
+      'fileSize': fileSize,
+      'lastModified': lastModified,
     };
   }
 
   @override
-  String toString() => 'Book(id: $id, title: $title)';
+  String toString() => 'Book(id: $id, title: $title, isExternal: $isExternal)';
 
   @override
   bool operator ==(Object other) =>
@@ -179,7 +237,12 @@ class Book {
           hasTargumConnection == other.hasTargumConnection &&
           hasReferenceConnection == other.hasReferenceConnection &&
           hasCommentaryConnection == other.hasCommentaryConnection &&
-          hasOtherConnection == other.hasOtherConnection;
+          hasOtherConnection == other.hasOtherConnection &&
+          isExternal == other.isExternal &&
+          filePath == other.filePath &&
+          fileType == other.fileType &&
+          fileSize == other.fileSize &&
+          lastModified == other.lastModified;
 
   @override
   int get hashCode =>
@@ -199,5 +262,10 @@ class Book {
       hasTargumConnection.hashCode ^
       hasReferenceConnection.hashCode ^
       hasCommentaryConnection.hashCode ^
-      hasOtherConnection.hashCode;
+      hasOtherConnection.hashCode ^
+      isExternal.hashCode ^
+      filePath.hashCode ^
+      fileType.hashCode ^
+      fileSize.hashCode ^
+      lastModified.hashCode;
 }
