@@ -35,9 +35,9 @@ class TextBookInitial extends TextBookState {
     super.showLeftPane,
     super.commentators, {
     this.searchText = '',
-    this.splitedView = true,
+    bool? splitedView,
     this.showPageShapeView = false,
-  });
+  }) : splitedView = splitedView ?? false; // ברירת מחדל: מפרשים מתחת
 
   @override
   List<Object?> get props =>

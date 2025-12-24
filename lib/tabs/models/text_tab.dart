@@ -54,11 +54,16 @@ class TextBookTab extends OpenedTab {
     this.searchText = '',
     this.commentators,
     bool openLeftPane = false,
-    bool splitedView = true,
+    bool? splitedView,
     bool showPageShapeView = false,
     bool isPinned = false,
   }) : super(book.title, isPinned: isPinned) {
     debugPrint('DEBUG: TextBookTab נוצר עם אינדקס: $index לספר: ${book.title}');
+
+    // קביעת ברירת המחדל של splitedView מההגדרות אם לא סופק
+    final bool effectiveSplitedView =
+        splitedView ?? (Settings.getValue<bool>('key-splited-view') ?? false);
+
     // Initialize the bloc with initial state
     bloc = TextBookBloc(
       repository: TextBookRepository(
@@ -71,7 +76,7 @@ class TextBookTab extends OpenedTab {
         openLeftPane,
         commentators ?? [],
         searchText: searchText,
-        splitedView: splitedView,
+        splitedView: effectiveSplitedView,
         showPageShapeView: showPageShapeView,
       ),
       scrollController: scrollController,
