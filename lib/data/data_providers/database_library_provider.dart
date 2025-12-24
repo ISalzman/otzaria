@@ -245,10 +245,11 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   /// Gets or creates a category in the database for the given path.
   /// Returns the category ID.
+  /// Implements the logic from CATEGORY_SYNC_PLAN.md - Step 3
   Future<int> _getOrCreateCategoryInDb(List<String> categoryPath) async {
     final repository = _sqliteProvider.repository;
     if (repository == null) {
-      return 1; // Default category ID
+      throw Exception('Repository is not initialized - cannot create categories');
     }
 
     if (categoryPath.isEmpty) {
@@ -269,35 +270,39 @@ class DatabaseLibraryProvider implements LibraryProvider {
       );
     }
 
+    // Start from root (parentId = null)
     int? parentId;
-    int categoryId = 1;
-    int level = 0;
+    int currentLevel = 0;
 
-    for (final part in categoryPath) {
-      // Try to find existing category
+    // Walk through each level of the category hierarchy
+    for (final categoryName in categoryPath) {
+      // Try to find existing category with this name under the current parent
       final existingCategory =
-          await repository.getCategoryByTitleAndParent(part, parentId);
+          await repository.getCategoryByTitleAndParent(categoryName, parentId);
 
       if (existingCategory != null) {
-        categoryId = existingCategory.id;
+        // Category exists - use it as parent for next level
         parentId = existingCategory.id;
-        level = existingCategory.level + 1;
+        currentLevel = existingCategory.level + 1;
       } else {
-        // Create new category
-        categoryId = await repository.insertCategory(
+        // Category doesn't exist - create it
+        final newCategoryId = await repository.insertCategory(
           db_models.Category(
-            id: 0,
-            title: part,
+            id: 0, // Will be auto-generated
+            title: categoryName,
             parentId: parentId,
-            level: level,
+            level: currentLevel,
           ),
         );
-        parentId = categoryId;
-        level++;
+        
+        // Use the new category as parent for next level
+        parentId = newCategoryId;
+        currentLevel++;
       }
     }
 
-    return categoryId;
+    // Return the ID of the final (deepest) category
+    return parentId!;
   }
 
   /// Parses TOC entries for an external text book.
