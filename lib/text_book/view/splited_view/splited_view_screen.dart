@@ -41,6 +41,11 @@ class SplitedViewScreen extends StatefulWidget {
 }
 
 class _SplitedViewScreenState extends State<SplitedViewScreen> {
+  // קבועים לאינדקסים של הטאבים
+  static const int _commentaryTabIndex = 0;
+  static const int _linksTabIndex = 1;
+  static const int _notesTabIndex = 2;
+
   late final MultiSplitViewController _controller;
   late final GlobalKey<SelectionAreaState> _selectionKey;
   bool _paneOpen = false;
@@ -123,8 +128,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
 
     int targetTab;
 
-    // הטאבים: 0=מפרשים, 1=קישורים, 2=הערות אישיות
-
     // בדיקה אם יש מפרשים לקטע הנוכחי
     final hasCommentary = _hasCommentaryInCurrentLine(state);
     // בדיקה אם יש קישורים לקטע הנוכחי
@@ -133,18 +136,18 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     if (widget.showSplitView) {
       // מצב "מפרשים בצד" - פתח מפרשים (אם יש)
       if (hasCommentary) {
-        targetTab = 0; // מפרשים
+        targetTab = _commentaryTabIndex;
       } else if (hasLinks) {
-        targetTab = 1; // קישורים
+        targetTab = _linksTabIndex;
       } else {
-        targetTab = 2; // הערות אישיות
+        targetTab = _notesTabIndex;
       }
     } else {
       // מצב "מפרשים מתחת הטקסט" - פתח קישורים (אם יש)
       if (hasLinks) {
-        targetTab = 1; // קישורים
+        targetTab = _linksTabIndex;
       } else {
-        targetTab = 2; // הערות אישיות
+        targetTab = _notesTabIndex;
       }
     }
 

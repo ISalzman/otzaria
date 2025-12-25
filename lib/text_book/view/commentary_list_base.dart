@@ -161,6 +161,18 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     }
   }
 
+  void _openCommentatorsFilter() {
+    setState(() {
+      _showCommentatorsFilter = true;
+    });
+  }
+
+  void _closeCommentatorsFilter() {
+    setState(() {
+      _showCommentatorsFilter = false;
+    });
+  }
+
   @override
   void dispose() {
     _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
@@ -535,11 +547,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     IconButton(
                       icon: const Icon(FluentIcons.arrow_right_24_regular),
                       tooltip: 'חזרה למפרשים',
-                      onPressed: () {
-                        setState(() {
-                          _showCommentatorsFilter = false;
-                        });
-                      },
+                      onPressed: _closeCommentatorsFilter,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -555,12 +563,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               ),
               Expanded(
                 child: CommentatorsListView(
-                  onCommentatorSelected: () {
-                    // סגירת מסך בחירת המפרשים וחזרה לרשימה
-                    setState(() {
-                      _showCommentatorsFilter = false;
-                    });
-                  },
+                  onCommentatorSelected: _closeCommentatorsFilter,
                 ),
               ),
             ],
@@ -590,11 +593,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                       minWidth: 40,
                       minHeight: 40,
                     ),
-                    onPressed: () {
-                      setState(() {
-                        _showCommentatorsFilter = true;
-                      });
-                    },
+                    onPressed: _openCommentatorsFilter,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
