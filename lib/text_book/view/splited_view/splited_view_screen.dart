@@ -159,10 +159,11 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
 
   bool _hasCommentaryInCurrentLine(TextBookLoaded state) {
     if (state.visibleIndices.isEmpty) return false;
-    
+
+    final visibleIndicesSet = state.visibleIndices.toSet();
     // בדיקה אם יש מפרשים פעילים לאינדקסים הנראים
     return state.links.any((link) =>
-        state.visibleIndices.contains(link.index1 - 1) &&
+        visibleIndicesSet.contains(link.index1 - 1) &&
         (link.connectionType == "commentary" || link.connectionType == "targum") &&
         state.activeCommentators.contains(utils.getTitleFromPath(link.path2)));
   }

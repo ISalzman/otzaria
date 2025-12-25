@@ -552,8 +552,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     const SizedBox(width: 8),
                     Text(
                       'בחירת מפרשים',
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.onSurface,
                       ),
