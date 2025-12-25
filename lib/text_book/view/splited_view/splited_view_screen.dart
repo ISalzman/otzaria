@@ -14,6 +14,7 @@ import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
 import 'package:otzaria/utils/context_menu_utils.dart';
+import 'package:otzaria/utils/text_manipulation.dart' as utils;
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -40,6 +41,11 @@ class SplitedViewScreen extends StatefulWidget {
 }
 
 class _SplitedViewScreenState extends State<SplitedViewScreen> {
+  // קבועים לאינדקסים של הטאבים
+  static const int _commentaryTabIndex = 0;
+  static const int _linksTabIndex = 1;
+  static const int _notesTabIndex = 2;
+
   late final MultiSplitViewController _controller;
   late final GlobalKey<SelectionAreaState> _selectionKey;
   bool _paneOpen = false;
@@ -122,18 +128,27 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
 
     int targetTab;
 
-    // הטאבים בטור השמאלי עכשיו הם: 0=מפרשים, 1=קישורים, 2=הערות אישיות
+    // בדיקה אם יש מפרשים לקטע הנוכחי
+    final hasCommentary = _hasCommentaryInCurrentLine(state);
+    // בדיקה אם יש קישורים לקטע הנוכחי
+    final hasLinks = state.visibleLinks.isNotEmpty;
 
-    if (state.visibleIndices.isNotEmpty) {
-      // בדוק אם יש קישורים בשורה הנוכחית
-      final hasLinks = _hasLinksInCurrentLine(state);
-      if (hasLinks) {
-        targetTab = 1; // קישורים
+    if (widget.showSplitView) {
+      // מצב "מפרשים בצד" - פתח מפרשים (אם יש)
+      if (hasCommentary) {
+        targetTab = _commentaryTabIndex;
+      } else if (hasLinks) {
+        targetTab = _linksTabIndex;
       } else {
-        targetTab = 2; // הערות אישיות
+        targetTab = _notesTabIndex;
       }
     } else {
-      targetTab = 0; // ברירת מחדל - מפרשים
+      // מצב "מפרשים מתחת הטקסט" - פתח קישורים (אם יש)
+      if (hasLinks) {
+        targetTab = _linksTabIndex;
+      } else {
+        targetTab = _notesTabIndex;
+      }
     }
 
     setState(() {
@@ -142,10 +157,15 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     });
   }
 
-  bool _hasLinksInCurrentLine(TextBookLoaded state) {
-    // בדיקה פשוטה - אם יש אינדקס נראה, נניח שיש קישורים
-    // אפשר לשפר את זה בעתיד עם בדיקה מדויקת יותר
-    return state.visibleIndices.isNotEmpty;
+  bool _hasCommentaryInCurrentLine(TextBookLoaded state) {
+    if (state.visibleIndices.isEmpty) return false;
+
+    final visibleIndicesSet = state.visibleIndices.toSet();
+    // בדיקה אם יש מפרשים פעילים לאינדקסים הנראים
+    return state.links.any((link) =>
+        visibleIndicesSet.contains(link.index1 - 1) &&
+        (link.connectionType == "commentary" || link.connectionType == "targum") &&
+        state.activeCommentators.contains(utils.getTitleFromPath(link.path2)));
   }
 
   void _openPane() {
