@@ -14,6 +14,7 @@ import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
 import 'package:otzaria/utils/context_menu_utils.dart';
+import 'package:otzaria/utils/text_manipulation.dart' as utils;
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -122,18 +123,29 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
 
     int targetTab;
 
-    // הטאבים בטור השמאלי עכשיו הם: 0=מפרשים, 1=קישורים, 2=הערות אישיות
+    // הטאבים: 0=מפרשים, 1=קישורים, 2=הערות אישיות
 
-    if (state.visibleIndices.isNotEmpty) {
-      // בדוק אם יש קישורים בשורה הנוכחית
-      final hasLinks = _hasLinksInCurrentLine(state);
-      if (hasLinks) {
+    // בדיקה אם יש מפרשים לקטע הנוכחי
+    final hasCommentary = _hasCommentaryInCurrentLine(state);
+    // בדיקה אם יש קישורים לקטע הנוכחי
+    final hasLinks = state.visibleLinks.isNotEmpty;
+
+    if (widget.showSplitView) {
+      // מצב "מפרשים בצד" - פתח מפרשים (אם יש)
+      if (hasCommentary) {
+        targetTab = 0; // מפרשים
+      } else if (hasLinks) {
         targetTab = 1; // קישורים
       } else {
         targetTab = 2; // הערות אישיות
       }
     } else {
-      targetTab = 0; // ברירת מחדל - מפרשים
+      // מצב "מפרשים מתחת הטקסט" - פתח קישורים (אם יש)
+      if (hasLinks) {
+        targetTab = 1; // קישורים
+      } else {
+        targetTab = 2; // הערות אישיות
+      }
     }
 
     setState(() {
@@ -142,10 +154,14 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     });
   }
 
-  bool _hasLinksInCurrentLine(TextBookLoaded state) {
-    // בדיקה פשוטה - אם יש אינדקס נראה, נניח שיש קישורים
-    // אפשר לשפר את זה בעתיד עם בדיקה מדויקת יותר
-    return state.visibleIndices.isNotEmpty;
+  bool _hasCommentaryInCurrentLine(TextBookLoaded state) {
+    if (state.visibleIndices.isEmpty) return false;
+    
+    // בדיקה אם יש מפרשים פעילים לאינדקסים הנראים
+    return state.links.any((link) =>
+        state.visibleIndices.contains(link.index1 - 1) &&
+        (link.connectionType == "commentary" || link.connectionType == "targum") &&
+        state.activeCommentators.contains(utils.getTitleFromPath(link.path2)));
   }
 
   void _openPane() {
