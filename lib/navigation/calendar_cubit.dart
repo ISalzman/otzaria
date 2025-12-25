@@ -1123,6 +1123,12 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
       'elevation': 610.0,
       'timezone': 'America/Los_Angeles'
     },
+    'ליקווד': {
+      'lat': 40.0878,
+      'lng': -74.2098,
+      'elevation': 20.0,
+      'timezone': 'America/New_York'
+    },
     'לוס אנג\'לס': {
       'lat': 34.0522,
       'lng': -118.2437,
