@@ -155,5 +155,4 @@ class AppearanceSettingsTab extends StatelessWidget {
       ),
     );
   }
-
 }

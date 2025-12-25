@@ -318,7 +318,7 @@ class ReadingSettingsTab extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: state.copyWithHeaders,
+                        initialValue: state.copyWithHeaders,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
@@ -357,7 +357,7 @@ class ReadingSettingsTab extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: state.copyHeaderFormat,
+                        initialValue: state.copyHeaderFormat,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
@@ -585,7 +585,7 @@ class _FontDropdown extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: DropdownButtonFormField<String>(
-            value: value,
+            initialValue: value,
             decoration: InputDecoration(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
