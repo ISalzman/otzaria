@@ -475,13 +475,52 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       vsync: this,
       initialIndex: initialIndex,
     );
-
     _sidebarWidth = ValueNotifier<double>(
         Settings.getValue<double>('key-sidebar-width', defaultValue: 300)!);
-    _settingsSub = context
-        .read<SettingsBloc>()
-        .stream
-        .listen((state) => _sidebarWidth.value = state.sidebarWidth);
+
+    // שמירת הגדרות נוכחיות כדי לזהות שינויים
+    double previousFontSize = context.read<SettingsBloc>().state.fontSize;
+    String previousFontFamily = context.read<SettingsBloc>().state.fontFamily;
+    bool previousRemoveNikud =
+        context.read<SettingsBloc>().state.defaultRemoveNikud;
+
+    _settingsSub = context.read<SettingsBloc>().stream.listen((state) {
+      _sidebarWidth.value = state.sidebarWidth;
+
+      // אם גודל הגופן השתנה, עדכן אותו מיידית
+      if (state.fontSize != previousFontSize) {
+        previousFontSize = state.fontSize;
+
+        if (!mounted) return;
+
+        final currentState = context.read<TextBookBloc>().state;
+        if (currentState is TextBookLoaded) {
+          context.read<TextBookBloc>().add(UpdateFontSize(state.fontSize));
+        }
+      }
+
+      // אם משפחת הגופן או הסרת ניקוד השתנו, טען מחדש את התוכן
+      if (state.fontFamily != previousFontFamily ||
+          state.defaultRemoveNikud != previousRemoveNikud) {
+        previousFontFamily = state.fontFamily;
+        previousRemoveNikud = state.defaultRemoveNikud;
+
+        if (!mounted) return;
+
+        final currentState = context.read<TextBookBloc>().state;
+        if (currentState is TextBookLoaded) {
+          context.read<TextBookBloc>().add(
+                LoadContent(
+                  fontSize: state.fontSize,
+                  showSplitView: currentState.showSplitView,
+                  removeNikud: state.defaultRemoveNikud,
+                  forceCloseLeftPane: widget.isInCombinedView,
+                  preserveState: true,
+                ),
+              );
+        }
+      }
+    });
   }
 
   /// טעינת הגדרות פר-ספר
