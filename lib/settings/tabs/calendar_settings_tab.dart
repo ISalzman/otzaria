@@ -15,6 +15,7 @@ class CalendarSettingsTab extends StatefulWidget {
 
 class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
   CalendarCubit? _localCubit;
+  bool _isCubitLocal = false;
   bool _showCitySearch = false;
 
   @override
@@ -31,12 +32,16 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
       // אם אין CalendarCubit זמין, ניצור חדש
       final settingsRepository = SettingsRepository();
       _localCubit = CalendarCubit(settingsRepository: settingsRepository);
+      _isCubitLocal = true;
     }
   }
 
   @override
   void dispose() {
     // נסגור רק אם יצרנו את ה-cubit בעצמנו
+    if (_isCubitLocal) {
+      _localCubit?.close();
+    }
     super.dispose();
   }
 
@@ -64,35 +69,29 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   context: context,
                   title: 'סוג לוח',
                   children: [
-                    RadioListTile<CalendarType>(
-                      title: const Text('לוח עברי', style: TextStyle(fontSize: 16)),
-                      value: CalendarType.hebrew,
+                    RadioGroup<CalendarType>(
                       groupValue: state.calendarType,
                       onChanged: (value) {
                         if (value != null) {
                           cubit.changeCalendarType(value);
                         }
                       },
-                    ),
-                    RadioListTile<CalendarType>(
-                      title: const Text('לוח לועזי', style: TextStyle(fontSize: 16)),
-                      value: CalendarType.gregorian,
-                      groupValue: state.calendarType,
-                      onChanged: (value) {
-                        if (value != null) {
-                          cubit.changeCalendarType(value);
-                        }
-                      },
-                    ),
-                    RadioListTile<CalendarType>(
-                      title: const Text('לוח משולב', style: TextStyle(fontSize: 16)),
-                      value: CalendarType.combined,
-                      groupValue: state.calendarType,
-                      onChanged: (value) {
-                        if (value != null) {
-                          cubit.changeCalendarType(value);
-                        }
-                      },
+                      child: Column(
+                        children: [
+                          RadioListTile<CalendarType>(
+                            title: const Text('לוח עברי', style: TextStyle(fontSize: 16)),
+                            value: CalendarType.hebrew,
+                          ),
+                          RadioListTile<CalendarType>(
+                            title: const Text('לוח לועזי', style: TextStyle(fontSize: 16)),
+                            value: CalendarType.gregorian,
+                          ),
+                          RadioListTile<CalendarType>(
+                            title: const Text('לוח משולב', style: TextStyle(fontSize: 16)),
+                            value: CalendarType.combined,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -185,7 +184,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                             labelText: 'זמן תזכורת לפני האירוע',
                             border: OutlineInputBorder(),
                           ),
-                          value: state.calendarNotificationTime,
+                          initialValue: state.calendarNotificationTime,
                           items: const [
                             DropdownMenuItem(value: 60, child: Text('שעה')),
                             DropdownMenuItem(

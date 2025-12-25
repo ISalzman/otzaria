@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
@@ -469,7 +471,13 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
                       'יש לסגור ולהפעיל מחדש את התוכנה כדי שהשינויים יכנסו לתוקף.'),
                   actions: [
                     TextButton(
-                      onPressed: () => exit(0),
+                      onPressed: () {
+                        if (Platform.isAndroid || Platform.isIOS) {
+                          SystemNavigator.pop();
+                        } else {
+                          windowManager.close();
+                        }
+                      },
                       child: const Text('סגור את התוכנה'),
                     ),
                   ],
