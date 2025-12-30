@@ -9,9 +9,12 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/search_results.dart';
-import 'package:otzaria/text_book/models/text_book_searcher.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/search_pane_base.dart';
+import 'package:otzaria/search/search_repository.dart';
+import 'package:search_engine/search_engine.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/models/books.dart';
 
 class _GroupedResultItem {
   final String? header;
@@ -42,15 +45,17 @@ class TextBookSearchView extends StatefulWidget {
 class TextBookSearchViewState extends State<TextBookSearchView>
     with AutomaticKeepAliveClientMixin<TextBookSearchView> {
   TextEditingController searchTextController = TextEditingController();
-  late final TextBookSearcher markdownTextSearcher;
+  final SearchRepository _searchRepository = SearchRepository();
   List<TextSearchResult> searchResults = [];
   late ItemScrollController scrollControler;
+  bool _isSearching = false;
+  List<String> _content = [];
+  String? _bookPath;
 
   @override
   void initState() {
     super.initState();
-    markdownTextSearcher = TextBookSearcher(widget.data);
-    markdownTextSearcher.addListener(_searchResultUpdated);
+    _content = widget.data.split('\n');
 
     searchTextController.text =
         (context.read<TextBookBloc>().state as TextBookLoaded).searchText;
@@ -59,24 +64,107 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     widget.focusNode.requestFocus();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _runInitialSearch();
+      _initializeBookPath();
     });
+  }
+
+  Future<void> _initializeBookPath() async {
+    final state = context.read<TextBookBloc>().state;
+    if (state is TextBookLoaded) {
+      final bookTitle = state.book.title;
+      debugPrint('📚 TextBookSearch: book.title = $bookTitle');
+
+      // Try to get the full book with topics from the library
+      String topics = state.book.topics;
+      if (topics.isEmpty) {
+        try {
+          final library = await DataRepository.instance.library;
+          final fullBook = library.findBookByTitle(bookTitle, TextBook);
+          if (fullBook != null) {
+            topics = fullBook.topics;
+            debugPrint(
+                '📚 TextBookSearch: Found topics from library = "$topics"');
+          }
+        } catch (e) {
+          debugPrint('📚 TextBookSearch: Error getting book from library: $e');
+        }
+      }
+
+      debugPrint('📚 TextBookSearch: final topics = "$topics"');
+
+      // Build the facet path using topics (same format as indexing)
+      if (topics.isNotEmpty) {
+        _bookPath = "/${topics.replaceAll(', ', '/')}/$bookTitle";
+      } else {
+        _bookPath = "/$bookTitle";
+      }
+      debugPrint('📚 TextBookSearch: _bookPath = $_bookPath');
+      if (searchTextController.text.isNotEmpty) {
+        _runInitialSearch();
+      }
+    }
   }
 
   void _runInitialSearch() {
     _searchTextUpdated();
   }
 
-  void _searchTextUpdated() {
-    markdownTextSearcher.startTextSearch(searchTextController.text);
+  Future<void> _searchTextUpdated() async {
+    final query = searchTextController.text.trim();
+    if (query.isEmpty || _bookPath == null) {
+      setState(() {
+        searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearching = true;
+    });
+
+    try {
+      final results = await _searchRepository.searchTexts(
+        query,
+        [_bookPath!],
+        1000,
+      );
+
+      if (mounted) {
+        setState(() {
+          searchResults = _convertSearchResults(results);
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Search error: $e');
+      if (mounted) {
+        setState(() {
+          searchResults = [];
+          _isSearching = false;
+        });
+      }
+    }
   }
 
-  void _searchResultUpdated() {
-    if (mounted) {
-      setState(() {
-        searchResults = markdownTextSearcher.searchResults;
-      });
+  List<TextSearchResult> _convertSearchResults(List<SearchResult> results) {
+    final List<TextSearchResult> converted = [];
+    for (final result in results) {
+      try {
+        final lineNumber = result.segment.toInt();
+        if (lineNumber >= 0 && lineNumber < _content.length) {
+          converted.add(TextSearchResult(
+            index: lineNumber,
+            snippet: result.text,
+            address: result.reference,
+            query: searchTextController.text,
+          ));
+        }
+      } catch (e) {
+        debugPrint('Error converting result: $e');
+      }
     }
+    return converted;
   }
 
   @override
@@ -97,7 +185,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     return SearchPaneBase(
       searchController: searchTextController,
       focusNode: widget.focusNode,
-      progressWidget: null,
+      progressWidget:
+          _isSearching ? const LinearProgressIndicator(minHeight: 4) : null,
       resultCountString: searchResults.isNotEmpty
           ? 'נמצאו ${searchResults.length} תוצאות'
           : null,

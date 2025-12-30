@@ -127,9 +127,14 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
       return const SizedBox.shrink();
     }
 
-    // בניית facet נכון על בסיס נתיב הקטגוריה
-    final facet =
-        categoryPath != null ? "$categoryPath/${book.title}" : "/${book.title}";
+    // בניית facet בהתאם לפורמט האינדקס: /<topics>/<title>
+    final topics = book.topics.trim();
+    final topicsPath = topics.isEmpty ? '' : "/${topics.replaceAll(', ', '/')}";
+    final fallbackFacet =
+        topicsPath.isEmpty ? "/${book.title}" : "$topicsPath/${book.title}";
+    final facet = categoryPath != null
+        ? "$categoryPath/${book.title}"
+        : fallbackFacet;
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
         final isSelected = state.currentFacets.contains(facet);
@@ -210,9 +215,15 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
 
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
-        // יצירת רשימת כל ה-facets בבת אחת
-        // עבור רשימת ספרים מסוננת, נשתמש בשם הספר בלבד
-        final facets = books.map((book) => "/${book.title}").toList();
+        // יצירת רשימת כל ה-facets בבת אחת (כמו באינדקס)
+        final facets = books.map((book) {
+          final topics = book.topics.trim();
+          final topicsPath =
+              topics.isEmpty ? '' : "/${topics.replaceAll(', ', '/')}";
+          return topicsPath.isEmpty
+              ? "/${book.title}"
+              : "$topicsPath/${book.title}";
+        }).toList();
 
         // ספירה מקבצת של כל ה-facets
         final countsFuture = widget.tab.countForMultipleFacets(facets);
@@ -229,7 +240,12 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                 itemCount: books.length,
                 itemBuilder: (context, index) {
                   final book = books[index];
-                  final facet = "/${book.title}";
+                  final topics = book.topics.trim();
+                  final topicsPath =
+                      topics.isEmpty ? '' : "/${topics.replaceAll(', ', '/')}";
+                  final facet = topicsPath.isEmpty
+                      ? "/${book.title}"
+                      : "$topicsPath/${book.title}";
                   final count = counts[facet] ?? 0;
                   return _buildBookTile(book, count, 0);
                 },
