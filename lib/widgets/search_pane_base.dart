@@ -14,6 +14,7 @@ class SearchPaneBase extends StatefulWidget {
     this.onSearchTextChanged,
     required this.resetSearchCallback,
     this.hintText,
+    this.onAdvancedSearch,
     super.key,
   });
 
@@ -26,6 +27,7 @@ class SearchPaneBase extends StatefulWidget {
   final ValueChanged<String>? onSearchTextChanged;
   final VoidCallback resetSearchCallback;
   final String? hintText;
+  final VoidCallback? onAdvancedSearch;
 
   @override
   State<SearchPaneBase> createState() => _SearchPaneBaseState();
@@ -71,7 +73,18 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
                 },
                 decoration: InputDecoration(
                   hintText: widget.hintText,
-                  prefixIcon: const Icon(FluentIcons.search_24_regular),
+                  prefixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(FluentIcons.search_24_regular),
+                      if (widget.onAdvancedSearch != null)
+                        IconButton(
+                          icon: const Icon(FluentIcons.settings_24_regular),
+                          tooltip: 'חיפוש מתקדם',
+                          onPressed: widget.onAdvancedSearch,
+                        ),
+                    ],
+                  ),
                   suffixIcon: value.text.isNotEmpty
                       ? IconButton(
                           tooltip: 'נקה',

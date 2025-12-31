@@ -14,6 +14,10 @@ import 'package:otzaria/widgets/search_pane_base.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/book_facet.dart';
 import 'package:search_engine/search_engine.dart';
+import 'package:otzaria/search/view/search_dialog.dart';
+import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/models/books.dart';
 
 class _GroupedResultItem {
@@ -51,6 +55,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   bool _isSearching = false;
   List<String> _content = [];
   String? _bookPath;
+  Map<String, Map<String, bool>> _searchOptions = {};
+  Map<int, List<String>> _alternativeWords = {};
+  Map<String, String> _spacingValues = {};
+  SearchMode _searchMode = SearchMode.exact;
 
   @override
   void initState() {
@@ -114,6 +122,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         query,
         [_bookPath!],
         1000,
+        searchOptions: _searchOptions,
+        alternativeWords: _alternativeWords,
+        customSpacing: _spacingValues,
+        fuzzy: _searchMode == SearchMode.fuzzy,
       );
 
       if (mounted) {
@@ -304,8 +316,42 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         context.read<TextBookBloc>().add(UpdateSearchText(value));
         _searchTextUpdated();
       },
-      resetSearchCallback: () {},
+      resetSearchCallback: () {
+        setState(() {
+          searchResults = [];
+          _searchOptions = {};
+          _alternativeWords = {};
+          _spacingValues = {};
+          _searchMode = SearchMode.exact;
+        });
+      },
       hintText: 'חפש כאן...',
+      onAdvancedSearch: () {
+        // Create a temporary SearchingTab to hold the state
+        final tempTab = SearchingTab("חיפוש", searchTextController.text);
+        tempTab.searchOptions.addAll(_searchOptions);
+        tempTab.alternativeWords.addAll(_alternativeWords);
+        tempTab.spacingValues.addAll(_spacingValues);
+        tempTab.searchBloc.add(SetSearchMode(_searchMode));
+
+        showDialog(
+          context: context,
+          builder: (context) => SearchDialog(
+            existingTab: tempTab,
+            onSearch: (query, searchOptions, alternativeWords, spacingValues,
+                searchMode) {
+              searchTextController.text = query;
+              setState(() {
+                _searchOptions = searchOptions;
+                _alternativeWords = alternativeWords;
+                _spacingValues = spacingValues;
+                _searchMode = searchMode;
+              });
+              _searchTextUpdated();
+            },
+          ),
+        );
+      },
     );
   }
 
