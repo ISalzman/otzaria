@@ -58,8 +58,7 @@ class TantivyDataProvider {
       return ReferenceSearchEngine(path: refIndexPath);
     } catch (e) {
       if (e.toString().contains("SchemaError")) {
-        String indexPath = await AppPaths.getIndexPath();
-        await resetIndex(indexPath);
+        await resetIndex(refIndexPath, closeBooksDoneBox: false);
         return ReferenceSearchEngine(path: refIndexPath);
       }
       rethrow;
@@ -158,9 +157,11 @@ class TantivyDataProvider {
     }
   }
 
-  Future<void> resetIndex(String indexPath) async {
+  Future<void> resetIndex(String indexPath, {bool closeBooksDoneBox = true}) async {
     Directory indexDirectory = Directory(indexPath);
-    Hive.box(name: 'books_indexed', directory: indexPath).close();
+    if (closeBooksDoneBox) {
+      Hive.box(name: 'books_indexed', directory: indexPath).close();
+    }
     indexDirectory.deleteSync(recursive: true);
     indexDirectory.createSync(recursive: true);
   }

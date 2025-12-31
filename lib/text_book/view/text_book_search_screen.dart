@@ -12,8 +12,8 @@ import 'package:otzaria/text_book/models/search_results.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/search_pane_base.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/search/book_facet.dart';
 import 'package:search_engine/search_engine.dart';
-import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 
 class _GroupedResultItem {
@@ -74,30 +74,16 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       final bookTitle = state.book.title;
       debugPrint('📚 TextBookSearch: book.title = $bookTitle');
 
-      // Try to get the full book with topics from the library
-      String topics = state.book.topics;
-      if (topics.isEmpty) {
-        try {
-          final library = await DataRepository.instance.library;
-          final fullBook = library.findBookByTitle(bookTitle, TextBook);
-          if (fullBook != null) {
-            topics = fullBook.topics;
-            debugPrint(
-                '📚 TextBookSearch: Found topics from library = "$topics"');
-          }
-        } catch (e) {
-          debugPrint('📚 TextBookSearch: Error getting book from library: $e');
-        }
-      }
+      final topics = await BookFacet.resolveTopics(
+        title: bookTitle,
+        initialTopics: state.book.topics,
+        type: TextBook,
+      );
+
+      if (!mounted) return;
 
       debugPrint('📚 TextBookSearch: final topics = "$topics"');
-
-      // Build the facet path using topics (same format as indexing)
-      if (topics.isNotEmpty) {
-        _bookPath = "/${topics.replaceAll(', ', '/')}/$bookTitle";
-      } else {
-        _bookPath = "/$bookTitle";
-      }
+      _bookPath = BookFacet.buildFacetPath(title: bookTitle, topics: topics);
       debugPrint('📚 TextBookSearch: _bookPath = $_bookPath');
       if (searchTextController.text.isNotEmpty) {
         _runInitialSearch();
@@ -311,7 +297,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         },
       ),
       isNoResults:
-          searchResults.isEmpty && searchTextController.text.isNotEmpty,
+          searchResults.isEmpty &&
+          searchTextController.text.isNotEmpty &&
+          !_isSearching,
       onSearchTextChanged: (value) {
         context.read<TextBookBloc>().add(UpdateSearchText(value));
         _searchTextUpdated();

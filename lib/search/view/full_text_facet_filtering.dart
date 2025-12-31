@@ -7,6 +7,7 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -128,13 +129,9 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
     }
 
     // בניית facet בהתאם לפורמט האינדקס: /<topics>/<title>
-    final topics = book.topics.trim();
-    final topicsPath = topics.isEmpty ? '' : "/${topics.replaceAll(', ', '/')}";
     final fallbackFacet =
-        topicsPath.isEmpty ? "/${book.title}" : "$topicsPath/${book.title}";
-    final facet = categoryPath != null
-        ? "$categoryPath/${book.title}"
-        : fallbackFacet;
+      BookFacet.buildFacetPath(title: book.title, topics: book.topics);
+    final facet = categoryPath != null ? "$categoryPath/${book.title}" : fallbackFacet;
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
         final isSelected = state.currentFacets.contains(facet);
@@ -216,14 +213,10 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
         // יצירת רשימת כל ה-facets בבת אחת (כמו באינדקס)
-        final facets = books.map((book) {
-          final topics = book.topics.trim();
-          final topicsPath =
-              topics.isEmpty ? '' : "/${topics.replaceAll(', ', '/')}";
-          return topicsPath.isEmpty
-              ? "/${book.title}"
-              : "$topicsPath/${book.title}";
-        }).toList();
+        final facets = books
+            .map((book) =>
+                BookFacet.buildFacetPath(title: book.title, topics: book.topics))
+            .toList();
 
         // ספירה מקבצת של כל ה-facets
         final countsFuture = widget.tab.countForMultipleFacets(facets);
@@ -240,12 +233,8 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                 itemCount: books.length,
                 itemBuilder: (context, index) {
                   final book = books[index];
-                  final topics = book.topics.trim();
-                  final topicsPath =
-                      topics.isEmpty ? '' : "/${topics.replaceAll(', ', '/')}";
-                  final facet = topicsPath.isEmpty
-                      ? "/${book.title}"
-                      : "$topicsPath/${book.title}";
+                  final facet = BookFacet.buildFacetPath(
+                    title: book.title, topics: book.topics);
                   final count = counts[facet] ?? 0;
                   return _buildBookTile(book, count, 0);
                 },

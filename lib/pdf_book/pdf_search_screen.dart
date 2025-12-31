@@ -8,8 +8,8 @@ import 'package:otzaria/utils/ref_helper.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/search_pane_base.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/search/book_facet.dart';
 import 'package:search_engine/search_engine.dart';
-import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 
 //
@@ -62,29 +62,16 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
 
     debugPrint('📚 PdfSearch: book.title = $title');
 
-    // Try to get the full book with topics from the library
-    String topics = widget.bookTopics ?? '';
-    if (topics.isEmpty) {
-      try {
-        final library = await DataRepository.instance.library;
-        final fullBook = library.findBookByTitle(title, PdfBook);
-        if (fullBook != null) {
-          topics = fullBook.topics;
-          debugPrint('📚 PdfSearch: Found topics from library = "$topics"');
-        }
-      } catch (e) {
-        debugPrint('📚 PdfSearch: Error getting book from library: $e');
-      }
-    }
+    final topics = await BookFacet.resolveTopics(
+      title: title,
+      initialTopics: widget.bookTopics ?? '',
+      type: PdfBook,
+    );
+
+    if (!mounted) return;
 
     debugPrint('📚 PdfSearch: final topics = "$topics"');
-
-    // Build the facet path using topics (same format as indexing)
-    if (topics.isNotEmpty) {
-      _bookPath = "/${topics.replaceAll(', ', '/')}/$title";
-    } else {
-      _bookPath = "/$title";
-    }
+    _bookPath = BookFacet.buildFacetPath(title: title, topics: topics);
     debugPrint('📚 PdfSearch: _bookPath = $_bookPath');
 
     // If the controller already has text, start the search
