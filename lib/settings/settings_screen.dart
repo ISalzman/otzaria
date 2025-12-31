@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/settings/settings_bloc.dart';
-import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/settings/tabs/settings_tabs.dart';
 
 class MySettingsScreen extends StatefulWidget {
@@ -66,9 +63,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
-    return BlocBuilder<SettingsBloc, SettingsState>(
-      builder: (context, state) {
-        return Scaffold(
+    return Scaffold(
           appBar: AppBar(
             title: const Text('הגדרות'),
             centerTitle: true,
@@ -89,16 +84,19 @@ class _MySettingsScreenState extends State<MySettingsScreen>
           ),
           body: TabBarView(
             controller: _tabController,
-            children: _tabs
-                .asMap()
-                .entries
-                .map((entry) => _buildTabContent(entry.key))
-                .toList(),
+            children: const [
+              AppearanceSettingsTab(),
+              ReadingSettingsTab(),
+              LibrarySettingsTab(),
+              CalendarSettingsTab(),
+              GematriaSettingsTab(),
+              BackupSettingsTab(),
+              AdvancedSettingsTab(),
+            ],
           ),
         );
-      },
-    );
   }
+
 }
 
 class _TabInfo {
@@ -111,17 +109,3 @@ class _TabInfo {
   });
 }
 
-extension on _MySettingsScreenState {
-  Widget _buildTabContent(int index) {
-    const tabs = [
-      AppearanceSettingsTab(),
-      ReadingSettingsTab(),
-      LibrarySettingsTab(),
-      CalendarSettingsTab(),
-      GematriaSettingsTab(),
-      BackupSettingsTab(),
-      AdvancedSettingsTab(),
-    ];
-    return tabs[index];
-  }
-}
