@@ -255,7 +255,9 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                           child: Text(
                             font.label,
                             style: TextStyle(
-                              fontFamily: font.value,
+                              fontFamily: AppFonts.fontPaths.containsKey(font.value)
+                                  ? font.value
+                                  : null,
                               fontSize: 13,
                             ),
                           ),
