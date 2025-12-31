@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/widgets/dialog_keyboard_navigator.dart';
 
 /// דיאלוג אישור עם תמיכה באנטר וחיצים
 class ConfirmationDialog extends StatefulWidget {
@@ -29,36 +30,11 @@ class _ConfirmationDialogState extends State<ConfirmationDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      autofocus: true,
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) {
-          return KeyEventResult.ignored;
-        }
-
-        // חיצים - מעבר בין כפתורים
-        if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-            event.logicalKey == LogicalKeyboardKey.arrowRight) {
-          setState(() {
-            _focusedButtonIndex = _focusedButtonIndex == 0 ? 1 : 0;
-          });
-          return KeyEventResult.handled;
-        }
-
-        // אנטר - לחיצה על הכפתור הממוקד
-        if (event.logicalKey == LogicalKeyboardKey.enter) {
-          Navigator.of(context).pop(_focusedButtonIndex == 1);
-          return KeyEventResult.handled;
-        }
-
-        // Escape - ביטול
-        if (event.logicalKey == LogicalKeyboardKey.escape) {
-          Navigator.of(context).pop(false);
-          return KeyEventResult.handled;
-        }
-
-        return KeyEventResult.ignored;
-      },
+    return DialogKeyboardNavigator(
+      focusedIndex: _focusedButtonIndex,
+      onFocusChange: (index) => setState(() => _focusedButtonIndex = index),
+      onConfirm: () => Navigator.of(context).pop(true),
+      onCancel: () => Navigator.of(context).pop(false),
       child: AlertDialog(
         title: Text(widget.title),
         content: Text(widget.content),

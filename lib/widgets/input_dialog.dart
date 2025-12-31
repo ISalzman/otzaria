@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/dialog_keyboard_navigator.dart';
 
 /// דיאלוג הזנת טקסט עם תמיכה באנטר וחיצים
 class InputDialog extends StatefulWidget {
@@ -59,47 +60,12 @@ class _InputDialogState extends State<InputDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) {
-          return KeyEventResult.ignored;
-        }
-
-        // אם הפוקוס בשדה הטקסט, אנטר שולח את הטופס
-        if (_textFieldFocusNode.hasFocus) {
-          if (event.logicalKey == LogicalKeyboardKey.enter) {
-            _submit();
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        }
-
-        // אם הפוקוס בכפתורים - חיצים ואנטר
-        if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-            event.logicalKey == LogicalKeyboardKey.arrowRight) {
-          setState(() {
-            _focusedButtonIndex = _focusedButtonIndex == 0 ? 1 : 0;
-          });
-          return KeyEventResult.handled;
-        }
-
-        if (event.logicalKey == LogicalKeyboardKey.enter) {
-          if (_focusedButtonIndex == 1) {
-            _submit();
-          } else {
-            Navigator.of(context).pop();
-          }
-          return KeyEventResult.handled;
-        }
-
-        // Escape - ביטול
-        if (event.logicalKey == LogicalKeyboardKey.escape) {
-          Navigator.of(context).pop();
-          return KeyEventResult.handled;
-        }
-
-        return KeyEventResult.ignored;
-      },
+    return DialogKeyboardNavigator(
+      focusedIndex: _focusedButtonIndex,
+      onFocusChange: (index) => setState(() => _focusedButtonIndex = index),
+      onConfirm: _submit,
+      onCancel: () => Navigator.of(context).pop(),
+      textFieldFocusNode: _textFieldFocusNode,
       child: AlertDialog(
         title: Text(widget.title),
         content: Column(
