@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:otzaria/widgets/dialog_keyboard_navigator.dart';
+import 'package:otzaria/widgets/mixins/dialog_navigation_mixin.dart';
 
 /// דיאלוג אישור עם תמיכה באנטר וחיצים
 class ConfirmationDialog extends StatefulWidget {
@@ -25,14 +25,11 @@ class ConfirmationDialog extends StatefulWidget {
   State<ConfirmationDialog> createState() => _ConfirmationDialogState();
 }
 
-class _ConfirmationDialogState extends State<ConfirmationDialog> {
-  int _focusedButtonIndex = 1; // 0 = ביטול, 1 = אישור (ברירת מחדל)
-
+class _ConfirmationDialogState extends State<ConfirmationDialog>
+    with DialogNavigationMixin {
   @override
   Widget build(BuildContext context) {
-    return DialogKeyboardNavigator(
-      focusedIndex: _focusedButtonIndex,
-      onFocusChange: (index) => setState(() => _focusedButtonIndex = index),
+    return buildKeyboardNavigator(
       onConfirm: () => Navigator.of(context).pop(true),
       onCancel: () => Navigator.of(context).pop(false),
       child: AlertDialog(
@@ -41,12 +38,12 @@ class _ConfirmationDialogState extends State<ConfirmationDialog> {
         actions: [
           _buildButton(
             text: widget.cancelText,
-            isFocused: _focusedButtonIndex == 0,
+            isFocused: focusedButtonIndex == 0,
             onPressed: () => Navigator.of(context).pop(false),
           ),
           _buildButton(
             text: widget.confirmText,
-            isFocused: _focusedButtonIndex == 1,
+            isFocused: focusedButtonIndex == 1,
             isConfirm: true,
             onPressed: () => Navigator.of(context).pop(true),
           ),

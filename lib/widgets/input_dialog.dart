@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
-import 'package:otzaria/widgets/dialog_keyboard_navigator.dart';
+import 'package:otzaria/widgets/mixins/dialog_navigation_mixin.dart';
 
 /// דיאלוג הזנת טקסט עם תמיכה באנטר וחיצים
 class InputDialog extends StatefulWidget {
@@ -32,9 +32,8 @@ class InputDialog extends StatefulWidget {
   State<InputDialog> createState() => _InputDialogState();
 }
 
-class _InputDialogState extends State<InputDialog> {
+class _InputDialogState extends State<InputDialog> with DialogNavigationMixin {
   late final TextEditingController _controller;
-  int _focusedButtonIndex = 1; // 0 = ביטול, 1 = אישור (ברירת מחדל)
   final FocusNode _textFieldFocusNode = FocusNode();
 
   @override
@@ -60,9 +59,7 @@ class _InputDialogState extends State<InputDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return DialogKeyboardNavigator(
-      focusedIndex: _focusedButtonIndex,
-      onFocusChange: (index) => setState(() => _focusedButtonIndex = index),
+    return buildKeyboardNavigator(
       onConfirm: _submit,
       onCancel: () => Navigator.of(context).pop(),
       textFieldFocusNode: _textFieldFocusNode,
@@ -95,12 +92,12 @@ class _InputDialogState extends State<InputDialog> {
         actions: [
           _buildButton(
             text: widget.cancelText,
-            isFocused: _focusedButtonIndex == 0,
+            isFocused: focusedButtonIndex == 0,
             onPressed: () => Navigator.of(context).pop(),
           ),
           _buildButton(
             text: widget.confirmText,
-            isFocused: _focusedButtonIndex == 1,
+            isFocused: focusedButtonIndex == 1,
             isConfirm: true,
             onPressed: _submit,
           ),
