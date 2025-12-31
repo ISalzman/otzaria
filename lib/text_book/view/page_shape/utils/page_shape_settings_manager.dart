@@ -3,6 +3,18 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 /// מנהל הגדרות צורת הדף - שומר ומטעין את בחירת המפרשים לכל ספר
 class PageShapeSettingsManager {
   static const String _highlightPrefix = 'page_shape_highlight_';
+  static const String _commentaryFontSizeKey = 'page_shape_commentary_font_size';
+  static const double defaultCommentaryFontSize = 16.0;
+
+  /// שמירת גודל גופן המפרשים (הגדרה גלובלית)
+  static Future<void> saveCommentaryFontSize(double size) async {
+    await Settings.setValue<double>(_commentaryFontSizeKey, size);
+  }
+
+  /// טעינת גודל גופן המפרשים
+  static double getCommentaryFontSize() {
+    return Settings.getValue<double>(_commentaryFontSizeKey) ?? defaultCommentaryFontSize;
+  }
 
   /// טעינת ההגדרות עבור ספר מסוים
   static Map<String, String?>? loadConfiguration(String bookTitle) {

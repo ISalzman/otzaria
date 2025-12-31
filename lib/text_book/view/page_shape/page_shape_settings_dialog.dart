@@ -38,6 +38,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   String? _bottomRightCommentator;
   String _bottomFontFamily =
       AppFonts.defaultFont; // גופן ברירת מחדל למפרשים תחתונים
+  double _commentaryFontSize = PageShapeSettingsManager.defaultCommentaryFontSize;
   List<CommentatorGroup> _groups = [];
   bool _isLoadingGroups = true;
   bool _hasChanges = false; // האם היו שינויים שצריך לשמור
@@ -64,6 +65,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _bottomRightCommentator = widget.currentBottomRight;
       _bottomFontFamily = Settings.getValue<String>('page_shape_bottom_font') ??
           AppFonts.defaultFont;
+      _commentaryFontSize = PageShapeSettingsManager.getCommentaryFontSize();
       _highlightRelatedCommentators =
           PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
       _columnVisibility =
@@ -160,6 +162,14 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     _saveSettings();
   }
 
+  void _onFontSizeChanged(double value) {
+    setState(() {
+      _commentaryFontSize = value;
+      _hasChanges = true;
+    });
+    PageShapeSettingsManager.saveCommentaryFontSize(value);
+  }
+
   void _toggleColumnVisibility(String column, bool visible) {
     setState(() {
       _columnVisibility[column] = visible;
@@ -231,6 +241,54 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
               ),
               const SizedBox(height: 20),
               const Divider(),
+              const SizedBox(height: 12),
+              // גודל גופן המפרשים
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 140,
+                    child: Text(
+                      'גודל גופן מפרשים:',
+                      style: TextStyle(fontSize: 15),
+                    ),
+                  ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove),
+                          onPressed: _commentaryFontSize > 10
+                              ? () => _onFontSizeChanged(_commentaryFontSize - 1)
+                              : null,
+                        ),
+                        SizedBox(
+                          width: 50,
+                          child: Text(
+                            '${_commentaryFontSize.round()}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add),
+                          onPressed: _commentaryFontSize < 30
+                              ? () => _onFontSizeChanged(_commentaryFontSize + 1)
+                              : null,
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value: _commentaryFontSize,
+                            min: 10,
+                            max: 30,
+                            divisions: 20,
+                            onChanged: _onFontSizeChanged,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
               Row(
                 children: [
