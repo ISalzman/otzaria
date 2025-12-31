@@ -108,4 +108,3 @@ class _TabInfo {
     required this.icon,
   });
 }
-
