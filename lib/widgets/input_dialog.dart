@@ -13,6 +13,7 @@ class InputDialog extends StatefulWidget {
   final String cancelText;
   final String confirmText;
   final Color? confirmColor;
+  final bool obscureText;
 
   const InputDialog({
     super.key,
@@ -25,6 +26,7 @@ class InputDialog extends StatefulWidget {
     this.cancelText = 'ביטול',
     this.confirmText = 'שמור',
     this.confirmColor,
+    this.obscureText = false,
   });
 
   @override
@@ -80,6 +82,7 @@ class _InputDialogState extends State<InputDialog> with DialogNavigationMixin {
               controller: _controller,
               focusNode: _textFieldFocusNode,
               keyboardType: widget.keyboardType,
+              obscureText: widget.obscureText,
               decoration: InputDecoration(
                 labelText: widget.labelText,
                 hintText: widget.hintText,
