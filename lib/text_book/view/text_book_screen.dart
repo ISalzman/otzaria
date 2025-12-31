@@ -475,13 +475,52 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       vsync: this,
       initialIndex: initialIndex,
     );
-
     _sidebarWidth = ValueNotifier<double>(
         Settings.getValue<double>('key-sidebar-width', defaultValue: 300)!);
-    _settingsSub = context
-        .read<SettingsBloc>()
-        .stream
-        .listen((state) => _sidebarWidth.value = state.sidebarWidth);
+
+    // שמירת הגדרות נוכחיות כדי לזהות שינויים
+    double previousFontSize = context.read<SettingsBloc>().state.fontSize;
+    String previousFontFamily = context.read<SettingsBloc>().state.fontFamily;
+    bool previousRemoveNikud =
+        context.read<SettingsBloc>().state.defaultRemoveNikud;
+
+    _settingsSub = context.read<SettingsBloc>().stream.listen((state) {
+      _sidebarWidth.value = state.sidebarWidth;
+
+      // אם גודל הגופן השתנה, עדכן אותו מיידית
+      if (state.fontSize != previousFontSize) {
+        previousFontSize = state.fontSize;
+
+        if (!mounted) return;
+
+        final currentState = context.read<TextBookBloc>().state;
+        if (currentState is TextBookLoaded) {
+          context.read<TextBookBloc>().add(UpdateFontSize(state.fontSize));
+        }
+      }
+
+      // אם משפחת הגופן או הסרת ניקוד השתנו, טען מחדש את התוכן
+      if (state.fontFamily != previousFontFamily ||
+          state.defaultRemoveNikud != previousRemoveNikud) {
+        previousFontFamily = state.fontFamily;
+        previousRemoveNikud = state.defaultRemoveNikud;
+
+        if (!mounted) return;
+
+        final currentState = context.read<TextBookBloc>().state;
+        if (currentState is TextBookLoaded) {
+          context.read<TextBookBloc>().add(
+                LoadContent(
+                  fontSize: state.fontSize,
+                  showSplitView: currentState.showSplitView,
+                  removeNikud: state.defaultRemoveNikud,
+                  forceCloseLeftPane: widget.isInCombinedView,
+                  preserveState: true,
+                ),
+              );
+        }
+      }
+    });
   }
 
   /// טעינת הגדרות פר-ספר
@@ -925,13 +964,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         final currentSettings =
             config ?? await DefaultCommentators.getDefaults(state.book);
 
-        if (!mounted) return;
+        if (!context.mounted) return;
 
+        final availableCommentators = state.availableCommentators;
+        final bookTitle = state.book.title;
         final hadChanges = await showDialog<bool>(
           context: context,
-          builder: (dialogContext) => PageShapeSettingsDialog(
-            availableCommentators: state.availableCommentators,
-            bookTitle: state.book.title,
+          builder: (builderContext) => PageShapeSettingsDialog(
+            availableCommentators: availableCommentators,
+            bookTitle: bookTitle,
             currentLeft: currentSettings['left'],
             currentRight: currentSettings['right'],
             currentBottom: currentSettings['bottom'],
@@ -939,7 +980,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ),
         );
         // אם היו שינויים, נשנה את המפתח כדי לגרום ל-PageShapeScreen להיבנות מחדש
-        if (hadChanges == true && mounted) {
+        if (hadChanges == true && context.mounted) {
           setState(() {
             _pageShapeKey = UniqueKey();
           });
@@ -2334,6 +2375,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       scrollControler: state.scrollController,
       // הוא מעביר את טקסט החיפוש מה-state הנוכחי אל תוך רכיב החיפוש
       initialQuery: state.searchText,
+      initialSearchOptions: widget.tab.searchOptions,
+      initialAlternativeWords: widget.tab.alternativeWords,
+      initialSpacingValues: widget.tab.spacingValues,
+      initialSearchMode: widget.tab.searchMode,
       closeLeftPaneCallback: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
     );
