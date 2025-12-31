@@ -54,6 +54,7 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
       children: [
         if (widget.progressWidget != null) widget.progressWidget!,
         Padding(
+          key: const ValueKey('searchField'),
           padding: const EdgeInsets.all(8.0),
           child: ValueListenableBuilder<TextEditingValue>(
             valueListenable: widget.searchController,
