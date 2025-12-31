@@ -33,14 +33,24 @@ class TextBookSearchView extends StatefulWidget {
   final ItemScrollController scrollControler;
   final FocusNode focusNode;
   final void Function() closeLeftPaneCallback;
+  final String initialQuery;
+  final Map<String, Map<String, bool>> initialSearchOptions;
+  final Map<int, List<String>> initialAlternativeWords;
+  final Map<String, String> initialSpacingValues;
+  final SearchMode initialSearchMode;
 
-  const TextBookSearchView(
-      {super.key,
-      required this.data,
-      required this.scrollControler,
-      required this.focusNode,
-      required this.closeLeftPaneCallback,
-      required String initialQuery});
+  const TextBookSearchView({
+    super.key,
+    required this.data,
+    required this.scrollControler,
+    required this.focusNode,
+    required this.closeLeftPaneCallback,
+    required this.initialQuery,
+    this.initialSearchOptions = const {},
+    this.initialAlternativeWords = const {},
+    this.initialSpacingValues = const {},
+    this.initialSearchMode = SearchMode.exact,
+  });
 
   @override
   TextBookSearchViewState createState() => TextBookSearchViewState();
@@ -65,8 +75,11 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     super.initState();
     _content = widget.data.split('\n');
 
-    searchTextController.text =
-        (context.read<TextBookBloc>().state as TextBookLoaded).searchText;
+    searchTextController.text = widget.initialQuery;
+    _searchOptions = widget.initialSearchOptions;
+    _alternativeWords = widget.initialAlternativeWords;
+    _spacingValues = widget.initialSpacingValues;
+    _searchMode = widget.initialSearchMode;
 
     scrollControler = widget.scrollControler;
     widget.focusNode.requestFocus();

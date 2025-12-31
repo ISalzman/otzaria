@@ -28,6 +28,10 @@ class PdfBookSearchView extends StatefulWidget {
     this.bookTitle,
     this.bookTopics,
     this.initialSearchText = '',
+    this.initialSearchOptions = const {},
+    this.initialAlternativeWords = const {},
+    this.initialSpacingValues = const {},
+    this.initialSearchMode = SearchMode.exact,
     this.onSearchResultNavigated,
     super.key,
   });
@@ -39,6 +43,10 @@ class PdfBookSearchView extends StatefulWidget {
   final String? bookTitle;
   final String? bookTopics;
   final String initialSearchText;
+  final Map<String, Map<String, bool>> initialSearchOptions;
+  final Map<int, List<String>> initialAlternativeWords;
+  final Map<String, String> initialSpacingValues;
+  final SearchMode initialSearchMode;
   final VoidCallback? onSearchResultNavigated;
 
   @override
@@ -60,6 +68,10 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
   @override
   void initState() {
     super.initState();
+    _searchOptions = widget.initialSearchOptions;
+    _alternativeWords = widget.initialAlternativeWords;
+    _spacingValues = widget.initialSpacingValues;
+    _searchMode = widget.initialSearchMode;
     widget.searchController.addListener(_searchTextUpdated);
     _initializeBookPath();
   }
