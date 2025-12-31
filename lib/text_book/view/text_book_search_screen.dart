@@ -334,10 +334,15 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         tempTab.spacingValues.addAll(_spacingValues);
         tempTab.searchBloc.add(SetSearchMode(_searchMode));
 
+        final bookTitle = (context.read<TextBookBloc>().state as TextBookLoaded)
+            .book
+            .title;
+
         showDialog(
           context: context,
           builder: (context) => SearchDialog(
             existingTab: tempTab,
+            bookTitle: bookTitle,
             onSearch: (query, searchOptions, alternativeWords, spacingValues,
                 searchMode) {
               searchTextController.text = query;

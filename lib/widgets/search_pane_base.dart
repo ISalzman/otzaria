@@ -73,20 +73,18 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
                 },
                 decoration: InputDecoration(
                   hintText: widget.hintText,
-                  prefixIcon: Row(
+                  prefixIcon: const Icon(FluentIcons.search_24_regular),
+                  suffixIcon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(FluentIcons.search_24_regular),
                       if (widget.onAdvancedSearch != null)
                         IconButton(
                           icon: const Icon(FluentIcons.settings_24_regular),
                           tooltip: 'חיפוש מתקדם',
                           onPressed: widget.onAdvancedSearch,
                         ),
-                    ],
-                  ),
-                  suffixIcon: value.text.isNotEmpty
-                      ? IconButton(
+                      if (value.text.isNotEmpty)
+                        IconButton(
                           tooltip: 'נקה',
                           onPressed: () {
                             widget.searchController.clear();
@@ -95,8 +93,9 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
                             widget.focusNode.requestFocus();
                           },
                           icon: const Icon(FluentIcons.dismiss_24_regular),
-                        )
-                      : null,
+                        ),
+                    ],
+                  ),
                   isDense: true,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8.0),

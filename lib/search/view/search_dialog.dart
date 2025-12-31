@@ -32,8 +32,10 @@ class SearchDialog extends StatefulWidget {
     Map<String, String> spacingValues,
     SearchMode searchMode,
   )? onSearch;
+  final String? bookTitle;
 
-  const SearchDialog({super.key, this.existingTab, this.onSearch});
+  const SearchDialog(
+      {super.key, this.existingTab, this.onSearch, this.bookTitle});
 
   @override
   State<SearchDialog> createState() => _SearchDialogState();
@@ -969,10 +971,12 @@ class _SearchDialogState extends State<SearchDialog> {
                   children: [
                     const Icon(FluentIcons.search_24_filled, size: 28),
                     const SizedBox(width: 12),
-                    const Text(
-                      'חיפוש',
-                      style:
-                          TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    Text(
+                      widget.bookTitle != null
+                          ? 'חיפוש ב${widget.bookTitle}'
+                          : 'חיפוש',
+                      style: const TextStyle(
+                          fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                     const Spacer(),
                     IconButton(

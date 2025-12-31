@@ -271,6 +271,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
           context: context,
           builder: (context) => SearchDialog(
             existingTab: tempTab,
+            bookTitle: widget.bookTitle,
             onSearch: (query, searchOptions, alternativeWords, spacingValues,
                 searchMode) {
               widget.searchController.text = query;
