@@ -25,6 +25,7 @@ import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
+import 'package:otzaria/utils/fullscreen_helper.dart';
 import 'dart:async';
 
 class MySettingsScreen extends StatefulWidget {
@@ -301,10 +302,8 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                 onTap: () async {
                                   final newFullscreenState =
                                       !settingsState.isFullscreen;
-                                  context.read<SettingsBloc>().add(
-                                      UpdateIsFullscreen(newFullscreenState));
-                                  await windowManager
-                                      .setFullScreen(newFullscreenState);
+                                  await FullscreenHelper.toggleFullscreen(
+                                      context, newFullscreenState);
                                 },
                               );
                             },
