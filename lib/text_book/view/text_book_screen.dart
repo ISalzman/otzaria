@@ -94,6 +94,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   // Cache לרשימת אינדקסי TOC ממוינת - למניעת חישוב מחדש בכל לחיצה
   List<int>? _cachedTocIndices;
   String? _cachedTocBookTitle;
+  List<TocEntry>? _cachedToc;
 
   /// Check if book is already being tracked in Shamor Zachor
   bool _isBookTrackedInShamorZachor(String bookTitle) {
@@ -1736,8 +1737,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// מחזיר רשימה ממוינת של כל אינדקסי ה-TOC (עם cache)
   List<int> _getSortedTocIndices(List<TocEntry> entries, String bookTitle) {
-    // אם יש cache תקף, נשתמש בו
-    if (_cachedTocIndices != null && _cachedTocBookTitle == bookTitle) {
+    // אם יש cache תקף, נשתמש בו (בודקים גם את זהות רשימת ה-TOC)
+    if (_cachedTocIndices != null &&
+        _cachedTocBookTitle == bookTitle &&
+        identical(_cachedToc, entries)) {
       return _cachedTocIndices!;
     }
 
@@ -1757,6 +1760,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // שומרים ב-cache
     _cachedTocIndices = allIndices;
     _cachedTocBookTitle = bookTitle;
+    _cachedToc = entries;
 
     return allIndices;
   }
