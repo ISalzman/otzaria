@@ -252,11 +252,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('ההגדרות הפר-ספריות אופסו בהצלחה'),
-        ),
-      );
+      UiSnack.show('ההגדרות הפר-ספריות אופסו בהצלחה');
     }
   }
 

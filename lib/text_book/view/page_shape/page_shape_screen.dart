@@ -8,6 +8,8 @@ import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dar
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/commentary_sync_helper.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
+import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
+import 'package:otzaria/widgets/loading_indicator.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -209,18 +211,15 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   Widget build(BuildContext context) {
     if (_isLoadingConfig) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: LoadingIndicator(),
       );
     }
 
-    return BlocBuilder<TextBookBloc, TextBookState>(
+    return TextBookStateBuilder(
+      loadingWidget: const Scaffold(
+        body: LoadingIndicator(),
+      ),
       builder: (context, state) {
-        if (state is! TextBookLoaded) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
         return Scaffold(
           body: Column(
             children: [
@@ -756,12 +755,9 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       );
     }
 
-    return BlocBuilder<TextBookBloc, TextBookState>(
+    return TextBookStateBuilder(
+      loadingWidget: const SizedBox(),
       builder: (context, state) {
-        if (state is! TextBookLoaded) {
-          return const SizedBox();
-        }
-
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
             // מפרשים תחתונים משתמשים בגופן מההגדרות, עליונים בגופן הרגיל
