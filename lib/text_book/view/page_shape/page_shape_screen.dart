@@ -709,9 +709,10 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
             final fontFamily = widget.isBottom
                 ? bottomFont
                 : settingsState.commentatorsFontFamily;
+            final commentaryFontSize = PageShapeSettingsManager.getCommentaryFontSize();
             return SimpleTextViewer(
               content: _content!,
-              fontSize: 16, // גופן קבוע למפרשים בצורת הדף
+              fontSize: commentaryFontSize,
               fontFamily: fontFamily,
               openBookCallback: widget.openBookCallback,
               scrollController: _scrollController,

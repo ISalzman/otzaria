@@ -92,6 +92,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Future<Map<String, dynamic>>? _preloadedHeavyData;
   bool _isLoadingHeavyData = false;
 
+  // Cache לרשימת אינדקסי TOC ממוינת - למניעת חישוב מחדש בכל לחיצה
+  List<int>? _cachedTocIndices;
+  String? _cachedTocBookTitle;
+  List<TocEntry>? _cachedToc;
+
   /// Check if book is already being tracked in Shamor Zachor
   bool _isBookTrackedInShamorZachor(String bookTitle) {
     try {
@@ -1155,15 +1160,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // 7) Navigation Buttons - רק אם לא בתצוגה משולבת
       if (!widget.isInCombinedView) ...[
         ActionButtonData(
-          widget: _buildFirstPageButton(state),
+          widget: _buildPreviousTocButton(state),
           icon: FluentIcons.arrow_previous_24_filled,
-          tooltip: 'תחילת הספר',
-          onPressed: () {
-            state.scrollController.scrollTo(
-              index: 0,
-              duration: const Duration(milliseconds: 300),
-            );
-          },
+          tooltip: 'הדף/פרק הקודם',
+          onPressed: () => _navigateToPreviousToc(state),
         ),
         ActionButtonData(
           widget: _buildPreviousPageButton(state),
@@ -1194,15 +1194,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           },
         ),
         ActionButtonData(
-          widget: _buildLastPageButton(state),
+          widget: _buildNextTocButton(state),
           icon: FluentIcons.arrow_next_24_filled,
-          tooltip: 'סוף הספר',
-          onPressed: () {
-            state.scrollController.scrollTo(
-              index: state.content.length,
-              duration: const Duration(milliseconds: 300),
-            );
-          },
+          tooltip: 'הדף/פרק הבא',
+          onPressed: () => _navigateToNextToc(state),
         ),
       ],
     ];
@@ -1217,15 +1212,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // כפתורי ניווט - רק בתצוגה משולבת
       if (widget.isInCombinedView) ...[
         ActionButtonData(
-          widget: _buildFirstPageButton(state),
+          widget: _buildPreviousTocButton(state),
           icon: FluentIcons.arrow_previous_24_filled,
-          tooltip: 'תחילת הספר',
-          onPressed: () {
-            state.scrollController.scrollTo(
-              index: 0,
-              duration: const Duration(milliseconds: 300),
-            );
-          },
+          tooltip: 'הדף/פרק הקודם',
+          onPressed: () => _navigateToPreviousToc(state),
         ),
         ActionButtonData(
           widget: _buildPreviousPageButton(state),
@@ -1256,15 +1246,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           },
         ),
         ActionButtonData(
-          widget: _buildLastPageButton(state),
+          widget: _buildNextTocButton(state),
           icon: FluentIcons.arrow_next_24_filled,
-          tooltip: 'סוף הספר',
-          onPressed: () {
-            state.scrollController.scrollTo(
-              index: state.content.length,
-              duration: const Duration(milliseconds: 300),
-            );
-          },
+          tooltip: 'הדף/פרק הבא',
+          onPressed: () => _navigateToNextToc(state),
         ),
       ],
 
@@ -1372,16 +1357,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           },
         ),
 
-      // 8) מקור הספר וזכויות יוצרים - לא בתצוגה משולבת
+      // 8) אודות הספר - לא בתצוגה משולבת
       if (!widget.isInCombinedView)
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.info_24_regular),
-            tooltip: 'מקור הספר וזכויות יוצרים',
+            tooltip: 'אודות הספר',
             onPressed: () => showBookSourceDialog(context, state),
           ),
           icon: FluentIcons.info_24_regular,
-          tooltip: 'מקור הספר וזכויות יוצרים',
+          tooltip: 'אודות הספר',
           onPressed: () => showBookSourceDialog(context, state),
         ),
 
@@ -1435,7 +1420,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ActionButtonData(
               widget: const SizedBox.shrink(),
               icon: FluentIcons.info_24_regular,
-              tooltip: 'מקור הספר וזכויות יוצרים',
+              tooltip: 'אודות הספר',
               onPressed: () => showBookSourceDialog(context, state),
             ),
           ],
@@ -1675,19 +1660,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  Widget _buildFirstPageButton(TextBookLoaded state) {
-    return IconButton(
-      icon: const Icon(FluentIcons.arrow_previous_24_filled),
-      tooltip: 'תחילת הספר (CTRL + HOME)',
-      onPressed: () {
-        state.scrollController.scrollTo(
-          index: 0,
-          duration: const Duration(milliseconds: 300),
-        );
-      },
-    );
-  }
-
   Widget _buildPreviousPageButton(TextBookLoaded state) {
     return IconButton(
       icon: const Icon(FluentIcons.chevron_left_24_regular),
@@ -1720,16 +1692,125 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  Widget _buildLastPageButton(TextBookLoaded state) {
+  /// מחזיר רשימה ממוינת של כל אינדקסי ה-TOC (עם cache)
+  List<int> _getSortedTocIndices(List<TocEntry> entries, String bookTitle) {
+    // אם יש cache תקף, נשתמש בו (בודקים גם את זהות רשימת ה-TOC)
+    if (_cachedTocIndices != null &&
+        _cachedTocBookTitle == bookTitle &&
+        identical(_cachedToc, entries)) {
+      return _cachedTocIndices!;
+    }
+
+    // יוצרים רשימה שטוחה של כל האינדקסים
+    final allIndices = <int>[];
+
+    void collectIndices(List<TocEntry> toc) {
+      for (final entry in toc) {
+        allIndices.add(entry.index);
+        collectIndices(entry.children);
+      }
+    }
+
+    collectIndices(entries);
+    allIndices.sort();
+
+    // שומרים ב-cache
+    _cachedTocIndices = allIndices;
+    _cachedTocBookTitle = bookTitle;
+    _cachedToc = entries;
+
+    return allIndices;
+  }
+
+  /// מוצא את הכותרת הבאה (דף/פרק) מתוך תוכן העניינים
+  /// מחזיר את האינדקס של הכותרת הבאה, או null אם אין
+  int? _findNextTocIndex(
+      List<TocEntry> entries, int currentIndex, String bookTitle) {
+    final allIndices = _getSortedTocIndices(entries, bookTitle);
+
+    // חיפוש בינארי יעיל יותר
+    int low = 0;
+    int high = allIndices.length - 1;
+
+    while (low <= high) {
+      final mid = (low + high) ~/ 2;
+      if (allIndices[mid] <= currentIndex) {
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    return low < allIndices.length ? allIndices[low] : null;
+  }
+
+  /// מוצא את הכותרת הקודמת (דף/פרק) מתוך תוכן העניינים
+  /// מחזיר את האינדקס של הכותרת הקודמת, או null אם אין
+  int? _findPreviousTocIndex(
+      List<TocEntry> entries, int currentIndex, String bookTitle) {
+    final allIndices = _getSortedTocIndices(entries, bookTitle);
+
+    // חיפוש בינארי יעיל יותר
+    int low = 0;
+    int high = allIndices.length - 1;
+
+    while (low <= high) {
+      final mid = (low + high) ~/ 2;
+      if (allIndices[mid] < currentIndex) {
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    return high >= 0 ? allIndices[high] : null;
+  }
+
+  /// ניווט לכותרת הקודמת ב-TOC
+  void _navigateToPreviousToc(TextBookLoaded state) {
+    final currentIndex =
+        state.positionsListener.itemPositions.value.isNotEmpty
+            ? state.positionsListener.itemPositions.value.first.index
+            : 0;
+    final prevIndex = _findPreviousTocIndex(
+        state.tableOfContents, currentIndex, state.book.title);
+    if (prevIndex != null) {
+      state.scrollController.scrollTo(
+        index: prevIndex,
+        duration: const Duration(milliseconds: 300),
+      );
+    }
+  }
+
+  /// ניווט לכותרת הבאה ב-TOC
+  void _navigateToNextToc(TextBookLoaded state) {
+    final currentIndex =
+        state.positionsListener.itemPositions.value.isNotEmpty
+            ? state.positionsListener.itemPositions.value.first.index
+            : 0;
+    final nextIndex = _findNextTocIndex(
+        state.tableOfContents, currentIndex, state.book.title);
+    if (nextIndex != null) {
+      state.scrollController.scrollTo(
+        index: nextIndex,
+        duration: const Duration(milliseconds: 300),
+      );
+    }
+  }
+
+  Widget _buildPreviousTocButton(TextBookLoaded state) {
+    return IconButton(
+      icon: const Icon(FluentIcons.arrow_previous_24_filled),
+      tooltip: 'הדף/פרק הקודם',
+      onPressed: () => _navigateToPreviousToc(state),
+    );
+  }
+
+  Widget _buildNextTocButton(TextBookLoaded state) {
     return IconButton(
       icon: const Icon(FluentIcons.arrow_next_24_filled),
-      tooltip: 'סוף הספר (CTRL + END)',
-      onPressed: () {
-        state.scrollController.scrollTo(
-          index: state.content.length,
-          duration: const Duration(milliseconds: 300),
-        );
-      },
+      tooltip: 'הדף/פרק הבא',
+      onPressed: () => _navigateToNextToc(state),
     );
   }
 
