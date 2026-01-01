@@ -1347,6 +1347,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               MaterialPageRoute(
                 builder: (context) => PrintingScreen(
                   data: Future.value(state.content.join('\n')),
+                  bookId: state.book.title,
+                  links: state.links,
+                  activeCommentators: state.activeCommentators,
                   startLine: state.visibleIndices.first,
                   removeNikud: state.removeNikud,
                   removeTaamim: !settingsState.showTeamim,
@@ -1408,6 +1411,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   MaterialPageRoute(
                     builder: (context) => PrintingScreen(
                       data: Future.value(state.content.join('\n')),
+                      bookId: state.book.title,
+                      links: state.links,
+                      activeCommentators: state.activeCommentators,
                       startLine: state.visibleIndices.first,
                       removeNikud: state.removeNikud,
                       removeTaamim: !settingsState.showTeamim,
@@ -1826,6 +1832,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           MaterialPageRoute(
             builder: (context) => PrintingScreen(
               data: Future.value(state.content.join('\n')),
+              bookId: state.book.title,
+              links: state.links,
+              activeCommentators: state.activeCommentators,
               startLine: state.visibleIndices.first,
               removeNikud: state.removeNikud,
               removeTaamim: !settingsState.showTeamim,
@@ -2537,6 +2546,9 @@ bool _handleGlobalKeyEvent(
       MaterialPageRoute(
         builder: (context) => PrintingScreen(
           data: Future.value(state.content.join('\n')),
+          bookId: state.book.title,
+          links: state.links,
+          activeCommentators: state.activeCommentators,
           startLine: state.visibleIndices.first,
           removeNikud: state.removeNikud,
           removeTaamim: !settingsState.showTeamim,

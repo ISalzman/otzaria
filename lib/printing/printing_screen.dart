@@ -8,6 +8,9 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/constants/fonts.dart';
+import 'package:otzaria/models/links.dart';
+import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/pdf_book/pdf_page_number_dispaly.dart';
 import 'package:otzaria/pdf_book/pdf_thumbnails_screen.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
@@ -19,6 +22,9 @@ import 'package:otzaria/models/books.dart';
 
 class PrintingScreen extends StatefulWidget {
   final Future<String> data;
+  final String bookId;
+  final List<Link> links;
+  final List<String> activeCommentators;
   final bool removeNikud;
   final bool removeTaamim;
   final int startLine;
@@ -26,6 +32,9 @@ class PrintingScreen extends StatefulWidget {
   const PrintingScreen({
     super.key,
     required this.data,
+    required this.bookId,
+    this.links = const [],
+    this.activeCommentators = const [],
     this.startLine = 0,
     this.removeNikud = false,
     this.removeTaamim = false,
@@ -52,6 +61,13 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
   bool _showThumbnails = false;
   int _pagesPerSheet = 1;
+
+  bool _includeCommentaries = false;
+  bool _includePersonalNotes = false;
+
+  final Map<String, String> _commentaryContentCache = {};
+  List<PersonalNote>? _personalNotesCache;
+  bool _isLoadingNotes = false;
 
   // מצב בחירה: שורות או כותרות
   bool _isHeaderMode = true; // ברירת מחדל: כותרות
@@ -281,7 +297,21 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (shouldReplaceHolyNames) {
       bookName = replaceHolyNames(bookName);
     }
-    data = data.getRange(startLine, endLine).toList();
+    final allLines = data;
+    final selectedStart = startLine.clamp(0, allLines.length);
+    final selectedEnd = endLine.clamp(selectedStart, allLines.length);
+
+    final personalNotes = _includePersonalNotes
+        ? await _getPersonalNotesForBook(widget.bookId)
+        : const <PersonalNote>[];
+
+    final blocks = await _buildPrintBlocks(
+      allLines: allLines,
+      selectedStart: selectedStart,
+      selectedEnd: selectedEnd,
+      shouldReplaceHolyNames: shouldReplaceHolyNames,
+      personalNotes: personalNotes,
+    );
 
     final result = await Isolate.run(() async {
       final pdfData =
@@ -313,22 +343,237 @@ class _PrintingScreenState extends State<PrintingScreen> {
                         .defaultTextStyle
                         .copyWith(color: PdfColors.grey)));
           },
-          build: (pw.Context context) => data
-              .map(
-                (i) => pw.Padding(
-                  padding: const pw.EdgeInsets.all(8.0),
-                  child: pw.Paragraph(
-                      text: i.replaceAll('\n', ''),
+          build: (pw.Context context) {
+            return blocks
+                .map((b) {
+                  final kind = b['kind'];
+                  final title = b['title'];
+                  final text = (b['text'] ?? '').replaceAll('\n', '');
+
+                  if (kind == 'commentaryTitle') {
+                    return pw.Padding(
+                      padding: const pw.EdgeInsets.only(
+                        top: 6,
+                        right: 8,
+                        left: 8,
+                      ),
+                      child: pw.Text(
+                        title ?? 'מפרשים',
+                        style: pw.TextStyle(
+                          fontSize: max(10.0, fontSize * 0.9),
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.grey800,
+                        ),
+                      ),
+                    );
+                  }
+
+                  if (kind == 'commentaryGroupTitle') {
+                    return pw.Padding(
+                      padding: const pw.EdgeInsets.only(
+                        top: 4,
+                        right: 12,
+                        left: 8,
+                      ),
+                      child: pw.Text(
+                        title ?? '',
+                        style: pw.TextStyle(
+                          fontSize: max(10.0, fontSize * 0.9),
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.grey900,
+                        ),
+                      ),
+                    );
+                  }
+
+                  if (kind == 'noteTitle') {
+                    return pw.Padding(
+                      padding: const pw.EdgeInsets.only(
+                        top: 6,
+                        right: 8,
+                        left: 8,
+                      ),
+                      child: pw.Text(
+                        title ?? 'הערות אישיות',
+                        style: pw.TextStyle(
+                          fontSize: max(10.0, fontSize * 0.9),
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.grey800,
+                        ),
+                      ),
+                    );
+                  }
+
+                  final effectiveFontSize = switch (kind) {
+                    'commentary' || 'note' => max(10.0, fontSize * 0.9),
+                    _ => fontSize,
+                  };
+
+                  final padding = switch (kind) {
+                    'commentary' || 'note' => const pw.EdgeInsets.only(
+                        top: 2,
+                        bottom: 2,
+                        right: 18,
+                        left: 8,
+                      ),
+                    'commentaryGroupTitle' => const pw.EdgeInsets.only(
+                        top: 4,
+                        bottom: 2,
+                        right: 12,
+                        left: 8,
+                      ),
+                    _ => const pw.EdgeInsets.all(8.0),
+                  };
+
+                  return pw.Padding(
+                    padding: padding,
+                    child: pw.Paragraph(
+                      text: text,
                       textAlign: pw.TextAlign.justify,
-                      style: pw.TextStyle(fontSize: fontSize, font: font)),
-                ),
-              )
-              .toList()));
+                      style: pw.TextStyle(
+                        fontSize: effectiveFontSize,
+                        font: font,
+                      ),
+                    ),
+                  );
+                })
+                .toList();
+          }));
 
       return await pdfData.save();
     });
 
     return result;
+  }
+
+  Future<List<Map<String, String>>> _buildPrintBlocks({
+    required List<String> allLines,
+    required int selectedStart,
+    required int selectedEnd,
+    required bool shouldReplaceHolyNames,
+    required List<PersonalNote> personalNotes,
+  }) async {
+    final blocks = <Map<String, String>>[];
+
+    Map<int, List<PersonalNote>> notesByLine = const {};
+    if (_includePersonalNotes && personalNotes.isNotEmpty) {
+      final map = <int, List<PersonalNote>>{};
+      for (final note in personalNotes) {
+        final ln = note.lineNumber;
+        if (ln == null) continue;
+        (map[ln] ??= []).add(note);
+      }
+      notesByLine = map;
+    }
+
+    for (var i = selectedStart; i < selectedEnd; i++) {
+      var lineText = allLines[i];
+      if (shouldReplaceHolyNames) {
+        lineText = replaceHolyNames(lineText);
+      }
+      blocks.add({'kind': 'text', 'text': lineText});
+
+      final lineNumber1Based = i + 1;
+
+      if (_includeCommentaries) {
+        final linksForLine = await getLinksforIndexs(
+          indexes: [i],
+          links: widget.links,
+          commentatorsToShow: widget.activeCommentators,
+        );
+
+        if (linksForLine.isNotEmpty) {
+          blocks.add({'kind': 'commentaryTitle', 'title': 'מפרשים'});
+
+          // קיבוץ לפי מפרש (כמו בתצוגת PDF): כותרת לכל מפרש, ומתחתיה כל הקטעים שלו
+          String? currentGroupTitle;
+          for (final link in linksForLine) {
+            final commentatorTitle = getTitleFromPath(link.path2);
+            if (currentGroupTitle != commentatorTitle) {
+              currentGroupTitle = commentatorTitle;
+              blocks.add({
+                'kind': 'commentaryGroupTitle',
+                'title': commentatorTitle,
+              });
+            }
+
+            final content = await _getCommentaryContent(
+              link,
+              shouldReplaceHolyNames: shouldReplaceHolyNames,
+            );
+            if (content.trim().isEmpty) continue;
+            blocks.add({
+              'kind': 'commentary',
+              'text': content,
+            });
+          }
+        }
+      }
+
+      if (_includePersonalNotes) {
+        final notes = notesByLine[lineNumber1Based] ?? const <PersonalNote>[];
+        if (notes.isNotEmpty) {
+          blocks.add({'kind': 'noteTitle', 'title': 'הערות אישיות'});
+          for (final note in notes) {
+            var noteText = note.content;
+            if (shouldReplaceHolyNames) {
+              noteText = replaceHolyNames(noteText);
+            }
+            blocks.add({'kind': 'note', 'text': noteText});
+          }
+        }
+      }
+    }
+
+    return blocks;
+  }
+
+  Future<String> _getCommentaryContent(
+    Link link, {
+    required bool shouldReplaceHolyNames,
+  }) async {
+    final key = '${link.path2}::${link.index2}::${link.heRef}';
+    final cached = _commentaryContentCache[key];
+    if (cached != null) return cached;
+
+    var text = await link.content;
+    text = stripHtmlIfNeeded(text);
+    if (_removeNikud && _removeTaamim) {
+      text = removeVolwels(text);
+    } else if (_removeNikud && !_removeTaamim) {
+      text = text
+          .replaceAll('־', ' ')
+          .replaceAll('׀', ' ')
+          .replaceAll('|', ' ')
+          .replaceAll(RegExp(r'[\u05B0-\u05C7]'), '');
+    } else if (!_removeNikud && _removeTaamim) {
+      text = removeTeamim(text);
+    }
+    if (shouldReplaceHolyNames) {
+      text = replaceHolyNames(text);
+    }
+
+    _commentaryContentCache[key] = text;
+    return text;
+  }
+
+  Future<List<PersonalNote>> _getPersonalNotesForBook(String bookId) async {
+    if (_personalNotesCache != null) return _personalNotesCache!;
+    if (_isLoadingNotes) return const <PersonalNote>[];
+    _isLoadingNotes = true;
+
+    try {
+      final repo = PersonalNotesRepository();
+      final all = await repo.loadNotes(bookId);
+      final located = all.where((n) => n.hasLocation).toList();
+      _personalNotesCache = located;
+      return located;
+    } catch (_) {
+      _personalNotesCache = const <PersonalNote>[];
+      return const <PersonalNote>[];
+    } finally {
+      _isLoadingNotes = false;
+    }
   }
 
   @override
@@ -417,6 +662,32 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                 onChanged: (value) {
                                   setState(() {
                                     _showThumbnails = value;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              SwitchListTile(
+                                title: const Text('כלול מפרשים'),
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                value: _includeCommentaries,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _includeCommentaries = value;
+                                  });
+                                },
+                              ),
+                              SwitchListTile(
+                                title: const Text('כלול הערות אישיות'),
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                value: _includePersonalNotes,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _includePersonalNotes = value;
+                                    if (!value) {
+                                      _personalNotesCache = null;
+                                    }
                                   });
                                 },
                               ),
