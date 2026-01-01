@@ -13,6 +13,7 @@ class TextBookScaffold extends StatelessWidget {
   final TextBookTab tab;
   final int? initialSidebarTabIndex;
   final Key? pageShapeKey; // מפתח עבור PageShapeScreen
+  final GlobalKey? pageShapePrintBoundaryKey; // מפתח עבור צילום למסמך הדפסה
 
   const TextBookScaffold({
     super.key,
@@ -23,6 +24,7 @@ class TextBookScaffold extends StatelessWidget {
     required this.tab,
     this.initialSidebarTabIndex,
     this.pageShapeKey,
+    this.pageShapePrintBoundaryKey,
   });
 
   @override
@@ -30,9 +32,17 @@ class TextBookScaffold extends StatelessWidget {
     return TextBookStateBuilder(
       builder: (context, state) {
         if (state.showPageShapeView) {
-          return PageShapeScreen(
+          final page = PageShapeScreen(
             key: pageShapeKey,
             openBookCallback: openBookCallback,
+          );
+
+          final boundaryKey = pageShapePrintBoundaryKey;
+          if (boundaryKey == null) return page;
+
+          return RepaintBoundary(
+            key: boundaryKey,
+            child: page,
           );
         }
 

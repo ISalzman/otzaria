@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -50,6 +52,8 @@ import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 // קבועים למצבי תצוגה (למניעת magic strings)
 const String _viewModeSplit = 'split';
@@ -87,6 +91,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   // Key עבור PageShapeScreen - שינוי המפתח יגרום לבנייה מחדש
   Key _pageShapeKey = UniqueKey();
+
+  // RepaintBoundary key עבור הדפסה של "צורת הדף" כפי שמוצג
+  final GlobalKey _pageShapePrintBoundaryKey = GlobalKey();
 
   // משתנים לשמירת נתונים כבדים שנטענים ברקע
   Future<Map<String, dynamic>>? _preloadedHeavyData;
@@ -456,6 +463,85 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       debugPrint('Error getting current line number: $e');
       return 1;
     }
+  }
+
+  Future<Uint8List?> _capturePageShapeViewPng() async {
+    final boundaryContext = _pageShapePrintBoundaryKey.currentContext;
+    if (boundaryContext == null) return null;
+
+    final renderObject = boundaryContext.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary) return null;
+
+    final pixelRatio = View.of(boundaryContext).devicePixelRatio;
+
+    // ודא שהמסך צויר לפני צילום
+    await WidgetsBinding.instance.endOfFrame;
+
+    if (!mounted) return null;
+
+    final image = await renderObject.toImage(pixelRatio: pixelRatio);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    return data?.buffer.asUint8List();
+  }
+
+  Future<void> _handlePrintPress(TextBookLoaded state) async {
+    if (state.showPageShapeView) {
+      final png = await _capturePageShapeViewPng();
+      if (!mounted) return;
+
+      final settingsState = context.read<SettingsBloc>().state;
+
+      if (png == null || png.isEmpty) {
+        UiSnack.showError('לא ניתן לצלם את תצוגת "צורת הדף" לצורך הדפסה');
+        return;
+      }
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PrintingScreen(
+            // במצב זה ה-PDF נוצר מצילום המסך, ולכן אין צורך בנתוני הטקסט
+            data: Future.value(''),
+            bookId: state.book.title,
+            removeNikud: state.removeNikud,
+            removeTaamim: !settingsState.showTeamim,
+            createPdfOverride: (PdfPageFormat format) async {
+              final doc = pw.Document(compress: false);
+              final img = pw.MemoryImage(png);
+              doc.addPage(
+                pw.Page(
+                  pageFormat: format,
+                  margin: pw.EdgeInsets.zero,
+                  build: (context) => pw.Center(
+                    child: pw.Image(
+                      img,
+                      fit: pw.BoxFit.contain,
+                    ),
+                  ),
+                ),
+              );
+              return doc.save();
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PrintingScreen(
+          data: Future.value(state.content.join('\n')),
+          bookId: state.book.title,
+          links: state.links,
+          activeCommentators: state.activeCommentators,
+          startLine: state.visibleIndices.first,
+          removeNikud: state.removeNikud,
+          removeTaamim: !context.read<SettingsBloc>().state.showTeamim,
+          tableOfContents: state.tableOfContents,
+        ),
+      ),
+    );
   }
 
   @override
@@ -1341,23 +1427,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           widget: _buildPrintButton(context, state),
           icon: FluentIcons.print_24_regular,
           tooltip: 'הדפסה',
-          onPressed: () {
-            final settingsState = context.read<SettingsBloc>().state;
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => PrintingScreen(
-                  data: Future.value(state.content.join('\n')),
-                  bookId: state.book.title,
-                  links: state.links,
-                  activeCommentators: state.activeCommentators,
-                  startLine: state.visibleIndices.first,
-                  removeNikud: state.removeNikud,
-                  removeTaamim: !settingsState.showTeamim,
-                  tableOfContents: state.tableOfContents,
-                ),
-              ),
-            );
-          },
+          onPressed: () => _handlePrintPress(state),
         ),
 
       // 8) אודות הספר - לא בתצוגה משולבת
@@ -1405,23 +1475,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               widget: const SizedBox.shrink(),
               icon: FluentIcons.print_24_regular,
               tooltip: 'הדפסה',
-              onPressed: () {
-                final settingsState = context.read<SettingsBloc>().state;
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => PrintingScreen(
-                      data: Future.value(state.content.join('\n')),
-                      bookId: state.book.title,
-                      links: state.links,
-                      activeCommentators: state.activeCommentators,
-                      startLine: state.visibleIndices.first,
-                      removeNikud: state.removeNikud,
-                      removeTaamim: !settingsState.showTeamim,
-                      tableOfContents: state.tableOfContents,
-                    ),
-                  ),
-                );
-              },
+              onPressed: () => _handlePrintPress(state),
             ),
             ActionButtonData(
               widget: const SizedBox.shrink(),
@@ -2308,6 +2362,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               tab: widget.tab,
               initialSidebarTabIndex: _sidebarTabIndex,
               pageShapeKey: _pageShapeKey,
+              pageShapePrintBoundaryKey: _pageShapePrintBoundaryKey,
             ),
           ),
         ),
