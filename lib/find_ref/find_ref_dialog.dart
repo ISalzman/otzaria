@@ -85,6 +85,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
               ),
             ),
             IconButton(
+                focusNode: FocusNode(skipTraversal: true),
                 onPressed: () => setState(() => showIndexWarning = false),
                 icon: const Icon(FluentIcons.dismiss_24_regular))
           ],
