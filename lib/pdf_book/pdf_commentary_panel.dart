@@ -4,6 +4,8 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/widgets/commentators_filter_button.dart';
+import 'package:otzaria/widgets/commentators_filter_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
@@ -199,17 +201,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           child: Row(
             children: [
               // כפתור סינון מפרשים
-              IconButton(
-                icon: Icon(
-                  FluentIcons.apps_list_24_regular,
-                  color: _showFilterTab
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.6),
-                ),
-                tooltip: 'בחירת מפרשים',
+              CommentatorsFilterButton(
+                isActive: _showFilterTab,
                 onPressed: () {
                   setState(() {
                     _showFilterTab = !_showFilterTab;
@@ -337,8 +330,12 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   Widget _buildCommentatorsFilter() {
-    return Container(
-      color: Theme.of(context).colorScheme.surface,
+    return CommentatorsFilterScreen(
+      onBack: () {
+        setState(() {
+          _showFilterTab = false;
+        });
+      },
       child: PdfCommentatorsSelector(
         tab: widget.tab,
         onChanged: () {
