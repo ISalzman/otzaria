@@ -405,14 +405,14 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                 title: 'איתור',
                                 allShortcuts: shortcuctsList,
                                 leading: const Icon(
-                                    FluentIcons.book_open_24_regular),
+                                    FluentIcons.book_search_24_regular),
                               ),
                               ShortcutDropDownTile(
                                 selected: 'ctrl+r',
                                 settingKey: 'key-shortcut-open-reading-screen',
                                 title: 'עיון',
                                 leading:
-                                    const Icon(FluentIcons.book_24_regular),
+                                    const Icon(FluentIcons.book_open_24_regular),
                                 allShortcuts: shortcuctsList,
                               ),
                               ShortcutDropDownTile(
