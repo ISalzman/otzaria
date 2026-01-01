@@ -100,6 +100,10 @@ void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
+  // pdfrx warning suppression: this only hides the debug-time warning message.
+  // It does not change the actual asset bundling (see pdfrx remove_wasm_modules).
+  pdfrxFlutterInitialize(dismissPdfiumWasmWarnings: true);
+
   // Check for single instance - skip on Apple platforms (macOS/iOS) due to sandbox restrictions
   if (!Platform.isMacOS && !Platform.isIOS) {
     FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
