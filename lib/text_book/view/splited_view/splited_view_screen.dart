@@ -10,6 +10,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
+import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
@@ -212,7 +213,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<TextBookBloc, TextBookState>(
+    return BlocListener<TextBookBloc, TextBookState>(
       listenWhen: (previous, current) {
         // האזן רק אם הוספנו מפרשים (לא אם הסרנו)
         if (previous is TextBookLoaded && current is TextBookLoaded) {
@@ -225,29 +226,26 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
         // מפרשים עברו לטור הימני, אז לא צריך לפתוח את הטור השמאלי
         // כשמוסיפים מפרשים
       },
-      buildWhen: (previous, current) {
-        if (previous is TextBookLoaded && current is TextBookLoaded) {
-          return previous.fontSize != current.fontSize ||
-              previous.showSplitView != current.showSplitView;
-        }
-        return true;
-      },
-      builder: (context, state) {
-        if (state is! TextBookLoaded) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        return Stack(
-          children: [
-            Row(
-              children: [
-                // תוכן הספר
-                Expanded(
-                  child: CombinedView(
-                    data: widget.content,
-                    textSize: state.fontSize,
-                    openBookCallback: widget.openBookCallback,
-                    openLeftPaneTab: widget.openLeftPaneTab,
+      child: TextBookStateBuilder(
+        buildWhen: (previous, current) {
+          if (previous is TextBookLoaded && current is TextBookLoaded) {
+            return previous.fontSize != current.fontSize ||
+                previous.showSplitView != current.showSplitView;
+          }
+          return true;
+        },
+        builder: (context, state) {
+          return Stack(
+            children: [
+              Row(
+                children: [
+                  // תוכן הספר
+                  Expanded(
+                    child: CombinedView(
+                      data: widget.content,
+                      textSize: state.fontSize,
+                      openBookCallback: widget.openBookCallback,
+                      openLeftPaneTab: widget.openLeftPaneTab,
                     showCommentaryAsExpansionTiles: !widget.showSplitView,
                     tab: widget.tab,
                     onOpenPersonalNotes: () {
@@ -404,6 +402,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
           ],
         );
       },
+      ),
     );
   }
 }
