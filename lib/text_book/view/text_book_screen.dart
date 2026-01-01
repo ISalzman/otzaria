@@ -1166,17 +1166,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           widget: _buildPreviousTocButton(state),
           icon: FluentIcons.arrow_previous_24_filled,
           tooltip: 'הדף/פרק הקודם',
-          onPressed: () {
-            final currentIndex =
-                state.positionsListener.itemPositions.value.isNotEmpty
-                    ? state.positionsListener.itemPositions.value.first.index
-                    : 0;
-            final prevIndex = _findPreviousTocIndex(
-                state.tableOfContents, currentIndex, state.book.title);
-            if (prevIndex != null) {
-              state.scrollController.jumpTo(index: prevIndex);
-            }
-          },
+          onPressed: () => _navigateToPreviousToc(state),
         ),
         ActionButtonData(
           widget: _buildPreviousPageButton(state),
@@ -1210,17 +1200,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           widget: _buildNextTocButton(state),
           icon: FluentIcons.arrow_next_24_filled,
           tooltip: 'הדף/פרק הבא',
-          onPressed: () {
-            final currentIndex =
-                state.positionsListener.itemPositions.value.isNotEmpty
-                    ? state.positionsListener.itemPositions.value.first.index
-                    : 0;
-            final nextIndex = _findNextTocIndex(
-                state.tableOfContents, currentIndex, state.book.title);
-            if (nextIndex != null) {
-              state.scrollController.jumpTo(index: nextIndex);
-            }
-          },
+          onPressed: () => _navigateToNextToc(state),
         ),
       ],
     ];
@@ -1238,17 +1218,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           widget: _buildPreviousTocButton(state),
           icon: FluentIcons.arrow_previous_24_filled,
           tooltip: 'הדף/פרק הקודם',
-          onPressed: () {
-            final currentIndex =
-                state.positionsListener.itemPositions.value.isNotEmpty
-                    ? state.positionsListener.itemPositions.value.first.index
-                    : 0;
-            final prevIndex = _findPreviousTocIndex(
-                state.tableOfContents, currentIndex, state.book.title);
-            if (prevIndex != null) {
-              state.scrollController.jumpTo(index: prevIndex);
-            }
-          },
+          onPressed: () => _navigateToPreviousToc(state),
         ),
         ActionButtonData(
           widget: _buildPreviousPageButton(state),
@@ -1282,17 +1252,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           widget: _buildNextTocButton(state),
           icon: FluentIcons.arrow_next_24_filled,
           tooltip: 'הדף/פרק הבא',
-          onPressed: () {
-            final currentIndex =
-                state.positionsListener.itemPositions.value.isNotEmpty
-                    ? state.positionsListener.itemPositions.value.first.index
-                    : 0;
-            final nextIndex = _findNextTocIndex(
-                state.tableOfContents, currentIndex, state.book.title);
-            if (nextIndex != null) {
-              state.scrollController.jumpTo(index: nextIndex);
-            }
-          },
+          onPressed: () => _navigateToNextToc(state),
         ),
       ],
 
@@ -1809,21 +1769,37 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return high >= 0 ? allIndices[high] : null;
   }
 
+  /// ניווט לכותרת הקודמת ב-TOC
+  void _navigateToPreviousToc(TextBookLoaded state) {
+    final currentIndex =
+        state.positionsListener.itemPositions.value.isNotEmpty
+            ? state.positionsListener.itemPositions.value.first.index
+            : 0;
+    final prevIndex = _findPreviousTocIndex(
+        state.tableOfContents, currentIndex, state.book.title);
+    if (prevIndex != null) {
+      state.scrollController.jumpTo(index: prevIndex);
+    }
+  }
+
+  /// ניווט לכותרת הבאה ב-TOC
+  void _navigateToNextToc(TextBookLoaded state) {
+    final currentIndex =
+        state.positionsListener.itemPositions.value.isNotEmpty
+            ? state.positionsListener.itemPositions.value.first.index
+            : 0;
+    final nextIndex = _findNextTocIndex(
+        state.tableOfContents, currentIndex, state.book.title);
+    if (nextIndex != null) {
+      state.scrollController.jumpTo(index: nextIndex);
+    }
+  }
+
   Widget _buildPreviousTocButton(TextBookLoaded state) {
     return IconButton(
       icon: const Icon(FluentIcons.arrow_previous_24_filled),
       tooltip: 'הדף/פרק הקודם',
-      onPressed: () {
-        final currentIndex =
-            state.positionsListener.itemPositions.value.isNotEmpty
-                ? state.positionsListener.itemPositions.value.first.index
-                : 0;
-        final prevIndex = _findPreviousTocIndex(
-            state.tableOfContents, currentIndex, state.book.title);
-        if (prevIndex != null) {
-          state.scrollController.jumpTo(index: prevIndex);
-        }
-      },
+      onPressed: () => _navigateToPreviousToc(state),
     );
   }
 
@@ -1831,17 +1807,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       icon: const Icon(FluentIcons.arrow_next_24_filled),
       tooltip: 'הדף/פרק הבא',
-      onPressed: () {
-        final currentIndex =
-            state.positionsListener.itemPositions.value.isNotEmpty
-                ? state.positionsListener.itemPositions.value.first.index
-                : 0;
-        final nextIndex = _findNextTocIndex(
-            state.tableOfContents, currentIndex, state.book.title);
-        if (nextIndex != null) {
-          state.scrollController.jumpTo(index: nextIndex);
-        }
-      },
+      onPressed: () => _navigateToNextToc(state),
     );
   }
 
