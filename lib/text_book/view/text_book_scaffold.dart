@@ -6,6 +6,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/splited_view/splited_view_screen.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_screen.dart';
+import 'package:otzaria/widgets/loading_indicator.dart';
 
 class TextBookScaffold extends StatelessWidget {
   final List<String> content;
@@ -32,7 +33,7 @@ class TextBookScaffold extends StatelessWidget {
     return BlocBuilder<TextBookBloc, TextBookState>(
       builder: (context, state) {
         if (state is! TextBookLoaded) {
-          return const Center(child: CircularProgressIndicator());
+          return const LoadingIndicator();
         }
 
         if (state.showPageShapeView) {

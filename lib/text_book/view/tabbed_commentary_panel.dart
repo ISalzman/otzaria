@@ -8,6 +8,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
+import 'package:otzaria/widgets/loading_indicator.dart';
 
 /// Widget שמציג כרטיסיות עם מפרשים וקישורים בחלונית הצד
 class TabbedCommentaryPanel extends StatefulWidget {
@@ -89,7 +90,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
     return BlocBuilder<TextBookBloc, TextBookState>(
       builder: (context, state) {
         if (state is! TextBookLoaded) {
-          return const Center(child: CircularProgressIndicator());
+          return const LoadingIndicator();
         }
 
         return Column(

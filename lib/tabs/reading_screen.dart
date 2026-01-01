@@ -18,6 +18,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/search/view/full_text_search_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:otzaria/history/history_dialog.dart';
@@ -834,12 +835,7 @@ class _ReadingScreenState extends State<ReadingScreen>
 
     // בדוק אם הספר כבר נעוץ
     if (currentPinnedBooksJson.any((book) => book['title'] == tab.title)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('"${tab.title}" כבר נעוץ בדף הבית'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('"${tab.title}" כבר נעוץ בדף הבית');
       return;
     }
 
@@ -868,12 +864,7 @@ class _ReadingScreenState extends State<ReadingScreen>
 
     debugPrint('Saved pinned books: $booksString'); // debug
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('הצמדת "${tab.title}" לדף הבית'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    UiSnack.show('הצמדת "${tab.title}" לדף הבית');
   }
 
   void closeAllTabs(TabsState state, BuildContext context) {
