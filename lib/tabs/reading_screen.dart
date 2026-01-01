@@ -30,6 +30,7 @@ import 'package:otzaria/settings/reading_settings_dialog.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/fullscreen_helper.dart';
+import 'package:otzaria/widgets/resizable_drag_handle.dart';
 
 class ReadingScreen extends StatefulWidget {
   const ReadingScreen({super.key});
@@ -922,7 +923,6 @@ class _SideBySideViewWidget extends StatefulWidget {
 
 class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
   late double _splitRatio;
-  bool _isResizing = false;
 
   @override
   void initState() {
@@ -948,7 +948,7 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
         final totalWidth = constraints.maxWidth;
         final rightWidth = totalWidth * _splitRatio;
         final leftWidth = totalWidth * (1.0 - _splitRatio);
-        final dividerWidth = _isResizing ? 4.0 : 8.0;
+        const dividerWidth = 8.0;
 
         return Stack(
           children: [
@@ -960,37 +960,16 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
                   child: widget.buildTabView(widget.rightTab),
                 ),
                 // מפריד ניתן לגרירה
-                MouseRegion(
-                  cursor: SystemMouseCursors.resizeColumn,
-                  child: GestureDetector(
-                    onHorizontalDragStart: (_) {
-                      setState(() => _isResizing = true);
-                    },
-                    onHorizontalDragUpdate: (details) {
-                      setState(() {
-                        // תיקון: הפיכת הכיוון כי אנחנו ב-RTL
-                        final delta = -details.delta.dx / totalWidth;
-                        _splitRatio = (_splitRatio + delta).clamp(0.2, 0.8);
-                      });
-                    },
-                    onHorizontalDragEnd: (_) {
-                      setState(() => _isResizing = false);
-                      widget.onSplitRatioChanged(_splitRatio);
-                    },
-                    child: Container(
-                      width: dividerWidth,
-                      color: _isResizing
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.transparent,
-                      alignment: Alignment.center,
-                      child: _isResizing
-                          ? null
-                          : Container(
-                              width: 1.5,
-                              color: Theme.of(context).dividerColor,
-                            ),
-                    ),
-                  ),
+                ResizableDragHandle(
+                  isVertical: true,
+                  onDragDelta: (delta) {
+                    setState(() {
+                      // תיקון: הפיכת הכיוון כי אנחנו ב-RTL
+                      final ratioDelta = -delta / totalWidth;
+                      _splitRatio = (_splitRatio + ratioDelta).clamp(0.2, 0.8);
+                    });
+                  },
+                  onDragEnd: () => widget.onSplitRatioChanged(_splitRatio),
                 ),
                 // ספר שמאלי (בגלל RTL, זה יופיע בצד שמאל)
                 SizedBox(

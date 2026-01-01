@@ -41,6 +41,7 @@ import 'package:otzaria/utils/shortcut_helper.dart';
 import 'package:otzaria/utils/fullscreen_helper.dart';
 
 import 'package:otzaria/widgets/responsive_action_bar.dart';
+import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'package:shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:shamor_zachor/models/book_model.dart';
@@ -2149,23 +2150,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               children: [
                 _buildTabBar(state),
                 if (state.showLeftPane)
-                  MouseRegion(
-                    cursor: SystemMouseCursors.resizeColumn,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onHorizontalDragUpdate: (details) {
-                        final newWidth =
-                            (_sidebarWidth.value - details.delta.dx)
-                                .clamp(200.0, 600.0);
-                        _sidebarWidth.value = newWidth;
-                      },
-                      onHorizontalDragEnd: (_) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(UpdateSidebarWidth(_sidebarWidth.value));
-                      },
-                      child: const VerticalDivider(width: 4),
-                    ),
+                  ResizableDragHandle(
+                    isVertical: true,
+                    hitSize: 4,
+                    onDragDelta: (delta) {
+                      final newWidth =
+                          (_sidebarWidth.value - delta).clamp(200.0, 600.0);
+                      _sidebarWidth.value = newWidth;
+                    },
+                    onDragEnd: () {
+                      context
+                          .read<SettingsBloc>()
+                          .add(UpdateSidebarWidth(_sidebarWidth.value));
+                    },
                   ),
                 Expanded(child: _buildHTMLViewer(state)),
               ],
