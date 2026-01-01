@@ -24,6 +24,7 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
   final GlobalKey<GematriaSearchScreenState> _gematriaKey =
       GlobalKey<GematriaSearchScreenState>();
   late final List<Widget> _pages;
+  late final List<Widget> _tabWidgets;
 
   final List<_TabInfo> _tabs = [
     const _TabInfo(
@@ -60,11 +61,25 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
     _calendarCubit = CalendarCubit(settingsRepository: _settingsRepository);
     
     _tabController = TabController(length: _tabs.length, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-         setState(() {});
+
+    _tabWidgets = _tabs.map((tab) {
+      if (tab.imageIcon != null) {
+        return SizedBox(
+          width: 100,
+          child: Tab(
+            text: tab.label,
+            icon: ImageIcon(AssetImage(tab.imageIcon!), size: 20),
+          ),
+        );
       }
-    });
+      return SizedBox(
+        width: 100,
+        child: Tab(
+          text: tab.label,
+          icon: Icon(tab.icon, size: 20),
+        ),
+      );
+    }).toList();
 
     // יצירת הדפים פעם אחת ב-initState
     _pages = [
@@ -105,24 +120,7 @@ class _MoreScreenState extends State<MoreScreen> with TickerProviderStateMixin {
           controller: _tabController,
           isScrollable: true,
           tabAlignment: TabAlignment.center,
-          tabs: _tabs.map((tab) {
-             if (tab.imageIcon != null) {
-               return SizedBox(
-                 width: 100,
-                 child: Tab(
-                   text: tab.label,
-                   icon: ImageIcon(AssetImage(tab.imageIcon!), size: 20),
-                 ),
-               );
-             }
-             return SizedBox(
-               width: 100,
-               child: Tab(
-                 text: tab.label,
-                 icon: Icon(tab.icon, size: 20),
-               ),
-             );
-          }).toList(),
+          tabs: _tabWidgets,
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
