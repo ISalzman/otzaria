@@ -717,12 +717,10 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                           },
                         ),
                       ]),
-                      if (!(Platform.isAndroid || Platform.isIOS))
-                        const SizedBox(height: 16),
-                      if (!(Platform.isAndroid || Platform.isIOS))
-                        _buildColumns(2, [
-                          SimpleSettingsTile(
-                            title: 'מיקום הספרייה',
+                      const SizedBox(height: 16),
+                      _buildColumns(2, [
+                        SimpleSettingsTile(
+                          title: 'מיקום הספרייה',
                             subtitle:
                                 Settings.getValue<String>('key-library-path') ??
                                     'לא קיים',
