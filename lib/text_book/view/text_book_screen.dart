@@ -1778,7 +1778,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final prevIndex = _findPreviousTocIndex(
         state.tableOfContents, currentIndex, state.book.title);
     if (prevIndex != null) {
-      state.scrollController.jumpTo(index: prevIndex);
+      state.scrollController.scrollTo(
+        index: prevIndex,
+        duration: const Duration(milliseconds: 300),
+      );
     }
   }
 
@@ -1791,7 +1794,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final nextIndex = _findNextTocIndex(
         state.tableOfContents, currentIndex, state.book.title);
     if (nextIndex != null) {
-      state.scrollController.jumpTo(index: nextIndex);
+      state.scrollController.scrollTo(
+        index: nextIndex,
+        duration: const Duration(milliseconds: 300),
+      );
     }
   }
 
