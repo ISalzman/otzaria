@@ -65,9 +65,8 @@ class _MySettingsScreenState extends State<MySettingsScreen>
 
     return Scaffold(
           appBar: AppBar(
-            title: const Text('הגדרות'),
-            centerTitle: true,
-            bottom: TabBar(
+            toolbarHeight: 72,
+            title: TabBar(
               controller: _tabController,
               isScrollable: true,
               tabAlignment: TabAlignment.center,
@@ -80,6 +79,13 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         ),
                       ))
                   .toList(),
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1.0),
+              child: Container(
+                color: Theme.of(context).dividerColor,
+                height: 1.0,
+              ),
             ),
           ),
           body: TabBarView(
