@@ -13,24 +13,10 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/widgets/count_future_builder.dart';
+import 'package:otzaria/widgets/thin_divider.dart';
 
 // Constants
 const double _kMinQueryLength = 2;
-
-/// A reusable divider widget that creates a line with a consistent height,
-/// color, and margin to match other dividers in the UI.
-class ThinDivider extends StatelessWidget {
-  const ThinDivider({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 1, // 1 logical pixel is sufficient here
-      color: Colors.grey.shade300,
-      margin: const EdgeInsets.symmetric(horizontal: 8.0),
-    );
-  }
-}
 
 class SearchFacetFiltering extends StatefulWidget {
   final SearchingTab tab;

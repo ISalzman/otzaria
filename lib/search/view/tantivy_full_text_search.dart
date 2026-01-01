@@ -16,6 +16,7 @@ import 'package:otzaria/search/view/search_edit_panel.dart';
 import 'package:otzaria/widgets/resizable_facet_filtering.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/widgets/indexing_warning.dart';
+import 'package:otzaria/widgets/thin_divider.dart';
 
 class TantivyFullTextSearch extends StatefulWidget {
   final SearchingTab tab;
@@ -100,7 +101,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               Row(children: [_buildMenuButton()]),
               // השורה התחתונה - מוצגת תמיד!
               _buildBottomRow(state),
-              _buildDivider(),
+              const ThinDivider(),
               // פאנל עריכה - מופיע מתחת לשורה התחתונה
               if (_showEditPanel)
                 SearchEditPanel(
@@ -317,7 +318,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                         ],
                       ),
                     ),
-                    _buildDivider(),
+                    const ThinDivider(),
                     // פאנל עריכה - מופיע מתחת לשורה העליונה
                     if (_showEditPanel)
                       SearchEditPanel(
@@ -503,14 +504,4 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
       ),
     );
   }
-
-  // פס מפריד מתחת לשורה התחתונה
-  Widget _buildDivider() {
-    return Container(
-      height: 1,
-      color: Colors.grey.shade300,
-      margin: const EdgeInsets.symmetric(horizontal: 8.0),
-    );
-  }
-
 }

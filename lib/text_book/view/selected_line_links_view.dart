@@ -8,8 +8,8 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
@@ -53,12 +53,8 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<TextBookBloc, TextBookState>(
+    return TextBookStateBuilder(
       builder: (context, state) {
-        if (state is! TextBookLoaded) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
         return Column(
           children: [
             // שדה חיפוש

@@ -10,6 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
@@ -373,15 +374,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                                       .read<SettingsBloc>()
                                       .add(ResetShortcuts());
 
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'קיצורי המקשים אופסו בהצלחה',
-                                        textDirection: TextDirection.rtl,
-                                      ),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
+                                  UiSnack.show('קיצורי המקשים אופסו בהצלחה');
                                 }
                               },
                             ),
@@ -1198,13 +1191,12 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
       if (!mounted) return;
 
       if (fileExists) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('הגיבוי נשמר בהצלחה!\nנתיב: $backupPath\nגודל: ${(fileSize / 1024).toStringAsFixed(1)} KB'),
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'פתח תיקייה',
-              onPressed: () async {
+        UiSnack.showWithAction(
+          message:
+              'הגיבוי נשמר בהצלחה!\nנתיב: $backupPath\nגודל: ${(fileSize / 1024).toStringAsFixed(1)} KB',
+          duration: const Duration(seconds: 5),
+          actionLabel: 'פתח תיקייה',
+          onAction: () async {
                 final dir = Directory(file.parent.path);
                 if (Platform.isWindows) {
                   await Process.run('explorer', [dir.path]);
@@ -1214,26 +1206,20 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
                   await Process.run('xdg-open', [dir.path]);
                 }
               },
-            ),
-          ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('שגיאה: הקובץ לא נוצר בנתיב:\n$backupPath'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 5),
-          ),
+        UiSnack.showWithDuration(
+          'שגיאה: הקובץ לא נוצר בנתיב:\n$backupPath',
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 5),
         );
       }
     } catch (e, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('שגיאה ביצירת הגיבוי:\n$e\n\nStack trace:\n${stackTrace.toString().substring(0, math.min(stackTrace.toString().length, 200))}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 10),
-        ),
+      UiSnack.showWithDuration(
+        'שגיאה ביצירת הגיבוי:\n$e\n\nStack trace:\n${stackTrace.toString().substring(0, math.min(stackTrace.toString().length, 200))}',
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 10),
       );
     }
   }
@@ -1286,12 +1272,10 @@ class _BackupSettingsSectionState extends State<_BackupSettingsSection> {
       );
     } catch (e, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('שגיאה בשחזור הגיבוי: $e\n\nStack trace: ${stackTrace.toString().substring(0, math.min(stackTrace.toString().length, 200))}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 10),
-        ),
+      UiSnack.showWithDuration(
+        'שגיאה בשחזור הגיבוי: $e\n\nStack trace: ${stackTrace.toString().substring(0, math.min(stackTrace.toString().length, 200))}',
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 10),
       );
     }
   }
