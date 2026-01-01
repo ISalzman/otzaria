@@ -11,7 +11,7 @@ class ResizablePreviewPanel extends StatefulWidget {
     super.key,
     required this.child,
     this.initialWidth = 400,
-    this.minWidth = 300,
+    this.minWidth = 100,
     this.maxWidth = 800,
   });
 
