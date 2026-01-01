@@ -20,6 +20,7 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/indexing_warning.dart';
 
 /// דיאלוג חיפוש מתקדם - מכיל את כל פקדי החיפוש וההגדרות
 /// כשמבצעים חיפוש, הדיאלוג נסגר ונפתחת לשונית תוצאות
@@ -108,34 +109,12 @@ class _SearchDialogState extends State<SearchDialog> {
   Widget _buildIndexWarning() {
     if (!_showIndexWarning) return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.all(8.0),
-      margin: const EdgeInsets.only(bottom: 8.0),
-      decoration: BoxDecoration(
-        color: Colors.yellow.shade100,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        children: [
-          Icon(FluentIcons.warning_24_regular, color: Colors.orange[700]),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Text(
-              'אינדקס החיפוש בתהליך עדכון. יתכן שחלק מהספרים לא יוצגו בתוצאות החיפוש.',
-              textAlign: TextAlign.right,
-              style: TextStyle(color: Colors.black87),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(FluentIcons.dismiss_24_regular),
-            onPressed: () {
-              setState(() {
-                _showIndexWarning = false;
-              });
-            },
-          ),
-        ],
-      ),
+    return IndexingWarning(
+      onDismiss: () {
+        setState(() {
+          _showIndexWarning = false;
+        });
+      },
     );
   }
 
