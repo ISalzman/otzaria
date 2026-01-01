@@ -97,7 +97,14 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
           decoration: const BoxDecoration(),
           child: Column(
             children: [
-              if (_showIndexWarning) const IndexingWarning(),
+              if (_showIndexWarning)
+                IndexingWarning(
+                  onDismiss: () {
+                    setState(() {
+                      _showIndexWarning = false;
+                    });
+                  },
+                ),
               Row(children: [_buildMenuButton()]),
               // השורה התחתונה - מוצגת תמיד!
               _buildBottomRow(state),
@@ -194,7 +201,14 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
       decoration: const BoxDecoration(),
       child: Column(
         children: [
-          if (_showIndexWarning) const IndexingWarning(),
+          if (_showIndexWarning)
+            IndexingWarning(
+              onDismiss: () {
+                setState(() {
+                  _showIndexWarning = false;
+                });
+              },
+            ),
           Expanded(
             child: BlocBuilder<SearchBloc, SearchState>(
               builder: (context, state) {
