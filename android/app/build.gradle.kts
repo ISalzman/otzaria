@@ -5,6 +5,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Load signing properties from key.properties file
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = java.util.Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.sivan22.otzaria"
     compileSdk = flutter.compileSdkVersion
@@ -17,6 +24,18 @@ android {
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_17.toString()
+    }
+
+    // Configure signing configs
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
     }
 
     defaultConfig {
@@ -32,13 +51,8 @@ android {
 
     buildTypes {
         release {
-            // WARNING: Using debug signing for release builds is a security risk!
-            // Before releasing to production, configure a proper release signing key:
-            // 1. Create a keystore file
-            // 2. Create a key.properties file with your signing credentials
-            // 3. Load the properties and configure signingConfigs.release
-            // See: https://docs.flutter.dev/deployment/android#signing-the-app
-            signingConfig = signingConfigs.getByName("debug")
+            // Use the release signing configuration
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
