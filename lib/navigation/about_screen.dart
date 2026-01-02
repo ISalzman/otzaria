@@ -19,6 +19,10 @@ class AboutScreen extends StatefulWidget {
   State<AboutScreen> createState() => _AboutScreenState();
 }
 
+// קבועים לגדלים ומרווחים
+const double _kIconSize = 16.0;
+const double _kIconTextSpacing = 8.0;
+
 class _AboutScreenState extends State<AboutScreen> {
   String? appVersion;
   String? libraryVersion;
@@ -78,8 +82,8 @@ class _AboutScreenState extends State<AboutScreen> {
       textDirection: TextDirection.rtl,
     )..layout();
 
-    // רוחב = רוחב טקסט + אייקון (16) + רווחים (8) + מרווח בטחון
-    return textPainter.width + 16 + 8 + extraPadding;
+    // רוחב = רוחב טקסט + אייקון + רווח + מרווח בטחון
+    return textPainter.width + _kIconSize + _kIconTextSpacing + extraPadding;
   }
 
   Widget _buildDevelopersList() {
@@ -107,9 +111,9 @@ class _AboutScreenState extends State<AboutScreen> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(
                         children: [
-                          const Icon(FluentIcons.person_24_regular,
-                              size: 16, color: Colors.grey),
-                          const SizedBox(width: 8),
+                          Icon(FluentIcons.person_24_regular,
+                              size: _kIconSize, color: Colors.grey),
+                          SizedBox(width: _kIconTextSpacing),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,9 +145,9 @@ class _AboutScreenState extends State<AboutScreen> {
                     width: itemWidth,
                     child: Row(
                       children: [
-                        const Icon(FluentIcons.person_24_regular,
-                            size: 16, color: Colors.grey),
-                        const SizedBox(width: 8),
+                        Icon(FluentIcons.person_24_regular,
+                            size: _kIconSize, color: Colors.grey),
+                        SizedBox(width: _kIconTextSpacing),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,8 +278,8 @@ class _AboutScreenState extends State<AboutScreen> {
                         child: Row(
                           children: [
                             const Icon(FluentIcons.book_24_regular,
-                                size: 16, color: Colors.grey),
-                            const SizedBox(width: 8),
+                                size: _kIconSize, color: Colors.grey),
+                            const SizedBox(width: _kIconTextSpacing),
                             Expanded(
                               child: _buildContributor(
                                   editor['name']!, editor['url'] ?? ''),
@@ -296,8 +300,8 @@ class _AboutScreenState extends State<AboutScreen> {
                       child: Row(
                         children: [
                           const Icon(FluentIcons.book_24_regular,
-                              size: 16, color: Colors.grey),
-                          const SizedBox(width: 8),
+                              size: _kIconSize, color: Colors.grey),
+                          const SizedBox(width: _kIconTextSpacing),
                           Expanded(
                             child: _buildContributor(
                                 editor['name']!, editor['url'] ?? ''),
