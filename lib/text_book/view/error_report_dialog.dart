@@ -150,7 +150,7 @@ $detailsSection
   /// שמירת דיווח לקובץ בתיקייה הראשית של הספרייה (libraryPath).
   static Future<bool> saveReportToFile(String reportContent) async {
     try {
-      final libraryPath = Settings.getValue('key-library-path');
+      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
 
       if (libraryPath == null || libraryPath.isEmpty) {
         debugPrint('libraryPath not set; cannot save report.');
@@ -194,7 +194,7 @@ $detailsSection
   /// סופר כמה דיווחים יש בקובץ – לפי המפריד.
   static Future<int> countReportsInFile() async {
     try {
-      final libraryPath = Settings.getValue('key-library-path');
+      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) return 0;
 
       final filePath = '$libraryPath${Platform.pathSeparator}$_reportFileName';

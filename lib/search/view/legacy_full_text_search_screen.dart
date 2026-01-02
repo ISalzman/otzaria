@@ -8,6 +8,7 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -151,7 +152,7 @@ class TextFileSearchScreenState extends State<TextFileSearchScreen>
           Expanded(
               child: FileTreeViewScreen(
             libraryRootPath:
-                '${Settings.getValue('key-library-path')}${Platform.pathSeparator}אוצריא',
+                '${Settings.getValue(SettingsRepository.keyLibraryPath)}${Platform.pathSeparator}אוצריא',
             checkedItems: widget.searcher.booksToSearch,
           )),
         ],

@@ -4,6 +4,7 @@ import 'package:csv/csv.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 /// Service for collecting data required for phone error reporting
 class DataCollectionService {
@@ -16,7 +17,7 @@ class DataCollectionService {
   /// Returns "unknown" if file is missing or cannot be read
   Future<String> readLibraryVersion() async {
     try {
-      final libraryPath = Settings.getValue('key-library-path');
+      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) {
         debugPrint('Library path not set');
         return 'unknown';
@@ -42,7 +43,7 @@ class DataCollectionService {
   /// Returns the line number (1-based) if found, null if not found or error
   Future<int?> findBookIdInCsv(String bookTitle) async {
     try {
-      final libraryPath = Settings.getValue('key-library-path');
+      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) {
         debugPrint('Library path not set');
         return null;
@@ -121,7 +122,7 @@ class DataCollectionService {
   /// Returns the number of data rows (excluding header)
   Future<int> getTotalBookCount() async {
     try {
-      final libraryPath = Settings.getValue('key-library-path');
+      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) {
         debugPrint('Library path not set');
         return 0;

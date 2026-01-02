@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:path/path.dart' as p;
+import '../settings/settings_repository.dart';
 import '../services/data_collection_service.dart';
 import '../widgets/ad_popup_dialog.dart';
 import 'dart:io';
@@ -638,7 +639,7 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Future<String?> _getOtzariaSitePath() async {
-    final libraryPath = Settings.getValue('key-library-path');
+    final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
     if (libraryPath == null || libraryPath.isEmpty) return null;
 
     // התיקייה otzaria-site נמצאת באותה תיקייה שבה נמצא "גירסת ספריה.txt"
@@ -704,7 +705,7 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Future<void> _showLibraryChangelogDialog(BuildContext context) async {
-    final libraryPath = Settings.getValue<String>('key-library-path') ?? '';
+    final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '';
     if (libraryPath.isEmpty) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
