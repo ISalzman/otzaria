@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:path/path.dart' as p;
 import '../services/data_collection_service.dart';
 import '../widgets/ad_popup_dialog.dart';
 import 'dart:io';
@@ -60,6 +61,26 @@ class _AboutScreenState extends State<AboutScreen> {
     );
   }
 
+  /// חישוב רוחב פריט לפי השם הכי ארוך ברשימה
+  double _calculateItemWidth(List<Map<String, String?>> items, {double extraPadding = 24}) {
+    if (items.isEmpty) return 0;
+
+    final longestName = items
+        .map((item) => item['name'] ?? '')
+        .reduce((a, b) => a.length > b.length ? a : b);
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: longestName,
+        style: const TextStyle(fontSize: 14),
+      ),
+      textDirection: TextDirection.rtl,
+    )..layout();
+
+    // רוחב = רוחב טקסט + אייקון (16) + רווחים (8) + מרווח בטחון
+    return textPainter.width + 16 + 8 + extraPadding;
+  }
+
   Widget _buildDevelopersList() {
     final developers = [
       {'name': 'sivan22', 'url': 'https://github.com/Sivan22'},
@@ -72,27 +93,10 @@ class _AboutScreenState extends State<AboutScreen> {
       {'name': 'NHLOCAL', 'url': 'https://github.com/NHLOCAL/Shamor-Zachor', 'description': "מפתח 'זכור ושמור'"},
     ];
 
-    // חישוב רוחב לפי השם הכי ארוך בלבד (התיאור בשורה נפרדת)
-    String longestName = '';
-    for (final dev in developers) {
-      if (dev['name']!.length > longestName.length) {
-        longestName = dev['name']!;
-      }
-    }
+    final itemWidth = _calculateItemWidth(developers);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // חישוב רוחב פריט לפי השם הכי ארוך
-        final textPainter = TextPainter(
-          text: TextSpan(
-            text: longestName,
-            style: const TextStyle(fontSize: 14),
-          ),
-          textDirection: TextDirection.rtl,
-        )..layout();
-        // רוחב = רוחב טקסט + אייקון (16) + רווחים (8) + מרווח בטחון (24)
-        final itemWidth = textPainter.width + 48;
-
         // במסכים קטנים, הצג בעמודה
         if (constraints.maxWidth < 500) {
           return Column(
@@ -253,14 +257,10 @@ class _AboutScreenState extends State<AboutScreen> {
     ];
 
     // חישוב רוחב לפי השם הכי ארוך מכל המהדירים
-    String longestName = '';
-    for (final editor in [...topEditors, ...regularEditors]) {
-      if (editor['name']!.length > longestName.length) {
-        longestName = editor['name']!;
-      }
-    }
+    final allEditors = [...topEditors, ...regularEditors];
+    final itemWidth = _calculateItemWidth(allEditors, extraPadding: 32);
 
-    Widget buildEditorsList(List<Map<String, String>> editors, double itemWidth) {
+    Widget buildEditorsList(List<Map<String, String>> editors) {
       return LayoutBuilder(
         builder: (context, constraints) {
           // במסכים קטנים, הצג בעמודה
@@ -310,17 +310,6 @@ class _AboutScreenState extends State<AboutScreen> {
       );
     }
 
-    // חישוב רוחב פריט לפי הטקסט הכי ארוך
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: longestName,
-        style: const TextStyle(fontSize: 14),
-      ),
-      textDirection: TextDirection.rtl,
-    )..layout();
-    // רוחב = רוחב טקסט + אייקון (16) + רווחים (8) + מרווח בטחון (32)
-    final itemWidth = textPainter.width + 56;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -334,7 +323,7 @@ class _AboutScreenState extends State<AboutScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        buildEditorsList(topEditors, itemWidth),
+        buildEditorsList(topEditors),
         const SizedBox(height: 24),
 
         // קטגוריה שנייה: 5-10 ספרים
@@ -347,7 +336,7 @@ class _AboutScreenState extends State<AboutScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        buildEditorsList(regularEditors, itemWidth),
+        buildEditorsList(regularEditors),
         const SizedBox(height: 16),
 
         // הודעה בסוף הרשימה
@@ -724,8 +713,7 @@ class _AboutScreenState extends State<AboutScreen> {
       return;
     }
 
-    final changelogPath =
-        '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}עדכוני ספריה.md';
+    final changelogPath = p.join(libraryPath, 'אוצריא', 'אודות התוכנה', 'עדכוני ספריה.md');
     final file = File(changelogPath);
 
     String changelog;
