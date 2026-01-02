@@ -9,6 +9,7 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/services/sources_books_service.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   final DataRepository _repository = DataRepository.instance;
@@ -83,7 +84,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       // שמירת המיקום הנוכחי בספרייה
       final currentCategoryPath = _getCurrentCategoryPath(state.currentCategory);
       
-      final libraryPath = Settings.getValue<String>('key-library-path');
+      final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath);
       if (libraryPath != null) {
         FileSystemData.instance.libraryPath = libraryPath;
       }
@@ -171,7 +172,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   ) async {
     emit(state.copyWith(isLoading: true));
     try {
-      await Settings.setValue<String>('key-library-path', event.path);
+      await Settings.setValue<String>(SettingsRepository.keyLibraryPath, event.path);
       FileSystemData.instance.libraryPath = event.path;
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
       

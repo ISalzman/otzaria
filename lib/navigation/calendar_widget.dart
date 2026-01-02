@@ -6,6 +6,7 @@ import 'calendar_cubit.dart';
 import 'package:otzaria/daf_yomi/daf_yomi_helper.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/settings/calendar_settings_dialog.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -2329,7 +2330,7 @@ class _TimesAndEventsTabViewState extends State<_TimesAndEventsTabView>
 
   // פונקציה לפתיחת דף חישוב הזמנים
   static Future<void> _openCalendarCalculationPage(BuildContext context) async {
-    final libraryPath = Settings.getValue('key-library-path');
+    final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
     if (libraryPath == null || libraryPath.isEmpty) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

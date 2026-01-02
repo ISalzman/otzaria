@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:csv/csv.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 /// שירות לניהול נתוני קובץ SourcesBooks.csv
 /// טוען את הקובץ פעם אחת בהפעלת התוכנה ושומר בזיכרון
@@ -22,7 +23,7 @@ class SourcesBooksService {
     try {
       debugPrint('Loading SourcesBooks.csv...');
       
-      final libraryPath = Settings.getValue('key-library-path');
+      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) {
         debugPrint('Library path is null or empty');
         _booksData = {};

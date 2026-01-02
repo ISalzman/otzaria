@@ -6,6 +6,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:path/path.dart' as p;
+import '../settings/settings_repository.dart';
 import '../services/data_collection_service.dart';
 import '../widgets/ad_popup_dialog.dart';
 import 'dart:io';
@@ -16,6 +18,10 @@ class AboutScreen extends StatefulWidget {
   @override
   State<AboutScreen> createState() => _AboutScreenState();
 }
+
+// קבועים לגדלים ומרווחים
+const double _kIconSize = 16.0;
+const double _kIconTextSpacing = 8.0;
 
 class _AboutScreenState extends State<AboutScreen> {
   String? appVersion;
@@ -34,6 +40,8 @@ class _AboutScreenState extends State<AboutScreen> {
     if (!hasUrl) {
       return Text(
         name,
+        maxLines: 1,
+        softWrap: false,
         style: TextStyle(
           color: Colors.grey[700],
         ),
@@ -49,11 +57,33 @@ class _AboutScreenState extends State<AboutScreen> {
       },
       child: Text(
         name,
+        maxLines: 1,
+        softWrap: false,
         style: const TextStyle(
           color: Colors.blue,
         ),
       ),
     );
+  }
+
+  /// חישוב רוחב פריט לפי השם הכי ארוך ברשימה
+  double _calculateItemWidth(List<Map<String, String?>> items, {double extraPadding = 24}) {
+    if (items.isEmpty) return 0;
+
+    final longestName = items
+        .map((item) => item['name'] ?? '')
+        .reduce((a, b) => a.length > b.length ? a : b);
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: longestName,
+        style: const TextStyle(fontSize: 14),
+      ),
+      textDirection: TextDirection.rtl,
+    )..layout();
+
+    // רוחב = רוחב טקסט + אייקון + רווח + מרווח בטחון
+    return textPainter.width + _kIconSize + _kIconTextSpacing + extraPadding;
   }
 
   Widget _buildDevelopersList() {
@@ -64,17 +94,11 @@ class _AboutScreenState extends State<AboutScreen> {
       {'name': 'zevisvei', 'url': 'https://github.com/zevisvei'},
       {'name': 'evel-avalim', 'url': 'https://github.com/evel-avalim'},
       {'name': 'userbot', 'url': 'https://github.com/userbot000'},
-      {
-        'name': 'mosh-dvd',
-        'url': 'https://github.com/mosh-dvd',
-        'description': 'ממפתחי ממשק צורת הדף'
-      },
-      {
-        'name': 'NHLOCAL',
-        'url': 'https://github.com/NHLOCAL/Shamor-Zachor',
-        'description': "מפתח 'זכור ושמור'"
-      },
+      {'name': 'mosh-dvd', 'url': 'https://github.com/mosh-dvd', 'description': 'ממפתחי ממשק צורת הדף'},
+      {'name': 'NHLOCAL', 'url': 'https://github.com/NHLOCAL/Shamor-Zachor', 'description': "מפתח 'זכור ושמור'"},
     ];
+
+    final itemWidth = _calculateItemWidth(developers);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -87,9 +111,9 @@ class _AboutScreenState extends State<AboutScreen> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(
                         children: [
-                          const Icon(FluentIcons.person_24_regular,
-                              size: 16, color: Colors.grey),
-                          const SizedBox(width: 8),
+                          Icon(FluentIcons.person_24_regular,
+                              size: _kIconSize, color: Colors.grey),
+                          SizedBox(width: _kIconTextSpacing),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,16 +138,16 @@ class _AboutScreenState extends State<AboutScreen> {
         }
         // במסכים רחבים, השתמש ב-Wrap
         return Wrap(
-          spacing: 40,
+          spacing: 16,
           runSpacing: 12,
           children: developers
               .map((dev) => SizedBox(
-                    width: 220,
+                    width: itemWidth,
                     child: Row(
                       children: [
-                        const Icon(FluentIcons.person_24_regular,
-                            size: 16, color: Colors.grey),
-                        const SizedBox(width: 8),
+                        Icon(FluentIcons.person_24_regular,
+                            size: _kIconSize, color: Colors.grey),
+                        SizedBox(width: _kIconTextSpacing),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -154,7 +178,12 @@ class _AboutScreenState extends State<AboutScreen> {
     final topEditors = [
       {
         'name': 'י. פל',
-        'url': 'https://mitmachim.top/user/%D7%99.-%D7%A4%D7%9C',
+        'url': 'https://forum.otzaria.org/user/%D7%99.-%D7%A4%D7%9C.',
+      },
+      {
+        'name': 'האדם החושב',
+        'url':
+            'https://forum.otzaria.org/user/%D7%94%D7%90%D7%93%D7%9D-%D7%94%D7%97%D7%95%D7%A9%D7%91',
       },
       {
         'name': 'sivan22',
@@ -163,73 +192,78 @@ class _AboutScreenState extends State<AboutScreen> {
       {
         'name': 'יהודי צעיר',
         'url':
-            'https://mitmachim.top/user/%D7%99%D7%94%D7%95%D7%93%D7%99-%D7%A6%D7%A2%D7%99%D7%A8',
+            'https://forum.otzaria.org/user/%D7%99%D7%94%D7%95%D7%93%D7%99-%D7%A6%D7%A2%D7%99%D7%A8',
       },
       // {
-      //   'name': 'דורש טוב',
+      //   'name': 'דורש טוב',  // כרגע לא רוצה
       //   'url':
-      //       'https://mitmachim.top/user/%D7%93%D7%95%D7%A8%D7%A9-%D7%98%D7%95%D7%91',
+      //       'https://forum.otzaria.org/user/%D7%93%D7%95%D7%A8%D7%A9-%D7%98%D7%95%D7%91',
       // },
       // {
-      //   'name': 'מ. פינק', כרגע לא רוצה
+      //   'name': 'מ. פינק', // כרגע לא רוצה
       // },
       // {
       //   'name': 'זקצ',
       // },
       {
         'name': 'קטנטן', // ד. בנדל
-        'url': 'https://mitmachim.top/user/%D7%A7%D7%98%D7%A0%D7%98%D7%9F',
+        'url': 'https://forum.otzaria.org/user/%D7%A7%D7%98%D7%A0%D7%98%D7%9F',
       },
       {
         'name': 'דאנציג',
         'url':
-            'https://mitmachim.top/user/%D7%93%D7%90%D7%A0%D7%A6%D7%99%D7%92',
+            'https://forum.otzaria.org/user/%D7%93%D7%90%D7%A0%D7%A6%D7%99%D7%92',
       },
       // {
-      //   'name': 'י. אשכנזי', כרגע לא רוצה
+      //   'name': 'י. אשכנזי', // כרגע לא רוצה
       // },
       {
         'name': '333',
-        'url': 'https://mitmachim.top/user/333',
+        'url': 'https://forum.otzaria.org/user/333',
       },
       {
         'name': "טכנולוגי גו'ניור", // י. אייזנשטיין
         'url':
-            'https://mitmachim.top/user/%D7%98%D7%9B%D7%A0%D7%95%D7%9C%D7%95%D7%92%D7%99-%D7%92%D7%95-%D7%A0%D7%99%D7%95%D7%A8',
+            'https://forum.otzaria.org/user/%D7%98%D7%9B%D7%A0%D7%95%D7%9C%D7%95%D7%92%D7%99-%D7%92%D7%95-%D7%A0%D7%99%D7%95%D7%A8',
       },
       {
         'name': 'הבל הבלים', // גאון גדול
         'url':
-            'https://mitmachim.top/user/%D7%94%D7%91%D7%9C-%D7%94%D7%91%D7%9C%D7%99%D7%9D',
+            'https://forum.otzaria.org/user/%D7%94%D7%91%D7%9C-%D7%94%D7%91%D7%9C%D7%99%D7%9D',
       },
     ];
 
     // מהדירים שההדירו בין 5 ל-10 ספרים
     final regularEditors = [
       {
-        'name': 'מוטיו',
+        'name': 'מויטיו',
+        'url': 'https://mitmachim.top/user/%D7%9E%D7%95%D7%99%D7%98%D7%99%D7%95',
       },
       {
         'name': 'דוד משה 1',
         'url':
-            'https://mitmachim.top/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1',
+            'https://forum.otzaria.org/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1',
       },
       {
         'name': 'איש צדיק מידי',
         'url':
-            'https://mitmachim.top/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99',
+            'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99',
       },
       {
         'name': 'שני אנשים',
         'url':
-            'https://mitmachim.top/user/%D7%A9%D7%A0%D7%99-%D7%90%D7%A0%D7%A9%D7%99%D7%9D',
+            'https://forum.otzaria.org/user/%D7%A9%D7%A0%D7%99-%D7%90%D7%A0%D7%A9%D7%99%D7%9D',
       },
       {
         'name': 'יאיר דניאל',
         'url':
-            'https://mitmachim.top/user/%D7%99%D7%90%D7%99%D7%A8-%D7%93%D7%A0%D7%99%D7%90%D7%9C',
+            'https://forum.otzaria.org/user/%D7%99%D7%90%D7%99%D7%A8-%D7%93%D7%A0%D7%99%D7%90%D7%9C',
       },
     ];
+
+    // חישוב רוחב לפי השם הכי ארוך מכל המהדירים
+    final allEditors = [...topEditors, ...regularEditors];
+    final itemWidth = _calculateItemWidth(allEditors, extraPadding: 32);
 
     Widget buildEditorsList(List<Map<String, String>> editors) {
       return LayoutBuilder(
@@ -244,8 +278,8 @@ class _AboutScreenState extends State<AboutScreen> {
                         child: Row(
                           children: [
                             const Icon(FluentIcons.book_24_regular,
-                                size: 16, color: Colors.grey),
-                            const SizedBox(width: 8),
+                                size: _kIconSize, color: Colors.grey),
+                            const SizedBox(width: _kIconTextSpacing),
                             Expanded(
                               child: _buildContributor(
                                   editor['name']!, editor['url'] ?? ''),
@@ -258,16 +292,16 @@ class _AboutScreenState extends State<AboutScreen> {
           }
           // במסכים רחבים, השתמש ב-Wrap
           return Wrap(
-            spacing: 40,
+            spacing: 16,
             runSpacing: 12,
             children: editors
                 .map((editor) => SizedBox(
-                      width: 220,
+                      width: itemWidth,
                       child: Row(
                         children: [
                           const Icon(FluentIcons.book_24_regular,
-                              size: 16, color: Colors.grey),
-                          const SizedBox(width: 8),
+                              size: _kIconSize, color: Colors.grey),
+                          const SizedBox(width: _kIconTextSpacing),
                           Expanded(
                             child: _buildContributor(
                                 editor['name']!, editor['url'] ?? ''),
@@ -609,7 +643,7 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Future<String?> _getOtzariaSitePath() async {
-    final libraryPath = Settings.getValue('key-library-path');
+    final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
     if (libraryPath == null || libraryPath.isEmpty) return null;
 
     // התיקייה otzaria-site נמצאת באותה תיקייה שבה נמצא "גירסת ספריה.txt"
@@ -655,7 +689,52 @@ class _AboutScreenState extends State<AboutScreen> {
       builder: (dialogContext) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          title: const Text('יומן שינויים'),
+          title: const Text('יומן שינויים בתוכנה'),
+          content: SizedBox(
+            width: 600,
+            height: 400,
+            child: Markdown(
+              data: changelog,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('סגור'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showLibraryChangelogDialog(BuildContext context) async {
+    final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '';
+    if (libraryPath.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('נתיב הספרייה לא מוגדר')),
+      );
+      return;
+    }
+
+    final changelogPath = p.join(libraryPath, 'אוצריא', 'אודות התוכנה', 'עדכוני ספריה.md');
+    final file = File(changelogPath);
+
+    String changelog;
+    if (await file.exists()) {
+      changelog = await file.readAsString();
+    } else {
+      changelog = 'קובץ יומן השינויים לא נמצא';
+    }
+
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('יומן שינויים בספרייה'),
           content: SizedBox(
             width: 600,
             height: 400,
@@ -982,10 +1061,21 @@ class _AboutScreenState extends State<AboutScreen> {
                 // כפתור יומן שינויים
                 Align(
                   alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showChangelogDialog(context),
-                    icon: const Icon(FluentIcons.history_24_regular),
-                    label: const Text('יומן שינויים'),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () => _showChangelogDialog(context),
+                        icon: const Icon(FluentIcons.history_24_regular),
+                        label: const Text('יומן שינויים בתוכנה'),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () => _showLibraryChangelogDialog(context),
+                        icon: const Icon(FluentIcons.library_24_regular),
+                        label: const Text('יומן שינויים בספרייה'),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -1142,13 +1232,21 @@ class _AboutScreenState extends State<AboutScreen> {
           const SizedBox(height: 16),
 
           // כפתור יומן שינויים
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => _showChangelogDialog(context),
-              icon: const Icon(FluentIcons.history_24_regular),
-              label: const Text('יומן שינויים'),
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => _showChangelogDialog(context),
+                icon: const Icon(FluentIcons.history_24_regular),
+                label: const Text('יומן שינויים בתוכנה'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _showLibraryChangelogDialog(context),
+                icon: const Icon(FluentIcons.library_24_regular),
+                label: const Text('יומן שינויים בספרייה'),
+              ),
+            ],
           ),
         ],
       ),

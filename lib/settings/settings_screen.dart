@@ -722,7 +722,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                         SimpleSettingsTile(
                           title: 'מיקום הספרייה',
                             subtitle:
-                                Settings.getValue<String>('key-library-path') ??
+                                Settings.getValue<String>(SettingsRepository.keyLibraryPath) ??
                                     'לא קיים',
                             leading: const Icon(FluentIcons.folder_24_regular),
                             onTap: () async {
@@ -746,7 +746,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                             child: SimpleSettingsTile(
                               title: 'מיקום ספרי היברובוקס',
                               subtitle: Settings.getValue<String>(
-                                      'key-hebrew-books-path') ??
+                                      SettingsRepository.keyHebrewBooksPath) ??
                                   'לא קיים',
                               leading:
                                   const Icon(FluentIcons.folder_24_regular),

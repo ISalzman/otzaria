@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 /// Utility class for managing application paths.
 /// Centralizes path construction logic to avoid duplication.
@@ -10,7 +11,7 @@ class AppPaths {
   /// Gets the main library path from settings. Defaults to 'C:/אוצריא' for Windows if not set.
   static Future<String> getLibraryPath() async {
     // Check existing library path setting
-    final currentPath = Settings.getValue('key-library-path');
+    final currentPath = Settings.getValue(SettingsRepository.keyLibraryPath);
 
     if (currentPath != null) {
       return currentPath;
@@ -34,7 +35,7 @@ class AppPaths {
       libraryPath = (await getApplicationSupportDirectory()).path;
     }
 
-    await Settings.setValue('key-library-path', libraryPath);
+    await Settings.setValue(SettingsRepository.keyLibraryPath, libraryPath);
     return libraryPath;
   }
 
