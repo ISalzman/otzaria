@@ -105,7 +105,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       commentators = config;
     } else {
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
-      commentators = await DefaultCommentators.getDefaults(state.book);
+      commentators = await DefaultCommentators.getDefaults(state.book, links: state.links);
     }
 
     if (mounted) {
