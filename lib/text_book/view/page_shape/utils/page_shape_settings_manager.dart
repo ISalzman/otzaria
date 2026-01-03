@@ -1,10 +1,9 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 
 /// מנהל הגדרות צורת הדף - שומר ומטעין את בחירת המפרשים
-/// תומך בהגדרות גלובליות והגדרות פר-ספר (override)
+/// תומך בהגדרות גלובליות, הגדרות פר-קטגוריה, והגדרות פר-ספר (override)
 /// 
-/// חשוב: בחירת מפרשים היא תמיד פר-ספר כי המפרשים שונים בין ספרים!
-/// (למשל "רש"י על סוכה" לא רלוונטי לחומש דברים)
+/// סדר עדיפות בטעינה: ספר ספציפי → קטגוריה → ברירת מחדל (JSON)
 class PageShapeSettingsManager {
   // מפתחות גלובליים (להגדרות תצוגה בלבד - לא למפרשים!)
   static const String _globalHighlightKey = 'page_shape_global_highlight';
@@ -17,7 +16,33 @@ class PageShapeSettingsManager {
   static const String _bookVisibilityPrefix = 'page_shape_visibility_';
   static const String _useBookSettingsPrefix = 'page_shape_use_book_settings_';
   
+  // מפתחות פר-קטגוריה (חדש!)
+  static const String _categoryConfigPrefix = 'page_shape_category_';
+  
   static const double defaultCommentaryFontSize = 16.0;
+
+  // ==================== עזר לקטגוריות ====================
+  
+  /// חילוץ רשימת קטגוריות מ-heCategories
+  /// למשל: "הלכה, משנה תורה, ספר מדע, הלכות יסודי התורה" → ["הלכה", "משנה תורה", "ספר מדע", ...]
+  static List<String> parseCategories(String? heCategories) {
+    if (heCategories == null || heCategories.isEmpty) {
+      return [];
+    }
+    return heCategories.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty).toList();
+  }
+  
+  /// קבלת קטגוריית האב הראשית (למשל "משנה תורה" מתוך "הלכה, משנה תורה, ספר מדע")
+  static String? getParentCategory(String? heCategories) {
+    final categories = parseCategories(heCategories);
+    // מחזיר את הקטגוריה השנייה אם יש (הראשונה היא בדרך כלל כללית מדי כמו "הלכה")
+    if (categories.length >= 2) {
+      return categories[1]; // למשל "משנה תורה"
+    } else if (categories.isNotEmpty) {
+      return categories[0];
+    }
+    return null;
+  }
 
   // ==================== גודל גופן (גלובלי בלבד) ====================
   
@@ -45,18 +70,69 @@ class PageShapeSettingsManager {
 
   // ==================== הגדרות מפרשים ====================
   
-  /// טעינת הגדרות מפרשים - תמיד פר-ספר בלבד!
-  /// בחירת מפרשים היא ספציפית לכל ספר כי המפרשים שונים בין ספרים
-  /// (למשל "רש"י על סוכה" לא רלוונטי לחומש דברים)
-  static Map<String, String?>? loadConfiguration(String bookTitle) {
-    // בחירת מפרשים היא תמיד פר-ספר - לא גלובלית!
-    return _loadBookConfiguration(bookTitle);
+  /// טעינת הגדרות מפרשים - קודם ספר, אחר כך קטגוריה
+  /// סדר עדיפות: ספר ספציפי → קטגוריה → null (יטען מ-JSON)
+  static Map<String, String?>? loadConfiguration(String bookTitle, {String? heCategories}) {
+    // 1. קודם בודקים אם יש הגדרות לספר הספציפי
+    final bookConfig = _loadBookConfiguration(bookTitle);
+    if (bookConfig != null) {
+      return bookConfig;
+    }
+    
+    // 2. אם אין, בודקים אם יש הגדרות לקטגוריה
+    if (heCategories != null) {
+      final categoryConfig = _loadCategoryConfiguration(heCategories);
+      if (categoryConfig != null) {
+        return categoryConfig;
+      }
+    }
+    
+    // 3. אם אין - מחזירים null (יטען מ-JSON)
+    return null;
   }
   
   /// טעינת הגדרות פר-ספר
   static Map<String, String?>? _loadBookConfiguration(String bookTitle) {
     final savedConfig = Settings.getValue<String>('$_bookConfigPrefix$bookTitle');
     return _parseConfiguration(savedConfig);
+  }
+  
+  /// טעינת הגדרות פר-קטגוריה
+  static Map<String, String?>? _loadCategoryConfiguration(String heCategories) {
+    final categories = parseCategories(heCategories);
+    
+    // מחפשים מהקטגוריה הספציפית ביותר לכללית ביותר
+    // למשל: "ספר מדע" → "משנה תורה" → "הלכה"
+    for (int i = categories.length - 1; i >= 0; i--) {
+      final category = categories[i];
+      final savedConfig = Settings.getValue<String>('$_categoryConfigPrefix$category');
+      final config = _parseConfiguration(savedConfig);
+      if (config != null) {
+        return config;
+      }
+    }
+    
+    return null;
+  }
+  
+  /// בדיקה אם יש הגדרות לקטגוריה מסוימת
+  static bool hasCategorySettings(String category) {
+    final savedConfig = Settings.getValue<String>('$_categoryConfigPrefix$category');
+    return savedConfig != null && savedConfig.isNotEmpty;
+  }
+  
+  /// קבלת הקטגוריה שממנה נטענו ההגדרות (אם יש)
+  static String? getActiveCategory(String? heCategories) {
+    if (heCategories == null) return null;
+    
+    final categories = parseCategories(heCategories);
+    for (int i = categories.length - 1; i >= 0; i--) {
+      final category = categories[i];
+      if (hasCategorySettings(category)) {
+        return category;
+      }
+    }
+    return null;
   }
   
   /// פענוח מחרוזת הגדרות
@@ -80,14 +156,21 @@ class PageShapeSettingsManager {
     return config;
   }
 
-  /// שמירת הגדרות מפרשים - תמיד פר-ספר!
+  /// שמירת הגדרות מפרשים - לספר או לקטגוריה
   static Future<void> saveConfiguration(
     String bookTitle,
-    Map<String, String?> config,
-  ) async {
-    // בחירת מפרשים נשמרת תמיד פר-ספר כי המפרשים ספציפיים לכל ספר
+    Map<String, String?> config, {
+    String? saveToCategory, // אם מוגדר - שומר לקטגוריה במקום לספר
+  }) async {
     final configString = _serializeConfiguration(config);
-    await Settings.setValue<String>('$_bookConfigPrefix$bookTitle', configString);
+    
+    if (saveToCategory != null) {
+      // שמירה לקטגוריה
+      await Settings.setValue<String>('$_categoryConfigPrefix$saveToCategory', configString);
+    } else {
+      // שמירה לספר ספציפי
+      await Settings.setValue<String>('$_bookConfigPrefix$bookTitle', configString);
+    }
   }
   
   /// המרת הגדרות למחרוזת
@@ -182,9 +265,9 @@ class PageShapeSettingsManager {
     }
   }
 
-  // ==================== איפוס הגדרות פר-ספר ====================
+  // ==================== איפוס הגדרות ====================
   
-  /// איפוס הגדרות פר-ספר (חזרה לגלובלי)
+  /// איפוס הגדרות פר-ספר (חזרה לקטגוריה/גלובלי)
   static Future<void> resetBookSettings(String bookTitle) async {
     await setUseBookSpecificSettings(bookTitle, false);
     // מחיקת ההגדרות הספציפיות
@@ -193,5 +276,10 @@ class PageShapeSettingsManager {
     await Settings.setValue<bool?>('${_bookVisibilityPrefix}left_$bookTitle', null);
     await Settings.setValue<bool?>('${_bookVisibilityPrefix}right_$bookTitle', null);
     await Settings.setValue<bool?>('${_bookVisibilityPrefix}bottom_$bookTitle', null);
+  }
+  
+  /// איפוס הגדרות קטגוריה
+  static Future<void> resetCategorySettings(String category) async {
+    await Settings.setValue<String?>('$_categoryConfigPrefix$category', null);
   }
 }

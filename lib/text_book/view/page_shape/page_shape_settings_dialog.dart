@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -7,10 +8,17 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
+/// סוג שמירת הגדרות מפרשים
+enum CommentatorSaveScope {
+  book,     // לספר הנוכחי בלבד
+  category, // לכל הספרים בקטגוריה
+}
+
 /// דיאלוג הגדרות צורת הדף - בחירת מפרשים לכל מיקום
 class PageShapeSettingsDialog extends StatefulWidget {
   final List<String> availableCommentators;
   final String bookTitle;
+  final String? heCategories; // קטגוריות הספר
   final String? currentLeft;
   final String? currentRight;
   final String? currentBottom;
@@ -20,6 +28,7 @@ class PageShapeSettingsDialog extends StatefulWidget {
     super.key,
     required this.availableCommentators,
     required this.bookTitle,
+    this.heCategories,
     this.currentLeft,
     this.currentRight,
     this.currentBottom,
@@ -48,8 +57,13 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     'bottom': true,
   };
   
-  // הגדרה חדשה: האם לשמור לספר הנוכחי בלבד
+  // הגדרה חדשה: האם לשמור לספר הנוכחי בלבד (להגדרות תצוגה)
   bool _saveForCurrentBookOnly = false;
+  
+  // הגדרה חדשה: היכן לשמור את בחירת המפרשים
+  CommentatorSaveScope _commentatorSaveScope = CommentatorSaveScope.book;
+  String? _selectedCategory; // הקטגוריה שנבחרה לשמירה
+  List<String> _availableCategories = []; // רשימת הקטגוריות הזמינות
 
   @override
   void initState() {
@@ -61,6 +75,25 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   void _loadCurrentSettings() {
     // בדיקה אם יש הגדרות פר-ספר
     _saveForCurrentBookOnly = PageShapeSettingsManager.hasBookSpecificSettings(widget.bookTitle);
+    
+    // טעינת קטגוריות זמינות
+    _availableCategories = PageShapeSettingsManager.parseCategories(widget.heCategories);
+    
+    // DEBUG
+    debugPrint('PageShapeSettingsDialog: bookTitle=${widget.bookTitle}');
+    debugPrint('PageShapeSettingsDialog: heCategories=${widget.heCategories}');
+    debugPrint('PageShapeSettingsDialog: availableCategories=$_availableCategories');
+    
+    // בדיקה מאיפה נטענו הגדרות המפרשים
+    final activeCategory = PageShapeSettingsManager.getActiveCategory(widget.heCategories);
+    if (activeCategory != null) {
+      _commentatorSaveScope = CommentatorSaveScope.category;
+      _selectedCategory = activeCategory;
+    } else {
+      _commentatorSaveScope = CommentatorSaveScope.book;
+      // בחירת קטגוריית ברירת מחדל (השנייה אם יש, אחרת הראשונה)
+      _selectedCategory = PageShapeSettingsManager.getParentCategory(widget.heCategories);
+    }
     
     setState(() {
       _leftCommentator = widget.currentLeft;
@@ -130,16 +163,30 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   }
 
   Future<void> _saveSettings() async {
-    // שמירת הגדרות מפרשים - תמיד פר-ספר!
-    await PageShapeSettingsManager.saveConfiguration(
-      widget.bookTitle,
-      {
-        'left': _leftCommentator,
-        'right': _rightCommentator,
-        'bottom': _bottomCommentator,
-        'bottomRight': _bottomRightCommentator,
-      },
-    );
+    // שמירת הגדרות מפרשים - לספר או לקטגוריה לפי הבחירה
+    final config = {
+      'left': _leftCommentator,
+      'right': _rightCommentator,
+      'bottom': _bottomCommentator,
+      'bottomRight': _bottomRightCommentator,
+    };
+    
+    if (_commentatorSaveScope == CommentatorSaveScope.category && _selectedCategory != null) {
+      // שמירה לקטגוריה
+      await PageShapeSettingsManager.saveConfiguration(
+        widget.bookTitle,
+        config,
+        saveToCategory: _selectedCategory,
+      );
+      // מחיקת הגדרות ספציפיות לספר אם יש
+      await PageShapeSettingsManager.resetBookSettings(widget.bookTitle);
+    } else {
+      // שמירה לספר ספציפי
+      await PageShapeSettingsManager.saveConfiguration(
+        widget.bookTitle,
+        config,
+      );
+    }
     
     // שמירת הגופן של המפרשים התחתונים (תמיד גלובלי)
     await Settings.setValue<String>('page_shape_bottom_font', _bottomFontFamily);
@@ -307,6 +354,111 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                   ],
                 ),
               ),
+              
+              // בחירת היכן לשמור את הגדרות המפרשים
+              if (_availableCategories.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            FluentIcons.save_24_regular,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'שמירת בחירת מפרשים',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // אפשרות 1: לספר הנוכחי
+                      RadioListTile<CommentatorSaveScope>(
+                        title: const Text('לספר הנוכחי בלבד'),
+                        subtitle: Text(
+                          'המפרשים יחולו רק על "${widget.bookTitle}"',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        value: CommentatorSaveScope.book,
+                        groupValue: _commentatorSaveScope,
+                        onChanged: (value) {
+                          setState(() {
+                            _commentatorSaveScope = value!;
+                            _hasChanges = true;
+                          });
+                          _saveSettings();
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                      // אפשרות 2: לקטגוריה
+                      RadioListTile<CommentatorSaveScope>(
+                        title: const Text('לכל הספרים בקטגוריה'),
+                        subtitle: _selectedCategory != null
+                            ? Text(
+                                'המפרשים יחולו על כל ספרי "$_selectedCategory"',
+                                style: const TextStyle(fontSize: 11),
+                              )
+                            : null,
+                        value: CommentatorSaveScope.category,
+                        groupValue: _commentatorSaveScope,
+                        onChanged: (value) {
+                          setState(() {
+                            _commentatorSaveScope = value!;
+                            _hasChanges = true;
+                          });
+                          _saveSettings();
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                      // בחירת קטגוריה
+                      if (_commentatorSaveScope == CommentatorSaveScope.category) ...[
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          value: _selectedCategory,
+                          decoration: InputDecoration(
+                            labelText: 'בחר קטגוריה',
+                            border: const OutlineInputBorder(),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            filled: true,
+                            fillColor: Theme.of(context).colorScheme.surface,
+                          ),
+                          items: _availableCategories.map((category) {
+                            return DropdownMenuItem<String>(
+                              value: category,
+                              child: Text(category, style: const TextStyle(fontSize: 13)),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedCategory = value;
+                              _hasChanges = true;
+                            });
+                            _saveSettings();
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
               
               const SizedBox(height: 16),
               const Text(

@@ -1045,8 +1045,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       tooltip: 'הגדרות צורת הדף',
       onPressed: () async {
         // טעינת ההגדרות הנוכחיות
-        final config =
-            PageShapeSettingsManager.loadConfiguration(state.book.title);
+        final config = PageShapeSettingsManager.loadConfiguration(
+          state.book.title,
+          heCategories: state.book.heCategories,
+        );
 
         // אם אין הגדרות שמורות, נשתמש בברירות מחדל
         final currentSettings =
@@ -1061,6 +1063,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           builder: (builderContext) => PageShapeSettingsDialog(
             availableCommentators: availableCommentators,
             bookTitle: bookTitle,
+            heCategories: state.book.heCategories,
             currentLeft: currentSettings['left'],
             currentRight: currentSettings['right'],
             currentBottom: currentSettings['bottom'],

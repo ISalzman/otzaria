@@ -95,7 +95,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
-    final config = PageShapeSettingsManager.loadConfiguration(state.book.title);
+    final config = PageShapeSettingsManager.loadConfiguration(
+      state.book.title,
+      heCategories: state.book.heCategories,
+    );
     _columnVisibility =
         PageShapeSettingsManager.getColumnVisibility(state.book.title);
 
@@ -194,6 +197,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       builder: (context) => PageShapeSettingsDialog(
         availableCommentators: availableCommentators,
         bookTitle: state.book.title,
+        heCategories: state.book.heCategories,
         currentLeft: _leftCommentator,
         currentRight: _rightCommentator,
         currentBottom: _bottomCommentator,
