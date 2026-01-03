@@ -371,6 +371,9 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               titleText = utils.replaceHolyNames(titleText);
               rawHtml = utils.replaceHolyNames(rawHtml);
             }
+            // הסרת גרשיים מהתצוגה
+            titleText = titleText.replaceAll('"', '');
+            rawHtml = rawHtml.replaceAll('"', '');
 
             // חישוב רוחב זמין לטקסט
             final availableWidth = constrains.maxWidth - 100.0;
