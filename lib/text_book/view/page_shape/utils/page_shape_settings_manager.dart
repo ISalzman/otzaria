@@ -2,9 +2,11 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 
 /// מנהל הגדרות צורת הדף - שומר ומטעין את בחירת המפרשים
 /// תומך בהגדרות גלובליות והגדרות פר-ספר (override)
+/// 
+/// חשוב: בחירת מפרשים היא תמיד פר-ספר כי המפרשים שונים בין ספרים!
+/// (למשל "רש"י על סוכה" לא רלוונטי לחומש דברים)
 class PageShapeSettingsManager {
-  // מפתחות גלובליים
-  static const String _globalConfigKey = 'page_shape_global_config';
+  // מפתחות גלובליים (להגדרות תצוגה בלבד - לא למפרשים!)
   static const String _globalHighlightKey = 'page_shape_global_highlight';
   static const String _globalVisibilityPrefix = 'page_shape_global_visibility_';
   static const String _commentaryFontSizeKey = 'page_shape_commentary_font_size';
@@ -43,24 +45,12 @@ class PageShapeSettingsManager {
 
   // ==================== הגדרות מפרשים ====================
   
-  /// טעינת הגדרות מפרשים - קודם בודק פר-ספר, אחר כך גלובלי
+  /// טעינת הגדרות מפרשים - תמיד פר-ספר בלבד!
+  /// בחירת מפרשים היא ספציפית לכל ספר כי המפרשים שונים בין ספרים
+  /// (למשל "רש"י על סוכה" לא רלוונטי לחומש דברים)
   static Map<String, String?>? loadConfiguration(String bookTitle) {
-    // אם יש הגדרות פר-ספר, השתמש בהן
-    if (hasBookSpecificSettings(bookTitle)) {
-      final bookConfig = _loadBookConfiguration(bookTitle);
-      if (bookConfig != null) {
-        return bookConfig;
-      }
-    }
-    
-    // אחרת, השתמש בהגדרות גלובליות
-    return _loadGlobalConfiguration();
-  }
-  
-  /// טעינת הגדרות גלובליות
-  static Map<String, String?>? _loadGlobalConfiguration() {
-    final savedConfig = Settings.getValue<String>(_globalConfigKey);
-    return _parseConfiguration(savedConfig);
+    // בחירת מפרשים היא תמיד פר-ספר - לא גלובלית!
+    return _loadBookConfiguration(bookTitle);
   }
   
   /// טעינת הגדרות פר-ספר
@@ -90,22 +80,14 @@ class PageShapeSettingsManager {
     return config;
   }
 
-  /// שמירת הגדרות מפרשים
+  /// שמירת הגדרות מפרשים - תמיד פר-ספר!
   static Future<void> saveConfiguration(
     String bookTitle,
-    Map<String, String?> config, {
-    bool saveAsGlobal = true,
-  }) async {
+    Map<String, String?> config,
+  ) async {
+    // בחירת מפרשים נשמרת תמיד פר-ספר כי המפרשים ספציפיים לכל ספר
     final configString = _serializeConfiguration(config);
-    
-    if (saveAsGlobal) {
-      // שמירה גלובלית
-      await Settings.setValue<String>(_globalConfigKey, configString);
-    } else {
-      // שמירה פר-ספר
-      await Settings.setValue<String>('$_bookConfigPrefix$bookTitle', configString);
-      await setUseBookSpecificSettings(bookTitle, true);
-    }
+    await Settings.setValue<String>('$_bookConfigPrefix$bookTitle', configString);
   }
   
   /// המרת הגדרות למחרוזת

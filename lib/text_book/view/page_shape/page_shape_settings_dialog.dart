@@ -130,7 +130,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   }
 
   Future<void> _saveSettings() async {
-    // שמירת הגדרות מפרשים
+    // שמירת הגדרות מפרשים - תמיד פר-ספר!
     await PageShapeSettingsManager.saveConfiguration(
       widget.bookTitle,
       {
@@ -139,20 +139,19 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
         'bottom': _bottomCommentator,
         'bottomRight': _bottomRightCommentator,
       },
-      saveAsGlobal: !_saveForCurrentBookOnly,
     );
     
     // שמירת הגופן של המפרשים התחתונים (תמיד גלובלי)
     await Settings.setValue<String>('page_shape_bottom_font', _bottomFontFamily);
     
-    // שמירת הגדרת הדגשה
+    // שמירת הגדרת הדגשה - גלובלי או פר-ספר לפי הבחירה
     await PageShapeSettingsManager.saveHighlightSetting(
       widget.bookTitle,
       _highlightRelatedCommentators,
       saveAsGlobal: !_saveForCurrentBookOnly,
     );
     
-    // שמירת הגדרות visibility
+    // שמירת הגדרות visibility - גלובלי או פר-ספר לפי הבחירה
     await PageShapeSettingsManager.saveColumnVisibility(
       widget.bookTitle,
       _columnVisibility,
@@ -192,25 +191,17 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     _saveSettings();
   }
   
-  /// איפוס הגדרות פר-ספר וחזרה לגלובלי
+  /// איפוס הגדרות תצוגה פר-ספר וחזרה לגלובלי (לא משפיע על בחירת מפרשים)
   Future<void> _resetToGlobalSettings() async {
     await PageShapeSettingsManager.resetBookSettings(widget.bookTitle);
     setState(() {
       _saveForCurrentBookOnly = false;
       _hasChanges = true;
     });
-    // טעינה מחדש של ההגדרות הגלובליות
-    final globalConfig = PageShapeSettingsManager.loadConfiguration(widget.bookTitle);
-    if (globalConfig != null) {
-      setState(() {
-        _leftCommentator = globalConfig['left'];
-        _rightCommentator = globalConfig['right'];
-        _bottomCommentator = globalConfig['bottom'];
-        _bottomRightCommentator = globalConfig['bottomRight'];
-      });
-    }
+    // טעינה מחדש של הגדרות התצוגה הגלובליות (לא מפרשים!)
     _highlightRelatedCommentators = PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
     _columnVisibility = PageShapeSettingsManager.getColumnVisibility(widget.bookTitle);
+    setState(() {});
   }
 
   @override
@@ -224,7 +215,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // בחירה בין גלובלי לפר-ספר
+              // בחירה בין גלובלי לפר-ספר (להגדרות תצוגה בלבד)
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -244,36 +235,37 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                           color: Theme.of(context).colorScheme.primary,
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          _saveForCurrentBookOnly 
-                              ? 'הגדרות לספר הנוכחי בלבד' 
-                              : 'הגדרות גלובליות (לכל הספרים)',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
+                        Expanded(
+                          child: Text(
+                            _saveForCurrentBookOnly 
+                                ? 'הגדרות תצוגה לספר הנוכחי בלבד' 
+                                : 'הגדרות תצוגה גלובליות',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     SwitchListTile(
-                      title: const Text('שמור לספר הנוכחי בלבד'),
+                      title: const Text('הגדרות תצוגה לספר הנוכחי בלבד'),
                       subtitle: Text(
                         _saveForCurrentBookOnly
-                            ? 'השינויים יחולו רק על "${widget.bookTitle}"'
-                            : 'השינויים יחולו על כל הספרים בצורת הדף',
+                            ? 'הדגשה והצגת טורים יחולו רק על "${widget.bookTitle}"'
+                            : 'הדגשה והצגת טורים יחולו על כל הספרים',
                         style: const TextStyle(fontSize: 12),
                       ),
                       value: _saveForCurrentBookOnly,
                       onChanged: (value) async {
                         if (!value && _saveForCurrentBookOnly) {
-                          // מעבר מפר-ספר לגלובלי - שאל אם לאפס
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (context) => AlertDialog(
                               title: const Text('חזרה להגדרות גלובליות'),
                               content: const Text(
-                                'האם לאפס את ההגדרות הספציפיות לספר זה ולחזור להגדרות הגלובליות?',
+                                'האם לאפס את הגדרות התצוגה הספציפיות לספר זה ולחזור להגדרות הגלובליות?',
                               ),
                               actions: [
                                 TextButton(
@@ -295,12 +287,20 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                             _saveForCurrentBookOnly = value;
                             _hasChanges = true;
                           });
-                          // שמירה מחדש עם ההגדרה החדשה
                           await _saveSettings();
                         }
                       },
                       contentPadding: EdgeInsets.zero,
                       dense: true,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '* בחירת מפרשים נשמרת תמיד לספר הנוכחי בלבד',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ],
                 ),
