@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/models/books.dart';
@@ -53,28 +54,16 @@ class DefaultCommentators {
   static String? _findMatchingCommentator(String? shortName, List<String> available) {
     if (shortName == null) return null;
     
-    // קודם נחפש התאמה מדויקת
-    if (available.contains(shortName)) {
-      return shortName;
-    }
+    // 1. התאמה מדויקת
+    String? match = available.firstWhereOrNull((name) => name == shortName);
+    if (match != null) return match;
     
-    // אחר כך נחפש מפרש שמתחיל בשם הקצר
-    final match = available.firstWhere(
-      (name) => name.startsWith(shortName),
-      orElse: () => '',
-    );
+    // 2. התאמה של התחלה
+    match = available.firstWhereOrNull((name) => name.startsWith(shortName));
+    if (match != null) return match;
     
-    if (match.isNotEmpty) {
-      return match;
-    }
-    
-    // אם לא מצאנו, נחפש מפרש שמכיל את השם הקצר
-    final containsMatch = available.firstWhere(
-      (name) => name.contains(shortName),
-      orElse: () => '',
-    );
-    
-    return containsMatch.isNotEmpty ? containsMatch : null;
+    // 3. התאמה של הכלה
+    return available.firstWhereOrNull((name) => name.contains(shortName));
   }
 
   static Future<Map<String, dynamic>> _loadConfig() async {
