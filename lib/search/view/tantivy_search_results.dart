@@ -422,13 +422,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               child: InkWell(
                 onTap: () {
                   if (result.isPdf) {
-                    final pageMatch = RegExp(
-                      '\u05E2\u05DE\u05D5\u05D3(?:\\s|:)+([0-9]{1,6})',
-                    ).firstMatch(result.reference);
-                    final pageNumber = pageMatch != null
-                        ? (int.tryParse(pageMatch.group(1)!) ??
-                            (result.segment.toInt() + 1))
-                        : (result.segment.toInt() + 1);
+                    final pageNumber = result.segment.toInt() + 1;
                     context.read<TabsBloc>().add(AddTab(
                           PdfBookTab(
                             book: PdfBook(
