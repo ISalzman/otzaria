@@ -30,6 +30,7 @@ class PdfBookSearchView extends StatefulWidget {
     this.outline,
     this.bookTitle,
     this.bookTopics,
+    this.pdfFilePath,
     this.initialSearchText = '',
     this.initialSearchOptions = const {},
     this.initialAlternativeWords = const {},
@@ -45,6 +46,12 @@ class PdfBookSearchView extends StatefulWidget {
   final List<PdfOutlineNode>? outline;
   final String? bookTitle;
   final String? bookTopics;
+
+  /// Absolute path to the currently opened PDF file.
+  ///
+  /// Used to ensure in-book PDF search doesn't return results from a same-title
+  /// text book (TXT) that shares the same facet path in the search index.
+  final String? pdfFilePath;
   final String initialSearchText;
   final Map<String, Map<String, bool>> initialSearchOptions;
   final Map<int, List<String>> initialAlternativeWords;
@@ -74,7 +81,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
   }
 
   String? _extractDafMarker(String reference) {
-    final match = RegExp(r'דף\s+[^,]+' ).firstMatch(reference);
+    final match = RegExp(r'דף\s+[^,]+').firstMatch(reference);
     return match?.group(0)?.trim();
   }
 
@@ -238,7 +245,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
     });
 
     try {
-      final results = await _searchRepository.searchTexts(
+      final rawResults = await _searchRepository.searchTexts(
         query,
         [_bookPath!],
         1000,
@@ -247,6 +254,15 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
         customSpacing: _spacingValues,
         fuzzy: _searchMode == SearchMode.fuzzy,
       );
+
+      // In PDF in-book search we must avoid mixing results from a same-title
+      // TextBook that shares the same facet path.
+      final pdfPath = widget.pdfFilePath;
+      final results = rawResults.where((r) {
+        if (!r.isPdf) return false;
+        if (pdfPath == null || pdfPath.isEmpty) return true;
+        return r.filePath == pdfPath;
+      }).toList(growable: false);
 
       // Kick off page-number resolution so results show the correct PDF pages
       // instead of clamping to the last page.
