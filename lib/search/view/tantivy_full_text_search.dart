@@ -281,50 +281,72 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                 return Row(
                                   children: [
                                     // הודעת "מוצגות תוצאות של חיפוש" + כפתור עריכה
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        left: 16.0,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          // הודעה רק בחיפוש מתקדם
-                                          if (searchState.isAdvancedSearchEnabled) ...[
-                                            Text(
-                                              'מוצגות תוצאות של חיפוש: ',
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface
-                                                    .withValues(alpha: 0.7),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 16.0,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            // הודעה רק בחיפוש מתקדם
+                                            if (searchState
+                                                .isAdvancedSearchEnabled) ...[
+                                              Text(
+                                                'מוצגות תוצאות של חיפוש: ',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withValues(alpha: 0.7),
+                                                ),
                                               ),
+                                              const SizedBox(width: 8),
+                                              Flexible(
+                                                child: Scrollbar(
+                                                  thumbVisibility: true,
+                                                  thickness: 2.0,
+                                                  child: SingleChildScrollView(
+                                                    scrollDirection:
+                                                        Axis.horizontal,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              bottom: 10.0),
+                                                      child: SearchTermsDisplay(
+                                                        tab: widget.tab,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                            ],
+                                            // כפתור עריכה - תמיד מוצג
+                                            IconButton(
+                                              icon: Icon(
+                                                _showEditPanel
+                                                    ? FluentIcons
+                                                        .chevron_up_24_regular
+                                                    : FluentIcons
+                                                        .edit_24_regular,
+                                                size: 20,
+                                              ),
+                                              tooltip: _showEditPanel
+                                                  ? 'סגור עריכה'
+                                                  : 'ערוך חיפוש',
+                                              onPressed: () {
+                                                setState(() {
+                                                  _showEditPanel =
+                                                      !_showEditPanel;
+                                                });
+                                              },
                                             ),
-                                            const SizedBox(width: 8),
-                                            SearchTermsDisplay(
-                                              tab: widget.tab,
-                                            ),
-                                            const SizedBox(width: 8),
                                           ],
-                                          // כפתור עריכה - תמיד מוצג
-                                          IconButton(
-                                            icon: Icon(
-                                              _showEditPanel
-                                                  ? FluentIcons.chevron_up_24_regular
-                                                  : FluentIcons.edit_24_regular,
-                                              size: 20,
-                                            ),
-                                            tooltip: _showEditPanel ? 'סגור עריכה' : 'ערוך חיפוש',
-                                            onPressed: () {
-                                              setState(() {
-                                                _showEditPanel = !_showEditPanel;
-                                              });
-                                            },
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ),
-                                    const Spacer(),
                                     Padding(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 16.0,
