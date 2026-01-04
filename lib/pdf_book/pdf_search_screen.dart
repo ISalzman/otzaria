@@ -1,4 +1,6 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -72,6 +74,8 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
   final _pageTitles = <int, String>{};
   final _pdfPageByResultId = <String, int>{};
   Map<String, Map<String, bool>> _searchOptions = {};
+  Timer? _pdfHighlightDebounce;
+  String _lastPdfHighlightQuery = '';
   Map<int, List<String>> _alternativeWords = {};
   Map<String, String> _spacingValues = {};
   SearchMode _searchMode = SearchMode.exact;
@@ -80,6 +84,22 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
     return s.replaceAll(RegExp(r'\s+'), '').trim();
   }
 
+  void _schedulePdfHighlight(String query) {
+    final normalized = query.trim();
+    if (normalized == _lastPdfHighlightQuery) return;
+    _lastPdfHighlightQuery = normalized;
+
+    _pdfHighlightDebounce?.cancel();
+    _pdfHighlightDebounce = Timer(const Duration(milliseconds: 250), () {
+      // Drive pdfrx highlight overlay via pagePaintCallbacks.
+      // We pass goToFirstMatch:false because navigation is driven by the
+      // result list (page headers / tiles), not by the first match.
+      widget.textSearcher.startTextSearch(
+        normalized,
+        goToFirstMatch: false,
+      );
+    });
+  }
   String? _extractDafMarker(String reference) {
     final match = RegExp(r'דף\s+[^,]+').firstMatch(reference);
     return match?.group(0)?.trim();
@@ -227,6 +247,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
   void dispose() {
     scrollController.dispose();
     widget.searchController.removeListener(_searchTextUpdated);
+    _pdfHighlightDebounce?.cancel();
     super.dispose();
   }
 
@@ -237,8 +258,14 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
         _searchResults = [];
         _isSearching = false;
       });
+
+      // Clear any PDF highlights when the query is cleared.
+      _schedulePdfHighlight('');
       return;
     }
+
+    // Keep PDF highlights in sync with the current query.
+    _schedulePdfHighlight(query);
 
     setState(() {
       _isSearching = true;
@@ -404,6 +431,9 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
                 if (controller != null) {
                   await controller.goToPage(pageNumber: pageNumber);
                 }
+
+                // Ensure PDF highlighting is active for the current query.
+                _schedulePdfHighlight(widget.searchController.text);
                 widget.onSearchResultNavigated?.call();
               },
               height: 50,
@@ -424,6 +454,9 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
           _spacingValues = {};
           _searchMode = SearchMode.exact;
         });
+
+        // Also clear PDF highlights when resetting the search UI.
+        _schedulePdfHighlight('');
       },
       hintText: 'חפש כאן..',
       onAdvancedSearch: () {
