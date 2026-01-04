@@ -32,6 +32,14 @@ class TantivySearchResults extends StatefulWidget {
 
 class _TantivySearchResultsState extends State<TantivySearchResults> {
 
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   // פונקציה לחישוב כמה תווים יכולים להיכנס בשורה אחת
   int _calculateCharsPerLine(double availableWidth, TextStyle textStyle) {
     final textPainter = TextPainter(
@@ -301,7 +309,9 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   }
 
   Widget _buildResultsContent(SearchState state, BoxConstraints constrains) {
-    if (state.isLoading) {
+    // חשוב: בעת טעינת "עוד תוצאות" אנחנו לא רוצים לפרק את ה-ListView,
+    // אחרת הגלילה מתאפסת לראש. לכן ספינר מרכזי מוצג רק כשאין עדיין תוצאות.
+    if (state.isLoading && state.results.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     if (state.searchQuery.isEmpty) {
@@ -319,6 +329,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     // +1 לכפתור "טען תוצאות נוספות" אם יש עוד תוצאות
     final hasMoreResults = state.results.length < state.totalResults;
     return ListView.builder(
+      key: PageStorageKey(widget.tab),
+      controller: _scrollController,
       padding: const EdgeInsets.all(16),
       itemCount: state.results.length + (hasMoreResults ? 1 : 0),
       itemBuilder: (context, index) {

@@ -33,6 +33,24 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   bool _showIndexWarning = false;
   bool _showEditPanel = false;
 
+  // משמש כדי להבדיל בין "חיפוש חדש" (שבו נרצה להציג מסך טעינה מלא)
+  // לבין "טען תוצאות נוספות" (שבו אסור להעלים את התוצאות הקיימות).
+  String _lastCompletedQuery = '';
+
+  bool _shouldShowBlockingLoader(SearchState state) {
+    final currentQuery = state.searchQuery.trim();
+    final lastQuery = _lastCompletedQuery.trim();
+    // אם יש חיפוש חדש (הטקסט השתנה) והוא עוד בטעינה — נחסום עם ספינר.
+    // אם זה רק "טען עוד" (אותו query) — לא נחסום.
+    return state.isLoading && currentQuery.isNotEmpty && currentQuery != lastQuery;
+  }
+
+  void _updateLastCompletedQuery(SearchState state) {
+    if (!state.isLoading) {
+      _lastCompletedQuery = state.searchQuery;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -92,6 +110,8 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   Widget _buildForSmallScreens() {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
+        _updateLastCompletedQuery(state);
+        final showBlockingLoader = _shouldShowBlockingLoader(state);
         return Container(
           clipBehavior: Clip.hardEdge,
           decoration: const BoxDecoration(),
@@ -122,7 +142,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               Expanded(
                 child: Stack(
                   children: [
-                    if (state.isLoading)
+                    if (showBlockingLoader)
                       const Center(child: CircularProgressIndicator())
                     else if (state.searchQuery.isEmpty)
                       Center(
@@ -212,6 +232,8 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
           Expanded(
             child: BlocBuilder<SearchBloc, SearchState>(
               builder: (context, state) {
+                _updateLastCompletedQuery(state);
+                final showBlockingLoader = _shouldShowBlockingLoader(state);
                 return Column(
                   children: [
                     // שורה אחת פשוטה
@@ -367,7 +389,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                 Expanded(
                                   child: Builder(
                                     builder: (context) {
-                                      if (state.isLoading) {
+                                      if (showBlockingLoader) {
                                         return const Center(
                                           child: CircularProgressIndicator(),
                                         );
