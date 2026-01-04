@@ -1,10 +1,13 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/utils/ref_helper.dart';
+import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/search_pane_base.dart';
 import 'package:otzaria/search/search_repository.dart';
@@ -60,10 +63,123 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
   List<SearchResult> _searchResults = [];
   String? _bookPath;
   final _pageTitles = <int, String>{};
+  final _pdfPageByResultId = <String, int>{};
   Map<String, Map<String, bool>> _searchOptions = {};
   Map<int, List<String>> _alternativeWords = {};
   Map<String, String> _spacingValues = {};
   SearchMode _searchMode = SearchMode.exact;
+
+  String _normalizeForCompare(String s) {
+    return s.replaceAll(RegExp(r'\s+'), '').trim();
+  }
+
+  String? _extractDafMarker(String reference) {
+    final match = RegExp(r'דף\s+[^,]+' ).firstMatch(reference);
+    return match?.group(0)?.trim();
+  }
+
+  String _cleanReferenceForDisplay(String reference) {
+    final title = widget.bookTitle?.trim();
+    if (title != null && title.isNotEmpty) {
+      final prefix = '$title, ';
+      if (reference.startsWith(prefix)) {
+        return reference.substring(prefix.length).trim();
+      }
+    }
+    return reference.trim();
+  }
+
+  Future<int> _refineMappedPageUsingOutline({
+    required SearchResult result,
+    required int mappedPage,
+  }) async {
+    final outline = widget.outline;
+    if (outline == null || outline.isEmpty) return mappedPage;
+
+    final expected = _extractDafMarker(result.reference);
+    if (expected == null || expected.isEmpty) return mappedPage;
+
+    final expectedNorm = _normalizeForCompare(expected);
+    final expectedNoAmud = expectedNorm.replaceAll('.', '').replaceAll(':', '');
+
+    final pageCount = widget.textSearcher.controller?.pageCount;
+    final candidates = <int>{
+      mappedPage,
+      mappedPage - 1,
+      mappedPage + 1,
+    }.where((p) {
+      if (p <= 0) return false;
+      if (pageCount != null && p > pageCount) return false;
+      return true;
+    }).toList();
+
+    var bestPage = mappedPage;
+    var bestScore = -1;
+
+    for (final p in candidates) {
+      final title = await refFromPageNumber(p, outline, widget.bookTitle);
+      final titleNorm = _normalizeForCompare(title);
+      final titleNoAmud = titleNorm.replaceAll('.', '').replaceAll(':', '');
+
+      var score = 0;
+      if (titleNorm.contains(expectedNorm)) score += 2;
+      if (score == 0 && titleNoAmud.contains(expectedNoAmud)) score += 1;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestPage = p;
+      }
+    }
+
+    return bestPage;
+  }
+
+  int _getPdfPageNumber(SearchResult result) {
+    final cached = _pdfPageByResultId[result.id.toString()];
+    if (cached != null) return cached;
+
+    // If the result came from PDF indexing, segment is the 0-based PDF page index.
+    if (result.isPdf) return result.segment.toInt() + 1;
+
+    // Otherwise, segment is usually a TextBook line index. Until we resolve mapping,
+    // return 1 to avoid clamping to the last page.
+    return 1;
+  }
+
+  Future<void> _resolvePdfPagesForResults(List<SearchResult> results) async {
+    if (results.isEmpty) return;
+
+    final title = widget.bookTitle?.trim();
+    if (title == null || title.isEmpty) return;
+
+    // Try to map TextBook line indices to PDF pages for results that are not PDF-indexed.
+    final TextBook? textBook = (await DataRepository.instance.library)
+        .findBookByTitle(title, TextBook) as TextBook?;
+
+    final newMap = <String, int>{};
+    for (final r in results) {
+      if (r.isPdf) {
+        newMap[r.id.toString()] = r.segment.toInt() + 1;
+        continue;
+      }
+
+      if (textBook == null) continue;
+
+      final mapped = await textToPdfPage(textBook, r.segment.toInt());
+      if (mapped != null && mapped > 0) {
+        final refined = await _refineMappedPageUsingOutline(
+          result: r,
+          mappedPage: mapped,
+        );
+        newMap[r.id.toString()] = refined;
+      }
+    }
+
+    if (!mounted || newMap.isEmpty) return;
+    setState(() {
+      _pdfPageByResultId.addAll(newMap);
+    });
+  }
 
   @override
   void initState() {
@@ -132,6 +248,23 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
         fuzzy: _searchMode == SearchMode.fuzzy,
       );
 
+      // Kick off page-number resolution so results show the correct PDF pages
+      // instead of clamping to the last page.
+      // We do this before setState so grouping uses the mapped pages ASAP.
+      await _resolvePdfPagesForResults(results);
+
+      // Debug: log a small sample to verify which field represents the real PDF page.
+      // This helps diagnose cases where all results appear to belong to the last page.
+      if (kDebugMode) {
+        final sampleSize = results.length < 10 ? results.length : 10;
+        debugPrint('PDF Search debug: got ${results.length} results. Sample:');
+        for (var i = 0; i < sampleSize; i++) {
+          final r = results[i];
+          debugPrint(
+              '  #$i isPdf=${r.isPdf} segment=${r.segment} page=${_getPdfPageNumber(r)} reference="${r.reference}"');
+        }
+      }
+
       if (mounted) {
         setState(() {
           _searchResults = results;
@@ -154,8 +287,14 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
     // Group results by page
     final Map<int, List<SearchResult>> resultsByPage = {};
     for (final result in _searchResults) {
-      final pageNumber = result.segment.toInt() + 1;
+      final pageNumber = _getPdfPageNumber(result);
       resultsByPage.putIfAbsent(pageNumber, () => []).add(result);
+
+      // For text-indexed results, prefer the reference label (daf) to avoid
+      // outline formatting differences ('.' vs ':') confusing the user.
+      if (!result.isPdf && !_pageTitles.containsKey(pageNumber)) {
+        _pageTitles[pageNumber] = _cleanReferenceForDisplay(result.reference);
+      }
     }
 
     // Create flat list with headers
@@ -244,7 +383,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
               result: result,
               onTap: () async {
                 // Navigate to the page
-                final pageNumber = result.segment.toInt() + 1;
+                final pageNumber = _getPdfPageNumber(result);
                 final controller = widget.textSearcher.controller;
                 if (controller != null) {
                   await controller.goToPage(pageNumber: pageNumber);
