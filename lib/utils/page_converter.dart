@@ -16,13 +16,17 @@ Future<int?> textToPdfPage(TextBook textBook, int textIndex) async {
     return null;
   }
 
+  final key = '${pdfBook.path}::${textBook.title}';
+  final cached = _pageMapCache[key];
+  if (cached != null) {
+    return cached.textToPdf(textIndex);
+  }
+
   // It's better to get the outline from a provider/tab if available than to load it every time.
   // For now, we load it directly as a fallback.
   final outline =
       await PdfDocument.openFile(pdfBook.path).then((doc) => doc.loadOutline());
-  final key = '${pdfBook.path}::${textBook.title}';
-  final map =
-      _pageMapCache[key] ??= await _buildPageMap(pdfBook, outline, textBook);
+  final map = _pageMapCache[key] ??= await _buildPageMap(pdfBook, outline, textBook);
 
   return map.textToPdf(textIndex);
 }

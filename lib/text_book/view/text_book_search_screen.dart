@@ -70,6 +70,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   Map<String, String> _spacingValues = {};
   SearchMode _searchMode = SearchMode.exact;
 
+  static const int _maxResultSnippetChars = 220;
+
   @override
   void initState() {
     super.initState();
@@ -258,6 +260,12 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                 snippet = utils.replaceHolyNames(snippet);
               }
 
+              snippet = _buildSearchExcerpt(
+                fullText: snippet,
+                query: result.query,
+                maxChars: _maxResultSnippetChars,
+              );
+
               // יצירת TextSpans עם הדגשה של מילות החיפוש
               final highlightedSnippet = _buildHighlightedText(
                 snippet,
@@ -303,6 +311,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     child: RichText(
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.justify,
                       text: TextSpan(
                         style: TextStyle(
@@ -321,8 +331,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           );
         },
       ),
-      isNoResults:
-          searchResults.isEmpty &&
+      isNoResults: searchResults.isEmpty &&
           searchTextController.text.isNotEmpty &&
           !_isSearching,
       onSearchTextChanged: (value) {
@@ -347,9 +356,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         tempTab.spacingValues.addAll(_spacingValues);
         tempTab.searchBloc.add(SetSearchMode(_searchMode));
 
-        final bookTitle = (context.read<TextBookBloc>().state as TextBookLoaded)
-            .book
-            .title;
+        final bookTitle =
+            (context.read<TextBookBloc>().state as TextBookLoaded).book.title;
 
         showDialog(
           context: context,
@@ -421,6 +429,95 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     }
 
     return spans;
+  }
+
+  String _buildSearchExcerpt({
+    required String fullText,
+    required String query,
+    required int maxChars,
+  }) {
+    var text = fullText.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (text.length <= maxChars) return text;
+
+    // Helper to find word end
+    int findWordEnd(int fromIndex) {
+      if (fromIndex >= text.length) return text.length;
+      final nextSpace = text.indexOf(' ', fromIndex);
+      return nextSpace != -1 ? nextSpace : text.length;
+    }
+
+    // Helper to find word start
+    int findWordStart(int fromIndex) {
+      if (fromIndex <= 0) return 0;
+      final lastSpace = text.lastIndexOf(' ', fromIndex);
+      return lastSpace != -1 ? lastSpace + 1 : 0;
+    }
+
+    final q = query.trim();
+    if (q.isEmpty) {
+      var end = findWordEnd(maxChars);
+      final suffix = end < text.length ? ' ...' : '';
+      return '${text.substring(0, end)}$suffix';
+    }
+
+    final terms = q.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    if (terms.isEmpty) {
+      var end = findWordEnd(maxChars);
+      final suffix = end < text.length ? ' ...' : '';
+      return '${text.substring(0, end)}$suffix';
+    }
+
+    final highlightRegex = RegExp(
+      terms.map(RegExp.escape).join('|'),
+      caseSensitive: false,
+    );
+
+    final matches = highlightRegex.allMatches(text);
+    if (matches.isEmpty) {
+      var end = findWordEnd(maxChars);
+      final suffix = end < text.length ? ' ...' : '';
+      return '${text.substring(0, end)}$suffix';
+    }
+
+    Match? bestMatch;
+    Match? firstMatch;
+
+    // Try to find a whole word match
+    // We define a word char as alphanumeric or Hebrew
+    final wordCharRegex = RegExp(r'[a-zA-Z0-9\u0590-\u05FF]');
+
+    for (final match in matches) {
+      firstMatch ??= match;
+
+      final start = match.start;
+      final end = match.end;
+
+      bool startOk = start == 0 || !wordCharRegex.hasMatch(text[start - 1]);
+      bool endOk = end == text.length || !wordCharRegex.hasMatch(text[end]);
+
+      if (startOk && endOk) {
+        bestMatch = match;
+        break;
+      }
+    }
+
+    bestMatch ??= firstMatch;
+
+    final len = text.length;
+    var start = (bestMatch!.start - (maxChars ~/ 2)).clamp(0, len);
+    var end = (start + maxChars).clamp(0, len);
+
+    // If we're at the end and didn't get enough chars, shift the window left.
+    if (end - start < maxChars) {
+      start = (end - maxChars).clamp(0, len);
+    }
+
+    start = findWordStart(start);
+    end = findWordEnd(end);
+
+    final prefix = start > 0 ? '... ' : '';
+    final suffix = end < len ? ' ...' : '';
+    return '$prefix${text.substring(start, end)}$suffix';
   }
 
   @override
