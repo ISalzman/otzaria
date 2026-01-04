@@ -20,26 +20,41 @@ class PageShapeSettingsManager {
   static const String _categoryConfigPrefix = 'page_shape_category_';
   
   static const double defaultCommentaryFontSize = 16.0;
+  
+  // קטגוריות כלליות מדי שלא כדאי לשמור עליהן הגדרות
+  static const List<String> _tooGeneralCategories = [
+    'אוצריא',
+    'הלכה',
+    'מדרש',
+    'תנ"ך',
+    'תלמוד',
+    'קבלה',
+    'מוסר',
+    'מחשבה',
+    'שו"ת',
+  ];
 
   // ==================== עזר לקטגוריות ====================
   
-  /// חילוץ רשימת קטגוריות מ-heCategories
-  /// למשל: "הלכה, משנה תורה, ספר מדע, הלכות יסודי התורה" → ["הלכה", "משנה תורה", "ספר מדע", ...]
+  /// חילוץ רשימת קטגוריות מ-heCategories (מסנן קטגוריות כלליות מדי)
+  /// למשל: "הלכה, משנה תורה, ספר מדע" → ["משנה תורה", "ספר מדע"]
   static List<String> parseCategories(String? heCategories) {
     if (heCategories == null || heCategories.isEmpty) {
       return [];
     }
-    return heCategories.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty).toList();
+    return heCategories
+        .split(',')
+        .map((c) => c.trim())
+        .where((c) => c.isNotEmpty && !_tooGeneralCategories.contains(c))
+        .toList();
   }
   
   /// קבלת קטגוריית האב הראשית (למשל "משנה תורה" מתוך "הלכה, משנה תורה, ספר מדע")
   static String? getParentCategory(String? heCategories) {
     final categories = parseCategories(heCategories);
-    // מחזיר את הקטגוריה השנייה אם יש (הראשונה היא בדרך כלל כללית מדי כמו "הלכה")
-    if (categories.length >= 2) {
-      return categories[1]; // למשל "משנה תורה"
-    } else if (categories.isNotEmpty) {
-      return categories[0];
+    // מחזיר את הקטגוריה הראשונה (אחרי סינון הכלליות)
+    if (categories.isNotEmpty) {
+      return categories[0]; // למשל "משנה תורה"
     }
     return null;
   }

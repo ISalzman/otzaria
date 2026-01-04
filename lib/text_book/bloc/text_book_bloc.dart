@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:io';
@@ -125,8 +124,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (book.heCategories == null || book.heCategories!.isEmpty) {
         final metadata = await FileSystemData.instance.metadata;
         final bookMetadata = metadata[book.title];
-        debugPrint('TextBookBloc: Loading metadata for "${book.title}"');
-        debugPrint('TextBookBloc: bookMetadata found: ${bookMetadata != null}');
         if (bookMetadata != null) {
           book.heCategories = bookMetadata['heCategories'];
           book.author = bookMetadata['author'];
@@ -147,13 +144,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
               // לוקחים את כל התיקיות בין אוצריא לקובץ עצמו
               final categories = pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
               book.heCategories = categories.join(', ');
-              debugPrint('TextBookBloc: heCategories extracted from path: ${book.heCategories}');
             }
           }
         }
-        debugPrint('TextBookBloc: final heCategories: ${book.heCategories}');
-      } else {
-        debugPrint('TextBookBloc: heCategories already exists: ${book.heCategories}');
       }
 
       // Update current title if we're preserving state
