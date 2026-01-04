@@ -130,8 +130,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     setState(() {
       _columnVisibility[column] = false;
     });
+    
+    // שמירה גלובלית אלא אם יש הגדרות פר-ספר
+    final hasBookSettings = PageShapeSettingsManager.hasBookSpecificSettings(state.book.title);
     PageShapeSettingsManager.saveColumnVisibility(
-        state.book.title, _columnVisibility);
+        state.book.title, _columnVisibility, saveAsGlobal: !hasBookSettings);
   }
 
   /// בניית widget למצב ריק של טור
