@@ -282,11 +282,20 @@ class PageShapeSettingsManager {
 
   // ==================== איפוס הגדרות ====================
   
-  /// איפוס הגדרות פר-ספר (חזרה לקטגוריה/גלובלי)
+  /// איפוס כל הגדרות פר-ספר (מפרשים + תצוגה)
   static Future<void> resetBookSettings(String bookTitle) async {
-    await setUseBookSpecificSettings(bookTitle, false);
-    // מחיקת ההגדרות הספציפיות
+    await resetBookCommentatorConfig(bookTitle);
+    await resetBookDisplaySettings(bookTitle);
+  }
+  
+  /// איפוס הגדרות מפרשים פר-ספר בלבד
+  static Future<void> resetBookCommentatorConfig(String bookTitle) async {
     await Settings.setValue<String?>('$_bookConfigPrefix$bookTitle', null);
+  }
+  
+  /// איפוס הגדרות תצוגה פר-ספר בלבד (הדגשה ונראות טורים)
+  static Future<void> resetBookDisplaySettings(String bookTitle) async {
+    await setUseBookSpecificSettings(bookTitle, false);
     await Settings.setValue<bool?>('$_bookHighlightPrefix$bookTitle', null);
     await Settings.setValue<bool?>('${_bookVisibilityPrefix}left_$bookTitle', null);
     await Settings.setValue<bool?>('${_bookVisibilityPrefix}right_$bookTitle', null);

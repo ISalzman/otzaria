@@ -172,8 +172,8 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
         config,
         saveToCategory: _selectedCategory,
       );
-      // מחיקת הגדרות ספציפיות לספר אם יש
-      await PageShapeSettingsManager.resetBookSettings(widget.bookTitle);
+      // מחיקת הגדרות מפרשים ספציפיות לספר אם יש
+      await PageShapeSettingsManager.resetBookCommentatorConfig(widget.bookTitle);
     } else {
       // שמירה לספר ספציפי
       await PageShapeSettingsManager.saveConfiguration(
@@ -238,7 +238,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   
   /// איפוס הגדרות תצוגה פר-ספר וחזרה לגלובלי (לא משפיע על בחירת מפרשים)
   Future<void> _resetDisplaySettingsToGlobal() async {
-    await PageShapeSettingsManager.resetBookSettings(widget.bookTitle);
+    await PageShapeSettingsManager.resetBookDisplaySettings(widget.bookTitle);
     // טעינה מחדש של הגדרות התצוגה הגלובליות (לא מפרשים!)
     final highlight = PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
     final visibility = PageShapeSettingsManager.getColumnVisibility(widget.bookTitle);
