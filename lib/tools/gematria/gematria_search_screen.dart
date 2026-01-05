@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/settings/gematria_settings_dialog.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/core/scaffold_messenger.dart';
@@ -136,7 +137,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
 
     try {
       // קבלת נתיב הספרייה מההגדרות
-      final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+      final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
 
       // חיפוש בתיקיות ספציפיות בלבד
       final searchPaths = torahOnly

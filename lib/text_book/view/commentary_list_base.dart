@@ -10,6 +10,8 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/text_book/view/combined_view/commentary_content.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
+import 'package:otzaria/widgets/commentators_filter_button.dart';
+import 'package:otzaria/widgets/commentators_filter_screen.dart';
 import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
@@ -397,416 +399,389 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   @override
   Widget build(BuildContext context) {
     return TextBookStateBuilder(
-      loadingWidget: const Center(),
-      builder: (context, state) {
-      Widget buildList() {
-        return Builder(
-          builder: (context) {
-            // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים
-            final currentIndexes = widget.indexes ??
-                (state.selectedIndex != null
-                    ? [state.selectedIndex!]
-                    : state.visibleIndices);
+        loadingWidget: const Center(),
+        builder: (context, state) {
+          Widget buildList() {
+            return Builder(
+              builder: (context) {
+                // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים
+                final currentIndexes = widget.indexes ??
+                    (state.selectedIndex != null
+                        ? [state.selectedIndex!]
+                        : state.visibleIndices);
 
-            // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
-            final hasAnyCommentaryLinks = state.links.any((link) =>
-                currentIndexes.contains(link.index1 - 1) &&
-                (link.connectionType == "commentary" ||
-                    link.connectionType == "targum"));
+                // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
+                final hasAnyCommentaryLinks = state.links.any((link) =>
+                    currentIndexes.contains(link.index1 - 1) &&
+                    (link.connectionType == "commentary" ||
+                        link.connectionType == "targum"));
 
-            // סינון מהיר של קישורים רלוונטיים
-            final hasRelevantLinks = state.links.any((link) =>
-                currentIndexes.contains(link.index1 - 1) &&
-                state.activeCommentators
-                    .contains(utils.getTitleFromPath(link.path2)));
+                // סינון מהיר של קישורים רלוונטיים
+                final hasRelevantLinks = state.links.any((link) =>
+                    currentIndexes.contains(link.index1 - 1) &&
+                    state.activeCommentators
+                        .contains(utils.getTitleFromPath(link.path2)));
 
-            // אם אין קישורים רלוונטיים
-            if (!hasRelevantLinks) {
-              // אם יש מפרשים זמינים אבל לא נבחרו בכלל - פתח אוטומטית את מסך הבחירה
-              if (hasAnyCommentaryLinks &&
-                  state.activeCommentators.isEmpty &&
-                  !_showCommentatorsFilter) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) {
-                    setState(() {
-                      _showCommentatorsFilter = true;
+                // אם אין קישורים רלוונטיים
+                if (!hasRelevantLinks) {
+                  // אם יש מפרשים זמינים אבל לא נבחרו בכלל - פתח אוטומטית את מסך הבחירה
+                  if (hasAnyCommentaryLinks &&
+                      state.activeCommentators.isEmpty &&
+                      !_showCommentatorsFilter) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        setState(() {
+                          _showCommentatorsFilter = true;
+                        });
+                      }
                     });
+                    return const Center(child: CircularProgressIndicator());
                   }
-                });
-                return const Center(child: CircularProgressIndicator());
-              }
 
-              // אין מפרשים בכלל לקטע הזה, או שיש מפרשים נבחרים אבל הם לא רלוונטיים
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    hasAnyCommentaryLinks
-                        ? 'לא נמצאו מפרשים מהנבחרים לקטע זה'
-                        : 'לא נמצאו מפרשים לקטע הנבחר',
-                    style: TextStyle(
-                      fontSize: widget.fontSize * 0.7,
-                      color: Colors.grey,
+                  // אין מפרשים בכלל לקטע הזה, או שיש מפרשים נבחרים אבל הם לא רלוונטיים
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        hasAnyCommentaryLinks
+                            ? 'לא נמצאו מפרשים מהנבחרים לקטע זה'
+                            : 'לא נמצאו מפרשים לקטע הנבחר',
+                        style: TextStyle(
+                          fontSize: widget.fontSize * 0.7,
+                          color: Colors.grey,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                    textAlign: TextAlign.center,
-                  ),
+                  );
+                }
+
+                return FutureBuilder(
+                  future: getLinksforIndexs(
+                      indexes: currentIndexes,
+                      links: state.links,
+                      commentatorsToShow: state.activeCommentators),
+                  builder: (context, thisLinksSnapshot) {
+                    if (!thisLinksSnapshot.hasData) {
+                      // רק אם יש קישורים רלוונטיים, מציג אנימציית טעינה
+                      return _buildSkeletonLoading();
+                    }
+                    if (thisLinksSnapshot.data!.isEmpty) {
+                      // אם אין מפרשים, פשוט נציג מסך ריק
+                      return const SizedBox.shrink();
+                    }
+                    final data = thisLinksSnapshot.data!;
+
+                    // שומר את הסדר של ה-links לצורך חישוב אינדקס החיפוש
+                    _orderedLinks = data;
+
+                    // מנקה מפתחות ישנים ומכין מפתחות חדשים
+                    final currentLinkKeys =
+                        data.map((l) => _getLinkKey(l)).toSet();
+                    _itemKeys.removeWhere(
+                        (key, value) => !currentLinkKeys.contains(key));
+                    for (final key in currentLinkKeys) {
+                      _itemKeys.putIfAbsent(key, () => GlobalKey());
+                    }
+
+                    // מקבץ את הקישורים לקבוצות רצופות
+                    final groups = _groupConsecutiveLinks(data);
+
+                    // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+                    final indexesKey = currentIndexes.join(',');
+
+                    return SelectionArea(
+                      onSelectionChanged: (selection) {
+                        if (selection != null &&
+                            selection.plainText.isNotEmpty) {
+                          setState(() {
+                            _savedSelectedText = selection.plainText;
+                          });
+                        }
+                      },
+                      child: ProgressiveScroll(
+                        scrollController: scrollController,
+                        maxSpeed: 10000.0,
+                        curve: 10.0,
+                        accelerationFactor: 5,
+                        child: ScrollConfiguration(
+                          // מונע בעיות של Scrollbar עם ScrollController לא מחובר
+                          behavior: ScrollConfiguration.of(context).copyWith(
+                            scrollbars: false,
+                          ),
+                          child: ScrollablePositionedList.builder(
+                            itemScrollController: _itemScrollController,
+                            itemPositionsListener: _itemPositionsListener,
+                            initialScrollIndex:
+                                _lastScrollIndex.clamp(0, groups.length - 1),
+                            key: PageStorageKey(
+                                'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
+                            physics: const ClampingScrollPhysics(),
+                            scrollOffsetController: scrollController,
+                            shrinkWrap: widget.shrinkWrap,
+                            itemCount: groups.length,
+                            itemBuilder: (context, groupIndex) {
+                              final group = groups[groupIndex];
+                              return _buildCommentaryGroupTile(
+                                group: group,
+                                state: state,
+                                indexesKey: indexesKey,
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          }
+
+          if (widget.showSearch) {
+            // אם מסך בחירת המפרשים פתוח, מציג אותו במקום הרשימה
+            if (_showCommentatorsFilter) {
+              return CommentatorsFilterScreen(
+                onBack: _closeCommentatorsFilter,
+                child: CommentatorsListView(
+                  onCommentatorSelected: _closeCommentatorsFilter,
                 ),
               );
             }
 
-            return FutureBuilder(
-              future: getLinksforIndexs(
-                  indexes: currentIndexes,
-                  links: state.links,
-                  commentatorsToShow: state.activeCommentators),
-              builder: (context, thisLinksSnapshot) {
-                if (!thisLinksSnapshot.hasData) {
-                  // רק אם יש קישורים רלוונטיים, מציג אנימציית טעינה
-                  return _buildSkeletonLoading();
-                }
-                if (thisLinksSnapshot.data!.isEmpty) {
-                  // אם אין מפרשים, פשוט נציג מסך ריק
-                  return const SizedBox.shrink();
-                }
-                final data = thisLinksSnapshot.data!;
-
-                // שומר את הסדר של ה-links לצורך חישוב אינדקס החיפוש
-                _orderedLinks = data;
-
-                // מנקה מפתחות ישנים ומכין מפתחות חדשים
-                final currentLinkKeys = data.map((l) => _getLinkKey(l)).toSet();
-                _itemKeys.removeWhere(
-                    (key, value) => !currentLinkKeys.contains(key));
-                for (final key in currentLinkKeys) {
-                  _itemKeys.putIfAbsent(key, () => GlobalKey());
-                }
-
-                // מקבץ את הקישורים לקבוצות רצופות
-                final groups = _groupConsecutiveLinks(data);
-
-                // יצירת מפתח ייחודי לאינדקסים הנוכחיים
-                final indexesKey = currentIndexes.join(',');
-
-                return SelectionArea(
-                  onSelectionChanged: (selection) {
-                    if (selection != null && selection.plainText.isNotEmpty) {
-                      setState(() {
-                        _savedSelectedText = selection.plainText;
-                      });
-                    }
-                  },
-                  child: ProgressiveScroll(
-                    scrollController: scrollController,
-                    maxSpeed: 10000.0,
-                    curve: 10.0,
-                    accelerationFactor: 5,
-                    child: ScrollConfiguration(
-                      // מונע בעיות של Scrollbar עם ScrollController לא מחובר
-                      behavior: ScrollConfiguration.of(context).copyWith(
-                        scrollbars: false,
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      // כפתור בחירת מפרשים - בצד ימין
+                      CommentatorsFilterButton(
+                        isActive: false,
+                        onPressed: _openCommentatorsFilter,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
+                        iconSize: 20,
                       ),
-                      child: ScrollablePositionedList.builder(
-                        itemScrollController: _itemScrollController,
-                        itemPositionsListener: _itemPositionsListener,
-                        initialScrollIndex:
-                            _lastScrollIndex.clamp(0, groups.length - 1),
-                        key: PageStorageKey(
-                            'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
-                        physics: const ClampingScrollPhysics(),
-                        scrollOffsetController: scrollController,
-                        shrinkWrap: widget.shrinkWrap,
-                        itemCount: groups.length,
-                        itemBuilder: (context, groupIndex) {
-                          final group = groups[groupIndex];
-                          return _buildCommentaryGroupTile(
-                            group: group,
-                            state: state,
-                            indexesKey: indexesKey,
-                          );
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: RtlTextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'חפש בתוך המפרשים המוצגים...',
+                            prefixIcon:
+                                const Icon(FluentIcons.search_24_regular),
+                            suffixIcon: _searchQuery.isNotEmpty
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (_totalSearchResults > 1) ...[
+                                        Text(
+                                          '${_currentSearchIndex + 1}/$_totalSearchResults',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        IconButton(
+                                          icon: const Icon(FluentIcons
+                                              .chevron_up_24_regular),
+                                          iconSize: 20,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 24,
+                                            minHeight: 24,
+                                          ),
+                                          onPressed: _currentSearchIndex > 0
+                                              ? () {
+                                                  setState(() {
+                                                    _currentSearchIndex--;
+                                                  });
+                                                  _scrollToSearchResult();
+                                                }
+                                              : null,
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(FluentIcons
+                                              .chevron_down_24_regular),
+                                          iconSize: 20,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 24,
+                                            minHeight: 24,
+                                          ),
+                                          onPressed: _currentSearchIndex <
+                                                  _totalSearchResults - 1
+                                              ? () {
+                                                  setState(() {
+                                                    _currentSearchIndex++;
+                                                  });
+                                                  _scrollToSearchResult();
+                                                }
+                                              : null,
+                                        ),
+                                      ],
+                                      IconButton(
+                                        icon: const Icon(
+                                            FluentIcons.dismiss_24_regular),
+                                        onPressed: () {
+                                          _searchController.clear();
+                                          setState(() {
+                                            _searchQuery = '';
+                                            _currentSearchIndex = 0;
+                                            _totalSearchResults = 0;
+                                            _searchResultsPerLink.clear();
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  )
+                                : null,
+                            isDense: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              _searchQuery = value;
+                              _currentSearchIndex = 0;
+                              if (value.isEmpty) {
+                                _totalSearchResults = 0;
+                                _searchResultsPerLink.clear();
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // כפתור סגירה/פתיחה גלובלית של כל המפרשים - מוצג רק אם יש מפרשים פעילים
+                      if (state.activeCommentators.isNotEmpty)
+                        IconButton(
+                          icon: Icon(
+                            _allExpanded
+                                ? FluentIcons.arrow_collapse_all_24_regular
+                                : FluentIcons.arrow_expand_all_24_regular,
+                          ),
+                          tooltip: _allExpanded
+                              ? 'סגור את כל המפרשים'
+                              : 'פתח את כל המפרשים',
+                          onPressed: () {
+                            setState(() {
+                              _allExpanded = !_allExpanded;
+                              // מעדכן את כל המצבים של ה-ExpansionTiles
+                              for (var key in _expansionStates.keys) {
+                                _expansionStates[key] = _allExpanded;
+                              }
+                              // משתמש ב-controllers לפתיחה/סגירה
+                              for (var controller in _controllers.values) {
+                                if (_allExpanded) {
+                                  controller.expand();
+                                } else {
+                                  controller.collapse();
+                                }
+                              }
+                            });
+                          },
+                        ),
+                      // מציג את לחצן הסגירה רק אם יש callback
+                      if (widget.onClosePane != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surface
+                                .withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: IconButton(
+                            iconSize: 18,
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(
+                              minWidth: 36,
+                              minHeight: 36,
+                            ),
+                            icon: const Icon(FluentIcons.dismiss_24_regular),
+                            onPressed: widget.onClosePane,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: buildList(),
+                ),
+              ],
+            );
+          } else {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // כפתור גלובלי מעל הרשימה
+                if (state.activeCommentators.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        style: IconButton.styleFrom(
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.1),
+                          foregroundColor:
+                              Theme.of(context).colorScheme.primary,
+                        ),
+                        icon: Icon(
+                          _allExpanded
+                              ? FluentIcons.arrow_collapse_all_24_regular
+                              : FluentIcons.arrow_expand_all_24_regular,
+                        ),
+                        tooltip: _allExpanded
+                            ? 'סגור את כל המפרשים'
+                            : 'פתח את כל המפרשים',
+                        onPressed: () {
+                          setState(() {
+                            _allExpanded = !_allExpanded;
+                            // מעדכן את כל המצבים של ה-ExpansionTiles
+                            for (var key in _expansionStates.keys) {
+                              _expansionStates[key] = _allExpanded;
+                            }
+                            // משתמש ב-controllers לפתיחה/סגירה
+                            for (var controller in _controllers.values) {
+                              if (_allExpanded) {
+                                controller.expand();
+                              } else {
+                                controller.collapse();
+                              }
+                            }
+                          });
                         },
                       ),
                     ),
                   ),
-                );
-              },
+                // הרשימה
+                Flexible(
+                  child: buildList(),
+                ),
+              ],
             );
-          },
-        );
-      }
-
-      if (widget.showSearch) {
-        // אם מסך בחירת המפרשים פתוח, מציג אותו במקום הרשימה
-        if (_showCommentatorsFilter) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // שורת כותרת עם כפתור חזרה
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(FluentIcons.arrow_right_24_regular),
-                      tooltip: 'חזרה למפרשים',
-                      onPressed: _closeCommentatorsFilter,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'בחירת מפרשים',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: CommentatorsListView(
-                  onCommentatorSelected: _closeCommentatorsFilter,
-                ),
-              ),
-            ],
-          );
-        }
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  // כפתור בחירת מפרשים - בצד ימין
-                  IconButton(
-                    icon: Icon(
-                      FluentIcons.apps_list_24_regular,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.6),
-                      size: 20,
-                    ),
-                    tooltip: 'בחירת מפרשים',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 40,
-                      minHeight: 40,
-                    ),
-                    onPressed: _openCommentatorsFilter,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: RtlTextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'חפש בתוך המפרשים המוצגים...',
-                        prefixIcon: const Icon(FluentIcons.search_24_regular),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (_totalSearchResults > 1) ...[
-                                    Text(
-                                      '${_currentSearchIndex + 1}/$_totalSearchResults',
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    IconButton(
-                                      icon: const Icon(
-                                          FluentIcons.chevron_up_24_regular),
-                                      iconSize: 20,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(
-                                        minWidth: 24,
-                                        minHeight: 24,
-                                      ),
-                                      onPressed: _currentSearchIndex > 0
-                                          ? () {
-                                              setState(() {
-                                                _currentSearchIndex--;
-                                              });
-                                              _scrollToSearchResult();
-                                            }
-                                          : null,
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(
-                                          FluentIcons.chevron_down_24_regular),
-                                      iconSize: 20,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(
-                                        minWidth: 24,
-                                        minHeight: 24,
-                                      ),
-                                      onPressed: _currentSearchIndex <
-                                              _totalSearchResults - 1
-                                          ? () {
-                                              setState(() {
-                                                _currentSearchIndex++;
-                                              });
-                                              _scrollToSearchResult();
-                                            }
-                                          : null,
-                                    ),
-                                  ],
-                                  IconButton(
-                                    icon: const Icon(
-                                        FluentIcons.dismiss_24_regular),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() {
-                                        _searchQuery = '';
-                                        _currentSearchIndex = 0;
-                                        _totalSearchResults = 0;
-                                        _searchResultsPerLink.clear();
-                                      });
-                                    },
-                                  ),
-                                ],
-                              )
-                            : null,
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value;
-                          _currentSearchIndex = 0;
-                          if (value.isEmpty) {
-                            _totalSearchResults = 0;
-                            _searchResultsPerLink.clear();
-                          }
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // כפתור סגירה/פתיחה גלובלית של כל המפרשים - מוצג רק אם יש מפרשים פעילים
-                  if (state.activeCommentators.isNotEmpty)
-                    IconButton(
-                      icon: Icon(
-                        _allExpanded
-                            ? FluentIcons.arrow_collapse_all_24_regular
-                            : FluentIcons.arrow_expand_all_24_regular,
-                      ),
-                      tooltip: _allExpanded
-                          ? 'סגור את כל המפרשים'
-                          : 'פתח את כל המפרשים',
-                      onPressed: () {
-                        setState(() {
-                          _allExpanded = !_allExpanded;
-                          // מעדכן את כל המצבים של ה-ExpansionTiles
-                          for (var key in _expansionStates.keys) {
-                            _expansionStates[key] = _allExpanded;
-                          }
-                          // משתמש ב-controllers לפתיחה/סגירה
-                          for (var controller in _controllers.values) {
-                            if (_allExpanded) {
-                              controller.expand();
-                            } else {
-                              controller.collapse();
-                            }
-                          }
-                        });
-                      },
-                    ),
-                  // מציג את לחצן הסגירה רק אם יש callback
-                  if (widget.onClosePane != null) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surface
-                            .withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        iconSize: 18,
-                        padding: const EdgeInsets.all(8),
-                        constraints: const BoxConstraints(
-                          minWidth: 36,
-                          minHeight: 36,
-                        ),
-                        icon: const Icon(FluentIcons.dismiss_24_regular),
-                        onPressed: widget.onClosePane,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Flexible(
-              fit: FlexFit.loose,
-              child: buildList(),
-            ),
-          ],
-        );
-      } else {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // כפתור גלובלי מעל הרשימה
-            if (state.activeCommentators.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    style: IconButton.styleFrom(
-                      backgroundColor: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.1),
-                      foregroundColor: Theme.of(context).colorScheme.primary,
-                    ),
-                    icon: Icon(
-                      _allExpanded
-                          ? FluentIcons.arrow_collapse_all_24_regular
-                          : FluentIcons.arrow_expand_all_24_regular,
-                    ),
-                    tooltip: _allExpanded
-                        ? 'סגור את כל המפרשים'
-                        : 'פתח את כל המפרשים',
-                    onPressed: () {
-                      setState(() {
-                        _allExpanded = !_allExpanded;
-                        // מעדכן את כל המצבים של ה-ExpansionTiles
-                        for (var key in _expansionStates.keys) {
-                          _expansionStates[key] = _allExpanded;
-                        }
-                        // משתמש ב-controllers לפתיחה/סגירה
-                        for (var controller in _controllers.values) {
-                          if (_allExpanded) {
-                            controller.expand();
-                          } else {
-                            controller.collapse();
-                          }
-                        }
-                      });
-                    },
-                  ),
-                ),
-              ),
-            // הרשימה
-            Flexible(
-              child: buildList(),
-            ),
-          ],
-        );
-      }
-    });
+          }
+        });
   }
 
   /// בניית skeleton loading לפרשנות - מספר פרשנויות עם כותרת ושלוש שורות

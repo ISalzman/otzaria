@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 /// מודל לניהול קבצי headings של PDF
 /// מקשר בין כותרות ב-PDF למספרי שורות בקובץ הטקסט
@@ -18,7 +19,7 @@ class PdfHeadings {
   static Future<PdfHeadings?> loadFromFile(String bookTitle) async {
     try {
       // קבלת נתיב הספרייה
-      final libraryPath = Settings.getValue<String>('key-library-path');
+      final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) {
         debugPrint('Library path not set');
         return null;

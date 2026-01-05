@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 String stripHtmlIfNeeded(String text) {
   return text.replaceAll(SearchRegexPatterns.htmlStripper, '');
@@ -218,7 +219,7 @@ Future<void> _loadCsvCache() async {
   _csvCache = {};
 
   try {
-    final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+    final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
     final csvPath =
         '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}סדר הדורות.csv';
     final csvFile = File(csvPath);

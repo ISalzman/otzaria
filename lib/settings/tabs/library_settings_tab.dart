@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -94,7 +95,7 @@ class LibrarySettingsTab extends StatelessWidget {
                       leading: const Icon(FluentIcons.folder_24_regular),
                       title: const Text('מיקום הספרייה', style: TextStyle(fontSize: 16)),
                       subtitle: Text(
-                        Settings.getValue<String>('key-library-path') ??
+                        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ??
                             'לא קיים',
                         style: const TextStyle(fontSize: 13),
                       ),
@@ -119,7 +120,7 @@ class LibrarySettingsTab extends StatelessWidget {
                         leading: const Icon(FluentIcons.folder_24_regular),
                         title: const Text('מיקום ספרי היברובוקס', style: TextStyle(fontSize: 16)),
                         subtitle: Text(
-                          Settings.getValue<String>('key-hebrew-books-path') ??
+                          Settings.getValue<String>(SettingsRepository.keyHebrewBooksPath) ??
                               'לא קיים',
                           style: const TextStyle(fontSize: 13),
                         ),
