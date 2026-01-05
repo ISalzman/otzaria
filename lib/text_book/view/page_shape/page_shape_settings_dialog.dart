@@ -660,34 +660,26 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
           width: visibilityKey != null ? 108 : 140,
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 15,
-              color: isVisible
-                  ? null
-                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
-            ),
+            style: const TextStyle(fontSize: 15),
           ),
         ),
         Expanded(
-          child: Opacity(
-            opacity: isVisible ? 1.0 : 0.5,
-            child: InkWell(
-              onTap: isVisible ? () => _showCommentatorPicker(value, onChanged) : null,
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  suffixIcon: Icon(Icons.arrow_drop_down, size: 20),
-                ),
-                child: Text(
-                  value ?? 'ללא מפרש',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: value == null
-                        ? Theme.of(context).hintColor
-                        : Theme.of(context).textTheme.bodyLarge?.color,
-                  ),
+          child: InkWell(
+            onTap: () => _showCommentatorPicker(value, onChanged),
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                suffixIcon: Icon(Icons.arrow_drop_down, size: 20),
+              ),
+              child: Text(
+                value ?? 'ללא מפרש',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: value == null
+                      ? Theme.of(context).hintColor
+                      : Theme.of(context).textTheme.bodyLarge?.color,
                 ),
               ),
             ),
