@@ -16,7 +16,7 @@ class ProgressDatabaseGenerator extends DatabaseGenerator {
 
   int _processedBooks = 0;
   int _totalLinks = 0;
-  int _processedLinks = 0;
+  final int _processedLinks = 0;
   String _currentBookTitle = '';
   Timer? _progressTimer;
 

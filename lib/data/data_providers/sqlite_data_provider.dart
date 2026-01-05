@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/migration/core/models/book.dart' as migration;
 import 'package:otzaria/migration/dao/repository/seforim_repository.dart';
 import 'package:otzaria/migration/dao/daos/database.dart';
 import 'package:otzaria/migration/adapters/model_adapters.dart';
@@ -114,7 +115,7 @@ class SqliteDataProvider {
     if (!_isInitialized) return null;
 
     try {
-      var book;
+      migration.Book? book;
       if (categoryId != null && fileType != null) {
         book = await _repository.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
       } else {
@@ -141,7 +142,7 @@ class SqliteDataProvider {
     if (!_isInitialized) return null;
 
     try {
-      var book;
+      migration.Book? book;
       if (categoryId != null && fileType != null) {
         book = await _repository.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
       } else {

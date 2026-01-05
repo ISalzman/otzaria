@@ -52,10 +52,6 @@ class DatabaseGenerator {
   /// Counter for TOC entry IDs
   int _nextTocEntryId = 1;
 
-  /// Track duplicate checks for performance measurement
-  int _duplicateChecks = 0;
-  int _duplicatesFound = 0;
-
   /// Library root path for relative path computations
   late String _libraryRoot;
 
@@ -307,11 +303,9 @@ class DatabaseGenerator {
         : fileExtension;
 
     // Check for duplicates in the same category with the same file type (for performance measurement)
-    _duplicateChecks++;
     final existingBook = await repository.checkBookExistsInCategoryWithFileType(
         title, categoryId, fileType);
     if (existingBook != null) {
-      _duplicatesFound++;
 
       // Call the callback if provided
       if (onDuplicateBook != null) {
@@ -726,10 +720,6 @@ class DatabaseGenerator {
       typeMap[type.name.toUpperCase()] = type.id;
     }
 
-    final targumId = typeMap['TARGUM'];
-    final refId = typeMap['REFERENCE'];
-    final commId = typeMap['COMMENTARY'];
-    final otherId = typeMap['OTHER'];
     String query = '''
       WITH book_connections AS (
     SELECT 

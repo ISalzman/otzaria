@@ -1,4 +1,3 @@
-import 'package:logging/logging.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../core/models/link.dart';
 import '../sqflite/query_loader.dart';
@@ -7,7 +6,6 @@ import 'database.dart';
 class LinkDao {
   final MyDatabase _db;
   late final Map<String, String> _queries;
-  final Logger _logger = Logger('LinkDao');
 
   LinkDao(this._db) {
     _queries = QueryLoader.loadQueries('LinkQueries.sq');

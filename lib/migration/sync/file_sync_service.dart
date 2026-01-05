@@ -1253,32 +1253,6 @@ class _RestoreResult {
   });
 }
 
-/// Data class for deserializing link data from JSON files
-class _LinkData {
-  final String heRef2;
-  final double lineIndex1;
-  final String path2;
-  final double lineIndex2;
-  final String connectionType;
-
-  const _LinkData({
-    required this.heRef2,
-    required this.lineIndex1,
-    required this.path2,
-    required this.lineIndex2,
-    this.connectionType = '',
-  });
-
-  factory _LinkData.fromJson(Map<String, dynamic> json) {
-    return _LinkData(
-      heRef2: json['heRef_2'] as String? ?? '',
-      lineIndex1: (json['line_index_1'] as num?)?.toDouble() ?? 0,
-      path2: json['path_2'] as String? ?? '',
-      lineIndex2: (json['line_index_2'] as num?)?.toDouble() ?? 0,
-      connectionType: json['Conection Type'] as String? ?? '',
-    );
-  }
-}
 
 /// Result of processing acronym.json file
 class _AcronymProcessResult {
