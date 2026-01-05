@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
@@ -673,42 +674,50 @@ $textWithBreaks
                 return const SizedBox.shrink();
               },
               onSelectionChanged: (selection) {
-                if (selection != null && selection.plainText.isNotEmpty) {
-                  // מחשב את מספר השורה המדויק של הטקסט המודגש
-                  // משתמש באותה לוגיקה כמו בדיווח שגיאות
-                  final state = _textBookBloc.state;
-                  int? foundIndex;
+                final plain = selection?.plainText;
+                if (plain == null || plain.trim().isEmpty) {
+                  return;
+                }
 
-                  if (state is TextBookLoaded) {
-                    // מקבל את השורה הראשונה הנראית
-                    final baseIndex = state.visibleIndices.isNotEmpty
-                        ? state.visibleIndices.first
-                        : 0;
+                // חשוב: כדי ש-Ctrl+C יעבוד מיד אחרי סימון טקסט עם העכבר
+                // נוודא שהפוקוס נמצא על אזור הקריאה.
+                _focusNode.requestFocus();
 
-                    // בונה את הטקסט הנראה
-                    final visibleText = state.visibleIndices
-                        .map((idx) =>
-                            widget.data[idx].replaceAll(RegExp(r'<[^>]*>'), ''))
-                        .join('\n');
+                // מחשב את מספר השורה המדויק של הטקסט המודגש
+                // משתמש באותה לוגיקה כמו בדיווח שגיאות
+                final state = _textBookBloc.state;
+                int? foundIndex;
 
-                    // מוצא את המיקום של הטקסט המודגש
-                    final selectionStart =
-                        visibleText.indexOf(selection.plainText);
+                if (state is TextBookLoaded) {
+                  // מקבל את השורה הראשונה הנראית
+                  final baseIndex =
+                      state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0;
 
-                    if (selectionStart >= 0) {
-                      // סופר כמה שורות יש לפני הטקסט המודגש
-                      final before = visibleText.substring(0, selectionStart);
-                      final offset = '\n'.allMatches(before).length;
-                      foundIndex = baseIndex + offset;
-                    }
+                  // בונה את הטקסט הנראה
+                  final visibleText = state.visibleIndices
+                      .map((idx) =>
+                          widget.data[idx].replaceAll(RegExp(r'<[^>]*>'), ''))
+                      .join('\n');
+
+                  // מוצא את המיקום של הטקסט המודגש
+                  final selectionStart = visibleText.indexOf(plain);
+
+                  if (selectionStart >= 0) {
+                    // סופר כמה שורות יש לפני הטקסט המודגש
+                    final before = visibleText.substring(0, selectionStart);
+                    final offset = '\n'.allMatches(before).length;
+                    foundIndex = baseIndex + offset;
                   }
 
-                  setState(() {
-                    _savedSelectedText = selection.plainText;
-                    _savedSelectedIndex = foundIndex;
-                    _currentSelectedIndex = foundIndex;
-                  });
+                  // fallback: אם לא הצלחנו לחשב אינדקס, נשתמש בשורה שנבחרה (אם קיימת)
+                  foundIndex ??= state.selectedIndex;
                 }
+
+                setState(() {
+                  _savedSelectedText = plain;
+                  _savedSelectedIndex = foundIndex;
+                  _currentSelectedIndex = foundIndex;
+                });
               },
               child: Directionality(
                 textDirection: widget.isPreviewMode
@@ -719,15 +728,44 @@ $textWithBreaks
                   behavior: ScrollConfiguration.of(context).copyWith(
                     scrollbars: false,
                   ),
-                  child: Directionality(
-                    textDirection: TextDirection.rtl,
-                    child: ProgressiveScroll(
-                      focusNode: _focusNode,
-                      maxSpeed: 10000.0,
-                      curve: 10.0,
-                      accelerationFactor: 5,
-                      scrollController: widget.tab.mainOffsetController,
-                      child: buildOuterList(state),
+                  child: Shortcuts(
+                    shortcuts: <ShortcutActivator, Intent>{
+                      // Windows/Linux
+                      LogicalKeySet(
+                        LogicalKeyboardKey.control,
+                        LogicalKeyboardKey.keyC,
+                      ): const _CopySelectedTextIntent(),
+                      // Windows "classic" copy
+                      LogicalKeySet(
+                        LogicalKeyboardKey.control,
+                        LogicalKeyboardKey.insert,
+                      ): const _CopySelectedTextIntent(),
+                      // macOS (למקרה שמריצים שם)
+                      LogicalKeySet(
+                        LogicalKeyboardKey.meta,
+                        LogicalKeyboardKey.keyC,
+                      ): const _CopySelectedTextIntent(),
+                    },
+                    child: Actions(
+                      actions: <Type, Action<Intent>>{
+                        _CopySelectedTextIntent: CallbackAction<_CopySelectedTextIntent>(
+                          onInvoke: (_) {
+                            _copyFormattedText();
+                            return null;
+                          },
+                        ),
+                      },
+                      child: Directionality(
+                        textDirection: TextDirection.rtl,
+                        child: ProgressiveScroll(
+                          focusNode: _focusNode,
+                          maxSpeed: 10000.0,
+                          curve: 10.0,
+                          accelerationFactor: 5,
+                          scrollController: widget.tab.mainOffsetController,
+                          child: buildOuterList(state),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1083,4 +1121,8 @@ class _CommentaryCardState extends State<_CommentaryCard> {
       },
     );
   }
+}
+
+class _CopySelectedTextIntent extends Intent {
+  const _CopySelectedTextIntent();
 }
