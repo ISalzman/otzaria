@@ -1,20 +1,69 @@
 import 'dart:convert';
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/links.dart';
+import 'package:otzaria/utils/text_manipulation.dart' as utils;
 
 /// מחלקה לניהול ברירות מחדל של מפרשים לפי סוג הספר
 /// ההגדרות נטענות מקובץ JSON חיצוני
 class DefaultCommentators {
   /// מחזיר מפרשי ברירת מחדל לפי קטגוריית הספר
-  static Future<Map<String, String?>> getDefaults(TextBook book) async {
+  /// מקבל גם את רשימת הקישורים כדי למצוא את השמות המלאים של המפרשים
+  static Future<Map<String, String?>> getDefaults(TextBook book, {List<Link>? links}) async {
     final config = await _loadConfig();
     
     // קבלת נתיב הספר
     final titleToPath = await book.data.titleToPath;
     final bookPath = titleToPath[book.title] ?? '';
     
-    return _getDefaultsFromConfig(config, book.title, bookPath);
+    // קבלת שמות המפרשים מה-JSON
+    final defaults = _getDefaultsFromConfig(config, book.title, bookPath);
+    
+    // אם יש links, נחפש את השמות המלאים של המפרשים
+    if (links != null && links.isNotEmpty) {
+      return _resolveCommentatorNames(defaults, links);
+    }
+    
+    return defaults;
+  }
+
+  /// מחפש את השמות המלאים של המפרשים מתוך רשימת הקישורים
+  static Map<String, String?> _resolveCommentatorNames(
+      Map<String, String?> defaults, List<Link> links) {
+    // קבלת רשימת שמות המפרשים הזמינים
+    final availableCommentators = links
+        .where((link) =>
+            link.connectionType == 'commentary' ||
+            link.connectionType == 'targum')
+        .map((link) => utils.getTitleFromPath(link.path2))
+        .toSet()
+        .toList();
+
+    return {
+      'right': _findMatchingCommentator(defaults['right'], availableCommentators),
+      'left': _findMatchingCommentator(defaults['left'], availableCommentators),
+      'bottom': _findMatchingCommentator(defaults['bottom'], availableCommentators),
+      'bottomRight': _findMatchingCommentator(defaults['bottomRight'], availableCommentators),
+    };
+  }
+
+  /// מחפש מפרש שמתאים לשם הנתון
+  /// מחזיר את השם המלא אם נמצא, או null אם לא
+  static String? _findMatchingCommentator(String? shortName, List<String> available) {
+    if (shortName == null) return null;
+    
+    // 1. התאמה מדויקת
+    String? match = available.firstWhereOrNull((name) => name == shortName);
+    if (match != null) return match;
+    
+    // 2. התאמה של התחלה
+    match = available.firstWhereOrNull((name) => name.startsWith(shortName));
+    if (match != null) return match;
+    
+    // 3. התאמה של הכלה
+    return available.firstWhereOrNull((name) => name.contains(shortName));
   }
 
   static Future<Map<String, dynamic>> _loadConfig() async {

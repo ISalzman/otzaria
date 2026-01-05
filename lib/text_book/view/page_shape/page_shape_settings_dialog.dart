@@ -7,10 +7,17 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
+/// סוג שמירת הגדרות מפרשים
+enum CommentatorSaveScope {
+  book,     // לספר הנוכחי בלבד
+  category, // לכל הספרים בקטגוריה
+}
+
 /// דיאלוג הגדרות צורת הדף - בחירת מפרשים לכל מיקום
 class PageShapeSettingsDialog extends StatefulWidget {
   final List<String> availableCommentators;
   final String bookTitle;
+  final String? heCategories; // קטגוריות הספר
   final String? currentLeft;
   final String? currentRight;
   final String? currentBottom;
@@ -20,6 +27,7 @@ class PageShapeSettingsDialog extends StatefulWidget {
     super.key,
     required this.availableCommentators,
     required this.bookTitle,
+    this.heCategories,
     this.currentLeft,
     this.currentRight,
     this.currentBottom,
@@ -48,8 +56,13 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     'bottom': true,
   };
   
-  // הגדרה חדשה: האם לשמור לספר הנוכחי בלבד
+  // הגדרה חדשה: האם לשמור לספר הנוכחי בלבד (להגדרות תצוגה)
   bool _saveForCurrentBookOnly = false;
+  
+  // הגדרה חדשה: היכן לשמור את בחירת המפרשים
+  CommentatorSaveScope _commentatorSaveScope = CommentatorSaveScope.book;
+  String? _selectedCategory; // הקטגוריה שנבחרה לשמירה
+  List<String> _availableCategories = []; // רשימת הקטגוריות הזמינות
 
   @override
   void initState() {
@@ -61,6 +74,20 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   void _loadCurrentSettings() {
     // בדיקה אם יש הגדרות פר-ספר
     _saveForCurrentBookOnly = PageShapeSettingsManager.hasBookSpecificSettings(widget.bookTitle);
+    
+    // טעינת קטגוריות זמינות
+    _availableCategories = PageShapeSettingsManager.parseCategories(widget.heCategories);
+    
+    // בדיקה מאיפה נטענו הגדרות המפרשים
+    final activeCategory = PageShapeSettingsManager.getActiveCategory(widget.heCategories);
+    if (activeCategory != null) {
+      _commentatorSaveScope = CommentatorSaveScope.category;
+      _selectedCategory = activeCategory;
+    } else {
+      _commentatorSaveScope = CommentatorSaveScope.book;
+      // בחירת קטגוריית ברירת מחדל (השנייה אם יש, אחרת הראשונה)
+      _selectedCategory = PageShapeSettingsManager.getParentCategory(widget.heCategories);
+    }
     
     setState(() {
       _leftCommentator = widget.currentLeft;
@@ -130,29 +157,42 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   }
 
   Future<void> _saveSettings() async {
-    // שמירת הגדרות מפרשים
-    await PageShapeSettingsManager.saveConfiguration(
-      widget.bookTitle,
-      {
-        'left': _leftCommentator,
-        'right': _rightCommentator,
-        'bottom': _bottomCommentator,
-        'bottomRight': _bottomRightCommentator,
-      },
-      saveAsGlobal: !_saveForCurrentBookOnly,
-    );
+    // שמירת הגדרות מפרשים - לספר או לקטגוריה לפי הבחירה
+    final config = {
+      'left': _leftCommentator,
+      'right': _rightCommentator,
+      'bottom': _bottomCommentator,
+      'bottomRight': _bottomRightCommentator,
+    };
+    
+    if (_commentatorSaveScope == CommentatorSaveScope.category && _selectedCategory != null) {
+      // שמירה לקטגוריה
+      await PageShapeSettingsManager.saveConfiguration(
+        widget.bookTitle,
+        config,
+        saveToCategory: _selectedCategory,
+      );
+      // מחיקת הגדרות מפרשים ספציפיות לספר אם יש
+      await PageShapeSettingsManager.resetBookCommentatorConfig(widget.bookTitle);
+    } else {
+      // שמירה לספר ספציפי
+      await PageShapeSettingsManager.saveConfiguration(
+        widget.bookTitle,
+        config,
+      );
+    }
     
     // שמירת הגופן של המפרשים התחתונים (תמיד גלובלי)
     await Settings.setValue<String>('page_shape_bottom_font', _bottomFontFamily);
     
-    // שמירת הגדרת הדגשה
+    // שמירת הגדרת הדגשה - גלובלי או פר-ספר לפי הבחירה
     await PageShapeSettingsManager.saveHighlightSetting(
       widget.bookTitle,
       _highlightRelatedCommentators,
       saveAsGlobal: !_saveForCurrentBookOnly,
     );
     
-    // שמירת הגדרות visibility
+    // שמירת הגדרות visibility - גלובלי או פר-ספר לפי הבחירה
     await PageShapeSettingsManager.saveColumnVisibility(
       widget.bookTitle,
       _columnVisibility,
@@ -160,10 +200,14 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     );
   }
 
-  void _onCommentatorChanged(String? value, void Function(String?) setter) {
+  void _onCommentatorChanged(String? value, void Function(String?) setter, {String? visibilityKey}) {
     setState(() {
       setter(value);
       _hasChanges = true;
+      // אם בחרו מפרש והטור מוסתר - הצג אותו אוטומטית
+      if (value != null && visibilityKey != null && _columnVisibility[visibilityKey] == false) {
+        _columnVisibility[visibilityKey] = true;
+      }
     });
     _saveSettings();
   }
@@ -192,25 +236,19 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     _saveSettings();
   }
   
-  /// איפוס הגדרות פר-ספר וחזרה לגלובלי
-  Future<void> _resetToGlobalSettings() async {
-    await PageShapeSettingsManager.resetBookSettings(widget.bookTitle);
+  /// איפוס הגדרות תצוגה פר-ספר וחזרה לגלובלי (לא משפיע על בחירת מפרשים)
+  Future<void> _resetDisplaySettingsToGlobal() async {
+    await PageShapeSettingsManager.resetBookDisplaySettings(widget.bookTitle);
+    // טעינה מחדש של הגדרות התצוגה הגלובליות (לא מפרשים!)
+    final highlight = PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
+    final visibility = PageShapeSettingsManager.getColumnVisibility(widget.bookTitle);
+    if (!mounted) return;
     setState(() {
       _saveForCurrentBookOnly = false;
       _hasChanges = true;
+      _highlightRelatedCommentators = highlight;
+      _columnVisibility = visibility;
     });
-    // טעינה מחדש של ההגדרות הגלובליות
-    final globalConfig = PageShapeSettingsManager.loadConfiguration(widget.bookTitle);
-    if (globalConfig != null) {
-      setState(() {
-        _leftCommentator = globalConfig['left'];
-        _rightCommentator = globalConfig['right'];
-        _bottomCommentator = globalConfig['bottom'];
-        _bottomRightCommentator = globalConfig['bottomRight'];
-      });
-    }
-    _highlightRelatedCommentators = PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
-    _columnVisibility = PageShapeSettingsManager.getColumnVisibility(widget.bookTitle);
   }
 
   @override
@@ -224,7 +262,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // בחירה בין גלובלי לפר-ספר
+              // בחירה בין גלובלי לפר-ספר (להגדרות תצוגה בלבד)
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -244,36 +282,41 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                           color: Theme.of(context).colorScheme.primary,
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          _saveForCurrentBookOnly 
-                              ? 'הגדרות לספר הנוכחי בלבד' 
-                              : 'הגדרות גלובליות (לכל הספרים)',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
+                        Expanded(
+                          child: Text(
+                            _saveForCurrentBookOnly 
+                                ? 'הגדרות תצוגה לספר הנוכחי בלבד' 
+                                : 'הגדרות תצוגה גלובליות',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     SwitchListTile(
-                      title: const Text('שמור לספר הנוכחי בלבד'),
+                      title: Text(
+                        _saveForCurrentBookOnly
+                            ? 'שמירה לספר הנוכחי בלבד'
+                            : 'שמירה גלובלית (לכל הספרים)',
+                      ),
                       subtitle: Text(
                         _saveForCurrentBookOnly
-                            ? 'השינויים יחולו רק על "${widget.bookTitle}"'
-                            : 'השינויים יחולו על כל הספרים בצורת הדף',
+                            ? 'הדגשה והצגת טורים יחולו רק על "${widget.bookTitle}"'
+                            : 'הדגשה והצגת טורים יחולו על כל הספרים',
                         style: const TextStyle(fontSize: 12),
                       ),
                       value: _saveForCurrentBookOnly,
                       onChanged: (value) async {
                         if (!value && _saveForCurrentBookOnly) {
-                          // מעבר מפר-ספר לגלובלי - שאל אם לאפס
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (context) => AlertDialog(
                               title: const Text('חזרה להגדרות גלובליות'),
                               content: const Text(
-                                'האם לאפס את ההגדרות הספציפיות לספר זה ולחזור להגדרות הגלובליות?',
+                                'האם לאפס את הגדרות התצוגה הספציפיות לספר זה ולחזור להגדרות הגלובליות?',
                               ),
                               actions: [
                                 TextButton(
@@ -288,14 +331,13 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                             ),
                           );
                           if (confirm == true) {
-                            await _resetToGlobalSettings();
+                            await _resetDisplaySettingsToGlobal();
                           }
                         } else {
                           setState(() {
                             _saveForCurrentBookOnly = value;
                             _hasChanges = true;
                           });
-                          // שמירה מחדש עם ההגדרה החדשה
                           await _saveSettings();
                         }
                       },
@@ -305,6 +347,111 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                   ],
                 ),
               ),
+              
+              // בחירת היכן לשמור את הגדרות המפרשים
+              if (_availableCategories.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            FluentIcons.save_24_regular,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'שמירת בחירת מפרשים',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // אפשרות 1: לספר הנוכחי
+                      RadioListTile<CommentatorSaveScope>(
+                        title: const Text('לספר הנוכחי בלבד'),
+                        subtitle: Text(
+                          'המפרשים יחולו רק על "${widget.bookTitle}"',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        value: CommentatorSaveScope.book,
+                        groupValue: _commentatorSaveScope,
+                        onChanged: (value) {
+                          setState(() {
+                            _commentatorSaveScope = value!;
+                            _hasChanges = true;
+                          });
+                          _saveSettings();
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                      // אפשרות 2: לקטגוריה
+                      RadioListTile<CommentatorSaveScope>(
+                        title: const Text('לכל הספרים בקטגוריה'),
+                        subtitle: _selectedCategory != null
+                            ? Text(
+                                'המפרשים יחולו על כל ספרי "$_selectedCategory"',
+                                style: const TextStyle(fontSize: 11),
+                              )
+                            : null,
+                        value: CommentatorSaveScope.category,
+                        groupValue: _commentatorSaveScope,
+                        onChanged: (value) {
+                          setState(() {
+                            _commentatorSaveScope = value!;
+                            _hasChanges = true;
+                          });
+                          _saveSettings();
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                      // בחירת קטגוריה
+                      if (_commentatorSaveScope == CommentatorSaveScope.category) ...[
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          value: _selectedCategory,
+                          decoration: InputDecoration(
+                            labelText: 'בחר קטגוריה',
+                            border: const OutlineInputBorder(),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            filled: true,
+                            fillColor: Theme.of(context).colorScheme.surface,
+                          ),
+                          items: _availableCategories.map((category) {
+                            return DropdownMenuItem<String>(
+                              value: category,
+                              child: Text(category, style: const TextStyle(fontSize: 13)),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedCategory = value;
+                              _hasChanges = true;
+                            });
+                            _saveSettings();
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
               
               const SizedBox(height: 16),
               const Text(
@@ -327,11 +474,32 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
               ),
               const Divider(),
               const SizedBox(height: 8),
+              // הסבר על כפתורי העין
+              Row(
+                children: [
+                  Icon(
+                    Icons.visibility,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'לחץ על סמל העין כדי להציג או להסתיר טור',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               _buildCommentatorDropdown(
                 label: 'מפרש ימני',
                 value: _leftCommentator,
                 onChanged: (value) =>
-                    _onCommentatorChanged(value, (v) => _leftCommentator = v),
+                    _onCommentatorChanged(value, (v) => _leftCommentator = v, visibilityKey: 'left'),
                 visibilityKey: 'left',
               ),
               const SizedBox(height: 12),
@@ -339,7 +507,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                 label: 'מפרש שמאלי',
                 value: _rightCommentator,
                 onChanged: (value) =>
-                    _onCommentatorChanged(value, (v) => _rightCommentator = v),
+                    _onCommentatorChanged(value, (v) => _rightCommentator = v, visibilityKey: 'right'),
                 visibilityKey: 'right',
               ),
               const SizedBox(height: 12),
@@ -347,7 +515,8 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                 label: 'מפרש תחתון',
                 value: _bottomCommentator,
                 onChanged: (value) =>
-                    _onCommentatorChanged(value, (v) => _bottomCommentator = v),
+                    _onCommentatorChanged(value, (v) => _bottomCommentator = v, visibilityKey: 'bottom'),
+                visibilityKey: 'bottom',
               ),
               const SizedBox(height: 12),
               _buildCommentatorDropdown(
@@ -474,53 +643,43 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       children: [
         // כפתור הצגה/הסתרה
         if (visibilityKey != null)
-          _BlinkingHighlight(
-            child: IconButton(
-              icon: Icon(
-                isVisible ? Icons.visibility : Icons.visibility_off,
-                size: 20,
-                color: isVisible
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
-              ),
-              tooltip: isVisible ? 'הסתר טור' : 'הצג טור',
-              onPressed: () => _toggleColumnVisibility(visibilityKey, !isVisible),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          IconButton(
+            icon: Icon(
+              isVisible ? Icons.visibility : Icons.visibility_off,
+              size: 20,
+              color: isVisible
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
             ),
+            tooltip: isVisible ? 'הסתר טור' : 'הצג טור',
+            onPressed: () => _toggleColumnVisibility(visibilityKey, !isVisible),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
         SizedBox(
           width: visibilityKey != null ? 108 : 140,
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 15,
-              color: isVisible
-                  ? null
-                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
-            ),
+            style: const TextStyle(fontSize: 15),
           ),
         ),
         Expanded(
-          child: Opacity(
-            opacity: isVisible ? 1.0 : 0.5,
-            child: InkWell(
-              onTap: isVisible ? () => _showCommentatorPicker(value, onChanged) : null,
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  suffixIcon: Icon(Icons.arrow_drop_down, size: 20),
-                ),
-                child: Text(
-                  value ?? 'ללא מפרש',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: value == null
-                        ? Theme.of(context).hintColor
-                        : Theme.of(context).textTheme.bodyLarge?.color,
-                  ),
+          child: InkWell(
+            onTap: () => _showCommentatorPicker(value, onChanged),
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                suffixIcon: Icon(Icons.arrow_drop_down, size: 20),
+              ),
+              child: Text(
+                value ?? 'ללא מפרש',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: value == null
+                      ? Theme.of(context).hintColor
+                      : Theme.of(context).textTheme.bodyLarge?.color,
                 ),
               ),
             ),
@@ -739,61 +898,6 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
       selected: isSelected,
       trailing: isSelected ? const Icon(Icons.check) : null,
       onTap: () => Navigator.of(context).pop(commentator),
-    );
-  }
-}
-
-class _BlinkingHighlight extends StatefulWidget {
-  final Widget child;
-  const _BlinkingHighlight({required this.child});
-
-  @override
-  State<_BlinkingHighlight> createState() => _BlinkingHighlightState();
-}
-
-class _BlinkingHighlightState extends State<_BlinkingHighlight>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Color?> _colorAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _colorAnimation = ColorTween(
-      begin: Colors.transparent,
-      end: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-    ).animate(_controller);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _colorAnimation,
-      builder: (context, child) {
-        return Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _colorAnimation.value,
-          ),
-          child: child,
-        );
-      },
-      child: widget.child,
     );
   }
 }

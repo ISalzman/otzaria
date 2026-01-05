@@ -120,6 +120,35 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final links = await repository.getBookLinks(book);
       final tableOfContents = await repository.getTableOfContents(book);
 
+      // טעינת metadata של הספר אם חסר (למשל כשפותחים מחיפוש)
+      if (book.heCategories == null || book.heCategories!.isEmpty) {
+        final metadata = await FileSystemData.instance.metadata;
+        final bookMetadata = metadata[book.title];
+        if (bookMetadata != null) {
+          book.heCategories = bookMetadata['heCategories'];
+          book.author = bookMetadata['author'];
+          book.heEra = bookMetadata['heEra'];
+        }
+        
+        // אם עדיין אין קטגוריות, נחלץ אותן מהנתיב של הספר
+        if (book.heCategories == null || book.heCategories!.isEmpty) {
+          final titleToPath = await FileSystemData.instance.titleToPath;
+          final bookPath = titleToPath[book.title];
+          if (bookPath != null) {
+            // חילוץ הקטגוריות מהנתיב
+            // למשל: /אוצריא/הלכה/משנה תורה/ספר מדע/משנה תורה, הלכות דעות.txt
+            // → הלכה, משנה תורה, ספר מדע
+            final pathParts = bookPath.split(Platform.pathSeparator);
+            final otzariaIndex = pathParts.indexOf('אוצריא');
+            if (otzariaIndex >= 0 && otzariaIndex < pathParts.length - 2) {
+              // לוקחים את כל התיקיות בין אוצריא לקובץ עצמו
+              final categories = pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
+              book.heCategories = categories.join(', ');
+            }
+          }
+        }
+      }
+
       // Update current title if we're preserving state
       String? currentTitle;
       if (visibleIndices.isNotEmpty) {

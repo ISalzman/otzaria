@@ -95,7 +95,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
-    final config = PageShapeSettingsManager.loadConfiguration(state.book.title);
+    final config = PageShapeSettingsManager.loadConfiguration(
+      state.book.title,
+      heCategories: state.book.heCategories,
+    );
     _columnVisibility =
         PageShapeSettingsManager.getColumnVisibility(state.book.title);
 
@@ -105,7 +108,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       commentators = config;
     } else {
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
-      commentators = await DefaultCommentators.getDefaults(state.book);
+      commentators = await DefaultCommentators.getDefaults(state.book, links: state.links);
     }
 
     if (mounted) {
@@ -127,8 +130,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     setState(() {
       _columnVisibility[column] = false;
     });
+    
+    // שמירה גלובלית אלא אם יש הגדרות פר-ספר
+    final hasBookSettings = PageShapeSettingsManager.hasBookSpecificSettings(state.book.title);
     PageShapeSettingsManager.saveColumnVisibility(
-        state.book.title, _columnVisibility);
+        state.book.title, _columnVisibility, saveAsGlobal: !hasBookSettings);
   }
 
   /// בניית widget למצב ריק של טור
@@ -194,6 +200,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       builder: (context) => PageShapeSettingsDialog(
         availableCommentators: availableCommentators,
         bookTitle: state.book.title,
+        heCategories: state.book.heCategories,
         currentLeft: _leftCommentator,
         currentRight: _rightCommentator,
         currentBottom: _bottomCommentator,
