@@ -49,9 +49,9 @@ class FileSyncResult {
 class ImportSource {
   final String path;
   final List<String> categoryPrefix;
-  
+
   const ImportSource({
-    required this.path, 
+    required this.path,
     this.categoryPrefix = const [],
   });
 }
@@ -355,7 +355,7 @@ class FileSyncService {
   }
 
   /// Unified method to scan directories and import content to the database.
-  /// 
+  ///
   /// [sources] - List of sources to scan.
   /// [deleteOriginals] - Whether to delete the original files after successful import.
   /// [onProgress] - Callback for progress updates.
@@ -411,7 +411,7 @@ class FileSyncService {
         deletedFiles += result.deletedFiles;
         skippedFiles += result.skippedFiles;
         errors.addAll(result.errors);
-        
+
         processedSources++;
       }
 
@@ -489,7 +489,9 @@ class FileSyncService {
         // ONLY delete .txt files, as other files (PDF, DOCX) are referenced externally
         final isTxtFile = path.extension(filePath).toLowerCase() == '.txt';
 
-        if (deleteOriginals && isTxtFile && (result.wasAdded || result.wasUpdated)) {
+        if (deleteOriginals &&
+            isTxtFile &&
+            (result.wasAdded || result.wasUpdated)) {
           try {
             await File(filePath).delete();
             deletedFiles++;
@@ -530,7 +532,7 @@ class FileSyncService {
   }) async {
     final title = path.basenameWithoutExtension(filePath);
     final extension = path.extension(filePath).toLowerCase();
-    
+
     // Build category path
     final relativeCategories = _parsePathToCategories(filePath, basePath);
     final categoryPath = [...categoryPrefix, ...relativeCategories];
@@ -549,7 +551,8 @@ class FileSyncService {
     final fileType = extension.replaceFirst('.', '').toLowerCase();
 
     // Check if book already exists in this category with the same file type
-    final existingBook = await _repository.checkBookExistsInCategoryWithFileType(title, categoryId, fileType);
+    final existingBook = await _repository
+        .checkBookExistsInCategoryWithFileType(title, categoryId, fileType);
 
     if (existingBook != null) {
       // Update existing book
@@ -625,7 +628,7 @@ class FileSyncService {
           categoryPrefix: [],
           deleteOriginals: true, // Keep existing behavior
         );
-        
+
         addedBooks += otzariaResult.addedBooks;
         updatedBooks += otzariaResult.updatedBooks;
         addedCategories += otzariaResult.addedCategories;
@@ -642,7 +645,8 @@ class FileSyncService {
       final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
 
       // Filter only folders marked for DB sync
-      final foldersToSync = customFolders.where((f) => f.addToDatabase).toList();
+      final foldersToSync =
+          customFolders.where((f) => f.addToDatabase).toList();
 
       if (foldersToSync.isNotEmpty) {
         _log.info('Found ${foldersToSync.length} custom folders to sync');
@@ -663,7 +667,7 @@ class FileSyncService {
             categoryPrefix: ['ספרים אישיים', folder.name],
             deleteOriginals: true, // Keep existing behavior
           );
-          
+
           addedBooks += result.addedBooks;
           updatedBooks += result.updatedBooks;
           addedCategories += result.addedCategories;
@@ -686,6 +690,15 @@ class FileSyncService {
         skippedFiles += linksResult.skippedFiles;
         errors.addAll(linksResult.errors);
       }
+
+      // Check for acronym.json file and update book_acronym table if found
+      _reportProgress(0.85, 'בודק קובץ acronym.json...');
+      final acronymResult = await _checkAndProcessAcronymFile(libraryPath);
+      if (acronymResult.processed) {
+        _log.info(
+            'Processed acronym.json: ${acronymResult.updatedBooks} books updated, ${acronymResult.newTerms} new terms');
+      }
+      errors.addAll(acronymResult.errors);
 
       // Rebuild category closure if categories were added
       if (addedCategories > 0) {
@@ -927,11 +940,7 @@ class FileSyncService {
 
   /// Add a new book to the database
   Future<void> _addNewBook(
-    String filePath,
-    int categoryId,
-    String title,
-    String fileType
-  ) async {
+      String filePath, int categoryId, String title, String fileType) async {
     _log.info('Adding new book: $title to category $categoryId');
 
     // Read file content
@@ -945,15 +954,14 @@ class FileSyncService {
     // Create book using repository method
     final bookId = _nextBookId++;
     final book = Book(
-      id: bookId,
-      categoryId: categoryId,
-      sourceId: sourceId,
-      title: title,
-      order: 999.0,
-      totalLines: lines.length,
-      isBaseBook: false,
-      fileType: fileType
-    );
+        id: bookId,
+        categoryId: categoryId,
+        sourceId: sourceId,
+        title: title,
+        order: 999.0,
+        totalLines: lines.length,
+        isBaseBook: false,
+        fileType: fileType);
 
     // Repository's insertBook handles the insertion
     await _repository.insertBook(book);
@@ -973,12 +981,12 @@ class FileSyncService {
     // Use DatabaseGenerator to process lines
     // We pass a dummy source directory as it's not used by processLinesWithTocEntries
     final generator = DatabaseGenerator('', _repository);
-    
+
     // Sync IDs
     generator.setIds(_nextBookId, _nextLineId, _nextTocEntryId);
-    
+
     await generator.processLinesWithTocEntries(bookId, lines);
-    
+
     // Sync IDs back
     final ids = generator.getIds();
     _nextBookId = ids.bookId;
@@ -993,7 +1001,8 @@ class FileSyncService {
     String title,
     String fileType,
   ) async {
-    _log.info('Adding new external book: $title ($fileType) to category $categoryId');
+    _log.info(
+        'Adding new external book: $title ($fileType) to category $categoryId');
 
     final file = File(filePath);
     final stat = await file.stat();
@@ -1008,7 +1017,7 @@ class FileSyncService {
       fileSize: fileSize,
       lastModified: lastModified,
     );
-    
+
     _log.info('Added new external book: $title');
   }
 
@@ -1021,8 +1030,9 @@ class FileSyncService {
     final fileSize = stat.size;
     final lastModified = stat.modified.millisecondsSinceEpoch;
 
-    await _repository.updateExternalBookMetadata(bookId, fileSize, lastModified);
-    
+    await _repository.updateExternalBookMetadata(
+        bookId, fileSize, lastModified);
+
     _log.info('Updated external book metadata for ID: $bookId');
   }
 
@@ -1060,6 +1070,136 @@ class FileSyncService {
   void _reportProgress(double progress, String message) {
     onProgress?.call(progress, message);
     _log.fine('Progress: ${(progress * 100).toStringAsFixed(1)}% - $message');
+  }
+
+  /// Check for acronym.json file in "אודות התוכנה" folder and update book_acronym table
+  /// Updates existing books by matching book_title to book.title in the database
+  /// After processing, deletes the acronym.json file
+  Future<_AcronymProcessResult> _checkAndProcessAcronymFile(
+      String libraryPath) async {
+    final errors = <String>[];
+    int updatedBooks = 0;
+    int newTerms = 0;
+
+    try {
+      final acronymPath =
+          path.join(libraryPath, 'אוצריא', 'אודות התוכנה', 'acronym.json');
+      final acronymFile = File(acronymPath);
+
+      if (!await acronymFile.exists()) {
+        _log.fine('No acronym.json file found at $acronymPath');
+        return const _AcronymProcessResult(processed: false);
+      }
+
+      _log.info('Found acronym.json file, processing...');
+
+      // Read and parse the file
+      final content = await acronymFile.readAsString();
+      final decoded = jsonDecode(content);
+
+      // Convert to list format (handle both Map and List)
+      List<Map<String, dynamic>> acronymEntries = [];
+      if (decoded is List) {
+        acronymEntries = decoded.cast<Map<String, dynamic>>();
+      } else if (decoded is Map<String, dynamic>) {
+        // Convert map to list format
+        decoded.forEach((key, value) {
+          if (value is Map<String, dynamic>) {
+            acronymEntries.add(value);
+          }
+        });
+      }
+
+      _log.info('Loaded ${acronymEntries.length} acronym entries from file');
+
+      // Process each entry - match by book_title to find the book in DB
+      for (final entry in acronymEntries) {
+        final bookTitle = entry['book_title'] as String?;
+        final termsRaw = entry['terms'] as String?;
+
+        if (bookTitle == null || bookTitle.isEmpty) {
+          continue;
+        }
+
+        // Find the book by title in the database
+        final existingBook = await _repository.checkBookExists(bookTitle);
+        if (existingBook == null) {
+          _log.fine('Book not found in DB for acronym update: $bookTitle');
+          continue;
+        }
+
+        final bookId = existingBook.id;
+
+        // Parse terms (comma-separated)
+        final terms = (termsRaw == null || termsRaw.isEmpty)
+            ? <String>[]
+            : termsRaw
+                .split(',')
+                .map((t) => _sanitizeAcronymTerm(t))
+                .where((t) => t.isNotEmpty)
+                .toList();
+
+        // Full replacement: delete all existing terms and insert new ones
+        // This handles additions, removals, and updates
+        await _repository.deleteBookAcronyms(bookId);
+
+        if (terms.isNotEmpty) {
+          await _repository.bulkInsertBookAcronyms(bookId, terms);
+          newTerms += terms.length;
+        }
+
+        updatedBooks++;
+        _log.fine(
+            'Replaced acronym terms for book: $bookTitle (id: $bookId) with ${terms.length} terms');
+      }
+
+      // Delete the acronym.json file after successful processing
+      try {
+        await acronymFile.delete();
+        _log.info('Deleted acronym.json file after processing');
+      } catch (e) {
+        _log.warning('Failed to delete acronym.json file: $e');
+        errors.add('Failed to delete acronym.json: $e');
+      }
+
+      _log.info(
+          'Acronym processing complete: $updatedBooks books updated, $newTerms new terms added');
+
+      return _AcronymProcessResult(
+        processed: true,
+        updatedBooks: updatedBooks,
+        newTerms: newTerms,
+        errors: errors,
+      );
+    } catch (e, stackTrace) {
+      _log.warning('Error processing acronym.json', e, stackTrace);
+      errors.add('Error processing acronym.json: $e');
+      return _AcronymProcessResult(
+        processed: false,
+        errors: errors,
+      );
+    }
+  }
+
+  /// Sanitizes an acronym term by removing diacritics, maqaf, gershayim and geresh
+  String _sanitizeAcronymTerm(String raw) {
+    var s = raw.trim();
+    if (s.isEmpty) return '';
+
+    // Remove Hebrew diacritics (nikud) - Unicode range 0x0591-0x05C7
+    s = s.replaceAll(RegExp(r'[\u0591-\u05C7]'), '');
+
+    // Replace maqaf (Hebrew hyphen) with space
+    s = s.replaceAll('\u05BE', ' ');
+
+    // Remove Hebrew gershayim (״) and geresh (׳)
+    s = s.replaceAll('\u05F4', ''); // gershayim
+    s = s.replaceAll('\u05F3', ''); // geresh
+
+    // Clean up multiple spaces
+    s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    return s;
   }
 }
 
@@ -1109,6 +1249,48 @@ class _RestoreResult {
   const _RestoreResult({
     this.books = 0,
     this.categories = 0,
+    this.errors = const [],
+  });
+}
+
+/// Data class for deserializing link data from JSON files
+class _LinkData {
+  final String heRef2;
+  final double lineIndex1;
+  final String path2;
+  final double lineIndex2;
+  final String connectionType;
+
+  const _LinkData({
+    required this.heRef2,
+    required this.lineIndex1,
+    required this.path2,
+    required this.lineIndex2,
+    this.connectionType = '',
+  });
+
+  factory _LinkData.fromJson(Map<String, dynamic> json) {
+    return _LinkData(
+      heRef2: json['heRef_2'] as String? ?? '',
+      lineIndex1: (json['line_index_1'] as num?)?.toDouble() ?? 0,
+      path2: json['path_2'] as String? ?? '',
+      lineIndex2: (json['line_index_2'] as num?)?.toDouble() ?? 0,
+      connectionType: json['Conection Type'] as String? ?? '',
+    );
+  }
+}
+
+/// Result of processing acronym.json file
+class _AcronymProcessResult {
+  final bool processed;
+  final int updatedBooks;
+  final int newTerms;
+  final List<String> errors;
+
+  const _AcronymProcessResult({
+    this.processed = false,
+    this.updatedBooks = 0,
+    this.newTerms = 0,
     this.errors = const [],
   });
 }
