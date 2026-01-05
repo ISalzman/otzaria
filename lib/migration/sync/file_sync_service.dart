@@ -8,12 +8,11 @@ import 'package:path/path.dart' as path;
 
 import '../core/models/book.dart';
 import '../core/models/category.dart';
-import '../core/models/line.dart';
-import '../core/models/link.dart';
-import '../core/models/toc_entry.dart';
 import '../dao/repository/seforim_repository.dart';
 import '../../settings/custom_folders/custom_folder.dart';
 import '../../settings/settings_repository.dart';
+import '../generator/generator.dart';
+import '../shared/link_processor.dart';
 
 /// Result of a file sync operation
 class FileSyncResult {
@@ -46,6 +45,17 @@ class FileSyncResult {
   }
 }
 
+/// Source for file import
+class ImportSource {
+  final String path;
+  final List<String> categoryPrefix;
+  
+  const ImportSource({
+    required this.path, 
+    this.categoryPrefix = const [],
+  });
+}
+
 /// Service for syncing files from אוצריא and links folders to the database.
 ///
 /// This service scans for new TXT files in the library path and adds them
@@ -66,13 +76,12 @@ class FileSyncService {
   int _nextTocEntryId = 0;
   int _nextCategoryId = 0;
 
-  /// Cache for book titles to IDs (for link processing)
-  final Map<String, int> _bookTitleToId = {};
-
-  /// Cache for book line indices to IDs
-  final Map<int, List<int>> _bookLineIndexToId = {};
-
   FileSyncService._(this._repository);
+
+  /// Create a new instance (not singleton) for specific tasks like DB generation
+  static FileSyncService create(SeforimRepository repository) {
+    return FileSyncService._(repository);
+  }
 
   /// Get singleton instance
   static Future<FileSyncService?> getInstance(
@@ -345,6 +354,232 @@ class FileSyncService {
     _log.info('Folder deleted from DB');
   }
 
+  /// Unified method to scan directories and import content to the database.
+  /// 
+  /// [sources] - List of sources to scan.
+  /// [deleteOriginals] - Whether to delete the original files after successful import.
+  /// [onProgress] - Callback for progress updates.
+  Future<FileSyncResult> scanAndImportSources({
+    required List<ImportSource> sources,
+    required bool deleteOriginals,
+    void Function(double progress, String message)? onProgress,
+  }) async {
+    if (_isSyncing) {
+      _log.warning('Sync already in progress, skipping');
+      return const FileSyncResult(errors: ['Sync already in progress']);
+    }
+
+    _isSyncing = true;
+    this.onProgress = onProgress;
+    final stopwatch = Stopwatch()..start();
+
+    int addedBooks = 0;
+    int updatedBooks = 0;
+    int addedCategories = 0;
+    int deletedFiles = 0;
+    int skippedFiles = 0;
+    final errors = <String>[];
+
+    try {
+      // Initialize ID counters from database
+      await _initializeIdCounters();
+
+      int processedSources = 0;
+      for (final source in sources) {
+        final sourceDir = Directory(source.path);
+        if (!await sourceDir.exists()) {
+          _log.warning('Source directory does not exist: ${source.path}');
+          errors.add('Directory not found: ${source.path}');
+          continue;
+        }
+
+        _log.info('Scanning source: ${source.path}');
+        _reportProgress(
+          0.1 + (0.8 * processedSources / sources.length),
+          'סורק: ${path.basename(source.path)}...',
+        );
+
+        final result = await _scanAndImportPath(
+          rootPath: source.path,
+          categoryPrefix: source.categoryPrefix,
+          deleteOriginals: deleteOriginals,
+        );
+
+        addedBooks += result.addedBooks;
+        updatedBooks += result.updatedBooks;
+        addedCategories += result.addedCategories;
+        deletedFiles += result.deletedFiles;
+        skippedFiles += result.skippedFiles;
+        errors.addAll(result.errors);
+        
+        processedSources++;
+      }
+
+      // Rebuild category closure if categories were added
+      if (addedCategories > 0) {
+        _reportProgress(0.95, 'מעדכן היררכיית קטגוריות...');
+        await _repository.rebuildCategoryClosure();
+      }
+
+      _reportProgress(1.0, 'הסנכרון הושלם');
+    } catch (e, stackTrace) {
+      _log.severe('Error during sync', e, stackTrace);
+      errors.add('Sync error: $e');
+    } finally {
+      _isSyncing = false;
+      stopwatch.stop();
+    }
+
+    final result = FileSyncResult(
+      addedBooks: addedBooks,
+      updatedBooks: updatedBooks,
+      addedCategories: addedCategories,
+      addedLinks: 0, // Links are handled separately
+      deletedFiles: deletedFiles,
+      skippedFiles: skippedFiles,
+      errors: errors,
+      duration: stopwatch.elapsed,
+    );
+
+    _log.info('Import completed: $result');
+    return result;
+  }
+
+  /// Internal method to scan a single path and import files
+  Future<FileSyncResult> _scanAndImportPath({
+    required String rootPath,
+    required List<String> categoryPrefix,
+    required bool deleteOriginals,
+  }) async {
+    int addedBooks = 0;
+    int updatedBooks = 0;
+    int addedCategories = 0;
+    int deletedFiles = 0;
+    int skippedFiles = 0;
+    final errors = <String>[];
+
+    // Find new files
+    final newFiles = await _findNewFiles(rootPath);
+
+    if (newFiles.isEmpty) {
+      _log.info('No files found in $rootPath');
+      return const FileSyncResult();
+    }
+
+    _log.info('Found ${newFiles.length} files to process in $rootPath');
+
+    for (final filePath in newFiles) {
+      try {
+        final result = await _processFileWithPrefix(
+          filePath: filePath,
+          basePath: rootPath,
+          categoryPrefix: categoryPrefix,
+        );
+
+        if (result.wasAdded) {
+          addedBooks++;
+          addedCategories += result.categoriesCreated;
+        } else if (result.wasUpdated) {
+          updatedBooks++;
+        } else {
+          skippedFiles++;
+        }
+
+        // Delete the file after successful processing if requested
+        // ONLY delete .txt files, as other files (PDF, DOCX) are referenced externally
+        final isTxtFile = path.extension(filePath).toLowerCase() == '.txt';
+
+        if (deleteOriginals && isTxtFile && (result.wasAdded || result.wasUpdated)) {
+          try {
+            await File(filePath).delete();
+            deletedFiles++;
+            _log.info('Deleted processed file: ${path.basename(filePath)}');
+          } catch (e) {
+            _log.warning('Failed to delete file $filePath: $e');
+          }
+        }
+
+        // We don't report progress here to avoid spamming the main progress callback
+        // or we could use a sub-progress callback if needed
+      } catch (e, stackTrace) {
+        _log.warning('Error processing file $filePath', e, stackTrace);
+        errors.add('Error processing ${path.basename(filePath)}: $e');
+      }
+    }
+
+    // Clean up empty directories after processing if we deleted files
+    if (deleteOriginals) {
+      await _removeEmptyDirectories(rootPath);
+    }
+
+    return FileSyncResult(
+      addedBooks: addedBooks,
+      updatedBooks: updatedBooks,
+      addedCategories: addedCategories,
+      deletedFiles: deletedFiles,
+      skippedFiles: skippedFiles,
+      errors: errors,
+    );
+  }
+
+  /// Process a file with a specific category prefix
+  Future<_FileProcessResult> _processFileWithPrefix({
+    required String filePath,
+    required String basePath,
+    required List<String> categoryPrefix,
+  }) async {
+    final title = path.basenameWithoutExtension(filePath);
+    final extension = path.extension(filePath).toLowerCase();
+    
+    // Build category path
+    final relativeCategories = _parsePathToCategories(filePath, basePath);
+    final categoryPath = [...categoryPrefix, ...relativeCategories];
+
+    if (categoryPath.isEmpty && categoryPrefix.isEmpty) {
+      _log.warning('Could not build category path for: $filePath');
+      return const _FileProcessResult(wasAdded: false, wasUpdated: false);
+    }
+
+    // Find or create category chain
+    final categoryResult = await _findOrCreateCategoryChain(categoryPath);
+    final categoryId = categoryResult.categoryId;
+    final categoriesCreated = categoryResult.categoriesCreated;
+
+    // Extract file type from extension (remove the dot)
+    final fileType = extension.replaceFirst('.', '').toLowerCase();
+
+    // Check if book already exists in this category with the same file type
+    final existingBook = await _repository.checkBookExistsInCategoryWithFileType(title, categoryId, fileType);
+
+    if (existingBook != null) {
+      // Update existing book
+      if (extension == '.txt') {
+        await _updateBookContent(existingBook.id, filePath);
+      } else {
+        await _updateExternalBook(existingBook.id, filePath);
+      }
+
+      return _FileProcessResult(
+        wasAdded: false,
+        wasUpdated: true,
+        categoriesCreated: categoriesCreated,
+      );
+    }
+
+    // Add new book
+    if (extension == '.txt') {
+      await _addNewBook(filePath, categoryId, title, fileType);
+    } else {
+      await _addExternalBook(filePath, categoryId, title, fileType);
+    }
+
+    return _FileProcessResult(
+      wasAdded: true,
+      wasUpdated: false,
+      categoriesCreated: categoriesCreated,
+    );
+  }
+
   /// Main sync function - scans אוצריא and links folders for new files
   Future<FileSyncResult> syncFiles({
     void Function(double progress, String message)? onProgress,
@@ -384,7 +619,13 @@ class FileSyncService {
         _log.info('Scanning אוצריא folder: $otzariaPath');
         _reportProgress(0.1, 'סורק תיקיית אוצריא...');
 
-        final otzariaResult = await _scanAndSyncTxtFiles(otzariaPath);
+        // Use the new internal method
+        final otzariaResult = await _scanAndImportPath(
+          rootPath: otzariaPath,
+          categoryPrefix: [],
+          deleteOriginals: true, // Keep existing behavior
+        );
+        
         addedBooks += otzariaResult.addedBooks;
         updatedBooks += otzariaResult.updatedBooks;
         addedCategories += otzariaResult.addedCategories;
@@ -395,14 +636,42 @@ class FileSyncService {
 
       // Scan custom folders that are marked for DB sync
       _reportProgress(0.4, 'סורק תיקיות מותאמות אישית...');
-      final customFoldersResult = await _scanAndSyncCustomFolders();
-      addedBooks += customFoldersResult.addedBooks;
-      updatedBooks += customFoldersResult.updatedBooks;
-      addedCategories += customFoldersResult.addedCategories;
-      deletedFiles += customFoldersResult.deletedFiles;
-      skippedFiles += customFoldersResult.skippedFiles;
-      errors.addAll(customFoldersResult.errors);
+      // Load custom folders from settings
+      final customFoldersJson =
+          Settings.getValue<String>(SettingsRepository.keyCustomFolders);
+      final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
 
+      // Filter only folders marked for DB sync
+      final foldersToSync = customFolders.where((f) => f.addToDatabase).toList();
+
+      if (foldersToSync.isNotEmpty) {
+        _log.info('Found ${foldersToSync.length} custom folders to sync');
+
+        for (final folder in foldersToSync) {
+          final folderDir = Directory(folder.path);
+          if (!await folderDir.exists()) {
+            _log.warning('Custom folder does not exist: ${folder.path}');
+            errors.add('תיקייה לא קיימת: ${folder.name}');
+            continue;
+          }
+
+          _log.info('Scanning custom folder: ${folder.path}');
+
+          // Use the new internal method
+          final result = await _scanAndImportPath(
+            rootPath: folder.path,
+            categoryPrefix: ['ספרים אישיים', folder.name],
+            deleteOriginals: true, // Keep existing behavior
+          );
+          
+          addedBooks += result.addedBooks;
+          updatedBooks += result.updatedBooks;
+          addedCategories += result.addedCategories;
+          deletedFiles += result.deletedFiles;
+          skippedFiles += result.skippedFiles;
+          errors.addAll(result.errors);
+        }
+      }
       // Scan links folder for JSON files only
       final linksPath = path.join(libraryPath, 'links');
       final linksDir = Directory(linksPath);
@@ -462,267 +731,6 @@ class FileSyncService {
         'toc=$_nextTocEntryId, category=$_nextCategoryId');
   }
 
-  /// Scan a folder and sync new TXT files to database (for אוצריא folder)
-  Future<FileSyncResult> _scanAndSyncTxtFiles(String folderPath) async {
-    int addedBooks = 0;
-    int updatedBooks = 0;
-    int addedCategories = 0;
-    int deletedFiles = 0;
-    int skippedFiles = 0;
-    final errors = <String>[];
-
-    // Find new TXT files only
-    final newFiles = await _findNewTxtFiles(folderPath);
-
-    if (newFiles.isEmpty) {
-      _log.info('No new TXT files found in $folderPath');
-      return const FileSyncResult();
-    }
-
-    _log.info('Found ${newFiles.length} new TXT files to process');
-
-    int processed = 0;
-    for (final filePath in newFiles) {
-      try {
-        final result = await _processNewFile(filePath, folderPath);
-        if (result.wasAdded) {
-          addedBooks++;
-          addedCategories += result.categoriesCreated;
-        } else if (result.wasUpdated) {
-          updatedBooks++;
-        } else {
-          skippedFiles++;
-        }
-
-        // Delete the TXT file after successful processing
-        if (result.wasAdded || result.wasUpdated) {
-          try {
-            await File(filePath).delete();
-            deletedFiles++;
-            _log.info('Deleted processed file: ${path.basename(filePath)}');
-          } catch (e) {
-            _log.warning('Failed to delete file $filePath: $e');
-          }
-        }
-
-        processed++;
-        _reportProgress(
-          0.1 + (0.7 * processed / newFiles.length),
-          'מעבד ${path.basename(filePath)}...',
-        );
-      } catch (e, stackTrace) {
-        _log.warning('Error processing file $filePath', e, stackTrace);
-        errors.add('Error processing ${path.basename(filePath)}: $e');
-      }
-    }
-
-    // Clean up empty directories after processing
-    await _removeEmptyDirectories(folderPath);
-
-    return FileSyncResult(
-      addedBooks: addedBooks,
-      updatedBooks: updatedBooks,
-      addedCategories: addedCategories,
-      deletedFiles: deletedFiles,
-      skippedFiles: skippedFiles,
-      errors: errors,
-    );
-  }
-
-  /// Scan custom folders that are marked for DB sync
-  /// Custom folders are stored under the "ספרים אישיים" category
-  Future<FileSyncResult> _scanAndSyncCustomFolders() async {
-    int addedBooks = 0;
-    int updatedBooks = 0;
-    int addedCategories = 0;
-    int deletedFiles = 0;
-    int skippedFiles = 0;
-    final errors = <String>[];
-
-    // Load custom folders from settings
-    final customFoldersJson =
-        Settings.getValue<String>(SettingsRepository.keyCustomFolders);
-    final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
-
-    // Filter only folders marked for DB sync
-    final foldersToSync = customFolders.where((f) => f.addToDatabase).toList();
-
-    if (foldersToSync.isEmpty) {
-      _log.info('No custom folders marked for DB sync');
-      return const FileSyncResult();
-    }
-
-    _log.info('Found ${foldersToSync.length} custom folders to sync');
-
-    for (final folder in foldersToSync) {
-      final folderDir = Directory(folder.path);
-      if (!await folderDir.exists()) {
-        _log.warning('Custom folder does not exist: ${folder.path}');
-        errors.add('תיקייה לא קיימת: ${folder.name}');
-        continue;
-      }
-
-      _log.info('Scanning custom folder: ${folder.path}');
-
-      // Scan for TXT files in this custom folder
-      final result = await _scanAndSyncCustomFolder(folder);
-      addedBooks += result.addedBooks;
-      updatedBooks += result.updatedBooks;
-      addedCategories += result.addedCategories;
-      deletedFiles += result.deletedFiles;
-      skippedFiles += result.skippedFiles;
-      errors.addAll(result.errors);
-    }
-
-    return FileSyncResult(
-      addedBooks: addedBooks,
-      updatedBooks: updatedBooks,
-      addedCategories: addedCategories,
-      deletedFiles: deletedFiles,
-      skippedFiles: skippedFiles,
-      errors: errors,
-    );
-  }
-
-  /// Scan a single custom folder and sync its files to DB
-  /// Files are placed under "ספרים אישיים" -> folder name -> subfolders
-  Future<FileSyncResult> _scanAndSyncCustomFolder(CustomFolder folder) async {
-    int addedBooks = 0;
-    int updatedBooks = 0;
-    int addedCategories = 0;
-    int deletedFiles = 0;
-    int skippedFiles = 0;
-    final errors = <String>[];
-
-    // Find all TXT files in the custom folder
-    final newFiles = await _findNewTxtFiles(folder.path);
-
-    if (newFiles.isEmpty) {
-      _log.info('No TXT files found in custom folder: ${folder.name}');
-      return const FileSyncResult();
-    }
-
-    _log.info(
-        'Found ${newFiles.length} TXT files in custom folder: ${folder.name}');
-
-    for (final filePath in newFiles) {
-      try {
-        // Process file with custom category path prefix
-        final result = await _processCustomFolderFile(filePath, folder);
-        if (result.wasAdded) {
-          addedBooks++;
-          addedCategories += result.categoriesCreated;
-        } else if (result.wasUpdated) {
-          updatedBooks++;
-        } else {
-          skippedFiles++;
-        }
-
-        // Delete the TXT file after successful processing
-        if (result.wasAdded || result.wasUpdated) {
-          try {
-            await File(filePath).delete();
-            deletedFiles++;
-            _log.info('Deleted processed file: ${path.basename(filePath)}');
-          } catch (e) {
-            _log.warning('Failed to delete file $filePath: $e');
-          }
-        }
-      } catch (e, stackTrace) {
-        _log.warning(
-            'Error processing custom folder file $filePath', e, stackTrace);
-        errors.add('Error processing ${path.basename(filePath)}: $e');
-      }
-    }
-
-    // Clean up empty directories after processing
-    await _removeEmptyDirectories(folder.path);
-
-    return FileSyncResult(
-      addedBooks: addedBooks,
-      updatedBooks: updatedBooks,
-      addedCategories: addedCategories,
-      deletedFiles: deletedFiles,
-      skippedFiles: skippedFiles,
-      errors: errors,
-    );
-  }
-
-  /// Process a file from a custom folder
-  /// Creates category hierarchy: ספרים אישיים -> folder name -> subfolders
-  Future<_FileProcessResult> _processCustomFolderFile(
-    String filePath,
-    CustomFolder folder,
-  ) async {
-    final title = path.basenameWithoutExtension(filePath);
-    _log.info('Processing custom folder file: $title');
-
-    // Build category path: ספרים אישיים -> folder name -> relative path
-    final categoryPath = _buildCustomFolderCategoryPath(filePath, folder);
-
-    if (categoryPath.isEmpty) {
-      _log.warning('Could not build category path for: $filePath');
-      return const _FileProcessResult(wasAdded: false, wasUpdated: false);
-    }
-
-    // Find or create category chain
-    int categoriesCreated = 0;
-    final categoryResult = await _findOrCreateCategoryChain(categoryPath);
-    final categoryId = categoryResult.categoryId;
-    categoriesCreated = categoryResult.categoriesCreated;
-
-    // Check if book already exists in this category
-    final existingBook = await _findBookInCategory(title, categoryId);
-
-    if (existingBook != null) {
-      // Update existing book
-      await _updateBookContent(existingBook.id, filePath);
-      _log.info('Updated existing book in custom folder: $title');
-      return _FileProcessResult(
-        wasAdded: false,
-        wasUpdated: true,
-        categoriesCreated: categoriesCreated,
-      );
-    }
-
-    // Add new book
-    await _addNewBook(filePath, categoryId, title);
-    return _FileProcessResult(
-      wasAdded: true,
-      wasUpdated: false,
-      categoriesCreated: categoriesCreated,
-    );
-  }
-
-  /// Build category path for a custom folder file
-  /// Returns: ["ספרים אישיים", folder.name, ...subfolders]
-  List<String> _buildCustomFolderCategoryPath(
-    String filePath,
-    CustomFolder folder,
-  ) {
-    final result = <String>['ספרים אישיים', folder.name];
-
-    // Get relative path within the custom folder
-    final normalizedFile = path.normalize(filePath);
-    final normalizedBase = path.normalize(folder.path);
-
-    if (normalizedFile.startsWith(normalizedBase)) {
-      String relativePath = normalizedFile.substring(normalizedBase.length);
-      if (relativePath.startsWith(path.separator)) {
-        relativePath = relativePath.substring(1);
-      }
-
-      // Split into parts and remove the filename
-      final parts = path.split(relativePath);
-      if (parts.length > 1) {
-        // Add subdirectories (excluding the filename)
-        result.addAll(parts.sublist(0, parts.length - 1));
-      }
-    }
-
-    return result;
-  }
-
   /// Scan links folder and sync JSON files to database
   Future<FileSyncResult> _scanAndSyncLinkFiles(String folderPath) async {
     int addedLinks = 0;
@@ -730,8 +738,9 @@ class FileSyncService {
     int skippedFiles = 0;
     final errors = <String>[];
 
-    // Load books cache for link processing
-    await _loadBooksCache();
+    // Create link processor and load books cache
+    final linkProcessor = LinkProcessor(_repository);
+    await linkProcessor.loadBooksCache();
 
     // Find JSON files in links folder
     final linksDir = Directory(folderPath);
@@ -753,9 +762,9 @@ class FileSyncService {
     int processed = 0;
     for (final filePath in jsonFiles) {
       try {
-        final linksProcessed = await _processLinkFile(filePath);
-        if (linksProcessed > 0) {
-          addedLinks += linksProcessed;
+        final result = await linkProcessor.processLinkFile(filePath);
+        if (result.processedLinks > 0) {
+          addedLinks += result.processedLinks;
 
           // Delete the JSON file after successful processing
           try {
@@ -789,217 +798,27 @@ class FileSyncService {
     );
   }
 
-  /// Load all books into cache for link processing
-  Future<void> _loadBooksCache() async {
-    if (_bookTitleToId.isNotEmpty) return; // Already loaded
-
-    _log.info('Loading books cache for link processing...');
-    // Use repository's getAllBooks method
-    final books = await _repository.getAllBooks();
-    for (final book in books) {
-      _bookTitleToId[book.title] = book.id;
-    }
-    _log.info('Loaded ${_bookTitleToId.length} books to cache');
-  }
-
-  /// Load lines cache for a specific book
-  Future<void> _loadBookLinesCache(int bookId) async {
-    if (_bookLineIndexToId.containsKey(bookId)) return;
-
-    // Use repository methods to get book and lines
-    final book = await _repository.getBook(bookId);
-    final totalLines = book?.totalLines ?? 0;
-    final arr = List<int>.filled(totalLines, 0);
-
-    if (totalLines > 0) {
-      // Use repository's getLines method
-      final lines = await _repository.getLines(bookId, 0, totalLines - 1);
-      for (final ln in lines) {
-        final idx = ln.lineIndex;
-        if (idx >= 0 && idx < arr.length) {
-          arr[idx] = ln.id;
-        }
-      }
-    }
-
-    _bookLineIndexToId[bookId] = arr;
-  }
-
-  /// Process a single link JSON file
-  Future<int> _processLinkFile(String linkFile) async {
-    final bookTitle = path
-        .basenameWithoutExtension(path.basename(linkFile))
-        .replaceAll('_links', '');
-    _log.fine('Processing link file for book: $bookTitle');
-
-    // Find source book
-    final sourceBookId = _bookTitleToId[bookTitle];
-    if (sourceBookId == null) {
-      _log.warning('Source book not found for links: $bookTitle');
-      return 0;
-    }
-
-    // Load lines cache for source book
-    await _loadBookLinesCache(sourceBookId);
-
-    try {
-      final file = File(linkFile);
-      final content = await file.readAsString();
-      final linksData = (jsonDecode(content) as List<dynamic>)
-          .map((item) => _LinkData.fromJson(item as Map<String, dynamic>))
-          .toList();
-
-      // Prepare batch of links
-      final linksToInsert = <Link>[];
-      var skipped = 0;
-
-      for (final linkData in linksData) {
-        try {
-          // Handle paths with backslashes
-          final pathStr = linkData.path2;
-          final targetTitle = pathStr.contains('\\')
-              ? pathStr.split('\\').last.replaceAll(RegExp(r'\.[^.]*$'), '')
-              : path.basenameWithoutExtension(pathStr);
-
-          // Find target book
-          final targetBookId = _bookTitleToId[targetTitle];
-          if (targetBookId == null) {
-            skipped++;
-            continue;
-          }
-
-          // Load lines cache for target book
-          await _loadBookLinesCache(targetBookId);
-
-          // Adjust indices from 1-based to 0-based
-          final sourceLineIndex = (linkData.lineIndex1.toInt() - 1)
-              .clamp(0, double.infinity)
-              .toInt();
-          final targetLineIndex = (linkData.lineIndex2.toInt() - 1)
-              .clamp(0, double.infinity)
-              .toInt();
-
-          // Get line IDs from cache
-          final sourceLineArr = _bookLineIndexToId[sourceBookId];
-          final targetLineArr = _bookLineIndexToId[targetBookId];
-
-          final sourceLineId = (sourceLineArr != null &&
-                  sourceLineIndex >= 0 &&
-                  sourceLineIndex < sourceLineArr.length)
-              ? (sourceLineArr[sourceLineIndex] != 0
-                  ? sourceLineArr[sourceLineIndex]
-                  : null)
-              : null;
-          final targetLineId = (targetLineArr != null &&
-                  targetLineIndex >= 0 &&
-                  targetLineIndex < targetLineArr.length)
-              ? (targetLineArr[targetLineIndex] != 0
-                  ? targetLineArr[targetLineIndex]
-                  : null)
-              : null;
-
-          if (sourceLineId == null || targetLineId == null) {
-            skipped++;
-            continue;
-          }
-
-          linksToInsert.add(Link(
-            sourceBookId: sourceBookId,
-            targetBookId: targetBookId,
-            sourceLineId: sourceLineId,
-            targetLineId: targetLineId,
-            connectionType: ConnectionType.fromString(linkData.connectionType),
-          ));
-
-          // Insert in batches of 1000 using repository batch method
-          if (linksToInsert.length >= 1000) {
-            await _repository.insertLinksBatch(linksToInsert);
-            linksToInsert.clear();
-          }
-        } catch (e) {
-          skipped++;
-        }
-      }
-
-      // Insert remaining links using repository batch method
-      if (linksToInsert.isNotEmpty) {
-        await _repository.insertLinksBatch(linksToInsert);
-      }
-
-      final processed = linksData.length - skipped;
-      _log.info('Processed $processed links from ${path.basename(linkFile)}');
-      return processed;
-    } catch (e, stackTrace) {
-      _log.warning('Error processing link file: ${path.basename(linkFile)}', e,
-          stackTrace);
-      return 0;
-    }
-  }
-
-  /// Find new or updated TXT files to sync to the database
-  /// Returns all TXT files - the processing logic will determine if they should be added or updated
-  Future<List<String>> _findNewTxtFiles(String basePath) async {
+  /// Find new or updated files to sync to the database
+  /// Returns all supported files - the processing logic will determine if they should be added or updated
+  Future<List<String>> _findNewFiles(String basePath) async {
     final newFiles = <String>[];
     final dir = Directory(basePath);
+    final supportedExtensions = {'.txt', '.pdf', '.docx'};
+
+    if (!await dir.exists()) return newFiles;
 
     await for (final entity in dir.list(recursive: true)) {
-      if (entity is File && path.extension(entity.path) == '.txt') {
-        final title = path.basenameWithoutExtension(entity.path);
-
-        // Add all TXT files - _processNewFile will handle add vs update logic
-        // based on the full category path, not just the title
-        newFiles.add(entity.path);
-        _log.fine('Found TXT file to process: $title');
+      if (entity is File) {
+        final ext = path.extension(entity.path).toLowerCase();
+        if (supportedExtensions.contains(ext)) {
+          final title = path.basenameWithoutExtension(entity.path);
+          newFiles.add(entity.path);
+          _log.fine('Found file to process: $title ($ext)');
+        }
       }
     }
 
     return newFiles;
-  }
-
-  /// Process a new file and add it to the database
-  Future<_FileProcessResult> _processNewFile(
-    String filePath,
-    String basePath,
-  ) async {
-    final title = path.basenameWithoutExtension(filePath);
-    _log.info('Processing file: $title');
-
-    // Parse path to get category hierarchy
-    final categoryPath = _parsePathToCategories(filePath, basePath);
-
-    if (categoryPath.isEmpty) {
-      _log.warning('Could not parse category path for: $filePath');
-      return const _FileProcessResult(wasAdded: false, wasUpdated: false);
-    }
-
-    // Find or create category chain
-    int categoriesCreated = 0;
-    final categoryResult = await _findOrCreateCategoryChain(categoryPath);
-    final categoryId = categoryResult.categoryId;
-    categoriesCreated = categoryResult.categoriesCreated;
-
-    // Check if book already exists in this category
-    final existingBook = await _findBookInCategory(title, categoryId);
-
-    if (existingBook != null) {
-      // Update existing book in the same category
-      await _updateBookContent(existingBook.id, filePath);
-      _log.info('Updated existing book in same category: $title');
-      return _FileProcessResult(
-        wasAdded: false,
-        wasUpdated: true,
-        categoriesCreated: categoriesCreated,
-      );
-    }
-
-    // Book doesn't exist in this category - add as new book
-    // Note: Books with the same name can exist in different categories
-    await _addNewBook(filePath, categoryId, title);
-    return _FileProcessResult(
-      wasAdded: true,
-      wasUpdated: false,
-      categoriesCreated: categoriesCreated,
-    );
   }
 
   /// Parse file path to extract category hierarchy
@@ -1084,20 +903,6 @@ class FileSyncService {
     return null;
   }
 
-  /// Find a book in a specific category
-  Future<Book?> _findBookInCategory(String title, int categoryId) async {
-    // Use repository method to get books by category
-    final books = await _repository.getBooksByCategory(categoryId);
-
-    // Find book with matching title
-    for (final book in books) {
-      if (book.title == title) {
-        return book;
-      }
-    }
-    return null;
-  }
-
   /// Update content of an existing book
   Future<void> _updateBookContent(int bookId, String filePath) async {
     _log.info('Updating book content for ID: $bookId');
@@ -1125,6 +930,7 @@ class FileSyncService {
     String filePath,
     int categoryId,
     String title,
+    String fileType
   ) async {
     _log.info('Adding new book: $title to category $categoryId');
 
@@ -1146,6 +952,7 @@ class FileSyncService {
       order: 999.0,
       totalLines: lines.length,
       isBaseBook: false,
+      fileType: fileType
     );
 
     // Repository's insertBook handles the insertion
@@ -1161,6 +968,64 @@ class FileSyncService {
         'Added new book: $title (id: $bookId) with ${lines.length} lines');
   }
 
+  /// Process book lines and create TOC entries
+  Future<void> _processBookLines(int bookId, List<String> lines) async {
+    // Use DatabaseGenerator to process lines
+    // We pass a dummy source directory as it's not used by processLinesWithTocEntries
+    final generator = DatabaseGenerator('', _repository);
+    
+    // Sync IDs
+    generator.setIds(_nextBookId, _nextLineId, _nextTocEntryId);
+    
+    await generator.processLinesWithTocEntries(bookId, lines);
+    
+    // Sync IDs back
+    final ids = generator.getIds();
+    _nextBookId = ids.bookId;
+    _nextLineId = ids.lineId;
+    _nextTocEntryId = ids.tocId;
+  }
+
+  /// Add a new external book (PDF, DOCX) to the database
+  Future<void> _addExternalBook(
+    String filePath,
+    int categoryId,
+    String title,
+    String fileType,
+  ) async {
+    _log.info('Adding new external book: $title ($fileType) to category $categoryId');
+
+    final file = File(filePath);
+    final stat = await file.stat();
+    final fileSize = stat.size;
+    final lastModified = stat.modified.millisecondsSinceEpoch;
+
+    await _repository.insertExternalBook(
+      categoryId: categoryId,
+      title: title,
+      filePath: filePath,
+      fileType: fileType,
+      fileSize: fileSize,
+      lastModified: lastModified,
+    );
+    
+    _log.info('Added new external book: $title');
+  }
+
+  /// Update metadata for an external book
+  Future<void> _updateExternalBook(int bookId, String filePath) async {
+    _log.info('Updating external book metadata for ID: $bookId');
+
+    final file = File(filePath);
+    final stat = await file.stat();
+    final fileSize = stat.size;
+    final lastModified = stat.modified.millisecondsSinceEpoch;
+
+    await _repository.updateExternalBookMetadata(bookId, fileSize, lastModified);
+    
+    _log.info('Updated external book metadata for ID: $bookId');
+  }
+
   /// Get or create a default source for user-added books
   Future<int> _getOrCreateDefaultSource() async {
     const sourceName = 'user_added';
@@ -1169,99 +1034,6 @@ class FileSyncService {
   }
 
   /// Process book lines and create TOC entries
-  Future<void> _processBookLines(int bookId, List<String> lines) async {
-    final linesBatch = <Line>[];
-    final tocEntriesBatch = <TocEntry>[];
-    final parentStack = <int, int>{};
-
-    const batchSize = 1000;
-
-    for (var lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      final line = lines[lineIndex];
-      final plainText = _cleanHtml(line);
-      final level = _detectHeaderLevel(line);
-
-      if (level > 0 && plainText.trim().isNotEmpty) {
-        // This is a TOC entry
-        int? parentId;
-        for (int l = level - 1; l >= 1; l--) {
-          if (parentStack.containsKey(l)) {
-            parentId = parentStack[l];
-            break;
-          }
-        }
-
-        final currentTocEntryId = _nextTocEntryId++;
-        final currentLineId = _nextLineId++;
-
-        // Add TOC entry
-        tocEntriesBatch.add(TocEntry(
-          id: currentTocEntryId,
-          bookId: bookId,
-          parentId: parentId,
-          text: plainText,
-          level: level,
-          lineId: currentLineId,
-          isLastChild: false,
-          hasChildren: false,
-        ));
-
-        parentStack[level] = currentTocEntryId;
-
-        // Add line
-        linesBatch.add(Line(
-          id: currentLineId,
-          bookId: bookId,
-          lineIndex: lineIndex,
-          content: line,
-        ));
-      } else {
-        // Regular line
-        final currentLineId = _nextLineId++;
-
-        linesBatch.add(Line(
-          id: currentLineId,
-          bookId: bookId,
-          lineIndex: lineIndex,
-          content: line,
-        ));
-      }
-
-      // Flush batches using repository batch methods
-      if (linesBatch.length >= batchSize) {
-        await _repository.insertLinesBatch(linesBatch);
-        linesBatch.clear();
-      }
-      if (tocEntriesBatch.length >= batchSize) {
-        await _repository.insertTocEntriesBatch(tocEntriesBatch);
-        tocEntriesBatch.clear();
-      }
-    }
-
-    // Flush remaining using repository batch methods
-    if (tocEntriesBatch.isNotEmpty) {
-      await _repository.insertTocEntriesBatch(tocEntriesBatch);
-    }
-    if (linesBatch.isNotEmpty) {
-      await _repository.insertLinesBatch(linesBatch);
-    }
-  }
-
-  /// Clean HTML tags from text
-  String _cleanHtml(String text) {
-    return text.replaceAll(RegExp(r'<[^>]*>'), '').trim();
-  }
-
-  /// Detect header level from HTML tags
-  int _detectHeaderLevel(String line) {
-    final match = RegExp(r'<h(\d)>').firstMatch(line);
-    if (match != null) {
-      return int.tryParse(match.group(1) ?? '') ?? 0;
-    }
-    return 0;
-  }
-
-  /// Remove empty directories recursively
   Future<void> _removeEmptyDirectories(String basePath) async {
     final dir = Directory(basePath);
     final entities = await dir.list(recursive: true).toList();
@@ -1339,31 +1111,4 @@ class _RestoreResult {
     this.categories = 0,
     this.errors = const [],
   });
-}
-
-/// Data class for deserializing link data from JSON files
-class _LinkData {
-  final String heRef2;
-  final double lineIndex1;
-  final String path2;
-  final double lineIndex2;
-  final String connectionType;
-
-  const _LinkData({
-    required this.heRef2,
-    required this.lineIndex1,
-    required this.path2,
-    required this.lineIndex2,
-    this.connectionType = '',
-  });
-
-  factory _LinkData.fromJson(Map<String, dynamic> json) {
-    return _LinkData(
-      heRef2: json['heRef_2'] as String? ?? '',
-      lineIndex1: (json['line_index_1'] as num?)?.toDouble() ?? 0,
-      path2: json['path_2'] as String? ?? '',
-      lineIndex2: (json['line_index_2'] as num?)?.toDouble() ?? 0,
-      connectionType: json['Conection Type'] as String? ?? '',
-    );
-  }
 }

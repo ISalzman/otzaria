@@ -25,6 +25,8 @@ import 'markdown_toolbar.dart';
 /// - Parallel column layout for simultaneous editing and preview
 class TextSectionEditorDialog extends StatefulWidget {
   final String bookId;
+  final String? category;
+  final String? fileType;
   final int sectionIndex;
   final String sectionId;
   final String initialContent;
@@ -35,6 +37,8 @@ class TextSectionEditorDialog extends StatefulWidget {
   const TextSectionEditorDialog({
     super.key,
     required this.bookId,
+    this.category,
+    this.fileType,
     required this.sectionIndex,
     required this.sectionId,
     required this.initialContent,
@@ -217,7 +221,11 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
         try {
           // Force a content reload from file system to ensure refresh
           final dataProvider = FileSystemData.instance;
-          await dataProvider.getBookText(widget.bookId);
+          await dataProvider.getBookText(
+            widget.bookId,
+            category: widget.category,
+            fileType: widget.fileType,
+          );
 
           // Show success feedback
           UiSnack.showSuccess(UiSnack.savedSuccessfully);

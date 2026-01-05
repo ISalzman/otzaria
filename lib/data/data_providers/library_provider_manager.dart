@@ -78,7 +78,7 @@ class LibraryProviderManager {
     if (!_isInitialized) await initialize();
 
     final Map<String, List<Book>> allBooksByCategory = {};
-    final Set<String> loadedTitles = {};
+    final Set<String> loadedKeys = {};
     _bookToProvider.clear();
 
     // Load from each provider in priority order
@@ -95,16 +95,19 @@ class LibraryProviderManager {
           allBooksByCategory.putIfAbsent(categoryName, () => []);
 
           for (final book in categoryBooks) {
-            // Skip if already loaded from higher priority provider
-            if (loadedTitles.contains(book.title)) {
-              debugPrint(
-                  '⏭️ Skipping "${book.title}" - already loaded from ${_bookToProvider[book.title]?.displayName}');
-              continue;
-            }
-
+            // Add all books to the category list, allowing duplicates
             allBooksByCategory[categoryName]!.add(book);
-            loadedTitles.add(book.title);
-            _bookToProvider[book.title] = provider;
+
+            final key = _generateKey(book.title, book.categoryPath ?? '', book.fileType ?? 'txt');
+
+            // Only map the first occurrence (highest priority) for key-based lookups
+            if (!loadedKeys.contains(key)) {
+              loadedKeys.add(key);
+              _bookToProvider[key] = provider;
+            } else {
+              debugPrint(
+                  'ℹ️ Duplicate book "${book.title}" from ${provider.displayName} - keeping primary mapping to ${_bookToProvider[key]?.displayName}');
+            }
           }
         }
 
@@ -115,43 +118,57 @@ class LibraryProviderManager {
       }
     }
 
-    debugPrint('📚 Total: ${loadedTitles.length} unique books loaded');
+    debugPrint('📚 Total: ${loadedKeys.length} unique books loaded');
     return allBooksByCategory;
   }
 
+  String _generateKey(String title, String category, String fileType) {
+    return '$title|$category|$fileType';
+  }
+
   /// Gets the provider that owns a specific book
-  LibraryProvider? getProviderForBook(String title) {
-    return _bookToProvider[title];
+  LibraryProvider? getProviderForBook(String title, String category, String fileType) {
+    final key = _generateKey(title, category, fileType);
+    if (_bookToProvider.containsKey(key)) {
+      return _bookToProvider[key];
+    }
+
+    // Fuzzy match if category is empty (backward compatibility)
+    if (category.isEmpty) {
+      for (final k in _bookToProvider.keys) {
+        if (k.startsWith('$title|')) return _bookToProvider[k];
+      }
+    }
+    
+    return null;
   }
 
   /// Gets the data source indicator for a book
-  Future<String> getBookDataSource(String title) async {
-    // Check if it's a personal book first
-    if (await fileSystemProvider.isPersonalBook(title)) {
-      return 'א';
-    }
-
-    final provider = _bookToProvider[title];
+  Future<String> getBookDataSource(String title, String category, String fileType) async {
+    final provider = getProviderForBook(title, category, fileType);
     return provider?.sourceIndicator ?? 'ק';
   }
 
   /// Gets the text content of a book from the appropriate provider
-  Future<String?> getBookText(String title) async {
-    final provider = _bookToProvider[title];
+  Future<String?> getBookText(String title, String category, String fileType) async {
+    if (!_isInitialized) await initialize();
+
+    final provider = getProviderForBook(title, category, fileType);
     if (provider != null) {
       debugPrint('📖 Loading "$title" from ${provider.displayName}');
-      return await provider.getBookText(title);
+      return await provider.getBookText(title, category, fileType);
     }
 
     // Fallback: try each provider
     debugPrint('⚠️ Book "$title" not in cache, searching providers...');
+    final key = '$title|$category|$fileType';
     for (final p in _providers) {
-      if (await p.hasBook(title)) {
+      if (await p.hasBook(title, category, fileType)) {
         debugPrint('✅ Found "$title" in ${p.displayName}');
-        final text = await p.getBookText(title);
+        final text = await p.getBookText(title, category, fileType);
         if (text != null) {
           // Cache the provider for future use
-          _bookToProvider[title] = p;
+          _bookToProvider[key] = p;
           return text;
         }
       }
@@ -162,19 +179,20 @@ class LibraryProviderManager {
   }
 
   /// Gets the table of contents for a book from the appropriate provider
-  Future<List<TocEntry>?> getBookToc(String title) async {
-    final provider = _bookToProvider[title];
+  Future<List<TocEntry>?> getBookToc(String title, String category, String fileType) async {
+    final provider = getProviderForBook(title, category, fileType);
     if (provider != null) {
-      return await provider.getBookToc(title);
+      return await provider.getBookToc(title, category, fileType);
     }
 
     // Fallback: try each provider
+    final key = '$title|$category|$fileType';
     for (final p in _providers) {
-      if (await p.hasBook(title)) {
-        final toc = await p.getBookToc(title);
+      if (await p.hasBook(title, category, fileType)) {
+        final toc = await p.getBookToc(title, category, fileType);
         if (toc != null && toc.isNotEmpty) {
           // Cache the provider for future use
-          _bookToProvider[title] = p;
+          _bookToProvider[key] = p;
           return toc;
         }
       }
@@ -184,9 +202,9 @@ class LibraryProviderManager {
   }
 
   /// Checks if a book exists in any provider
-  Future<bool> bookExists(String title) async {
+  Future<bool> bookExists(String title, String category, String fileType) async {
     for (final provider in _providers) {
-      if (await provider.hasBook(title)) {
+      if (await provider.hasBook(title, category, fileType)) {
         return true;
       }
     }
@@ -197,7 +215,7 @@ class LibraryProviderManager {
   void clearCaches() {
     _bookToProvider.clear();
     databaseProvider.clearCache();
-    fileSystemProvider.refresh();
+    // fileSystemProvider.refresh();
     debugPrint('🔄 All provider caches cleared');
   }
 
@@ -205,7 +223,17 @@ class LibraryProviderManager {
   Future<String> getLinkContent(Link link) async {
     // Try to find the provider for the target book
     final targetTitle = link.path2.split('/').last.replaceAll('.txt', '');
-    final provider = _bookToProvider[targetTitle];
+    
+    // Find key that starts with targetTitle + '|'
+    String? key;
+    for (final k in _bookToProvider.keys) {
+        if (k.startsWith('$targetTitle|')) {
+            key = k;
+            break;
+        }
+    }
+
+    final provider = key != null ? _bookToProvider[key] : null;
 
     if (provider != null) {
       return await provider.getLinkContent(link);
@@ -306,18 +334,16 @@ class LibraryProviderManager {
   void _mapBooksRecursiveWithCache(Category category,
       LibraryProvider primaryProvider, Set<String> dbTitles) {
     for (final book in category.books) {
-      if (book is PdfBook) {
+      final key = _generateKey(book.title, book.categoryPath ?? '', book.fileType ?? 'txt');  
+ 
+      if (book is FileBook) {
         // PDF books are always file-based
-        _bookToProvider[book.title] = fileSystemProvider;
+        _bookToProvider[key] = fileSystemProvider;
       } else {
-        // For TextBooks, check if the title is in the DB cache
-        // This is important because some TextBooks are only in the file system
-        if (dbTitles.contains(book.title)) {
-          _bookToProvider[book.title] = databaseProvider;
+        if (dbTitles.contains(key)) {
+          _bookToProvider[key] = databaseProvider;
         } else {
-          _bookToProvider[book.title] = fileSystemProvider;
-          debugPrint(
-              '📁 Mapped file-only book: "${book.title}" -> ${fileSystemProvider.displayName}');
+          _bookToProvider[key] = fileSystemProvider;
         }
       }
     }

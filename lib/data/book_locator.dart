@@ -146,8 +146,30 @@ class BookLocator {
     Category? category,
   ) async {
     try {
-      final titleToPath = await FileSystemData.instance.titleToPath;
-      final filePath = titleToPath[bookTitle];
+      final keyToPath = await FileSystemData.instance.fileSystemProvider.keyToPath;
+      String? filePath;
+
+      if (category != null) {
+        // Try to find exact match with category
+        // Note: We don't have fileType here, so we might need to iterate
+        final categoryPath = category.path.replaceAll('/', ', ');
+        for (final key in keyToPath.keys) {
+          if (key.startsWith('$bookTitle|$categoryPath|')) {
+            filePath = keyToPath[key];
+            break;
+          }
+        }
+      }
+
+      // If not found or no category, try fuzzy match by title
+      if (filePath == null) {
+        for (final key in keyToPath.keys) {
+          if (key.startsWith('$bookTitle|')) {
+            filePath = keyToPath[key];
+            break;
+          }
+        }
+      }
 
       if (filePath == null) {
         return null;
@@ -266,35 +288,6 @@ class BookLocator {
   }) async {
     final location = await locateBook(bookTitle, category: category);
     return location != null;
-  }
-
-  /// קבלת מקור הספר (DB או קובץ)
-  ///
-  /// [bookTitle] - שם הספר
-  /// [category] - הקטגוריה שבה נמצא הספר (אופציונלי)
-  ///
-  /// מחזיר 'DB', 'ק', או 'א' (אישי)
-  static Future<String> getBookDataSource(
-    String bookTitle, {
-    Category? category,
-  }) async {
-    final location = await locateBook(bookTitle, category: category);
-    if (location == null) {
-      return 'ק'; // ברירת מחדל
-    }
-
-    if (location.source == BookSource.database) {
-      return 'DB';
-    }
-
-    // בדיקה אם זה ספר אישי
-    if (location.filePath != null) {
-      final isPersonal =
-          await FileSystemData.instance.isPersonalBook(bookTitle);
-      return isPersonal ? 'א' : 'ק';
-    }
-
-    return 'ק';
   }
 
   /// קבלת ספר מ-DB (אם קיים)

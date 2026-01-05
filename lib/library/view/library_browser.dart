@@ -719,7 +719,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   Widget _buildBookItem(Book book, {bool showTopics = false}) {
-    if (book is ExternalBook) {
+    if (book is ExternalLibraryBook) {
       return BookGridItem(
         book: book,
         onBookClickCallback: () => _openOtzarBook(book),
@@ -885,7 +885,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   /// פריט ספר בתצוגת רשימה
   Widget _buildListBookItem(Book book, int level) {
-    if (book is ExternalBook) {
+    if (book is ExternalLibraryBook) {
       return _buildExternalBookListItem(book, level);
     }
 
@@ -976,7 +976,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   /// פריט ספר חיצוני בתצוגת רשימה
-  Widget _buildExternalBookListItem(ExternalBook book, int level) {
+  Widget _buildExternalBookListItem(ExternalLibraryBook book, int level) {
     return InkWell(
       onTap: () => _openOtzarBook(book),
       child: Container(
@@ -1047,7 +1047,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     _refocusSearchBar();
   }
 
-  void _openOtzarBook(ExternalBook book) {
+  void _openOtzarBook(ExternalLibraryBook book) {
     showDialog(
       context: context,
       builder: (BuildContext context) {

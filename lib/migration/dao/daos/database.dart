@@ -49,20 +49,68 @@ class MyDatabase {
   TocTextDao? _tocTextDao;
   TopicDao? _topicDao;
 
-  AuthorDao get authorDao => _authorDao!;
-  BookAcronymDao get bookAcronymDao => _bookAcronymDao!;
-  BookDao get bookDao => _bookDao!;
-  BookHasLinksDao get bookHasLinksDao => _bookHasLinksDao!;
-  CategoryDao get categoryDao => _categoryDao!;
-  ConnectionTypeDao get connectionTypeDao => _connectionTypeDao!;
-  LineDao get lineDao => _lineDao!;
-  LinkDao get linkDao => _linkDao!;
-  PubDateDao get pubDateDao => _pubDateDao!;
-  PubPlaceDao get pubPlaceDao => _pubPlaceDao!;
-  SearchDao get searchDao => _searchDao!;
-  TocDao get tocDao => _tocDao!;
-  TocTextDao get tocTextDao => _tocTextDao!;
-  TopicDao get topicDao => _topicDao!;
+  AuthorDao get authorDao {
+    _ensureDaosInitialized();
+    return _authorDao!;
+  }
+  BookAcronymDao get bookAcronymDao {
+    _ensureDaosInitialized();
+    return _bookAcronymDao!;
+  }
+  BookDao get bookDao {
+    _ensureDaosInitialized();
+    return _bookDao!;
+  }
+  BookHasLinksDao get bookHasLinksDao {
+    _ensureDaosInitialized();
+    return _bookHasLinksDao!;
+  }
+  CategoryDao get categoryDao {
+    _ensureDaosInitialized();
+    return _categoryDao!;
+  }
+  ConnectionTypeDao get connectionTypeDao {
+    _ensureDaosInitialized();
+    return _connectionTypeDao!;
+  }
+  LineDao get lineDao {
+    _ensureDaosInitialized();
+    return _lineDao!;
+  }
+  LinkDao get linkDao {
+    _ensureDaosInitialized();
+    return _linkDao!;
+  }
+  PubDateDao get pubDateDao {
+    _ensureDaosInitialized();
+    return _pubDateDao!;
+  }
+  PubPlaceDao get pubPlaceDao {
+    _ensureDaosInitialized();
+    return _pubPlaceDao!;
+  }
+  SearchDao get searchDao {
+    _ensureDaosInitialized();
+    return _searchDao!;
+  }
+  TocDao get tocDao {
+    _ensureDaosInitialized();
+    return _tocDao!;
+  }
+  TocTextDao get tocTextDao {
+    _ensureDaosInitialized();
+    return _tocTextDao!;
+  }
+  TopicDao get topicDao {
+    _ensureDaosInitialized();
+    return _topicDao!;
+  }
+
+  void _ensureDaosInitialized() {
+    if (_authorDao == null) {
+      _initializeDaos();
+    }
+  }
 
   MyDatabase._privateConstructor();
 

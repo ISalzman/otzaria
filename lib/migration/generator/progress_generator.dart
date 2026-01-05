@@ -25,7 +25,9 @@ class ProgressDatabaseGenerator extends DatabaseGenerator {
     super.repository, {
     super.onDuplicateBook,
     this.createIndexes = true,
-  });
+  }) : super(
+    onProgress: null, // We'll override processLinks to handle this
+  );
 
   @override
   Future<void> generate() async {
@@ -92,6 +94,37 @@ class ProgressDatabaseGenerator extends DatabaseGenerator {
   }
 
   @override
+  Future<void> processLinks() async {
+    // Count link files for progress tracking
+    final linksDir = Directory(path.join(sourceDirectory, 'links'));
+    if (await linksDir.exists()) {
+      _totalLinks = await linksDir.list().where((e) => e is File && path.extension(e.path) == '.json').length;
+    }
+    
+    _emitProgress(GenerationProgress(
+      phase: GenerationPhase.processingLinks,
+      message: 'מתחיל עיבוד קישורים...',
+      processedBooks: _processedBooks,
+      totalBooks: totalBooksToProcess,
+      progress: 0.6,
+    ));
+
+    // Call parent processLinks which includes updateBookHasLinksTable()
+    await super.processLinks();
+
+    // Emit progress after links are processed
+    _emitProgress(GenerationProgress(
+      phase: GenerationPhase.finalizing,
+      message: 'הושלם עיבוד קישורים',
+      processedBooks: _processedBooks,
+      totalBooks: totalBooksToProcess,
+      processedLinks: _processedLinks,
+      totalLinks: _totalLinks,
+      progress: 0.95,
+    ));
+  }
+
+  @override
   Future<void> createAndProcessBook(
     String bookPath,
     int categoryId,
@@ -108,38 +141,29 @@ class ProgressDatabaseGenerator extends DatabaseGenerator {
     await super.createAndProcessBook(bookPath, categoryId, metadata, isBaseBook: isBaseBook);
   }
 
-  @override
-  Future<int> processLinkFile(String linkFile) async {
-    final bookTitle = path.basenameWithoutExtension(path.basename(linkFile))
-        .replaceAll('_links', '');
+  // @override
+  // Future<int> processLinkFile(String linkFile) async {
+  //   final bookTitle = path.basenameWithoutExtension(path.basename(linkFile))
+  //       .replaceAll('_links', '');
     
-    _emitProgress(GenerationProgress(
-      phase: GenerationPhase.processingLinks,
-      currentBook: bookTitle,
-      processedBooks: _processedBooks,
-      totalBooks: totalBooksToProcess,
-      processedLinks: _processedLinks,
-      message: 'מעבד קישורים: $bookTitle',
-      progress: 0.6 + (0.3 * (_processedLinks / (_totalLinks > 0 ? _totalLinks : 1))),
-    ));
+  //   _emitProgress(GenerationProgress(
+  //     phase: GenerationPhase.processingLinks,
+  //     currentBook: bookTitle,
+  //     processedBooks: _processedBooks,
+  //     totalBooks: totalBooksToProcess,
+  //     processedLinks: _processedLinks,
+  //     message: 'מעבד קישורים: $bookTitle',
+  //     progress: 0.6 + (0.3 * (_processedLinks / (_totalLinks > 0 ? _totalLinks : 1))),
+  //   ));
 
-    final result = await super.processLinkFile(linkFile);
-    _processedLinks += result;
+  //   final result = await super.processLinkFile(linkFile);
+  //   _processedLinks += result;
     
-    return result;
-  }
+  //   return result;
+  // }
 
-  @override
-  Future<void> processLinks() async {
-    // links directory should be in sourceDirectory (the parent folder)
-    final linksDir = Directory(path.join(sourceDirectory, 'links'));
-    
-    if (await linksDir.exists()) {
-      _totalLinks = await linksDir.list().where((e) => e is File && path.extension(e.path) == '.json').length;
-    }
-    
-    await super.processLinks();
-  }
+  // Note: We override processLinks() to add progress updates
+  // The parent method includes updateBookHasLinksTable() at the end
 
   void _emitProgress(GenerationProgress progress) {
     if (!_progressController.isClosed) {

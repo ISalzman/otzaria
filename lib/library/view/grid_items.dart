@@ -131,7 +131,7 @@ class BookGridItem extends StatelessWidget {
             alignment: Alignment.topRight,
             child: Row(
               children: [
-                book is PdfBook
+                (book is PdfBook || book.fileType == 'pdf')
                     ? Padding(
                         padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
                         child: Icon(FluentIcons.document_pdf_24_regular,
@@ -140,11 +140,11 @@ class BookGridItem extends StatelessWidget {
                                 .secondary
                                 .withValues(alpha: 0.6)),
                       )
-                    : book is ExternalBook
+                    : book is ExternalLibraryBook
                         ? Padding(
                             padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
                             child: Image.asset(
-                              (book as ExternalBook)
+                              (book as ExternalLibraryBook)
                                       .link
                                       .toString()
                                       .contains('tablet.otzar.org')
@@ -155,14 +155,23 @@ class BookGridItem extends StatelessWidget {
                               fit: BoxFit.contain,
                             ),
                           )
-                        : Padding(
-                            padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
-                            child: Icon(FluentIcons.document_text_24_regular,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .secondary
-                                    .withValues(alpha: 0.6)),
-                          ),
+                        : book.fileType == 'docx'
+                            ? Padding(
+                                padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
+                                child: Icon(FluentIcons.document_one_page_24_regular,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .secondary
+                                        .withValues(alpha: 0.6)),
+                              )
+                            : Padding(
+                                padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
+                                child: Icon(FluentIcons.document_text_24_regular,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .secondary
+                                        .withValues(alpha: 0.6)),
+                              ),
                 Expanded(
                   child: ListTile(
                     mouseCursor: SystemMouseCursors.click,
@@ -203,7 +212,7 @@ class BookGridItem extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 4.0),
                         child: DataSourceIndicatorAsync(
                           sourceFuture: FileSystemData.instance
-                              .getBookDataSource(book.title),
+                              .getBookDataSource(book.title, book.categoryPath, book.fileType),
                           size: 18.0,
                         ),
                       )
@@ -239,7 +248,7 @@ class BookGridItem extends StatelessWidget {
                         ),
                       ),
                 // כפתור תפריט אפשרויות (3 נקודות)
-                book is! ExternalBook
+                book is! ExternalLibraryBook
                     ? PopupMenuButton<String>(
                         icon: Icon(
                           FluentIcons.more_vertical_24_regular,

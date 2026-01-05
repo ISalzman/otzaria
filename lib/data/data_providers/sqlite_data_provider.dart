@@ -61,13 +61,17 @@ class SqliteDataProvider {
   bool get isInitialized => _isInitialized;
 
   /// Checks if a book exists in the database
-  Future<bool> isBookInDatabase(String title) async {
+  Future<bool> isBookInDatabase(String title, [int? categoryId, String? fileType]) async {
     if (!_isInitialized) {
       await initialize();
     }
     if (!_isInitialized) return false;
 
     try {
+      if (categoryId != null && fileType != null) {
+        final book = await _repository.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+        return book != null;
+      }
       final book = await _repository.getBookByTitle(title);
       return book != null;
     } catch (e) {
@@ -103,14 +107,20 @@ class SqliteDataProvider {
   }
 
   /// Retrieves the full text content of a book from the database
-  Future<String?> getBookTextFromDb(String title) async {
+  Future<String?> getBookTextFromDb(String title, [int? categoryId, String? fileType]) async {
     if (!_isInitialized) {
       await initialize();
     }
     if (!_isInitialized) return null;
 
     try {
-      final book = await _repository.getBookByTitle(title);
+      var book;
+      if (categoryId != null && fileType != null) {
+        book = await _repository.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+      } else {
+        book = await _repository.getBookByTitle(title);
+      }
+      
       if (book == null) return null;
 
       debugPrint('📚 Loading full book: ${book.totalLines} lines');
@@ -124,14 +134,20 @@ class SqliteDataProvider {
   }
 
   /// Retrieves the table of contents of a book from the database
-  Future<List<TocEntry>?> getBookTocFromDb(String title) async {
+  Future<List<TocEntry>?> getBookTocFromDb(String title, [int? categoryId, String? fileType]) async {
     if (!_isInitialized) {
       await initialize();
     }
     if (!_isInitialized) return null;
 
     try {
-      final book = await _repository.getBookByTitle(title);
+      var book;
+      if (categoryId != null && fileType != null) {
+        book = await _repository.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+      } else {
+        book = await _repository.getBookByTitle(title);
+      }
+
       if (book == null) return null;
 
       final migrationTocEntries = await _repository.getBookTocs(book.id);

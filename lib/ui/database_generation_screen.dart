@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:logging/logging.dart';
+import '../migration/generator/generator.dart';
 import '../migration/core/models/generation_progress.dart';
 import '../migration/dao/daos/database.dart';
 import '../migration/dao/repository/seforim_repository.dart';
-import '../migration/generator/progress_generator.dart';
 import '../data/constants/database_constants.dart';
 import '../core/app_paths.dart';
 
@@ -15,6 +15,15 @@ enum DuplicateBookStrategy {
   skip,
   replace,
   ask,
+}
+
+/// Represents the current generation step
+enum GenerationStep {
+  idle,
+  books,
+  links,
+  complete,
+  error,
 }
 
 class DatabaseGenerationScreen extends StatefulWidget {
@@ -29,7 +38,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   final _logger = Logger('DatabaseGenerationScreen');
   GenerationProgress _progress = GenerationProgress.initial();
   StreamSubscription<GenerationProgress>? _progressSubscription;
-  ProgressDatabaseGenerator? _generator;
   DateTime? _startTime;
   Timer? _timer;
   Duration _elapsed = Duration.zero;
@@ -37,18 +45,26 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   String? _selectedLibraryPath;
   String? _selectedDbPath;
   final DuplicateBookStrategy _duplicateStrategy =
-      DuplicateBookStrategy.replace; // Always replace duplicates
+      DuplicateBookStrategy.replace;
+
+  // Step tracking
+  GenerationStep _currentStep = GenerationStep.idle;
+  double _booksProgress = 0.0;
+  double _linksProgress = 0.0;
+  int _processedBooks = 0;
+  int _totalBooks = 0;
+  int _processedLinks = 0;
+  int _totalLinks = 0;
+  String _currentMessage = '';
 
   // File validation status
   bool _dbFileExists = false;
-  bool _dbFileExistsAtTarget =
-      false; // DB file at target location (blocks generation)
-  bool _otzariaFolderExists = false; // Otzaria folder exists
+  bool _dbFileExistsAtTarget = false;
+  bool _otzariaFolderExists = false;
   bool _priorityFileExists = false;
   bool _acronymFileExists = false;
   bool _linksDirectoryExists = false;
-  final List<Map<String, String>> _duplicateBooks =
-      []; // Store book info with path
+  final List<Map<String, String>> _duplicateBooks = [];
   final Map<String, String> _duplicateReasons = {};
 
   @override
@@ -61,11 +77,9 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   void dispose() {
     _progressSubscription?.cancel();
     _timer?.cancel();
-    _generator?.dispose();
     super.dispose();
   }
 
-  /// Load the default library path from settings and auto-select it
   Future<void> _loadDefaultLibraryPath() async {
     try {
       final libraryPath = await AppPaths.getLibraryPath();
@@ -76,13 +90,10 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         _selectedDbPath = dbPath;
       });
 
-      // Check file status immediately after loading the path
       await _checkFileStatus();
-
       _logger.info('Auto-loaded library path: $libraryPath');
     } catch (e, stackTrace) {
       _logger.warning('Error loading default library path', e, stackTrace);
-      // If no default path, still check file status to show "select path" message
       await _checkFileStatus();
     }
   }
@@ -94,10 +105,16 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       _progressSubscription = null;
       _timer?.cancel();
       _timer = null;
-      _generator?.dispose();
-      _generator = null;
       _startTime = null;
       _elapsed = Duration.zero;
+      _currentStep = GenerationStep.idle;
+      _booksProgress = 0.0;
+      _linksProgress = 0.0;
+      _processedBooks = 0;
+      _totalBooks = 0;
+      _processedLinks = 0;
+      _totalLinks = 0;
+      _currentMessage = '';
     });
   }
 
@@ -110,7 +127,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       if (selectedDirectory != null) {
         _logger.info('Selected library folder: $selectedDirectory');
 
-        // Verify that the selected directory contains the required structure
         final otzariaDir = Directory(
             '$selectedDirectory/${DatabaseConstants.otzariaFolderName}');
 
@@ -127,7 +143,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
           return;
         }
         
-        // Auto-set DB path to database file in the Otzaria folder
         final dbPath = DatabaseConstants.getDatabasePathForLibrary(selectedDirectory);
   
         setState(() {
@@ -135,9 +150,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
           _selectedDbPath = dbPath;
         });
 
-        // Check file status after setting paths
         await _checkFileStatus();
-
         _logger.info('Auto-set database path: $dbPath');
       }
     } catch (e, stackTrace) {
@@ -153,34 +166,23 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     }
   }
 
-  /// Check the status of required files and directories
   Future<void> _checkFileStatus() async {
     if (_selectedLibraryPath == null) return;
 
     try {
-      // Check if Otzaria folder exists
       final otzariaDir = Directory(
           '$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}');
       _otzariaFolderExists = await otzariaDir.exists();
-      _logger.info(
-          'Checking Otzaria folder: ${otzariaDir.path} - exists: $_otzariaFolderExists');
 
-      // Check if DB file exists at target location (blocks generation)
       if (_selectedDbPath != null) {
         final dbFileAtTarget = File(_selectedDbPath!);
         _dbFileExistsAtTarget = await dbFileAtTarget.exists();
-        _logger.info(
-            'Checking DB file at target: $_selectedDbPath - exists: $_dbFileExistsAtTarget');
       }
 
-      // Check if DB file exists in Otzaria directory
       final dbFileInOtzaria = File(
           '$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/${DatabaseConstants.databaseFileName}');
       _dbFileExists = await dbFileInOtzaria.exists();
-      _logger.info(
-          'Checking DB file: ${dbFileInOtzaria.path} - exists: $_dbFileExists');
 
-      // Check priority file in "About Software" directory
       _priorityFileExists = false;
       _acronymFileExists = false;
 
@@ -190,23 +192,13 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       if (await aboutSoftwareDirHeb.exists()) {
         final priorityFile = File('${aboutSoftwareDirHeb.path}/priority');
         _priorityFileExists = await priorityFile.exists();
-        _logger.info(
-            'Checking priority file (Hebrew): ${priorityFile.path} - exists: $_priorityFileExists');
 
         final acronymFile = File('${aboutSoftwareDirHeb.path}/acronym.json');
         _acronymFileExists = await acronymFile.exists();
-        _logger.info(
-            'Checking acronym file (Hebrew): ${acronymFile.path} - exists: $_acronymFileExists');
-      } else {
-        _logger.info(
-            'About Software directory not found in either Hebrew or English');
       }
 
-      // Check links directory
       final linksDir = Directory('$_selectedLibraryPath/links');
       _linksDirectoryExists = await linksDir.exists();
-      _logger.info(
-          'Checking links directory: ${linksDir.path} - exists: $_linksDirectoryExists');
 
       setState(() {});
     } catch (e, stackTrace) {
@@ -214,54 +206,9 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     }
   }
 
-  // Removed - DB path is now auto-set based on library folder
-
-  /// Backup existing database file if it exists
-  Future<void> _backupExistingDatabase() async {
-    if (_selectedLibraryPath == null) return;
-
-    final dbFileInOtzaria = File(
-        '$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/${DatabaseConstants.databaseFileName}');
-    if (await dbFileInOtzaria.exists()) {
-      try {
-        // Create backup with readable date format
-        final now = DateTime.now();
-        final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
-        final backupPath = '${dbFileInOtzaria.path}.backup_$dateStr';
-        
-        // Copy the existing file to backup
-        await dbFileInOtzaria.copy(backupPath);
-        _logger.info('Database backed up to: $backupPath');
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'מסד הנתונים הקיים גובה ל: ${backupPath.split('/').last}'),
-              backgroundColor: Colors.blue,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-      } catch (e, stackTrace) {
-        _logger.warning('Failed to backup existing database', e, stackTrace);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('שגיאה בגיבוי מסד הנתונים: $e'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    }
-  }
-
   Future<void> _startGeneration() async {
     if (_selectedLibraryPath == null || _selectedDbPath == null) {
-      _logger.warning(
-          'Cannot start generation: missing library path or database path');
+      _logger.warning('Cannot start generation: missing library path or database path');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('יש לבחור תיקיית אוצריא (תיקיית האב)'),
@@ -272,12 +219,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     }
 
     _logger.info('Starting database generation');
-    _logger.info('Library path: $_selectedLibraryPath');
-    _logger.info('Database path: $_selectedDbPath');
-    _logger.info('Duplicate strategy: $_duplicateStrategy');
-
-    // Backup existing database if it exists
-    await _backupExistingDatabase();
 
     setState(() {
       _progress = GenerationProgress(
@@ -288,9 +229,16 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       _elapsed = Duration.zero;
       _duplicateBooks.clear();
       _duplicateReasons.clear();
+      _currentStep = GenerationStep.books;
+      _booksProgress = 0.0;
+      _linksProgress = 0.0;
+      _processedBooks = 0;
+      _totalBooks = 0;
+      _processedLinks = 0;
+      _totalLinks = 0;
+      _currentMessage = 'מאתחל...';
     });
 
-    // Start timer
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_startTime != null) {
         setState(() {
@@ -305,88 +253,87 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       final repository = SeforimRepository(database);
       await repository.ensureInitialized();
 
-      // Always replace duplicates and track them
-      Future<bool> duplicateCallback(String title, int categoryId) async {
-        // Get category name for better reporting
-        String categoryName = 'לא ידוע';
-        try {
-          final category = await repository.getCategory(categoryId);
-          if (category != null) {
-            categoryName = category.title;
-          }
-        } catch (e) {
-          // Ignore error, use default name
-        }
-        
-        final bookInfo = {
-          'title': title,
-          'path': 'נתיב לא זמין', // We'll improve this later if needed
-          'reason': 'ספר קיים הוחלף בקטגוריה: $categoryName'
-        };
-        _duplicateBooks.add(bookInfo);
-        _duplicateReasons[title] = 'ספר קיים הוחלף בקטגוריה: $categoryName';
-        return true; // Always replace
-      }
-
-      _generator = ProgressDatabaseGenerator(
+      late final DatabaseGenerator generator;
+      generator = DatabaseGenerator(
         _selectedLibraryPath!,
         repository,
-        onDuplicateBook: duplicateCallback,
-        createIndexes: true, // Always create indexes
-      );
-
-      _progressSubscription = _generator!.progressStream.listen(
-        (progress) {
+        onProgress: (progress, message) {
           setState(() {
-            _progress = progress;
+            // Detect links phase by message content
+            final isLinksPhase = message.contains('קישור') || 
+                                 message.contains('link') ||
+                                 message.contains('קבצים)');
+            
+            if (isLinksPhase) {
+              _currentStep = GenerationStep.links;
+              _linksProgress = progress;
+              // Mark books as complete when entering links phase
+              if (_booksProgress < 1.0) {
+                _booksProgress = 1.0;
+              }
+            } else {
+              _currentStep = GenerationStep.books;
+              _booksProgress = progress;
+              _processedBooks = (progress * generator.totalBooksToProcess).toInt();
+              _totalBooks = generator.totalBooksToProcess;
+            }
+            _currentMessage = message;
+            _progress = GenerationProgress(
+              phase: _currentStep == GenerationStep.links 
+                  ? GenerationPhase.processingLinks 
+                  : GenerationPhase.processingBooks,
+              message: message,
+              progress: progress,
+              processedBooks: _processedBooks,
+              totalBooks: _totalBooks,
+              processedLinks: _processedLinks,
+              totalLinks: _totalLinks,
+            );
           });
         },
-        onError: (error) {
-          final errorMsg = error.toString();
-          _logger.severe('Error during generation: $errorMsg');
-          setState(() {
-            _progress = GenerationProgress.error(errorMsg);
-          });
+        onDuplicateBook: (title, categoryId) async {
+          if (_duplicateStrategy == DuplicateBookStrategy.replace) {
+            _duplicateBooks.add({'title': title, 'path': 'Unknown', 'reason': 'Replaced'});
+            return true;
+          }
+          return false;
         },
       );
 
-      await _generator!.generate();
+      await generator.generate();
       await repository.close();
-
       _timer?.cancel();
 
-      // Show duplicate books report if any were found
       if (_duplicateBooks.isNotEmpty) {
         _showDuplicateReport();
       }
+      
+      setState(() {
+        _currentStep = GenerationStep.complete;
+        _booksProgress = 1.0;
+        _linksProgress = 1.0;
+        _progress = GenerationProgress.complete();
+      });
+      
     } catch (e, stackTrace) {
       final errorMsg = e.toString();
       _logger.severe('Error during generation: $errorMsg', e, stackTrace);
       setState(() {
+        _currentStep = GenerationStep.error;
         _progress = GenerationProgress.error(errorMsg);
       });
       _timer?.cancel();
     }
   }
 
-  /// Show report of duplicate books that were replaced
   void _showDuplicateReport() {
-    // Create report text for copying
     final reportText = StringBuffer();
-    reportText
-        .writeln('דוח ספרים כפולים - ${_duplicateBooks.length} ספרים הוחלפו:');
+    reportText.writeln('דוח ספרים כפולים - ${_duplicateBooks.length} ספרים הוחלפו:');
     reportText.writeln('=' * 50);
 
     for (int i = 0; i < _duplicateBooks.length; i++) {
       final bookInfo = _duplicateBooks[i];
-      final title = bookInfo['title'] ?? 'לא ידוע';
-      final path = bookInfo['path'] ?? 'נתיב לא זמין';
-      final reason = bookInfo['reason'] ?? 'לא ידוע';
-
-      reportText.writeln('${i + 1}. $title');
-      reportText.writeln('   נתיב: $path');
-      reportText.writeln('   סיבה: $reason');
-      reportText.writeln();
+      reportText.writeln('${i + 1}. ${bookInfo['title'] ?? 'לא ידוע'}');
     }
 
     showDialog(
@@ -394,165 +341,31 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.library_books, color: Colors.orange),
-              const SizedBox(width: 8),
-              const Expanded(child: Text('דוח ספרים כפולים')),
-              IconButton(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: reportText.toString()));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('הדוח הועתק ללוח'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.copy),
-                tooltip: 'העתק דוח',
-              ),
-            ],
-          ),
+          title: const Text('דוח ספרים כפולים'),
           content: SizedBox(
             width: double.maxFinite,
-            height: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue[200]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          color: Colors.blue[700], size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'נמצאו ${_duplicateBooks.length} ספרים כפולים שהוחלפו במהלך יצירת מסד הנתונים',
-                          style: TextStyle(
-                            color: Colors.blue[800],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _duplicateBooks.length,
-                    itemBuilder: (context, index) {
-                      final bookInfo = _duplicateBooks[index];
-                      final title = bookInfo['title'] ?? 'לא ידוע';
-                      final path = bookInfo['path'] ?? 'נתיב לא זמין';
-                      final reason = bookInfo['reason'] ?? 'לא ידוע';
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange[100],
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        '${index + 1}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.orange[800],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      title,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(Icons.folder_outlined,
-                                      size: 16, color: Colors.grey[600]),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      'נתיב: $path',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[700],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Icon(Icons.info_outline,
-                                      size: 16, color: Colors.grey[600]),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    reason,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
+            height: 300,
+            child: ListView.builder(
+              itemCount: _duplicateBooks.length,
+              itemBuilder: (context, index) {
+                final title = _duplicateBooks[index]['title'] ?? 'לא ידוע';
+                return ListTile(
+                  leading: Text('${index + 1}'),
+                  title: Text(title),
+                );
+              },
             ),
           ),
           actions: [
-            TextButton.icon(
+            TextButton(
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: reportText.toString()));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('הדוח הועתק ללוח'),
-                    duration: Duration(seconds: 2),
-                  ),
+                  const SnackBar(content: Text('הדוח הועתק ללוח')),
                 );
               },
-              icon: const Icon(Icons.copy, size: 18),
-              label: const Text('העתק דוח'),
+              child: const Text('העתק'),
             ),
-            const SizedBox(width: 8),
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('סגור'),
@@ -565,466 +378,418 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final content = Directionality(
-      textDirection: TextDirection.rtl,
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Configuration section
-              if (_progress.phase == GenerationPhase.idle) ...[
-                Card(
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'הגדרות',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Library folder selection
-                        _buildPathSelector(
-                          label: 'תיקיית אוצריא (תיקיית האב)',
-                          path: _selectedLibraryPath,
-                          onTap: _selectLibraryFolder,
-                          icon: Icons.folder_open,
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        // Database path display (read-only)
-                        if (_selectedDbPath != null)
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.blue[50],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.blue[200]!),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(Icons.info_outline,
-                                    color: Colors.blue[700], size: 20),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'מסד הנתונים: $_selectedDbPath',
-                                    style: TextStyle(
-                                      color: Colors.blue[900],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                        // File status section - always show
-                        const SizedBox(height: 16),
-                        const Divider(),
-                        const SizedBox(height: 16),
-
-                        Text(
-                          'בדיקת קבצים נדרשים',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        if (_selectedLibraryPath != null) ...[
-                          // Check if DB file already exists at target - blocks generation
-                          if (_dbFileExistsAtTarget)
-                            _buildBlockingStatusItem(
-                              'קובץ מסד נתונים קיים',
-                              'קובץ DB כבר קיים במיקום היעד - לא ניתן ליצור מסד נתונים נוסף',
-                            ),
-                          // Check if Otzaria folder exists
-                          _buildFileStatusItem(
-                            'תיקיית אוצריא',
-                            _otzariaFolderExists,
-                            _otzariaFolderExists
-                                ? 'קיימת'
-                                : 'לא קיימת - נדרשת ליצירת מסד הנתונים',
-                          ),
-                          _buildDbStatusItem(
-                            'קובץ מסד נתונים (אוצריא)',
-                            _dbFileExists,
-                            _dbFileExists
-                                ? 'קיים - הקובץ הישן יגובה ויווצר קובץ חדש'
-                                : 'לא קיים - יווצר קובץ חדש',
-                          ),
-                          _buildFileStatusItem(
-                            'קובץ priority (אודות התוכנה)',
-                            _priorityFileExists,
-                            _priorityFileExists ? 'קיים' : 'לא קיים',
-                          ),
-                          _buildFileStatusItem(
-                            'קובץ acronym.json (אודות התוכנה)',
-                            _acronymFileExists,
-                            _acronymFileExists ? 'קיים' : 'לא קיים',
-                          ),
-                          _buildFileStatusItem(
-                            'תיקיית links',
-                            _linksDirectoryExists,
-                            _linksDirectoryExists
-                                ? 'קיימת - יווצרו קישורים'
-                                : 'לא קיימת - לא ייווצרו קישורים',
-                          ),
-                        ] else ...[
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.orange[50],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange[200]!),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(Icons.warning_amber,
-                                    color: Colors.orange[700], size: 24),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    'יש לבחור תיקיית אוצריא כדי לבדוק את סטטוס הקבצים הנדרשים',
-                                    style: TextStyle(
-                                      color: Colors.orange[800],
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
-
-              // Status Card
-              if (_progress.phase != GenerationPhase.idle)
-                Card(
-                  elevation: 4,
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      children: [
-                        // Phase indicator
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _progress.phase.emoji,
-                              style: const TextStyle(fontSize: 48),
-                            ),
-                            const SizedBox(width: 16),
-                            Text(
-                              _progress.phase.displayName,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Progress bar
-                        if (_progress.phase != GenerationPhase.error)
-                          Column(
-                            children: [
-                              LinearProgressIndicator(
-                                value: _progress.progress,
-                                minHeight: 8,
-                                backgroundColor: Colors.grey[200],
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  _progress.isComplete
-                                      ? Colors.green
-                                      : Colors.blue,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '${(_progress.progress * 100).toStringAsFixed(1)}%',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ],
-                          ),
-
-                        const SizedBox(height: 16),
-
-                        // Current message
-                        Text(
-                          _progress.message,
-                          style: Theme.of(context).textTheme.titleMedium,
-                          textAlign: TextAlign.center,
-                        ),
-
-                        // Current book
-                        if (_progress.currentBook.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'ספר נוכחי: ${_progress.currentBook}',
-                            style:
-                                Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      color: Colors.blue[700],
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-
-                        // Elapsed time
-                        if (_startTime != null && !_progress.isComplete) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'זמן שעבר: ${_formatDuration(_elapsed)}',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: Colors.grey[600],
-                                ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-
-              const SizedBox(height: 24),
-
-              // Statistics Cards
-              if (_progress.totalBooks > 0 || _progress.totalLinks > 0)
-                Row(
-                  children: [
-                    // Books card
-                    if (_progress.totalBooks > 0)
-                      Expanded(
-                        child: _StatCard(
-                          icon: Icons.book,
-                          title: 'ספרים',
-                          current: _progress.processedBooks,
-                          total: _progress.totalBooks,
-                          color: Colors.blue,
-                        ),
-                      ),
-
-                    if (_progress.totalBooks > 0 && _progress.totalLinks > 0)
-                      const SizedBox(width: 16),
-
-                    // Links card
-                    if (_progress.totalLinks > 0)
-                      Expanded(
-                        child: _StatCard(
-                          icon: Icons.link,
-                          title: 'קישורים',
-                          current: _progress.processedLinks,
-                          total: _progress.totalLinks,
-                          color: Colors.green,
-                        ),
-                      ),
-                  ],
-                ),
-
-              const SizedBox(height: 24),
-
-              // Error message
-              if (_progress.error != null)
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.red[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red[300]!),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.error_outline, color: Colors.red[700]),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Container(
-                              constraints: const BoxConstraints(maxHeight: 120),
-                              child: SingleChildScrollView(
-                                child: SelectableText(
-                                  _progress.error!,
-                                  style: TextStyle(color: Colors.red[700]),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Clipboard.setData(
-                              ClipboardData(text: _progress.error!));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('השגיאה הועתקה ללוח'),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.copy, size: 18),
-                        label: const Text('העתק שגיאה'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red[700],
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              if (_progress.error != null) const SizedBox(height: 16),
-
-              // Action buttons
-              if (_progress.error != null) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _resetToInitialState,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('חזור להתחלה'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _startGeneration,
-                        icon: const Icon(Icons.replay),
-                        label: const Text('נסה שוב'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ] else
-                ElevatedButton(
-                  onPressed: (_progress.phase == GenerationPhase.idle ||
-                              _progress.phase == GenerationPhase.complete) &&
-                          !_dbFileExistsAtTarget &&
-                          _otzariaFolderExists
-                      ? _startGeneration
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor:
-                        _progress.isComplete ? Colors.green : Colors.blue,
-                    disabledBackgroundColor: Colors.grey[300],
-                  ),
-                  child: Text(
-                    _getButtonText(),
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-
-              const SizedBox(height: 16),
-
-              // Info text
-              if (_progress.phase == GenerationPhase.idle)
-                Text(
-                  'בחר את תיקיית האב של אוצריא (שמכילה את התיקיות "אוצריא" ו-"links").\n'
-                  'מסד הנתונים ייווצר אוטומטית בתיקייה זו (${DatabaseConstants.databaseFileName}).\n'
-                  'אינדקסים ייווצרו תמיד לשיפור ביצועי החיפוש.\n'
-                  'ספרים כפולים (אותו שם באותה קטגוריה) יוחלפו תמיד ויוצג דוח לאחר היצירה.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey[600],
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-
-              if (_progress.isComplete && _progress.error == null)
-                Text(
-                  'מסד הנתונים נוצר בהצלחה!\n'
-                  'זמן כולל: ${_formatDuration(_elapsed)}',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.green[700],
-                        fontWeight: FontWeight.w500,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    // Return with Scaffold
     return Scaffold(
       appBar: AppBar(
         title: const Text('יצירת מסד נתונים'),
         centerTitle: true,
       ),
-      body: content,
-    );
-  }
-
-  Widget _buildDbStatusItem(String label, bool exists, String description) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(
-            Icons.storage,
-            color: Colors.blue,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
+      body: Directionality(
+        textDirection: TextDirection.rtl,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  label,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
+                // Configuration section - only show when idle
+                if (_currentStep == GenerationStep.idle) ...[
+                  _buildConfigurationCard(),
+                  const SizedBox(height: 24),
+                ],
+
+                // Progress section - show during generation
+                if (_currentStep != GenerationStep.idle) ...[
+                  _buildStepsProgressCard(),
+                  const SizedBox(height: 16),
+                ],
+
+                // Error display
+                if (_progress.error != null) ...[
+                  _buildErrorCard(),
+                  const SizedBox(height: 16),
+                ],
+
+                // Action buttons
+                _buildActionButtons(),
+
+                const SizedBox(height: 16),
+
+                // Info text
+                if (_currentStep == GenerationStep.idle)
+                  _buildInfoText(),
+
+                if (_currentStep == GenerationStep.complete && _progress.error == null)
+                  _buildCompletionText(),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Build the steps progress card showing both phases
+  Widget _buildStepsProgressCard() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          children: [
+            // Timer display
+            if (_startTime != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.timer_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'זמן שעבר: ${_formatDuration(_elapsed)}',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+              ),
+
+            // Step 1: Books
+            _buildStepProgress(
+              stepNumber: 1,
+              title: 'עיבוד ספרים',
+              emoji: '📚',
+              progress: _booksProgress,
+              processed: _processedBooks,
+              total: _totalBooks,
+              isActive: _currentStep == GenerationStep.books,
+              isComplete: _currentStep == GenerationStep.links || 
+                         _currentStep == GenerationStep.complete,
+            ),
+
+            const SizedBox(height: 20),
+
+            // Step 2: Links
+            _buildStepProgress(
+              stepNumber: 2,
+              title: 'יצירת קישורים',
+              emoji: '🔗',
+              progress: _linksProgress,
+              processed: _processedLinks,
+              total: _totalLinks,
+              isActive: _currentStep == GenerationStep.links,
+              isComplete: _currentStep == GenerationStep.complete,
+            ),
+
+            // Current message
+            if (_currentMessage.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 12),
+              Text(
+                _currentMessage,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[700],
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build individual step progress widget
+  Widget _buildStepProgress({
+    required int stepNumber,
+    required String title,
+    required String emoji,
+    required double progress,
+    required int processed,
+    required int total,
+    required bool isActive,
+    required bool isComplete,
+  }) {
+    final progressPercent = (progress * 100).toStringAsFixed(1);
+    
+    Color getStepColor() {
+      if (isComplete) return Colors.green;
+      if (isActive) return Colors.blue;
+      return Colors.grey[400]!;
+    }
+
+    Color getProgressColor() {
+      if (isComplete) return Colors.green;
+      return Colors.blue;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.blue[50] : (isComplete ? Colors.green[50] : Colors.grey[100]),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive ? Colors.blue[300]! : (isComplete ? Colors.green[300]! : Colors.grey[300]!),
+          width: isActive ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          // Header row
+          Row(
+            children: [
+              // Step number circle
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: getStepColor(),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: isComplete
+                      ? const Icon(Icons.check, color: Colors.white, size: 20)
+                      : Text(
+                          '$stepNumber',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Title and emoji
+              Text(emoji, style: const TextStyle(fontSize: 24)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isActive ? Colors.blue[800] : (isComplete ? Colors.green[800] : Colors.grey[600]),
+                  ),
+                ),
+              ),
+              // Percentage
+              Text(
+                '$progressPercent%',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: getStepColor(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 12,
+              backgroundColor: Colors.grey[300],
+              valueColor: AlwaysStoppedAnimation<Color>(getProgressColor()),
+            ),
+          ),
+          // Stats row
+          if (total > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              '$processed / $total',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildConfigurationCard() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('הגדרות', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            _buildPathSelector(
+              label: 'תיקיית אוצריא (תיקיית האב)',
+              path: _selectedLibraryPath,
+              onTap: _selectLibraryFolder,
+              icon: Icons.folder_open,
+            ),
+            const SizedBox(height: 8),
+            if (_selectedDbPath != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('מסד הנתונים: $_selectedDbPath',
+                        style: TextStyle(color: Colors.blue[900], fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text('בדיקת קבצים נדרשים', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            if (_selectedLibraryPath != null) ...[
+              if (_dbFileExistsAtTarget)
+                _buildBlockingStatusItem('קובץ מסד נתונים קיים', 'קובץ DB כבר קיים במיקום היעד'),
+              _buildFileStatusItem('תיקיית אוצריא', _otzariaFolderExists, _otzariaFolderExists ? 'קיימת' : 'לא קיימת'),
+              _buildFileStatusItem('קובץ מסד נתונים (אוצריא)', _dbFileExists, _dbFileExists ? 'קיים - יגובה' : 'לא קיים'),
+              _buildFileStatusItem('קובץ priority', _priorityFileExists, _priorityFileExists ? 'קיים' : 'לא קיים'),
+              _buildFileStatusItem('קובץ acronym.json', _acronymFileExists, _acronymFileExists ? 'קיים' : 'לא קיים'),
+              _buildFileStatusItem('תיקיית links', _linksDirectoryExists, _linksDirectoryExists ? 'קיימת' : 'לא קיימת'),
+            ] else
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: Colors.orange[700], size: 24),
+                    const SizedBox(width: 12),
+                    const Expanded(child: Text('יש לבחור תיקיית אוצריא כדי לבדוק את סטטוס הקבצים')),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorCard() {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 200),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.error_outline, color: Colors.red[700]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 120),
+                  child: SingleChildScrollView(
+                    child: SelectableText(_progress.error!, style: TextStyle(color: Colors.red[700])),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: _progress.error!));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('השגיאה הועתקה ללוח')),
+              );
+            },
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('העתק שגיאה'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    if (_progress.error != null) {
+      return Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _resetToInitialState,
+              icon: const Icon(Icons.refresh),
+              label: const Text('חזור להתחלה'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _startGeneration,
+              icon: const Icon(Icons.replay),
+              label: const Text('נסה שוב'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return ElevatedButton(
+      onPressed: (_currentStep == GenerationStep.idle || _currentStep == GenerationStep.complete) &&
+              !_dbFileExistsAtTarget && _otzariaFolderExists
+          ? _startGeneration
+          : null,
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        backgroundColor: _currentStep == GenerationStep.complete ? Colors.green : Colors.blue,
+        disabledBackgroundColor: Colors.grey[300],
+      ),
+      child: Text(_getButtonText(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildInfoText() {
+    return Text(
+      'בחר את תיקיית האב של אוצריא.\nמסד הנתונים ייווצר אוטומטית בתיקייה זו.',
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+      textAlign: TextAlign.center,
+    );
+  }
+
+  Widget _buildCompletionText() {
+    return Text(
+      'מסד הנתונים נוצר בהצלחה!\nזמן כולל: ${_formatDuration(_elapsed)}',
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        color: Colors.green[700],
+        fontWeight: FontWeight.w500,
+      ),
+      textAlign: TextAlign.center,
     );
   }
 
@@ -1033,27 +798,14 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(
-            exists ? Icons.check_circle : Icons.cancel,
-            color: exists ? Colors.green : Colors.red,
-            size: 20,
-          ),
+          Icon(exists ? Icons.check_circle : Icons.cancel, color: exists ? Colors.green : Colors.red, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
+                Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+                Text(description, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
               ],
             ),
           ),
@@ -1073,30 +825,14 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.block,
-            color: Colors.red[700],
-            size: 24,
-          ),
+          Icon(Icons.block, color: Colors.red[700], size: 24),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red[800],
-                  ),
-                ),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.red[700],
-                  ),
-                ),
+                Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red[800])),
+                Text(description, style: TextStyle(fontSize: 12, color: Colors.red[700])),
               ],
             ),
           ),
@@ -1114,13 +850,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
-        ),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
         const SizedBox(height: 8),
         InkWell(
           onTap: onTap,
@@ -1139,9 +869,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
                 Expanded(
                   child: Text(
                     path ?? 'לחץ לבחירה...',
-                    style: TextStyle(
-                      color: path != null ? Colors.black87 : Colors.grey[600],
-                    ),
+                    style: TextStyle(color: path != null ? Colors.black87 : Colors.grey[600]),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -1155,82 +883,20 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
   }
 
   String _getButtonText() {
-    if (_dbFileExistsAtTarget) {
-      return 'לא ניתן ליצור - קובץ DB כבר קיים';
-    } else if (!_otzariaFolderExists && _selectedLibraryPath != null) {
-      return 'לא ניתן ליצור - תיקיית אוצריא לא קיימת';
-    } else if (_progress.phase == GenerationPhase.idle) {
-      return 'התחל יצירת מסד נתונים';
-    } else if (_progress.isComplete && _progress.error == null) {
-      return 'הושלם בהצלחה ✓';
-    } else {
-      return 'מעבד...';
-    }
+    if (_dbFileExistsAtTarget) return 'לא ניתן ליצור - קובץ DB כבר קיים';
+    if (!_otzariaFolderExists && _selectedLibraryPath != null) return 'לא ניתן ליצור - תיקיית אוצריא לא קיימת';
+    if (_currentStep == GenerationStep.idle) return 'התחל יצירת מסד נתונים';
+    if (_currentStep == GenerationStep.complete && _progress.error == null) return 'הושלם בהצלחה ✓';
+    return 'מעבד...';
   }
 
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);
-
     if (hours > 0) {
       return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-    } else {
-      return '$minutes:${seconds.toString().padLeft(2, '0')}';
     }
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final int current;
-  final int total;
-  final Color color;
-
-  const _StatCard({
-    required this.icon,
-    required this.title,
-    required this.current,
-    required this.total,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final percentage =
-        total > 0 ? (current / total * 100).toStringAsFixed(0) : '0';
-
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '$current / $total',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '$percentage%',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }

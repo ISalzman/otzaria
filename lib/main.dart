@@ -57,6 +57,7 @@ import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/services/sources_books_service.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/services/notification_service.dart';
+import 'package:logging/logging.dart';
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
@@ -111,6 +112,14 @@ void main() async {
 
   // Initialize bloc observer for debugging
   Bloc.observer = AppBlocObserver();
+
+  // Configure logging level for debug mode
+  if (kDebugMode) {
+    Logger.root.level = Level.ALL;
+    Logger.root.onRecord.listen((record) {
+      debugPrint('${record.level.name}: ${record.loggerName}: ${record.message}');
+    });
+  }
 
   // Remove legacy debug log setup
 

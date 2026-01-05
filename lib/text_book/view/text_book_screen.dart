@@ -28,6 +28,7 @@ import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
 import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
@@ -141,8 +142,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       try {
         // קבלת נתיב הספר
-        final titleToPath = await FileSystemData.instance.titleToPath;
-        final bookPath = titleToPath[bookTitle];
+        final location = await BookLocator.locateBook(bookTitle);
+        final bookPath = location?.filePath;
 
         if (bookPath != null) {
           debugPrint('Book path: $bookPath');
@@ -1235,7 +1236,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           if (_isBookTrackedInShamorZachor(state.book.title)) {
             _markShamorZachorProgress(state.book.title);
           } else {
-            _addBookToShamorZachorTracking(state.book.title);
+            _addBookToShamorZachorTracking(state.book);
           }
         },
       ),
@@ -1588,7 +1589,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           _markShamorZachorProgress(state.book.title);
         } else {
           // Book is not tracked - add to tracking
-          _addBookToShamorZachorTracking(state.book.title);
+          _addBookToShamorZachorTracking(state.book);
         }
       },
       icon: isTracked
@@ -1604,7 +1605,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   /// Add book to Shamor Zachor tracking
-  Future<void> _addBookToShamorZachorTracking(String bookTitle) async {
+  Future<void> _addBookToShamorZachorTracking(Book book) async {
     try {
       final dataProvider = context.read<ShamorZachorDataProvider>();
 
@@ -1615,47 +1616,57 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         return;
       }
 
+      final bookTitle = book.title;
+
       // 1. Get book path from library or database
-      final titleToPath = await FileSystemData.instance.titleToPath;
-      String? bookPath = titleToPath[bookTitle];
+      String? bookPath = book.filePath;
+      
+      if (bookPath == null) {
+        final location = await BookLocator.locateBook(bookTitle);
+        bookPath = location?.filePath;
+      }
 
       // If not found in file system, try to get category from database
-      String categoryPath = '';
       if (bookPath == null) {
-        final dbProvider = SqliteDataProvider.instance;
-        if (await dbProvider.databaseExists() && dbProvider.isInitialized) {
-          try {
-            final repository = dbProvider.repository;
-            if (repository != null) {
-              final book = await repository.getBookByTitle(bookTitle);
-              if (book != null) {
-                // Get category path from database
-                final category = await repository.getCategory(book.categoryId);
-                if (category != null) {
-                  // Build category path by traversing up the hierarchy
-                  final categoryParts = <String>[];
-                  dynamic currentCategory = category;
-                  while (currentCategory != null) {
-                    categoryParts.insert(0, currentCategory.title);
-                    if (currentCategory.parentId != null) {
-                      currentCategory = await repository
-                          .getCategory(currentCategory.parentId!);
-                    } else {
-                      break;
+        String categoryPath = '';
+        // Try to use the category path from the book object first
+        if (book.categoryPath != null && book.categoryPath!.isNotEmpty) {
+           categoryPath = book.categoryPath!.replaceAll(', ', '/');
+        } else {
+          final dbProvider = SqliteDataProvider.instance;
+          if (await dbProvider.databaseExists() && dbProvider.isInitialized) {
+            try {
+              final repository = dbProvider.repository;
+              if (repository != null) {
+                final dbBook = await repository.getBookByTitle(bookTitle);
+                if (dbBook != null) {
+                  final category = await repository.getCategory(dbBook.categoryId);
+                  if (category != null) {
+                    final categoryParts = <String>[];
+                    dynamic currentCategory = category;
+                    while (currentCategory != null) {
+                      categoryParts.insert(0, currentCategory.title);
+                      if (currentCategory.parentId != null) {
+                        currentCategory = await repository
+                            .getCategory(currentCategory.parentId!);
+                      } else {
+                        break;
+                      }
                     }
+                    categoryPath = categoryParts.join('/');
                   }
-                  categoryPath = categoryParts.join('/');
-                  final libraryPath =
-                      Settings.getValue<String>('key-library-path') ?? '.';
-                  bookPath =
-                      '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}$categoryPath${Platform.pathSeparator}$bookTitle.txt';
-                  debugPrint('Book path from DB: $bookPath');
                 }
               }
+            } catch (e) {
+              debugPrint('Error getting category from DB: $e');
             }
-          } catch (e) {
-            debugPrint('Error getting book path from DB: $e');
           }
+        }
+        
+        if (categoryPath.isNotEmpty) {
+             final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+             bookPath = '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}$categoryPath${Platform.pathSeparator}$bookTitle.txt';
+             debugPrint('Book path from DB: $bookPath');
         }
       }
 
@@ -2450,7 +2461,11 @@ void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
   try {
     // Try to reload content from file system
     final dataProvider = FileSystemData.instance;
-    freshContent = await dataProvider.getBookText(state.book.title);
+    freshContent = await dataProvider.getBookText(
+      state.book.title,
+      category: state.book.categoryPath,
+      fileType: state.book.fileType,
+    );
   } catch (e) {
     debugPrint('Failed to load fresh content: $e');
     // Fall back to cached content
@@ -2466,6 +2481,8 @@ void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
       value: context.read<TextBookBloc>(),
       child: TextSectionEditorDialog(
         bookId: state.book.title,
+        category: state.book.categoryPath,
+        fileType: state.book.fileType,
         sectionIndex: state.editorIndex!,
         sectionId: state.editorSectionId!,
         initialContent:

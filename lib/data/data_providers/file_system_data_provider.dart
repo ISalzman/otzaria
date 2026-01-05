@@ -24,9 +24,6 @@ import 'package:otzaria/utils/toc_parser.dart';
 /// - Managing book links and metadata
 /// - Providing table of contents functionality
 class FileSystemData {
-  /// Future that resolves to a mapping of book titles to their file system paths
-  late Future<Map<String, String>> titleToPath;
-
   late String libraryPath;
 
   /// Future that resolves to metadata for all books and categories
@@ -40,7 +37,6 @@ class FileSystemData {
   /// and metadata
   FileSystemData() {
     libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
-    titleToPath = _getTitleToPath();
     metadata = _getMetadata();
     _initializeProviders();
   }
@@ -59,14 +55,17 @@ class FileSystemData {
   }
 
   /// Checks if a book is stored in the database
-  Future<bool> isBookInDatabase(String title) async {
-    return await _providerManager.databaseProvider.hasBook(title);
+  Future<bool> isBookInDatabase(String title, {String? category, String? fileType}) async {
+    if (category != null && fileType != null) {
+      return await _providerManager.databaseProvider.hasBook(title, category, fileType);
+    }
+    return await _providerManager.databaseProvider.hasBookWithTitle(title);
   }
 
   /// Gets the data source for a book (DB, File, or Personal)
   /// Returns: 'DB' for database, 'ק' for file, 'א' for personal
-  Future<String> getBookDataSource(String title) async {
-    return await _providerManager.getBookDataSource(title);
+  Future<String> getBookDataSource(String title, [String? category, String? fileType='txt']) async {
+    return await _providerManager.getBookDataSource(title, category ?? '', fileType ?? 'txt');
   }
 
   /// Clears the book-in-database cache
@@ -92,8 +91,8 @@ class FileSystemData {
       _providerManager.databaseProvider;
 
   /// Checks if a book is in the personal folder
-  Future<bool> isPersonalBook(String title) async {
-    return await _providerManager.fileSystemProvider.isPersonalBook(title);
+  Future<bool> isPersonalBook(String title, {String? category, String? fileType}) async {
+    return await _providerManager.fileSystemProvider.isPersonalBook(title, category: category, fileType: fileType);
   }
 
   /// Gets the path to the personal books folder
@@ -127,7 +126,6 @@ class FileSystemData {
       return Library(categories: []);
     }
 
-    titleToPath = _getTitleToPath();
     metadata = _getMetadata();
 
     // Use the unified catalog builder from LibraryProviderManager
@@ -138,7 +136,7 @@ class FileSystemData {
   }
 
   /// Retrieves the list of books from Otzar HaChochma
-  static Future<List<ExternalBook>> getOtzarBooks() {
+  static Future<List<ExternalLibraryBook>> getOtzarBooks() {
     return _getOtzarBooks();
   }
 
@@ -165,12 +163,12 @@ class FileSystemData {
   }
 
   /// Internal implementation for loading Otzar HaChochma books from CSV
-  static Future<List<ExternalBook>> _getOtzarBooks() async {
+  static Future<List<ExternalLibraryBook>> _getOtzarBooks() async {
     try {
       final table = await _loadCsvTable('assets/otzar_books.csv',
           shouldParseNumbers: false);
       return table.skip(1).map((row) {
-        return ExternalBook(
+        return ExternalLibraryBook(
           title: row[1],
           id: int.tryParse(row[0]) ?? -1,
           author: row[2],
@@ -228,8 +226,8 @@ class FileSystemData {
               heShortDesc: row[13].toString(),
             ));
           } else {
-            // If no local file, add as ExternalBook
-            books.add(ExternalBook(
+            // If no local file, add as ExternalLibraryBook
+            books.add(ExternalLibraryBook(
               title: row[1].toString(),
               id: int.parse(bookId),
               author: row[2].toString(),
@@ -269,8 +267,8 @@ class FileSystemData {
   /// Retrieves the text content of a book.
   ///
   /// Uses LibraryProviderManager to get text from the appropriate provider.
-  Future<String> getBookText(String title) async {
-    final text = await _providerManager.getBookText(title);
+  Future<String> getBookText(String title, {String? category, String? fileType}) async {
+    final text = await _providerManager.getBookText(title, category ?? '', fileType ?? 'txt');
     if (text != null) {
       return text;
     }
@@ -278,7 +276,7 @@ class FileSystemData {
     // Fallback to direct file system access
     debugPrint(
         '⚠️ Provider manager failed, falling back to direct file access for "$title"');
-    final path = await _getBookPath(title);
+    final path = await _getBookPath(title, category: category, fileType: fileType);
     if (path.startsWith('error:')) {
       throw Exception('Book not found: $title');
     }
@@ -355,8 +353,8 @@ class FileSystemData {
   /// Retrieves the table of contents for a book.
   ///
   /// Uses LibraryProviderManager to get TOC from the appropriate provider.
-  Future<List<TocEntry>> getBookToc(String title) async {
-    final toc = await _providerManager.getBookToc(title);
+  Future<List<TocEntry>> getBookToc(String title, {String? category, String? fileType}) async {
+    final toc = await _providerManager.getBookToc(title, category ?? '', fileType ?? 'txt');
     if (toc != null && toc.isNotEmpty) {
       return toc;
     }
@@ -364,7 +362,7 @@ class FileSystemData {
     // Fallback to parsing from text
     debugPrint(
         '⚠️ Provider manager failed, falling back to text parsing for "$title"');
-    return _parseToc(getBookText(title));
+    return _parseToc(getBookText(title, category: category, fileType: fileType));
   }
 
   /// Efficiently reads a specific line from a file.
@@ -421,17 +419,7 @@ class FileSystemData {
 
   /// Updates the mapping of book titles to their file system paths.
   ///
-  /// Creates a map where keys are book titles and values are their corresponding
-  /// file system paths, excluding PDF files.
-  Future<Map<String, String>> _getTitleToPath() async {
-    Map<String, String> titleToPath = {};
-    List<String> paths = await getAllBooksPathsFromDirecctory(libraryPath);
-    for (var path in paths) {
-      if (path.toLowerCase().endsWith('.pdf')) continue;
-      titleToPath[getTitleFromPath(path)] = path;
-    }
-    return titleToPath;
-  }
+
 
   /// Loads and parses the metadata for all books in the library.
   ///
@@ -489,9 +477,22 @@ class FileSystemData {
   }
 
   /// Retrieves the file system path for a book with the given title.
-  Future<String> _getBookPath(String title) async {
-    final titleToPath = await this.titleToPath;
-    return titleToPath[title] ?? 'error: book path not found: $title';
+  Future<String> _getBookPath(String title, {String? category, String? fileType}) async {
+    final keyToPath = await _providerManager.fileSystemProvider.keyToPath;
+
+    if (category != null && fileType != null) {
+      final key = '$title|$category|$fileType';
+      if (keyToPath.containsKey(key)) return keyToPath[key]!;
+    }
+
+    // Fallback: fuzzy search by title
+    for (final key in keyToPath.keys) {
+      if (key.startsWith('$title|')) {
+        return keyToPath[key]!;
+      }
+    }
+
+    return 'error: book path not found: $title';
   }
 
   /// Parses the table of contents from book content.
@@ -512,8 +513,11 @@ class FileSystemData {
 
   /// Checks if a book with the given title exists in the library.
   Future<bool> bookExists(String title) async {
-    final titleToPath = await this.titleToPath;
-    return titleToPath.keys.contains(title);
+    final keyToPath = await _providerManager.fileSystemProvider.keyToPath;
+    for (final key in keyToPath.keys) {
+      if (key.startsWith('$title|')) return true;
+    }
+    return false;
   }
 
   /// Returns true if the book belongs to Tanach (Torah, Neviim or Ketuvim).

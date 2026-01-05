@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
+import 'package:otzaria/data/book_locator.dart';
 
 String stripHtmlIfNeeded(String text) {
   return text.replaceAll(SearchRegexPatterns.htmlStripper, '');
@@ -118,8 +118,8 @@ Future<bool> hasTopic(String title, String topic) async {
   }
 
   // Fallback to original path-based logic
-  final titleToPath = await FileSystemData.instance.titleToPath;
-  return titleToPath[title]?.contains(topic) ?? false;
+  final location = await BookLocator.locateBook(title);
+  return location?.filePath?.contains(topic) ?? false;
 }
 
 Future<void> _loadCsvCache() async {

@@ -16,7 +16,7 @@ import 'package:otzaria/settings/settings_repository.dart';
 /// Library provider that loads books from the file system.
 class FileSystemLibraryProvider implements LibraryProvider {
   late String _libraryPath;
-  late Future<Map<String, String>> _titleToPath;
+  late Future<Map<String, String>> _keyToPath;
   bool _isInitialized = false;
 
   /// Singleton instance
@@ -27,6 +27,10 @@ class FileSystemLibraryProvider implements LibraryProvider {
   static FileSystemLibraryProvider get instance {
     _instance ??= FileSystemLibraryProvider._();
     return _instance!;
+  }
+
+  String _generateKey(String title, String category, String fileType) {
+    return '$title|$category|$fileType';
   }
 
   @override
@@ -49,14 +53,14 @@ class FileSystemLibraryProvider implements LibraryProvider {
     if (_isInitialized) return;
 
     _libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
-    _titleToPath = _buildTitleToPath();
+    _keyToPath = _buildKeyToPath();
     _isInitialized = true;
     debugPrint('📁 FileSystemLibraryProvider initialized');
   }
 
   String get libraryPath => _libraryPath;
 
-  Future<Map<String, String>> get titleToPath => _titleToPath;
+  Future<Map<String, String>> get keyToPath => _keyToPath;
 
   @override
   Future<Map<String, List<Book>>> loadBooks(
@@ -72,10 +76,13 @@ class FileSystemLibraryProvider implements LibraryProvider {
       return booksByCategory;
     }
 
-    await _loadBooksRecursively(otzariaDir, metadata, booksByCategory, []);
+    // We can populate the key map here as well to ensure it's accurate
+    final map = await _keyToPath;
+    
+    await _loadBooksRecursively(otzariaDir, metadata, booksByCategory, [], map);
 
     // Load books from custom folders (those NOT marked for DB sync)
-    await _loadCustomFoldersBooks(metadata, booksByCategory);
+    await _loadCustomFoldersBooks(metadata, booksByCategory, map);
 
     debugPrint(
         '📁 FileSystem loaded ${booksByCategory.values.expand((b) => b).length} books');
@@ -87,6 +94,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
   Future<void> _loadCustomFoldersBooks(
     Map<String, Map<String, dynamic>> metadata,
     Map<String, List<Book>> booksByCategory,
+    Map<String, String> keyToPath,
   ) async {
     final customFoldersJson =
         Settings.getValue<String>(SettingsRepository.keyCustomFolders);
@@ -112,6 +120,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
         metadata,
         booksByCategory,
         ['ספרים אישיים', folder.name],
+        keyToPath,
       );
     }
   }
@@ -121,6 +130,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
     Map<String, Map<String, dynamic>> metadata,
     Map<String, List<Book>> booksByCategory,
     List<String> currentPath,
+    Map<String, String> keyToPath,
   ) async {
     final dirName = dir.path.split(Platform.pathSeparator).last;
 
@@ -134,7 +144,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
         if (entity is Directory) {
           final newPath = [...currentPath, getTitleFromPath(entity.path)];
           await _loadBooksRecursively(
-              entity, metadata, booksByCategory, newPath);
+              entity, metadata, booksByCategory, newPath, keyToPath);
         } else if (entity is File) {
           final book = _createBookFromFile(entity, metadata, currentPath);
           if (book != null) {
@@ -142,6 +152,11 @@ class FileSystemLibraryProvider implements LibraryProvider {
                 currentPath.isNotEmpty ? currentPath.last : 'ללא קטגוריה';
             booksByCategory.putIfAbsent(categoryName, () => []);
             booksByCategory[categoryName]!.add(book);
+
+            // Add to key map
+            final key =
+                _generateKey(book.title, book.categoryPath ?? '', book.fileType ?? '');
+            keyToPath[key] = entity.path;
           }
         }
       } catch (e) {
@@ -176,6 +191,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
         pubPlace: metadata[title]?['pubPlace'],
         order: metadata[title]?['order'] ?? 999,
         topics: finalTopics,
+        categoryPath: categoryPath.join(', '),
       );
     }
 
@@ -189,6 +205,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
         order: metadata[title]?['order'] ?? 999,
         topics: finalTopics,
         extraTitles: metadata[title]?['extraTitles'],
+        categoryPath: categoryPath.join(', '),
       );
     }
 
@@ -196,17 +213,18 @@ class FileSystemLibraryProvider implements LibraryProvider {
   }
 
   @override
-  Future<bool> hasBook(String title) async {
+  Future<bool> hasBook(String title, String category, String fileType) async {
     if (!_isInitialized) await initialize();
-    final map = await _titleToPath;
-    return map.containsKey(title);
+    final map = await _keyToPath;
+    final key = _generateKey(title, category, fileType);
+    return map.containsKey(key);
   }
 
   @override
-  Future<String?> getBookText(String title) async {
+  Future<String?> getBookText(String title, String category, String fileType) async {
     if (!_isInitialized) await initialize();
 
-    final path = await _getBookPath(title);
+    final path = await _getBookPath(title, category, fileType);
     if (path == null) return null;
 
     final file = File(path);
@@ -221,8 +239,8 @@ class FileSystemLibraryProvider implements LibraryProvider {
   }
 
   @override
-  Future<List<TocEntry>?> getBookToc(String title) async {
-    final text = await getBookText(title);
+  Future<List<TocEntry>?> getBookToc(String title, String category, String fileType) async {
+    final text = await getBookText(title, category, fileType);
     if (text == null) return null;
     return Isolate.run(() => TocParser.parseEntriesFromContent(text));
   }
@@ -230,23 +248,52 @@ class FileSystemLibraryProvider implements LibraryProvider {
   @override
   Future<Set<String>> getAvailableBookTitles() async {
     if (!_isInitialized) await initialize();
-    final map = await _titleToPath;
+    final map = await _keyToPath;
     return map.keys.toSet();
   }
 
-  Future<String?> _getBookPath(String title) async {
-    final map = await _titleToPath;
-    return map[title];
+  Future<String?> _getBookPath(String title, String category, String fileType) async {
+    final map = await _keyToPath;
+    final key = _generateKey(title, category, fileType);
+    return map[key];
   }
 
-  Future<Map<String, String>> _buildTitleToPath() async {
-    Map<String, String> titleToPath = {};
+  Future<Map<String, String>> _buildKeyToPath() async {
+    Map<String, String> keyToPath = {};
+
+    // Helper to add path
+    void addPath(String path, String rootPath, [List<String> prefix = const []]) {
+      if (path.toLowerCase().endsWith('.pdf')) return;
+      final title = getTitleFromPath(path);
+      final fileType = path.split('.').last;
+
+      // Extract category
+      String relative = path;
+      if (path.startsWith(rootPath)) {
+        relative = path.substring(rootPath.length);
+      }
+      if (relative.startsWith(Platform.pathSeparator)) {
+        relative = relative.substring(1);
+      }
+
+      final parts = relative.split(Platform.pathSeparator);
+      // Remove filename
+      if (parts.isNotEmpty) parts.removeLast();
+
+      final categoryParts = [...prefix, ...parts];
+      final category = categoryParts.join(', ');
+
+      final key = _generateKey(title, category, fileType);
+      keyToPath[key] = path;
+    }
 
     // Load from main library path
-    List<String> paths = await _getAllBookPaths(_libraryPath);
-    for (var path in paths) {
-      if (path.toLowerCase().endsWith('.pdf')) continue;
-      titleToPath[getTitleFromPath(path)] = path;
+    final otzariaPath = '$_libraryPath${Platform.pathSeparator}אוצריא';
+    if (await Directory(otzariaPath).exists()) {
+      List<String> paths = await _getAllBookPaths(otzariaPath);
+      for (var path in paths) {
+        addPath(path, otzariaPath);
+      }
     }
 
     // Load from custom folders (those NOT marked for DB sync)
@@ -261,12 +308,11 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
       final folderPaths = await _getAllBookPaths(folder.path);
       for (var path in folderPaths) {
-        if (path.toLowerCase().endsWith('.pdf')) continue;
-        titleToPath[getTitleFromPath(path)] = path;
+        addPath(path, folder.path, ['ספרים אישיים', folder.name]);
       }
     }
 
-    return titleToPath;
+    return keyToPath;
   }
 
   static Future<List<String>> _getAllBookPaths(String path) async {
@@ -282,12 +328,25 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
   /// Refreshes the title to path mapping
   void refresh() {
-    _titleToPath = _buildTitleToPath();
+    _keyToPath = _buildKeyToPath();
   }
 
   /// Checks if a book is in the personal folder or a custom folder
-  Future<bool> isPersonalBook(String title) async {
-    final bookPath = await _getBookPath(title);
+  Future<bool> isPersonalBook(String title, {String? category, String? fileType}) async {
+    String? bookPath;
+    if (category != null && fileType != null) {
+      bookPath = await _getBookPath(title, category, fileType);
+    } else {
+      // Fuzzy search
+      final map = await _keyToPath;
+      for (final key in map.keys) {
+        if (key.startsWith('$title|')) {
+          bookPath = map[key];
+          break;
+        }
+      }
+    }
+
     if (bookPath == null) return false;
 
     // Check if in the built-in personal folder
@@ -346,7 +405,14 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
   /// Saves text content to a book file
   Future<void> saveBookText(String title, String content) async {
-    final path = await _getBookPath(title);
+    final map = await _keyToPath;
+    String? path;
+    for (final key in map.keys) {
+      if (key.startsWith('$title|')) {
+        path = map[key];
+        break;
+      }
+    }
     if (path == null) throw Exception('Book not found: $title');
 
     if (path.endsWith('.docx')) {
@@ -554,6 +620,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
         order: book.order,
         topics: book.topics,
         extraTitles: book.extraTitles ?? bookMeta?['extraTitles'],
+        categoryPath: book.categoryPath,
       );
     } else if (book is PdfBook) {
       return PdfBook(
@@ -566,6 +633,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
         pubPlace: book.pubPlace ?? bookMeta?['pubPlace'],
         order: book.order,
         topics: book.topics,
+        categoryPath: book.categoryPath,
       );
     }
     return book;
@@ -582,7 +650,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
   }
 
   @override
-  Future<List<Link>> getAllLinksForBook(String title) async {
+  Future<List<Link>> getAllLinksForBook(String title, String category, String fileType) async {
     if (!_isInitialized) await initialize();
 
     try {
@@ -617,7 +685,16 @@ class FileSystemLibraryProvider implements LibraryProvider {
       }
 
       final title = getTitleFromPath(link.path2);
-      final path = await _getBookPath(title);
+      
+      // Find path for title (fuzzy match since we don't have category/fileType)
+      final map = await _keyToPath;
+      String? path;
+      for (final key in map.keys) {
+        if (key.startsWith('$title|')) {
+           path = map[key];
+           break;
+        }
+      }
 
       if (path == null) {
         return 'שגיאה: הספר לא נמצא';

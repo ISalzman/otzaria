@@ -1,3 +1,4 @@
+import 'package:logging/logging.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../core/models/link.dart';
 import '../sqflite/query_loader.dart';
@@ -6,6 +7,7 @@ import 'database.dart';
 class LinkDao {
   final MyDatabase _db;
   late final Map<String, String> _queries;
+  final Logger _logger = Logger('LinkDao');
 
   LinkDao(this._db) {
     _queries = QueryLoader.loadQueries('LinkQueries.sq');
@@ -43,15 +45,27 @@ class LinkDao {
     return await db.rawQuery(_queries['selectCommentatorsByBook']!, [bookId]);
   }
 
-  Future<int> insertLink(Link link) async {
+  Future<int> insertLink(Link link, int connectionTypeId) async {
     final db = await database;
-    return await db.rawInsert(_queries['insert']!, [
+    return await db.rawInsert(_queries['insert']!,[
       link.sourceBookId,
       link.targetBookId,
       link.sourceLineId,
       link.targetLineId,
-      link.connectionType.index + 1, // Convert enum to database ID
+      connectionTypeId
     ]);
+  }
+
+  Future<Link?> selectLinkByDetails(int sourceBookId, int targetBookId, int sourceLineId, int targetLineId) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT id FROM link
+      WHERE sourceBookId = ? AND targetBookId = ? AND sourceLineId = ? AND targetLineId = ?
+    ''', [sourceBookId, targetBookId, sourceLineId, targetLineId]);
+    
+    if (result.isEmpty) return null;
+    final linkId = result.first['id'] as int;
+    return await selectLinkById(linkId);
   }
 
   Future<int> delete(int id) async {

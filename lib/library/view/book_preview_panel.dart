@@ -120,7 +120,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     }
 
     // אם זה ספר חיצוני
-    if (widget.book is ExternalBook) {
+    if (widget.book is ExternalLibraryBook) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

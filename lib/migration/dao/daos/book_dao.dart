@@ -145,6 +145,13 @@ class BookDao {
     return Book.fromJson(result.first);
   }
 
+  Future<Book?> getBookByTitleCategoryAndFileType(String title, int categoryId, String fileType) async {
+    final db = await database;
+    final result = await db.rawQuery(_queries['selectByTitleCategoryAndFileType']!, [title, categoryId, fileType]);
+    if (result.isEmpty) return null;
+    return Book.fromJson(result.first);
+  }
+
   Future<List<Book>> getBooksByAuthor(String authorName) async {
     final db = await database;
     final result =
@@ -160,7 +167,9 @@ class BookDao {
       double orderIndex,
       int totalLines,
       bool isBaseBook,
-      String? notesContent) async {
+      String? notesContent,
+      String? filePath,
+      String? fileType) async {
     final db = await database;
     return await db.rawInsert(_queries['insert']!, [
       categoryId,
@@ -171,6 +180,8 @@ class BookDao {
       orderIndex,
       totalLines,
       (isBaseBook ? 1 : 0),
+      filePath,
+      fileType,
     ]);
   }
 
@@ -183,7 +194,9 @@ class BookDao {
       double orderIndex,
       int totalLines,
       bool isBaseBook,
-      String? notesContent) async {
+      String? notesContent,
+      String? filePath,
+      String? fileType) async {
     final db = await database;
     return await db.rawInsert(_queries['insertWithId']!, [
       id,
@@ -195,6 +208,8 @@ class BookDao {
       orderIndex,
       totalLines,
       (isBaseBook ? 1 : 0),
+      filePath,
+      fileType,
     ]);
   }
 

@@ -77,13 +77,13 @@ class TantivyDataProvider {
     try {
       String indexPath = await AppPaths.getIndexPath();
       await resetIndex(indexPath);
-      reopenIndex();
+      await reopenIndex();
     } catch (e) {
       debugPrint('❌ Error handling schema error: $e');
     }
   }
 
-  void reopenIndex() async {
+  Future<void> reopenIndex() async {
     // Prevent concurrent reopens that would cause lock conflicts
     if (_isReopening) {
       debugPrint('⚠️ Index reopen already in progress, skipping...');
@@ -102,6 +102,9 @@ class TantivyDataProvider {
     debugPrint('🔄 Reopening search index...');
 
     try {
+      // Dispose previous engine to release locks
+      await dispose();
+
       String indexPath = await AppPaths.getIndexPath();
 
       engine = Future.value(SearchEngine(path: indexPath));
@@ -346,13 +349,6 @@ class TantivyDataProvider {
       index.dispose();
     } catch (e) {
       debugPrint('⚠️ Error disposing search engine: $e');
-    }
-    
-    try {
-      final engineIndex = await engine;
-      engineIndex.dispose();
-    } catch (e) {
-      debugPrint('⚠️ Error disposing reference engine: $e');
     }
   }
 }

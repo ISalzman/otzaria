@@ -92,18 +92,33 @@ Future<int> findOrCreateCategory(List<String> categoryPath) async {
 ### מטרה
 קביעה האם הספר קיים ונדרש עדכון, או שזהו ספר חדש.
 
-**עדכון חשוב**: הבדיקה משתנה מבדיקה לפי שם בלבד לבדיקה לפי שם **וקטגוריה**. 
-זה אומר שספר עם אותו שם יכול להיות בקטגוריות שונות ולא להיחשב כפול.
+**עדכון חשוב**: הבדיקה משתנה מבדיקה לפי שם בלבד לבדיקה לפי שם, **קטגוריה וסוג קובץ**. 
+זה אומר שספר עם אותו שם יכול להיות בקטגוריות שונות ולא להיחשב כפול, וגם ספר עם אותו שם באותה קטגוריה אבל עם סוג קובץ שונה (TXT vs PDF) לא יחשב כפול.
 
 ### משימות
 - [x] 4.1 יצירת פונקציה `findBookInCategory(String bookName, int categoryId)`
 - [x] 4.2 החזרת מזהה הספר אם קיים, או null אם לא
 - [x] 4.3 עדכון הלוגיקה במערכת לבדיקה לפי שם וקטגוריה
+- [x] 4.4 הוספת בדיקה לפי סוג קובץ (fileType) למניעת התנגשות בין TXT ו-PDF
+- [x] 4.5 יצירת פונקציה `checkBookExistsInCategoryWithFileType(String title, int categoryId, String fileType)`
 
 ### שאילתה מעודכנת
 ```sql
+-- בדיקה לפי שם, קטגוריה וסוג קובץ
 SELECT id FROM book 
-WHERE title = ? AND categoryId = ?
+WHERE title = ? AND categoryId = ? AND fileType = ?
+```
+
+### דוגמה לשימוש
+```dart
+// עכשיו ספרים אלה לא יחשבו כפולים:
+// 1. "ספר הזוהר.txt" בקטגוריה "קבלה" 
+// 2. "ספר הזוהר.pdf" בקטגוריה "קבלה"
+// כי יש להם סוג קובץ שונה
+
+final txtBook = await repository.checkBookExistsInCategoryWithFileType("ספר הזוהר", categoryId, "txt");
+final pdfBook = await repository.checkBookExistsInCategoryWithFileType("ספר הזוהר", categoryId, "pdf");
+// txtBook ו-pdfBook יכולים להיות שניהם null או שניהם לא-null ללא התנגשות
 ```
 
 ---
@@ -228,29 +243,66 @@ Future<SyncResult> syncFilesToDatabase(
 
 ---
 
-## עדכון מימוש - בדיקת ספרים כפולים לפי קטגוריה
+## עדכון מימוש - בדיקת ספרים כפולים לפי קטגוריה וסוג קובץ
 
 ### שינויים שבוצעו:
 
-1. **BookQueries.sq**: הוספת שאילתה `selectByTitleAndCategory` לבדיקת ספר לפי שם וקטגוריה
-2. **BookDao**: הוספת פונקציה `getBookByTitleAndCategory(String title, int categoryId)`
+1. **BookQueries.sq**: הוספת שאילתה `selectByTitleCategoryAndFileType` לבדיקת ספר לפי שם, קטגוריה וסוג קובץ
+2. **BookDao**: 
+   - הוספת פונקציה `getBookByTitleCategoryAndFileType(String title, int categoryId, String fileType)`
+   - עדכון פונקציות ההכנסה לכלול פרמטר fileType
 3. **SeforimRepository**: 
-   - הוספת פונקציה `getBookByTitleAndCategory(String title, int categoryId)`
-   - הוספת פונקציה `checkBookExistsInCategory(String title, int categoryId)`
+   - הוספת פונקציה `getBookByTitleCategoryAndFileType(String title, int categoryId, String fileType)`
+   - הוספת פונקציה `checkBookExistsInCategoryWithFileType(String title, int categoryId, String fileType)`
+   - עדכון קריאות להכנסת ספרים לכלול fileType
 4. **DatabaseGenerator**: 
-   - עדכון הcallback signature לקבל גם categoryId
-   - שינוי הבדיקה מ-`checkBookExists` ל-`checkBookExistsInCategory`
-5. **DatabaseGenerationScreen**: 
-   - עדכון הcallback לקבל categoryId ולהציג שם קטגוריה בדיווח
-   - עדכון הטקסט ההסבר למשתמש
+   - עדכון הבדיקה מ-`checkBookExistsInCategory` ל-`checkBookExistsInCategoryWithFileType`
+   - הוספת חילוץ סוג קובץ מנתיב הקובץ
+   - הוספת שדה fileType לספר שנוצר
+   - הוספת הודעות לוג מפורטות לבירור התהליך
 
 ### התנאי החדש לספר כפול:
-ספר נחשב כפול רק אם יש ספר עם **אותו שם בדיוק** ב**אותה קטגוריה בדיוק**.
-זה מאפשר לספרים עם אותו שם להיות בקטגוריות שונות מבלי להיחשב כפולים.
+ספר נחשב כפול רק אם יש ספר עם **אותו שם בדיוק** ב**אותה קטגוריה בדיוק** עם **אותו סוג קובץ בדיוק**.
+זה מאפשר:
+- לספרים עם אותו שם להיות בקטגוריות שונות מבלי להיחשב כפולים
+- לספרים עם אותו שם באותה קטגוריה אבל עם סוג קובץ שונה (TXT vs PDF) להיות מבלי להיחשב כפולים
 
----
+### דוגמה:
+```
+✅ מותר: "ספר הזוהר.txt" ו-"ספר הזוהר.pdf" באותה קטגוריה
+✅ מותר: "ספר הזוהר.txt" בקטגוריה A ו-"ספר הזוהר.txt" בקטגוריה B  
+❌ כפול: "ספר הזוהר.txt" ו-"ספר הזוהר.txt" באותה קטגוריה
+```
 
-## סיכום תלויות בין שלבים
+## פתרון הבעיה המקורית
+
+### הבעיה שהייתה:
+כאשר מכניסים ספר ל-DB, הייתה בדיקה של כפילות רק לפי שם הספר והקטגוריה. זה גרם למצב שבו:
+- ספר PDF עם שם "ספר הזוהר" בקטגוריה "קבלה" 
+- ספר TXT עם שם "ספר הזוהר" באותה קטגוריה "קבלה"
+
+נחשבו כפולים, והשני דרס את הראשון.
+
+### הפתרון שיושם:
+עכשיו הבדיקה כוללת גם את **סוג הקובץ** (fileType):
+- ספר PDF: `title="ספר הזוהר", categoryId=5, fileType="pdf"`
+- ספר TXT: `title="ספר הזוהר", categoryId=5, fileType="txt"`
+
+**אלה לא נחשבים עוד כפולים** כי יש להם fileType שונה!
+
+### יתרונות הפתרון:
+1. ✅ ספרי PDF ו-TXT עם אותו שם יכולים להתקיים יחד באותה קטגוריה
+2. ✅ עדיין מונע כפילות אמיתיות (אותו שם + קטגוריה + סוג קובץ)
+3. ✅ שומר על הביצועים - בדיקה מהירה במסד הנתונים
+4. ✅ תואם לאחור - ספרים קיימים ימשיכו לעבוד
+
+### דוגמאות:
+```
+✅ מותר: "תורה.txt" ו-"תורה.pdf" בקטגוריה "תנ״ך"
+✅ מותר: "משנה.txt" בקטגוריה "משנה" ו-"משנה.txt" בקטגוריה "הלכה"  
+❌ כפול: "גמרא.txt" ו-"גמרא.txt" באותה קטגוריה
+❌ כפול: "זוהר.pdf" ו-"זוהר.pdf" באותה קטגוריה
+```
 
 ```
 שלב 1 (סריקה)
