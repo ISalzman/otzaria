@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/services/notification_service.dart';
+import 'package:shamor_zachor/utils/message_utils.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 enum CalendarType { hebrew, gregorian, combined }
@@ -536,12 +538,30 @@ class CalendarCubit extends Cubit<CalendarState> {
       if (!notificationService.isInitialized) {
         await notificationService.init();
       }
-      final hasPermission = await notificationService.requestPermissions();
+      // בדוק תחילה אם ההרשאות כבר ניתנו
+      bool hasPermission = await notificationService.checkPermissions();
 
-      // אם אין הרשאה, אל תפעיל את ההתראות
+      // אם אין הרשאות, בקש אותן
+      if (!hasPermission) {
+        hasPermission = await notificationService.requestPermissions();
+      }
+
+      // אם אין הרשאה, אל תפעיל את ההתראות והצג הודעה למשתמש
       if (!hasPermission) {
         emit(state.copyWith(calendarNotificationsEnabled: false));
         await _settingsRepository.updateCalendarNotificationsEnabled(false);
+
+        // הצג הודעת שגיאה למשתמש עם הוראות מפורטות
+        UiSnack.showWithAction(
+          message: 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+              'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
+          actionLabel: 'הבנתי',
+          onAction: () {
+            // אפשר להוסיף כאן פתיחת הגדרות האפליקציה בעתיד
+          },
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 8),
+        );
         return;
       }
     }
