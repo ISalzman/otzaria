@@ -32,16 +32,14 @@ class _FindRefDialogState extends State<FindRefDialog> {
     }
 
     // בחירת הטקסט הקיים כאשר חוזרים למסך
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final controller =
-          context.read<FocusRepository>().findRefSearchController;
-      if (controller.text.isNotEmpty) {
-        controller.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: controller.text.length,
-        );
-      }
-    });
+    // מבוצע מיד ולא ב-postFrameCallback כדי למנוע אובדן פוקוס באנדרואיד
+    final controller = context.read<FocusRepository>().findRefSearchController;
+    if (controller.text.isNotEmpty) {
+      controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: controller.text.length,
+      );
+    }
   }
 
   GlobalKey _getKeyForIndex(int index) {
@@ -87,6 +85,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
               ),
             ),
             IconButton(
+                focusNode: FocusNode(skipTraversal: true),
                 onPressed: () => setState(() => showIndexWarning = false),
                 icon: const Icon(FluentIcons.dismiss_24_regular))
           ],

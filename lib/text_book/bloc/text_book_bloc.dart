@@ -279,6 +279,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
+
+      // אם עוברים לצורת הדף הישנה, ודא שמצב "צורת הדף" החדש לא נשמר כברירת מחדל
+      if (event.show) {
+        Settings.setValue<bool>('key-page-shape-view', false);
+      }
       emit(currentState.copyWith(
         showTzuratHadafView: event.show,
         showPageShapeView: false, // כיבוי התצוגה החדשה
@@ -295,6 +300,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
+
+      // שמירת מצב "צורת הדף" כדי שישוחזר גם אחרי סגירה/פתיחה של האפליקציה
+      Settings.setValue<bool>('key-page-shape-view', event.show);
       emit(currentState.copyWith(
         showPageShapeView: event.show,
         showTzuratHadafView: false, // כיבוי התצוגה הישנה

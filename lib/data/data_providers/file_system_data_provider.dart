@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/utils/docx_to_otzaria.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -33,7 +34,7 @@ class FileSystemData {
   /// Creates a new instance of [FileSystemData] and initializes the title to path mapping
   /// and metadata
   FileSystemData() {
-    libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+    libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
     titleToPath = _getTitleToPath();
     metadata = _getMetadata();
   }
@@ -624,7 +625,7 @@ class FileSystemData {
     Map<String, Map<String, dynamic>> metadata = {};
     try {
       File file = File(
-          '${Settings.getValue<String>('key-library-path') ?? '.'}${Platform.pathSeparator}metadata.json');
+          '${Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.'}${Platform.pathSeparator}metadata.json');
       metadataString = await file.readAsString();
     } catch (e) {
       return {};
@@ -686,7 +687,7 @@ class FileSystemData {
 
   /// Gets the path to the JSON file containing links for a specific book.
   String _getLinksPath(String title) {
-    return '${Settings.getValue<String>('key-library-path') ?? '.'}${Platform.pathSeparator}links${Platform.pathSeparator}${title}_links.json';
+    return '${Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.'}${Platform.pathSeparator}links${Platform.pathSeparator}${title}_links.json';
   }
 
   /// Checks if a book with the given title exists in the library.
