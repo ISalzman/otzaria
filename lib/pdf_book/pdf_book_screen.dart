@@ -908,6 +908,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                 outline: widget.tab.outline.value,
                                 bookTitle: widget.tab.book.title,
                                 bookTopics: widget.tab.book.topics,
+                                pdfFilePath: widget.tab.book.path,
                                 initialSearchText: widget.tab.searchText,
                                 initialSearchOptions: widget.tab.searchOptions,
                                 initialAlternativeWords:

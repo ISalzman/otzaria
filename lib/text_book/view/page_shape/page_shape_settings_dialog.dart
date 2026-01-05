@@ -628,18 +628,20 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       children: [
         // כפתור הצגה/הסתרה
         if (visibilityKey != null)
-          IconButton(
-            icon: Icon(
-              isVisible ? Icons.visibility : Icons.visibility_off,
-              size: 20,
-              color: isVisible
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+          _BlinkingHighlight(
+            child: IconButton(
+              icon: Icon(
+                isVisible ? Icons.visibility : Icons.visibility_off,
+                size: 20,
+                color: isVisible
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+              ),
+              tooltip: isVisible ? 'הסתר טור' : 'הצג טור',
+              onPressed: () => _toggleColumnVisibility(visibilityKey, !isVisible),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
-            tooltip: isVisible ? 'הסתר טור' : 'הצג טור',
-            onPressed: () => _toggleColumnVisibility(visibilityKey, !isVisible),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
         SizedBox(
           width: visibilityKey != null ? 108 : 140,
@@ -891,6 +893,61 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
       selected: isSelected,
       trailing: isSelected ? const Icon(Icons.check) : null,
       onTap: () => Navigator.of(context).pop(commentator),
+    );
+  }
+}
+
+class _BlinkingHighlight extends StatefulWidget {
+  final Widget child;
+  const _BlinkingHighlight({required this.child});
+
+  @override
+  State<_BlinkingHighlight> createState() => _BlinkingHighlightState();
+}
+
+class _BlinkingHighlightState extends State<_BlinkingHighlight>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Color?> _colorAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _colorAnimation = ColorTween(
+      begin: Colors.transparent,
+      end: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+    ).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _colorAnimation,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _colorAnimation.value,
+          ),
+          child: child,
+        );
+      },
+      child: widget.child,
     );
   }
 }
