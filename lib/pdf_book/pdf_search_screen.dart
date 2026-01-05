@@ -400,7 +400,7 @@ class SearchResultTile extends StatelessWidget {
     SettingsState settingsState,
     BuildContext context,
   ) {
-    var displayText = text;
+    var displayText = utils.stripHtmlIfNeeded(text);
     if (settingsState.replaceHolyNames) {
       displayText = utils.replaceHolyNames(displayText);
     }
