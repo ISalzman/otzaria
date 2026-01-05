@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -78,11 +77,6 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     
     // טעינת קטגוריות זמינות
     _availableCategories = PageShapeSettingsManager.parseCategories(widget.heCategories);
-    
-    // DEBUG
-    debugPrint('PageShapeSettingsDialog: bookTitle=${widget.bookTitle}');
-    debugPrint('PageShapeSettingsDialog: heCategories=${widget.heCategories}');
-    debugPrint('PageShapeSettingsDialog: availableCategories=$_availableCategories');
     
     // בדיקה מאיפה נטענו הגדרות המפרשים
     final activeCategory = PageShapeSettingsManager.getActiveCategory(widget.heCategories);
@@ -206,10 +200,14 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     );
   }
 
-  void _onCommentatorChanged(String? value, void Function(String?) setter) {
+  void _onCommentatorChanged(String? value, void Function(String?) setter, {String? visibilityKey}) {
     setState(() {
       setter(value);
       _hasChanges = true;
+      // אם בחרו מפרש והטור מוסתר - הצג אותו אוטומטית
+      if (value != null && visibilityKey != null && _columnVisibility[visibilityKey] == false) {
+        _columnVisibility[visibilityKey] = true;
+      }
     });
     _saveSettings();
   }
@@ -239,7 +237,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   }
   
   /// איפוס הגדרות תצוגה פר-ספר וחזרה לגלובלי (לא משפיע על בחירת מפרשים)
-  Future<void> _resetToGlobalSettings() async {
+  Future<void> _resetDisplaySettingsToGlobal() async {
     await PageShapeSettingsManager.resetBookSettings(widget.bookTitle);
     // טעינה מחדש של הגדרות התצוגה הגלובליות (לא מפרשים!)
     final highlight = PageShapeSettingsManager.getHighlightSetting(widget.bookTitle);
@@ -299,7 +297,11 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                     ),
                     const SizedBox(height: 8),
                     SwitchListTile(
-                      title: const Text('הגדרות תצוגה לספר הנוכחי בלבד'),
+                      title: Text(
+                        _saveForCurrentBookOnly
+                            ? 'שמירה לספר הנוכחי בלבד'
+                            : 'שמירה גלובלית (לכל הספרים)',
+                      ),
                       subtitle: Text(
                         _saveForCurrentBookOnly
                             ? 'הדגשה והצגת טורים יחולו רק על "${widget.bookTitle}"'
@@ -329,7 +331,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                             ),
                           );
                           if (confirm == true) {
-                            await _resetToGlobalSettings();
+                            await _resetDisplaySettingsToGlobal();
                           }
                         } else {
                           setState(() {
@@ -341,15 +343,6 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                       },
                       contentPadding: EdgeInsets.zero,
                       dense: true,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '* בחירת מפרשים נשמרת תמיד לספר הנוכחי בלבד',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                        fontStyle: FontStyle.italic,
-                      ),
                     ),
                   ],
                 ),
@@ -481,11 +474,32 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
               ),
               const Divider(),
               const SizedBox(height: 8),
+              // הסבר על כפתורי העין
+              Row(
+                children: [
+                  Icon(
+                    Icons.visibility,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'לחץ על סמל העין כדי להציג או להסתיר טור',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               _buildCommentatorDropdown(
                 label: 'מפרש ימני',
                 value: _leftCommentator,
                 onChanged: (value) =>
-                    _onCommentatorChanged(value, (v) => _leftCommentator = v),
+                    _onCommentatorChanged(value, (v) => _leftCommentator = v, visibilityKey: 'left'),
                 visibilityKey: 'left',
               ),
               const SizedBox(height: 12),
@@ -493,7 +507,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                 label: 'מפרש שמאלי',
                 value: _rightCommentator,
                 onChanged: (value) =>
-                    _onCommentatorChanged(value, (v) => _rightCommentator = v),
+                    _onCommentatorChanged(value, (v) => _rightCommentator = v, visibilityKey: 'right'),
                 visibilityKey: 'right',
               ),
               const SizedBox(height: 12),
@@ -501,7 +515,8 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                 label: 'מפרש תחתון',
                 value: _bottomCommentator,
                 onChanged: (value) =>
-                    _onCommentatorChanged(value, (v) => _bottomCommentator = v),
+                    _onCommentatorChanged(value, (v) => _bottomCommentator = v, visibilityKey: 'bottom'),
+                visibilityKey: 'bottom',
               ),
               const SizedBox(height: 12),
               _buildCommentatorDropdown(
@@ -628,20 +643,18 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       children: [
         // כפתור הצגה/הסתרה
         if (visibilityKey != null)
-          _BlinkingHighlight(
-            child: IconButton(
-              icon: Icon(
-                isVisible ? Icons.visibility : Icons.visibility_off,
-                size: 20,
-                color: isVisible
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
-              ),
-              tooltip: isVisible ? 'הסתר טור' : 'הצג טור',
-              onPressed: () => _toggleColumnVisibility(visibilityKey, !isVisible),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          IconButton(
+            icon: Icon(
+              isVisible ? Icons.visibility : Icons.visibility_off,
+              size: 20,
+              color: isVisible
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
             ),
+            tooltip: isVisible ? 'הסתר טור' : 'הצג טור',
+            onPressed: () => _toggleColumnVisibility(visibilityKey, !isVisible),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
         SizedBox(
           width: visibilityKey != null ? 108 : 140,
@@ -893,61 +906,6 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
       selected: isSelected,
       trailing: isSelected ? const Icon(Icons.check) : null,
       onTap: () => Navigator.of(context).pop(commentator),
-    );
-  }
-}
-
-class _BlinkingHighlight extends StatefulWidget {
-  final Widget child;
-  const _BlinkingHighlight({required this.child});
-
-  @override
-  State<_BlinkingHighlight> createState() => _BlinkingHighlightState();
-}
-
-class _BlinkingHighlightState extends State<_BlinkingHighlight>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Color?> _colorAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _colorAnimation = ColorTween(
-      begin: Colors.transparent,
-      end: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-    ).animate(_controller);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _colorAnimation,
-      builder: (context, child) {
-        return Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _colorAnimation.value,
-          ),
-          child: child,
-        );
-      },
-      child: widget.child,
     );
   }
 }
