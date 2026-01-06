@@ -104,9 +104,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   int _lastScrollIndex = 0; // שומר את מיקום הגלילה האחרון
   bool _allExpanded = true; // מצב גלובלי של פתיחה/סגירה של כל המפרשים
   final Map<String, bool> _expansionStates =
-      {}; // מעקב אחרי מצב כל ExpansionTile
-  final Map<String, ExpansibleController> _controllers =
-      {}; // controllers לכל ExpansionTile
+      {}; // מעקב אחרי מצב כל קבוצת מפרשים
+
   String? _savedSelectedText; // טקסט נבחר לתפריט הקשר
   bool _showCommentatorsFilter = false; // האם להציג את מסך בחירת המפרשים
 
@@ -180,10 +179,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   void dispose() {
     _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
     _searchController.dispose();
-    // מנקה את כל ה-controllers
-    for (var controller in _controllers.values) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -243,7 +238,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (!isCurrentlyExpanded) {
       setState(() {
         _expansionStates[groupKey] = true;
-        _controllers[groupKey]?.expand();
       });
     }
 
@@ -481,7 +475,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     _itemKeys.removeWhere(
                         (key, value) => !currentLinkKeys.contains(key));
                     for (final key in currentLinkKeys) {
-                      _itemKeys.putIfAbsent(key, () => GlobalKey());
+                      _itemKeys[key] = GlobalKey();
                     }
 
                     // מקבץ את הקישורים לקבוצות רצופות
@@ -515,7 +509,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                             initialScrollIndex:
                                 _lastScrollIndex.clamp(0, groups.length - 1),
                             key: PageStorageKey(
-                                'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
+                                'commentary_${indexesKey}_${state.activeCommentators.hashCode}_$_allExpanded'),
                             physics: const ClampingScrollPhysics(),
                             scrollOffsetController: scrollController,
                             shrinkWrap: widget.shrinkWrap,
@@ -673,17 +667,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                           onPressed: () {
                             setState(() {
                               _allExpanded = !_allExpanded;
-                              // מעדכן את כל המצבים של ה-ExpansionTiles
+                              // מעדכן את כל המצבים של הקבוצות
                               for (var key in _expansionStates.keys) {
                                 _expansionStates[key] = _allExpanded;
-                              }
-                              // משתמש ב-controllers לפתיחה/סגירה
-                              for (var controller in _controllers.values) {
-                                if (_allExpanded) {
-                                  controller.expand();
-                                } else {
-                                  controller.collapse();
-                                }
                               }
                             });
                           },
@@ -757,17 +743,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         onPressed: () {
                           setState(() {
                             _allExpanded = !_allExpanded;
-                            // מעדכן את כל המצבים של ה-ExpansionTiles
+                            // מעדכן את כל המצבים של הקבוצות
                             for (var key in _expansionStates.keys) {
                               _expansionStates[key] = _allExpanded;
-                            }
-                            // משתמש ב-controllers לפתיחה/סגירה
-                            for (var controller in _controllers.values) {
-                              if (_allExpanded) {
-                                controller.expand();
-                              } else {
-                                controller.collapse();
-                              }
                             }
                           });
                         },
