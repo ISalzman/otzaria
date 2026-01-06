@@ -14,6 +14,7 @@ import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart
 import 'package:otzaria/pdf_book/pdf_page_number_dispaly.dart';
 import 'package:otzaria/pdf_book/pdf_thumbnails_screen.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:otzaria/widgets/selection_dialog.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
@@ -281,7 +282,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
   }
 
   Future<Uint8List> createPdf(PdfPageFormat format) async {
-    final font = pw.Font.ttf(await rootBundle.load(fonts[fontName]!));
+    // אם הגופן לא מוטמע, השתמש בגופן ברירת מחדל
+    final fontPath = fonts[fontName] ?? fonts.values.first;
+    final font = pw.Font.ttf(await rootBundle.load(fontPath));
     final fullBackFont = pw.Font.ttf(await rootBundle
         .load('fonts/NotoSerifHebrew-VariableFont_wdth,wght.ttf'));
     String dataString = await widget.data;
@@ -1176,31 +1179,65 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                 },
                               ),
                               const SizedBox(height: 16),
-                              _buildDropdownRow(
-                                context: context,
-                                label: 'גופן',
-                                child: DropdownButton<String>(
-                                  value: fontName,
-                                  isExpanded: true,
-                                  underline: const SizedBox(),
-                                  borderRadius: BorderRadius.circular(8),
-                                  onChanged: (String? value) {
-                                    fontName = value!;
-                                    setState(() {});
-                                  },
-                                  items: fontNames.entries
-                                      .map<DropdownMenuItem<String>>((entry) {
-                                    return DropdownMenuItem<String>(
-                                      value: entry.key,
-                                      child: Text(
-                                        entry.value,
-                                        style: TextStyle(
-                                          fontFamily: entry.key,
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: 80,
+                                    child: Text(
+                                      'גופן',
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () async {
+                                        final fontItems = fontNames.entries
+                                            .map((entry) => SelectionItem<String>(
+                                                  label: entry.value,
+                                                  value: entry.key,
+                                                  searchValue: '${entry.value} ${entry.key}',
+                                                ))
+                                            .toList();
+
+                                        final result = await showSelectionDialog<String>(
+                                          context: context,
+                                          title: 'בחירת גופן להדפסה',
+                                          items: fontItems,
+                                          initialValue: fontName,
+                                          searchHint: 'חיפוש גופן',
+                                        );
+                                        if (result != null) {
+                                          setState(() {
+                                            fontName = result;
+                                          });
+                                        }
+                                      },
+                                      child: InputDecorator(
+                                        decoration: InputDecoration(
+                                          contentPadding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 8,
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          suffixIcon: const Icon(Icons.arrow_drop_down),
+                                        ),
+                                        child: Text(
+                                          fontNames[fontName] ?? fontName,
+                                          style: TextStyle(
+                                            fontFamily: fontName,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                    );
-                                  }).toList(),
-                                ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 16),
                               // הגדרות ניקוד וטעמים
@@ -1588,7 +1625,14 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
   // שימוש בקבועים מ-AppFonts
   Map<String, String> get fonts => AppFonts.fontPaths;
-  Map<String, String> get fontNames => AppFonts.fontLabels;
+  Map<String, String> get fontNames {
+    // כולל את כל הגופנים הזמינים (גם מהמערכת), אבל רק גופנים מוטמעים יכולים להיות מודפסים
+    final Map<String, String> allFonts = {};
+    for (final font in AppFonts.availableFonts) {
+      allFonts[font.value] = font.label;
+    }
+    return allFonts;
+  }
 
   final Map<PdfPageFormat, String> formats = {
     PdfPageFormat.a4: 'A4',
