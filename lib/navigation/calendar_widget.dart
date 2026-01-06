@@ -1779,8 +1779,13 @@ class CalendarWidget extends StatelessWidget {
     final TextEditingController yearsController = TextEditingController(
         text: existingEvent?.recurringYears?.toString() ?? '');
 
-    bool isRecurring = existingEvent?.recurring ?? false;
-    bool useHebrewCalendar = existingEvent?.recurOnHebrew ?? true;
+    bool isRecurring =
+        (existingEvent?.recurrenceType ?? RecurrenceType.none) !=
+            RecurrenceType.none;
+    RecurrenceType selectedRecurrenceType = isRecurring
+        ? existingEvent!.recurrenceType
+        : RecurrenceType.annualHebrew;
+
     // משתנה חדש שבודק אם האירוע מוגדר כ"תמיד"
     bool recurForever = existingEvent?.recurringYears == null;
 
@@ -1829,12 +1834,14 @@ class CalendarWidget extends StatelessWidget {
                             recurringYears = null;
                           }
 
+                          final finalRecurrenceType =
+                              isRecurring ? selectedRecurrenceType : RecurrenceType.none;
+
                           if (isEditMode) {
                             final updatedEvent = existingEvent.copyWith(
                               title: titleController.text.trim(),
                               description: descriptionController.text.trim(),
-                              recurring: isRecurring,
-                              recurOnHebrew: useHebrewCalendar,
+                              recurrenceType: finalRecurrenceType,
                               recurringYears: recurringYears,
                             );
                             cubit.updateEvent(updatedEvent);
@@ -1843,8 +1850,7 @@ class CalendarWidget extends StatelessWidget {
                               title: titleController.text.trim(),
                               description: descriptionController.text.trim(),
                               baseGregorianDate: displayedGregorianDate,
-                              isRecurring: isRecurring,
-                              recurOnHebrew: useHebrewCalendar,
+                              recurrenceType: finalRecurrenceType,
                               recurringYears: recurringYears,
                             );
                           }
@@ -1901,26 +1907,41 @@ class CalendarWidget extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
                           child: Column(
                             children: [
-                              DropdownButtonFormField<bool>(
-                                initialValue: useHebrewCalendar,
+                              DropdownButtonFormField<RecurrenceType>(
+                                initialValue: selectedRecurrenceType,
                                 decoration: const InputDecoration(
                                   labelText: 'חזור לפי',
                                   border: OutlineInputBorder(),
                                 ),
                                 items: [
-                                  DropdownMenuItem<bool>(
-                                    value: true,
-                                    child: Text(
-                                        'לוח עברי (${_formatHebrewDay(displayedJewishDate.getJewishDayOfMonth())} ${_getHebrewMonthNameFor(displayedJewishDate)})'),
+                                  const DropdownMenuItem(
+                                    value: RecurrenceType.weekly,
+                                    child: Text('שבועי'),
                                   ),
-                                  DropdownMenuItem<bool>(
-                                    value: false,
+                                  DropdownMenuItem(
+                                    value: RecurrenceType.monthlyHebrew,
                                     child: Text(
-                                        'לוח לועזי (${displayedGregorianDate.day}/${displayedGregorianDate.month})'),
+                                        'חודשי עברי (יום ${_formatHebrewDay(displayedJewishDate.getJewishDayOfMonth())})'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: RecurrenceType.monthlyGregorian,
+                                    child: Text(
+                                        'חודשי לועזי (יום ${displayedGregorianDate.day})'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: RecurrenceType.annualHebrew,
+                                    child: Text(
+                                        'שנתי עברי (${_formatHebrewDay(displayedJewishDate.getJewishDayOfMonth())} ${_getHebrewMonthNameFor(displayedJewishDate)})'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: RecurrenceType.annualGregorian,
+                                    child: Text(
+                                        'שנתי לועזי (${displayedGregorianDate.day}/${displayedGregorianDate.month})'),
                                   ),
                                 ],
-                                onChanged: (value) => setState(
-                                    () => useHebrewCalendar = value ?? true),
+                                onChanged: (value) => setState(() =>
+                                    selectedRecurrenceType =
+                                        value ?? RecurrenceType.annualHebrew),
                               ),
                               const SizedBox(height: 16),
 
@@ -1993,12 +2014,14 @@ class CalendarWidget extends StatelessWidget {
                       recurringYears = null;
                     }
 
+                    final finalRecurrenceType =
+                        isRecurring ? selectedRecurrenceType : RecurrenceType.none;
+
                     if (isEditMode) {
                       final updatedEvent = existingEvent.copyWith(
                         title: titleController.text.trim(),
                         description: descriptionController.text.trim(),
-                        recurring: isRecurring,
-                        recurOnHebrew: useHebrewCalendar,
+                        recurrenceType: finalRecurrenceType,
                         recurringYears: recurringYears,
                       );
                       cubit.updateEvent(updatedEvent);
@@ -2007,8 +2030,7 @@ class CalendarWidget extends StatelessWidget {
                         title: titleController.text.trim(),
                         description: descriptionController.text.trim(),
                         baseGregorianDate: displayedGregorianDate,
-                        isRecurring: isRecurring,
-                        recurOnHebrew: useHebrewCalendar,
+                        recurrenceType: finalRecurrenceType,
                         recurringYears: recurringYears,
                       );
                     }
@@ -2041,6 +2063,23 @@ class CalendarWidget extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _getRecurrenceLabel(RecurrenceType type) {
+    switch (type) {
+      case RecurrenceType.weekly:
+        return 'חוזר שבועי';
+      case RecurrenceType.monthlyHebrew:
+        return 'חוזר חודשי (עברי)';
+      case RecurrenceType.monthlyGregorian:
+        return 'חוזר חודשי (לועזי)';
+      case RecurrenceType.annualHebrew:
+        return 'חוזר שנתי (עברי)';
+      case RecurrenceType.annualGregorian:
+        return 'חוזר שנתי (לועזי)';
+      case RecurrenceType.none:
+        return '';
+    }
   }
 
   Widget _buildEventsList(BuildContext context, CalendarState state,
@@ -2129,9 +2168,7 @@ class CalendarWidget extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            event.recurOnHebrew
-                                ? 'חוזר לפי לוח עברי'
-                                : 'חוזר לפי לוח לועזי',
+                            _getRecurrenceLabel(event.recurrenceType),
                             style: TextStyle(
                               fontSize: 10,
                               color: Theme.of(context).colorScheme.primary,

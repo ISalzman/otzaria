@@ -639,8 +639,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     required String title,
     String? description,
     required DateTime baseGregorianDate,
-    required bool isRecurring,
-    required bool recurOnHebrew,
+    required RecurrenceType recurrenceType,
     int? recurringYears,
   }) {
     final baseJewish = JewishDate.fromDateTime(baseGregorianDate);
@@ -657,8 +656,7 @@ class CalendarCubit extends Cubit<CalendarState> {
       baseJewishYear: baseJewish.getJewishYear(),
       baseJewishMonth: baseJewish.getJewishMonth(),
       baseJewishDay: baseJewish.getJewishDayOfMonth(),
-      recurring: isRecurring,
-      recurOnHebrew: recurOnHebrew,
+      recurrenceType: recurrenceType,
       recurringYears: recurringYears,
     );
     final updated = List<CustomEvent>.from(state.events)..add(newEvent);
@@ -689,27 +687,42 @@ class CalendarCubit extends Cubit<CalendarState> {
     final hY = jd.getJewishYear(),
         hM = jd.getJewishMonth(),
         hD = jd.getJewishDayOfMonth();
+    final gWeekday = date.weekday;
 
     return state.events.where((e) {
-      if (e.recurring) {
+      if (e.recurrenceType != RecurrenceType.none) {
         // בדוק אם האירוע החוזר עדיין בתוקף
         if (e.recurringYears != null && e.recurringYears! > 0) {
-          if (e.recurOnHebrew) {
+          bool expired = false;
+          if (e.recurrenceType == RecurrenceType.annualHebrew ||
+              e.recurrenceType == RecurrenceType.monthlyHebrew) {
             if (hY >= e.baseJewishYear + e.recurringYears!) {
-              return false; // עבר זמנו
+              expired = true;
             }
           } else {
+            // Gregorian based (Weekly, MonthlyGregorian, AnnualGregorian)
             if (gY >= e.baseGregorianDate.year + e.recurringYears!) {
-              return false; // עבר זמנו
+              expired = true;
             }
           }
+          if (expired) return false;
         }
-        // אם הוא בתוקף, בדוק אם התאריך מתאים
-        if (e.recurOnHebrew) {
-          return e.baseJewishMonth == hM && e.baseJewishDay == hD;
-        } else {
-          return e.baseGregorianDate.month == gM &&
-              e.baseGregorianDate.day == gD;
+        
+        // בדיקת התאמה לפי סוג החזרה
+        switch (e.recurrenceType) {
+          case RecurrenceType.weekly:
+            return e.baseGregorianDate.weekday == gWeekday;
+          case RecurrenceType.monthlyHebrew:
+            return e.baseJewishDay == hD;
+          case RecurrenceType.monthlyGregorian:
+            return e.baseGregorianDate.day == gD;
+          case RecurrenceType.annualHebrew:
+            return e.baseJewishMonth == hM && e.baseJewishDay == hD;
+          case RecurrenceType.annualGregorian:
+            return e.baseGregorianDate.month == gM &&
+                e.baseGregorianDate.day == gD;
+          case RecurrenceType.none:
+            return false;
         }
       } else {
         // אירוע רגיל
@@ -959,6 +972,16 @@ JewishDate computePreviousJewishMonth(JewishDate current) =>
     _computePreviousJewishMonth(current);
 
 // Simple event model kept here for scope
+
+enum RecurrenceType {
+  none,
+  weekly,
+  monthlyHebrew,
+  monthlyGregorian,
+  annualHebrew,
+  annualGregorian
+}
+
 class CustomEvent extends Equatable {
   final String id; // מזהה ייחודי
   final String title;
@@ -968,9 +991,11 @@ class CustomEvent extends Equatable {
   final int baseJewishYear;
   final int baseJewishMonth;
   final int baseJewishDay;
-  final bool recurring;
-  final bool recurOnHebrew;
+  final RecurrenceType recurrenceType;
   final int? recurringYears; // כמה שנים האירוע יחזור
+
+  bool get recurring => recurrenceType != RecurrenceType.none;
+  bool get recurOnHebrew => recurrenceType == RecurrenceType.annualHebrew || recurrenceType == RecurrenceType.monthlyHebrew;
 
   const CustomEvent({
     required this.id,
@@ -981,8 +1006,7 @@ class CustomEvent extends Equatable {
     required this.baseJewishYear,
     required this.baseJewishMonth,
     required this.baseJewishDay,
-    required this.recurring,
-    required this.recurOnHebrew,
+    required this.recurrenceType,
     this.recurringYears,
   });
 
@@ -996,8 +1020,7 @@ class CustomEvent extends Equatable {
     int? baseJewishYear,
     int? baseJewishMonth,
     int? baseJewishDay,
-    bool? recurring,
-    bool? recurOnHebrew,
+    RecurrenceType? recurrenceType,
     int? recurringYears,
   }) {
     return CustomEvent(
@@ -1009,8 +1032,7 @@ class CustomEvent extends Equatable {
       baseJewishYear: baseJewishYear ?? this.baseJewishYear,
       baseJewishMonth: baseJewishMonth ?? this.baseJewishMonth,
       baseJewishDay: baseJewishDay ?? this.baseJewishDay,
-      recurring: recurring ?? this.recurring,
-      recurOnHebrew: recurOnHebrew ?? this.recurOnHebrew,
+      recurrenceType: recurrenceType ?? this.recurrenceType,
       recurringYears: recurringYears ?? this.recurringYears,
     );
   }
@@ -1026,14 +1048,27 @@ class CustomEvent extends Equatable {
       'baseJewishYear': baseJewishYear,
       'baseJewishMonth': baseJewishMonth,
       'baseJewishDay': baseJewishDay,
-      'recurring': recurring,
-      'recurOnHebrew': recurOnHebrew,
+      'recurrenceType': recurrenceType.index,
       'recurringYears': recurringYears,
     };
   }
 
   // יצירה מ-JSON לטעינה
   factory CustomEvent.fromJson(Map<String, dynamic> json) {
+    RecurrenceType type;
+    if (json.containsKey('recurrenceType')) {
+      type = RecurrenceType.values[json['recurrenceType'] as int];
+    } else {
+      // Backward compatibility
+      final bool recurring = json['recurring'] as bool? ?? false;
+      final bool recurOnHebrew = json['recurOnHebrew'] as bool? ?? true;
+      if (!recurring) {
+        type = RecurrenceType.none;
+      } else {
+        type = recurOnHebrew ? RecurrenceType.annualHebrew : RecurrenceType.annualGregorian;
+      }
+    }
+
     return CustomEvent(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -1044,8 +1079,7 @@ class CustomEvent extends Equatable {
       baseJewishYear: json['baseJewishYear'] as int,
       baseJewishMonth: json['baseJewishMonth'] as int,
       baseJewishDay: json['baseJewishDay'] as int,
-      recurring: json['recurring'] as bool,
-      recurOnHebrew: json['recurOnHebrew'] as bool,
+      recurrenceType: type,
       recurringYears: json['recurringYears'] as int?,
     );
   }
@@ -1060,8 +1094,7 @@ class CustomEvent extends Equatable {
         baseJewishYear,
         baseJewishMonth,
         baseJewishDay,
-        recurring,
-        recurOnHebrew,
+        recurrenceType,
         recurringYears,
       ];
 }
