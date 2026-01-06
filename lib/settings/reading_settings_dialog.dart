@@ -8,6 +8,7 @@ import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
+import 'package:otzaria/widgets/selection_dialog.dart';
 
 /// פונקציה גלובלית להצגת דיאלוג הגדרות תצוגת הספרים
 /// ניתן לקרוא לה מכל מקום באפליקציה
@@ -111,51 +112,16 @@ void showReadingSettingsDialog(BuildContext context) {
                           flex: 1,
                           child: StatefulBuilder(
                             builder: (context, setState) {
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(
-                                          FluentIcons.text_font_24_regular),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'גופן טקסט',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  DropdownButtonFormField<String>(
-                                    initialValue: settingsState.fontFamily,
-                                    decoration: InputDecoration(
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                    dropdownColor:
-                                        Theme.of(context).colorScheme.surface,
-                                    isExpanded: true,
-                                    items: AppFonts.buildDropdownItems(),
-                                    onChanged: (value) {
-                                      if (value != null) {
-                                        context
-                                            .read<SettingsBloc>()
-                                            .add(UpdateFontFamily(value));
-                                        setState(() {});
-                                      }
-                                    },
-                                  ),
-                                ],
+                              return _FontSelector(
+                                label: 'גופן טקסט',
+                                icon: FluentIcons.text_font_24_regular,
+                                value: settingsState.fontFamily,
+                                onChanged: (value) {
+                                  context
+                                      .read<SettingsBloc>()
+                                      .add(UpdateFontFamily(value));
+                                  setState(() {});
+                                },
                               );
                             },
                           ),
@@ -231,51 +197,15 @@ void showReadingSettingsDialog(BuildContext context) {
                           flex: 1,
                           child: StatefulBuilder(
                             builder: (context, setState) {
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(FluentIcons.book_24_regular),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'גופן מפרשים',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  DropdownButtonFormField<String>(
-                                    initialValue:
-                                        settingsState.commentatorsFontFamily,
-                                    decoration: InputDecoration(
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                    dropdownColor:
-                                        Theme.of(context).colorScheme.surface,
-                                    isExpanded: true,
-                                    items: AppFonts.buildDropdownItems(),
-                                    onChanged: (value) {
-                                      if (value != null) {
-                                        context.read<SettingsBloc>().add(
-                                            UpdateCommentatorsFontFamily(
-                                                value));
-                                        setState(() {});
-                                      }
-                                    },
-                                  ),
-                                ],
+                              return _FontSelector(
+                                label: 'גופן מפרשים',
+                                icon: FluentIcons.book_24_regular,
+                                value: settingsState.commentatorsFontFamily,
+                                onChanged: (value) {
+                                  context.read<SettingsBloc>().add(
+                                      UpdateCommentatorsFontFamily(value));
+                                  setState(() {});
+                                },
                               );
                             },
                           ),
@@ -966,4 +896,88 @@ void showReadingSettingsDialog(BuildContext context) {
       },
     ),
   );
+}
+
+class _FontSelector extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final String? value;
+  final ValueChanged<String> onChanged;
+
+  const _FontSelector({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Find the label for the current value
+    final selectedFont = AppFonts.availableFonts.firstWhere(
+      (element) => element.value == value,
+      orElse: () => AppFonts.availableFonts[0],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () async {
+            final fontItems = AppFonts.availableFonts
+                .map((font) => SelectionItem<String>(
+                      label: font.label,
+                      value: font.value,
+                      searchValue: '${font.label} ${font.value}',
+                    ))
+                .toList();
+
+            final result = await showSelectionDialog<String>(
+              context: context,
+              title: 'בחירת גופן',
+              items: fontItems,
+              initialValue: value,
+              searchHint: 'חיפוש גופן',
+            );
+            if (result != null) {
+              onChanged(result);
+            }
+          },
+          child: InputDecorator(
+            decoration: InputDecoration(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              suffixIcon: const Icon(Icons.arrow_drop_down),
+            ),
+            child: Text(
+              selectedFont.label,
+              style: AppFonts.fontPaths.containsKey(selectedFont.value)
+                  ? TextStyle(fontFamily: selectedFont.value)
+                  : null,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
