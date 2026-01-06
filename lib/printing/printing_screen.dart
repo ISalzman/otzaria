@@ -14,7 +14,7 @@ import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart
 import 'package:otzaria/pdf_book/pdf_page_number_dispaly.dart';
 import 'package:otzaria/pdf_book/pdf_thumbnails_screen.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
-import 'package:otzaria/widgets/selection_dialog.dart';
+import 'package:otzaria/widgets/dialogs.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';

@@ -8,7 +8,7 @@ import 'package:otzaria/daf_yomi/daf_yomi_helper.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/settings/calendar_settings_dialog.dart';
 import 'package:otzaria/settings/settings_repository.dart';
-import 'package:otzaria/widgets/confirmation_dialog.dart';
+import 'package:otzaria/widgets/dialogs.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'dart:io';

@@ -13,7 +13,7 @@ import '../services/preview_renderer.dart';
 import '../models/editor_settings.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
-import 'package:otzaria/widgets/confirmation_dialog.dart';
+import 'package:otzaria/widgets/dialogs.dart';
 import 'markdown_toolbar.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 

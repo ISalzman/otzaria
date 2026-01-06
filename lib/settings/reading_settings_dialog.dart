@@ -8,7 +8,7 @@ import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
-import 'package:otzaria/widgets/selection_dialog.dart';
+import 'package:otzaria/widgets/dialogs.dart';
 
 /// פונקציה גלובלית להצגת דיאלוג הגדרות תצוגת הספרים
 /// ניתן לקרוא לה מכל מקום באפליקציה

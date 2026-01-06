@@ -25,7 +25,7 @@ import 'package:otzaria/settings/gematria_settings_dialog.dart';
 import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
-import 'package:otzaria/widgets/confirmation_dialog.dart';
+import 'package:otzaria/widgets/dialogs.dart';
 import 'package:otzaria/utils/fullscreen_helper.dart';
 import 'dart:async';
 
