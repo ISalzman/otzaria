@@ -16,6 +16,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   })  : _repository = repository,
         super(TabsState.initial()) {
     on<LoadTabs>(_onLoadTabs);
+    on<ReplaceAllTabs>(_onReplaceAllTabs);
     on<AddTab>(_onAddTab);
     on<RemoveTab>(_onRemoveTab);
     on<SetCurrentTab>(_onSetCurrentTab);
@@ -55,6 +56,23 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       tabs: tabs,
       currentTabIndex: currentTabIndex,
       sideBySideMode: validatedMode,
+    ));
+  }
+
+  void _onReplaceAllTabs(ReplaceAllTabs event, Emitter<TabsState> emit) {
+    debugPrint('DEBUG: החלפת כל הטאבים - ${event.tabs.length} טאבים חדשים');
+    
+    // ניקוי משאבים של כל הטאבים הקיימים
+    for (final tab in state.tabs) {
+      tab.dispose();
+    }
+
+    _repository.saveTabs(event.tabs, event.currentTabIndex, null);
+    
+    emit(state.copyWith(
+      tabs: event.tabs,
+      currentTabIndex: event.currentTabIndex,
+      clearSideBySide: true,
     ));
   }
 
