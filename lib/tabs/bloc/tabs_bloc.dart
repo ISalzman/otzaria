@@ -279,20 +279,18 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   void _onNavigateToNextTab(NavigateToNextTab event, Emitter<TabsState> emit) {
-    if (state.currentTabIndex < state.tabs.length - 1) {
-      final newIndex = state.currentTabIndex + 1;
-      _repository.saveTabs(state.tabs, newIndex);
-      emit(state.copyWith(currentTabIndex: newIndex));
-    }
+    if (state.tabs.isEmpty) return;
+    final newIndex = (state.currentTabIndex + 1) % state.tabs.length;
+    _repository.saveTabs(state.tabs, newIndex);
+    emit(state.copyWith(currentTabIndex: newIndex));
   }
 
   void _onNavigateToPreviousTab(
       NavigateToPreviousTab event, Emitter<TabsState> emit) {
-    if (state.currentTabIndex > 0) {
-      final newIndex = state.currentTabIndex - 1;
-      _repository.saveTabs(state.tabs, newIndex);
-      emit(state.copyWith(currentTabIndex: newIndex));
-    }
+    if (state.tabs.isEmpty) return;
+    final newIndex = state.currentTabIndex == 0 ? state.tabs.length - 1 : state.currentTabIndex - 1;
+    _repository.saveTabs(state.tabs, newIndex);
+    emit(state.copyWith(currentTabIndex: newIndex));
   }
 
   void _onTogglePinTab(TogglePinTab event, Emitter<TabsState> emit) {
