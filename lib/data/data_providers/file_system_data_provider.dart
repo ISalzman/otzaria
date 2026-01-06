@@ -294,7 +294,7 @@ class FileSystemData {
               pubDate: row[4].toString(),
               topics: row[15].toString().replaceAll(';', ', '),
               heShortDesc: row[13].toString(),
-              link: 'https://beta.hebrewbooks.org/$bookId',
+              link: 'https://beta.hebrewbooks.org/reader/reader.aspx?sfid=$bookId#p=1&fitMode=fitwidth&hlts=&ocr=',
             ));
           }
         } catch (e) {
