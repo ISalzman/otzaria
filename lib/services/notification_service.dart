@@ -39,12 +39,20 @@ class NotificationService {
     const LinuxInitializationSettings initializationSettingsLinux =
         LinuxInitializationSettings(defaultActionName: 'Open');
 
+    const WindowsInitializationSettings initializationSettingsWindows =
+        WindowsInitializationSettings(
+      appName: 'אוצריא',
+      appUserModelId: 'com.otzaria.app',
+      guid: 'a8c49f1f-9c5d-4d8e-8b1a-2e3f4a5b6c7d',
+    );
+
     final InitializationSettings initializationSettings =
         InitializationSettings(
             android: initializationSettingsAndroid,
             iOS: initializationSettingsIOS,
             macOS: initializationSettingsIOS,
-            linux: initializationSettingsLinux);
+            linux: initializationSettingsLinux,
+            windows: initializationSettingsWindows);
 
     await flutterLocalNotificationsPlugin.initialize(initializationSettings,
         onDidReceiveNotificationResponse: onDidReceiveNotificationResponse);
@@ -251,11 +259,14 @@ class NotificationService {
       presentSound: soundEnabled,
     );
 
+    const windowsDetails = WindowsNotificationDetails();
+
     final notificationDetails = NotificationDetails(
       android: androidDetails,
       iOS: iOSDetails,
       macOS: iOSDetails,
       linux: const LinuxNotificationDetails(),
+      windows: windowsDetails,
     );
 
     try {
@@ -306,11 +317,14 @@ class NotificationService {
       presentSound: true,
     );
 
+    const windowsDetails = WindowsNotificationDetails();
+
     const notificationDetails = NotificationDetails(
       android: androidDetails,
       iOS: iOSDetails,
       macOS: iOSDetails,
       linux: LinuxNotificationDetails(),
+      windows: windowsDetails,
     );
 
     try {
