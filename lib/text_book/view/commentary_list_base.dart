@@ -225,14 +225,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (targetGroupIndex == -1 || targetGroup == null) return;
 
     // 3. מבטיח שה-ExpansionTile של הקבוצה פתוח
-    final currentIndexes = widget.indexes ??
-        (state.selectedIndex != null
-            ? [state.selectedIndex!]
-            : state.visibleIndices);
-    final indexesKey = currentIndexes.join(',');
-    final groupKey = '${targetGroup.bookTitle}_$indexesKey';
+    final groupKey = targetGroup.bookTitle;
 
-    final bool isCurrentlyExpanded = _expansionStates[groupKey] ?? _allExpanded;
+    final bool isCurrentlyExpanded = _expansionStates[groupKey] ?? true;
 
     // אם צריך לפתוח, פותח ומחכה לאנימציה
     if (!isCurrentlyExpanded) {
@@ -352,11 +347,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     required TextBookLoaded state,
     required String indexesKey,
   }) {
-    final groupKey = '${group.bookTitle}_$indexesKey';
+    final groupKey = group.bookTitle;
 
     // אם אין מצב שמור עבור הקבוצה הזו, משתמש במצב הגלובלי
     if (!_expansionStates.containsKey(groupKey)) {
-      _expansionStates[groupKey] = _allExpanded;
+      _expansionStates[groupKey] = true;
     }
 
     final isExpanded = _expansionStates[groupKey] ?? _allExpanded;
@@ -480,6 +475,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
                     // מקבץ את הקישורים לקבוצות רצופות
                     final groups = _groupConsecutiveLinks(data);
+
+                    // אתחול מצבי הרחבה עבור כל הקבוצות
+                    for (final group in groups) {
+                      final groupKey = group.bookTitle;
+                      _expansionStates.putIfAbsent(groupKey, () => true);
+                    }
 
                     // יצירת מפתח ייחודי לאינדקסים הנוכחיים
                     final indexesKey = currentIndexes.join(',');
@@ -899,6 +900,7 @@ class _CollapsibleCommentaryGroupState
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // כותרת הקבוצה - ניתנת ללחיצה להרחבה/כיווץ
