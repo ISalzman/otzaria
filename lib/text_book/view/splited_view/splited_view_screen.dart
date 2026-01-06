@@ -16,7 +16,6 @@ import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
 import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'package:otzaria/utils/context_menu_utils.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -162,12 +161,11 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     if (state.visibleIndices.isEmpty) return false;
 
     final visibleIndicesSet = state.visibleIndices.toSet();
-    // בדיקה אם יש מפרשים פעילים לאינדקסים הנראים
+    // בדיקה אם יש קישורים מסוג מפרשים לאינדקסים הנראים
     return state.links.any((link) =>
         visibleIndicesSet.contains(link.index1 - 1) &&
         (link.connectionType == "commentary" ||
-            link.connectionType == "targum") &&
-        state.activeCommentators.contains(utils.getTitleFromPath(link.path2)));
+            link.connectionType == "targum"));
   }
 
   void _openPane() {
