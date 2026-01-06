@@ -110,33 +110,28 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   /// - במצב פרודקשן (release): הכפתור מוצג רק אם קובץ DB לא קיים
   /// - עד לסיום הבדיקה: הכפתור לא מוצג (_showDbGenerationButton = null)
   Future<void> _checkDbGenerationButtonVisibility() async {
-    // במצב דיבאגר - תמיד הצג את הכפתור
+    // במצב דיבאגר - תמיד הצג את הכפתור חיווי אם חסר
     // const bool.fromEnvironment('dart.vm.product') מחזיר false בדיבאגר, true בפרודקשן
     if (const bool.fromEnvironment('dart.vm.product') == false) {
-      if (mounted) {
-        setState(() {
-          _showDbGenerationButton = true;
-        });
-      }
-      return;
+       // בדוק אם DB קיים גם בדיבאג כדי לדעת אם להבהב או לא
     }
 
     try {
       // בדיקה אם קובץ DB קיים
       final libraryPath = await AppPaths.getLibraryPath();
-      final dbPath = '$libraryPath/${DatabaseConstants.databaseFileName}';
+      final dbPath = DatabaseConstants.getDatabasePathForLibrary(libraryPath);
       final dbFile = File(dbPath);
       final dbExists = await dbFile.exists();
 
       if (mounted) {
         setState(() {
-          // הצג את הכפתור רק אם DB לא קיים
+          // הצג חיווי מהבהב ר אם DB לא קיים
           _showDbGenerationButton = !dbExists;
         });
       }
     } catch (e) {
       debugPrint('Error checking DB file existence: $e');
-      // במקרה של שגיאה - אל תציג את הכפתור
+      // במקרה של שגיאה - נניח שה-DB קיים כדי לא לבלבל
       if (mounted) {
         setState(() {
           _showDbGenerationButton = false;
@@ -1260,12 +1255,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 )
               : IconButton(
                   icon: const Icon(FluentIcons.database_arrow_right_24_regular),
-                  tooltip: 'יצירת מסד נתונים',
-                  onPressed: () => showDatabaseGenerationDialog(context),
+                  tooltip: 'מסד נתונים כבר קיים',
+                  onPressed: null,
                 ),
           icon: FluentIcons.database_arrow_right_24_regular,
-          tooltip: 'יצירת מסד נתונים',
-          onPressed: () => showDatabaseGenerationDialog(context),
+          tooltip: _showDbGenerationButton == true
+              ? 'יצירת מסד נתונים'
+              : 'מסד נתונים כבר קיים',
+          onPressed: _showDbGenerationButton == true
+              ? () => showDatabaseGenerationDialog(context)
+              : null,
         ),
 
       // סינכרון - מוצג רק אם מצב אופליין לא מופעל
@@ -1420,12 +1419,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 )
               : IconButton(
                   icon: const Icon(FluentIcons.database_arrow_right_24_regular),
-                  tooltip: 'יצירת מסד נתונים',
-                  onPressed: () => showDatabaseGenerationDialog(context),
+                  tooltip: 'מסד נתונים כבר קיים',
+                  onPressed: null,
                 ),
           icon: FluentIcons.database_arrow_right_24_regular,
-          tooltip: 'יצירת מסד נתונים',
-          onPressed: () => showDatabaseGenerationDialog(context),
+          tooltip: _showDbGenerationButton == true
+              ? 'יצירת מסד נתונים'
+              : 'מסד נתונים כבר קיים',
+          onPressed: _showDbGenerationButton == true
+              ? () => showDatabaseGenerationDialog(context)
+              : null,
         ),
 
       // 2) הצג היסטוריה, הצג סימניות

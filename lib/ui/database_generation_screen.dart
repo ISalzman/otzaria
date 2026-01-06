@@ -203,49 +203,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
   // Removed - DB path is now auto-set based on library folder
 
-  /// Backup existing database file if it exists
-  Future<void> _backupExistingDatabase() async {
-    if (_selectedLibraryPath == null) return;
-
-    final dbFileInOtzaria = File(
-        '$_selectedLibraryPath/${DatabaseConstants.otzariaFolderName}/${DatabaseConstants.databaseFileName}');
-    if (await dbFileInOtzaria.exists()) {
-      try {
-        // Create backup with readable date format
-        final now = DateTime.now();
-        final dateStr =
-            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
-        final backupPath = '${dbFileInOtzaria.path}.backup_$dateStr';
-
-        // Copy the existing file to backup
-        await dbFileInOtzaria.copy(backupPath);
-        _logger.info('Database backed up to: $backupPath');
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'מסד הנתונים הקיים גובה ל: ${backupPath.split('/').last}'),
-              backgroundColor: Colors.blue,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-      } catch (e, stackTrace) {
-        _logger.warning('Failed to backup existing database', e, stackTrace);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('שגיאה בגיבוי מסד הנתונים: $e'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    }
-  }
-
   Future<void> _startGeneration() async {
     if (_selectedLibraryPath == null || _selectedDbPath == null) {
       _logger.warning(
@@ -256,6 +213,10 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
           backgroundColor: Colors.red,
         ),
       );
+      return;
+    }
+
+    if (_dbFileExists && _currentStep != GenerationStep.error) {
       return;
     }
 
@@ -289,8 +250,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     });
 
     try {
-      // Backup existing DB (if any) before overwriting
-      await _backupExistingDatabase();
 
       MyDatabase.initialize();
       final database = MyDatabase.withPath(_selectedDbPath!);
@@ -515,14 +474,27 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
             if (_startTime != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Column(
                   children: [
-                    const Icon(Icons.timer_outlined, size: 20),
-                    const SizedBox(width: 8),
                     Text(
-                      'זמן שעבר: ${_formatDuration(_elapsed)}',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      'התחלה: ${_formatTime(_startTime!)}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    Text(
+                      'נוכחי: ${_formatTime(DateTime.now())}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.timer_outlined, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'זמן שעבר: ${_formatDuration(_elapsed)}',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -859,10 +831,11 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       );
     }
 
-    return ElevatedButton(
+    final button = ElevatedButton(
       onPressed: (_currentStep == GenerationStep.idle ||
                   _currentStep == GenerationStep.complete) &&
-              _otzariaFolderExists
+              _otzariaFolderExists &&
+              !_dbFileExists
           ? _startGeneration
           : null,
       style: ElevatedButton.styleFrom(
@@ -875,6 +848,15 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       child: Text(_getButtonText(),
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
     );
+
+    if (_dbFileExists) {
+      return Tooltip(
+        message: 'מסד הנתונים כבר קיים',
+        child: button,
+      );
+    }
+
+    return button;
   }
 
   Widget _buildInfoText() {
@@ -985,5 +967,9 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     }
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  String _formatTime(DateTime dateTime) {
+    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
   }
 }

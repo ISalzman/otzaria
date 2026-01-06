@@ -216,7 +216,7 @@ class SqliteDataProvider {
 
     // Close existing connection if open
     if (_isInitialized) {
-      // TODO: Add close method to repository/database
+      _repository.database.close();
       _isInitialized = false;
     }
 
