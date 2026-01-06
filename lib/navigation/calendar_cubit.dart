@@ -12,6 +12,44 @@ enum CalendarType { hebrew, gregorian, combined }
 
 enum CalendarView { month, week, day }
 
+class ZmanAlertPreference extends Equatable {
+  final int minutesBefore;
+  final String displayName;
+
+  const ZmanAlertPreference({
+    required this.minutesBefore,
+    required this.displayName,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'minutesBefore': minutesBefore,
+      'displayName': displayName,
+    };
+  }
+
+  static ZmanAlertPreference? fromJson(dynamic json, {String? fallbackName}) {
+    if (json is int) {
+      return ZmanAlertPreference(
+        minutesBefore: json,
+        displayName: fallbackName ?? '',
+      );
+    }
+    if (json is! Map) return null;
+    final minutesBefore = json['minutesBefore'];
+    final displayName = json['displayName'] ?? fallbackName;
+    if (minutesBefore is! int) return null;
+    if (displayName is! String || displayName.isEmpty) return null;
+    return ZmanAlertPreference(
+      minutesBefore: minutesBefore,
+      displayName: displayName,
+    );
+  }
+
+  @override
+  List<Object?> get props => [minutesBefore, displayName];
+}
+
 // Calendar State
 class CalendarState extends Equatable {
   final JewishDate selectedJewishDate;
@@ -30,6 +68,7 @@ class CalendarState extends Equatable {
   final bool calendarNotificationsEnabled;
   final int calendarNotificationTime;
   final bool calendarNotificationSound;
+  final Map<String, ZmanAlertPreference> zmanAlerts;
 
   const CalendarState({
     required this.selectedJewishDate,
@@ -48,6 +87,7 @@ class CalendarState extends Equatable {
     this.calendarNotificationsEnabled = true,
     this.calendarNotificationTime = 60,
     this.calendarNotificationSound = true,
+    this.zmanAlerts = const {},
   });
 
   factory CalendarState.initial() {
@@ -86,6 +126,7 @@ class CalendarState extends Equatable {
     bool? calendarNotificationsEnabled,
     int? calendarNotificationTime,
     bool? calendarNotificationSound,
+    Map<String, ZmanAlertPreference>? zmanAlerts,
   }) {
     return CalendarState(
       selectedJewishDate: selectedJewishDate ?? this.selectedJewishDate,
@@ -108,6 +149,7 @@ class CalendarState extends Equatable {
           calendarNotificationTime ?? this.calendarNotificationTime,
       calendarNotificationSound:
           calendarNotificationSound ?? this.calendarNotificationSound,
+      zmanAlerts: zmanAlerts ?? this.zmanAlerts,
     );
   }
 
@@ -139,6 +181,7 @@ class CalendarState extends Equatable {
         calendarNotificationsEnabled,
         calendarNotificationTime,
         calendarNotificationSound,
+        zmanAlerts,
       ];
 }
 
@@ -165,6 +208,10 @@ class CalendarCubit extends Cubit<CalendarState> {
         settings['calendarNotificationTime'] as int;
     final bool calendarNotificationSound =
         settings['calendarNotificationSound'] as bool;
+    final String zmanAlertsJson = settings['calendarZmanAlerts'] as String;
+
+    final Map<String, ZmanAlertPreference> zmanAlerts =
+      _parseZmanAlertPreferences(zmanAlertsJson);
 
     // טעינת אירועים מהאחסון
     List<CustomEvent> events = [];
@@ -185,9 +232,175 @@ class CalendarCubit extends Cubit<CalendarState> {
       calendarNotificationsEnabled: calendarNotificationsEnabled,
       calendarNotificationTime: calendarNotificationTime,
       calendarNotificationSound: calendarNotificationSound,
+      zmanAlerts: zmanAlerts,
     ));
     _updateTimesForDate(state.selectedGregorianDate, selectedCity);
-    _rescheduleNotifications();
+    await _rescheduleNotifications();
+    await _rescheduleZmanAlerts();
+  }
+
+  static const int _zmanScheduleDaysAhead = 45;
+
+  static Map<String, ZmanAlertPreference> _parseZmanAlertPreferences(
+      String jsonStr) {
+    try {
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is! Map) return {};
+      final result = <String, ZmanAlertPreference>{};
+      decoded.forEach((key, value) {
+        if (key is! String) return;
+        final pref = ZmanAlertPreference.fromJson(value, fallbackName: key);
+        if (pref != null) {
+          result[key] = pref;
+        }
+      });
+      return result;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static int _zmanNotificationId(String timeId, DateTime date) {
+    final y = date.year.toString();
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    final key = '$timeId|$y$m$d';
+    return key.hashCode & 0x7fffffff;
+  }
+
+  static DateTime? _parseTimeOnDate(DateTime date, String timeStr) {
+    final parts = timeStr.split(':');
+    if (parts.length != 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return DateTime(date.year, date.month, date.day, h, m);
+  }
+
+  static String _formatMinutesBefore(int minutes) {
+    if (minutes <= 0) return 'עכשיו';
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (h > 0 && m > 0) return '$h שעות ו-$m דקות';
+    if (h > 0) return '$h שעות';
+    return '$m דקות';
+  }
+
+  Future<void> setZmanAlertPreference({
+    required String timeId,
+    required String displayName,
+    required int minutesBefore,
+  }) async {
+    final notificationService = NotificationService();
+
+    if (!notificationService.isInitialized) {
+      await notificationService.init();
+    }
+
+    bool hasPermission = await notificationService.checkPermissions();
+    if (!hasPermission) {
+      hasPermission = await notificationService.requestPermissions();
+    }
+
+    if (!hasPermission) {
+      UiSnack.showWithAction(
+        message: 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+            'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
+        actionLabel: 'הבנתי',
+        onAction: () {},
+        backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 8),
+      );
+      return;
+    }
+
+    final updated = Map<String, ZmanAlertPreference>.from(state.zmanAlerts);
+    updated[timeId] = ZmanAlertPreference(
+      minutesBefore: minutesBefore,
+      displayName: displayName,
+    );
+    emit(state.copyWith(zmanAlerts: updated));
+    await _settingsRepository
+        .updateCalendarZmanAlertsJson(jsonEncode(updated.map((k, v) => MapEntry(k, v.toJson()))));
+
+    await _rescheduleZmanAlerts();
+    UiSnack.showSuccess('התראה הופעלה עבור $displayName');
+  }
+
+  Future<void> cancelZmanAlertPreference({
+    required String timeId,
+  }) async {
+    final existing = state.zmanAlerts[timeId];
+    if (existing == null) return;
+
+    final updated = Map<String, ZmanAlertPreference>.from(state.zmanAlerts);
+    updated.remove(timeId);
+    emit(state.copyWith(zmanAlerts: updated));
+    await _settingsRepository
+        .updateCalendarZmanAlertsJson(jsonEncode(updated.map((k, v) => MapEntry(k, v.toJson()))));
+
+    // Cancel scheduled notifications for this timeId in our rolling window.
+    final notificationService = NotificationService();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    for (int i = 0; i <= _zmanScheduleDaysAhead; i++) {
+      final d = today.add(Duration(days: i));
+      final id = _zmanNotificationId(timeId, d);
+      await notificationService.cancelNotification(id);
+    }
+
+    UiSnack.showSuccess('ההתראה בוטלה עבור ${existing.displayName}');
+  }
+
+  Future<void> _rescheduleZmanAlerts() async {
+    if (state.zmanAlerts.isEmpty) return;
+
+    final notificationService = NotificationService();
+    if (!notificationService.isInitialized) {
+      return;
+    }
+
+    // Don't prompt here; only schedule if we already have permissions.
+    final hasPermission = await notificationService.checkPermissions();
+    if (!hasPermission) return;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    for (final entry in state.zmanAlerts.entries) {
+      final timeId = entry.key;
+      final pref = entry.value;
+
+      for (int i = 0; i <= _zmanScheduleDaysAhead; i++) {
+        final d = today.add(Duration(days: i));
+        final times = _calculateDailyTimes(d, state.selectedCity);
+        final timeStr = times[timeId];
+        if (timeStr == null) {
+          // Ensure no stale notification for days the zman doesn't exist.
+          await notificationService.cancelNotification(_zmanNotificationId(timeId, d));
+          continue;
+        }
+
+        final eventDt = _parseTimeOnDate(d, timeStr);
+        if (eventDt == null) {
+          await notificationService.cancelNotification(_zmanNotificationId(timeId, d));
+          continue;
+        }
+
+        final id = _zmanNotificationId(timeId, d);
+        await notificationService.cancelNotification(id);
+
+        await notificationService.scheduleNotification(
+          id: id,
+          title: 'תזכורת: ${pref.displayName}',
+          body:
+              'בעוד ${_formatMinutesBefore(pref.minutesBefore)} ${pref.displayName} ($timeStr)',
+          eventDate: eventDt,
+          reminderMinutes: pref.minutesBefore,
+          soundEnabled: true,
+        );
+      }
+    }
   }
 
   void _updateTimesForDate(DateTime date, String city) {
@@ -220,6 +433,9 @@ class CalendarCubit extends Cubit<CalendarState> {
     ));
     // שמור את הבחירה בהגדרות
     await _settingsRepository.updateSelectedCity(newCity);
+
+    // Times shift with city, so reschedule zman alerts.
+    await _rescheduleZmanAlerts();
   }
 
   Future<void> changeCalendarType(CalendarType type) async {
@@ -522,7 +738,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     try {
       final eventsJson = jsonEncode(events.map((e) => e.toJson()).toList());
       await _settingsRepository.updateCalendarEvents(eventsJson);
-      _rescheduleNotifications();
+      await _rescheduleNotifications();
     } catch (e) {
       // במקרה של שגיאה, נדפיס הודעה לקונסול
       debugPrint('שגיאה בשמירת אירועים: $e');
@@ -568,7 +784,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     emit(state.copyWith(calendarNotificationsEnabled: enabled));
     await _settingsRepository.updateCalendarNotificationsEnabled(enabled);
     // Reschedule only if enabling/disabling notifications
-    _rescheduleNotifications();
+    await _rescheduleNotifications();
   }
 
   Future<void> changeCalendarNotificationTime(int time) async {
@@ -577,7 +793,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     await _settingsRepository.updateCalendarNotificationTime(time);
     // Reschedule only if time actually changed and notifications are enabled
     if (oldTime != time && state.calendarNotificationsEnabled) {
-      _rescheduleNotifications();
+      await _rescheduleNotifications();
     }
   }
 
@@ -587,13 +803,31 @@ class CalendarCubit extends Cubit<CalendarState> {
     // No need to reschedule for sound changes - it only affects new notifications
   }
 
-  void _rescheduleNotifications() {
+  Future<void> _rescheduleNotifications() async {
     final notificationService = NotificationService();
-    notificationService.cancelAllNotifications();
+
+    // Cancel previously scheduled calendar EVENT notifications only.
+    final prevIdsJson = _settingsRepository.getCalendarEventNotificationIdsJson();
+    final prevIds = <int>[];
+    try {
+      final decoded = jsonDecode(prevIdsJson);
+      if (decoded is List) {
+        for (final v in decoded) {
+          if (v is int) prevIds.add(v);
+        }
+      }
+    } catch (_) {}
+
+    for (final id in prevIds) {
+      await notificationService.cancelNotification(id);
+    }
 
     if (!state.calendarNotificationsEnabled) {
+      await _settingsRepository.updateCalendarEventNotificationIdsJson('[]');
       return;
     }
+
+    final scheduledIds = <int>{};
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -635,7 +869,8 @@ class CalendarCubit extends Cubit<CalendarState> {
             final id =
                 '${event.id}${occurrenceDate.year}${occurrenceDate.month}${occurrenceDate.day}'
                     .hashCode;
-            notificationService.scheduleNotification(
+            scheduledIds.add(id);
+            await notificationService.scheduleNotification(
               id: id,
               title: event.title,
               body: event.description,
@@ -648,8 +883,10 @@ class CalendarCubit extends Cubit<CalendarState> {
       } else {
         // Non-recurring event
         if (event.baseGregorianDate.isAfter(today)) {
-          notificationService.scheduleNotification(
-            id: event.id.hashCode,
+          final id = event.id.hashCode;
+          scheduledIds.add(id);
+          await notificationService.scheduleNotification(
+            id: id,
             title: event.title,
             body: event.description,
             eventDate: event.baseGregorianDate,
@@ -659,6 +896,10 @@ class CalendarCubit extends Cubit<CalendarState> {
         }
       }
     }
+
+    await _settingsRepository.updateCalendarEventNotificationIdsJson(
+      jsonEncode(scheduledIds.toList()),
+    );
   }
 }
 

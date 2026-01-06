@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_spinbox/flutter_spinbox.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'calendar_cubit.dart';
 import 'package:otzaria/daf_yomi/daf_yomi_helper.dart';
@@ -16,6 +17,24 @@ import 'package:otzaria/widgets/rtl_text_field.dart';
 // הפכנו את הווידג'ט ל-Stateless כי הוא כבר לא מנהל מצב בעצמו.
 class CalendarWidget extends StatelessWidget {
   const CalendarWidget({super.key});
+
+  Future<_ZmanAlertDialogResult?> _showZmanAlertDialog(
+    BuildContext context, {
+    required String zmanName,
+    required String timeLabel,
+    required int initialMinutesBefore,
+    required bool isEnabled,
+  }) {
+    return showDialog<_ZmanAlertDialogResult>(
+      context: context,
+      builder: (context) => _ZmanAlertDialog(
+        zmanName: zmanName,
+        timeLabel: timeLabel,
+        initialMinutesBefore: initialMinutesBefore,
+        isEnabled: isEnabled,
+      ),
+    );
+  }
 
   // העברנו את רשימות הקבועים לכאן כדי שיהיו זמינים
   final List<String> hebrewMonths = const [
@@ -945,46 +964,52 @@ class CalendarWidget extends StatelessWidget {
 
     // זמנים בסיסיים
     final List<Map<String, String?>> timesList = [
-      {'name': 'עלות השחר', 'time': dailyTimes['alos']},
+      {'id': 'alos', 'name': 'עלות השחר', 'time': dailyTimes['alos']},
       {
+        'id': 'alos16point1Degrees',
         'name': "עלוה\"ש (72 דק') במע'",
         'time': dailyTimes['alos16point1Degrees']
       },
       {
+        'id': 'alos19point8Degrees',
         'name': "עלוה\"ש (90 דק') במע'",
         'time': dailyTimes['alos19point8Degrees']
       },
-      {'name': 'זריחה', 'time': dailyTimes['sunrise']},
-      {'name': 'סוף זמן ק"ש - מג"א', 'time': dailyTimes['sofZmanShmaMGA']},
-      {'name': 'סוף זמן ק"ש - גר"א', 'time': dailyTimes['sofZmanShmaGRA']},
-      {'name': 'סוף זמן תפילה - מג"א', 'time': dailyTimes['sofZmanTfilaMGA']},
-      {'name': 'סוף זמן תפילה - גר"א', 'time': dailyTimes['sofZmanTfilaGRA']},
-      {'name': 'חצות היום', 'time': dailyTimes['chatzos']},
-      {'name': 'חצות הלילה', 'time': dailyTimes['chatzosLayla']},
-      {'name': 'מנחה גדולה', 'time': dailyTimes['minchaGedola']},
-      {'name': 'מנחה קטנה', 'time': dailyTimes['minchaKetana']},
-      {'name': 'פלג המנחה', 'time': dailyTimes['plagHamincha']},
-      {'name': 'שקיעה', 'time': dailyTimes['sunset']},
-      {'name': 'צאת הכוכבים', 'time': dailyTimes['tzais']},
-      {'name': 'צאת הכוכבים ר"ת', 'time': dailyTimes['sunsetRT']},
+      {'id': 'sunrise', 'name': 'זריחה', 'time': dailyTimes['sunrise']},
+      {'id': 'sofZmanShmaMGA', 'name': 'סוף זמן ק"ש - מג"א', 'time': dailyTimes['sofZmanShmaMGA']},
+      {'id': 'sofZmanShmaGRA', 'name': 'סוף זמן ק"ש - גר"א', 'time': dailyTimes['sofZmanShmaGRA']},
+      {'id': 'sofZmanTfilaMGA', 'name': 'סוף זמן תפילה - מג"א', 'time': dailyTimes['sofZmanTfilaMGA']},
+      {'id': 'sofZmanTfilaGRA', 'name': 'סוף זמן תפילה - גר"א', 'time': dailyTimes['sofZmanTfilaGRA']},
+      {'id': 'chatzos', 'name': 'חצות היום', 'time': dailyTimes['chatzos']},
+      {'id': 'chatzosLayla', 'name': 'חצות הלילה', 'time': dailyTimes['chatzosLayla']},
+      {'id': 'minchaGedola', 'name': 'מנחה גדולה', 'time': dailyTimes['minchaGedola']},
+      {'id': 'minchaKetana', 'name': 'מנחה קטנה', 'time': dailyTimes['minchaKetana']},
+      {'id': 'plagHamincha', 'name': 'פלג המנחה', 'time': dailyTimes['plagHamincha']},
+      {'id': 'sunset', 'name': 'שקיעה', 'time': dailyTimes['sunset']},
+      {'id': 'tzais', 'name': 'צאת הכוכבים', 'time': dailyTimes['tzais']},
+      {'id': 'sunsetRT', 'name': 'צאת הכוכבים ר"ת', 'time': dailyTimes['sunsetRT']},
     ];
 
     // הוספת זמנים מיוחדים לערב פסח
     if (jewishCalendar.getYomTovIndex() == JewishCalendar.EREV_PESACH) {
       timesList.addAll([
         {
+          'id': 'sofZmanAchilasChametzMGA',
           'name': 'סוף זמן אכילת חמץ - מג"א',
           'time': dailyTimes['sofZmanAchilasChametzMGA']
         },
         {
+          'id': 'sofZmanAchilasChametzGRA',
           'name': 'סוף זמן אכילת חמץ - גר"א',
           'time': dailyTimes['sofZmanAchilasChametzGRA']
         },
         {
+          'id': 'sofZmanBiurChametzMGA',
           'name': 'סוף זמן ביעור חמץ - מג"א',
           'time': dailyTimes['sofZmanBiurChametzMGA']
         },
         {
+          'id': 'sofZmanBiurChametzGRA',
           'name': 'סוף זמן ביעור חמץ - גר"א',
           'time': dailyTimes['sofZmanBiurChametzGRA']
         },
@@ -993,8 +1018,8 @@ class CalendarWidget extends StatelessWidget {
 
     // הוספת זמני כניסת שבת/חג
     if (jewishCalendar.getDayOfWeek() == 6 || jewishCalendar.isErevYomTov()) {
-      timesList
-          .add({'name': 'הדלקת נרות', 'time': dailyTimes['candleLighting']});
+      timesList.add(
+          {'id': 'candleLighting', 'name': 'הדלקת נרות', 'time': dailyTimes['candleLighting']});
     }
 
     // הוספת זמני יציאת שבת/חג (לא להוסיף בימי חול המועד, הושענא רבה וחנוכה)
@@ -1023,23 +1048,22 @@ class CalendarWidget extends StatelessWidget {
       }
 
       timesList.addAll([
-        {'name': exitName, 'time': dailyTimes['shabbosExit1']},
-        {'name': exitName2, 'time': dailyTimes['shabbosExit2']},
+        {'id': 'shabbosExit1', 'name': exitName, 'time': dailyTimes['shabbosExit1']},
+        {'id': 'shabbosExit2', 'name': exitName2, 'time': dailyTimes['shabbosExit2']},
       ]);
     }
 
     // הוספת זמן ספירת העומר
     if (jewishCalendar.getDayOfOmer() != -1) {
-      timesList
-          .add({'name': 'ספירת העומר', 'time': dailyTimes['omerCounting']});
+      timesList.add({'id': 'omerCounting', 'name': 'ספירת העומר', 'time': dailyTimes['omerCounting']});
     }
 
     // הוספת זמני תענית
     if (jewishCalendar.isTaanis() &&
         jewishCalendar.getYomTovIndex() != JewishCalendar.YOM_KIPPUR) {
       timesList.addAll([
-        {'name': 'תחילת התענית', 'time': dailyTimes['fastStart']},
-        {'name': 'סיום התענית', 'time': dailyTimes['fastEnd']},
+        {'id': 'fastStart', 'name': 'תחילת התענית', 'time': dailyTimes['fastStart']},
+        {'id': 'fastEnd', 'name': 'סיום התענית', 'time': dailyTimes['fastEnd']},
       ]);
     }
 
@@ -1048,12 +1072,14 @@ class CalendarWidget extends StatelessWidget {
         dailyTimes['kidushLevanaLatest'] != null) {
       if (dailyTimes['kidushLevanaEarliest'] != null) {
         timesList.add({
+          'id': 'kidushLevanaEarliest',
           'name': 'תחילת זמן קידוש לבנה',
           'time': dailyTimes['kidushLevanaEarliest']
         });
       }
       if (dailyTimes['kidushLevanaLatest'] != null) {
         timesList.add({
+          'id': 'kidushLevanaLatest',
           'name': 'סוף זמן קידוש לבנה',
           'time': dailyTimes['kidushLevanaLatest']
         });
@@ -1063,12 +1089,14 @@ class CalendarWidget extends StatelessWidget {
     // הוספת זמני קידוש לבנה
     if (dailyTimes['tchilasKidushLevana'] != null) {
       timesList.add({
+        'id': 'tchilasKidushLevana',
         'name': 'תחילת זמן קידוש לבנה',
         'time': dailyTimes['tchilasKidushLevana']
       });
     }
     if (dailyTimes['sofZmanKidushLevana'] != null) {
       timesList.add({
+        'id': 'sofZmanKidushLevana',
         'name': 'סוף זמן קידוש לבנה',
         'time': dailyTimes['sofZmanKidushLevana']
       });
@@ -1092,17 +1120,34 @@ class CalendarWidget extends StatelessWidget {
       itemCount: filteredTimesList.length,
       itemBuilder: (context, index) {
         final timeData = filteredTimesList[index];
+        final timeId = timeData['id']!;
+        final timeName = timeData['name']!;
+        final timeLabel = timeData['time'] ?? '--:--';
+
+        final existingAlert = state.zmanAlerts[timeId];
+        final bool hasAlert = existingAlert != null;
+
         final isSpecialTime = _isSpecialTime(timeData['name']!);
-        final bgColor = isSpecialTime
+        final bgColor = hasAlert
+          ? scheme.errorContainer
+          : (isSpecialTime
             ? scheme.tertiaryContainer
-            : scheme.surfaceContainerHighest;
-        final border =
-            isSpecialTime ? Border.all(color: scheme.tertiary, width: 1) : null;
-        final titleColor = isSpecialTime
+            : scheme.surfaceContainerHighest);
+        final border = hasAlert
+          ? Border.all(color: scheme.error, width: 1)
+          : (isSpecialTime
+            ? Border.all(color: scheme.tertiary, width: 1)
+            : null);
+        final titleColor = hasAlert
+          ? scheme.onErrorContainer
+          : (isSpecialTime
             ? scheme.onTertiaryContainer
-            : scheme.onSurfaceVariant;
-        final timeColor =
-            isSpecialTime ? scheme.onTertiaryContainer : scheme.onSurface;
+            : scheme.onSurfaceVariant);
+        final timeColor = hasAlert
+          ? scheme.onErrorContainer
+          : (isSpecialTime
+            ? scheme.onTertiaryContainer
+            : scheme.onSurface);
 
         return Container(
           padding: const EdgeInsets.all(8),
@@ -1115,19 +1160,81 @@ class CalendarWidget extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                timeData['name']!,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: titleColor,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      timeName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: titleColor,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  PopupMenuButton<_ZmanMenuAction>(
+                    tooltip: '',
+                    padding: EdgeInsets.zero,
+                    child: SizedBox.square(
+                      dimension: 18,
+                      child: Center(
+                        child: Icon(
+                          FluentIcons.more_vertical_24_regular,
+                          color: titleColor,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                    itemBuilder: (context) {
+                      return [
+                        PopupMenuItem<_ZmanMenuAction>(
+                          value: _ZmanMenuAction.toggle,
+                          child: Text(
+                            hasAlert
+                                ? 'מופעלת התראה לזמן זה'
+                                : 'הפעל התראה לזמן זה',
+                          ),
+                        ),
+                      ];
+                    },
+                    onSelected: (_) async {
+                      final cubit = context.read<CalendarCubit>();
+
+                      if (timeLabel == '--:--') {
+                        UiSnack.showError('לא ניתן להפעיל התראה לזמן לא זמין');
+                        return;
+                      }
+
+                      final initial = existingAlert?.minutesBefore ?? 60;
+                      final result = await _showZmanAlertDialog(
+                        context,
+                        zmanName: timeName,
+                        timeLabel: timeLabel,
+                        initialMinutesBefore: initial,
+                        isEnabled: hasAlert,
+                      );
+                      if (result == null) return;
+
+                      if (result.cancelAlert) {
+                        await cubit.cancelZmanAlertPreference(timeId: timeId);
+                        return;
+                      }
+
+                      await cubit.setZmanAlertPreference(
+                        timeId: timeId,
+                        displayName: timeName,
+                        minutesBefore: result.minutesBefore,
+                      );
+                    },
+                  ),
+                ],
               ),
               const SizedBox(height: 2),
               Text(
-                timeData['time'] ?? '--:--',
+                timeLabel,
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -2365,6 +2472,127 @@ class _TimesAndEventsTabViewState extends State<_TimesAndEventsTabView>
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
+  }
+}
+
+// --- Zman alert dialog (file-scope private) ---
+
+enum _ZmanMenuAction { toggle }
+
+class _ZmanAlertDialogResult {
+  final int minutesBefore;
+  final bool cancelAlert;
+
+  const _ZmanAlertDialogResult({
+    required this.minutesBefore,
+    required this.cancelAlert,
+  });
+}
+
+class _ZmanAlertDialog extends StatefulWidget {
+  final String zmanName;
+  final String timeLabel;
+  final int initialMinutesBefore;
+  final bool isEnabled;
+
+  const _ZmanAlertDialog({
+    required this.zmanName,
+    required this.timeLabel,
+    required this.initialMinutesBefore,
+    required this.isEnabled,
+  });
+
+  @override
+  State<_ZmanAlertDialog> createState() => _ZmanAlertDialogState();
+}
+
+class _ZmanAlertDialogState extends State<_ZmanAlertDialog> {
+  late int hours;
+  late int minutes;
+
+  @override
+  void initState() {
+    super.initState();
+    final total = widget.initialMinutesBefore;
+    hours = total ~/ 60;
+    minutes = total % 60;
+  }
+
+  int get totalMinutes => (hours * 60) + minutes;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.zmanName),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'כמה זמן לפני זמן ${widget.zmanName} ברצונך לקבל התראה?',
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'הזמן: ${widget.timeLabel}',
+            style: Theme.of(context).textTheme.bodySmall,
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: SpinBox(
+                  min: 0,
+                  max: 23,
+                  value: hours.toDouble(),
+                  decimals: 0,
+                  step: 1,
+                  decoration: const InputDecoration(labelText: 'שעות'),
+                  onChanged: (v) => setState(() => hours = v.toInt()),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SpinBox(
+                  min: 0,
+                  max: 59,
+                  value: minutes.toDouble(),
+                  decimals: 0,
+                  step: 1,
+                  decoration: const InputDecoration(labelText: 'דקות'),
+                  onChanged: (v) => setState(() => minutes = v.toInt()),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        if (widget.isEnabled)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(
+              const _ZmanAlertDialogResult(minutesBefore: 0, cancelAlert: true),
+            ),
+            child: const Text('בטל התראה'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('ביטול'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.of(context).pop(
+              _ZmanAlertDialogResult(
+                minutesBefore: totalMinutes,
+                cancelAlert: false,
+              ),
+            );
+          },
+          child: Text(widget.isEnabled ? 'עדכן' : 'הפעל'),
+        ),
+      ],
+    );
   }
 }
 

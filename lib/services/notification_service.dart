@@ -290,6 +290,17 @@ class NotificationService {
     await flutterLocalNotificationsPlugin.cancelAll();
   }
 
+  Future<void> cancelNotification(int id) async {
+    if (!_isInitialized) return;
+    try {
+      await flutterLocalNotificationsPlugin.cancel(id);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Failed to cancel notification $id: $e');
+      }
+    }
+  }
+
   /// Test function to verify notifications are working
   /// This sends a test notification to verify system notifications work
   Future<void> sendTestNotification() async {

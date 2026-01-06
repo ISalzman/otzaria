@@ -53,6 +53,13 @@ class SettingsRepository {
   static const String keyCalendarNotificationSound =
       'key-calendar-notification-sound';
 
+    // Calendar per-time (zman) alerts
+    static const String keyCalendarZmanAlerts = 'key-calendar-zman-alerts';
+
+    // Internal tracking of scheduled calendar event notification IDs
+    static const String keyCalendarEventNotificationIds =
+      'key-calendar-event-notification-ids';
+
   final SettingsWrapper _settings;
 
   SettingsRepository({SettingsWrapper? settings})
@@ -198,6 +205,12 @@ class SettingsRepository {
       'calendarNotificationSound': _settings.getValue<bool>(
         keyCalendarNotificationSound,
         defaultValue: true,
+      ),
+
+      // Calendar per-time (zman) alerts
+      'calendarZmanAlerts': _settings.getValue<String>(
+        keyCalendarZmanAlerts,
+        defaultValue: '{}',
       ),
     };
   }
@@ -352,6 +365,24 @@ class SettingsRepository {
     await _settings.setValue(keyCalendarNotificationSound, value);
   }
 
+  String getCalendarZmanAlertsJson() {
+    return _settings.getValue<String>(keyCalendarZmanAlerts,
+        defaultValue: '{}');
+  }
+
+  Future<void> updateCalendarZmanAlertsJson(String json) async {
+    await _settings.setValue(keyCalendarZmanAlerts, json);
+  }
+
+  String getCalendarEventNotificationIdsJson() {
+    return _settings.getValue<String>(keyCalendarEventNotificationIds,
+        defaultValue: '[]');
+  }
+
+  Future<void> updateCalendarEventNotificationIdsJson(String json) async {
+    await _settings.setValue(keyCalendarEventNotificationIds, json);
+  }
+
   Future<Map<String, String>> getShortcuts() async {
     // Start with the default shortcuts
     final shortcuts =
@@ -450,6 +481,12 @@ class SettingsRepository {
     await _settings.setValue(keyCalendarNotificationsEnabled, true);
     await _settings.setValue(keyCalendarNotificationTime, 60);
     await _settings.setValue(keyCalendarNotificationSound, true);
+
+    // Calendar per-time (zman) alerts
+    await _settings.setValue(keyCalendarZmanAlerts, '{}');
+
+    // Internal tracking of scheduled calendar event notification IDs
+    await _settings.setValue(keyCalendarEventNotificationIds, '[]');
 
     // Mark as initialized
     await _settings.setValue('settings_initialized', true);
