@@ -49,16 +49,18 @@ class LinkProcessResult {
   final int processedLinks;
   final int skippedLinks;
   final int totalLinks;
+  final bool success;
 
   const LinkProcessResult({
     this.processedLinks = 0,
     this.skippedLinks = 0,
     this.totalLinks = 0,
+    this.success = true,
   });
 
   @override
   String toString() =>
-      'LinkProcessResult(processed: $processedLinks, skipped: $skippedLinks, total: $totalLinks)';
+      'LinkProcessResult(processed: $processedLinks, skipped: $skippedLinks, total: $totalLinks, success: $success)';
 }
 
 /// Utility class for processing link files.
@@ -150,7 +152,7 @@ class LinkProcessor {
 
     if (sourceBookId == null) {
       _log.warning('Source book not found for links: $bookTitle');
-      return const LinkProcessResult();
+      return const LinkProcessResult(success: false);
     }
 
     // Load lines cache for source book
@@ -178,7 +180,7 @@ class LinkProcessor {
         }
       } else {
         _log.warning('Unexpected JSON structure in file: ${path.basename(linkFile)}');
-        return const LinkProcessResult();
+        return const LinkProcessResult(success: false);
       }
 
       final linksData = linksList
@@ -276,10 +278,11 @@ class LinkProcessor {
         processedLinks: processed,
         skippedLinks: skipped,
         totalLinks: linksData.length,
+        success: true,
       );
     } catch (e, stackTrace) {
       _log.warning('Error processing link file: ${path.basename(linkFile)}', e, stackTrace);
-      return const LinkProcessResult();
+      return const LinkProcessResult(success: false);
     }
   }
 

@@ -2130,10 +2130,8 @@ class SeforimRepository {
   ///
   /// @param sql The SQL query to execute
   Future<void> _executeRawQuery(String sql) async {
-    _logger.fine('Executing raw SQL query: $sql');
     final db = await _database.database;
     await db.execute(sql);
-    _logger.fine('Raw SQL query executed successfully');
   }
 
   /// Disables foreign key constraints.

@@ -245,6 +245,9 @@ class DatabaseGenerator {
         await createAndProcessBook(entity.path, parentCategoryId, metadata);
       }
     }
+
+    // Delete directory if it became empty after processing
+    await _deleteIfEmpty(dir);
   }
 
   /// Creates a category in the database.
@@ -414,6 +417,26 @@ class DatabaseGenerator {
         _processedBooksCount /
             (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
         'מעבד ספר: $title ($pct%)');
+
+    // Delete source files if it's a txt file
+    if (fileType == 'txt') {
+      try {
+        final file = File(bookPath);
+        if (await file.exists()) {
+          await file.delete();
+        }
+        // Also delete companion notes file if it exists
+        final dir = Directory(path.dirname(bookPath));
+        final notesTitle = 'הערות על $title';
+        final notesPath = path.join(dir.path, '$notesTitle.txt');
+        final notesFile = File(notesPath);
+        if (await notesFile.exists()) {
+          await notesFile.delete();
+        }
+      } catch (e) {
+        _log.warning('Failed to delete source file(s) for $title', e);
+      }
+    }
   }
 
   /// Processes the content of a book, extracting lines and TOC entries.
@@ -630,6 +653,9 @@ class DatabaseGenerator {
     // Process all link files within a single transaction for better performance
     await repository.beginTransaction();
 
+    // Track files to delete after successful commit
+    final filesToDelete = <File>[];
+
     try {
       for (final file in linkFiles) {
         if (file.path.endsWith('_headings.json')) {
@@ -646,9 +672,28 @@ class DatabaseGenerator {
         onProgress?.call(progress,
             'מעבד קישורים: $fileName ($processedLinkFiles/$totalLinkFiles)');
 
+        // Add to deletion list only if successful
+        if (result.success) {
+          filesToDelete.add(file);
+        }
+
         // Commit transaction every 50 files to avoid excessive memory usage
         if (processedLinkFiles % 50 == 0) {
           await repository.commitTransaction();
+
+          // Delete files that were just committed
+          for (final f in filesToDelete) {
+            try {
+              if (await f.exists()) {
+                await f.delete();
+                _log.info('Deleted processed link file: ${f.path}');
+              }
+            } catch (e) {
+              _log.warning('Failed to delete link file ${f.path}', e);
+            }
+          }
+          filesToDelete.clear();
+
           // Clear line cache to prevent memory explosion
           _linkProcessor!.clearLineCache();
           await repository.beginTransaction();
@@ -657,6 +702,19 @@ class DatabaseGenerator {
 
       // Commit the transaction after all links are processed
       await repository.commitTransaction();
+
+      // Delete remaining files
+      for (final f in filesToDelete) {
+        try {
+          if (await f.exists()) {
+            await f.delete();
+            _log.info('Deleted processed link file: ${f.path}');
+          }
+        } catch (e) {
+          _log.warning('Failed to delete link file ${f.path}', e);
+        }
+      }
+      filesToDelete.clear();
 
       // Clear caches to free memory
       _linkProcessor!.clearCaches();
@@ -674,6 +732,9 @@ class DatabaseGenerator {
     // Final progress update with summary
     onProgress?.call(
         1.0, 'הושלם עיבוד $totalLinks קישורים מ-$totalLinkFiles קבצים');
+
+    // Delete links directory if it became empty
+    await _deleteIfEmpty(linksDir);
   }
 
   /// Extracts topics from the file path.
@@ -770,6 +831,19 @@ WHERE book.id = bc.book_id;
   }
 
   /// Helper methods for source management and priority processing
+
+  /// Deletes a directory if it is empty.
+  Future<void> _deleteIfEmpty(Directory dir) async {
+    try {
+      if (!await dir.exists()) return;
+      if (await dir.list().isEmpty) {
+        await dir.delete();
+        _log.info('Deleted empty directory: ${dir.path}');
+      }
+    } catch (e) {
+      // Ignore deletion mistakes (e.g. permissions)
+    }
+  }
 
   /// Loads files_manifest.json and builds mapping from library-relative path to source name
   Future<void> _loadSourcesFromManifest() async {
