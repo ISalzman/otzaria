@@ -227,7 +227,7 @@ class _AboutScreenState extends State<AboutScreen> {
         'url': 'https://forum.otzaria.org/user/333',
       },
       {
-        'name': "ט. ז.", // "טכנולוגי גו'ניור", // י. אייזנשטיין
+        'name': "ט. ג.", // "טכנולוגי גו'ניור", // י. אייזנשטיין
         'url':
             'https://forum.otzaria.org/user/%D7%98%D7%9B%D7%A0%D7%95%D7%9C%D7%95%D7%92%D7%99-%D7%92%D7%95-%D7%A0%D7%99%D7%95%D7%A8',
       },
