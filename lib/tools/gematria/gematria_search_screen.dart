@@ -5,11 +5,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/settings/gematria_settings_dialog.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'gematria_search.dart';
 import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class GematriaSearchScreen extends StatefulWidget {
   const GematriaSearchScreen({super.key});
@@ -135,7 +137,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
 
     try {
       // קבלת נתיב הספרייה מההגדרות
-      final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+      final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
 
       // Define book titles to search based on settings
       List<String>? bookTitlesToSearch;
@@ -329,10 +331,9 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
         children: [
           const SizedBox(width: 8),
           Expanded(
-            child: TextField(
+            child: RtlTextField(
               controller: _searchController,
               textAlign: TextAlign.right,
-              textDirection: TextDirection.rtl,
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
                 hintText: 'חפש גימטריה...',

@@ -12,6 +12,7 @@ import 'package:otzaria/services/phone_report_service.dart';
 import 'package:otzaria/services/sources_books_service.dart';
 import 'package:otzaria/widgets/phone_report_tab.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 
 /// נתוני הדיווח שנאספו מתיבת סימון הטקסט + פירוט הטעות שהמשתמש הקליד.
 class ReportedErrorData {
@@ -149,7 +150,7 @@ $detailsSection
   /// שמירת דיווח לקובץ בתיקייה הראשית של הספרייה (libraryPath).
   static Future<bool> saveReportToFile(String reportContent) async {
     try {
-      final libraryPath = Settings.getValue('key-library-path');
+      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
 
       if (libraryPath == null || libraryPath.isEmpty) {
         debugPrint('libraryPath not set; cannot save report.');
@@ -193,7 +194,7 @@ $detailsSection
   /// סופר כמה דיווחים יש בקובץ – לפי המפריד.
   static Future<int> countReportsInFile() async {
     try {
-      final libraryPath = Settings.getValue('key-library-path');
+      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) return 0;
 
       final filePath = '$libraryPath${Platform.pathSeparator}$_reportFileName';
@@ -803,7 +804,7 @@ class _RegularReportTabState extends State<RegularReportTab> {
             ),
           ),
           const SizedBox(height: 4),
-          TextField(
+          RtlTextField(
             controller: _detailsController,
             minLines: 2,
             maxLines: 4,
@@ -812,7 +813,6 @@ class _RegularReportTabState extends State<RegularReportTab> {
               border: OutlineInputBorder(),
               hintText: 'כתוב כאן מה לא תקין, הצע תיקון וכו\'',
             ),
-            textDirection: TextDirection.rtl,
           ),
           const SizedBox(height: 24),
           _buildActionButtons(),
@@ -825,7 +825,7 @@ class _RegularReportTabState extends State<RegularReportTab> {
     // בדיקת מצב אופליין
     final isOfflineMode =
         Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false;
-    
+
     return FutureBuilder<bool>(
       future: _isPhoneReportDisabled(),
       builder: (context, snapshot) {

@@ -17,6 +17,16 @@ class AddTab extends TabsEvent {
   List<Object?> get props => [tab];
 }
 
+class ReplaceAllTabs extends TabsEvent {
+  final List<OpenedTab> tabs;
+  final int currentTabIndex;
+
+  const ReplaceAllTabs(this.tabs, this.currentTabIndex);
+
+  @override
+  List<Object?> get props => [tabs, currentTabIndex];
+}
+
 class SaveTabs extends TabsEvent {
   const SaveTabs();
 

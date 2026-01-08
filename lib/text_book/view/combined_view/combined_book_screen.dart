@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
@@ -23,6 +24,7 @@ import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/utils/html_link_handler.dart';
 import 'package:otzaria/utils/text_with_inline_links.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 
 class CombinedView extends StatefulWidget {
   const CombinedView({
@@ -163,9 +165,9 @@ class _CombinedViewState extends State<CombinedView> {
 
     return [
       ctx.MenuItem<void>(
-        label: 'הצג את כל $groupName',
-        icon: groupActive ? FluentIcons.checkmark_24_regular : null,
-        onSelected: () {
+        label: Text('הצג את כל $groupName'),
+        icon: groupActive ? const Icon(FluentIcons.checkmark_24_regular) : null,
+        onSelected: (_) {
           final current = List<String>.from(st.activeCommentators);
           final isAdding = !groupActive;
           if (groupActive) {
@@ -182,9 +184,9 @@ class _CombinedViewState extends State<CombinedView> {
       ...group.map((title) {
         final bool isActive = st.activeCommentators.contains(title);
         return ctx.MenuItem<void>(
-          label: title,
-          icon: isActive ? FluentIcons.checkmark_24_regular : null,
-          onSelected: () {
+          label: Text(title),
+          icon: isActive ? const Icon(FluentIcons.checkmark_24_regular) : null,
+          onSelected: (_) {
             final current = List<String>.from(st.activeCommentators);
             final isAdding = !current.contains(title);
             current.contains(title)
@@ -206,11 +208,11 @@ class _CombinedViewState extends State<CombinedView> {
       return ctx.ContextMenu(
         entries: [
           ctx.MenuItem(
-            label: 'העתק',
-            icon: FluentIcons.copy_24_regular,
+            label: const Text('העתק'),
+            icon: const Icon(FluentIcons.copy_24_regular),
             enabled: _savedSelectedText != null &&
                 _savedSelectedText!.trim().isNotEmpty,
-            onSelected: _copyFormattedText,
+            onSelected: (_) => _copyFormattedText(),
           ),
         ],
       );
@@ -235,22 +237,22 @@ class _CombinedViewState extends State<CombinedView> {
       maxHeight: screenHeight * 0.9,
       entries: [
         ctx.MenuItem(
-            label: 'חיפוש',
-            icon: FluentIcons.search_24_regular,
-            onSelected: () => widget.openLeftPaneTab(1)),
+            label: const Text('חיפוש'),
+            icon: const Icon(FluentIcons.search_24_regular),
+            onSelected: (_) => widget.openLeftPaneTab(1)),
         ctx.MenuItem.submenu(
-          label: 'מפרשים',
-          icon: FluentIcons.book_24_regular,
+          label: const Text('מפרשים'),
+          icon: const Icon(FluentIcons.book_24_regular),
           enabled: state.availableCommentators.isNotEmpty,
           items: [
             ctx.MenuItem(
-              label: 'הצג את כל המפרשים',
+              label: const Text('הצג את כל המפרשים'),
               icon: state.activeCommentators
                       .toSet()
                       .containsAll(state.availableCommentators)
-                  ? FluentIcons.checkmark_24_regular
+                  ? const Icon(FluentIcons.checkmark_24_regular)
                   : null,
-              onSelected: () {
+              onSelected: (_) {
                 final allActive = state.activeCommentators
                     .toSet()
                     .containsAll(state.availableCommentators);
@@ -318,14 +320,14 @@ class _CombinedViewState extends State<CombinedView> {
           ],
         ),
         ctx.MenuItem.submenu(
-          label: 'קישורים',
-          icon: FluentIcons.link_24_regular,
+          label: const Text('קישורים'),
+          icon: const Icon(FluentIcons.link_24_regular),
           enabled: state.visibleLinks.isNotEmpty,
           items: state.visibleLinks
               .map(
                 (link) => ctx.MenuItem(
-                  label: link.heRef,
-                  onSelected: () {
+                  label: Text(link.heRef),
+                  onSelected: (_) {
                     widget.openBookCallback(
                       TextBookTab(
                         book: TextBook(
@@ -348,36 +350,36 @@ class _CombinedViewState extends State<CombinedView> {
         const ctx.MenuDivider(),
         // הערות אישיות
         ctx.MenuItem(
-          label: 'הוסף הערה אישית לשורה זו',
-          icon: FluentIcons.note_add_24_regular,
-          onSelected: () => _createNoteForCurrentLine(),
+          label: const Text('הוסף הערה אישית '),
+          icon: const Icon(FluentIcons.note_add_24_regular),
+          onSelected: (_) => _createNoteForCurrentLine(),
         ),
         const ctx.MenuDivider(),
         // העתקה
         ctx.MenuItem(
-          label: 'העתק',
-          icon: FluentIcons.copy_24_regular,
+          label: const Text('העתק'),
+          icon: const Icon(FluentIcons.copy_24_regular),
           enabled: _savedSelectedText != null &&
               _savedSelectedText!.trim().isNotEmpty,
-          onSelected: _copyFormattedText,
+          onSelected: (_) => _copyFormattedText(),
         ),
         ctx.MenuItem(
-          label: 'העתק את כל הפסקה',
-          icon: FluentIcons.document_copy_24_regular,
+          label: const Text('העתק את כל הפסקה'),
+          icon: const Icon(FluentIcons.document_copy_24_regular),
           enabled: paragraphIndex >= 0 && paragraphIndex < widget.data.length,
-          onSelected: () => _copyParagraphByIndex(paragraphIndex),
+          onSelected: (_) => _copyParagraphByIndex(paragraphIndex),
         ),
         ctx.MenuItem(
-          label: 'העתק את הטקסט המוצג',
-          icon: FluentIcons.copy_select_24_regular,
-          onSelected: _copyVisibleText,
+          label: const Text('העתק את הטקסט המוצג'),
+          icon: const Icon(FluentIcons.copy_select_24_regular),
+          onSelected: (_) => _copyVisibleText(),
         ),
         const ctx.MenuDivider(),
         // Edit paragraph option
         ctx.MenuItem(
-          label: 'ערוך פסקה זו',
-          icon: FluentIcons.edit_24_regular,
-          onSelected: () => _editParagraph(paragraphIndex),
+          label: const Text('ערוך פסקה זו'),
+          icon: const Icon(FluentIcons.edit_24_regular),
+          onSelected: (_) => _editParagraph(paragraphIndex),
         ),
       ],
     );
@@ -672,50 +674,101 @@ $textWithBreaks
                 return const SizedBox.shrink();
               },
               onSelectionChanged: (selection) {
-                if (selection != null && selection.plainText.isNotEmpty) {
-                  // מחשב את מספר השורה המדויק של הטקסט המודגש
-                  // משתמש באותה לוגיקה כמו בדיווח שגיאות
-                  final state = _textBookBloc.state;
-                  int? foundIndex;
+                final plain = selection?.plainText;
+                if (plain == null || plain.trim().isEmpty) {
+                  return;
+                }
 
-                  if (state is TextBookLoaded) {
-                    // מקבל את השורה הראשונה הנראית
-                    final baseIndex = state.visibleIndices.isNotEmpty
-                        ? state.visibleIndices.first
-                        : 0;
+                // חשוב: כדי ש-Ctrl+C יעבוד מיד אחרי סימון טקסט עם העכבר
+                // נוודא שהפוקוס נמצא על אזור הקריאה.
+                _focusNode.requestFocus();
 
-                    // בונה את הטקסט הנראה
-                    final visibleText = state.visibleIndices
-                        .map((idx) =>
-                            widget.data[idx].replaceAll(RegExp(r'<[^>]*>'), ''))
-                        .join('\n');
+                // מחשב את מספר השורה המדויק של הטקסט המודגש
+                // משתמש באותה לוגיקה כמו בדיווח שגיאות
+                final state = _textBookBloc.state;
+                int? foundIndex;
 
-                    // מוצא את המיקום של הטקסט המודגש
-                    final selectionStart =
-                        visibleText.indexOf(selection.plainText);
+                if (state is TextBookLoaded) {
+                  // מקבל את השורה הראשונה הנראית
+                  final baseIndex =
+                      state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0;
 
-                    if (selectionStart >= 0) {
-                      // סופר כמה שורות יש לפני הטקסט המודגש
-                      final before = visibleText.substring(0, selectionStart);
-                      final offset = '\n'.allMatches(before).length;
-                      foundIndex = baseIndex + offset;
-                    }
+                  // בונה את הטקסט הנראה
+                  final visibleText = state.visibleIndices
+                      .map((idx) =>
+                          widget.data[idx].replaceAll(RegExp(r'<[^>]*>'), ''))
+                      .join('\n');
+
+                  // מוצא את המיקום של הטקסט המודגש
+                  final selectionStart = visibleText.indexOf(plain);
+
+                  if (selectionStart >= 0) {
+                    // סופר כמה שורות יש לפני הטקסט המודגש
+                    final before = visibleText.substring(0, selectionStart);
+                    final offset = '\n'.allMatches(before).length;
+                    foundIndex = baseIndex + offset;
                   }
 
-                  setState(() {
-                    _savedSelectedText = selection.plainText;
-                    _savedSelectedIndex = foundIndex;
-                    _currentSelectedIndex = foundIndex;
-                  });
+                  // fallback: אם לא הצלחנו לחשב אינדקס, נשתמש בשורה שנבחרה (אם קיימת)
+                  foundIndex ??= state.selectedIndex;
                 }
+
+                setState(() {
+                  _savedSelectedText = plain;
+                  _savedSelectedIndex = foundIndex;
+                  _currentSelectedIndex = foundIndex;
+                });
               },
-              child: ProgressiveScroll(
-                focusNode: _focusNode,
-                maxSpeed: 10000.0,
-                curve: 10.0,
-                accelerationFactor: 5,
-                scrollController: widget.tab.mainOffsetController,
-                child: buildOuterList(state),
+              child: Directionality(
+                textDirection: widget.isPreviewMode
+                    ? TextDirection.ltr
+                    : TextDirection.rtl,
+                child: ScrollConfiguration(
+                  // מונע בעיות של Scrollbar עם ScrollController לא מחובר
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    scrollbars: false,
+                  ),
+                  child: Shortcuts(
+                    shortcuts: <ShortcutActivator, Intent>{
+                      // Windows/Linux
+                      LogicalKeySet(
+                        LogicalKeyboardKey.control,
+                        LogicalKeyboardKey.keyC,
+                      ): const _CopySelectedTextIntent(),
+                      // Windows "classic" copy
+                      LogicalKeySet(
+                        LogicalKeyboardKey.control,
+                        LogicalKeyboardKey.insert,
+                      ): const _CopySelectedTextIntent(),
+                      // macOS (למקרה שמריצים שם)
+                      LogicalKeySet(
+                        LogicalKeyboardKey.meta,
+                        LogicalKeyboardKey.keyC,
+                      ): const _CopySelectedTextIntent(),
+                    },
+                    child: Actions(
+                      actions: <Type, Action<Intent>>{
+                        _CopySelectedTextIntent: CallbackAction<_CopySelectedTextIntent>(
+                          onInvoke: (_) {
+                            _copyFormattedText();
+                            return null;
+                          },
+                        ),
+                      },
+                      child: Directionality(
+                        textDirection: TextDirection.rtl,
+                        child: ProgressiveScroll(
+                          focusNode: _focusNode,
+                          maxSpeed: 10000.0,
+                          curve: 10.0,
+                          accelerationFactor: 5,
+                          scrollController: widget.tab.mainOffsetController,
+                          child: buildOuterList(state),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             );
           },
@@ -837,22 +890,26 @@ $textWithBreaks
 
                         String data = widget.data[index];
 
-                        // הוספת קישורים מבוססי תווים
+                        // הוספת קישורים מבוססי תווים לפני כל עיבוד אחר
+                        // כי start/end מתייחסים לטקסט המקורי
                         String dataWithLinks = data;
-                        try {
-                          final linksForLine = state.links
-                              .where((link) =>
-                                  link.index1 == index + 1 &&
-                                  link.start != null &&
-                                  link.end != null)
-                              .toList();
+                        if (settingsState.enableHtmlLinks) {
+                          try {
+                            final linksForLine = state.links
+                                .where((link) =>
+                                    link.index1 == index + 1 &&
+                                    link.start != null &&
+                                    link.end != null)
+                                .toList();
 
-                          if (linksForLine.isNotEmpty) {
-                            dataWithLinks =
-                                addInlineLinksToText(data, linksForLine);
+                            if (linksForLine.isNotEmpty) {
+                              dataWithLinks =
+                                  addInlineLinksToText(data, linksForLine);
+                            }
+                          } catch (e) {
+                            // אם יש שגיאה, פשוט נשתמש בטקסט המקורי
+                            dataWithLinks = data;
                           }
-                        } catch (e) {
-                          dataWithLinks = data;
                         }
 
                         // עיבודים נוספים
@@ -866,9 +923,20 @@ $textWithBreaks
                         String processedData = state.removeNikud
                             ? utils.highLight(
                                 utils.removeVolwels('$dataWithLinks\n'),
-                                state.searchText)
+                                state.searchText,
+                                searchOptions: state.searchOptions,
+                                alternativeWords: state.alternativeWords,
+                                spacingValues: state.spacingValues,
+                                isFuzzy: state.searchMode == SearchMode.fuzzy,
+                              )
                             : utils.highLight(
-                                '$dataWithLinks\n', state.searchText);
+                                '$dataWithLinks\n',
+                                state.searchText,
+                                searchOptions: state.searchOptions,
+                                alternativeWords: state.alternativeWords,
+                                spacingValues: state.spacingValues,
+                                isFuzzy: state.searchMode == SearchMode.fuzzy,
+                              );
 
                         processedData =
                             utils.formatTextWithParentheses(processedData);
@@ -919,6 +987,7 @@ $textWithBreaks
             isSelected &&
             _hasCommentaries(state, index))
           _CommentaryCard(
+            key: ValueKey('commentary_card_$index'),
             index: index,
             textSize: widget.textSize,
             openBookCallback: widget.openBookCallback,
@@ -960,6 +1029,7 @@ class _CommentaryCard extends StatefulWidget {
   final double viewportHeight;
 
   const _CommentaryCard({
+    super.key,
     required this.index,
     required this.textSize,
     required this.openBookCallback,
@@ -1022,6 +1092,7 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: maxHeight,
+                    minHeight: 50, // מינימום גובה למניעת בעיות layout
                   ),
                   child: CommentaryListBase(
                     key: _commentaryKey,
@@ -1050,4 +1121,8 @@ class _CommentaryCardState extends State<_CommentaryCard> {
       },
     );
   }
+}
+
+class _CopySelectedTextIntent extends Intent {
+  const _CopySelectedTextIntent();
 }

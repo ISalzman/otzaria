@@ -6,6 +6,7 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/text_book/bloc/text_book_state.dart';
 
 abstract class OpenedTab {
   String title;
@@ -18,11 +19,20 @@ abstract class OpenedTab {
 
   factory OpenedTab.from(OpenedTab tab) {
     if (tab is TextBookTab) {
+      bool? splitedView;
+      bool? showPageShapeView;
+      final state = tab.bloc.state;
+      if (state is TextBookLoaded) {
+        splitedView = state.showSplitView;
+        showPageShapeView = state.showPageShapeView;
+      }
       return TextBookTab(
         index: tab.index,
         book: tab.book,
         searchText: tab.searchText,
         commentators: tab.commentators,
+        splitedView: splitedView,
+        showPageShapeView: showPageShapeView,
         isPinned: tab.isPinned,
       );
     } else if (tab is PdfBookTab) {

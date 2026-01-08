@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class OutlineView extends StatefulWidget {
   const OutlineView({
@@ -216,7 +217,7 @@ class _OutlineViewState extends State<OutlineView>
       children: [
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: TextField(
+          child: RtlTextField(
             controller: searchController,
             focusNode: widget.focusNode,
             autofocus: true,
@@ -296,8 +297,11 @@ class _OutlineViewState extends State<OutlineView>
 
     getAllNodes(widget.outline, 0);
 
+    // דילוג על רמה 0 (כותרת ראשית של הספר) כדי למנוע התאמות שגויות
+    // לאותיות שמופיעות בשם הספר
     final filteredNodes = allNodes
-        .where((item) => item.node.title.contains(searchController.text))
+        .where((item) =>
+            item.level > 0 && item.node.title.contains(searchController.text))
         .toList();
 
     return SingleChildScrollView(

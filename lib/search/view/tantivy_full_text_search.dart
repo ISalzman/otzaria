@@ -15,6 +15,8 @@ import 'package:otzaria/search/view/full_text_facet_filtering.dart';
 import 'package:otzaria/search/view/search_edit_panel.dart';
 import 'package:otzaria/widgets/resizable_facet_filtering.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
+import 'package:otzaria/widgets/indexing_warning.dart';
+import 'package:otzaria/widgets/thin_divider.dart';
 
 class TantivyFullTextSearch extends StatefulWidget {
   final SearchingTab tab;
@@ -30,6 +32,24 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
 
   bool _showIndexWarning = false;
   bool _showEditPanel = false;
+
+  // משמש כדי להבדיל בין "חיפוש חדש" (שבו נרצה להציג מסך טעינה מלא)
+  // לבין "טען תוצאות נוספות" (שבו אסור להעלים את התוצאות הקיימות).
+  String _lastCompletedQuery = '';
+
+  bool _shouldShowBlockingLoader(SearchState state) {
+    final currentQuery = state.searchQuery.trim();
+    final lastQuery = _lastCompletedQuery.trim();
+    // אם יש חיפוש חדש (הטקסט השתנה) והוא עוד בטעינה — נחסום עם ספינר.
+    // אם זה רק "טען עוד" (אותו query) — לא נחסום.
+    return state.isLoading && currentQuery.isNotEmpty && currentQuery != lastQuery;
+  }
+
+  void _updateLastCompletedQuery(SearchState state) {
+    if (!state.isLoading) {
+      _lastCompletedQuery = state.searchQuery;
+    }
+  }
 
   @override
   void initState() {
@@ -90,16 +110,25 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   Widget _buildForSmallScreens() {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
+        _updateLastCompletedQuery(state);
+        final showBlockingLoader = _shouldShowBlockingLoader(state);
         return Container(
           clipBehavior: Clip.hardEdge,
           decoration: const BoxDecoration(),
           child: Column(
             children: [
-              if (_showIndexWarning) _buildIndexWarning(),
+              if (_showIndexWarning)
+                IndexingWarning(
+                  onDismiss: () {
+                    setState(() {
+                      _showIndexWarning = false;
+                    });
+                  },
+                ),
               Row(children: [_buildMenuButton()]),
               // השורה התחתונה - מוצגת תמיד!
               _buildBottomRow(state),
-              _buildDivider(),
+              const ThinDivider(),
               // פאנל עריכה - מופיע מתחת לשורה התחתונה
               if (_showEditPanel)
                 SearchEditPanel(
@@ -113,7 +142,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               Expanded(
                 child: Stack(
                   children: [
-                    if (state.isLoading)
+                    if (showBlockingLoader)
                       const Center(child: CircularProgressIndicator())
                     else if (state.searchQuery.isEmpty)
                       Center(
@@ -192,10 +221,19 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
       decoration: const BoxDecoration(),
       child: Column(
         children: [
-          if (_showIndexWarning) _buildIndexWarning(),
+          if (_showIndexWarning)
+            IndexingWarning(
+              onDismiss: () {
+                setState(() {
+                  _showIndexWarning = false;
+                });
+              },
+            ),
           Expanded(
             child: BlocBuilder<SearchBloc, SearchState>(
               builder: (context, state) {
+                _updateLastCompletedQuery(state);
+                final showBlockingLoader = _shouldShowBlockingLoader(state);
                 return Column(
                   children: [
                     // שורה אחת פשוטה
@@ -243,50 +281,72 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                 return Row(
                                   children: [
                                     // הודעת "מוצגות תוצאות של חיפוש" + כפתור עריכה
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        left: 16.0,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          // הודעה רק בחיפוש מתקדם
-                                          if (searchState.isAdvancedSearchEnabled) ...[
-                                            Text(
-                                              'מוצגות תוצאות של חיפוש: ',
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface
-                                                    .withValues(alpha: 0.7),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 16.0,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            // הודעה רק בחיפוש מתקדם
+                                            if (searchState
+                                                .isAdvancedSearchEnabled) ...[
+                                              Text(
+                                                'מוצגות תוצאות של חיפוש: ',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withValues(alpha: 0.7),
+                                                ),
                                               ),
+                                              const SizedBox(width: 8),
+                                              Flexible(
+                                                child: Scrollbar(
+                                                  thumbVisibility: true,
+                                                  thickness: 2.0,
+                                                  child: SingleChildScrollView(
+                                                    scrollDirection:
+                                                        Axis.horizontal,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              bottom: 10.0),
+                                                      child: SearchTermsDisplay(
+                                                        tab: widget.tab,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                            ],
+                                            // כפתור עריכה - תמיד מוצג
+                                            IconButton(
+                                              icon: Icon(
+                                                _showEditPanel
+                                                    ? FluentIcons
+                                                        .chevron_up_24_regular
+                                                    : FluentIcons
+                                                        .edit_24_regular,
+                                                size: 20,
+                                              ),
+                                              tooltip: _showEditPanel
+                                                  ? 'סגור עריכה'
+                                                  : 'ערוך חיפוש',
+                                              onPressed: () {
+                                                setState(() {
+                                                  _showEditPanel =
+                                                      !_showEditPanel;
+                                                });
+                                              },
                                             ),
-                                            const SizedBox(width: 8),
-                                            SearchTermsDisplay(
-                                              tab: widget.tab,
-                                            ),
-                                            const SizedBox(width: 8),
                                           ],
-                                          // כפתור עריכה - תמיד מוצג
-                                          IconButton(
-                                            icon: Icon(
-                                              _showEditPanel
-                                                  ? FluentIcons.chevron_up_24_regular
-                                                  : FluentIcons.edit_24_regular,
-                                              size: 20,
-                                            ),
-                                            tooltip: _showEditPanel ? 'סגור עריכה' : 'ערוך חיפוש',
-                                            onPressed: () {
-                                              setState(() {
-                                                _showEditPanel = !_showEditPanel;
-                                              });
-                                            },
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ),
-                                    const Spacer(),
                                     Padding(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 16.0,
@@ -316,7 +376,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                         ],
                       ),
                     ),
-                    _buildDivider(),
+                    const ThinDivider(),
                     // פאנל עריכה - מופיע מתחת לשורה העליונה
                     if (_showEditPanel)
                       SearchEditPanel(
@@ -351,7 +411,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                 Expanded(
                                   child: Builder(
                                     builder: (context) {
-                                      if (state.isLoading) {
+                                      if (showBlockingLoader) {
                                         return const Center(
                                           child: CircularProgressIndicator(),
                                         );
@@ -498,47 +558,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-
-  // פס מפריד מתחת לשורה התחתונה
-  Widget _buildDivider() {
-    return Container(
-      height: 1,
-      color: Colors.grey.shade300,
-      margin: const EdgeInsets.symmetric(horizontal: 8.0),
-    );
-  }
-
-  Container _buildIndexWarning() {
-    return Container(
-      padding: const EdgeInsets.all(8.0),
-      margin: const EdgeInsets.only(bottom: 8.0),
-      decoration: BoxDecoration(
-        color: Colors.yellow.shade100,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        children: [
-          Icon(FluentIcons.warning_24_regular, color: Colors.orange[700]),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Text(
-              'אינדקס החיפוש בתהליך עדכון. יתכן שחלק מהספרים לא יוצגו בתוצאות החיפוש.',
-              textAlign: TextAlign.right,
-              style: TextStyle(color: Colors.black87),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(FluentIcons.dismiss_24_regular),
-            onPressed: () {
-              setState(() {
-                _showIndexWarning = false;
-              });
-            },
-          ),
         ],
       ),
     );

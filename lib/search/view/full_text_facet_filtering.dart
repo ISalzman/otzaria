@@ -7,27 +7,16 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/count_future_builder.dart';
+import 'package:otzaria/widgets/thin_divider.dart';
 
 // Constants
 const double _kMinQueryLength = 2;
-
-/// A reusable divider widget that creates a line with a consistent height,
-/// color, and margin to match other dividers in the UI.
-class ThinDivider extends StatelessWidget {
-  const ThinDivider({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 1, // 1 logical pixel is sufficient here
-      color: Colors.grey.shade300,
-      margin: const EdgeInsets.symmetric(horizontal: 8.0),
-    );
-  }
-}
 
 class SearchFacetFiltering extends StatefulWidget {
   final SearchingTab tab;
@@ -84,15 +73,20 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
   }
 
   void _setFacet(BuildContext context, String facet) {
-    context.read<SearchBloc>().add(SetFacet(facet));
+    context.read<SearchBloc>().add(SetFacet(
+          facet,
+          customSpacing: widget.tab.spacingValues,
+          alternativeWords: widget.tab.alternativeWords,
+          searchOptions: widget.tab.searchOptions,
+        ));
   }
 
   Widget _buildSearchField() {
     return Container(
       height: 60, // Same height as the container on the right
-      alignment: Alignment.center, // Vertically centers the TextField
+      alignment: Alignment.center, // Vertically centers the RtlTextField
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: TextField(
+      child: RtlTextField(
         controller: _filterQuery,
         decoration: InputDecoration(
           hintText: 'איתור ספר…',
@@ -121,9 +115,10 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
       return const SizedBox.shrink();
     }
 
-    // בניית facet נכון על בסיס נתיב הקטגוריה
-    final facet =
-        categoryPath != null ? "$categoryPath/${book.title}" : "/${book.title}";
+    // בניית facet בהתאם לפורמט האינדקס: /<topics>/<title>
+    final fallbackFacet =
+      BookFacet.buildFacetPath(title: book.title, topics: book.topics);
+    final facet = categoryPath != null ? "$categoryPath/${book.title}" : fallbackFacet;
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
         final isSelected = state.currentFacets.contains(facet);
@@ -204,9 +199,11 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
 
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
-        // יצירת רשימת כל ה-facets בבת אחת
-        // עבור רשימת ספרים מסוננת, נשתמש בשם הספר בלבד
-        final facets = books.map((book) => "/${book.title}").toList();
+        // יצירת רשימת כל ה-facets בבת אחת (כמו באינדקס)
+        final facets = books
+            .map((book) =>
+                BookFacet.buildFacetPath(title: book.title, topics: book.topics))
+            .toList();
 
         // ספירה מקבצת של כל ה-facets
         final countsFuture = widget.tab.countForMultipleFacets(facets);
@@ -223,7 +220,8 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                 itemCount: books.length,
                 itemBuilder: (context, index) {
                   final book = books[index];
-                  final facet = "/${book.title}";
+                  final facet = BookFacet.buildFacetPath(
+                    title: book.title, topics: book.topics);
                   final count = counts[facet] ?? 0;
                   return _buildBookTile(book, count, 0);
                 },
@@ -356,20 +354,11 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
       children.add(BlocBuilder<SearchBloc, SearchState>(
         builder: (context, state) {
           final countFuture = widget.tab.countForFacetCached(subCategory.path);
-          return FutureBuilder<int>(
+          return CountFutureBuilder(
             key: ValueKey('${state.searchQuery}_${subCategory.path}'),
             future: countFuture,
-            builder: (context, snapshot) {
-              if (snapshot.hasData) {
-                final count = snapshot.data!;
-                // מציגים את הקטגוריה רק אם יש בה תוצאות או אם אנחנו בטעינה
-                if (count > 0 || count == -1) {
-                  return _buildCategoryTile(subCategory, count, level + 1);
-                }
-                return const SizedBox.shrink();
-              }
-              return _buildCategoryTile(subCategory, -1, level + 1);
-            },
+            builder: (context, count) =>
+                _buildCategoryTile(subCategory, count, level + 1),
           );
         },
       ));
@@ -387,57 +376,44 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
 
           // ננסה קודם עם ה-facet המלא
           final countFuture = widget.tab.countForFacetCached(fullFacet);
-          return FutureBuilder<int>(
+          return CountFutureBuilder(
             key: ValueKey('${state.searchQuery}_$fullFacet'),
             future: countFuture,
-            builder: (context, snapshot) {
-              if (snapshot.hasData) {
-                final count = snapshot.data!;
+            builder: (context, count) => _buildBookTile(book, count, level + 1,
+                categoryPath: category.path),
+            emptyBuilder: FutureBuilder<int>(
+              key: ValueKey('${state.searchQuery}_$topicsOnlyFacet'),
+              future: widget.tab.countForFacetCached(topicsOnlyFacet),
+              builder: (context, topicsSnapshot) {
+                if (topicsSnapshot.hasData) {
+                  final topicsCount = topicsSnapshot.data!;
 
-                // אם יש תוצאות, נציג את הספר
-                if (count > 0 || count == -1) {
-                  return _buildBookTile(book, count, level + 1,
-                      categoryPath: category.path);
-                }
+                  if (topicsCount > 0 || topicsCount == -1) {
+                    // יש תוצאות בקטגוריה, אבל לא בספר הספציפי
+                    // לא נציג את הספר כי זה יגרום להצגת ספרים ללא תוצאות
+                    return const SizedBox.shrink();
+                  }
 
-                // אם אין תוצאות עם ה-facet המלא, ננסה עם topics בלבד
-                return FutureBuilder<int>(
-                  key: ValueKey('${state.searchQuery}_$topicsOnlyFacet'),
-                  future: widget.tab.countForFacetCached(topicsOnlyFacet),
-                  builder: (context, topicsSnapshot) {
-                    if (topicsSnapshot.hasData) {
-                      final topicsCount = topicsSnapshot.data!;
+                  // ננסה עם שם הספר בלבד
+                  return FutureBuilder<int>(
+                    key: ValueKey('${state.searchQuery}_$titleOnlyFacet'),
+                    future: widget.tab.countForFacetCached(titleOnlyFacet),
+                    builder: (context, titleSnapshot) {
+                      if (titleSnapshot.hasData) {
+                        final titleCount = titleSnapshot.data!;
 
-                      if (topicsCount > 0 || topicsCount == -1) {
-                        // יש תוצאות בקטגוריה, אבל לא בספר הספציפי
-                        // לא נציג את הספר כי זה יגרום להצגת ספרים ללא תוצאות
-                        return const SizedBox.shrink();
+                        if (titleCount > 0 || titleCount == -1) {
+                          return _buildBookTile(book, titleCount, level + 1,
+                              categoryPath: category.path);
+                        }
                       }
-
-                      // ננסה עם שם הספר בלבד
-                      return FutureBuilder<int>(
-                        key: ValueKey('${state.searchQuery}_$titleOnlyFacet'),
-                        future: widget.tab.countForFacetCached(titleOnlyFacet),
-                        builder: (context, titleSnapshot) {
-                          if (titleSnapshot.hasData) {
-                            final titleCount = titleSnapshot.data!;
-
-                            if (titleCount > 0 || titleCount == -1) {
-                              return _buildBookTile(book, titleCount, level + 1,
-                                  categoryPath: category.path);
-                            }
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      );
-                    }
-                    return _buildBookTile(book, -1, level + 1);
-                  },
-                );
-              }
-              return _buildBookTile(book, -1, level + 1,
-                  categoryPath: category.path);
-            },
+                      return const SizedBox.shrink();
+                    },
+                  );
+                }
+                return _buildBookTile(book, -1, level + 1);
+              },
+            ),
           );
         },
       ));
@@ -487,7 +463,6 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
 
         return BlocBuilder<SearchBloc, SearchState>(
           builder: (context, searchState) {
-
             if (libraryState.library == null) {
               return const Center(child: Text('No library data available'));
             }

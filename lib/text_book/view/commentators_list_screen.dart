@@ -4,10 +4,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/widgets/filter_list/src/filter_list_dialog.dart';
 import 'package:otzaria/widgets/filter_list/src/theme/filter_list_theme.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class CommentatorsListView extends StatefulWidget {
   final VoidCallback? onCommentatorSelected;
@@ -135,8 +137,9 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<TextBookBloc, TextBookState>(builder: (context, state) {
-      if (state is! TextBookLoaded) return const Center();
+    return TextBookStateBuilder(
+      loadingWidget: const Center(),
+      builder: (context, state) {
       if (state.availableCommentators.isEmpty) {
         return const Center(
           child: Text("אין מפרשים"),
@@ -196,7 +199,7 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
                 // --- שדה החיפוש ---
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: TextField(
+                  child: RtlTextField(
                     controller: searchController,
                     decoration: InputDecoration(
                       hintText: "סינון מפרשים...",

@@ -4,6 +4,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 
 abstract class TextBookState extends Equatable {
   final TextBook book;
@@ -19,13 +20,41 @@ abstract class TextBookState extends Equatable {
 
 class TextBookInitial extends TextBookState {
   final String searchText;
+  final Map<String, Map<String, bool>> searchOptions;
+  final Map<int, List<String>> alternativeWords;
+  final Map<String, String> spacingValues;
+  final SearchMode searchMode;
+  final bool splitedView;
+  final bool showPageShapeView;
 
   const TextBookInitial(
       super.book, super.index, super.showLeftPane, super.commentators,
-      [this.searchText = '']);
+      [this.searchText = '',
+      this.searchOptions = const {},
+      this.alternativeWords = const {},
+      this.spacingValues = const {},
+      this.searchMode = SearchMode.exact,
+      this.splitedView = true,
+      this.showPageShapeView = false]);
+
+  // קונסטרקטור עם פרמטרים בשם
+  const TextBookInitial.named(
+    super.book,
+    super.index,
+    super.showLeftPane,
+    super.commentators, {
+    this.searchText = '',
+    this.searchOptions = const {},
+    this.alternativeWords = const {},
+    this.spacingValues = const {},
+    this.searchMode = SearchMode.exact,
+    bool? splitedView,
+    this.showPageShapeView = false,
+  }) : splitedView = splitedView ?? false; // ברירת מחדל: מפרשים מתחת
 
   @override
-  List<Object?> get props => [book.title, searchText];
+  List<Object?> get props =>
+      [book.title, searchText, splitedView, showPageShapeView];
 }
 
 class TextBookLoading extends TextBookState {
@@ -50,6 +79,8 @@ class TextBookLoaded extends TextBookState {
   final List<String> content;
   final double fontSize;
   final bool showSplitView;
+  final bool showTzuratHadafView;
+  final bool showPageShapeView;
   final List<String> activeCommentators;
   final List<CommentatorGroup> commentatorGroups;
   final List<String> availableCommentators;
@@ -61,6 +92,10 @@ class TextBookLoaded extends TextBookState {
   final int? selectedIndex;
   final bool pinLeftPane;
   final String searchText;
+  final Map<String, Map<String, bool>> searchOptions;
+  final Map<int, List<String>> alternativeWords;
+  final Map<String, String> spacingValues;
+  final SearchMode searchMode;
   final String? currentTitle;
   final String? selectedTextForNote;
   final int? selectedTextStart;
@@ -85,6 +120,8 @@ class TextBookLoaded extends TextBookState {
     required this.content,
     required this.fontSize,
     required this.showSplitView,
+    this.showTzuratHadafView = false,
+    this.showPageShapeView = false,
     required this.activeCommentators,
     required this.commentatorGroups,
     required this.availableCommentators,
@@ -96,6 +133,10 @@ class TextBookLoaded extends TextBookState {
     this.selectedIndex,
     required this.pinLeftPane,
     required this.searchText,
+    this.searchOptions = const {},
+    this.alternativeWords = const {},
+    this.spacingValues = const {},
+    this.searchMode = SearchMode.exact,
     required this.scrollController,
     required this.positionsListener,
     this.currentTitle,
@@ -124,6 +165,8 @@ class TextBookLoaded extends TextBookState {
       fontSize: 25.0, // Default font size
       showLeftPane: showLeftPane,
       showSplitView: splitView,
+      showTzuratHadafView: false,
+      showPageShapeView: false,
       activeCommentators: commentators ?? const [],
       commentatorGroups: const [],
       availableCommentators: const [],
@@ -155,6 +198,8 @@ class TextBookLoaded extends TextBookState {
     double? fontSize,
     bool? showLeftPane,
     bool? showSplitView,
+    bool? showTzuratHadafView,
+    bool? showPageShapeView,
     List<String>? activeCommentators,
     List<CommentatorGroup>? commentatorGroups,
     List<String>? availableCommentators,
@@ -166,6 +211,10 @@ class TextBookLoaded extends TextBookState {
     List<int>? visibleIndices,
     bool? pinLeftPane,
     String? searchText,
+    Map<String, Map<String, bool>>? searchOptions,
+    Map<int, List<String>>? alternativeWords,
+    Map<String, String>? spacingValues,
+    SearchMode? searchMode,
     ItemScrollController? scrollController,
     ItemPositionsListener? positionsListener,
     String? currentTitle,
@@ -187,6 +236,8 @@ class TextBookLoaded extends TextBookState {
       fontSize: fontSize ?? this.fontSize,
       showLeftPane: showLeftPane ?? this.showLeftPane,
       showSplitView: showSplitView ?? this.showSplitView,
+      showTzuratHadafView: showTzuratHadafView ?? this.showTzuratHadafView,
+      showPageShapeView: showPageShapeView ?? this.showPageShapeView,
       activeCommentators: activeCommentators ?? this.activeCommentators,
       commentatorGroups: commentatorGroups ?? this.commentatorGroups,
       availableCommentators:
@@ -199,6 +250,10 @@ class TextBookLoaded extends TextBookState {
       selectedIndex: selectedIndex,
       pinLeftPane: pinLeftPane ?? this.pinLeftPane,
       searchText: searchText ?? this.searchText,
+      searchOptions: searchOptions ?? this.searchOptions,
+      alternativeWords: alternativeWords ?? this.alternativeWords,
+      spacingValues: spacingValues ?? this.spacingValues,
+      searchMode: searchMode ?? this.searchMode,
       scrollController: scrollController ?? this.scrollController,
       positionsListener: positionsListener ?? this.positionsListener,
       currentTitle: currentTitle ?? this.currentTitle,
@@ -223,6 +278,8 @@ class TextBookLoaded extends TextBookState {
         fontSize,
         showLeftPane,
         showSplitView,
+        showTzuratHadafView,
+        showPageShapeView,
         activeCommentators.length,
         commentatorGroups,
         availableCommentators.length,

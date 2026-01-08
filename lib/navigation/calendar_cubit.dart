@@ -1,15 +1,54 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/services/notification_service.dart';
+import 'package:shamor_zachor/utils/message_utils.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 enum CalendarType { hebrew, gregorian, combined }
 
 enum CalendarView { month, week, day }
+
+class ZmanAlertPreference extends Equatable {
+  final int minutesBefore;
+  final String displayName;
+
+  const ZmanAlertPreference({
+    required this.minutesBefore,
+    required this.displayName,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'minutesBefore': minutesBefore,
+      'displayName': displayName,
+    };
+  }
+
+  static ZmanAlertPreference? fromJson(dynamic json, {String? fallbackName}) {
+    if (json is int) {
+      return ZmanAlertPreference(
+        minutesBefore: json,
+        displayName: fallbackName ?? '',
+      );
+    }
+    if (json is! Map) return null;
+    final minutesBefore = json['minutesBefore'];
+    final displayName = json['displayName'] ?? fallbackName;
+    if (minutesBefore is! int) return null;
+    if (displayName is! String || displayName.isEmpty) return null;
+    return ZmanAlertPreference(
+      minutesBefore: minutesBefore,
+      displayName: displayName,
+    );
+  }
+
+  @override
+  List<Object?> get props => [minutesBefore, displayName];
+}
 
 // Calendar State
 class CalendarState extends Equatable {
@@ -29,6 +68,7 @@ class CalendarState extends Equatable {
   final bool calendarNotificationsEnabled;
   final int calendarNotificationTime;
   final bool calendarNotificationSound;
+  final Map<String, ZmanAlertPreference> zmanAlerts;
 
   const CalendarState({
     required this.selectedJewishDate,
@@ -47,6 +87,7 @@ class CalendarState extends Equatable {
     this.calendarNotificationsEnabled = true,
     this.calendarNotificationTime = 60,
     this.calendarNotificationSound = true,
+    this.zmanAlerts = const {},
   });
 
   factory CalendarState.initial() {
@@ -85,6 +126,7 @@ class CalendarState extends Equatable {
     bool? calendarNotificationsEnabled,
     int? calendarNotificationTime,
     bool? calendarNotificationSound,
+    Map<String, ZmanAlertPreference>? zmanAlerts,
   }) {
     return CalendarState(
       selectedJewishDate: selectedJewishDate ?? this.selectedJewishDate,
@@ -107,6 +149,7 @@ class CalendarState extends Equatable {
           calendarNotificationTime ?? this.calendarNotificationTime,
       calendarNotificationSound:
           calendarNotificationSound ?? this.calendarNotificationSound,
+      zmanAlerts: zmanAlerts ?? this.zmanAlerts,
     );
   }
 
@@ -138,6 +181,7 @@ class CalendarState extends Equatable {
         calendarNotificationsEnabled,
         calendarNotificationTime,
         calendarNotificationSound,
+        zmanAlerts,
       ];
 }
 
@@ -164,6 +208,10 @@ class CalendarCubit extends Cubit<CalendarState> {
         settings['calendarNotificationTime'] as int;
     final bool calendarNotificationSound =
         settings['calendarNotificationSound'] as bool;
+    final String zmanAlertsJson = settings['calendarZmanAlerts'] as String;
+
+    final Map<String, ZmanAlertPreference> zmanAlerts =
+      _parseZmanAlertPreferences(zmanAlertsJson);
 
     // טעינת אירועים מהאחסון
     List<CustomEvent> events = [];
@@ -184,9 +232,175 @@ class CalendarCubit extends Cubit<CalendarState> {
       calendarNotificationsEnabled: calendarNotificationsEnabled,
       calendarNotificationTime: calendarNotificationTime,
       calendarNotificationSound: calendarNotificationSound,
+      zmanAlerts: zmanAlerts,
     ));
     _updateTimesForDate(state.selectedGregorianDate, selectedCity);
-    _rescheduleNotifications();
+    await _rescheduleNotifications();
+    await _rescheduleZmanAlerts();
+  }
+
+  static const int _zmanScheduleDaysAhead = 45;
+
+  static Map<String, ZmanAlertPreference> _parseZmanAlertPreferences(
+      String jsonStr) {
+    try {
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is! Map) return {};
+      final result = <String, ZmanAlertPreference>{};
+      decoded.forEach((key, value) {
+        if (key is! String) return;
+        final pref = ZmanAlertPreference.fromJson(value, fallbackName: key);
+        if (pref != null) {
+          result[key] = pref;
+        }
+      });
+      return result;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static int _zmanNotificationId(String timeId, DateTime date) {
+    final y = date.year.toString();
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    final key = '$timeId|$y$m$d';
+    return key.hashCode & 0x7fffffff;
+  }
+
+  static DateTime? _parseTimeOnDate(DateTime date, String timeStr) {
+    final parts = timeStr.split(':');
+    if (parts.length != 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return DateTime(date.year, date.month, date.day, h, m);
+  }
+
+  static String _formatMinutesBefore(int minutes) {
+    if (minutes <= 0) return 'עכשיו';
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (h > 0 && m > 0) return '$h שעות ו-$m דקות';
+    if (h > 0) return '$h שעות';
+    return '$m דקות';
+  }
+
+  Future<void> setZmanAlertPreference({
+    required String timeId,
+    required String displayName,
+    required int minutesBefore,
+  }) async {
+    final notificationService = NotificationService();
+
+    if (!notificationService.isInitialized) {
+      await notificationService.init();
+    }
+
+    bool hasPermission = await notificationService.checkPermissions();
+    if (!hasPermission) {
+      hasPermission = await notificationService.requestPermissions();
+    }
+
+    if (!hasPermission) {
+      UiSnack.showWithAction(
+        message: 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+            'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
+        actionLabel: 'הבנתי',
+        onAction: () {},
+        backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 8),
+      );
+      return;
+    }
+
+    final updated = Map<String, ZmanAlertPreference>.from(state.zmanAlerts);
+    updated[timeId] = ZmanAlertPreference(
+      minutesBefore: minutesBefore,
+      displayName: displayName,
+    );
+    emit(state.copyWith(zmanAlerts: updated));
+    await _settingsRepository
+        .updateCalendarZmanAlertsJson(jsonEncode(updated.map((k, v) => MapEntry(k, v.toJson()))));
+
+    await _rescheduleZmanAlerts();
+    UiSnack.showSuccess('התראה הופעלה עבור $displayName');
+  }
+
+  Future<void> cancelZmanAlertPreference({
+    required String timeId,
+  }) async {
+    final existing = state.zmanAlerts[timeId];
+    if (existing == null) return;
+
+    final updated = Map<String, ZmanAlertPreference>.from(state.zmanAlerts);
+    updated.remove(timeId);
+    emit(state.copyWith(zmanAlerts: updated));
+    await _settingsRepository
+        .updateCalendarZmanAlertsJson(jsonEncode(updated.map((k, v) => MapEntry(k, v.toJson()))));
+
+    // Cancel scheduled notifications for this timeId in our rolling window.
+    final notificationService = NotificationService();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    for (int i = 0; i <= _zmanScheduleDaysAhead; i++) {
+      final d = today.add(Duration(days: i));
+      final id = _zmanNotificationId(timeId, d);
+      await notificationService.cancelNotification(id);
+    }
+
+    UiSnack.showSuccess('ההתראה בוטלה עבור ${existing.displayName}');
+  }
+
+  Future<void> _rescheduleZmanAlerts() async {
+    if (state.zmanAlerts.isEmpty) return;
+
+    final notificationService = NotificationService();
+    if (!notificationService.isInitialized) {
+      return;
+    }
+
+    // Don't prompt here; only schedule if we already have permissions.
+    final hasPermission = await notificationService.checkPermissions();
+    if (!hasPermission) return;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    for (final entry in state.zmanAlerts.entries) {
+      final timeId = entry.key;
+      final pref = entry.value;
+
+      for (int i = 0; i <= _zmanScheduleDaysAhead; i++) {
+        final d = today.add(Duration(days: i));
+        final times = _calculateDailyTimes(d, state.selectedCity);
+        final timeStr = times[timeId];
+        if (timeStr == null) {
+          // Ensure no stale notification for days the zman doesn't exist.
+          await notificationService.cancelNotification(_zmanNotificationId(timeId, d));
+          continue;
+        }
+
+        final eventDt = _parseTimeOnDate(d, timeStr);
+        if (eventDt == null) {
+          await notificationService.cancelNotification(_zmanNotificationId(timeId, d));
+          continue;
+        }
+
+        final id = _zmanNotificationId(timeId, d);
+        await notificationService.cancelNotification(id);
+
+        await notificationService.scheduleNotification(
+          id: id,
+          title: 'תזכורת: ${pref.displayName}',
+          body:
+              'בעוד ${_formatMinutesBefore(pref.minutesBefore)} ${pref.displayName} ($timeStr)',
+          eventDate: eventDt,
+          reminderMinutes: pref.minutesBefore,
+          soundEnabled: true,
+        );
+      }
+    }
   }
 
   void _updateTimesForDate(DateTime date, String city) {
@@ -219,6 +433,9 @@ class CalendarCubit extends Cubit<CalendarState> {
     ));
     // שמור את הבחירה בהגדרות
     await _settingsRepository.updateSelectedCity(newCity);
+
+    // Times shift with city, so reschedule zman alerts.
+    await _rescheduleZmanAlerts();
   }
 
   Future<void> changeCalendarType(CalendarType type) async {
@@ -422,8 +639,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     required String title,
     String? description,
     required DateTime baseGregorianDate,
-    required bool isRecurring,
-    required bool recurOnHebrew,
+    required RecurrenceType recurrenceType,
     int? recurringYears,
   }) {
     final baseJewish = JewishDate.fromDateTime(baseGregorianDate);
@@ -440,8 +656,7 @@ class CalendarCubit extends Cubit<CalendarState> {
       baseJewishYear: baseJewish.getJewishYear(),
       baseJewishMonth: baseJewish.getJewishMonth(),
       baseJewishDay: baseJewish.getJewishDayOfMonth(),
-      recurring: isRecurring,
-      recurOnHebrew: recurOnHebrew,
+      recurrenceType: recurrenceType,
       recurringYears: recurringYears,
     );
     final updated = List<CustomEvent>.from(state.events)..add(newEvent);
@@ -472,27 +687,42 @@ class CalendarCubit extends Cubit<CalendarState> {
     final hY = jd.getJewishYear(),
         hM = jd.getJewishMonth(),
         hD = jd.getJewishDayOfMonth();
+    final gWeekday = date.weekday;
 
     return state.events.where((e) {
-      if (e.recurring) {
+      if (e.recurrenceType != RecurrenceType.none) {
         // בדוק אם האירוע החוזר עדיין בתוקף
         if (e.recurringYears != null && e.recurringYears! > 0) {
-          if (e.recurOnHebrew) {
+          bool expired = false;
+          if (e.recurrenceType == RecurrenceType.annualHebrew ||
+              e.recurrenceType == RecurrenceType.monthlyHebrew) {
             if (hY >= e.baseJewishYear + e.recurringYears!) {
-              return false; // עבר זמנו
+              expired = true;
             }
           } else {
+            // Gregorian based (Weekly, MonthlyGregorian, AnnualGregorian)
             if (gY >= e.baseGregorianDate.year + e.recurringYears!) {
-              return false; // עבר זמנו
+              expired = true;
             }
           }
+          if (expired) return false;
         }
-        // אם הוא בתוקף, בדוק אם התאריך מתאים
-        if (e.recurOnHebrew) {
-          return e.baseJewishMonth == hM && e.baseJewishDay == hD;
-        } else {
-          return e.baseGregorianDate.month == gM &&
-              e.baseGregorianDate.day == gD;
+        
+        // בדיקת התאמה לפי סוג החזרה
+        switch (e.recurrenceType) {
+          case RecurrenceType.weekly:
+            return e.baseGregorianDate.weekday == gWeekday;
+          case RecurrenceType.monthlyHebrew:
+            return e.baseJewishDay == hD;
+          case RecurrenceType.monthlyGregorian:
+            return e.baseGregorianDate.day == gD;
+          case RecurrenceType.annualHebrew:
+            return e.baseJewishMonth == hM && e.baseJewishDay == hD;
+          case RecurrenceType.annualGregorian:
+            return e.baseGregorianDate.month == gM &&
+                e.baseGregorianDate.day == gD;
+          case RecurrenceType.none:
+            return false;
         }
       } else {
         // אירוע רגיל
@@ -521,7 +751,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     try {
       final eventsJson = jsonEncode(events.map((e) => e.toJson()).toList());
       await _settingsRepository.updateCalendarEvents(eventsJson);
-      _rescheduleNotifications();
+      await _rescheduleNotifications();
     } catch (e) {
       // במקרה של שגיאה, נדפיס הודעה לקונסול
       debugPrint('שגיאה בשמירת אירועים: $e');
@@ -530,10 +760,44 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   // --- Notification Settings ---
   Future<void> changeCalendarNotificationsEnabled(bool enabled) async {
+    if (enabled) {
+      // בקש הרשאות לפני הפעלת התראות
+      final notificationService = NotificationService();
+      if (!notificationService.isInitialized) {
+        await notificationService.init();
+      }
+      // בדוק תחילה אם ההרשאות כבר ניתנו
+      bool hasPermission = await notificationService.checkPermissions();
+
+      // אם אין הרשאות, בקש אותן
+      if (!hasPermission) {
+        hasPermission = await notificationService.requestPermissions();
+      }
+
+      // אם אין הרשאה, אל תפעיל את ההתראות והצג הודעה למשתמש
+      if (!hasPermission) {
+        emit(state.copyWith(calendarNotificationsEnabled: false));
+        await _settingsRepository.updateCalendarNotificationsEnabled(false);
+
+        // הצג הודעת שגיאה למשתמש עם הוראות מפורטות
+        UiSnack.showWithAction(
+          message: 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+              'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
+          actionLabel: 'הבנתי',
+          onAction: () {
+            // אפשר להוסיף כאן פתיחת הגדרות האפליקציה בעתיד
+          },
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 8),
+        );
+        return;
+      }
+    }
+
     emit(state.copyWith(calendarNotificationsEnabled: enabled));
     await _settingsRepository.updateCalendarNotificationsEnabled(enabled);
     // Reschedule only if enabling/disabling notifications
-    _rescheduleNotifications();
+    await _rescheduleNotifications();
   }
 
   Future<void> changeCalendarNotificationTime(int time) async {
@@ -542,7 +806,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     await _settingsRepository.updateCalendarNotificationTime(time);
     // Reschedule only if time actually changed and notifications are enabled
     if (oldTime != time && state.calendarNotificationsEnabled) {
-      _rescheduleNotifications();
+      await _rescheduleNotifications();
     }
   }
 
@@ -552,13 +816,31 @@ class CalendarCubit extends Cubit<CalendarState> {
     // No need to reschedule for sound changes - it only affects new notifications
   }
 
-  void _rescheduleNotifications() {
+  Future<void> _rescheduleNotifications() async {
     final notificationService = NotificationService();
-    notificationService.cancelAllNotifications();
+
+    // Cancel previously scheduled calendar EVENT notifications only.
+    final prevIdsJson = _settingsRepository.getCalendarEventNotificationIdsJson();
+    final prevIds = <int>[];
+    try {
+      final decoded = jsonDecode(prevIdsJson);
+      if (decoded is List) {
+        for (final v in decoded) {
+          if (v is int) prevIds.add(v);
+        }
+      }
+    } catch (_) {}
+
+    for (final id in prevIds) {
+      await notificationService.cancelNotification(id);
+    }
 
     if (!state.calendarNotificationsEnabled) {
+      await _settingsRepository.updateCalendarEventNotificationIdsJson('[]');
       return;
     }
+
+    final scheduledIds = <int>{};
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -600,7 +882,8 @@ class CalendarCubit extends Cubit<CalendarState> {
             final id =
                 '${event.id}${occurrenceDate.year}${occurrenceDate.month}${occurrenceDate.day}'
                     .hashCode;
-            notificationService.scheduleNotification(
+            scheduledIds.add(id);
+            await notificationService.scheduleNotification(
               id: id,
               title: event.title,
               body: event.description,
@@ -613,8 +896,10 @@ class CalendarCubit extends Cubit<CalendarState> {
       } else {
         // Non-recurring event
         if (event.baseGregorianDate.isAfter(today)) {
-          notificationService.scheduleNotification(
-            id: event.id.hashCode,
+          final id = event.id.hashCode;
+          scheduledIds.add(id);
+          await notificationService.scheduleNotification(
+            id: id,
             title: event.title,
             body: event.description,
             eventDate: event.baseGregorianDate,
@@ -624,6 +909,10 @@ class CalendarCubit extends Cubit<CalendarState> {
         }
       }
     }
+
+    await _settingsRepository.updateCalendarEventNotificationIdsJson(
+      jsonEncode(scheduledIds.toList()),
+    );
   }
 }
 
@@ -683,6 +972,16 @@ JewishDate computePreviousJewishMonth(JewishDate current) =>
     _computePreviousJewishMonth(current);
 
 // Simple event model kept here for scope
+
+enum RecurrenceType {
+  none,
+  weekly,
+  monthlyHebrew,
+  monthlyGregorian,
+  annualHebrew,
+  annualGregorian
+}
+
 class CustomEvent extends Equatable {
   final String id; // מזהה ייחודי
   final String title;
@@ -692,9 +991,11 @@ class CustomEvent extends Equatable {
   final int baseJewishYear;
   final int baseJewishMonth;
   final int baseJewishDay;
-  final bool recurring;
-  final bool recurOnHebrew;
+  final RecurrenceType recurrenceType;
   final int? recurringYears; // כמה שנים האירוע יחזור
+
+  bool get recurring => recurrenceType != RecurrenceType.none;
+  bool get recurOnHebrew => recurrenceType == RecurrenceType.annualHebrew || recurrenceType == RecurrenceType.monthlyHebrew;
 
   const CustomEvent({
     required this.id,
@@ -705,8 +1006,7 @@ class CustomEvent extends Equatable {
     required this.baseJewishYear,
     required this.baseJewishMonth,
     required this.baseJewishDay,
-    required this.recurring,
-    required this.recurOnHebrew,
+    required this.recurrenceType,
     this.recurringYears,
   });
 
@@ -720,8 +1020,7 @@ class CustomEvent extends Equatable {
     int? baseJewishYear,
     int? baseJewishMonth,
     int? baseJewishDay,
-    bool? recurring,
-    bool? recurOnHebrew,
+    RecurrenceType? recurrenceType,
     int? recurringYears,
   }) {
     return CustomEvent(
@@ -733,8 +1032,7 @@ class CustomEvent extends Equatable {
       baseJewishYear: baseJewishYear ?? this.baseJewishYear,
       baseJewishMonth: baseJewishMonth ?? this.baseJewishMonth,
       baseJewishDay: baseJewishDay ?? this.baseJewishDay,
-      recurring: recurring ?? this.recurring,
-      recurOnHebrew: recurOnHebrew ?? this.recurOnHebrew,
+      recurrenceType: recurrenceType ?? this.recurrenceType,
       recurringYears: recurringYears ?? this.recurringYears,
     );
   }
@@ -750,14 +1048,27 @@ class CustomEvent extends Equatable {
       'baseJewishYear': baseJewishYear,
       'baseJewishMonth': baseJewishMonth,
       'baseJewishDay': baseJewishDay,
-      'recurring': recurring,
-      'recurOnHebrew': recurOnHebrew,
+      'recurrenceType': recurrenceType.index,
       'recurringYears': recurringYears,
     };
   }
 
   // יצירה מ-JSON לטעינה
   factory CustomEvent.fromJson(Map<String, dynamic> json) {
+    RecurrenceType type;
+    if (json.containsKey('recurrenceType')) {
+      type = RecurrenceType.values[json['recurrenceType'] as int];
+    } else {
+      // Backward compatibility
+      final bool recurring = json['recurring'] as bool? ?? false;
+      final bool recurOnHebrew = json['recurOnHebrew'] as bool? ?? true;
+      if (!recurring) {
+        type = RecurrenceType.none;
+      } else {
+        type = recurOnHebrew ? RecurrenceType.annualHebrew : RecurrenceType.annualGregorian;
+      }
+    }
+
     return CustomEvent(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -768,8 +1079,7 @@ class CustomEvent extends Equatable {
       baseJewishYear: json['baseJewishYear'] as int,
       baseJewishMonth: json['baseJewishMonth'] as int,
       baseJewishDay: json['baseJewishDay'] as int,
-      recurring: json['recurring'] as bool,
-      recurOnHebrew: json['recurOnHebrew'] as bool,
+      recurrenceType: type,
       recurringYears: json['recurringYears'] as int?,
     );
   }
@@ -784,8 +1094,7 @@ class CustomEvent extends Equatable {
         baseJewishYear,
         baseJewishMonth,
         baseJewishDay,
-        recurring,
-        recurOnHebrew,
+        recurrenceType,
         recurringYears,
       ];
 }
@@ -1106,6 +1415,12 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
       'lng': -115.1398,
       'elevation': 610.0,
       'timezone': 'America/Los_Angeles'
+    },
+    'ליקווד': {
+      'lat': 40.0878,
+      'lng': -74.2098,
+      'elevation': 20.0,
+      'timezone': 'America/New_York'
     },
     'לוס אנג\'לס': {
       'lat': 34.0522,

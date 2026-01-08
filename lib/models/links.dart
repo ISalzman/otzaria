@@ -56,8 +56,12 @@ class Link {
         index1 = int.parse(json['line_index_1'].toString().split('.').first),
         path2 = json['path_2'].toString(),
         index2 = int.parse(json['line_index_2'].toString().split('.').first),
-        connectionType = json['Conection Type'].toString(),
-        start = json['start'] != null ? int.tryParse(json['start'].toString()) : null,
+        connectionType = json['Conection Type'].toString().isEmpty
+            ? 'reference'
+            : json['Conection Type'].toString(),
+        start = json['start'] != null
+            ? int.tryParse(json['start'].toString())
+            : null,
         end = json['end'] != null ? int.tryParse(json['end'].toString()) : null;
 }
 

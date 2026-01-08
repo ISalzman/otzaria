@@ -9,8 +9,8 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor_dialog.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/widgets/confirmation_dialog.dart';
-import 'package:otzaria/widgets/input_dialog.dart';
+import 'package:otzaria/widgets/dialogs.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class PersonalNotesSidebar extends StatefulWidget {
   final String bookId;
@@ -93,10 +93,15 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, PersonalNotesState state, List<int> visibleIndices) {
+  Widget _buildHeader(BuildContext context, PersonalNotesState state,
+      List<int> visibleIndices) {
     final totalNotes = state.locatedNotes.length + state.missingNotes.length;
     final visibleNotes = _showOnlyVisible && visibleIndices.isNotEmpty
-        ? state.locatedNotes.where((n) => n.lineNumber != null && visibleIndices.contains(n.lineNumber! - 1)).length
+        ? state.locatedNotes
+            .where((n) =>
+                n.lineNumber != null &&
+                visibleIndices.contains(n.lineNumber! - 1))
+            .length
         : totalNotes;
 
     return Padding(
@@ -107,7 +112,7 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
           Row(
             children: [
               Expanded(
-                child: TextField(
+                child: RtlTextField(
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'חפש בהערות...',
@@ -181,7 +186,10 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
               Text(
                 '$visibleNotes/$totalNotes',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.6),
                     ),
               ),
             ],
@@ -191,7 +199,8 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
     );
   }
 
-  Widget _buildContent(BuildContext context, PersonalNotesState state, List<int> visibleIndices) {
+  Widget _buildContent(BuildContext context, PersonalNotesState state,
+      List<int> visibleIndices) {
     if (state.errorMessage != null) {
       return Center(
         child: Padding(
@@ -238,7 +247,8 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
             : state.missingNotes.where((note) {
                 final query = _searchQuery.toLowerCase();
                 return note.content.toLowerCase().contains(query) ||
-                    (note.lastKnownLineNumber?.toString().contains(query) ?? false);
+                    (note.lastKnownLineNumber?.toString().contains(query) ??
+                        false);
               }).toList());
 
     // אם אין תוצאות
@@ -254,7 +264,10 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
           child: Text(
             message,
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.6),
             ),
           ),
         ),
@@ -281,10 +294,7 @@ class _PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
                 'הערות חסרות מיקום',
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
-                    ?.copyWith(
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: Theme.of(context)
                           .colorScheme
                           .onSurface
@@ -414,7 +424,8 @@ class _LocatedNoteTileState extends State<_LocatedNoteTile> {
         InkWell(
           onTap: widget.onTap,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
             color: Theme.of(context).colorScheme.surface,
             child: Row(
               children: [
@@ -506,8 +517,12 @@ class _MissingNoteTileState extends State<_MissingNoteTile> {
         InkWell(
           onTap: widget.onReposition,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            color: Theme.of(context).colorScheme.surfaceTint.withValues(alpha: 0.05),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceTint
+                .withValues(alpha: 0.05),
             child: Row(
               children: [
                 Expanded(
@@ -552,7 +567,10 @@ class _MissingNoteTileState extends State<_MissingNoteTile> {
                   onTap: widget.onReposition,
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 12.0),
-                    color: Theme.of(context).colorScheme.surfaceTint.withValues(alpha: 0.05),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceTint
+                        .withValues(alpha: 0.05),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -561,7 +579,10 @@ class _MissingNoteTileState extends State<_MissingNoteTile> {
                             padding: const EdgeInsets.only(bottom: 8.0),
                             child: Text(
                               'שורה קודמת: ${widget.note.lastKnownLineNumber}',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
                                     color: Theme.of(context)
                                         .colorScheme
                                         .onSurface
@@ -574,7 +595,10 @@ class _MissingNoteTileState extends State<_MissingNoteTile> {
                           alignment: Alignment.centerRight,
                           child: Text(
                             widget.note.content,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
                                   height: 1.5,
                                 ),
                             textAlign: TextAlign.justify,

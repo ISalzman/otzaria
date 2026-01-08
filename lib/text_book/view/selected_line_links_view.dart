@@ -3,15 +3,19 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
+import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
+import 'package:otzaria/widgets/app_future_builder.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/context_menu_utils.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 
 /// Widget שמציג את הקישורים של השורה הנבחרת בלבד
 class SelectedLineLinksView extends StatefulWidget {
@@ -40,6 +44,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   Future<List<Link>>? _filteredLinksFuture;
   String _lastSearchKey = '';
   final Set<String> _linksWithSearchResults = {}; // קישורים עם תוצאות חיפוש
+  String? _savedSelectedText; // טקסט נבחר לתפריט הקשר
 
   @override
   void dispose() {
@@ -49,12 +54,8 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<TextBookBloc, TextBookState>(
+    return TextBookStateBuilder(
       builder: (context, state) {
-        if (state is! TextBookLoaded) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
         return Column(
           children: [
             // שדה חיפוש
@@ -62,7 +63,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
               padding: const EdgeInsets.all(8.0),
               child: Column(
                 children: [
-                  TextField(
+                  RtlTextField(
                     controller: _searchController,
                     decoration: InputDecoration(
                       hintText: 'חפש בתוך הקישורים המוצגים...',
@@ -152,19 +153,10 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
 
     return Container(
       color: Theme.of(context).colorScheme.surface,
-      child: FutureBuilder<List<Link>>(
+      child: AppFutureBuilder<List<Link>>(
         future: _filteredLinksFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
-
-          final filteredLinks = snapshot.data ?? links;
+        builder: (context, data) {
+          final filteredLinks = data;
 
           return ListView.builder(
             itemCount: filteredLinks.length,
@@ -233,98 +225,113 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
 
   Widget _buildExpansionTile(Link link) {
     final keyStr = '${link.path2}_${link.index2}';
-    return ExpansionTile(
-      key: PageStorageKey(keyStr),
-      maintainState: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
-      title: BlocBuilder<SettingsBloc, SettingsState>(
-        builder: (context, settingsState) {
-          String displayTitle = link.heRef;
-          if (settingsState.replaceHolyNames) {
-            displayTitle = utils.replaceHolyNames(displayTitle);
-          }
-          return Text(
-            displayTitle,
-            style: TextStyle(
-              fontSize: widget.fontSize * 0.75,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'FrankRuhlCLM',
-            ),
-          );
-        },
+    return ctx.ContextMenuRegion(
+      contextMenu: ContextMenuUtils.buildCommentaryContextMenu(
+        context: context,
+        link: link,
+        openBookCallback: widget.openBookCallback,
+        fontSize: widget.fontSize,
+        savedSelectedText: _savedSelectedText,
+        onCopySelected: () => ContextMenuUtils.copyFormattedText(
+          context: context,
+          savedSelectedText: _savedSelectedText,
+          fontSize: widget.fontSize,
+        ),
       ),
-      subtitle: BlocBuilder<SettingsBloc, SettingsState>(
-        builder: (context, settingsState) {
-          String displaySubtitle = utils.getTitleFromPath(link.path2);
-          if (settingsState.replaceHolyNames) {
-            displaySubtitle = utils.replaceHolyNames(displaySubtitle);
+      child: ExpansionTile(
+        key: PageStorageKey(keyStr),
+        maintainState: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
+        title: BlocBuilder<SettingsBloc, SettingsState>(
+          builder: (context, settingsState) {
+            String displayTitle = utils.getTitleFromPath(link.path2);
+            if (settingsState.replaceHolyNames) {
+              displayTitle = utils.replaceHolyNames(displayTitle);
+            }
+            return Text(
+              displayTitle,
+              style: TextStyle(
+                fontSize: settingsState.commentatorsFontSize - 2,
+                fontWeight: FontWeight.bold,
+                fontFamily: settingsState.commentatorsFontFamily,
+              ),
+            );
+          },
+        ),
+        subtitle: BlocBuilder<SettingsBloc, SettingsState>(
+          builder: (context, settingsState) {
+            String displaySubtitle = link.heRef;
+            if (settingsState.replaceHolyNames) {
+              displaySubtitle = utils.replaceHolyNames(displaySubtitle);
+            }
+            return Text(
+              displaySubtitle,
+              style: TextStyle(
+                fontSize: settingsState.commentatorsFontSize - 4,
+                fontWeight: FontWeight.normal,
+                fontFamily: settingsState.commentatorsFontFamily,
+                color: Theme.of(context).colorScheme.onSurface.withAlpha(128),
+              ),
+            );
+          },
+        ),
+        onExpansionChanged: (isExpanded) {
+          // טוען תוכן רק אם נפתח ועדיין לא נטען
+          if (isExpanded && !_contentCache.containsKey(keyStr)) {
+            _contentCache[keyStr] = link.content;
           }
-          return Text(
-            displaySubtitle,
-            style: TextStyle(
-              fontSize: widget.fontSize * 0.65,
-              fontFamily: 'FrankRuhlCLM',
-              color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
-            ),
-          );
-        },
-      ),
-      onExpansionChanged: (isExpanded) {
-        // טוען תוכן רק אם נפתח ועדיין לא נטען
-        if (isExpanded && !_contentCache.containsKey(keyStr)) {
-          _contentCache[keyStr] = link.content;
-        }
 
-        // עדכון מצב ההרחבה עם setState בטוח
-        if (_expanded[keyStr] != isExpanded) {
-          setState(() {
-            _expanded[keyStr] = isExpanded;
-          });
-        }
-      },
-      children: [
-        if (_expanded[keyStr] == true)
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: FutureBuilder<String>(
-              future: _contentCache[keyStr],
-              builder: (context, snapshot) =>
-                  _buildLinkContentWidget(link, snapshot),
+          // עדכון מצב ההרחבה עם setState בטוח - דוחה עד אחרי הבנייה
+          if (_expanded[keyStr] != isExpanded) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _expanded[keyStr] = isExpanded;
+                });
+              }
+            });
+          }
+        },
+        children: [
+          if (_expanded[keyStr] == true)
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: AppFutureBuilder<String>(
+                future: _contentCache[keyStr],
+                builder: (context, content) => _buildLinkContent(content, link),
+                errorBuilder: (context, error) =>
+                    BlocBuilder<SettingsBloc, SettingsState>(
+                  builder: (context, settingsState) {
+                    return Text(
+                      'שגיאה בטעינת התוכן: $error',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: settingsState.commentatorsFontSize,
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildLinkContentWidget(Link link, AsyncSnapshot<String> snapshot) {
-    if (snapshot.connectionState == ConnectionState.waiting) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    if (snapshot.hasError) {
-      return Text(
-        'שגיאה בטעינת התוכן: ${snapshot.error}',
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.error,
-          fontSize: widget.fontSize * 0.9,
-        ),
-      );
-    }
-
-    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-      return Text(
-        'אין תוכן זמין',
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurface.withAlpha(150),
-          fontSize: widget.fontSize * 0.9,
-        ),
+  Widget _buildLinkContent(String content, Link link) {
+    if (content.isEmpty) {
+      return BlocBuilder<SettingsBloc, SettingsState>(
+        builder: (context, settingsState) {
+          return Text(
+            'אין תוכן זמין',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface.withAlpha(150),
+              fontSize: settingsState.commentatorsFontSize,
+            ),
+          );
+        },
       );
     }
 
@@ -345,7 +352,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12.0),
-        child: _buildHighlightedText(snapshot.data!, link),
+        child: _buildHighlightedText(content, link),
       ),
     );
   }
@@ -373,9 +380,9 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           return HtmlWidget(
             cleanContent,
             textStyle: TextStyle(
-              fontSize: widget.fontSize * 0.75,
+              fontSize: settingsState.commentatorsFontSize,
               height: 1.5,
-              fontFamily: 'FrankRuhlCLM',
+              fontFamily: settingsState.commentatorsFontFamily,
             ),
           );
         } else {
@@ -383,9 +390,9 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           return Text(
             cleanContent,
             style: TextStyle(
-              fontSize: widget.fontSize * 0.75,
+              fontSize: settingsState.commentatorsFontSize,
               height: 1.5,
-              fontFamily: 'FrankRuhlCLM',
+              fontFamily: settingsState.commentatorsFontFamily,
             ),
             textAlign: TextAlign.justify,
             textDirection: TextDirection.rtl,

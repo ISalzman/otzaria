@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
+import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/text_book/view/combined_view/commentary_content.dart';
+import 'package:otzaria/text_book/view/commentators_list_screen.dart';
+import 'package:otzaria/widgets/commentators_filter_button.dart';
+import 'package:otzaria/widgets/commentators_filter_screen.dart';
 import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 
 /// מייצג קבוצת קטעי פירוש רצופים מאותו ספר
 class CommentaryGroup {
@@ -66,7 +74,6 @@ class CommentaryListBase extends StatefulWidget {
   final VoidCallback? onClosePane;
   final bool shrinkWrap;
   final ItemPositionsListener? itemPositionsListener;
-  final VoidCallback? onOpenCommentatorsFilter;
 
   const CommentaryListBase({
     super.key,
@@ -77,7 +84,6 @@ class CommentaryListBase extends StatefulWidget {
     this.onClosePane,
     this.shrinkWrap = true,
     this.itemPositionsListener,
-    this.onOpenCommentatorsFilter,
   });
 
   @override
@@ -98,9 +104,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   int _lastScrollIndex = 0; // שומר את מיקום הגלילה האחרון
   bool _allExpanded = true; // מצב גלובלי של פתיחה/סגירה של כל המפרשים
   final Map<String, bool> _expansionStates =
-      {}; // מעקב אחרי מצב כל ExpansionTile
-  final Map<String, ExpansibleController> _controllers =
-      {}; // controllers לכל ExpansionTile
+      {}; // מעקב אחרי מצב כל קבוצת מפרשים
+
+  String? _savedSelectedText; // טקסט נבחר לתפריט הקשר
+  bool _showCommentatorsFilter = false; // האם להציג את מסך בחירת המפרשים
 
   String _getLinkKey(Link link) => '${link.path2}_${link.index2}';
 
@@ -156,14 +163,22 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     }
   }
 
+  void _openCommentatorsFilter() {
+    setState(() {
+      _showCommentatorsFilter = true;
+    });
+  }
+
+  void _closeCommentatorsFilter() {
+    setState(() {
+      _showCommentatorsFilter = false;
+    });
+  }
+
   @override
   void dispose() {
     _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
     _searchController.dispose();
-    // מנקה את כל ה-controllers
-    for (var controller in _controllers.values) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -210,20 +225,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (targetGroupIndex == -1 || targetGroup == null) return;
 
     // 3. מבטיח שה-ExpansionTile של הקבוצה פתוח
-    final currentIndexes = widget.indexes ??
-        (state.selectedIndex != null
-            ? [state.selectedIndex!]
-            : state.visibleIndices);
-    final indexesKey = currentIndexes.join(',');
-    final groupKey = '${targetGroup.bookTitle}_$indexesKey';
+    final groupKey = targetGroup.bookTitle;
 
-    final bool isCurrentlyExpanded = _expansionStates[groupKey] ?? _allExpanded;
+    final bool isCurrentlyExpanded = _expansionStates[groupKey] ?? true;
 
     // אם צריך לפתוח, פותח ומחכה לאנימציה
     if (!isCurrentlyExpanded) {
       setState(() {
         _expansionStates[groupKey] = true;
-        _controllers[groupKey]?.expand();
       });
     }
 
@@ -267,11 +276,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
           // תיקון שגיאת לינט: שימוש במשתנה שאינו nullable
           final ScrollableState scrollable = Scrollable.of(itemContext);
-          
+
           // תיקון שגיאת לינט: בדיקת mounted ל-scrollable לפני גישה ל-context שלו
           if (!scrollable.mounted) return;
-          
-          final RenderObject? viewportRenderObj = scrollable.context.findRenderObject();
+
+          final RenderObject? viewportRenderObj =
+              scrollable.context.findRenderObject();
           if (viewportRenderObj is! RenderBox) return;
           final RenderBox viewportBox = viewportRenderObj;
 
@@ -337,27 +347,32 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     required TextBookLoaded state,
     required String indexesKey,
   }) {
-    final groupKey = '${group.bookTitle}_$indexesKey';
+    final groupKey = group.bookTitle;
 
     // אם אין מצב שמור עבור הקבוצה הזו, משתמש במצב הגלובלי
     if (!_expansionStates.containsKey(groupKey)) {
-      _expansionStates[groupKey] = _allExpanded;
-    }
-
-    // יוצר controller אם לא קיים
-    if (!_controllers.containsKey(groupKey)) {
-      _controllers[groupKey] = ExpansibleController();
+      _expansionStates[groupKey] = true;
     }
 
     final isExpanded = _expansionStates[groupKey] ?? _allExpanded;
 
-    return ExpansionTile(
+    return _CollapsibleCommentaryGroup(
       key: PageStorageKey(groupKey),
-      controller: _controllers[groupKey],
-      maintainState: true,
-      initiallyExpanded: isExpanded,
-      onExpansionChanged: (isExpanded) {
-        _expansionStates[groupKey] = isExpanded;
+      group: group,
+      isExpanded: isExpanded,
+      fontSize: widget.fontSize,
+      openBookCallback: widget.openBookCallback,
+      removeNikud: state.removeNikud,
+      showSearch: widget.showSearch,
+      searchQuery: _searchQuery,
+      getItemSearchIndex: _getItemSearchIndex,
+      updateSearchResultsCount: _updateSearchResultsCount,
+      itemKeys: _itemKeys,
+      getLinkKey: _getLinkKey,
+      indexesKey: indexesKey,
+      savedSelectedText: _savedSelectedText,
+      onExpansionChanged: (expanded) {
+        _expansionStates[groupKey] = expanded;
         // בודק אם כל המפרשים פתוחים או סגורים ומעדכן את המצב הגלובלי
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -367,104 +382,58 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           }
         });
       },
-      backgroundColor: Colors.transparent,
-      collapsedBackgroundColor: Colors.transparent,
-      title: BlocBuilder<SettingsBloc, SettingsState>(
-        builder: (context, settingsState) {
-          String displayTitle = group.bookTitle;
-          if (settingsState.replaceHolyNames) {
-            displayTitle = utils.replaceHolyNames(displayTitle);
-          }
-          return Text(
-            displayTitle,
-            style: TextStyle(
-              fontSize: widget.fontSize * 0.85,
-              fontWeight: FontWeight.bold,
-              fontFamily: 'FrankRuhlCLM',
-            ),
-          );
-        },
-      ),
-      children: group.links.map((link) {
-        return ListTile(
-          key: _itemKeys[_getLinkKey(link)],
-          contentPadding: const EdgeInsets.only(right: 32.0, left: 16.0),
-          title: BlocBuilder<SettingsBloc, SettingsState>(
-            builder: (context, settingsState) {
-              String displayTitle = link.heRef;
-              if (settingsState.replaceHolyNames) {
-                displayTitle = utils.replaceHolyNames(displayTitle);
-              }
-
-              return Text(
-                displayTitle,
-                style: TextStyle(
-                  fontSize: widget.fontSize * 0.75,
-                  fontWeight: FontWeight.normal,
-                  fontFamily: 'FrankRuhlCLM',
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.5),
-                ),
-              );
-            },
-          ),
-          subtitle: CommentaryContent(
-            key: ValueKey('${link.path2}_${link.index2}_$indexesKey'),
-            link: link,
-            fontSize: widget.fontSize,
-            openBookCallback: widget.openBookCallback,
-            removeNikud: state.removeNikud,
-            searchQuery: widget.showSearch ? _searchQuery : '',
-            currentSearchIndex:
-                widget.showSearch ? _getItemSearchIndex(link) : 0,
-            onSearchResultsCountChanged: widget.showSearch
-                ? (count) => _updateSearchResultsCount(link, count)
-                : null,
-          ),
-        );
-      }).toList(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<TextBookBloc, TextBookState>(builder: (context, state) {
-      if (state is! TextBookLoaded) return const Center();
+    return TextBookStateBuilder(
+        loadingWidget: const Center(),
+        builder: (context, state) {
+          Widget buildList() {
+            return Builder(
+              builder: (context) {
+                // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים
+                final currentIndexes = widget.indexes ??
+                    (state.selectedIndex != null
+                        ? [state.selectedIndex!]
+                        : state.visibleIndices);
 
-      Widget buildList() {
-        return Builder(
-          builder: (context) {
-            // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים
-            final currentIndexes = widget.indexes ??
-                (state.selectedIndex != null
-                    ? [state.selectedIndex!]
-                    : state.visibleIndices);
+                // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
+                final hasAnyCommentaryLinks = state.links.any((link) =>
+                    currentIndexes.contains(link.index1 - 1) &&
+                    (link.connectionType == "commentary" ||
+                        link.connectionType == "targum"));
 
-            // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
-            final hasAnyCommentaryLinks = state.links.any((link) =>
-                currentIndexes.contains(link.index1 - 1) &&
-                (link.connectionType == "commentary" ||
-                    link.connectionType == "targum"));
+                // סינון מהיר של קישורים רלוונטיים
+                final hasRelevantLinks = state.links.any((link) =>
+                    currentIndexes.contains(link.index1 - 1) &&
+                    state.activeCommentators
+                        .contains(utils.getTitleFromPath(link.path2)));
 
-            // סינון מהיר של קישורים רלוונטיים
-            final hasRelevantLinks = state.links.any((link) =>
-                currentIndexes.contains(link.index1 - 1) &&
-                state.activeCommentators
-                    .contains(utils.getTitleFromPath(link.path2)));
+                // אם אין קישורים רלוונטיים
+                if (!hasRelevantLinks) {
+                  // אם יש מפרשים זמינים אבל לא נבחרו בכלל - פתח אוטומטית את מסך הבחירה
+                  if (hasAnyCommentaryLinks &&
+                      state.activeCommentators.isEmpty &&
+                      !_showCommentatorsFilter) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        setState(() {
+                          _showCommentatorsFilter = true;
+                        });
+                      }
+                    });
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-            // אם אין קישורים רלוונטיים, לא מציג כלום
-            if (!hasRelevantLinks) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
+                  // אין מפרשים בכלל לקטע הזה, או שיש מפרשים נבחרים אבל הם לא רלוונטיים
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
                         hasAnyCommentaryLinks
-                            ? 'לא נבחרו מפרשים להצגה'
+                            ? 'לא נמצאו מפרשים מהנבחרים לקטע זה'
                             : 'לא נמצאו מפרשים לקטע הנבחר',
                         style: TextStyle(
                           fontSize: widget.fontSize * 0.7,
@@ -472,311 +441,326 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      if (hasAnyCommentaryLinks &&
-                          widget.onOpenCommentatorsFilter != null) ...[
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: widget.onOpenCommentatorsFilter,
-                          icon: const Icon(FluentIcons.apps_list_24_regular),
-                          label: const Text('בחר מפרשים'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
+                    ),
+                  );
+                }
+
+                return FutureBuilder(
+                  future: getLinksforIndexs(
+                      indexes: currentIndexes,
+                      links: state.links,
+                      commentatorsToShow: state.activeCommentators),
+                  builder: (context, thisLinksSnapshot) {
+                    if (!thisLinksSnapshot.hasData) {
+                      // רק אם יש קישורים רלוונטיים, מציג אנימציית טעינה
+                      return _buildSkeletonLoading();
+                    }
+                    if (thisLinksSnapshot.data!.isEmpty) {
+                      // אם אין מפרשים, פשוט נציג מסך ריק
+                      return const SizedBox.shrink();
+                    }
+                    final data = thisLinksSnapshot.data!;
+
+                    // שומר את הסדר של ה-links לצורך חישוב אינדקס החיפוש
+                    _orderedLinks = data;
+
+                    // מנקה מפתחות ישנים ומכין מפתחות חדשים
+                    final currentLinkKeys =
+                        data.map((l) => _getLinkKey(l)).toSet();
+                    _itemKeys.removeWhere(
+                        (key, value) => !currentLinkKeys.contains(key));
+                    for (final key in currentLinkKeys) {
+                      _itemKeys[key] = GlobalKey();
+                    }
+
+                    // מקבץ את הקישורים לקבוצות רצופות
+                    final groups = _groupConsecutiveLinks(data);
+
+                    // אתחול מצבי הרחבה עבור כל הקבוצות
+                    for (final group in groups) {
+                      final groupKey = group.bookTitle;
+                      _expansionStates.putIfAbsent(groupKey, () => true);
+                    }
+
+                    // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+                    final indexesKey = currentIndexes.join(',');
+
+                    return SelectionArea(
+                      onSelectionChanged: (selection) {
+                        if (selection != null &&
+                            selection.plainText.isNotEmpty) {
+                          setState(() {
+                            _savedSelectedText = selection.plainText;
+                          });
+                        }
+                      },
+                      child: ProgressiveScroll(
+                        scrollController: scrollController,
+                        maxSpeed: 10000.0,
+                        curve: 10.0,
+                        accelerationFactor: 5,
+                        child: ScrollConfiguration(
+                          // מונע בעיות של Scrollbar עם ScrollController לא מחובר
+                          behavior: ScrollConfiguration.of(context).copyWith(
+                            scrollbars: false,
+                          ),
+                          child: ScrollablePositionedList.builder(
+                            itemScrollController: _itemScrollController,
+                            itemPositionsListener: _itemPositionsListener,
+                            initialScrollIndex:
+                                _lastScrollIndex.clamp(0, groups.length - 1),
+                            key: PageStorageKey(
+                                'commentary_${indexesKey}_${state.activeCommentators.hashCode}_$_allExpanded'),
+                            physics: const ClampingScrollPhysics(),
+                            scrollOffsetController: scrollController,
+                            shrinkWrap: widget.shrinkWrap,
+                            itemCount: groups.length,
+                            itemBuilder: (context, groupIndex) {
+                              final group = groups[groupIndex];
+                              return _buildCommentaryGroupTile(
+                                group: group,
+                                state: state,
+                                indexesKey: indexesKey,
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          }
+
+          if (widget.showSearch) {
+            // אם מסך בחירת המפרשים פתוח, מציג אותו במקום הרשימה
+            if (_showCommentatorsFilter) {
+              return CommentatorsFilterScreen(
+                onBack: _closeCommentatorsFilter,
+                child: CommentatorsListView(
+                  onCommentatorSelected: _closeCommentatorsFilter,
+                ),
+              );
+            }
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      // כפתור בחירת מפרשים - בצד ימין
+                      CommentatorsFilterButton(
+                        isActive: false,
+                        onPressed: _openCommentatorsFilter,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
+                        iconSize: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: RtlTextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'חפש בתוך המפרשים המוצגים...',
+                            prefixIcon:
+                                const Icon(FluentIcons.search_24_regular),
+                            suffixIcon: _searchQuery.isNotEmpty
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (_totalSearchResults > 1) ...[
+                                        Text(
+                                          '${_currentSearchIndex + 1}/$_totalSearchResults',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        IconButton(
+                                          icon: const Icon(FluentIcons
+                                              .chevron_up_24_regular),
+                                          iconSize: 20,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 24,
+                                            minHeight: 24,
+                                          ),
+                                          onPressed: _currentSearchIndex > 0
+                                              ? () {
+                                                  setState(() {
+                                                    _currentSearchIndex--;
+                                                  });
+                                                  _scrollToSearchResult();
+                                                }
+                                              : null,
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(FluentIcons
+                                              .chevron_down_24_regular),
+                                          iconSize: 20,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 24,
+                                            minHeight: 24,
+                                          ),
+                                          onPressed: _currentSearchIndex <
+                                                  _totalSearchResults - 1
+                                              ? () {
+                                                  setState(() {
+                                                    _currentSearchIndex++;
+                                                  });
+                                                  _scrollToSearchResult();
+                                                }
+                                              : null,
+                                        ),
+                                      ],
+                                      IconButton(
+                                        icon: const Icon(
+                                            FluentIcons.dismiss_24_regular),
+                                        onPressed: () {
+                                          _searchController.clear();
+                                          setState(() {
+                                            _searchQuery = '';
+                                            _currentSearchIndex = 0;
+                                            _totalSearchResults = 0;
+                                            _searchResultsPerLink.clear();
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  )
+                                : null,
+                            isDense: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8.0),
                             ),
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              _searchQuery = value;
+                              _currentSearchIndex = 0;
+                              if (value.isEmpty) {
+                                _totalSearchResults = 0;
+                                _searchResultsPerLink.clear();
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // כפתור סגירה/פתיחה גלובלית של כל המפרשים - מוצג רק אם יש מפרשים פעילים
+                      if (state.activeCommentators.isNotEmpty)
+                        IconButton(
+                          icon: Icon(
+                            _allExpanded
+                                ? FluentIcons.arrow_collapse_all_24_regular
+                                : FluentIcons.arrow_expand_all_24_regular,
+                          ),
+                          tooltip: _allExpanded
+                              ? 'סגור את כל המפרשים'
+                              : 'פתח את כל המפרשים',
+                          onPressed: () {
+                            setState(() {
+                              _allExpanded = !_allExpanded;
+                              // מעדכן את כל המצבים של הקבוצות
+                              for (var key in _expansionStates.keys) {
+                                _expansionStates[key] = _allExpanded;
+                              }
+                            });
+                          },
+                        ),
+                      // מציג את לחצן הסגירה רק אם יש callback
+                      if (widget.onClosePane != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surface
+                                .withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: IconButton(
+                            iconSize: 18,
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(
+                              minWidth: 36,
+                              minHeight: 36,
+                            ),
+                            icon: const Icon(FluentIcons.dismiss_24_regular),
+                            onPressed: widget.onClosePane,
                           ),
                         ),
                       ],
                     ],
                   ),
                 ),
-              );
-            }
-
-            return FutureBuilder(
-              future: getLinksforIndexs(
-                  indexes: currentIndexes,
-                  links: state.links,
-                  commentatorsToShow: state.activeCommentators),
-              builder: (context, thisLinksSnapshot) {
-                if (!thisLinksSnapshot.hasData) {
-                  // רק אם יש קישורים רלוונטיים, מציג אנימציית טעינה
-                  return _buildSkeletonLoading();
-                }
-                if (thisLinksSnapshot.data!.isEmpty) {
-                  // אם אין מפרשים, פשוט נציג מסך ריק
-                  return const SizedBox.shrink();
-                }
-                final data = thisLinksSnapshot.data!;
-
-                // שומר את הסדר של ה-links לצורך חישוב אינדקס החיפוש
-                _orderedLinks = data;
-
-                // מנקה מפתחות ישנים ומכין מפתחות חדשים
-                final currentLinkKeys = data.map((l) => _getLinkKey(l)).toSet();
-                _itemKeys.removeWhere(
-                    (key, value) => !currentLinkKeys.contains(key));
-                for (final key in currentLinkKeys) {
-                  _itemKeys.putIfAbsent(key, () => GlobalKey());
-                }
-
-                // מקבץ את הקישורים לקבוצות רצופות
-                final groups = _groupConsecutiveLinks(data);
-
-                // יצירת מפתח ייחודי לאינדקסים הנוכחיים
-                final indexesKey = currentIndexes.join(',');
-
-                return ProgressiveScroll(
-                  scrollController: scrollController,
-                  maxSpeed: 10000.0,
-                  curve: 10.0,
-                  accelerationFactor: 5,
-                  child: ScrollablePositionedList.builder(
-                    itemScrollController: _itemScrollController,
-                    itemPositionsListener: _itemPositionsListener,
-                    initialScrollIndex:
-                        _lastScrollIndex.clamp(0, groups.length - 1),
-                    key: PageStorageKey(
-                        'commentary_${indexesKey}_${state.activeCommentators.hashCode}'),
-                    physics: const ClampingScrollPhysics(),
-                    scrollOffsetController: scrollController,
-                    shrinkWrap: widget.shrinkWrap,
-                    itemCount: groups.length,
-                    itemBuilder: (context, groupIndex) {
-                      final group = groups[groupIndex];
-                      return _buildCommentaryGroupTile(
-                        group: group,
-                        state: state,
-                        indexesKey: indexesKey,
-                      );
-                    },
-                  ),
-                );
-              },
-            );
-          },
-        );
-      }
-
-      if (widget.showSearch) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'חפש בתוך המפרשים המוצגים...',
-                        prefixIcon: const Icon(FluentIcons.search_24_regular),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (_totalSearchResults > 1) ...[
-                                    Text(
-                                      '${_currentSearchIndex + 1}/$_totalSearchResults',
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    IconButton(
-                                      icon: const Icon(
-                                          FluentIcons.chevron_up_24_regular),
-                                      iconSize: 20,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(
-                                        minWidth: 24,
-                                        minHeight: 24,
-                                      ),
-                                      onPressed: _currentSearchIndex > 0
-                                          ? () {
-                                              setState(() {
-                                                _currentSearchIndex--;
-                                              });
-                                              _scrollToSearchResult();
-                                            }
-                                          : null,
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(
-                                          FluentIcons.chevron_down_24_regular),
-                                      iconSize: 20,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(
-                                        minWidth: 24,
-                                        minHeight: 24,
-                                      ),
-                                      onPressed: _currentSearchIndex <
-                                              _totalSearchResults - 1
-                                          ? () {
-                                              setState(() {
-                                                _currentSearchIndex++;
-                                              });
-                                              _scrollToSearchResult();
-                                            }
-                                          : null,
-                                    ),
-                                  ],
-                                  IconButton(
-                                    icon: const Icon(
-                                        FluentIcons.dismiss_24_regular),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() {
-                                        _searchQuery = '';
-                                        _currentSearchIndex = 0;
-                                        _totalSearchResults = 0;
-                                        _searchResultsPerLink.clear();
-                                      });
-                                    },
-                                  ),
-                                ],
-                              )
-                            : null,
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value;
-                          _currentSearchIndex = 0;
-                          if (value.isEmpty) {
-                            _totalSearchResults = 0;
-                            _searchResultsPerLink.clear();
-                          }
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // כפתור סגירה/פתיחה גלובלית של כל המפרשים - מוצג רק אם יש מפרשים פעילים
-                  if (state.activeCommentators.isNotEmpty)
-                    IconButton(
-                      icon: Icon(
-                        _allExpanded
-                            ? FluentIcons.arrow_collapse_all_24_regular
-                            : FluentIcons.arrow_expand_all_24_regular,
-                      ),
-                      tooltip: _allExpanded
-                          ? 'סגור את כל המפרשים'
-                          : 'פתח את כל המפרשים',
-                      onPressed: () {
-                        setState(() {
-                          _allExpanded = !_allExpanded;
-                          // מעדכן את כל המצבים של ה-ExpansionTiles
-                          for (var key in _expansionStates.keys) {
-                            _expansionStates[key] = _allExpanded;
-                          }
-                          // משתמש ב-controllers לפתיחה/סגירה
-                          for (var controller in _controllers.values) {
-                            if (_allExpanded) {
-                              controller.expand();
-                            } else {
-                              controller.collapse();
-                            }
-                          }
-                        });
-                      },
-                    ),
-                  // מציג את לחצן הסגירה רק אם יש callback
-                  if (widget.onClosePane != null) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surface
-                            .withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        iconSize: 18,
-                        padding: const EdgeInsets.all(8),
-                        constraints: const BoxConstraints(
-                          minWidth: 36,
-                          minHeight: 36,
-                        ),
-                        icon: const Icon(FluentIcons.dismiss_24_regular),
-                        onPressed: widget.onClosePane,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Flexible(
-              fit: FlexFit.loose,
-              child: buildList(),
-            ),
-          ],
-        );
-      } else {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // כפתור גלובלי מעל הרשימה
-            if (state.activeCommentators.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    style: IconButton.styleFrom(
-                      backgroundColor: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.1),
-                      foregroundColor: Theme.of(context).colorScheme.primary,
-                    ),
-                    icon: Icon(
-                      _allExpanded
-                          ? FluentIcons.arrow_collapse_all_24_regular
-                          : FluentIcons.arrow_expand_all_24_regular,
-                    ),
-                    tooltip: _allExpanded
-                        ? 'סגור את כל המפרשים'
-                        : 'פתח את כל המפרשים',
-                    onPressed: () {
-                      setState(() {
-                        _allExpanded = !_allExpanded;
-                        // מעדכן את כל המצבים של ה-ExpansionTiles
-                        for (var key in _expansionStates.keys) {
-                          _expansionStates[key] = _allExpanded;
-                        }
-                        // משתמש ב-controllers לפתיחה/סגירה
-                        for (var controller in _controllers.values) {
-                          if (_allExpanded) {
-                            controller.expand();
-                          } else {
-                            controller.collapse();
-                          }
-                        }
-                      });
-                    },
-                  ),
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: buildList(),
                 ),
-              ),
-            // הרשימה
-            Flexible(
-              child: buildList(),
-            ),
-          ],
-        );
-      }
-    });
+              ],
+            );
+          } else {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // כפתור גלובלי מעל הרשימה
+                if (state.activeCommentators.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        style: IconButton.styleFrom(
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.1),
+                          foregroundColor:
+                              Theme.of(context).colorScheme.primary,
+                        ),
+                        icon: Icon(
+                          _allExpanded
+                              ? FluentIcons.arrow_collapse_all_24_regular
+                              : FluentIcons.arrow_expand_all_24_regular,
+                        ),
+                        tooltip: _allExpanded
+                            ? 'סגור את כל המפרשים'
+                            : 'פתח את כל המפרשים',
+                        onPressed: () {
+                          setState(() {
+                            _allExpanded = !_allExpanded;
+                            // מעדכן את כל המצבים של הקבוצות
+                            for (var key in _expansionStates.keys) {
+                              _expansionStates[key] = _allExpanded;
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                // הרשימה
+                Flexible(
+                  child: buildList(),
+                ),
+              ],
+            );
+          }
+        });
   }
 
   /// בניית skeleton loading לפרשנות - מספר פרשנויות עם כותרת ושלוש שורות
@@ -850,6 +834,188 @@ class _SkeletonLine extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(4),
       ),
+    );
+  }
+}
+
+/// Widget מותאם אישית להצגת קבוצת מפרשים עם אפשרות כיווץ/הרחבה
+/// שלא מפריע לבחירת טקסט והעתקה (במקום ExpansionTile)
+class _CollapsibleCommentaryGroup extends StatefulWidget {
+  final CommentaryGroup group;
+  final bool isExpanded;
+  final double fontSize;
+  final Function(TextBookTab) openBookCallback;
+  final bool removeNikud;
+  final bool showSearch;
+  final String searchQuery;
+  final int Function(Link) getItemSearchIndex;
+  final void Function(Link, int) updateSearchResultsCount;
+  final Map<String, GlobalKey> itemKeys;
+  final String Function(Link) getLinkKey;
+  final String indexesKey;
+  final String? savedSelectedText;
+  final void Function(bool) onExpansionChanged;
+
+  const _CollapsibleCommentaryGroup({
+    super.key,
+    required this.group,
+    required this.isExpanded,
+    required this.fontSize,
+    required this.openBookCallback,
+    required this.removeNikud,
+    required this.showSearch,
+    required this.searchQuery,
+    required this.getItemSearchIndex,
+    required this.updateSearchResultsCount,
+    required this.itemKeys,
+    required this.getLinkKey,
+    required this.indexesKey,
+    required this.savedSelectedText,
+    required this.onExpansionChanged,
+  });
+
+  @override
+  State<_CollapsibleCommentaryGroup> createState() =>
+      _CollapsibleCommentaryGroupState();
+}
+
+class _CollapsibleCommentaryGroupState
+    extends State<_CollapsibleCommentaryGroup> {
+  late bool _isExpanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _isExpanded = widget.isExpanded;
+  }
+
+  @override
+  void didUpdateWidget(_CollapsibleCommentaryGroup oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isExpanded != widget.isExpanded) {
+      _isExpanded = widget.isExpanded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // כותרת הקבוצה - ניתנת ללחיצה להרחבה/כיווץ
+        InkWell(
+          onTap: () {
+            setState(() {
+              _isExpanded = !_isExpanded;
+            });
+            widget.onExpansionChanged(_isExpanded);
+          },
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            child: Row(
+              children: [
+                Icon(
+                  _isExpanded
+                      ? Icons.keyboard_arrow_down
+                      : Icons.keyboard_arrow_left,
+                  size: 20,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: BlocBuilder<SettingsBloc, SettingsState>(
+                    builder: (context, settingsState) {
+                      String displayTitle = widget.group.bookTitle;
+                      if (settingsState.replaceHolyNames) {
+                        displayTitle = utils.replaceHolyNames(displayTitle);
+                      }
+                      return Text(
+                        displayTitle,
+                        style: TextStyle(
+                          fontSize: widget.fontSize * 0.85,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: AppFonts.defaultFont,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // תוכן המפרשים - מוצג רק כשמורחב
+        if (_isExpanded)
+          ...widget.group.links.map((link) {
+            return ctx.ContextMenuRegion(
+              contextMenu: ContextMenuUtils.buildCommentaryContextMenu(
+                context: context,
+                link: link,
+                openBookCallback: widget.openBookCallback,
+                fontSize: widget.fontSize,
+                savedSelectedText: widget.savedSelectedText,
+                onCopySelected: () => ContextMenuUtils.copyFormattedText(
+                  context: context,
+                  savedSelectedText: widget.savedSelectedText,
+                  fontSize: widget.fontSize,
+                ),
+              ),
+              child: Padding(
+                key: widget.itemKeys[widget.getLinkKey(link)],
+                padding: const EdgeInsets.only(
+                    right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BlocBuilder<SettingsBloc, SettingsState>(
+                      builder: (context, settingsState) {
+                        String displayTitle = link.heRef;
+                        if (settingsState.replaceHolyNames) {
+                          displayTitle = utils.replaceHolyNames(displayTitle);
+                        }
+                        return Text(
+                          displayTitle,
+                          style: TextStyle(
+                            fontSize: widget.fontSize * 0.75,
+                            fontWeight: FontWeight.normal,
+                            fontFamily: AppFonts.defaultFont,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.5),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    CommentaryContent(
+                      key: ValueKey(
+                          '${link.path2}_${link.index2}_${widget.indexesKey}'),
+                      link: link,
+                      fontSize: widget.fontSize,
+                      openBookCallback: widget.openBookCallback,
+                      removeNikud: widget.removeNikud,
+                      searchQuery: widget.showSearch ? widget.searchQuery : '',
+                      currentSearchIndex: widget.showSearch
+                          ? widget.getItemSearchIndex(link)
+                          : 0,
+                      onSearchResultsCountChanged: widget.showSearch
+                          ? (count) =>
+                              widget.updateSearchResultsCount(link, count)
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        const Divider(height: 1),
+      ],
     );
   }
 }

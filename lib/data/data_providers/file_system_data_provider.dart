@@ -9,6 +9,7 @@ import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -29,6 +30,8 @@ class FileSystemData {
   /// Future that resolves to metadata for all books and categories
   late Future<Map<String, Map<String, dynamic>>> metadata;
 
+  late Future<Map<String, String>> titleToPath;
+
   /// Library provider manager for coordinating multiple data sources
   final LibraryProviderManager _providerManager =
       LibraryProviderManager.instance;
@@ -36,7 +39,9 @@ class FileSystemData {
   /// Creates a new instance of [FileSystemData] and initializes the title to path mapping
   /// and metadata
   FileSystemData() {
-    libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+    libraryPath =
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
+    titleToPath = _getTitleToPath();
     metadata = _getMetadata();
     _initializeProviders();
   }
@@ -54,18 +59,34 @@ class FileSystemData {
     }
   }
 
+  Future<Map<String, String>> _getTitleToPath() async {
+    final keyToPath = await _providerManager.fileSystemProvider.keyToPath;
+    final Map<String, String> result = {};
+    for (var entry in keyToPath.entries) {
+      final parts = entry.key.split('|');
+      if (parts.isNotEmpty) {
+        result[parts[0]] = entry.value;
+      }
+    }
+    return result;
+  }
+
   /// Checks if a book is stored in the database
-  Future<bool> isBookInDatabase(String title, {String? category, String? fileType}) async {
+  Future<bool> isBookInDatabase(String title,
+      {String? category, String? fileType}) async {
     if (category != null && fileType != null) {
-      return await _providerManager.databaseProvider.hasBook(title, category, fileType);
+      return await _providerManager.databaseProvider
+          .hasBook(title, category, fileType);
     }
     return await _providerManager.databaseProvider.hasBookWithTitle(title);
   }
 
   /// Gets the data source for a book (DB, File, or Personal)
   /// Returns: 'DB' for database, 'ק' for file, 'א' for personal
-  Future<String> getBookDataSource(String title, [String? category, String? fileType='txt']) async {
-    return await _providerManager.getBookDataSource(title, category ?? '', fileType ?? 'txt');
+  Future<String> getBookDataSource(String title,
+      [String? category, String? fileType = 'txt']) async {
+    return await _providerManager.getBookDataSource(
+        title, category ?? '', fileType ?? 'txt');
   }
 
   /// Clears the book-in-database cache
@@ -91,8 +112,10 @@ class FileSystemData {
       _providerManager.databaseProvider;
 
   /// Checks if a book is in the personal folder
-  Future<bool> isPersonalBook(String title, {String? category, String? fileType}) async {
-    return await _providerManager.fileSystemProvider.isPersonalBook(title, category: category, fileType: fileType);
+  Future<bool> isPersonalBook(String title,
+      {String? category, String? fileType}) async {
+    return await _providerManager.fileSystemProvider
+        .isPersonalBook(title, category: category, fileType: fileType);
   }
 
   /// Gets the path to the personal books folder
@@ -127,7 +150,7 @@ class FileSystemData {
     }
 
     metadata = _getMetadata();
-    final metadataResult = await metadata;    
+    final metadataResult = await metadata;
 
     // Use the unified catalog builder from LibraryProviderManager
     final library = await _providerManager.buildLibraryCatalog(
@@ -237,7 +260,8 @@ class FileSystemData {
               pubDate: row[4].toString(),
               topics: row[15].toString().replaceAll(';', ', '),
               heShortDesc: row[13].toString(),
-              link: 'https://beta.hebrewbooks.org/$bookId',
+              link:
+                  'https://beta.hebrewbooks.org/reader/reader.aspx?sfid=$bookId#p=1&fitMode=fitwidth&hlts=&ocr=',
             ));
           }
         } catch (e) {
@@ -254,14 +278,95 @@ class FileSystemData {
   /// Retrieves all links associated with a specific book.
   ///
   /// Links are stored in JSON files named '[book_title]_links.json' in the links directory.
+  ///
+  /// For commentary books whose title starts with "הערות על", this function will also
+  /// retrieve reverse links from the source book, creating bidirectional navigation.
   Future<List<Link>> getAllLinksForBook(String title) async {
     try {
+      // First, try to load direct links for this book
       File file = File(_getLinksPath(title));
-      final jsonString = await file.readAsString();
+      List<Link> directLinks = [];
+
+      if (await file.exists()) {
+        final jsonString = await file.readAsString();
+        final jsonList =
+            await Isolate.run(() async => jsonDecode(jsonString) as List);
+        directLinks = jsonList.map((json) => Link.fromJson(json)).toList();
+      }
+
+      // Check if this is a commentary book (starts with "הערות על")
+      final sourceBookTitle = _getSourceBookFromCommentary(title);
+      if (sourceBookTitle != null) {
+        // Load the source book's links and create reverse links
+        final reverseLinks = await _getReverseLinksFromSourceBook(
+          title,
+          sourceBookTitle,
+        );
+        directLinks.addAll(reverseLinks);
+      }
+
+      return directLinks;
+    } on Exception {
+      return [];
+    }
+  }
+
+  /// Checks if a book title starts with "הערות על" and extracts the source book name.
+  ///
+  /// For example, "הערות על סוכה" returns "סוכה".
+  /// Returns null if the title doesn't start with "הערות על".
+  String? _getSourceBookFromCommentary(String title) {
+    const commentaryPrefix = 'הערות על ';
+    if (title.startsWith(commentaryPrefix)) {
+      return title.substring(commentaryPrefix.length);
+    }
+    return null;
+  }
+
+  /// Creates reverse links from a source book to its commentary.
+  ///
+  /// When the source book has links pointing to the commentary, this function
+  /// creates the opposite links so readers of the commentary can navigate back
+  /// to the source text.
+  Future<List<Link>> _getReverseLinksFromSourceBook(
+    String commentaryTitle,
+    String sourceBookTitle,
+  ) async {
+    try {
+      // Load links from the source book
+      File sourceLinksFile = File(_getLinksPath(sourceBookTitle));
+      if (!await sourceLinksFile.exists()) {
+        return [];
+      }
+
+      final jsonString = await sourceLinksFile.readAsString();
       final jsonList =
           await Isolate.run(() async => jsonDecode(jsonString) as List);
-      return jsonList.map((json) => Link.fromJson(json)).toList();
-    } on Exception {
+      final sourceLinks = jsonList.map((json) => Link.fromJson(json)).toList();
+
+      // Filter links that point to the commentary and create reverse links
+      final reverseLinks = <Link>[];
+      for (final link in sourceLinks) {
+        final linkTargetTitle = getTitleFromPath(link.path2);
+
+        // Check if this link points to the commentary book
+        if (linkTargetTitle == commentaryTitle) {
+          // Create a reverse link: from commentary back to source
+          reverseLinks.add(Link(
+            heRef: sourceBookTitle, // Reference to the source book
+            index1: link.index2, // The commentary line that's being referenced
+            path2: sourceBookTitle, // Path to the source book
+            index2: link.index1, // The source book line that references it
+            connectionType: link.connectionType,
+            start: link.start,
+            end: link.end,
+          ));
+        }
+      }
+
+      return reverseLinks;
+    } on Exception catch (e) {
+      debugPrint('Error creating reverse links for $commentaryTitle: $e');
       return [];
     }
   }
@@ -269,8 +374,10 @@ class FileSystemData {
   /// Retrieves the text content of a book.
   ///
   /// Uses LibraryProviderManager to get text from the appropriate provider.
-  Future<String> getBookText(String title, {String? category, String? fileType}) async {
-    final text = await _providerManager.getBookText(title, category ?? '', fileType ?? 'txt');
+  Future<String> getBookText(String title,
+      {String? category, String? fileType}) async {
+    final text = await _providerManager.getBookText(
+        title, category ?? '', fileType ?? 'txt');
     if (text != null) {
       return text;
     }
@@ -278,7 +385,8 @@ class FileSystemData {
     // Fallback to direct file system access
     debugPrint(
         '⚠️ Provider manager failed, falling back to direct file access for "$title"');
-    final path = await _getBookPath(title, category: category, fileType: fileType);
+    final path =
+        await _getBookPath(title, category: category, fileType: fileType);
     if (path.startsWith('error:')) {
       throw Exception('Book not found: $title');
     }
@@ -346,7 +454,9 @@ class FileSystemData {
       List<String> paths = [];
       final files = await Directory(path).list(recursive: true).toList();
       for (var file in files) {
-        paths.add(file.path);
+        if (file is File && !file.path.toLowerCase().endsWith('.pdf')) {
+          paths.add(file.path);
+        }
       }
       return paths;
     });
@@ -355,8 +465,10 @@ class FileSystemData {
   /// Retrieves the table of contents for a book.
   ///
   /// Uses LibraryProviderManager to get TOC from the appropriate provider.
-  Future<List<TocEntry>> getBookToc(String title, {String? category, String? fileType}) async {
-    final toc = await _providerManager.getBookToc(title, category ?? '', fileType ?? 'txt');
+  Future<List<TocEntry>> getBookToc(String title,
+      {String? category, String? fileType}) async {
+    final toc = await _providerManager.getBookToc(
+        title, category ?? '', fileType ?? 'txt');
     if (toc != null && toc.isNotEmpty) {
       return toc;
     }
@@ -364,7 +476,8 @@ class FileSystemData {
     // Fallback to parsing from text
     debugPrint(
         '⚠️ Provider manager failed, falling back to text parsing for "$title"');
-    return _parseToc(getBookText(title, category: category, fileType: fileType));
+    return _parseToc(
+        getBookText(title, category: category, fileType: fileType));
   }
 
   /// Efficiently reads a specific line from a file.
@@ -422,7 +535,6 @@ class FileSystemData {
   /// Updates the mapping of book titles to their file system paths.
   ///
 
-
   /// Loads and parses the metadata for all books in the library.
   ///
   /// Reads metadata from a JSON file and creates a structured mapping of
@@ -435,7 +547,7 @@ class FileSystemData {
     Map<String, Map<String, dynamic>> metadata = {};
     try {
       File file = File(
-          '${Settings.getValue<String>('key-library-path') ?? '.'}${Platform.pathSeparator}metadata.json');
+          '${Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.'}${Platform.pathSeparator}metadata.json');
       metadataString = await file.readAsString();
     } catch (e) {
       return {};
@@ -479,7 +591,8 @@ class FileSystemData {
   }
 
   /// Retrieves the file system path for a book with the given title.
-  Future<String> _getBookPath(String title, {String? category, String? fileType}) async {
+  Future<String> _getBookPath(String title,
+      {String? category, String? fileType}) async {
     final keyToPath = await _providerManager.fileSystemProvider.keyToPath;
 
     if (category != null && fileType != null) {
@@ -510,7 +623,7 @@ class FileSystemData {
 
   /// Gets the path to the JSON file containing links for a specific book.
   String _getLinksPath(String title) {
-    return '${Settings.getValue<String>('key-library-path') ?? '.'}${Platform.pathSeparator}links${Platform.pathSeparator}${title}_links.json';
+    return '${Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.'}${Platform.pathSeparator}links${Platform.pathSeparator}${title}_links.json';
   }
 
   /// Checks if a book with the given title exists in the library.

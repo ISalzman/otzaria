@@ -16,9 +16,10 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/text_book/editing/repository/overrides_repository.dart';
 import 'package:otzaria/text_book/editing/models/section_identifier.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
-  final TextBookRepository _repository;
+  final TextBookRepository repository;
   final OverridesRepository _overridesRepository;
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
@@ -28,18 +29,19 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   VoidCallback? _positionListenerCallback;
 
   TextBookBloc({
-    required TextBookRepository repository,
+    required this.repository,
     required OverridesRepository overridesRepository,
     required TextBookInitial initialState,
     required this.scrollController,
     required this.positionsListener,
-  })  : _repository = repository,
-        _overridesRepository = overridesRepository,
+  })  : _overridesRepository = overridesRepository,
         super(initialState) {
     on<LoadContent>(_onLoadContent);
     on<UpdateFontSize>(_onUpdateFontSize);
     on<ToggleLeftPane>(_onToggleLeftPane);
     on<ToggleSplitView>(_onToggleSplitView);
+    on<ToggleTzuratHadafView>(_onToggleTzuratHadafView);
+    on<TogglePageShapeView>(_onTogglePageShapeView);
     on<UpdateCommentators>(_onUpdateCommentators);
     on<ToggleNikud>(_onToggleNikud);
     on<UpdateVisibleIndecies>(_onUpdateVisibleIndecies);
@@ -68,26 +70,42 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) async {
     TextBook book;
     String searchText;
+    Map<String, Map<String, bool>> searchOptions = {};
+    Map<int, List<String>> alternativeWords = {};
+    Map<String, String> spacingValues = {};
+    SearchMode searchMode = SearchMode.exact;
     bool showLeftPane;
     List<String> commentators;
     late final List<int> visibleIndices;
+
+    bool initialShowPageShapeView = false;
 
     if (state is TextBookLoaded && event.preserveState) {
       // Preserve current state when reloading
       final currentState = state as TextBookLoaded;
       book = currentState.book;
       searchText = currentState.searchText;
+      searchOptions = currentState.searchOptions;
+      alternativeWords = currentState.alternativeWords;
+      spacingValues = currentState.spacingValues;
+      searchMode = currentState.searchMode;
       showLeftPane = currentState.showLeftPane;
       commentators = currentState.activeCommentators;
       visibleIndices = currentState.visibleIndices;
+      initialShowPageShapeView = currentState.showPageShapeView;
     } else if (state is TextBookInitial) {
       // Normal initial load
       final initial = state as TextBookInitial;
       book = initial.book;
       searchText = initial.searchText;
+      searchOptions = initial.searchOptions;
+      alternativeWords = initial.alternativeWords;
+      spacingValues = initial.spacingValues;
+      searchMode = initial.searchMode;
       showLeftPane = initial.showLeftPane;
       commentators = initial.commentators;
       visibleIndices = [initial.index];
+      initialShowPageShapeView = initial.showPageShapeView;
 
       emit(TextBookLoading(
           book, initial.index, initial.showLeftPane, initial.commentators));
@@ -104,7 +122,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     try {
       // Check if book is from database - if so, load preview first for instant display
       final sqliteProvider = SqliteDataProvider.instance;
-      String content = await _repository.getBookContent(book);
+      String content = await repository.getBookContent(book);
       if (content.isEmpty) {
         // Load quick preview (40 lines) for instant display
         final preview = await sqliteProvider.getBookQuickPreview(
@@ -122,12 +140,42 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
               searchText, showLeftPane, commentators);
         } else {
           // Preview failed, load full book normally
-          content = await _repository.getBookContent(book);
+          content = await repository.getBookContent(book);
         }
       }
 
-      final links = await _repository.getBookLinks(book);
-      final tableOfContents = await _repository.getTableOfContents(book);
+      final links = await repository.getBookLinks(book);
+      final tableOfContents = await repository.getTableOfContents(book);
+
+      // טעינת metadata של הספר אם חסר (למשל כשפותחים מחיפוש)
+      if (book.heCategories == null || book.heCategories!.isEmpty) {
+        final metadata = await FileSystemData.instance.metadata;
+        final bookMetadata = metadata[book.title];
+        if (bookMetadata != null) {
+          book.heCategories = bookMetadata['heCategories'];
+          book.author = bookMetadata['author'];
+          book.heEra = bookMetadata['heEra'];
+        }
+
+        // אם עדיין אין קטגוריות, נחלץ אותן מהנתיב של הספר
+        if (book.heCategories == null || book.heCategories!.isEmpty) {
+          final titleToPath = await FileSystemData.instance.titleToPath;
+          final bookPath = titleToPath[book.title];
+          if (bookPath != null) {
+            // חילוץ הקטגוריות מהנתיב
+            // למשל: /אוצריא/הלכה/משנה תורה/ספר מדע/משנה תורה, הלכות דעות.txt
+            // → הלכה, משנה תורה, ספר מדע
+            final pathParts = bookPath.split(Platform.pathSeparator);
+            final otzariaIndex = pathParts.indexOf('אוצריא');
+            if (otzariaIndex >= 0 && otzariaIndex < pathParts.length - 2) {
+              // לוקחים את כל התיקיות בין אוצריא לקובץ עצמו
+              final categories =
+                  pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
+              book.heCategories = categories.join(', ');
+            }
+          }
+        }
+      }
 
       // Update current title if we're preserving state
       String? currentTitle;
@@ -144,8 +192,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final List<String> availableCommentators;
       final Map<String, List<String>> eras;
       if (event.loadCommentators) {
-        availableCommentators =
-            await _repository.getAvailableCommentators(book);
+        availableCommentators = await repository.getAvailableCommentators(book);
         eras = await utils.splitByEra(availableCommentators);
       } else {
         availableCommentators = [];
@@ -203,6 +250,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             ? false
             : (showLeftPane || searchText.isNotEmpty),
         showSplitView: event.showSplitView,
+        showPageShapeView: initialShowPageShapeView,
         activeCommentators: commentators,
         commentatorGroups: event.loadCommentators
             ? _buildCommentatorGroups(eras, availableCommentators)
@@ -211,6 +259,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         visibleIndices: visibleIndices,
         pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
         searchText: searchText,
+        searchOptions: searchOptions,
+        alternativeWords: alternativeWords,
+        spacingValues: spacingValues,
+        searchMode: searchMode,
         scrollController: scrollController,
         positionsListener: positionsListener,
         currentTitle: currentTitle,
@@ -282,6 +334,58 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         showSplitView: event.show,
         selectedIndex: currentState.selectedIndex,
       ));
+    }
+  }
+
+  void _onToggleTzuratHadafView(
+    ToggleTzuratHadafView event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is TextBookLoaded) {
+      final currentState = state as TextBookLoaded;
+
+      // אם עוברים לצורת הדף הישנה, ודא שמצב "צורת הדף" החדש לא נשמר כברירת מחדל
+      if (event.show) {
+        Settings.setValue<bool>('key-page-shape-view', false);
+      }
+      emit(currentState.copyWith(
+        showTzuratHadafView: event.show,
+        showPageShapeView: false, // כיבוי התצוגה החדשה
+        selectedIndex: currentState.selectedIndex,
+        // סגור את חלונית הניווט/חיפוש כשעוברים לצורת הדף
+        showLeftPane: event.show ? false : currentState.showLeftPane,
+      ));
+    }
+  }
+
+  void _onTogglePageShapeView(
+    TogglePageShapeView event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is TextBookLoaded) {
+      final currentState = state as TextBookLoaded;
+
+      // שמירת מצב "צורת הדף" כדי שישוחזר גם אחרי סגירה/פתיחה של האפליקציה
+      Settings.setValue<bool>('key-page-shape-view', event.show);
+      emit(currentState.copyWith(
+        showPageShapeView: event.show,
+        showTzuratHadafView: false, // כיבוי התצוגה הישנה
+        selectedIndex: currentState.selectedIndex,
+        // סגור את חלונית הניווט/חיפוש כשעוברים לצורת הדף
+        showLeftPane: event.show ? false : currentState.showLeftPane,
+      ));
+
+      // כשיוצאים ממצב צורת הדף למצב רגיל, גלול למיקום הנוכחי
+      if (!event.show && currentState.selectedIndex != null) {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (scrollController.isAttached) {
+            scrollController.scrollTo(
+              index: currentState.selectedIndex!,
+              duration: const Duration(milliseconds: 300),
+            );
+          }
+        });
+      }
     }
   }
 
@@ -614,7 +718,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       // Handle full file editing differently
       if (event.sectionId == 'full_file' && event.index == -1) {
         // For full file editing, save the entire content to the original file
-        await _repository.saveBookContent(currentState.book, event.markdown);
+        await repository.saveBookContent(currentState.book, event.markdown);
 
         // Split the content back into sections for display
         final sections = event.markdown
@@ -644,7 +748,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       // Join all sections back together and save to original file
       final fullContent = updatedContent.join('\n\n');
-      await _repository.saveBookContent(currentState.book, fullContent);
+      await repository.saveBookContent(currentState.book, fullContent);
 
       // Close editor immediately
       emit(currentState.copyWith(
@@ -791,7 +895,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       debugPrint('📚 Loading full book in background...');
 
       // Load full content
-      final fullContent = await _repository.getBookContent(book);
+      final fullContent = await repository.getBookContent(book);
 
       // Check if still in the same book (user might have navigated away)
       if (isClosed || state is! TextBookLoaded) {

@@ -9,6 +9,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 
 /// Represents a tab that contains a text book.
 ///
@@ -23,6 +24,10 @@ class TextBookTab extends OpenedTab {
 
   /// The initial search text for this tab.
   final String searchText;
+  final Map<String, Map<String, bool>> searchOptions;
+  final Map<int, List<String>> alternativeWords;
+  final Map<String, String> spacingValues;
+  final SearchMode searchMode;
 
   /// The bloc that manages the text book state and logic.
   late final TextBookBloc bloc;
@@ -52,24 +57,44 @@ class TextBookTab extends OpenedTab {
     required this.book,
     required this.index,
     this.searchText = '',
+    this.searchOptions = const {},
+    this.alternativeWords = const {},
+    this.spacingValues = const {},
+    this.searchMode = SearchMode.exact,
     this.commentators,
     bool openLeftPane = false,
-    bool splitedView = true,
+    bool? splitedView,
+    bool? showPageShapeView,
     bool isPinned = false,
   }) : super(book.title, isPinned: isPinned) {
     debugPrint('DEBUG: TextBookTab נוצר עם אינדקס: $index לספר: ${book.title}');
+
+    // קביעת ברירת המחדל של splitedView מההגדרות אם לא סופק
+    final bool effectiveSplitedView =
+        splitedView ?? (Settings.getValue<bool>('key-splited-view') ?? false);
+
+    // קביעת ברירת המחדל של צורת הדף מההגדרות אם לא סופק
+    final bool effectiveShowPageShapeView = showPageShapeView ??
+        (Settings.getValue<bool>('key-page-shape-view') ?? false);
+
     // Initialize the bloc with initial state
     bloc = TextBookBloc(
       repository: TextBookRepository(
         fileSystem: FileSystemData.instance,
       ),
       overridesRepository: LocalOverridesRepository(),
-      initialState: TextBookInitial(
+      initialState: TextBookInitial.named(
         book,
         index,
         openLeftPane,
         commentators ?? [],
-        searchText,
+        searchText: searchText,
+        searchOptions: searchOptions,
+        alternativeWords: alternativeWords,
+        spacingValues: spacingValues,
+        searchMode: searchMode,
+        splitedView: effectiveSplitedView,
+        showPageShapeView: effectiveShowPageShapeView,
       ),
       scrollController: scrollController,
       positionsListener: positionsListener,
@@ -102,13 +127,21 @@ class TextBookTab extends OpenedTab {
         (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
             (Settings.getValue<bool>('key-default-sidebar-open') ?? false);
 
+    // שחזור מצב התצוגה המפוצלת מה-JSON
+    final bool splitedView = json['splitedView'] ??
+        (Settings.getValue<bool>('key-splited-view') ?? false);
+
+    debugPrint(
+        'DEBUG: טעינת טאב ${json['title']} עם splitedView: $splitedView (מ-JSON: ${json['splitedView']})');
+
     return TextBookTab(
       index: json['initalIndex'],
       book: TextBook(
         title: json['title'],
       ),
       commentators: List<String>.from(json['commentators']),
-      splitedView: json['splitedView'],
+      splitedView: splitedView,
+      showPageShapeView: json['showPageShapeView'] ?? false,
       openLeftPane: shouldOpenLeftPane,
       isPinned: json['isPinned'] ?? false,
     );
@@ -122,25 +155,36 @@ class TextBookTab extends OpenedTab {
   Map<String, dynamic> toJson() {
     List<String> commentators = [];
     bool splitedView = false;
+    bool showPageShapeView = false;
     int currentIndex = index; // שמירת האינדקס הנוכחי כברירת מחדל
 
     if (bloc.state is TextBookLoaded) {
       final loadedState = bloc.state as TextBookLoaded;
       commentators = loadedState.activeCommentators;
       splitedView = loadedState.showSplitView;
+      showPageShapeView = loadedState.showPageShapeView;
       // עדכון האינדקס מה-state הנטען - תמיד לוקחים את האינדקס האחרון שנראה
       if (loadedState.visibleIndices.isNotEmpty) {
         currentIndex = loadedState.visibleIndices.first;
         // עדכון גם את ה-index של הטאב עצמו כדי שישמר
         index = currentIndex;
-      } 
-    } 
+        debugPrint(
+            'DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex, splitedView: $splitedView (מתוך visibleIndices)');
+      } else {
+        debugPrint(
+            'DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex, splitedView: $splitedView (ברירת מחדל)');
+      }
+    } else {
+      debugPrint(
+          'DEBUG: שמירת טאב ${book.title} עם אינדקס: $currentIndex, splitedView: $splitedView (state לא loaded)');
+    }
 
     return {
       'title': title,
       'initalIndex': currentIndex,
       'commentators': commentators,
       'splitedView': splitedView,
+      'showPageShapeView': showPageShapeView,
       'isPinned': isPinned,
       'type': 'TextBookTab'
     };

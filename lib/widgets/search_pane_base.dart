@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class SearchPaneBase extends StatefulWidget {
   const SearchPaneBase({
@@ -13,6 +14,7 @@ class SearchPaneBase extends StatefulWidget {
     this.onSearchTextChanged,
     required this.resetSearchCallback,
     this.hintText,
+    this.onAdvancedSearch,
     super.key,
   });
 
@@ -25,6 +27,7 @@ class SearchPaneBase extends StatefulWidget {
   final ValueChanged<String>? onSearchTextChanged;
   final VoidCallback resetSearchCallback;
   final String? hintText;
+  final VoidCallback? onAdvancedSearch;
 
   @override
   State<SearchPaneBase> createState() => _SearchPaneBaseState();
@@ -53,11 +56,12 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
       children: [
         if (widget.progressWidget != null) widget.progressWidget!,
         Padding(
+          key: const ValueKey('searchField'),
           padding: const EdgeInsets.all(8.0),
           child: ValueListenableBuilder<TextEditingValue>(
             valueListenable: widget.searchController,
             builder: (context, value, _) {
-              return TextField(
+              return RtlTextField(
                 autofocus: true,
                 focusNode: widget.focusNode,
                 controller: widget.searchController,
@@ -70,8 +74,17 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
                 decoration: InputDecoration(
                   hintText: widget.hintText,
                   prefixIcon: const Icon(FluentIcons.search_24_regular),
-                  suffixIcon: value.text.isNotEmpty
-                      ? IconButton(
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.onAdvancedSearch != null)
+                        IconButton(
+                          icon: const Icon(FluentIcons.settings_24_regular),
+                          tooltip: 'חיפוש מתקדם',
+                          onPressed: widget.onAdvancedSearch,
+                        ),
+                      if (value.text.isNotEmpty)
+                        IconButton(
                           tooltip: 'נקה',
                           onPressed: () {
                             widget.searchController.clear();
@@ -80,15 +93,15 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
                             widget.focusNode.requestFocus();
                           },
                           icon: const Icon(FluentIcons.dismiss_24_regular),
-                        )
-                      : null,
+                        ),
+                    ],
+                  ),
                   isDense: true,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                 ),
                 textInputAction: TextInputAction.search,
-                textDirection: TextDirection.rtl,
               );
             },
           ),

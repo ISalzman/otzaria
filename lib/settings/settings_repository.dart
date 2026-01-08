@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/utils/color_utils.dart';
 import 'package:otzaria/utils/shortcut_validator.dart';
 import 'package:otzaria/utils/settings_wrapper.dart';
@@ -42,6 +43,8 @@ class SettingsRepository {
   static const String keyHebrewBooksPath = 'key-hebrew-books-path';
   static const String keyDevChannel = 'key-dev-channel';
   static const String keyCustomFolders = 'key-custom-folders';
+  static const String keyAlignTabsToRight = 'key-align-tabs-to-right';
+  static const String keyEnableHtmlLinks = 'key-enable-html-links';
 
   // Calendar Notification Settings
   static const String keyCalendarNotificationsEnabled =
@@ -50,6 +53,13 @@ class SettingsRepository {
       'key-calendar-notification-time';
   static const String keyCalendarNotificationSound =
       'key-calendar-notification-sound';
+
+  // Calendar per-time (zman) alerts
+  static const String keyCalendarZmanAlerts = 'key-calendar-zman-alerts';
+
+  // Internal tracking of scheduled calendar event notification IDs
+  static const String keyCalendarEventNotificationIds =
+      'key-calendar-event-notification-ids';
 
   final SettingsWrapper _settings;
 
@@ -74,11 +84,11 @@ class SettingsRepository {
       'fontSize': _settings.getValue<double>(keyFontSize, defaultValue: 25),
       'fontFamily': _settings.getValue<String>(
         keyFontFamily,
-        defaultValue: 'FrankRuhlCLM',
+        defaultValue: AppFonts.defaultFont,
       ),
       'commentatorsFontFamily': _settings.getValue<String>(
         keyCommentatorsFontFamily,
-        defaultValue: 'NotoRashiHebrew',
+        defaultValue: AppFonts.defaultCommentatorsFont,
       ),
       'commentatorsFontSize': _settings.getValue<double>(
         keyCommentatorsFontSize,
@@ -175,6 +185,14 @@ class SettingsRepository {
         keyOfflineMode,
         defaultValue: false,
       ),
+      'alignTabsToRight': _settings.getValue<bool>(
+        keyAlignTabsToRight,
+        defaultValue: false,
+      ),
+      'enableHtmlLinks': _settings.getValue<bool>(
+        keyEnableHtmlLinks,
+        defaultValue: true,
+      ),
 
       // Calendar Notification Settings
       'calendarNotificationsEnabled': _settings.getValue<bool>(
@@ -188,6 +206,12 @@ class SettingsRepository {
       'calendarNotificationSound': _settings.getValue<bool>(
         keyCalendarNotificationSound,
         defaultValue: true,
+      ),
+
+      // Calendar per-time (zman) alerts
+      'calendarZmanAlerts': _settings.getValue<String>(
+        keyCalendarZmanAlerts,
+        defaultValue: '{}',
       ),
     };
   }
@@ -321,6 +345,14 @@ class SettingsRepository {
     await _settings.setValue(keyOfflineMode, value);
   }
 
+  Future<void> updateAlignTabsToRight(bool value) async {
+    await _settings.setValue(keyAlignTabsToRight, value);
+  }
+
+  Future<void> updateEnableHtmlLinks(bool value) async {
+    await _settings.setValue(keyEnableHtmlLinks, value);
+  }
+
   // Calendar Notification Settings
   Future<void> updateCalendarNotificationsEnabled(bool value) async {
     await _settings.setValue(keyCalendarNotificationsEnabled, value);
@@ -332,6 +364,24 @@ class SettingsRepository {
 
   Future<void> updateCalendarNotificationSound(bool value) async {
     await _settings.setValue(keyCalendarNotificationSound, value);
+  }
+
+  String getCalendarZmanAlertsJson() {
+    return _settings.getValue<String>(keyCalendarZmanAlerts,
+        defaultValue: '{}');
+  }
+
+  Future<void> updateCalendarZmanAlertsJson(String json) async {
+    await _settings.setValue(keyCalendarZmanAlerts, json);
+  }
+
+  String getCalendarEventNotificationIdsJson() {
+    return _settings.getValue<String>(keyCalendarEventNotificationIds,
+        defaultValue: '[]');
+  }
+
+  Future<void> updateCalendarEventNotificationIdsJson(String json) async {
+    await _settings.setValue(keyCalendarEventNotificationIds, json);
   }
 
   Future<Map<String, String>> getShortcuts() async {
@@ -399,8 +449,9 @@ class SettingsRepository {
     await _settings.setValue(keyDarkSwatchColor, '#ffce93d8');
     await _settings.setValue(keyTextMaxWidth, -1.0);
     await _settings.setValue(keyFontSize, 25.0);
-    await _settings.setValue(keyFontFamily, 'FrankRuhlCLM');
-    await _settings.setValue(keyCommentatorsFontFamily, 'NotoRashiHebrew');
+    await _settings.setValue(keyFontFamily, AppFonts.defaultFont);
+    await _settings.setValue(
+        keyCommentatorsFontFamily, AppFonts.defaultCommentatorsFont);
     await _settings.setValue(keyCommentatorsFontSize, 22.0);
     await _settings.setValue(keyShowOtzarHachochma, false);
     await _settings.setValue(keyShowHebrewBooks, false);
@@ -425,11 +476,18 @@ class SettingsRepository {
     await _settings.setValue(keyLibraryViewMode, 'grid');
     await _settings.setValue(keyLibraryShowPreview, true);
     await _settings.setValue(keyEnablePerBookSettings, true);
+    await _settings.setValue(keyAlignTabsToRight, false);
 
     // Calendar Notification Settings
     await _settings.setValue(keyCalendarNotificationsEnabled, true);
     await _settings.setValue(keyCalendarNotificationTime, 60);
     await _settings.setValue(keyCalendarNotificationSound, true);
+
+    // Calendar per-time (zman) alerts
+    await _settings.setValue(keyCalendarZmanAlerts, '{}');
+
+    // Internal tracking of scheduled calendar event notification IDs
+    await _settings.setValue(keyCalendarEventNotificationIds, '[]');
 
     // Mark as initialized
     await _settings.setValue('settings_initialized', true);

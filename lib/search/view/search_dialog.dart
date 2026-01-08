@@ -19,13 +19,25 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/indexing_warning.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 
 /// דיאלוג חיפוש מתקדם - מכיל את כל פקדי החיפוש וההגדרות
 /// כשמבצעים חיפוש, הדיאלוג נסגר ונפתחת לשונית תוצאות
 class SearchDialog extends StatefulWidget {
   final SearchingTab? existingTab;
+  final Function(
+    String query,
+    Map<String, Map<String, bool>> searchOptions,
+    Map<int, List<String>> alternativeWords,
+    Map<String, String> spacingValues,
+    SearchMode searchMode,
+  )? onSearch;
+  final String? bookTitle;
 
-  const SearchDialog({super.key, this.existingTab});
+  const SearchDialog(
+      {super.key, this.existingTab, this.onSearch, this.bookTitle});
 
   @override
   State<SearchDialog> createState() => _SearchDialogState();
@@ -53,7 +65,11 @@ class _SearchDialogState extends State<SearchDialog> {
         Settings.getValue<String>('key-last-search-mode') ?? 'advanced';
 
     // יצירת טאב עם ההקלדה האחרונה
-    _searchTab = SearchingTab("חיפוש", lastTyping);
+    if (widget.existingTab != null) {
+      _searchTab = widget.existingTab!;
+    } else {
+      _searchTab = SearchingTab("חיפוש", lastTyping);
+    }
 
     // הגדרת מצב החיפוש האחרון
     final searchMode = lastMode == 'advanced'
@@ -94,34 +110,12 @@ class _SearchDialogState extends State<SearchDialog> {
   Widget _buildIndexWarning() {
     if (!_showIndexWarning) return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.all(8.0),
-      margin: const EdgeInsets.only(bottom: 8.0),
-      decoration: BoxDecoration(
-        color: Colors.yellow.shade100,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        children: [
-          Icon(FluentIcons.warning_24_regular, color: Colors.orange[700]),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Text(
-              'אינדקס החיפוש בתהליך עדכון. יתכן שחלק מהספרים לא יוצגו בתוצאות החיפוש.',
-              textAlign: TextAlign.right,
-              style: TextStyle(color: Colors.black87),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(FluentIcons.dismiss_24_regular),
-            onPressed: () {
-              setState(() {
-                _showIndexWarning = false;
-              });
-            },
-          ),
-        ],
-      ),
+    return IndexingWarning(
+      onDismiss: () {
+        setState(() {
+          _showIndexWarning = false;
+        });
+      },
     );
   }
 
@@ -280,12 +274,7 @@ class _SearchDialogState extends State<SearchDialog> {
     final query = _searchTab.queryController.text.trim();
 
     if (query.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('נא להזין טקסט לחיפוש'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      UiSnack.show('נא להזין טקסט לחיפוש');
       return;
     }
 
@@ -300,6 +289,18 @@ class _SearchDialogState extends State<SearchDialog> {
             ? 'fuzzy'
             : 'exact';
     Settings.setValue<String>('key-last-search-mode', modeString);
+
+    if (widget.onSearch != null) {
+      widget.onSearch!(
+        query,
+        _searchTab.searchOptions,
+        _searchTab.alternativeWords,
+        _searchTab.spacingValues,
+        currentMode,
+      );
+      Navigator.of(context).pop();
+      return;
+    }
 
     // יצירת טאב חדש לגמרי - ללא קשר לטאב קודם
     // שם הלשונית: "חיפוש: [מילות החיפוש]"
@@ -591,7 +592,7 @@ class _SearchDialogState extends State<SearchDialog> {
                           // תיבת מרווח - מעל (תמיד גלויה)
                           Opacity(
                             opacity: isEnabled && wordIndex != null ? 1.0 : 0.5,
-                            child: TextField(
+                            child: RtlTextField(
                               enabled: isEnabled && wordIndex != null,
                               focusNode: wordIndex != null
                                   ? _getSpacingFocusNode(
@@ -670,7 +671,7 @@ class _SearchDialogState extends State<SearchDialog> {
                           const SizedBox(height: 16),
 
                           // תיבת מילה חילופית - מתחת
-                          TextField(
+                          RtlTextField(
                             controller: _alternativeWordController,
                             focusNode: _alternativeWordFocusNode,
                             decoration: InputDecoration(
@@ -945,10 +946,12 @@ class _SearchDialogState extends State<SearchDialog> {
                   children: [
                     const Icon(FluentIcons.search_24_filled, size: 28),
                     const SizedBox(width: 12),
-                    const Text(
-                      'חיפוש',
-                      style:
-                          TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    Text(
+                      widget.bookTitle != null
+                          ? 'חיפוש ב${widget.bookTitle}'
+                          : 'חיפוש',
+                      style: const TextStyle(
+                          fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                     const Spacer(),
                     IconButton(

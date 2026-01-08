@@ -33,6 +33,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:flutter/gestures.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
+import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
@@ -252,11 +253,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('ההגדרות הפר-ספריות אופסו בהצלחה'),
-        ),
-      );
+      UiSnack.show('ההגדרות הפר-ספריות אופסו בהצלחה');
     }
   }
 
@@ -324,6 +321,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   int _lastComputedForPage = -1;
   void _onPdfViewerControllerUpdate() async {
     if (!widget.tab.pdfViewerController.isReady) return;
+
+    // שמירת מצב הזום לשחזור אחרי rebuild
+    widget.tab.savedZoom = widget.tab.pdfViewerController.value.zoom;
+
     final newPage = widget.tab.pdfViewerController.pageNumber ?? 1;
     if (newPage == widget.tab.pageNumber) return;
     widget.tab.pageNumber = newPage;
@@ -455,23 +456,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 ValueListenableBuilder(
                   valueListenable: widget.tab.showLeftPane,
                   builder: (context, show, child) => show
-                      ? MouseRegion(
-                          cursor: SystemMouseCursors.resizeColumn,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.translucent,
-                            onHorizontalDragUpdate: (details) {
-                              final newWidth =
-                                  (_sidebarWidth.value - details.delta.dx)
-                                      .clamp(200.0, 600.0);
-                              _sidebarWidth.value = newWidth;
-                            },
-                            onHorizontalDragEnd: (_) {
-                              context
-                                  .read<SettingsBloc>()
-                                  .add(UpdateSidebarWidth(_sidebarWidth.value));
-                            },
-                            child: const VerticalDivider(width: 4),
-                          ),
+                      ? ResizableDragHandle(
+                          isVertical: true,
+                          hitSize: 4,
+                          onDragDelta: (delta) {
+                            final newWidth = (_sidebarWidth.value - delta)
+                                .clamp(200.0, 600.0);
+                            _sidebarWidth.value = newWidth;
+                          },
+                          onDragEnd: () {
+                            context
+                                .read<SettingsBloc>()
+                                .add(UpdateSidebarWidth(_sidebarWidth.value));
+                          },
                         )
                       : const SizedBox.shrink(),
                 ),
@@ -605,6 +602,27 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                       controller.documentRef;
                                   widget.tab.outline.value =
                                       await document.loadOutline();
+
+                                  // 1.5. שחזור מצב הזום אם נשמר קודם
+                                  if (widget.tab.savedZoom != null &&
+                                      widget.tab.savedZoom != 1.0) {
+                                    // המתנה קצרה לוודא שה-viewer מוכן לחלוטין
+                                    // הערה: ספריית pdfrx לא מספקת callback או stream שמציין שה-viewer
+                                    // סיים את כל תהליכי האתחול והרינדור הראשוני. לכן משתמשים ב-delay
+                                    // קצר בשילוב עם בדיקת isReady. זהו פתרון סביר עד שהספרייה תספק
+                                    // דרך דטרמיניסטית יותר לדעת מתי בטוח לקרוא ל-setZoom.
+                                    await Future.delayed(
+                                        const Duration(milliseconds: 100));
+                                    if (mounted &&
+                                        widget
+                                            .tab.pdfViewerController.isReady) {
+                                      widget.tab.pdfViewerController.setZoom(
+                                        widget.tab.pdfViewerController
+                                            .centerPosition,
+                                        widget.tab.savedZoom!,
+                                      );
+                                    }
+                                  }
 
                                   // 2. עדכון הכותרת הנוכחית
                                   final currentPage =
@@ -742,24 +760,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 ValueListenableBuilder(
                   valueListenable: _showRightPane,
                   builder: (context, show, child) => show
-                      ? MouseRegion(
-                          cursor: SystemMouseCursors.resizeColumn,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.translucent,
-                            onHorizontalDragUpdate: (details) {
-                              final newWidth =
-                                  (_rightPaneWidth.value + details.delta.dx)
-                                      .clamp(250.0, 600.0);
-                              _rightPaneWidth.value = newWidth;
-                            },
-                            onHorizontalDragEnd: (_) {
-                              // שמור את הרוחב ב-SettingsBloc
-                              context.read<SettingsBloc>().add(
-                                  UpdateCommentaryPaneWidth(
-                                      _rightPaneWidth.value));
-                            },
-                            child: const VerticalDivider(width: 4),
-                          ),
+                      ? ResizableDragHandle(
+                          isVertical: true,
+                          hitSize: 4,
+                          onDragDelta: (delta) {
+                            final newWidth = (_rightPaneWidth.value + delta)
+                                .clamp(250.0, 600.0);
+                            _rightPaneWidth.value = newWidth;
+                          },
+                          onDragEnd: () {
+                            context.read<SettingsBloc>().add(
+                                UpdateCommentaryPaneWidth(
+                                    _rightPaneWidth.value));
+                          },
                         )
                       : const SizedBox.shrink(),
                 ),
@@ -894,7 +907,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                 focusNode: _searchFieldFocusNode,
                                 outline: widget.tab.outline.value,
                                 bookTitle: widget.tab.book.title,
+                                bookTopics: widget.tab.book.topics,
+                                pdfFilePath: widget.tab.book.path,
                                 initialSearchText: widget.tab.searchText,
+                                initialSearchOptions: widget.tab.searchOptions,
+                                initialAlternativeWords:
+                                    widget.tab.alternativeWords,
+                                initialSpacingValues: widget.tab.spacingValues,
+                                initialSearchMode: widget.tab.searchMode,
                                 onSearchResultNavigated:
                                     _ensureSearchTabIsActive,
                               )
@@ -1112,13 +1132,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // 5) First Page Button
         ActionButtonData(
           widget: IconButton(
-            icon: const Icon(FluentIcons.arrow_previous_24_regular),
-            tooltip: 'תחילת הספר',
+            icon: const Icon(FluentIcons.arrow_previous_24_filled),
+            tooltip: 'תחילת הספר (CTRL + HOME)',
             onPressed: () =>
                 widget.tab.pdfViewerController.goToPage(pageNumber: 1),
           ),
-          icon: FluentIcons.arrow_previous_24_regular,
-          tooltip: 'תחילת הספר',
+          icon: FluentIcons.arrow_previous_24_filled,
+          tooltip: 'תחילת הספר (CTRL + HOME)',
           onPressed: () =>
               widget.tab.pdfViewerController.goToPage(pageNumber: 1),
         ),
@@ -1193,12 +1213,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.arrow_next_24_filled),
-            tooltip: 'סוף הספר',
+            tooltip: 'סוף הספר (CTRL + END)',
             onPressed: () => widget.tab.pdfViewerController
                 .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
           ),
           icon: FluentIcons.arrow_next_24_filled,
-          tooltip: 'סוף הספר',
+          tooltip: 'סוף הספר (CTRL + END)',
           onPressed: () => widget.tab.pdfViewerController
               .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
         ),
@@ -1213,13 +1233,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       if (widget.isInCombinedView) ...[
         ActionButtonData(
           widget: IconButton(
-            icon: const Icon(FluentIcons.arrow_previous_24_regular),
-            tooltip: 'תחילת הספר',
+            icon: const Icon(FluentIcons.arrow_previous_24_filled),
+            tooltip: 'תחילת הספר (CTRL + HOME)',
             onPressed: () =>
                 widget.tab.pdfViewerController.goToPage(pageNumber: 1),
           ),
-          icon: FluentIcons.arrow_previous_24_regular,
-          tooltip: 'תחילת הספר',
+          icon: FluentIcons.arrow_previous_24_filled,
+          tooltip: 'תחילת הספר (CTRL + HOME)',
           onPressed: () =>
               widget.tab.pdfViewerController.goToPage(pageNumber: 1),
         ),
@@ -1280,12 +1300,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.arrow_next_24_filled),
-            tooltip: 'סוף הספר',
+            tooltip: 'סוף הספר (CTRL + END)',
             onPressed: () => widget.tab.pdfViewerController
                 .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
           ),
           icon: FluentIcons.arrow_next_24_filled,
-          tooltip: 'סוף הספר',
+          tooltip: 'סוף הספר (CTRL + END)',
           onPressed: () => widget.tab.pdfViewerController
               .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
         ),
@@ -1630,9 +1650,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         builder: (context, showRightPane, child) =>
             ValueListenableBuilder<double>(
           valueListenable: _rightPaneWidth,
-          builder: (context, width, child2) => SizedBox(
-            width: showRightPane ? width : 0,
-            child: child2!,
+          builder: (context, width, child2) => ClipRect(
+            child: SizedBox(
+              width: showRightPane ? width : 0,
+              child: showRightPane ? child2 : null,
+            ),
           ),
           child: child,
         ),

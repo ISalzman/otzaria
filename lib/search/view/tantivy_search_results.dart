@@ -8,6 +8,8 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
@@ -30,51 +32,13 @@ class TantivySearchResults extends StatefulWidget {
 }
 
 class _TantivySearchResultsState extends State<TantivySearchResults> {
-  // פונקציה עזר ליצירת וריאציות כתיב מלא/חסר
-  List<String> _generateFullPartialSpellingVariations(String word) {
-    if (word.isEmpty) return [word];
 
-    final variations = <String>{word}; // המילה המקורית
+  final ScrollController _scrollController = ScrollController();
 
-    // מוצא את כל המיקומים של י, ו, וגרשיים
-    final chars = word.split('');
-    final optionalIndices = <int>[];
-
-    // מוצא אינדקסים של תווים שיכולים להיות אופציונליים
-    for (int i = 0; i < chars.length; i++) {
-      if (chars[i] == 'י' ||
-          chars[i] == 'ו' ||
-          chars[i] == "'" ||
-          chars[i] == '"') {
-        optionalIndices.add(i);
-      }
-    }
-
-    // יוצר את כל הצירופים האפשריים (2^n אפשרויות)
-    final numCombinations = 1 << optionalIndices.length; // 2^n
-
-    for (int combination = 0; combination < numCombinations; combination++) {
-      final variant = <String>[];
-
-      for (int i = 0; i < chars.length; i++) {
-        final optionalIndex = optionalIndices.indexOf(i);
-
-        if (optionalIndex != -1) {
-          // זה תו אופציונלי - בודק אם לכלול אותו בצירוף הזה
-          final shouldInclude = (combination & (1 << optionalIndex)) != 0;
-          if (shouldInclude) {
-            variant.add(chars[i]);
-          }
-        } else {
-          // תו רגיל - תמיד כולל
-          variant.add(chars[i]);
-        }
-      }
-
-      variations.add(variant.join(''));
-    }
-
-    return variations.toList();
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   // פונקציה לחישוב כמה תווים יכולים להיכנס בשורה אחת
@@ -127,7 +91,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         // אם יש כתיב מלא/חסר, נוסיף את כל הווריאציות
         try {
           // ייבוא דינמי של HebrewMorphology
-          final variations = _generateFullPartialSpellingVariations(word);
+          final variations = utils.generateFullPartialSpellingVariations(word);
           searchTerms.addAll(variations);
         } catch (e) {
           // אם יש בעיה, נוסיף לפחות את המילה המקורית
@@ -145,7 +109,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
           // אם יש כתיב מלא/חסר, נוסיף גם את הווריאציות של המילים החילופיות
           for (final alt in alternatives) {
             try {
-              final altVariations = _generateFullPartialSpellingVariations(alt);
+              final altVariations = utils.generateFullPartialSpellingVariations(alt);
               searchTerms.addAll(altVariations);
             } catch (e) {
               searchTerms.add(alt);
@@ -346,7 +310,9 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   }
 
   Widget _buildResultsContent(SearchState state, BoxConstraints constrains) {
-    if (state.isLoading) {
+    // חשוב: בעת טעינת "עוד תוצאות" אנחנו לא רוצים לפרק את ה-ListView,
+    // אחרת הגלילה מתאפסת לראש. לכן ספינר מרכזי מוצג רק כשאין עדיין תוצאות.
+    if (state.isLoading && state.results.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     if (state.searchQuery.isEmpty) {
@@ -361,10 +327,53 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     }
 
     // תמיד נשתמש ב-ListView גם לתוצאה אחת - כך היא תופיע למעלה
+    // +1 לכפתור "טען תוצאות נוספות" אם יש עוד תוצאות
+    final hasMoreResults = state.results.length < state.totalResults;
     return ListView.builder(
+      key: PageStorageKey(widget.tab),
+      controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: state.results.length,
+      itemCount: state.results.length + (hasMoreResults ? 1 : 0),
       itemBuilder: (context, index) {
+        // אם זה האיטם האחרון והוא כפתור "טען עוד"
+        if (index == state.results.length) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            child: Center(
+              child: ElevatedButton.icon(
+                onPressed: state.isLoading
+                    ? null
+                    : () {
+                        context.read<SearchBloc>().add(
+                              LoadMoreResults(
+                                customSpacing: widget.tab.spacingValues,
+                                alternativeWords: widget.tab.alternativeWords,
+                                searchOptions: widget.tab.searchOptions,
+                              ),
+                            );
+                      },
+                icon: state.isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(FluentIcons.arrow_download_24_regular),
+                label: Text(
+                  state.isLoading
+                      ? 'טוען...'
+                      : 'טען תוצאות נוספות (${state.totalResults - state.results.length} נותרו)',
+                ),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
         final result = state.results[index];
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
@@ -375,6 +384,9 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               titleText = utils.replaceHolyNames(titleText);
               rawHtml = utils.replaceHolyNames(rawHtml);
             }
+            // הסרת גרשיים מהתצוגה
+            titleText = titleText.replaceAll('"', '');
+            rawHtml = rawHtml.replaceAll('"', '');
 
             // חישוב רוחב זמין לטקסט
             final availableWidth = constrains.maxWidth - 100.0;
@@ -403,20 +415,50 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outline
+                      .withValues(alpha: 0.3),
                   width: 1,
                 ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: InkWell(
                 onTap: () {
+                  final rawQuery = widget.tab.queryController.text;
+                  final hasEnabledOptions = widget.tab.searchOptions.values
+                    .any((m) => m.values.any((v) => v == true));
+                  final hasAlternativeWords = widget.tab.alternativeWords.values
+                    .any((alts) => alts.any((w) => w.trim().isNotEmpty));
+                  final hasSpacingValues = widget.tab.spacingValues.values
+                    .any((v) => v.trim().isNotEmpty);
+                  final looksLikeRegex = RegExp(r'[\\.\*\+\?\|\(\)\[\]\{\}\^\$]')
+                    .hasMatch(rawQuery);
+                  final currentMode =
+                    widget.tab.searchBloc.state.configuration.searchMode;
+
+                  final shouldUseLegacyInBook =
+                    !hasEnabledOptions &&
+                    !hasAlternativeWords &&
+                    !hasSpacingValues &&
+                    !looksLikeRegex &&
+                    currentMode != SearchMode.fuzzy;
+
+                  final inBookMode =
+                    shouldUseLegacyInBook ? SearchMode.exact : currentMode;
+
                   if (result.isPdf) {
+                    final pageNumber = result.segment.toInt() + 1;
                     context.read<TabsBloc>().add(AddTab(
                           PdfBookTab(
                             book: PdfBook(
                                 title: result.title, path: result.filePath),
-                            pageNumber: result.segment.toInt() + 1,
-                            searchText: widget.tab.queryController.text,
+                            pageNumber: pageNumber,
+                      searchText: rawQuery,
+                            searchOptions: widget.tab.searchOptions,
+                            alternativeWords: widget.tab.alternativeWords,
+                            spacingValues: widget.tab.spacingValues,
+                      searchMode: inBookMode,
                             openLeftPane:
                                 (Settings.getValue<bool>('key-pin-sidebar') ??
                                         false) ||
@@ -432,13 +474,17 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                 title: result.title,
                               ),
                               index: result.segment.toInt(),
-                              searchText: widget.tab.queryController.text,
-                              openLeftPane: (Settings.getValue<bool>(
-                                          'key-pin-sidebar') ??
-                                      false) ||
-                                  (Settings.getValue<bool>(
-                                          'key-default-sidebar-open') ??
-                                      false)),
+                        searchText: rawQuery,
+                              searchOptions: widget.tab.searchOptions,
+                              alternativeWords: widget.tab.alternativeWords,
+                              spacingValues: widget.tab.spacingValues,
+                        searchMode: inBookMode,
+                              openLeftPane:
+                                  (Settings.getValue<bool>('key-pin-sidebar') ??
+                                          false) ||
+                                      (Settings.getValue<bool>(
+                                              'key-default-sidebar-open') ??
+                                          false)),
                         ));
                   }
                 },

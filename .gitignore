@@ -34,6 +34,7 @@ migrate_working_dir/
 build/
 windows
 macos/
+!macos/Runner/*.entitlements
 ios/
 .dart_tool
 web/
@@ -55,6 +56,7 @@ app.*.map.json
 
 .git/
 .vscode/
+.kiro/
 android/.gradle/
 android/.idea/
 android/local.properties
@@ -67,8 +69,8 @@ android/app/google-services.json
 build/
 fonts/
 
-installer/otzaria-0.9.72-windows.exe
-installer/otzaria-0.9.72-windows-full.exe
+installer/otzaria-0.9.74-windows.exe
+installer/otzaria-0.9.74-windows-full.exe
 pubspec.lock
 flutter/
 

@@ -106,7 +106,10 @@ class SearchQueryBuilder {
       Map<String, String>? customSpacing,
       Map<int, List<String>>? alternativeWords,
       Map<String, Map<String, bool>>? searchOptions) {
-    final words = query
+    // ניקוי תווים מיוחדים שלא צריכים להיות בחיפוש (כמו גרשיים)
+    final cleanedQuery = query.replaceAll('"', '');
+    
+    final words = cleanedQuery
         .trim()
         .split(SearchRegexPatterns.wordSplitter)
         .where((w) => w.isNotEmpty)

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 import 'overrides_repository.dart';
 import '../models/text_override.dart';
@@ -305,7 +306,7 @@ $content''';
     try {
       // Check if there's a links file for this book
       // This would typically be in the book's directory with a .links extension
-      final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+      final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
       final bookPath = path.join(libraryPath, 'אוצריא');
       
       // Look for links file - this is a simplified check

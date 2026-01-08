@@ -1,7 +1,10 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/settings/per_book_settings.dart';
 
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsRepository _repository;
@@ -42,6 +45,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateShortcut>(_onUpdateShortcut);
     on<UpdateEnablePerBookSettings>(_onUpdateEnablePerBookSettings);
     on<UpdateOfflineMode>(_onUpdateOfflineMode);
+    on<UpdateAlignTabsToRight>(_onUpdateAlignTabsToRight);
+    on<UpdateEnableHtmlLinks>(_onUpdateEnableHtmlLinks);
   }
 
   Future<void> _onLoadSettings(
@@ -49,6 +54,11 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     final settings = await _repository.loadSettings();
+
+    // בדסקטופ: אם המשתמש בחר גופן מערכת בעבר, נטען אותו כדי שיהיה זמין ב-TextStyle.
+    await AppFonts.ensureFontLoaded(settings['fontFamily'] as String);
+    await AppFonts.ensureFontLoaded(settings['commentatorsFontFamily'] as String);
+
     emit(SettingsState(
       isDarkMode: settings['isDarkMode'],
       seedColor: settings['seedColor'],
@@ -82,6 +92,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       ),
       enablePerBookSettings: settings['enablePerBookSettings'],
       isOfflineMode: settings['isOfflineMode'] ?? false,
+      alignTabsToRight: settings['alignTabsToRight'] ?? false,
+      enableHtmlLinks: settings['enableHtmlLinks'] ?? true,
     ));
   }
 
@@ -99,6 +111,22 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateOfflineMode(event.isOfflineMode);
     emit(state.copyWith(isOfflineMode: event.isOfflineMode));
+  }
+
+  Future<void> _onUpdateAlignTabsToRight(
+    UpdateAlignTabsToRight event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateAlignTabsToRight(event.alignTabsToRight);
+    emit(state.copyWith(alignTabsToRight: event.alignTabsToRight));
+  }
+
+  Future<void> _onUpdateEnableHtmlLinks(
+    UpdateEnableHtmlLinks event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateEnableHtmlLinks(event.enableHtmlLinks);
+    emit(state.copyWith(enableHtmlLinks: event.enableHtmlLinks));
   }
 
   Future<void> _onUpdateDarkMode(
@@ -139,12 +167,16 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateFontSize(event.fontSize);
     emit(state.copyWith(fontSize: event.fontSize));
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
   }
 
   Future<void> _onUpdateFontFamily(
     UpdateFontFamily event,
     Emitter<SettingsState> emit,
   ) async {
+    await AppFonts.ensureFontLoaded(event.fontFamily);
     await _repository.updateFontFamily(event.fontFamily);
     emit(state.copyWith(fontFamily: event.fontFamily));
   }
@@ -153,6 +185,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     UpdateCommentatorsFontFamily event,
     Emitter<SettingsState> emit,
   ) async {
+    await AppFonts.ensureFontLoaded(event.commentatorsFontFamily);
     await _repository
         .updateCommentatorsFontFamily(event.commentatorsFontFamily);
     emit(state.copyWith(commentatorsFontFamily: event.commentatorsFontFamily));
@@ -228,6 +261,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateDefaultRemoveNikud(event.defaultRemoveNikud);
     emit(state.copyWith(defaultRemoveNikud: event.defaultRemoveNikud));
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
   }
 
   Future<void> _onUpdateRemoveNikudFromTanach(
@@ -352,6 +388,17 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       state.copyWith(
         shortcuts: Map<String, String>.unmodifiable(shortcuts),
       ),
+    );
+  }
+
+  /// ניקוי קבצי per_book_settings שהפכו למיותרים
+  void _cleanupRedundantPerBookSettings() {
+    // הרצה אסינכרונית ללא המתנה כדי לא לחסום את ה-UI
+    PerBookSettings.cleanupRedundantSettings(
+      defaultFontSize: state.fontSize,
+      defaultRemoveNikud: state.defaultRemoveNikud,
+      defaultShowSplitView:
+          Settings.getValue<bool>('key-splited-view') ?? false,
     );
   }
 }

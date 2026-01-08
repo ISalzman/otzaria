@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   StreamSubscription? _downloadSubscription;
@@ -64,7 +65,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   Future<void> _onPickAndExtractZipRequested(
       PickAndExtractZipRequested event, Emitter<EmptyLibraryState> emit) async {
-    final libraryPath = Settings.getValue<String>('key-library-path') ?? '';
+    final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '';
     if (libraryPath.isEmpty) {
       emit(const EmptyLibraryError(errorMessage: 'נא לבחור תיקייה תחילה'));
       return;
@@ -124,7 +125,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         downloadSpeed: 0,
         currentOperation: 'מתחיל הורדה...'));
 
-    final libraryPath = Settings.getValue<String>('key-library-path') ?? '';
+    final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '';
     if (libraryPath.isEmpty) {
       emit(const EmptyLibraryError(errorMessage: 'נא לבחור תיקייה תחילה'));
       emit(EmptyLibraryInitial());
@@ -321,7 +322,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         downloadedMB: 0,
         downloadSpeed: 0,
         currentOperation: ''));
-    Settings.setValue('key-library-path', selectedDirectory);
+    Settings.setValue(SettingsRepository.keyLibraryPath, selectedDirectory);
     emit(
         EmptyLibraryDownloaded()); // Or maybe a different state like DirectorySelected?
   }

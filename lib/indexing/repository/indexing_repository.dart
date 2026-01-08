@@ -6,6 +6,7 @@ import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 
@@ -13,6 +14,44 @@ class IndexingRepository {
   final TantivyDataProvider _tantivyDataProvider;
 
   IndexingRepository(this._tantivyDataProvider);
+
+  static final RegExp _pdfInvisibleChars = RegExp(
+    r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069]'
+    r'|\uFEFF',
+  );
+
+  static final RegExp _pdfLettersAndDigits =
+      RegExp(r'[\u05D0-\u05EAa-zA-Z0-9]');
+  static final RegExp _pdfNonLettersNonSpace =
+      RegExp(r'[^\s\u05D0-\u05EAa-zA-Z0-9]');
+
+  static String _normalizePdfTextForIndexing(String input) {
+    var text = stripHtmlIfNeeded(input);
+    text = text.replaceAll(_pdfInvisibleChars, '');
+    text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    text = removeVolwels(text);
+    return text;
+  }
+
+  static bool _isProbablyGarbagePdfText(String normalizedText) {
+    final compact = normalizedText.replaceAll(RegExp(r'\s+'), '');
+    if (compact.isEmpty) return true;
+
+    final letters = _pdfLettersAndDigits.allMatches(compact).length;
+    if (letters == 0) return true;
+
+    final nonLetters = _pdfNonLettersNonSpace.allMatches(compact).length;
+    final ratioLetters = letters / compact.length;
+
+    // Heuristic: dot/bullet/garbage glyph-mapped text tends to be mostly
+    // punctuation/symbols with very few letters.
+    if (compact.length >= 50 && ratioLetters < 0.10) return true;
+    if (compact.length >= 20 && ratioLetters < 0.20 && nonLetters > letters) {
+      return true;
+    }
+
+    return false;
+  }
 
   /// Indexes all books in the provided library.
   ///
@@ -84,6 +123,7 @@ class IndexingRepository {
   /// Indexes a text-based book by processing its content and adding it to the search index.
   Future<void> _indexTextBook(TextBook book) async {
     final index = await _tantivyDataProvider.engine;
+    final refIndex = await _tantivyDataProvider.refEngine;
     var text = await book.text;
     final title = book.title;
     final topics = "/${book.topics.replaceAll(', ', '/')}";
@@ -114,6 +154,34 @@ class IndexingRepository {
               reference.length);
         }
         reference.add(line);
+
+        // Index the header as a reference
+        String refText = stripHtmlIfNeeded(reference.join(" "));
+        // שומרים את ה-reference המקורי ללא עיבוד
+        // הנרמול יתבצע בשלב החיפוש, לא באינדקס
+
+        refIndex.addDocument(
+            id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+            title: title,
+            reference: refText,
+            shortRef: refText, // שומרים את המקור
+            segment: BigInt.from(i),
+            isPdf: false,
+            filePath: '');
+
+        // Index the header also into the main search index so in-book search
+        // can find headings that are displayed and highlighted.
+        var headerLine = stripHtmlIfNeeded(line);
+        headerLine = removeVolwels(headerLine);
+        index.addDocument(
+            id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+            title: title,
+            reference: stripHtmlIfNeeded(reference.join(', ')),
+            topics: '$topics/$title',
+            text: headerLine,
+            segment: BigInt.from(i),
+            isPdf: false,
+            filePath: '');
       } else {
         line = stripHtmlIfNeeded(line);
         line = removeVolwels(line);
@@ -152,11 +220,22 @@ class IndexingRepository {
         '📚 PDF outline items: ${outline.length}, pages: ${pages.length}');
 
     // Process each page
+    var addedAnyInBook = false;
     for (int i = 0; i < pages.length; i++) {
+      if (!_tantivyDataProvider.isIndexing.value) {
+        return;
+      }
+
       final pageText = await pages[i].loadText();
-      final texts = pageText?.fullText.split('\n') ?? [];
-      // Index each line from the page
-      for (int j = 0; j < texts.length; j++) {
+      final rawLines = pageText?.fullText.split('\n') ?? const <String>[];
+
+      final bookmark = await refFromPageNumber(i + 1, outline, title);
+      final ref = bookmark.isNotEmpty
+          ? '$title, $bookmark, עמוד ${i + 1}'
+          : '$title, עמוד ${i + 1}';
+
+      var addedAny = false;
+      for (int j = 0; j < rawLines.length; j++) {
         if (!_tantivyDataProvider.isIndexing.value) {
           return;
         }
@@ -165,19 +244,100 @@ class IndexingRepository {
         if (j % 50 == 0) {
           await Future.delayed(Duration.zero);
         }
-        final bookmark = await refFromPageNumber(i + 1, outline, title);
-        final ref = bookmark.isNotEmpty
-            ? '$title, $bookmark, עמוד ${i + 1}'
-            : '$title, עמוד ${i + 1}';
+
+        final normalized = _normalizePdfTextForIndexing(rawLines[j]);
+        if (_isProbablyGarbagePdfText(normalized)) {
+          continue;
+        }
+
         index.addDocument(
-            id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
-            title: title,
-            reference: ref,
-            topics: '$topics/$title',
-            text: texts[j],
-            segment: BigInt.from(i),
-            isPdf: true,
-            filePath: book.path);
+          id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+          title: title,
+          reference: ref,
+          topics: '$topics/$title',
+          text: normalized,
+          segment: BigInt.from(i),
+          isPdf: true,
+          filePath: book.path,
+        );
+        addedAny = true;
+        addedAnyInBook = true;
+      }
+
+      if (!addedAny && kDebugMode) {
+        debugPrint(
+          '⚠️ PDF page ${i + 1}: skipped (no usable extracted text) file: ${book.path}',
+        );
+      }
+    }
+
+    // Fallback: some PDFs have no usable text layer, but ship alongside a
+    // plain-text OCR dump. If the PDF extraction produced nothing usable,
+    // try indexing a sidecar .txt so the book is still searchable.
+    if (!addedAnyInBook) {
+      final candidates = <String>{
+        '${book.path}.txt',
+        p.setExtension(book.path, '.txt'),
+      };
+
+      File? sidecar;
+      for (final candidate in candidates) {
+        final f = File(candidate);
+        if (await f.exists()) {
+          sidecar = f;
+          break;
+        }
+      }
+
+      if (sidecar != null) {
+        final ocrText = await sidecar.readAsString();
+        final pagesText =
+            ocrText.contains('\f') ? ocrText.split('\f') : <String>[ocrText];
+
+        for (int pageIndex = 0; pageIndex < pagesText.length; pageIndex++) {
+          if (!_tantivyDataProvider.isIndexing.value) {
+            return;
+          }
+
+          final bookmark =
+              await refFromPageNumber(pageIndex + 1, outline, title);
+          final ref = bookmark.isNotEmpty
+              ? '$title, $bookmark, עמוד ${pageIndex + 1}'
+              : '$title, עמוד ${pageIndex + 1}';
+
+          final lines = pagesText[pageIndex].split('\n');
+          for (int j = 0; j < lines.length; j++) {
+            if (!_tantivyDataProvider.isIndexing.value) {
+              return;
+            }
+            if (j % 50 == 0) {
+              await Future.delayed(Duration.zero);
+            }
+
+            final normalized = _normalizePdfTextForIndexing(lines[j]);
+            if (_isProbablyGarbagePdfText(normalized)) {
+              continue;
+            }
+
+            index.addDocument(
+              id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+              title: title,
+              reference: ref,
+              topics: '$topics/$title',
+              text: normalized,
+              segment: BigInt.from(pageIndex),
+              isPdf: true,
+              filePath: book.path,
+            );
+            addedAnyInBook = true;
+          }
+        }
+
+        if (kDebugMode) {
+          debugPrint(
+            'ℹ️ Indexed PDF from sidecar text: ${sidecar.path} (pdf: ${book.path})',
+          );
+        }
       }
     }
 

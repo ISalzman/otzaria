@@ -119,6 +119,64 @@ class PerBookSettings {
       return [];
     }
   }
+
+  /// ניקוי קבצי הגדרות שהפכו למיותרים (זהים לברירת המחדל)
+  static Future<void> cleanupRedundantSettings({
+    required double defaultFontSize,
+    required bool defaultRemoveNikud,
+    required bool defaultShowSplitView,
+  }) async {
+    try {
+      final dir = await _getSettingsDirectory();
+      if (!await dir.exists()) {
+        return;
+      }
+
+      final files = (await dir.list().toList()).whereType<File>();
+      int cleanedCount = 0;
+
+      for (final file in files) {
+        if (!file.path.endsWith('.json')) continue;
+
+        try {
+          final json =
+              jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+
+          // בדיקה אם כל ההגדרות זהות לברירת המחדל
+          final fontSize = json['fontSize'] as double?;
+          final commentatorsBelow = json['commentatorsBelow'] as bool?;
+          final removeNikud = json['removeNikud'] as bool?;
+
+          bool isRedundant = true;
+
+          if (fontSize != null && fontSize != defaultFontSize) {
+            isRedundant = false;
+          }
+          if (removeNikud != null && removeNikud != defaultRemoveNikud) {
+            isRedundant = false;
+          }
+          if (commentatorsBelow != null &&
+              commentatorsBelow != !defaultShowSplitView) {
+            isRedundant = false;
+          }
+
+          if (isRedundant) {
+            await file.delete();
+            cleanedCount++;
+            debugPrint('🧹 Cleaned redundant settings file: ${file.path}');
+          }
+        } catch (e) {
+          debugPrint('❌ Error processing file ${file.path}: $e');
+        }
+      }
+
+      if (cleanedCount > 0) {
+        debugPrint('🧹 Cleaned $cleanedCount redundant settings files');
+      }
+    } catch (e) {
+      debugPrint('❌ Error cleaning redundant settings: $e');
+    }
+  }
 }
 
 /// הגדרות פר-ספר לספרי טקסט
