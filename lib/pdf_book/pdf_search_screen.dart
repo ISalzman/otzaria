@@ -169,7 +169,13 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
         if (!r.isPdf) return false;
         if (pdfPath == null || pdfPath.isEmpty) return true;
         return r.filePath == pdfPath;
-      }).toList(growable: false);
+      }).toList(growable: true)
+        ..sort((a, b) {
+          final sa = a.segment.toInt();
+          final sb = b.segment.toInt();
+          if (sa != sb) return sa.compareTo(sb);
+          return a.reference.compareTo(b.reference);
+        });
 
       if (!mounted) return;
       setState(() {

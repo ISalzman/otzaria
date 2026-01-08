@@ -157,10 +157,27 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
       final expectedTitle = _bookTitle!.trim();
 
-      final results = rawResults
+      final filtered = rawResults
           .where((r) => !r.isPdf && r.title.trim() == expectedTitle)
-          .take(displayLimit)
           .toList(growable: false);
+
+      // In-book search should be presented in reading order (by segment/line),
+      // not by relevance.
+      final sorted = filtered.toList(growable: true)
+        ..sort((a, b) {
+          final sa = a.segment.toInt();
+          final sb = b.segment.toInt();
+          if (sa != sb) return sa.compareTo(sb);
+
+          final ra = a.reference;
+          final rb = b.reference;
+          final rc = ra.compareTo(rb);
+          if (rc != 0) return rc;
+
+          return a.text.compareTo(b.text);
+        });
+
+      final results = sorted.take(displayLimit).toList(growable: false);
 
       debugPrint(
         '📚 TextBookSearch: rawResults=${rawResults.length}, '
