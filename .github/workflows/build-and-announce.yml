@@ -9,6 +9,7 @@ on:
       - main
       - dev
       - migrationToDB
+      - MTDB+dev
 
   # pull_request:
   #   types: [opened, synchronize, reopened]
