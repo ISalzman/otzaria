@@ -104,10 +104,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     try {
       // Check if book is from database - if so, load preview first for instant display
       final sqliteProvider = SqliteDataProvider.instance;
-      final isFromDb = await sqliteProvider.isBookInDatabase(book.title);
-      String content;
-
-      if (isFromDb && state is TextBookInitial) {
+      String content = await _repository.getBookContent(book);
+      if (content.isEmpty) {
         // Load quick preview (40 lines) for instant display
         final preview = await sqliteProvider.getBookQuickPreview(
           book.title,
@@ -126,9 +124,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           // Preview failed, load full book normally
           content = await _repository.getBookContent(book);
         }
-      } else {
-        // Not from DB or preserving state - load normally
-        content = await _repository.getBookContent(book);
       }
 
       final links = await _repository.getBookLinks(book);
