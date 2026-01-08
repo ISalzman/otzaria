@@ -8,6 +8,7 @@ on:
     branches:
       - main
       - dev
+      - migrationToDB
 
   pull_request:
     types: [opened, synchronize, reopened]
@@ -778,3 +779,4 @@ jobs:
           TOKEN_YEMOT: ${{ secrets.TOKEN_YEMOT }}
         run: |
           python webhooks/main.py
+
