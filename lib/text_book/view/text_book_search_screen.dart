@@ -65,6 +65,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   bool _isSearching = false;
   List<String> _content = [];
   String? _bookPath;
+  String? _bookTitle;
   Map<String, Map<String, bool>> _searchOptions = {};
   Map<int, List<String>> _alternativeWords = {};
   Map<String, String> _spacingValues = {};
@@ -97,6 +98,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       final bookTitle = state.book.title;
       debugPrint('📚 TextBookSearch: book.title = $bookTitle');
 
+      _bookTitle = bookTitle;
+
       final topics = await BookFacet.resolveTopics(
         title: bookTitle,
         initialTopics: state.book.topics,
@@ -120,7 +123,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
   Future<void> _searchTextUpdated() async {
     final query = searchTextController.text.trim();
-    if (query.isEmpty || _bookPath == null) {
+    if (query.isEmpty || _bookPath == null || _bookTitle == null) {
       setState(() {
         searchResults = [];
         _isSearching = false;
@@ -133,14 +136,35 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     });
 
     try {
-      final results = await _searchRepository.searchTexts(
+      // The facet filter is a prefix filter in the underlying engine, so when a
+      // book is a parent facet (e.g. /.../ספר הזהר) it may also match child
+      // facets like commentaries. We therefore post-filter by exact title.
+      //
+      // Use a higher raw limit to avoid losing relevant results that would have
+      // been returned after filtering.
+      const rawLimit = 5000;
+      const displayLimit = 1000;
+
+      final rawResults = await _searchRepository.searchTexts(
         query,
         [_bookPath!],
-        1000,
+        rawLimit,
         searchOptions: _searchOptions,
         alternativeWords: _alternativeWords,
         customSpacing: _spacingValues,
         fuzzy: _searchMode == SearchMode.fuzzy,
+      );
+
+      final expectedTitle = _bookTitle!.trim();
+
+      final results = rawResults
+          .where((r) => !r.isPdf && r.title.trim() == expectedTitle)
+          .take(displayLimit)
+          .toList(growable: false);
+
+      debugPrint(
+        '📚 TextBookSearch: rawResults=${rawResults.length}, '
+        'filteredResults=${results.length}, title="$expectedTitle"',
       );
 
       if (mounted) {
