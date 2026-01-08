@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
+import '../migration/dao/daos/database.dart';
 
 /// Callback type for fullscreen state changes
 typedef FullscreenCallback = void Function(bool isFullscreen);
@@ -26,13 +27,14 @@ class AppWindowListener extends WindowListener {
   }
 
   @override
-  void onWindowClose() {
+  void onWindowClose() async {
     if (kDebugMode) {
       print('Window close requested');
     }
 
     try {
       // Perform cleanup operations here if needed
+      await MyDatabase().close();
 
       // Close the window properly
       if (!kIsWeb &&
