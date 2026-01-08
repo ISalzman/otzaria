@@ -190,6 +190,13 @@ class MyDatabase {
     }
   }
 
+  Future<void> close() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+  }
+
   void _initializeDaos() {
     if (_authorDao != null) return; // Already initialized
 
@@ -482,11 +489,5 @@ class MyDatabase {
       ''',
       'CREATE INDEX IF NOT EXISTS idx_book_acronym_term ON book_acronym(term);',
     ];
-  }
-
-  Future<void> close() async {
-    final db = await database;
-    db.close();
-    _database = null;
   }
 }

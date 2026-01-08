@@ -50,12 +50,48 @@ class TantivyDataProvider {
   }
 
   Future<SearchEngine> _initializeEngine() async {
+    String? indexPath;
     try {
-      String indexPath = await AppPaths.getIndexPath();
+      indexPath = await AppPaths.getIndexPath();
       return SearchEngine(path: indexPath);
     } catch (e) {
       debugPrint('❌ Failed to initialize search engine: $e');
-      rethrow;
+      if (indexPath != null) {
+        debugPrint('⚠️ Attempting to recover by resetting index at $indexPath...');
+        try {
+          final indexDirectory = Directory(indexPath);
+          
+          // Attempt to delete the lock file specifically first
+          final lockFile = File('${indexDirectory.path}/.tantivy-writer.lock');
+          if (lockFile.existsSync()) {
+            try {
+              lockFile.deleteSync();
+              debugPrint('🔓 Deleted stale lock file');
+            } catch (e) {
+              debugPrint('⚠️ Failed to delete lock file: $e');
+            }
+          }
+
+          if (indexDirectory.existsSync()) {
+            try {
+              indexDirectory.deleteSync(recursive: true);
+            } catch (e) {
+              debugPrint('❌ Failed to delete index directory: $e');
+              // If we can't delete the directory, we probably can't use it.
+              throw e;
+            }
+          }
+          indexDirectory.createSync(recursive: true);
+          return SearchEngine(path: indexPath);
+        } catch (e2) {
+          debugPrint('❌ Failed to recover search engine: $e2');
+        }
+      }
+      
+      // Fallback to temporary directory to prevent app crash
+      debugPrint('⚠️ Falling back to temporary in-memory index');
+      final tempDir = Directory.systemTemp.createTempSync('otzaria_temp_index_');
+      return SearchEngine(path: tempDir.path);
     }
   }
 

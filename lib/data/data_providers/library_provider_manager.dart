@@ -17,6 +17,7 @@ class LibraryProviderManager {
   final List<LibraryProvider> _providers = [];
   final Map<String, LibraryProvider> _bookToProvider = {};
   bool _isInitialized = false;
+  Future<void>? _initializationFuture;
 
   /// Singleton instance
   static LibraryProviderManager? _instance;
@@ -43,8 +44,20 @@ class LibraryProviderManager {
 
   /// Initializes all providers
   Future<void> initialize() async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      return;
+    }
 
+    // If initialization is already in progress, wait for it
+    if (_initializationFuture != null) {
+      return _initializationFuture;
+    }
+
+    _initializationFuture = _doInitialize();
+    return _initializationFuture;
+  }
+
+  Future<void> _doInitialize() async {
     // Register providers in priority order
     _providers.clear();
     _providers.add(DatabaseLibraryProvider.instance);
@@ -155,7 +168,6 @@ class LibraryProviderManager {
 
     final provider = getProviderForBook(title, category, fileType);
     if (provider != null) {
-      debugPrint('📖 Loading "$title" from ${provider.displayName}');
       return await provider.getBookText(title, category, fileType);
     }
 

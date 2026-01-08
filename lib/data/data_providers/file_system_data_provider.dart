@@ -127,12 +127,14 @@ class FileSystemData {
     }
 
     metadata = _getMetadata();
+    final metadataResult = await metadata;    
 
     // Use the unified catalog builder from LibraryProviderManager
-    return _providerManager.buildLibraryCatalog(
-      await metadata,
+    final library = await _providerManager.buildLibraryCatalog(
+      metadataResult,
       otzariaPath,
     );
+    return library;
   }
 
   /// Retrieves the list of books from Otzar HaChochma

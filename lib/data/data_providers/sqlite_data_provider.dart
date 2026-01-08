@@ -18,6 +18,7 @@ class SqliteDataProvider {
   late SeforimRepository _repository;
   late String _dbPath;
   bool _isInitialized = false;
+  bool _isInitializedInProgress = false;
 
   /// Singleton instance
   static SqliteDataProvider? _instance;
@@ -31,8 +32,18 @@ class SqliteDataProvider {
 
   /// Initializes the database connection
   Future<void> initialize() async {
-    if (_isInitialized) return;
-
+    if (_isInitialized) {
+      debugPrint('SQLite database is already initialized.');
+      return;
+    }
+     
+    if (_isInitializedInProgress) {
+       debugPrint('SQLite database initialization is already in progress.');
+      return;
+    }else{
+      debugPrint('Starting SQLite database initialization.');
+    }
+    _isInitializedInProgress = true;
     // Use centralized database path
     _dbPath = DatabaseConstants.getDatabasePath();
 
@@ -51,6 +62,7 @@ class SqliteDataProvider {
       _repository = SeforimRepository(database);
       await _repository.ensureInitialized();
       _isInitialized = true;
+      _isInitializedInProgress = false;
       debugPrint('SQLite database initialized successfully');
     } catch (e) {
       debugPrint('Error initializing SQLite database: $e');
@@ -123,8 +135,6 @@ class SqliteDataProvider {
       }
       
       if (book == null) return null;
-
-      debugPrint('📚 Loading full book: ${book.totalLines} lines');
 
       final lines = await _repository.getLines(book.id, 0, book.totalLines - 1);
       return migrationLinesToText(lines);
