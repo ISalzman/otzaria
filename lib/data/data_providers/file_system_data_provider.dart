@@ -60,6 +60,7 @@ class FileSystemData {
   }
 
   Future<Map<String, String>> _getTitleToPath() async {
+    await _providerManager.initialize();
     final keyToPath = await _providerManager.fileSystemProvider.keyToPath;
     final Map<String, String> result = {};
     for (var entry in keyToPath.entries) {
@@ -593,6 +594,7 @@ class FileSystemData {
   /// Retrieves the file system path for a book with the given title.
   Future<String> _getBookPath(String title,
       {String? category, String? fileType}) async {
+    await _providerManager.initialize();
     final keyToPath = await _providerManager.fileSystemProvider.keyToPath;
 
     if (category != null && fileType != null) {
