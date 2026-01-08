@@ -321,6 +321,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
       // Delete acronym.json file after successful generation
       await _deleteAcronymFileAfterGeneration();
+      
       await repository.close();
       _timer?.cancel();
 
@@ -334,6 +335,24 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
         _linksProgress = 1.0;
         _progress = GenerationProgress.complete();
       });
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('הפעלה מחדש נדרשת'),
+            content: const Text(
+                'תהליך יצירת מסד הנתונים הסתיים בהצלחה.\nיש להפעיל מחדש את התוכנה.'),
+            actions: [
+              TextButton(
+                onPressed: () => exit(0),
+                child: const Text('סגור תוכנה'),
+              ),
+            ],
+          ),
+        );
+      }
     } catch (e, stackTrace) {
       final errorMsg = e.toString();
       _logger.severe('Error during generation: $errorMsg', e, stackTrace);
@@ -344,6 +363,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       _timer?.cancel();
     }
   }
+
 
   /// Delete acronym.json file after successful database generation
   Future<void> _deleteAcronymFileAfterGeneration() async {
@@ -831,18 +851,29 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       );
     }
 
+    if (_currentStep == GenerationStep.complete && _progress.error == null) {
+      return ElevatedButton.icon(
+        onPressed: () => exit(0),
+        icon: const Icon(Icons.restart_alt),
+        label: Text(_getButtonText(),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+        ),
+      );
+    }
+
     final button = ElevatedButton(
-      onPressed: (_currentStep == GenerationStep.idle ||
-                  _currentStep == GenerationStep.complete) &&
+      onPressed: (_currentStep == GenerationStep.idle) &&
               _otzariaFolderExists &&
               !_dbFileExists
           ? _startGeneration
           : null,
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        backgroundColor: _currentStep == GenerationStep.complete
-            ? Colors.green
-            : Colors.blue,
+        backgroundColor: Colors.blue,
         disabledBackgroundColor: Colors.grey[300],
       ),
       child: Text(_getButtonText(),
@@ -954,7 +985,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     }
     if (_currentStep == GenerationStep.idle) return 'התחל יצירת מסד נתונים';
     if (_currentStep == GenerationStep.complete && _progress.error == null) {
-      return 'הושלם בהצלחה ✓';
+      return 'הפעל מחדש';
     }
     return 'מעבד...';
   }

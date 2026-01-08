@@ -42,6 +42,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:otzaria/app_bloc_observer.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/migration/file_to_db_migrator.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -58,6 +59,7 @@ import 'package:otzaria/services/sources_books_service.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/services/notification_service.dart';
 import 'package:logging/logging.dart';
+import 'package:otzaria/widgets/restart_widget.dart';
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
@@ -130,9 +132,10 @@ void main() async {
   final historyRepository = HistoryRepository();
 
   runApp(
-    MultiRepositoryProvider(
-      providers: [
-        RepositoryProvider<FocusRepository>(
+    RestartWidget(
+      child: MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<FocusRepository>(
           create: (context) => FocusRepository(),
         ),
       ],
@@ -196,6 +199,7 @@ void main() async {
         child: const App(),
       ),
     ),
+    ),
   );
 }
 
@@ -225,6 +229,8 @@ Future<void> initialize() async {
     _appWindowListener = AppWindowListener();
     windowManager.addListener(_appWindowListener!);
 
+    await windowManager.setPreventClose(true);
+
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
       await windowManager.focus();
@@ -237,6 +243,9 @@ Future<void> initialize() async {
   await createDirs();
   await loadCerts();
   
+  // Initialize SQLite Database Provider
+  await SqliteDataProvider.instance.initialize();
+
   // Migrate personal notes from file storage to SQLite database
   await FileToDbMigrator.runMigration();
 
@@ -318,6 +327,10 @@ void createDirectoryIfNotExists(String path) {
 
 initHive() async {
   Hive.defaultDirectory = (await getApplicationSupportDirectory()).path;
+  Hive.box(name: 'tabs');
+  Hive.box(name: 'workspaces');
+  Hive.box(name: 'history');
+  Hive.box(name: 'bookmarks');
 }
 
 Future<void> loadCerts() async {

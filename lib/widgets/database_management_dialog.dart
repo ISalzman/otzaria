@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/widgets/restart_widget.dart';
 
 /// Dialog for managing database operations (export/import)
 class DatabaseManagementDialog extends StatefulWidget {
@@ -160,9 +161,16 @@ class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
                 textAlign: TextAlign.right,
               ),
               actions: [
-                ElevatedButton(
+                TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('הבנתי'),
+                  child: const Text('אחר כך'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    RestartWidget.restartApp(context);
+                  },
+                  child: const Text('אתחל כעת'),
                 ),
               ],
             ),
