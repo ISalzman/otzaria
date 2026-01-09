@@ -94,7 +94,7 @@ class _AboutScreenState extends State<AboutScreen> {
         'url': 'https://github.com/Sivan22',
       },
       {
-        'name': 'רחל נבון',
+        'name': 'ר. נבון',
         'url': 'https://github.com/rachelGrayover',
         'description': 'השקעה עצומה במעבר מקבצי טקסט ל-SQLite'
       },
@@ -126,27 +126,32 @@ class _AboutScreenState extends State<AboutScreen> {
             children: developers
                 .map((dev) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(FluentIcons.person_24_regular,
-                              size: _kIconSize, color: Colors.grey),
-                          SizedBox(width: _kIconTextSpacing),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildContributor(dev['name']!, dev['url']!),
-                                if (dev['description'] != null)
-                                  Text(
-                                    '(${dev['description']})',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                              ],
-                            ),
+                          Row(
+                            children: [
+                              Icon(FluentIcons.person_24_regular,
+                                  size: _kIconSize, color: Colors.grey),
+                              SizedBox(width: _kIconTextSpacing),
+                              Expanded(
+                                child: _buildContributor(
+                                    dev['name']!, dev['url']!),
+                              ),
+                            ],
                           ),
+                          if (dev['description'] != null)
+                            Padding(
+                              padding: EdgeInsets.only(
+                                  left: _kIconSize + _kIconTextSpacing, top: 2),
+                              child: Text(
+                                '(${dev['description']})',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ))
@@ -160,27 +165,32 @@ class _AboutScreenState extends State<AboutScreen> {
           children: developers
               .map((dev) => SizedBox(
                     width: itemWidth,
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(FluentIcons.person_24_regular,
-                            size: _kIconSize, color: Colors.grey),
-                        SizedBox(width: _kIconTextSpacing),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildContributor(dev['name']!, dev['url']!),
-                              if (dev['description'] != null)
-                                Text(
-                                  '(${dev['description']})',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                            ],
-                          ),
+                        Row(
+                          children: [
+                            Icon(FluentIcons.person_24_regular,
+                                size: _kIconSize, color: Colors.grey),
+                            SizedBox(width: _kIconTextSpacing),
+                            Expanded(
+                              child:
+                                  _buildContributor(dev['name']!, dev['url']!),
+                            ),
+                          ],
                         ),
+                        if (dev['description'] != null)
+                          Padding(
+                            padding: EdgeInsets.only(
+                                left: _kIconSize + _kIconTextSpacing, top: 2),
+                            child: Text(
+                              '(${dev['description']})',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ))
@@ -1035,7 +1045,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                // כארדים תורמים
+                // כארדים לתורמים
                 const Text(
                   'תורמים',
                   style: TextStyle(
