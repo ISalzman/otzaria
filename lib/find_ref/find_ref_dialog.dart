@@ -19,7 +19,6 @@ class FindRefDialog extends StatefulWidget {
 
 class _FindRefDialogState extends State<FindRefDialog> {
   int _selectedIndex = 0;
-  bool showIndexWarning = true;
   final Map<int, GlobalKey> _itemKeys = {};
 
   @override
@@ -59,37 +58,6 @@ class _FindRefDialogState extends State<FindRefDialog> {
     });
   }
 
-  Widget _buildIndexingWarning() {
-    if (showIndexWarning) {
-      return Container(
-        padding: const EdgeInsets.all(8.0),
-        margin: const EdgeInsets.only(bottom: 8.0),
-        decoration: BoxDecoration(
-          color: Colors.yellow.shade100,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Row(
-          children: [
-            Icon(FluentIcons.warning_24_regular, color: Colors.orange[700]),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text(
-                'אינדקס המקורות בתהליך בנייה. תוצאות החיפוש עלולות להיות חלקיות.',
-                textAlign: TextAlign.right,
-                style: TextStyle(color: Colors.black87),
-              ),
-            ),
-            IconButton(
-                focusNode: FocusNode(skipTraversal: true),
-                onPressed: () => setState(() => showIndexWarning = false),
-                icon: const Icon(FluentIcons.dismiss_24_regular))
-          ],
-        ),
-      );
-    }
-    return const SizedBox.shrink();
-  }
-
   @override
   Widget build(BuildContext context) {
     final focusRepository = context.read<FocusRepository>();
@@ -105,7 +73,6 @@ class _FindRefDialogState extends State<FindRefDialog> {
         height: 600,
         child: Column(
           children: [
-            _buildIndexingWarning(),
             BlocBuilder<FindRefBloc, FindRefState>(
               builder: (context, state) {
                 final refs = state is FindRefSuccess ? state.refs : [];

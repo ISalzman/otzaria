@@ -43,13 +43,9 @@ class TantivyDataProvider {
   /// Maintains a list of processed books to avoid reindexing
   late List<String> booksDone = [];
 
-  // Used for reference searching
-  late Future<ReferenceSearchEngine> refEngine;
-
   TantivyDataProvider._internal() {
     // Initialize engines
     engine = _initEngine();
-    refEngine = _initRefEngine();
     _loadBooksDone();
   }
 
@@ -98,19 +94,6 @@ class TantivyDataProvider {
       final tempDir =
           Directory.systemTemp.createTempSync('otzaria_temp_index_');
       return SearchEngine(path: tempDir.path);
-    }
-  }
-
-  Future<ReferenceSearchEngine> _initRefEngine() async {
-    String refIndexPath = await AppPaths.getRefIndexPath();
-    try {
-      return ReferenceSearchEngine(path: refIndexPath);
-    } catch (e) {
-      if (e.toString().contains("SchemaError")) {
-        await resetIndex(refIndexPath, closeBooksDoneBox: false);
-        return ReferenceSearchEngine(path: refIndexPath);
-      }
-      rethrow;
     }
   }
 
@@ -163,7 +146,6 @@ class TantivyDataProvider {
 
       // Reset engines
       engine = _initEngine();
-      refEngine = _initRefEngine();
 
       // Check engine
       engine.then((value) {

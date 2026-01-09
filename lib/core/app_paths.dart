@@ -44,11 +44,6 @@ class AppPaths {
     return p.join(await getLibraryPath(), 'index');
   }
 
-  /// Gets the reference search index path (library_path/ref_index)
-  static Future<String> getRefIndexPath() async {
-    return p.join(await getLibraryPath(), 'ref_index');
-  }
-
   /// Gets the manifest file path (library_path/files_manifest.json)
   static Future<String> getManifestPath() async {
     return p.join(await getLibraryPath(), 'files_manifest.json');

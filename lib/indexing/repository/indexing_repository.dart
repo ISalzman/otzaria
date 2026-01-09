@@ -123,7 +123,6 @@ class IndexingRepository {
   /// Indexes a text-based book by processing its content and adding it to the search index.
   Future<void> _indexTextBook(TextBook book) async {
     final index = await _tantivyDataProvider.engine;
-    final refIndex = await _tantivyDataProvider.refEngine;
     var text = await book.text;
     final title = book.title;
     final topics = "/${book.topics.replaceAll(', ', '/')}";
@@ -154,20 +153,6 @@ class IndexingRepository {
               reference.length);
         }
         reference.add(line);
-
-        // Index the header as a reference
-        String refText = stripHtmlIfNeeded(reference.join(" "));
-        // שומרים את ה-reference המקורי ללא עיבוד
-        // הנרמול יתבצע בשלב החיפוש, לא באינדקס
-
-        refIndex.addDocument(
-            id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
-            title: title,
-            reference: refText,
-            shortRef: refText, // שומרים את המקור
-            segment: BigInt.from(i),
-            isPdf: false,
-            filePath: '');
 
         // Index the header also into the main search index so in-book search
         // can find headings that are displayed and highlighted.
