@@ -394,10 +394,21 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
             return Builder(
               builder: (context) {
                 // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים
-                final currentIndexes = widget.indexes ??
+                final currentIndexesRaw = widget.indexes ??
                     (state.selectedIndex != null
                         ? [state.selectedIndex!]
                         : state.visibleIndices);
+
+                // בהפעלה מחדש/מצבים נדירים יכול להגיע לכאן עם רשימת אינדקסים ריקה,
+                // מה שגורם ל"אין מפרשים" גם כשיש. נבחר אינדקס ברירת מחדל יציב.
+                final currentIndexes = currentIndexesRaw.isNotEmpty
+                    ? currentIndexesRaw
+                    : [
+                        state.selectedIndex ??
+                            (state.visibleIndices.isNotEmpty
+                                ? state.visibleIndices.first
+                                : 0)
+                      ];
 
                 // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
                 final hasAnyCommentaryLinks = state.links.any((link) =>

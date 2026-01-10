@@ -134,11 +134,15 @@ class TextBookTab extends OpenedTab {
     debugPrint(
         'DEBUG: טעינת טאב ${json['title']} עם splitedView: $splitedView (מ-JSON: ${json['splitedView']})');
 
+    final TextBook restoredBook = json['book'] != null
+        ? Book.fromJson(Map<String, dynamic>.from(json['book'])) as TextBook
+        : TextBook(
+            title: json['title'],
+          );
+
     return TextBookTab(
       index: json['initalIndex'],
-      book: TextBook(
-        title: json['title'],
-      ),
+      book: restoredBook,
       commentators: List<String>.from(json['commentators']),
       splitedView: splitedView,
       showPageShapeView: json['showPageShapeView'] ?? false,
@@ -181,6 +185,7 @@ class TextBookTab extends OpenedTab {
 
     return {
       'title': title,
+      'book': book.toJson(),
       'initalIndex': currentIndex,
       'commentators': commentators,
       'splitedView': splitedView,
