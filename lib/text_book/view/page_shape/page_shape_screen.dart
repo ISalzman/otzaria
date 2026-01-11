@@ -598,8 +598,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   Future<void> _loadCommentary() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-    debugPrint(
-        '_CommentaryPane: Loading commentary for "${widget.commentatorName}"');
 
     try {
       String? categoryPath;
@@ -609,18 +607,12 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       categoryPath = await FileSystemData.instance
           .findBookCategoryPath(widget.commentatorName);
 
-      if (categoryPath != null) {
-        debugPrint(
-            '_CommentaryPane: Found category path via findBookCategoryPath for "${widget.commentatorName}": $categoryPath');
-      }
+      if (!mounted) return;
 
       final bloc = context.read<TextBookBloc>();
       final state = bloc.state;
 
       if (state is TextBookLoaded) {
-        debugPrint(
-            '_CommentaryPane: State is Loaded. Links count: ${state.links.length}');
-
         // סינון קישורים לפי שם המפרש ולפי סוג הקישור (commentary/targum)
         _relevantLinks = state.links.where((link) {
           final linkTitle = utils.getTitleFromPath(link.path2);
@@ -629,13 +621,9 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
                   link.connectionType == 'targum');
         }).toList();
 
-        debugPrint(
-            '_CommentaryPane: Found ${_relevantLinks.length} relevant links for "${widget.commentatorName}"');
-
         // אם עדיין אין נתיב, ננסה לחלץ מקישורים (Fallback)
         if (categoryPath == null && _relevantLinks.isNotEmpty) {
           final firstLinkPath = _relevantLinks.first.path2;
-          debugPrint('_CommentaryPane: Using path from link: $firstLinkPath');
 
           var normalizedPath = firstLinkPath;
           if (normalizedPath.startsWith('/') ||
@@ -654,8 +642,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           if (directoryPath.isNotEmpty) {
             categoryPath =
                 directoryPath.replaceAll('/', ', ').replaceAll('\\', ', ');
-            debugPrint(
-                'PageShape: Inferred category path from link for ${widget.commentatorName}: "$categoryPath"');
           } else {
             // אם הנתיב הוא רק שם הספר, נסה להמיר אותו לקטגוריה
             // (אם זה לא עובד בחלק 1, כנראה שגם זה לא יעבוד, אבל ניתן סיכוי)
@@ -663,11 +649,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
                 normalizedPath.replaceAll('/', ', ').replaceAll('\\', ', ');
           }
         }
-      }
-
-      if (categoryPath == null || categoryPath.isEmpty) {
-        debugPrint(
-            '_CommentaryPane: WARNING - Could not resolve category path for "${widget.commentatorName}"');
       }
 
       final book =
@@ -688,7 +669,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         _syncWithMainText(state);
       }
     } catch (e) {
-      debugPrint('Error loading commentary ${widget.commentatorName}: $e');
       if (mounted) {
         setState(() {
           _content = null;

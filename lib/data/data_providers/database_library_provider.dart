@@ -173,7 +173,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           return await _getPathForCategoryId(book.categoryId);
         }
       } catch (e) {
-        debugPrint('⚠️ Error finding category path for "$title": $e');
+        // Ignored
       }
     }
 

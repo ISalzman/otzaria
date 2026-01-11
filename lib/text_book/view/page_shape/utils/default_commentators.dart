@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -23,7 +22,6 @@ class DefaultCommentators {
     // נסיון לקבלת נתיב מתוך אובייקט הספר (עבור ספרים ממסד הנתונים)
     if (bookPath.isEmpty) {
       bookPath = book.category?.path ?? book.categoryPath ?? '';
-      debugPrint('DefaultCommentators: Used book.category path: "$bookPath"');
     }
 
     // קבלת שמות המפרשים מה-JSON
@@ -31,9 +29,6 @@ class DefaultCommentators {
 
     // אם יש links, נחפש את השמות המלאים של המפרשים
     if (links != null && links.isNotEmpty) {
-      debugPrint(
-          'DefaultCommentators: Resolving defaults for ${book.title} (path: $bookPath)');
-      debugPrint('DefaultCommentators: Raw defaults from config: $defaults');
       return _resolveCommentatorNames(defaults, links);
     }
 
@@ -52,15 +47,6 @@ class DefaultCommentators {
         .toSet()
         .toList();
 
-    debugPrint(
-        'DefaultCommentators: Available links count: ${availableLinks.length}');
-    debugPrint(
-        'DefaultCommentators: First 5 available commentators: ${availableCommentators.take(5).toList()}');
-    if (availableLinks.isNotEmpty) {
-      debugPrint(
-          'DefaultCommentators: Sample link path2: ${availableLinks.first.path2}');
-    }
-
     return {
       'right':
           _findMatchingCommentator(defaults['right'], availableCommentators),
@@ -78,26 +64,21 @@ class DefaultCommentators {
       String? shortName, List<String> available) {
     if (shortName == null) return null;
 
-    debugPrint('DefaultCommentators: Searching for "$shortName"');
-
     // 1. התאמה מדויקת
     String? match = available.firstWhereOrNull((name) => name == shortName);
     if (match != null) {
-      debugPrint('DefaultCommentators: Found exact match: "$match"');
       return match;
     }
 
     // 2. התאמה של התחלה
     match = available.firstWhereOrNull((name) => name.startsWith(shortName));
     if (match != null) {
-      debugPrint('DefaultCommentators: Found startsWith match: "$match"');
       return match;
     }
 
     // 3. התאמה של הכלה
     match = available.firstWhereOrNull((name) => name.contains(shortName));
     if (match != null) {
-      debugPrint('DefaultCommentators: Found contains match: "$match"');
       return match;
     }
 
@@ -105,12 +86,9 @@ class DefaultCommentators {
     // נבדוק אם השם בהגדרות מכיל את השם הזמין
     match = available.firstWhereOrNull((name) => shortName.contains(name));
     if (match != null) {
-      debugPrint(
-          'DefaultCommentators: Found reverse contains match (config contains available): "$match"');
       return match;
     }
 
-    debugPrint('DefaultCommentators: No match found for "$shortName"');
     return null;
   }
 
@@ -119,8 +97,7 @@ class DefaultCommentators {
       final jsonString =
           await rootBundle.loadString('assets/default_commentators.json');
       return json.decode(jsonString) as Map<String, dynamic>;
-    } catch (e, s) {
-      debugPrint('Failed to load default commentators config: $e\n$s');
+    } catch (e) {
       return {
         'categories': [],
         'default': {
