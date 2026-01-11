@@ -18,13 +18,22 @@ class DefaultCommentators {
 
     // קבלת נתיב הספר
     final titleToPath = await FileSystemData.instance.titleToPath;
-    final bookPath = titleToPath[book.title] ?? '';
+    var bookPath = titleToPath[book.title] ?? '';
+
+    // נסיון לקבלת נתיב מתוך אובייקט הספר (עבור ספרים ממסד הנתונים)
+    if (bookPath.isEmpty) {
+      bookPath = book.category?.path ?? book.categoryPath ?? '';
+      debugPrint('DefaultCommentators: Used book.category path: "$bookPath"');
+    }
 
     // קבלת שמות המפרשים מה-JSON
     final defaults = _getDefaultsFromConfig(config, book.title, bookPath);
 
     // אם יש links, נחפש את השמות המלאים של המפרשים
     if (links != null && links.isNotEmpty) {
+      debugPrint(
+          'DefaultCommentators: Resolving defaults for ${book.title} (path: $bookPath)');
+      debugPrint('DefaultCommentators: Raw defaults from config: $defaults');
       return _resolveCommentatorNames(defaults, links);
     }
 
@@ -35,13 +44,22 @@ class DefaultCommentators {
   static Map<String, String?> _resolveCommentatorNames(
       Map<String, String?> defaults, List<Link> links) {
     // קבלת רשימת שמות המפרשים הזמינים
-    final availableCommentators = links
-        .where((link) =>
-            link.connectionType == 'commentary' ||
-            link.connectionType == 'targum')
+    final availableLinks = links.where((link) =>
+        link.connectionType == 'commentary' || link.connectionType == 'targum');
+
+    final availableCommentators = availableLinks
         .map((link) => utils.getTitleFromPath(link.path2))
         .toSet()
         .toList();
+
+    debugPrint(
+        'DefaultCommentators: Available links count: ${availableLinks.length}');
+    debugPrint(
+        'DefaultCommentators: First 5 available commentators: ${availableCommentators.take(5).toList()}');
+    if (availableLinks.isNotEmpty) {
+      debugPrint(
+          'DefaultCommentators: Sample link path2: ${availableLinks.first.path2}');
+    }
 
     return {
       'right':
@@ -60,16 +78,40 @@ class DefaultCommentators {
       String? shortName, List<String> available) {
     if (shortName == null) return null;
 
+    debugPrint('DefaultCommentators: Searching for "$shortName"');
+
     // 1. התאמה מדויקת
     String? match = available.firstWhereOrNull((name) => name == shortName);
-    if (match != null) return match;
+    if (match != null) {
+      debugPrint('DefaultCommentators: Found exact match: "$match"');
+      return match;
+    }
 
     // 2. התאמה של התחלה
     match = available.firstWhereOrNull((name) => name.startsWith(shortName));
-    if (match != null) return match;
+    if (match != null) {
+      debugPrint('DefaultCommentators: Found startsWith match: "$match"');
+      return match;
+    }
 
     // 3. התאמה של הכלה
-    return available.firstWhereOrNull((name) => name.contains(shortName));
+    match = available.firstWhereOrNull((name) => name.contains(shortName));
+    if (match != null) {
+      debugPrint('DefaultCommentators: Found contains match: "$match"');
+      return match;
+    }
+
+    // 4. התאמה הפוכה - אם השם בהגדרות הוא נתיב מלא והשם הזמין הוא רק הכותרת
+    // נבדוק אם השם בהגדרות מכיל את השם הזמין
+    match = available.firstWhereOrNull((name) => shortName.contains(name));
+    if (match != null) {
+      debugPrint(
+          'DefaultCommentators: Found reverse contains match (config contains available): "$match"');
+      return match;
+    }
+
+    debugPrint('DefaultCommentators: No match found for "$shortName"');
+    return null;
   }
 
   static Future<Map<String, dynamic>> _loadConfig() async {

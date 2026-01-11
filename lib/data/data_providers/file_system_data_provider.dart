@@ -61,15 +61,48 @@ class FileSystemData {
 
   Future<Map<String, String>> _getTitleToPath() async {
     await _providerManager.initialize();
-    final keyToPath = await _providerManager.fileSystemProvider.keyToPath;
     final Map<String, String> result = {};
+
+    // Get paths from FileSystemProvider
+    final keyToPath = await _providerManager.fileSystemProvider.keyToPath;
     for (var entry in keyToPath.entries) {
       final parts = entry.key.split('|');
       if (parts.isNotEmpty) {
         result[parts[0]] = entry.value;
       }
     }
+
+    // Get paths from DatabaseProvider
+    final dbKeys =
+        await _providerManager.databaseProvider.getDatabaseOnlyBookTitles();
+    for (var key in dbKeys) {
+      final parts = key.split('|');
+      if (parts.length >= 2) {
+        // parts[0] is title, parts[1] is category path
+        result[parts[0]] = parts[1];
+      }
+    }
+
     return result;
+  }
+
+  /// Finds the category path for a book by its title.
+  /// Checks in-memory cache first, then queries valid providers.
+  Future<String?> findBookCategoryPath(String title) async {
+    await _providerManager.initialize();
+
+    // 1. Check cached FileSystemData map
+    // Note: titleToPath might be stale if DB loaded later
+    // so we re-check providers below if not found.
+    final path = (await titleToPath)[title];
+    if (path != null && path.isNotEmpty) return path;
+
+    // 2. Ask DatabaseProvider explicitly
+    final dbPath =
+        await _providerManager.databaseProvider.findCategoryPathForBook(title);
+    if (dbPath != null) return dbPath;
+
+    return null;
   }
 
   /// Checks if a book is stored in the database

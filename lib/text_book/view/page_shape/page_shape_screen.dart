@@ -21,6 +21,7 @@ import 'package:otzaria/settings/settings_state.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:collection/collection.dart';
 import 'dart:async';
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
 const double _kCommentaryPaneWidthFactor = 0.17;
@@ -109,7 +110,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       commentators = config;
     } else {
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
-      commentators = await DefaultCommentators.getDefaults(state.book, links: state.links);
+      commentators =
+          await DefaultCommentators.getDefaults(state.book, links: state.links);
     }
 
     if (mounted) {
@@ -131,11 +133,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     setState(() {
       _columnVisibility[column] = false;
     });
-    
+
     // שמירה גלובלית אלא אם יש הגדרות פר-ספר
-    final hasBookSettings = PageShapeSettingsManager.hasBookSpecificSettings(state.book.title);
+    final hasBookSettings =
+        PageShapeSettingsManager.hasBookSpecificSettings(state.book.title);
     PageShapeSettingsManager.saveColumnVisibility(
-        state.book.title, _columnVisibility, saveAsGlobal: !hasBookSettings);
+        state.book.title, _columnVisibility,
+        saveAsGlobal: !hasBookSettings);
   }
 
   /// בניית widget למצב ריק של טור
@@ -367,9 +371,9 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                   rightCommentator: _rightCommentator,
                   onPanUpdate: (details) {
                     setState(() {
-                      _bottomHeight =
-                          ((_bottomHeight ?? 0) - details.delta.dy)
-                              .clamp(80.0, MediaQuery.of(context).size.height * 0.5);
+                      _bottomHeight = ((_bottomHeight ?? 0) - details.delta.dy)
+                          .clamp(
+                              80.0, MediaQuery.of(context).size.height * 0.5);
                     });
                   },
                   onPanEnd: _saveSizes,
@@ -503,16 +507,19 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   @override
   void initState() {
     super.initState();
-    _loadCommentary();
+    // דוחה את הטעינה כדי לוודא שכל ה-providers מוכנים וה-bloc זמין
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadCommentary();
+        _setupBlocListener();
+      }
+    });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // הגדרת המאזין רק פעם אחת
-    if (_blocSubscription == null) {
-      _setupBlocListener();
-    }
+    // הסרנו את הקריאה מכאן כדי למנוע כפילות או בעיות context מוקדמות
   }
 
   @override
@@ -589,18 +596,31 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   }
 
   Future<void> _loadCommentary() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+    debugPrint(
+        '_CommentaryPane: Loading commentary for "${widget.commentatorName}"');
 
     try {
-      final book = TextBook(title: widget.commentatorName);
-      final bookContent = await book.text;
-      final lines = bookContent.split('\n');
+      String? categoryPath;
 
-      if (!mounted) return;
+      // 1. נסיון לקבל נתיב ממערכת הקבצים/מסד הנתונים
+      // שימוש בפונקציה חדשה שבודקת גם דינמית מול ה-DB אם המטמון רך
+      categoryPath = await FileSystemData.instance
+          .findBookCategoryPath(widget.commentatorName);
 
-      // טעינת הקישורים הרלוונטיים למפרש זה
-      final state = context.read<TextBookBloc>().state;
+      if (categoryPath != null) {
+        debugPrint(
+            '_CommentaryPane: Found category path via findBookCategoryPath for "${widget.commentatorName}": $categoryPath');
+      }
+
+      final bloc = context.read<TextBookBloc>();
+      final state = bloc.state;
+
       if (state is TextBookLoaded) {
+        debugPrint(
+            '_CommentaryPane: State is Loaded. Links count: ${state.links.length}');
+
         // סינון קישורים לפי שם המפרש ולפי סוג הקישור (commentary/targum)
         _relevantLinks = state.links.where((link) {
           final linkTitle = utils.getTitleFromPath(link.path2);
@@ -608,19 +628,64 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               (link.connectionType == 'commentary' ||
                   link.connectionType == 'targum');
         }).toList();
+
+        debugPrint(
+            '_CommentaryPane: Found ${_relevantLinks.length} relevant links for "${widget.commentatorName}"');
+
+        // אם עדיין אין נתיב, ננסה לחלץ מקישורים (Fallback)
+        if (categoryPath == null && _relevantLinks.isNotEmpty) {
+          final firstLinkPath = _relevantLinks.first.path2;
+          debugPrint('_CommentaryPane: Using path from link: $firstLinkPath');
+
+          var normalizedPath = firstLinkPath;
+          if (normalizedPath.startsWith('/') ||
+              normalizedPath.startsWith('\\')) {
+            normalizedPath = normalizedPath.substring(1);
+          }
+
+          final lastSeparatorIndex = normalizedPath.lastIndexOf('/');
+          final directoryPath = lastSeparatorIndex != -1
+              ? normalizedPath.substring(0, lastSeparatorIndex)
+              : (normalizedPath.contains('\\')
+                  ? normalizedPath.substring(
+                      0, normalizedPath.lastIndexOf('\\'))
+                  : '');
+
+          if (directoryPath.isNotEmpty) {
+            categoryPath =
+                directoryPath.replaceAll('/', ', ').replaceAll('\\', ', ');
+            debugPrint(
+                'PageShape: Inferred category path from link for ${widget.commentatorName}: "$categoryPath"');
+          } else {
+            // אם הנתיב הוא רק שם הספר, נסה להמיר אותו לקטגוריה
+            // (אם זה לא עובד בחלק 1, כנראה שגם זה לא יעבוד, אבל ניתן סיכוי)
+            categoryPath =
+                normalizedPath.replaceAll('/', ', ').replaceAll('\\', ', ');
+          }
+        }
       }
 
-      if (mounted) {
-        setState(() {
-          _content = lines;
-          _isLoading = false;
-          _lastSyncedIndex = null; // איפוס לסנכרון ראשוני
-        });
+      if (categoryPath == null || categoryPath.isEmpty) {
+        debugPrint(
+            '_CommentaryPane: WARNING - Could not resolve category path for "${widget.commentatorName}"');
+      }
 
-        // סנכרון ראשוני
-        if (state is TextBookLoaded) {
-          _syncWithMainText(state);
-        }
+      final book =
+          TextBook(title: widget.commentatorName, categoryPath: categoryPath);
+      final bookContent = await book.text;
+      final lines = bookContent.split('\n');
+
+      if (!mounted) return;
+
+      setState(() {
+        _content = lines;
+        _isLoading = false;
+        _lastSyncedIndex = null; // איפוס לסנכרון ראשוני
+      });
+
+      // סנכרון ראשוני
+      if (state is TextBookLoaded) {
+        _syncWithMainText(state);
       }
     } catch (e) {
       debugPrint('Error loading commentary ${widget.commentatorName}: $e');
@@ -721,7 +786,8 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
             final fontFamily = widget.isBottom
                 ? bottomFont
                 : settingsState.commentatorsFontFamily;
-            final commentaryFontSize = PageShapeSettingsManager.getCommentaryFontSize();
+            final commentaryFontSize =
+                PageShapeSettingsManager.getCommentaryFontSize();
             return SimpleTextViewer(
               content: _content!,
               fontSize: commentaryFontSize,
@@ -739,8 +805,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     );
   }
 }
-
-
 
 /// ידית גרירה אופקית מותאמת אישית עם קווים מתחת למפרשים העליונים
 class _HorizontalDragHandle extends StatelessWidget {

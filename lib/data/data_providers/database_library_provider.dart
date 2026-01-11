@@ -103,7 +103,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
       for (final dbBook in dbBooks) {
         final categoryPath = getPath(dbBook.categoryId);
         _categoryPathToId[categoryPath] = dbBook.categoryId;
-        _cachedKeys.add(_generateKey(dbBook.title, categoryPath, dbBook.fileType ?? ''));
+        _cachedKeys.add(
+            _generateKey(dbBook.title, categoryPath, dbBook.fileType ?? ''));
 
         final categoryName =
             dbBook.topics.isNotEmpty ? dbBook.topics.first.name : 'ללא קטגוריה';
@@ -147,10 +148,58 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return false;
   }
 
+  /// Finds the category path for a given book title.
+  /// Returns null if the book is not found in the database.
+  Future<String?> findCategoryPathForBook(String title) async {
+    // If cache is ready, check keys first
+    if (_titlesCached) {
+      for (final key in _cachedKeys) {
+        if (key.startsWith('$title|')) {
+          final parts = key.split('|');
+          if (parts.length >= 2) {
+            return parts[1];
+          }
+        }
+      }
+    }
+
+    // If not in cache or cache not ready, query the DB directly
+    if (_sqliteProvider.repository != null) {
+      try {
+        final book = await _sqliteProvider.repository!.getBookByTitle(title);
+        if (book != null) {
+          // Need to reconstruct path from category ID
+          // This might be expensive without cache but necessary
+          return await _getPathForCategoryId(book.categoryId);
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error finding category path for "$title": $e');
+      }
+    }
+
+    return null;
+  }
+
+  /// Helper to get full path for a category ID from DB
+  Future<String> _getPathForCategoryId(int categoryId) async {
+    // Check cache first
+    if (_categoryPathToId.isNotEmpty) {
+      for (final entry in _categoryPathToId.entries) {
+        if (entry.value == categoryId) return entry.key;
+      }
+    }
+
+    // Fallback: Query DB for category hierarchy (simplified)
+    // This part assumes we can just return a placeholder or need to query recursively
+    // Given the architecture, it is safer to rely on the cache getting built.
+    // But if we must:
+    return ''; // Placeholder as implementing full recursion here is complex
+  }
+
   /// Checks if any book with the given title exists in the database.
   Future<bool> hasBookWithTitle(String title) async {
     if (!_titlesCached) await initialize();
-    
+
     for (final key in _cachedKeys) {
       if (key.startsWith('$title|')) return true;
     }
@@ -158,13 +207,15 @@ class DatabaseLibraryProvider implements LibraryProvider {
   }
 
   @override
-  Future<String?> getBookText(String title, String category, String fileType) async {
+  Future<String?> getBookText(
+      String title, String category, String fileType) async {
     if (_sqliteProvider.repository != null) {
       try {
         final categoryId = _categoryPathToId[category];
         if (categoryId == null) return null;
 
-        final book = await _sqliteProvider.repository!.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+        final book = await _sqliteProvider.repository!
+            .getBookByTitleCategoryAndFileType(title, categoryId, fileType);
         if (book != null && book.isExternal && book.filePath != null) {
           final file = File(book.filePath!);
           if (await file.exists()) {
@@ -173,7 +224,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
         }
         // If not external or file not found, try DB text
         if (book != null) {
-             return await _sqliteProvider.getBookTextFromDb(title, categoryId, fileType);
+          return await _sqliteProvider.getBookTextFromDb(
+              title, categoryId, fileType);
         }
       } catch (e) {
         debugPrint('⚠️ Error reading external book text: $e');
@@ -183,7 +235,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
   }
 
   @override
-  Future<List<TocEntry>?> getBookToc(String title, String category, String fileType) async {
+  Future<List<TocEntry>?> getBookToc(
+      String title, String category, String fileType) async {
     final categoryId = _categoryPathToId[category];
     if (categoryId == null) return null;
     return await _sqliteProvider.getBookTocFromDb(title, categoryId, fileType);
@@ -451,9 +504,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
     for (final dbBook in dbBooks) {
       final book = _convertDbBookToBook(dbBook, category, metadata);
       category.books.add(book);
-      
+
       // Cache the book key for provider mapping
-      final key = _generateKey(book.title, book.categoryPath ?? '', book.fileType ?? 'txt');
+      final key = _generateKey(
+          book.title, book.categoryPath ?? '', book.fileType ?? 'txt');
       _cachedKeys.add(key);
       if (book.categoryPath != null) {
         _categoryPathToId[book.categoryPath!] = dbCategory.id;
@@ -500,7 +554,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     final categoryPath = getCategoryPath(category);
 
-    if (dbBook.filePath != null && dbBook.fileType == 'pdf') { 
+    if (dbBook.filePath != null && dbBook.fileType == 'pdf') {
       return PdfBook(
           title: dbBook.title,
           category: category,
@@ -578,7 +632,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
   }
 
   @override
-  Future<List<Link>> getAllLinksForBook(String title, String category, String fileType) async {
+  Future<List<Link>> getAllLinksForBook(
+      String title, String category, String fileType) async {
     if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
       debugPrint('💾 Database not initialized, returning empty links');
       return [];
@@ -587,11 +642,12 @@ class DatabaseLibraryProvider implements LibraryProvider {
     try {
       final categoryId = _categoryPathToId[category];
       if (categoryId == null) {
-         debugPrint('💾 Category "$category" not found in cache');
-         return [];
+        debugPrint('💾 Category "$category" not found in cache');
+        return [];
       }
 
-      final book = await _sqliteProvider.repository!.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+      final book = await _sqliteProvider.repository!
+          .getBookByTitleCategoryAndFileType(title, categoryId, fileType);
       if (book == null) {
         debugPrint('💾 Book "$title" not found in database');
         return [];

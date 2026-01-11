@@ -92,9 +92,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     _spacingValues = widget.initialSpacingValues;
     _searchMode = widget.initialSearchMode;
     _forceSearchEngine = _searchMode != SearchMode.exact ||
-      _searchOptions.isNotEmpty ||
-      _alternativeWords.isNotEmpty ||
-      _spacingValues.isNotEmpty;
+        _searchOptions.isNotEmpty ||
+        _alternativeWords.isNotEmpty ||
+        _spacingValues.isNotEmpty;
 
     scrollControler = widget.scrollControler;
     widget.focusNode.requestFocus();
@@ -105,6 +105,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   }
 
   Future<void> _initializeBookPath() async {
+    if (!mounted) return;
     final state = context.read<TextBookBloc>().state;
     if (state is TextBookLoaded) {
       final bookTitle = state.book.title;
@@ -153,13 +154,13 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       final results = await Future(() {
         final List<SearchResult> matches = [];
         final List<String> address = [];
-        
+
         for (int i = 0; i < _content.length; i++) {
           final line = _content[i];
-          
+
           // Update address based on headers
           if (line.startsWith('<h')) {
-             if (address.isNotEmpty &&
+            if (address.isNotEmpty &&
                 address.any((element) =>
                     element.substring(0, 4) == line.substring(0, 4))) {
               address.removeRange(
@@ -174,7 +175,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           final cleanLine = utils.removeVolwels(utils.stripHtmlIfNeeded(line));
           if (cleanLine.contains(query)) {
             // Build reference string from address (excluding h1 which is usually book title)
-            final filteredAddress = address.where((h) => !h.startsWith('<h1')).toList();
+            final filteredAddress =
+                address.where((h) => !h.startsWith('<h1')).toList();
             final reference = utils.removeVolwels(
                 utils.stripHtmlIfNeeded(filteredAddress.join(', ')));
 
