@@ -40,10 +40,10 @@ class SeforimRepository {
 
   Future<void> _initialize() async {
     _logger.info('Initializing SeforimRepository');
-    
+
     // Ensure QueryLoader and database are initialized first
     await _database.database;
-    
+
     // Database schema creation is handled by MyDatabase
     // SQLite optimizations for normal operations
     await _executeRawQuery('PRAGMA journal_mode=WAL');
@@ -57,7 +57,7 @@ class SeforimRepository {
     try {
       final count = await _database.bookDao.countAllBooks();
       _logger.info('Database contains $count books');
-      
+
       // Initialize connection types cache
       await initializeConnectionTypes();
     } catch (e) {
@@ -531,7 +531,8 @@ class SeforimRepository {
   }
 
   Future<Book?> getBookByTitleAndCategory(String title, int categoryId) async {
-    final bookData = await _database.bookDao.getBookByTitleAndCategory(title, categoryId);
+    final bookData =
+        await _database.bookDao.getBookByTitleAndCategory(title, categoryId);
     if (bookData == null) return null;
 
     final authors = await _getBookAuthors(bookData.id);
@@ -547,8 +548,10 @@ class SeforimRepository {
     );
   }
 
-  Future<Book?> getBookByTitleCategoryAndFileType(String title, int categoryId, String fileType) async {
-    final bookData = await _database.bookDao.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+  Future<Book?> getBookByTitleCategoryAndFileType(
+      String title, int categoryId, String fileType) async {
+    final bookData = await _database.bookDao
+        .getBookByTitleCategoryAndFileType(title, categoryId, fileType);
     if (bookData == null) return null;
 
     final authors = await _getBookAuthors(bookData.id);
@@ -827,7 +830,6 @@ class SeforimRepository {
     double orderIndex = 999,
     List<TocEntry>? tocEntries,
   }) async {
-
     // Get or create a source for external books
     final sourceId = await insertSource('external');
 
@@ -1125,7 +1127,6 @@ class SeforimRepository {
   Future<void> insertTocEntriesBatch(List<TocEntry> entries) async {
     if (entries.isEmpty) return;
 
-
     // Pre-create all tocText entries
     final textIds = <String, int>{};
     for (final entry in entries) {
@@ -1258,7 +1259,7 @@ class SeforimRepository {
     if (_connectionTypeCache.isNotEmpty) return;
 
     final types = ['commentary', 'targum', 'reference', 'other'];
-    
+
     for (final type in types) {
       // Force creation/retrieval and cache it
       _connectionTypeCache[type] = await _fetchOrCreateConnectionType(type);
@@ -1299,7 +1300,7 @@ class SeforimRepository {
     if (_connectionTypeCache.containsKey(name)) {
       return _connectionTypeCache[name]!;
     }
-    
+
     // If not in cache, fetch/create and cache it
     final id = await _fetchOrCreateConnectionType(name);
     _connectionTypeCache[name] = id;
@@ -1415,15 +1416,17 @@ class SeforimRepository {
   Future<int> insertLink(Link link) async {
     try {
       // Get or create the connection type
-      final connectionTypeId = await getOrCreateConnectionType(link.connectionType.name);
+      final connectionTypeId =
+          await getOrCreateConnectionType(link.connectionType.name);
       final linkId = await _database.linkDao.insertLink(link, connectionTypeId);
       // Check if insertion failed
       if (linkId == 0) {
         // Try to find a matching link
-        final existingResult = await _database.linkDao.selectLinkByDetails( link.sourceBookId,
-          link.targetBookId,
-          link.sourceLineId,
-          link.targetLineId);
+        final existingResult = await _database.linkDao.selectLinkByDetails(
+            link.sourceBookId,
+            link.targetBookId,
+            link.sourceLineId,
+            link.targetLineId);
 
         if (existingResult != null) {
           return existingResult.id;
@@ -1451,12 +1454,12 @@ class SeforimRepository {
     }
 
     final db = await _database.database;
-    
+
     // Build VALUES string with all links in a single SQL statement
     final values = links.map((link) {
       // Use cache directly - extremely fast
       int? connectionTypeId = _connectionTypeCache[link.connectionType.name];
-      
+
       // Fallback only if not found in cache (rare case for non-standard types)
       connectionTypeId ??= _connectionTypeCache['default'] ?? 1;
 
@@ -2017,9 +2020,8 @@ class SeforimRepository {
     _logger.fine('Found ${booksWithRelations.length} books');
 
     // Convert to Book objects
-    var all =  booksWithRelations
-        .map((bookData) => Book.fromJson(bookData))
-        .toList();
+    var all =
+        booksWithRelations.map((bookData) => Book.fromJson(bookData)).toList();
     return all;
   }
 
@@ -2160,9 +2162,11 @@ class SeforimRepository {
 
   /// Checks if a book with the given title, category and file type already exists in the database.
   /// Returns the book if found, null otherwise.
-  Future<Book?> checkBookExistsInCategoryWithFileType(String title, int categoryId, String fileType) async {
+  Future<Book?> checkBookExistsInCategoryWithFileType(
+      String title, int categoryId, String fileType) async {
     //_logger.fine('Checking if book exists in category with file type: $title (categoryId: $categoryId, fileType: $fileType)');
-    return await _database.bookDao.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+    return await _database.bookDao
+        .getBookByTitleCategoryAndFileType(title, categoryId, fileType);
   }
 
   /// Deletes a book and all its related data (lines, TOC entries, links, etc.)
@@ -2456,10 +2460,12 @@ extension BookAcronymRepository on SeforimRepository {
 
     // Get all TOC entries for the book
     final tocEntries = await db.rawQuery('''
-        SELECT t.id, t.text, t.level, t.lineIndex, t.parentId
-        FROM toc_entry t
+        SELECT t.id, tt.text, t.level, l.lineIndex, t.parentId
+        FROM tocEntry t
+        JOIN tocText tt ON t.textId = tt.id
+        LEFT JOIN line l ON t.lineId = l.id
         WHERE t.bookId = ?
-        ORDER BY t.lineIndex, t.level
+        ORDER BY l.lineIndex, t.level
       ''', [bookId]);
 
     if (tocEntries.isEmpty) {

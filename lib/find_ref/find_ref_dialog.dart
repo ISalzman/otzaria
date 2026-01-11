@@ -5,7 +5,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/find_ref/find_ref_bloc.dart';
 import 'package:otzaria/find_ref/find_ref_event.dart';
 import 'package:otzaria/find_ref/find_ref_state.dart';
+import 'package:otzaria/find_ref/db_reference_result.dart';
 import 'package:otzaria/focus/focus_repository.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
@@ -56,6 +59,36 @@ class _FindRefDialogState extends State<FindRefDialog> {
         );
       }
     });
+  }
+
+  Future<void> _openRef(DbReferenceResult ref) async {
+    Book? book;
+    try {
+      final library = await DataRepository.instance.library;
+      book = _findBookInLibrary(library, ref.title);
+    } catch (e) {
+      debugPrint('Error searching library: $e');
+    }
+
+    if (!mounted) return;
+
+    book ??= ref.isPdf
+        ? PdfBook(title: ref.title, path: ref.filePath)
+        : TextBook(title: ref.title);
+
+    Navigator.of(context).pop();
+    openBook(context, book, ref.segment.toInt(), '');
+  }
+
+  Book? _findBookInLibrary(Category category, String title) {
+    for (final b in category.books) {
+      if (b.title == title) return b;
+    }
+    for (final subCat in category.subCategories) {
+      final found = _findBookInLibrary(subCat, title);
+      if (found != null) return found;
+    }
+    return null;
   }
 
   @override
@@ -133,12 +166,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
                     onSubmitted: (value) {
                       // פתיחת המקור הנבחר בלחיצה על אנטר
                       if (refs.isNotEmpty) {
-                        final ref = refs[_selectedIndex];
-                        final book = ref.isPdf
-                            ? PdfBook(title: ref.title, path: ref.filePath)
-                            : TextBook(title: ref.title);
-                        Navigator.of(context).pop();
-                        openBook(context, book, ref.segment.toInt(), '');
+                        _openRef(refs[_selectedIndex]);
                       }
                     },
                   ),
@@ -194,15 +222,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
                                 ),
                               ),
                               onTap: () {
-                                final ref = state.refs[index];
-                                final book = ref.isPdf
-                                    ? PdfBook(
-                                        title: ref.title, path: ref.filePath)
-                                    : TextBook(title: ref.title);
-                                // סגירת הדיאלוג לפני פתיחת הספר
-                                Navigator.of(context).pop();
-                                openBook(
-                                    context, book, ref.segment.toInt(), '');
+                                _openRef(state.refs[index]);
                               }),
                         );
                       },
