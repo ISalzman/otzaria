@@ -78,6 +78,7 @@ DynamicDataLoaderService? _shamorZachorDataLoader;
 /// 2. Calls [initialize] to set up required services and configurations
 /// 3. Launches the main application widget
 void main() async {
+  hierarchicalLoggingEnabled = true;
   // write errors to file
   FlutterError.onError = (FlutterErrorDetails details) {
     if (kDebugMode) {
@@ -123,8 +124,11 @@ void main() async {
   // Configure logging level for debug mode
   if (kDebugMode) {
     Logger.root.level = Level.ALL;
+    // Silence verbose logs from flutter_widget_from_html
+    Logger('fwfh').level = Level.INFO;
     Logger.root.onRecord.listen((record) {
-      debugPrint('${record.level.name}: ${record.loggerName}: ${record.message}');
+      debugPrint(
+          '${record.level.name}: ${record.loggerName}: ${record.message}');
     });
   }
 
@@ -141,69 +145,69 @@ void main() async {
       child: MultiRepositoryProvider(
         providers: [
           RepositoryProvider<FocusRepository>(
-          create: (context) => FocusRepository(),
-        ),
-      ],
-      child: MultiBlocProvider(
-        providers: [
-          BlocProvider<SettingsBloc>(
-            create: (context) => SettingsBloc(
-              repository: SettingsRepository(),
-            )..add(LoadSettings()),
-          ),
-          BlocProvider<LibraryBloc>(
-            create: (context) => LibraryBloc()..add(LoadLibrary()),
-          ),
-          BlocProvider<IndexingBloc>(
-            create: (context) => IndexingBloc.create(),
-          ),
-          BlocProvider<HistoryBloc>(
-              create: (context) => HistoryBloc(historyRepository)),
-          BlocProvider<TabsBloc>(
-            create: (context) => TabsBloc(
-              repository: TabsRepository(),
-            )..add(LoadTabs()),
-          ),
-          BlocProvider<NavigationBloc>(
-            create: (context) => NavigationBloc(
-              repository: NavigationRepository(),
-              tabsRepository: TabsRepository(),
-            )..add(const CheckLibrary()),
-          ),
-          BlocProvider<FindRefBloc>(
-              create: (context) => FindRefBloc(
-                  findRefRepository: FindRefRepository(
-                      dataRepository: DataRepository.instance))),
-          BlocProvider<PersonalNotesBloc>(
-            create: (context) => PersonalNotesBloc(),
-          ),
-          BlocProvider<BookmarkBloc>(
-            create: (context) => BookmarkBloc(BookmarkRepository()),
-          ),
-          BlocProvider<WorkspaceBloc>(
-            create: (context) => WorkspaceBloc(
-              repository: WorkspaceRepository(),
-              tabsBloc: context.read<TabsBloc>(),
-            )..add(LoadWorkspaces()),
-          ),
-          ChangeNotifierProvider<ShamorZachorDataProvider>(
-            lazy: true, // Create only when needed
-            create: (context) {
-              // Create provider based on current state of loader
-              final provider = _shamorZachorDataLoader != null
-                  ? ShamorZachorDataProvider.dynamic(_shamorZachorDataLoader!)
-                  : ShamorZachorDataProvider(); // Start with legacy
-
-              return provider;
-            },
-          ),
-          ChangeNotifierProvider<ShamorZachorProgressProvider>(
-            create: (context) => ShamorZachorProgressProvider(),
+            create: (context) => FocusRepository(),
           ),
         ],
-        child: const App(),
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider<SettingsBloc>(
+              create: (context) => SettingsBloc(
+                repository: SettingsRepository(),
+              )..add(LoadSettings()),
+            ),
+            BlocProvider<LibraryBloc>(
+              create: (context) => LibraryBloc()..add(LoadLibrary()),
+            ),
+            BlocProvider<IndexingBloc>(
+              create: (context) => IndexingBloc.create(),
+            ),
+            BlocProvider<HistoryBloc>(
+                create: (context) => HistoryBloc(historyRepository)),
+            BlocProvider<TabsBloc>(
+              create: (context) => TabsBloc(
+                repository: TabsRepository(),
+              )..add(LoadTabs()),
+            ),
+            BlocProvider<NavigationBloc>(
+              create: (context) => NavigationBloc(
+                repository: NavigationRepository(),
+                tabsRepository: TabsRepository(),
+              )..add(const CheckLibrary()),
+            ),
+            BlocProvider<FindRefBloc>(
+                create: (context) => FindRefBloc(
+                    findRefRepository: FindRefRepository(
+                        dataRepository: DataRepository.instance))),
+            BlocProvider<PersonalNotesBloc>(
+              create: (context) => PersonalNotesBloc(),
+            ),
+            BlocProvider<BookmarkBloc>(
+              create: (context) => BookmarkBloc(BookmarkRepository()),
+            ),
+            BlocProvider<WorkspaceBloc>(
+              create: (context) => WorkspaceBloc(
+                repository: WorkspaceRepository(),
+                tabsBloc: context.read<TabsBloc>(),
+              )..add(LoadWorkspaces()),
+            ),
+            ChangeNotifierProvider<ShamorZachorDataProvider>(
+              lazy: true, // Create only when needed
+              create: (context) {
+                // Create provider based on current state of loader
+                final provider = _shamorZachorDataLoader != null
+                    ? ShamorZachorDataProvider.dynamic(_shamorZachorDataLoader!)
+                    : ShamorZachorDataProvider(); // Start with legacy
+
+                return provider;
+              },
+            ),
+            ChangeNotifierProvider<ShamorZachorProgressProvider>(
+              create: (context) => ShamorZachorProgressProvider(),
+            ),
+          ],
+          child: const App(),
+        ),
       ),
-    ),
     ),
   );
 }
@@ -248,7 +252,7 @@ Future<void> initialize() async {
   await initHive();
   await createDirs();
   await loadCerts();
-  
+
   // Initialize SQLite Database Provider
   await SqliteDataProvider.instance.initialize();
 
