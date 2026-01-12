@@ -158,7 +158,8 @@ class BookGridItem extends StatelessWidget {
                         : book.fileType == 'docx'
                             ? Padding(
                                 padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
-                                child: Icon(FluentIcons.document_one_page_24_regular,
+                                child: Icon(
+                                    FluentIcons.document_one_page_24_regular,
                                     color: Theme.of(context)
                                         .colorScheme
                                         .secondary
@@ -166,7 +167,8 @@ class BookGridItem extends StatelessWidget {
                               )
                             : Padding(
                                 padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
-                                child: Icon(FluentIcons.document_text_24_regular,
+                                child: Icon(
+                                    FluentIcons.document_text_24_regular,
                                     color: Theme.of(context)
                                         .colorScheme
                                         .secondary
@@ -212,7 +214,8 @@ class BookGridItem extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 4.0),
                         child: DataSourceIndicatorAsync(
                           sourceFuture: FileSystemData.instance
-                              .getBookDataSource(book.title, book.categoryPath, book.fileType),
+                              .getBookDataSource(
+                                  book.title, book.categoryPath, book.fileType),
                           size: 18.0,
                         ),
                       )
@@ -258,6 +261,7 @@ class BookGridItem extends StatelessWidget {
                               .withValues(alpha: 0.6),
                         ),
                         tooltip: 'אפשרויות',
+                        position: PopupMenuPosition.under,
                         onSelected: (value) {
                           if (value == 'delete') {
                             _showDeleteBookDialog(context, book, onBookDeleted);
