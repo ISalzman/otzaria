@@ -16,6 +16,7 @@ import '../core/models/topic.dart';
 import '../dao/repository/seforim_repository.dart';
 import '../shared/link_processor.dart';
 import 'hebrew_text_utils.dart' as hebrew_text_utils;
+import 'catalog_importer.dart';
 
 /// DatabaseGenerator is responsible for generating the Otzaria database from source files.
 /// It processes directories, books, and links to create a structured database.
@@ -155,6 +156,9 @@ class DatabaseGenerator {
       // Preload all book contents into RAM
       await _preloadAllBookContents(libraryPath);
       await processDirectory(libraryPath, null, 0, metadata);
+
+      // Import external catalogs
+      await importExternalCatalogs();
 
       // Process links
       await processLinks();
@@ -855,28 +859,28 @@ class DatabaseGenerator {
 
     String query = '''
       WITH book_connections AS (
-    SELECT 
-        book_id,
-        MAX(CASE WHEN connectionTypeId = 2 THEN 1 ELSE 0 END) as has_targum,
-        MAX(CASE WHEN connectionTypeId = 3 THEN 1 ELSE 0 END) as has_reference,
-        MAX(CASE WHEN connectionTypeId = 1 THEN 1 ELSE 0 END) as has_commentary,
-        MAX(CASE WHEN connectionTypeId = 4 THEN 1 ELSE 0 END) as has_other
-    FROM (
-        SELECT sourceBookId as book_id, connectionTypeId FROM link
-        UNION ALL
-        SELECT targetBookId as book_id, connectionTypeId FROM link
-    ) all_connections
-    GROUP BY book_id
-)
-UPDATE book 
-SET 
-    hasTargumConnection = COALESCE(bc.has_targum, 0),
-    hasReferenceConnection = COALESCE(bc.has_reference, 0),
-    hasCommentaryConnection = COALESCE(bc.has_commentary, 0),
-    hasOtherConnection = COALESCE(bc.has_other, 0)
-FROM book_connections bc
-WHERE book.id = bc.book_id;
-    ''';
+        SELECT 
+            book_id,
+            MAX(CASE WHEN connectionTypeId = 2 THEN 1 ELSE 0 END) as has_targum,
+            MAX(CASE WHEN connectionTypeId = 3 THEN 1 ELSE 0 END) as has_reference,
+            MAX(CASE WHEN connectionTypeId = 1 THEN 1 ELSE 0 END) as has_commentary,
+            MAX(CASE WHEN connectionTypeId = 4 THEN 1 ELSE 0 END) as has_other
+        FROM (
+            SELECT sourceBookId as book_id, connectionTypeId FROM link
+            UNION ALL
+            SELECT targetBookId as book_id, connectionTypeId FROM link
+        ) all_connections
+        GROUP BY book_id
+      )
+      UPDATE book 
+      SET 
+          hasTargumConnection = COALESCE(bc.has_targum, 0),
+          hasReferenceConnection = COALESCE(bc.has_reference, 0),
+          hasCommentaryConnection = COALESCE(bc.has_commentary, 0),
+          hasOtherConnection = COALESCE(bc.has_other, 0)
+      FROM book_connections bc
+      WHERE book.id = bc.book_id;
+          ''';
     // Update all books that have links
     _log.fine(query);
     await repository.executeRawQuery(query);
@@ -1289,6 +1293,18 @@ WHERE book.id = bc.book_id;
           'Error reading acronyms for \'$title\' from $acronymPath', e);
       return [];
     }
+  }
+
+  /// Imports books from external catalogs (Otzar HaChochma, HebrewBooks)
+  Future<void> importExternalCatalogs() async {
+    final importer = CatalogImporter(
+      repository: repository,
+      sourceDirectory: sourceDirectory,
+      onProgress: onProgress,
+    );
+    importer.setNextBookId(_nextBookId);
+    await importer.importExternalCatalogs();
+    _nextBookId = importer.getNextBookId();
   }
 }
 

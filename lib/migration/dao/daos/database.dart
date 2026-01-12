@@ -294,6 +294,7 @@ class MyDatabase {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           categoryId INTEGER NOT NULL,
           sourceId INTEGER NOT NULL,
+          externalId TEXT,
           title TEXT NOT NULL,
           heShortDesc TEXT,
           notesContent TEXT,

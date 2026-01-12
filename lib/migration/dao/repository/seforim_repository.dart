@@ -685,7 +685,8 @@ class SeforimRepository {
           book.isBaseBook,
           book.notesContent,
           book.filePath,
-          book.fileType);
+          book.fileType,
+          book.externalId);
 
       // Process authors
       for (final author in book.authors) {
@@ -724,7 +725,8 @@ class SeforimRepository {
           book.isBaseBook,
           book.notesContent,
           book.filePath,
-          book.fileType);
+          book.fileType,
+          book.externalId);
 
       // Check if insertion failed
       if (id == 0) {

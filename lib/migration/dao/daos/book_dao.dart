@@ -169,7 +169,8 @@ class BookDao {
       bool isBaseBook,
       String? notesContent,
       String? filePath,
-      String? fileType) async {
+      String? fileType,
+      String? externalId) async {
     final db = await database;
     return await db.rawInsert(_queries['insert']!, [
       categoryId,
@@ -182,6 +183,7 @@ class BookDao {
       (isBaseBook ? 1 : 0),
       filePath,
       fileType,
+      externalId,
     ]);
   }
 
@@ -196,7 +198,8 @@ class BookDao {
       bool isBaseBook,
       String? notesContent,
       String? filePath,
-      String? fileType) async {
+      String? fileType,
+      String? externalId) async {
     final db = await database;
     return await db.rawInsert(_queries['insertWithId']!, [
       id,
@@ -210,6 +213,7 @@ class BookDao {
       (isBaseBook ? 1 : 0),
       filePath,
       fileType,
+      externalId,
     ]);
   }
 
