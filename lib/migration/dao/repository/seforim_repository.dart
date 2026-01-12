@@ -2520,8 +2520,29 @@ extension BookAcronymRepository on SeforimRepository {
       if (queryTokens != null && queryTokens.isNotEmpty) {
         // Use the same normalization as FindRef for consistent matching
         final refNormalized = _normalizeForTocMatch(fullRef);
-        final matches =
-            queryTokens.every((token) => refNormalized.contains(token));
+        final refTokens =
+            refNormalized.split(' ').where((t) => t.isNotEmpty).toList();
+
+        // Check if ALL query tokens appear as complete tokens in the reference
+        // This prevents "א" from matching "נ" or other unrelated text
+        bool matches = true;
+        for (final queryToken in queryTokens) {
+          // Check if this token appears as a complete word or at start/end of a word
+          bool tokenFound = false;
+          for (final refToken in refTokens) {
+            if (refToken == queryToken ||
+                refToken.startsWith(queryToken) ||
+                refToken.endsWith(queryToken)) {
+              tokenFound = true;
+              break;
+            }
+          }
+          if (!tokenFound) {
+            matches = false;
+            break;
+          }
+        }
+
         if (!matches) continue;
       }
 
@@ -2531,6 +2552,10 @@ extension BookAcronymRepository on SeforimRepository {
         'level': level,
       });
     }
+
+    // Sort results by segment (lineIndex) for logical ordering
+    results
+        .sort((a, b) => (a['segment'] as int).compareTo(b['segment'] as int));
 
     return results;
   }
