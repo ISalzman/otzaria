@@ -57,7 +57,8 @@ import 'package:shamor_zachor/services/dynamic_data_loader_service.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/services/sources_books_service.dart';
-import 'package:otzaria/find_ref/reference_books_cache.dart';
+import 'package:otzaria/data/cache/books_cache.dart';
+import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/services/notification_service.dart';
 import 'package:logging/logging.dart';
@@ -263,14 +264,15 @@ Future<void> initialize() async {
   // If the migration created the DB file on a first run, initialize again.
   await SqliteDataProvider.instance.initialize();
 
-  // Warm up in-memory cache for FindRef (book + acronym tables)
-  // so FindRef can match book names without hitting SQLite per keystroke.
+  // Warm up shared in-memory caches for books and acronyms.
+  // BooksCache is shared between library screen and FindRef.
+  // AcronymsCache is used exclusively by FindRef.
   try {
-    ReferenceBooksCache.instance.clear();
-    await ReferenceBooksCache.instance.warmUp();
+    await BooksCache.instance.warmUp();
+    await AcronymsCache.instance.warmUp();
   } catch (e) {
     if (kDebugMode) {
-      debugPrint('Failed to warm up ReferenceBooksCache: $e');
+      debugPrint('Failed to warm up book/acronym caches: $e');
     }
   }
 
@@ -374,8 +376,9 @@ void cleanup() {
   // Clear SourcesBooks data from memory
   SourcesBooksService().clearData();
 
-  // Clear FindRef book/acronym in-memory cache
-  ReferenceBooksCache.instance.clear();
+  // Clear shared book/acronym caches
+  BooksCache.instance.clear();
+  AcronymsCache.instance.clear();
 }
 
 // Note: TOC parsing helper moved to lib/utils/toc_parser.dart for reuse

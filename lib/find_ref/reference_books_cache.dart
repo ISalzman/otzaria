@@ -1,12 +1,15 @@
 import 'package:flutter/foundation.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/cache/books_cache.dart';
+import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 
 /// In-memory cache for reference finding.
 ///
-/// Loads (once per app run) the data needed to quickly match a book by its
-/// title or acronym, without hitting SQLite on every keystroke.
+/// Uses shared caches:
+/// - BooksCache: shared with library screen (book table)
+/// - AcronymsCache: exclusive to FindRef (book_acronym table)
 ///
+/// This avoids loading the same data twice into memory.
 /// Scope: only the "book selection" phase. TOC lookup is handled elsewhere.
 class ReferenceBooksCache {
   ReferenceBooksCache._();
@@ -16,8 +19,8 @@ class ReferenceBooksCache {
   bool _isLoaded = false;
   Future<void>? _loadingFuture;
 
-  final List<_BookRow> _books = <_BookRow>[];
-  final Map<int, List<String>> _acronymsByBookId = <int, List<String>>{};
+  // Normalized titles cache (computed from BooksCache)
+  final Map<int, String> _normalizedTitles = <int, String>{};
 
   bool get isLoaded => _isLoaded;
 
@@ -35,68 +38,33 @@ class ReferenceBooksCache {
   }
 
   Future<void> _loadInternal() async {
-    final repository = SqliteDataProvider.instance.repository;
-    if (repository == null) {
-      debugPrint('[ReferenceBooksCache] DB not initialized; skipping warmup');
-      _books.clear();
-      _acronymsByBookId.clear();
-      // Keep as not-loaded so we can warm up later after DB is created/initialized.
-      _isLoaded = false;
-      return;
-    }
-
     try {
-      final allBooks = await repository.database.bookDao.getAllBooks();
+      // Warm up shared caches
+      await BooksCache.instance.warmUp();
+      await AcronymsCache.instance.warmUp();
 
-      _books
-        ..clear()
-        ..addAll(
-          allBooks.map(
-            (b) => _BookRow(
-              id: b.id,
-              title: b.title,
-              titleNorm: _normalizeForMatch(b.title),
-              filePath: b.filePath,
-              fileType: b.fileType ?? 'txt',
-              orderIndex: b.order,
-            ),
-          ),
-        );
-
-      final db = await repository.database.database;
-      final acrRows = await db.rawQuery(
-        'SELECT bookId, term FROM book_acronym ORDER BY bookId',
-      );
-
-      _acronymsByBookId.clear();
-      for (final row in acrRows) {
-        final bookId = row['bookId'] as int;
-        final term = (row['term'] as String?) ?? '';
-        final norm = _normalizeForMatch(term);
-        if (norm.isEmpty) continue;
-        _acronymsByBookId.putIfAbsent(bookId, () => <String>[]).add(norm);
+      // Pre-compute normalized titles for fast matching
+      _normalizedTitles.clear();
+      for (final book in BooksCache.instance.books) {
+        _normalizedTitles[book.id] = _normalizeForMatch(book.title);
       }
 
       _isLoaded = true;
       debugPrint(
-        '[ReferenceBooksCache] Loaded ${_books.length} books, '
-        '${acrRows.length} acronyms',
+        '[ReferenceBooksCache] Ready with ${BooksCache.instance.books.length} books',
       );
     } catch (e) {
       debugPrint('[ReferenceBooksCache] Warmup failed: $e');
-      _books.clear();
-      _acronymsByBookId.clear();
-      // Mark loaded to avoid repeated attempts per keystroke; caller can decide
-      // to clear() and warmUp() again.
+      _normalizedTitles.clear();
       _isLoaded = true;
     }
   }
 
   void clear() {
-    _books.clear();
-    _acronymsByBookId.clear();
+    _normalizedTitles.clear();
     _isLoaded = false;
     _loadingFuture = null;
+    // Note: We don't clear the shared caches here as they may be used by other components
   }
 
   /// Searches books by title and acronym from memory.
@@ -110,8 +78,8 @@ class ReferenceBooksCache {
     final starts = <ReferenceBookHit>[];
     final contains = <ReferenceBookHit>[];
 
-    for (final b in _books) {
-      final t = b.titleNorm;
+    for (final book in BooksCache.instance.books) {
+      final t = _normalizedTitles[book.id] ?? '';
       if (t.isEmpty) continue;
 
       int? matchRank;
@@ -125,9 +93,12 @@ class ReferenceBooksCache {
         matchRank = 2;
       } else {
         // acronym match
-        final acrs = _acronymsByBookId[b.id];
-        if (acrs != null) {
-          for (final a in acrs) {
+        final rawAcronyms = AcronymsCache.instance.getAcronymsForBook(book.id);
+        if (rawAcronyms != null) {
+          for (final rawAcr in rawAcronyms) {
+            final a = _normalizeForMatch(rawAcr);
+            if (a.isEmpty) continue;
+
             if (a == q) {
               matchRank = 3;
               matchedTerm = a;
@@ -147,13 +118,13 @@ class ReferenceBooksCache {
       if (matchRank == null) continue;
 
       final hit = ReferenceBookHit(
-        bookId: b.id,
-        title: b.title,
-        filePath: b.filePath ?? '',
-        fileType: b.fileType,
+        bookId: book.id,
+        title: book.title,
+        filePath: book.filePath ?? '',
+        fileType: book.fileType,
         matchRank: matchRank,
         matchedTerm: matchedTerm,
-        orderIndex: b.orderIndex,
+        orderIndex: book.orderIndex,
       );
 
       // Keep two buckets for cheap ordering.
@@ -205,23 +176,5 @@ class ReferenceBookHit {
     required this.matchRank,
     required this.orderIndex,
     this.matchedTerm,
-  });
-}
-
-class _BookRow {
-  final int id;
-  final String title;
-  final String titleNorm;
-  final String? filePath;
-  final String fileType;
-  final double orderIndex;
-
-  const _BookRow({
-    required this.id,
-    required this.title,
-    required this.titleNorm,
-    required this.filePath,
-    required this.fileType,
-    required this.orderIndex,
   });
 }
