@@ -42,6 +42,27 @@ class FindRefRepository {
 
     final results = <DbReferenceResult>[];
 
+    // Step 2 requirement: for a single-word query, do NOT search TOC at all.
+    // Only return book-name matches (book + book_acronym via in-memory cache).
+    if (queryTokens.length == 1) {
+      for (final hit in bookHits) {
+        final fileType = hit.fileType;
+        final isPdf = fileType == 'pdf';
+
+        results.add(DbReferenceResult(
+          title: hit.title,
+          reference: hit.title,
+          segment: 0,
+          isPdf: isPdf,
+          filePath: hit.filePath,
+        ));
+      }
+
+      final unique = _dedupeRefs(results);
+      final ranked = _rankResults(unique, queryTokens);
+      return ranked.length > 15 ? ranked.take(15).toList() : ranked;
+    }
+
     for (final hit in bookHits) {
       final bookId = hit.bookId;
       final title = hit.title;
