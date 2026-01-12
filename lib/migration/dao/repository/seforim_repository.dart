@@ -2481,10 +2481,14 @@ extension BookAcronymRepository on SeforimRepository {
 
     final results = <Map<String, dynamic>>[];
 
-    // Build a map of parent IDs to their text for building full paths
+    // Build maps for parent texts and levels
     final parentTexts = <int, String>{};
+    final parentLevels = <int, int>{};
     for (final entry in tocEntries) {
-      parentTexts[entry['id'] as int] = entry['text'] as String;
+      final id = entry['id'] as int;
+      final level = entry['level'] as int;
+      parentTexts[id] = entry['text'] as String;
+      parentLevels[id] = level;
     }
 
     for (final entry in tocEntries) {
@@ -2493,11 +2497,17 @@ extension BookAcronymRepository on SeforimRepository {
       final lineIndex = entry['lineIndex'] as int? ?? 0;
       final parentId = entry['parentId'] as int?;
 
-      // Build full reference path
+      // Step 4: Skip level 1 entries - they always contain book name
+      // This prevents duplicates like "בראשית בראשית"
+      if (level == 1) continue;
+
+      // Build full reference path, skipping level 1 parents
       String fullRef = bookTitle;
       if (text.isNotEmpty) {
-        // Add parent path if exists
-        if (parentId != null && parentTexts.containsKey(parentId)) {
+        // Check if parent exists and is NOT level 1
+        if (parentId != null &&
+            parentTexts.containsKey(parentId) &&
+            parentLevels[parentId] != 1) {
           fullRef = '$bookTitle ${parentTexts[parentId]} $text';
         } else {
           fullRef = '$bookTitle $text';

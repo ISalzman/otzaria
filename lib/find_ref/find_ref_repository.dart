@@ -107,10 +107,11 @@ class FindRefRepository {
           filePath: filePath,
         ));
 
-        // Add top-level TOC entries (level 1 and 2)
+        // Add top-level TOC entries (level 2 only - skip level 1)
+        // Step 4: Level 1 always contains book name, causing duplicates like "בראשית בראשית"
         for (final entry in tocEntries) {
           final level = entry['level'] as int;
-          if (level <= 2 && entry['reference'] != title) {
+          if (level == 2 && entry['reference'] != title) {
             results.add(DbReferenceResult(
               title: title,
               reference: entry['reference'] as String,
