@@ -2506,8 +2506,10 @@ extension BookAcronymRepository on SeforimRepository {
 
       // Filter by query tokens if provided
       if (queryTokens != null && queryTokens.isNotEmpty) {
-        final refLower = fullRef.toLowerCase();
-        final matches = queryTokens.every((token) => refLower.contains(token));
+        // Use the same normalization as FindRef for consistent matching
+        final refNormalized = _normalizeForTocMatch(fullRef);
+        final matches =
+            queryTokens.every((token) => refNormalized.contains(token));
         if (!matches) continue;
       }
 
@@ -2519,5 +2521,17 @@ extension BookAcronymRepository on SeforimRepository {
     }
 
     return results;
+  }
+
+  /// Normalizes text for TOC matching (same as FindRef normalization)
+  String _normalizeForTocMatch(String input) {
+    // Remove nikud and teamim
+    var cleaned = input;
+    // Remove common Hebrew diacritics
+    cleaned = cleaned.replaceAll(RegExp(r'[\u0591-\u05C7]'), '');
+    // Keep only letters, numbers, and spaces
+    cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9\u0590-\u05FF\s]'), ' ');
+    cleaned = cleaned.toLowerCase();
+    return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }

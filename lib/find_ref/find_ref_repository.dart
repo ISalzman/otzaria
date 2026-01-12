@@ -35,10 +35,10 @@ class FindRefRepository {
       await ReferenceBooksCache.instance.warmUp();
     }
     final bookHits =
-        ReferenceBooksCache.instance.search(cleanedQuery, limit: 50);
+        ReferenceBooksCache.instance.search(queryTokens.first, limit: 50);
 
     debugPrint(
-        '[FindRef] Found ${bookHits.length} books matching query (memory)');
+        '[FindRef] Found ${bookHits.length} books matching first word (memory)');
 
     final results = <DbReferenceResult>[];
 
@@ -62,6 +62,23 @@ class FindRefRepository {
       final ranked = _rankResults(unique, queryTokens);
       return ranked.length > 15 ? ranked.take(15).toList() : ranked;
     }
+
+    // Step 3: For multi-word queries, check if remaining words match book names
+    // If the second word has an exact match in book names, don't search TOC
+    // Example: "בראשית א" - if "א" doesn't match any book exactly, search TOC
+    // But "בראשית רבא" - "רבא" matches a book, so don't search TOC for "בראשית"
+
+    final secondWordMatches = ReferenceBooksCache.instance.search(
+      queryTokens.length > 1 ? queryTokens[1] : '',
+      limit: 50,
+    );
+
+    // Check if second word has exact match (rank 0 = exact match)
+    final hasExactSecondWordMatch =
+        secondWordMatches.any((hit) => hit.matchRank == 0);
+
+    debugPrint(
+        '[FindRef] Second word "${queryTokens.length > 1 ? queryTokens[1] : ''}" has exact match: $hasExactSecondWordMatch');
 
     for (final hit in bookHits) {
       final bookId = hit.bookId;
@@ -103,8 +120,9 @@ class FindRefRepository {
             ));
           }
         }
-      } else {
-        // Query has additional tokens - search in TOC
+      } else if (!hasExactSecondWordMatch) {
+        // Step 3: Only search TOC if second word doesn't have exact book match
+        // This prevents "בראשית א" from matching "בראשית רבא"
         final tocEntries = await repository.getTocEntriesForReference(
           bookId,
           title,
@@ -121,6 +139,7 @@ class FindRefRepository {
           ));
         }
       }
+      // else: second word has exact book match, skip TOC search for this book
     }
 
     // Deduplicate and rank results
