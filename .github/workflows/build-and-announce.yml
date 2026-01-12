@@ -8,6 +8,7 @@ on:
     branches:
       - main
       - dev
+      - MTDB+dev
 
   pull_request:
     types: [opened, synchronize, reopened]
