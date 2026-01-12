@@ -214,6 +214,12 @@ class FindRefRepository {
 
   String _normalizeForMatch(String input) {
     var cleaned = removeTeamim(removeVolwels(input));
+
+    // Remove quotes/gershayim completely (don't convert to space)
+    // This way מ"ב becomes מב (not מ ב)
+    cleaned = cleaned.replaceAll('"', '').replaceAll("'", '');
+    cleaned = cleaned.replaceAll('\u05F4', '').replaceAll('\u05F3', '');
+
     cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9\u0590-\u05FF\s]'), ' ');
     cleaned = cleaned.toLowerCase();
     return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();

@@ -16,7 +16,7 @@ class FindRefBloc extends Bloc<FindRefEvent, FindRefState> {
 
   Future<void> _onSearchRefRequested(
       SearchRefRequested event, Emitter<FindRefState> emit) async {
-    if (event.refText.length < 3) {
+    if (event.refText.length < 2) {
       emit(const FindRefSuccess([]));
       return;
     }
