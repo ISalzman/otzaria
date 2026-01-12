@@ -2523,20 +2523,13 @@ extension BookAcronymRepository on SeforimRepository {
         final refTokens =
             refNormalized.split(' ').where((t) => t.isNotEmpty).toList();
 
-        // Check if ALL query tokens appear as complete tokens in the reference
-        // This prevents "א" from matching "נ" or other unrelated text
+        // Check if ALL query tokens match exactly as complete tokens
+        // This prevents "א" from matching "יא", "כא", etc.
         bool matches = true;
         for (final queryToken in queryTokens) {
-          // Check if this token appears as a complete word or at start/end of a word
-          bool tokenFound = false;
-          for (final refToken in refTokens) {
-            if (refToken == queryToken ||
-                refToken.startsWith(queryToken) ||
-                refToken.endsWith(queryToken)) {
-              tokenFound = true;
-              break;
-            }
-          }
+          // Look for exact token match
+          bool tokenFound = refTokens.contains(queryToken);
+
           if (!tokenFound) {
             matches = false;
             break;
