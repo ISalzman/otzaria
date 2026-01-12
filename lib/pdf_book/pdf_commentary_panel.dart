@@ -814,7 +814,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       if (itemContext != null && itemContext.mounted) {
         try {
           final scrollable = Scrollable.of(itemContext);
-          scrollable?.position.ensureVisible(
+          scrollable.position.ensureVisible(
             itemContext.findRenderObject()!,
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeInOut,
@@ -843,7 +843,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           final retryContext = itemKey?.currentContext;
           if (retryContext != null && retryContext.mounted) {
             final scrollable = Scrollable.of(retryContext);
-            scrollable?.position.ensureVisible(
+            scrollable.position.ensureVisible(
               retryContext.findRenderObject()!,
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
