@@ -4,6 +4,7 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/find_ref/db_reference_result.dart';
 import 'package:otzaria/migration/dao/repository/seforim_repository.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:otzaria/find_ref/reference_books_cache.dart';
 
 class FindRefRepository {
   final DataRepository dataRepository;
@@ -28,21 +29,24 @@ class FindRefRepository {
       return const [];
     }
 
-    // Search for books by title or acronym
-    final bookResults = await repository.searchBooksForReference(
-      cleanedQuery,
-      limit: 50,
-    );
+    // Search for books by title or acronym from in-memory cache.
+    // This avoids hitting SQLite on every keystroke.
+    if (!ReferenceBooksCache.instance.isLoaded) {
+      await ReferenceBooksCache.instance.warmUp();
+    }
+    final bookHits =
+        ReferenceBooksCache.instance.search(cleanedQuery, limit: 50);
 
-    debugPrint('[FindRef] Found ${bookResults.length} books matching query');
+    debugPrint(
+        '[FindRef] Found ${bookHits.length} books matching query (memory)');
 
     final results = <DbReferenceResult>[];
 
-    for (final bookData in bookResults) {
-      final bookId = bookData['bookId'] as int;
-      final title = bookData['title'] as String;
-      final filePath = bookData['filePath'] as String? ?? '';
-      final fileType = bookData['fileType'] as String? ?? 'txt';
+    for (final hit in bookHits) {
+      final bookId = hit.bookId;
+      final title = hit.title;
+      final filePath = hit.filePath;
+      final fileType = hit.fileType;
       final isPdf = fileType == 'pdf';
 
       // Get remaining tokens after matching book title

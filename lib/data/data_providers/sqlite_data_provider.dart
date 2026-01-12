@@ -36,11 +36,11 @@ class SqliteDataProvider {
       debugPrint('SQLite database is already initialized.');
       return;
     }
-     
+
     if (_isInitializedInProgress) {
-       debugPrint('SQLite database initialization is already in progress.');
+      debugPrint('SQLite database initialization is already in progress.');
       return;
-    }else{
+    } else {
       debugPrint('Starting SQLite database initialization.');
     }
     _isInitializedInProgress = true;
@@ -54,6 +54,7 @@ class SqliteDataProvider {
     if (!await dbFile.exists()) {
       debugPrint('Database file does not exist yet at: $_dbPath');
       // Database will be created when first book is migrated
+      _isInitializedInProgress = false;
       return;
     }
 
@@ -65,6 +66,7 @@ class SqliteDataProvider {
       _isInitializedInProgress = false;
       debugPrint('SQLite database initialized successfully');
     } catch (e) {
+      _isInitializedInProgress = false;
       debugPrint('Error initializing SQLite database: $e');
       rethrow;
     }
@@ -74,7 +76,8 @@ class SqliteDataProvider {
   bool get isInitialized => _isInitialized;
 
   /// Checks if a book exists in the database
-  Future<bool> isBookInDatabase(String title, [int? categoryId, String? fileType]) async {
+  Future<bool> isBookInDatabase(String title,
+      [int? categoryId, String? fileType]) async {
     if (!_isInitialized) {
       await initialize();
     }
@@ -82,7 +85,8 @@ class SqliteDataProvider {
 
     try {
       if (categoryId != null && fileType != null) {
-        final book = await _repository.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+        final book = await _repository.getBookByTitleCategoryAndFileType(
+            title, categoryId, fileType);
         return book != null;
       }
       final book = await _repository.getBookByTitle(title);
@@ -120,7 +124,8 @@ class SqliteDataProvider {
   }
 
   /// Retrieves the full text content of a book from the database
-  Future<String?> getBookTextFromDb(String title, [int? categoryId, String? fileType]) async {
+  Future<String?> getBookTextFromDb(String title,
+      [int? categoryId, String? fileType]) async {
     if (!_isInitialized) {
       await initialize();
     }
@@ -129,11 +134,12 @@ class SqliteDataProvider {
     try {
       migration.Book? book;
       if (categoryId != null && fileType != null) {
-        book = await _repository.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+        book = await _repository.getBookByTitleCategoryAndFileType(
+            title, categoryId, fileType);
       } else {
         book = await _repository.getBookByTitle(title);
       }
-      
+
       if (book == null) return null;
 
       final lines = await _repository.getLines(book.id, 0, book.totalLines - 1);
@@ -145,7 +151,8 @@ class SqliteDataProvider {
   }
 
   /// Retrieves the table of contents of a book from the database
-  Future<List<TocEntry>?> getBookTocFromDb(String title, [int? categoryId, String? fileType]) async {
+  Future<List<TocEntry>?> getBookTocFromDb(String title,
+      [int? categoryId, String? fileType]) async {
     if (!_isInitialized) {
       await initialize();
     }
@@ -154,7 +161,8 @@ class SqliteDataProvider {
     try {
       migration.Book? book;
       if (categoryId != null && fileType != null) {
-        book = await _repository.getBookByTitleCategoryAndFileType(title, categoryId, fileType);
+        book = await _repository.getBookByTitleCategoryAndFileType(
+            title, categoryId, fileType);
       } else {
         book = await _repository.getBookByTitle(title);
       }
