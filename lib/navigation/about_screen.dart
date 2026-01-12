@@ -67,7 +67,8 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   /// חישוב רוחב פריט לפי השם הכי ארוך ברשימה
-  double _calculateItemWidth(List<Map<String, String?>> items, {double extraPadding = 24}) {
+  double _calculateItemWidth(List<Map<String, String?>> items,
+      {double extraPadding = 24}) {
     if (items.isEmpty) return 0;
 
     final longestName = items
@@ -94,8 +95,16 @@ class _AboutScreenState extends State<AboutScreen> {
       {'name': 'zevisvei', 'url': 'https://github.com/zevisvei'},
       {'name': 'evel-avalim', 'url': 'https://github.com/evel-avalim'},
       {'name': 'userbot', 'url': 'https://github.com/userbot000'},
-      {'name': 'mosh-dvd', 'url': 'https://github.com/mosh-dvd', 'description': 'ממפתחי ממשק צורת הדף'},
-      {'name': 'NHLOCAL', 'url': 'https://github.com/NHLOCAL/Shamor-Zachor', 'description': "מפתח 'זכור ושמור'"},
+      {
+        'name': 'mosh-dvd',
+        'url': 'https://github.com/mosh-dvd',
+        'description': 'ממפתחי ממשק צורת הדף'
+      },
+      {
+        'name': 'NHLOCAL',
+        'url': 'https://github.com/NHLOCAL/Shamor-Zachor',
+        'description': "מפתח 'זכור ושמור'"
+      },
     ];
 
     final itemWidth = _calculateItemWidth(developers);
@@ -237,7 +246,8 @@ class _AboutScreenState extends State<AboutScreen> {
     final regularEditors = [
       {
         'name': 'מויטיו',
-        'url': 'https://mitmachim.top/user/%D7%9E%D7%95%D7%99%D7%98%D7%99%D7%95',
+        'url':
+            'https://mitmachim.top/user/%D7%9E%D7%95%D7%99%D7%98%D7%99%D7%95',
       },
       {
         'name': 'דוד משה 1',
@@ -709,7 +719,8 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Future<void> _showLibraryChangelogDialog(BuildContext context) async {
-    final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '';
+    final libraryPath =
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '';
     if (libraryPath.isEmpty) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -718,7 +729,8 @@ class _AboutScreenState extends State<AboutScreen> {
       return;
     }
 
-    final changelogPath = p.join(libraryPath, 'אוצריא', 'אודות התוכנה', 'עדכוני ספריה.md');
+    final changelogPath =
+        p.join(libraryPath, 'אוצריא', 'אודות התוכנה', 'עדכוני ספריה.md');
     final file = File(changelogPath);
 
     String changelog;
@@ -972,7 +984,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 Row(
                   children: [
                     Image.asset(
-                      'assets/icon/icon.png',
+                      'assets/icon/iconnew.png',
                       width: 80,
                       height: 80,
                     ),
@@ -1260,7 +1272,7 @@ class _AboutScreenState extends State<AboutScreen> {
         return Row(
           children: [
             Image.asset(
-              'assets/icon/icon.png',
+              'assets/icon/iconnew.png',
               width: isVerySmall ? 50 : 60,
               height: isVerySmall ? 50 : 60,
             ),
