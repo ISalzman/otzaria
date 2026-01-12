@@ -19,6 +19,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'dart:async';
 
 /// מייצג קבוצת קטעי פירוש רצופים מאותו ספר
 class CommentaryGroup {
@@ -106,6 +107,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   final Map<String, bool> _expansionStates =
       {}; // מעקב אחרי מצב כל קבוצת מפרשים
 
+  // Anti-jitter search stats
+  Timer? _searchUpdateDebounce;
+  final Map<String, int> _pendingCounts = {};
+
   String? _savedSelectedText; // טקסט נבחר לתפריט הקשר
   bool _showCommentatorsFilter = false; // האם להציג את מסך בחירת המפרשים
 
@@ -177,6 +182,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   @override
   void dispose() {
+    _searchUpdateDebounce?.cancel();
     _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
     _searchController.dispose();
     super.dispose();
@@ -311,17 +317,33 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   }
 
   void _updateSearchResultsCount(Link link, int count) {
-    if (mounted) {
+    if (!mounted) return;
+
+    final key = _getLinkKey(link);
+    // אם הכמות לא השתנתה, אין צורך לעשות כלום
+    if (_searchResultsPerLink[key] == count) return;
+
+    _pendingCounts[key] = count;
+
+    // אם כבר יש טיימר פעיל, רק עדכנו את הרשימה הממתינה
+    if (_searchUpdateDebounce?.isActive ?? false) return;
+
+    // הפעלת הטיימר
+    _searchUpdateDebounce = Timer(const Duration(milliseconds: 150), () {
+      if (!mounted) return;
       setState(() {
-        _searchResultsPerLink[_getLinkKey(link)] = count;
+        _searchResultsPerLink.addAll(_pendingCounts);
+        _pendingCounts.clear();
         _totalSearchResults =
             _searchResultsPerLink.values.fold(0, (sum, count) => sum + count);
+
+        // תיקון אינדקס אם חרגנו מהגבולות
         if (_currentSearchIndex >= _totalSearchResults &&
             _totalSearchResults > 0) {
-          _currentSearchIndex = _totalSearchResults - 1;
+          _currentSearchIndex = 0;
         }
       });
-    }
+    });
   }
 
   void _updateGlobalExpansionState() {
@@ -510,31 +532,25 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         maxSpeed: 10000.0,
                         curve: 10.0,
                         accelerationFactor: 5,
-                        child: ScrollConfiguration(
-                          // מונע בעיות של Scrollbar עם ScrollController לא מחובר
-                          behavior: ScrollConfiguration.of(context).copyWith(
-                            scrollbars: false,
-                          ),
-                          child: ScrollablePositionedList.builder(
-                            itemScrollController: _itemScrollController,
-                            itemPositionsListener: _itemPositionsListener,
-                            initialScrollIndex:
-                                _lastScrollIndex.clamp(0, groups.length - 1),
-                            key: PageStorageKey(
-                                'commentary_${indexesKey}_${state.activeCommentators.hashCode}_$_allExpanded'),
-                            physics: const ClampingScrollPhysics(),
-                            scrollOffsetController: scrollController,
-                            shrinkWrap: widget.shrinkWrap,
-                            itemCount: groups.length,
-                            itemBuilder: (context, groupIndex) {
-                              final group = groups[groupIndex];
-                              return _buildCommentaryGroupTile(
-                                group: group,
-                                state: state,
-                                indexesKey: indexesKey,
-                              );
-                            },
-                          ),
+                        child: ScrollablePositionedList.builder(
+                          itemScrollController: _itemScrollController,
+                          itemPositionsListener: _itemPositionsListener,
+                          initialScrollIndex:
+                              _lastScrollIndex.clamp(0, groups.length - 1),
+                          key: PageStorageKey(
+                              'commentary_${indexesKey}_${state.activeCommentators.hashCode}_$_allExpanded'),
+                          physics: const ClampingScrollPhysics(),
+                          scrollOffsetController: scrollController,
+                          shrinkWrap: widget.shrinkWrap,
+                          itemCount: groups.length,
+                          itemBuilder: (context, groupIndex) {
+                            final group = groups[groupIndex];
+                            return _buildCommentaryGroupTile(
+                              group: group,
+                              state: state,
+                              indexesKey: indexesKey,
+                            );
+                          },
                         ),
                       ),
                     );
