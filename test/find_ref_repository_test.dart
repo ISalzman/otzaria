@@ -69,4 +69,59 @@ void main() {
 
     expect(results.map((r) => r.reference), contains('משנה ברורה סימן ב'));
   });
+
+  test('FindRef: multi-word acronym ("שוע אוח") is matched as a phrase',
+      () async {
+    final tocQueryTokensSeen = <List<String>?>[];
+
+    final repository = FindRefRepository(
+      dataRepository: MockDataRepository(),
+      isReferenceBooksCacheLoaded: () => true,
+      warmUpReferenceBooksCache: () async {},
+      searchReferenceBooks: (query, {int limit = 50}) {
+        // Only the full phrase exists as an acronym in book_acronym.
+        if (query == 'שוע אוח') {
+          return [
+            ReferenceBookHit(
+              bookId: 2,
+              title: 'שולחן ערוך אורח חיים',
+              filePath: '',
+              fileType: 'txt',
+              matchRank: 3, // acronym match
+              matchedTerm: 'שוע אוח',
+              orderIndex: 0.0,
+            ),
+          ];
+        }
+        return const <ReferenceBookHit>[];
+      },
+      getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async {
+        tocQueryTokensSeen.add(queryTokens);
+
+        if (bookId == 2 &&
+            bookTitle == 'שולחן ערוך אורח חיים' &&
+            listEquals(queryTokens, const ['יב'])) {
+          return [
+            {
+              'reference': 'שולחן ערוך אורח חיים סימן יב',
+              'segment': 12,
+              'level': 2,
+            },
+          ];
+        }
+
+        return const <Map<String, dynamic>>[];
+      },
+    );
+
+    final results = await repository.findRefs('שוע אוח יב');
+
+    expect(
+      tocQueryTokensSeen.any((t) => listEquals(t, const ['יב'])),
+      isTrue,
+      reason: 'TOC query should include only the suffix token',
+    );
+    expect(results.map((r) => r.reference),
+        contains('שולחן ערוך אורח חיים סימן יב'));
+  });
 }

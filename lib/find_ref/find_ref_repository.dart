@@ -2,9 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/find_ref/db_reference_result.dart';
+import 'package:otzaria/find_ref/reference_books_cache.dart';
 import 'package:otzaria/migration/dao/repository/seforim_repository.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
-import 'package:otzaria/find_ref/reference_books_cache.dart';
 
 class FindRefRepository {
   final DataRepository dataRepository;
@@ -38,9 +38,6 @@ class FindRefRepository {
       return const [];
     }
 
-    // Get repository from SqliteDataProvider.
-    // In tests we may inject [getTocEntriesForReference] to avoid requiring
-    // a real SQLite DB.
     final SeforimRepository? repository =
         SqliteDataProvider.instance.repository;
     if (repository == null && getTocEntriesForReference == null) {
@@ -64,8 +61,6 @@ class FindRefRepository {
       );
     }
 
-    // Search for books by title or acronym from in-memory cache.
-    // This avoids hitting SQLite on every keystroke.
     final cacheLoaded = isReferenceBooksCacheLoaded?.call() ??
         ReferenceBooksCache.instance.isLoaded;
     if (!cacheLoaded) {
@@ -73,23 +68,33 @@ class FindRefRepository {
           ReferenceBooksCache.instance.warmUp());
     }
 
-    final bookHits =
-        (searchReferenceBooks ?? ReferenceBooksCache.instance.search)(
-      queryTokens.first,
-      limit: 50,
-    );
+    final searchBooks =
+        searchReferenceBooks ?? ReferenceBooksCache.instance.search;
+
+    // Prefer matching the longest leading phrase (up to 3 tokens) as the book key.
+    // This supports multi-word acronyms like "שוע אוח".
+    final maxPhraseTokens = queryTokens.length >= 3 ? 3 : queryTokens.length;
+    var bookQueryTokenCount = 1;
+    List<ReferenceBookHit> bookHits = const <ReferenceBookHit>[];
+    for (var n = maxPhraseTokens; n >= 1; n--) {
+      final phrase = queryTokens.take(n).join(' ');
+      final hits = searchBooks(phrase, limit: 50);
+      if (hits.isNotEmpty) {
+        bookHits = hits;
+        bookQueryTokenCount = n;
+        break;
+      }
+    }
 
     debugPrint(
-        '[FindRef] Found ${bookHits.length} books matching first word (memory)');
+        '[FindRef] Found ${bookHits.length} books matching leading phrase (memory)');
 
     final results = <DbReferenceResult>[];
 
-    // Step 2 requirement: for a single-word query, do NOT search TOC at all.
-    // Only return book-name matches (book + book_acronym via in-memory cache).
+    // Single-word query: do NOT search TOC at all.
     if (queryTokens.length == 1) {
       for (final hit in bookHits) {
-        final fileType = hit.fileType;
-        final isPdf = fileType == 'pdf';
+        final isPdf = hit.fileType == 'pdf';
 
         results.add(DbReferenceResult(
           title: hit.title,
@@ -105,58 +110,41 @@ class FindRefRepository {
       return ranked.length > 15 ? ranked.take(15).toList() : ranked;
     }
 
-    // Step 3: For multi-word queries, check if remaining words match book names
-    // If the second word has an exact match in book names, don't search TOC
-    // Example: "בראשית א" - if "א" doesn't match any book exactly, search TOC
-    // But "בראשית רבא" - "רבא" matches a book, so don't search TOC for "בראשית"
-
-    final secondWordMatches =
-        (searchReferenceBooks ?? ReferenceBooksCache.instance.search)(
-      queryTokens.length > 1 ? queryTokens[1] : '',
-      limit: 50,
-    );
-
-    // Check if second word has exact match (rank 0 = exact match)
-    final hasExactSecondWordMatch =
-        secondWordMatches.any((hit) => hit.matchRank == 0);
-
-    debugPrint(
-        '[FindRef] Second word "${queryTokens.length > 1 ? queryTokens[1] : ''}" has exact match: $hasExactSecondWordMatch');
+    // If the *next* token after the matched book-phrase is an exact book match,
+    // avoid TOC search to prevent cross-book false positives.
+    final nextTokenIndex = bookQueryTokenCount;
+    final nextToken =
+        queryTokens.length > nextTokenIndex ? queryTokens[nextTokenIndex] : '';
+    final nextTokenMatches = nextToken.isEmpty
+        ? const <ReferenceBookHit>[]
+        : searchBooks(nextToken, limit: 50);
+    final hasExactNextTokenMatch =
+        nextTokenMatches.any((hit) => hit.matchRank == 0);
 
     for (final hit in bookHits) {
       final bookId = hit.bookId;
       final title = hit.title;
-      final filePath = hit.filePath;
-      final fileType = hit.fileType;
-      final isPdf = fileType == 'pdf';
+      final isPdf = hit.fileType == 'pdf';
 
-      // Get remaining tokens after matching book title
       final titleTokens = _tokenize(_normalizeForMatch(title));
-      // If the book was matched by acronym, the first query token is NOT part
-      // of the title or TOC reference path (e.g., "משנב ב" should search TOC
-      // for ["ב"], not ["משנב", "ב"]).
       final matchedByAcronym = hit.matchRank >= 3;
       final remainingTokens = _getRemainingTokens(
         queryTokens,
         titleTokens,
-        stripFirstQueryToken: matchedByAcronym,
+        stripLeadingTokensCount: matchedByAcronym ? bookQueryTokenCount : 0,
       );
 
       if (remainingTokens.isEmpty) {
-        // Query is just the book name - return book root and top-level TOC entries
         final tocEntries = await fetchTocEntries(bookId, title);
 
-        // Add book root
         results.add(DbReferenceResult(
           title: title,
           reference: title,
           segment: 0,
           isPdf: isPdf,
-          filePath: filePath,
+          filePath: hit.filePath,
         ));
 
-        // Add top-level TOC entries (level 2 only - skip level 1)
-        // Step 4: Level 1 always contains book name, causing duplicates like "בראשית בראשית"
         for (final entry in tocEntries) {
           final level = entry['level'] as int;
           if (level == 2 && entry['reference'] != title) {
@@ -165,13 +153,11 @@ class FindRefRepository {
               reference: entry['reference'] as String,
               segment: entry['segment'] as int,
               isPdf: isPdf,
-              filePath: filePath,
+              filePath: hit.filePath,
             ));
           }
         }
-      } else if (!hasExactSecondWordMatch) {
-        // Step 3: Only search TOC if second word doesn't have exact book match
-        // This prevents "בראשית א" from matching "בראשית רבא"
+      } else if (!hasExactNextTokenMatch) {
         final tocEntries = await fetchTocEntries(
           bookId,
           title,
@@ -184,14 +170,12 @@ class FindRefRepository {
             reference: entry['reference'] as String,
             segment: entry['segment'] as int,
             isPdf: isPdf,
-            filePath: filePath,
+            filePath: hit.filePath,
           ));
         }
       }
-      // else: second word has exact book match, skip TOC search for this book
     }
 
-    // Deduplicate and rank results
     final unique = _dedupeRefs(results);
     final ranked = _rankResults(unique, queryTokens);
 
@@ -200,14 +184,21 @@ class FindRefRepository {
     return ranked.length > 15 ? ranked.take(15).toList() : ranked;
   }
 
-  /// Gets tokens that remain after matching book title tokens
   List<String> _getRemainingTokens(
-      List<String> queryTokens, List<String> titleTokens,
-      {bool stripFirstQueryToken = false}) {
+    List<String> queryTokens,
+    List<String> titleTokens, {
+    int stripLeadingTokensCount = 0,
+    bool stripFirstQueryToken = false,
+  }) {
     final remaining = List<String>.from(queryTokens);
 
-    if (stripFirstQueryToken && remaining.isNotEmpty) {
-      remaining.removeAt(0);
+    if (stripFirstQueryToken && stripLeadingTokensCount == 0) {
+      stripLeadingTokensCount = 1;
+    }
+
+    if (stripLeadingTokensCount > 0) {
+      final toRemove = stripLeadingTokensCount.clamp(0, remaining.length);
+      remaining.removeRange(0, toRemove);
     }
 
     for (final token in titleTokens) {
@@ -220,7 +211,6 @@ class FindRefRepository {
     return remaining;
   }
 
-  /// Deduplicates results based on reference text
   List<DbReferenceResult> _dedupeRefs(List<DbReferenceResult> results) {
     final seen = <String>{};
     final out = <DbReferenceResult>[];
@@ -235,27 +225,19 @@ class FindRefRepository {
     return out;
   }
 
-  /// Ranks results by relevance
   List<DbReferenceResult> _rankResults(
       List<DbReferenceResult> results, List<String> queryTokens) {
-    // Sort by:
-    // 1. Exact title match first
-    // 2. Title starts with query
-    // 3. Reference length (shorter = more specific)
     results.sort((a, b) {
       final aTitle = _normalize(a.title);
       final bTitle = _normalize(b.title);
       final query = queryTokens.join(' ');
 
-      // Exact title match
       if (aTitle == query && bTitle != query) return -1;
       if (bTitle == query && aTitle != query) return 1;
 
-      // Title starts with query
       if (aTitle.startsWith(query) && !bTitle.startsWith(query)) return -1;
       if (bTitle.startsWith(query) && !aTitle.startsWith(query)) return 1;
 
-      // Shorter reference = more specific
       return a.reference.length.compareTo(b.reference.length);
     });
 
@@ -268,8 +250,6 @@ class FindRefRepository {
   String _normalizeForMatch(String input) {
     var cleaned = removeTeamim(removeVolwels(input));
 
-    // Remove quotes/gershayim completely (don't convert to space)
-    // This way מ"ב becomes מב (not מ ב)
     cleaned = cleaned.replaceAll('"', '').replaceAll("'", '');
     cleaned = cleaned.replaceAll('\u05F4', '').replaceAll('\u05F3', '');
 
