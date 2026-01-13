@@ -4,6 +4,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/settings/settings_repository.dart';
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 
 String stripHtmlIfNeeded(String text) {
   return text.replaceAll(SearchRegexPatterns.htmlStripper, '');
@@ -192,6 +193,16 @@ String getTitleFromPath(String path) {
 // Cache for the CSV data to avoid reading the file multiple times
 Map<String, String>? _csvCache;
 
+// Era categories constant - used across multiple functions
+const List<String> _eraCategories = [
+  'תורה שבכתב',
+  'חז"ל',
+  'ראשונים',
+  'אחרונים',
+  'מחברי זמננו',
+];
+const String _defaultCategory = 'מפרשים נוספים';
+
 int countMatches(String text, String searchQuery) {
   if (searchQuery.isEmpty) return 0;
   // אותו רג'קס כמו ב-highLight
@@ -297,20 +308,11 @@ List<String> _parseCsvLine(String line) {
 
 // Helper function to map CSV generation to our categories
 String _mapGenerationToCategory(String generation) {
-  switch (generation) {
-    case 'תורה שבכתב':
-      return 'תורה שבכתב';
-    case 'חז"ל':
-      return 'חז"ל';
-    case 'ראשונים':
-      return 'ראשונים';
-    case 'אחרונים':
-      return 'אחרונים';
-    case 'מחברי זמננו':
-      return 'מחברי זמננו';
-    default:
-      return 'מפרשים נוספים';
+  // Check if generation matches any of the era categories
+  if (_eraCategories.contains(generation)) {
+    return generation;
   }
+  return _defaultCategory;
 }
 
 // Matches the Tetragrammaton with any Hebrew diacritics or cantillation marks.
@@ -705,34 +707,45 @@ String replaceParaphrases(String s) {
 Future<Map<String, List<String>>> splitByEra(
   List<String> titles,
 ) async {
-  // יוצרים מבנה נתונים ריק לכל הקטגוריות החדשות
+  // טעינת ה-cache פעם אחת בהתחלה (אם עדיין לא נטען)
+  if (_csvCache == null) {
+    await _loadCsvCache();
+  }
+
+  // טעינת titleToPath פעם אחת (לא בכל איטרציה)
+  final titleToPath = await FileSystemData.instance.titleToPath;
+
+  // יוצרים מבנה נתונים ריק לכל הקטגוריות
   final Map<String, List<String>> byEra = {
-    'תורה שבכתב': [],
-    'חז"ל': [],
-    'ראשונים': [],
-    'אחרונים': [],
-    'מחברי זמננו': [],
-    'מפרשים נוספים': [],
+    for (var category in _eraCategories) category: [],
+    _defaultCategory: [],
   };
 
-  // ממיינים כל פרשן לקטגוריה הראשונה שמתאימה לו
+  // ממיינים כל פרשן לקטגוריה הראשונה שמתאימה לו (סינכרוני!)
   for (final t in titles) {
-    if (await hasTopic(t, 'תורה שבכתב')) {
-      byEra['תורה שבכתב']!.add(t);
-    } else if (await hasTopic(t, 'חז"ל')) {
-      byEra['חז"ל']!.add(t);
-    } else if (await hasTopic(t, 'ראשונים')) {
-      byEra['ראשונים']!.add(t);
-    } else if (await hasTopic(t, 'אחרונים')) {
-      byEra['אחרונים']!.add(t);
-    } else if (await hasTopic(t, 'מחברי זמננו')) {
-      byEra['מחברי זמננו']!.add(t);
-    } else {
-      // כל ספר שלא נמצא בקטגוריות הקודמות יוכנס ל"מפרשים נוספים"
-      byEra['מפרשים נוספים']!.add(t);
-    }
+    final category = _getTopicSync(t, titleToPath);
+    byEra[category]!.add(t);
   }
 
   // מחזירים את כל הקטגוריות, גם אם הן ריקות
   return byEra;
+}
+
+/// גרסה סינכרונית של hasTopic - משתמשת ב-cache שכבר נטען
+String _getTopicSync(String title, Map<String, String> titleToPath) {
+  // בדיקה ב-CSV cache
+  if (_csvCache != null && _csvCache!.containsKey(title)) {
+    final generation = _csvCache![title]!;
+    return _mapGenerationToCategory(generation);
+  }
+
+  // Fallback לפי נתיב
+  final path = titleToPath[title];
+  if (path != null) {
+    for (var category in _eraCategories) {
+      if (path.contains(category)) return category;
+    }
+  }
+
+  return _defaultCategory;
 }

@@ -106,8 +106,9 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 
     final Map<String, String?> commentators;
     if (config != null) {
-      // יש הגדרה שמורה - להשתמש בה (גם אם ריקה)
-      commentators = config;
+      // יש הגדרה שמורה - צריך להתאים שמות בסיסיים לשמות מלאים
+      // (כי הגדרות קטגוריה שומרות רק שמות בסיסיים כמו "רמב"ן")
+      commentators = _resolveCommentatorNames(config, state.links);
     } else {
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
       commentators =
@@ -123,6 +124,37 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         _isLoadingConfig = false;
       });
     }
+  }
+
+  /// התאמת שמות מפרשים בסיסיים לשמות מלאים מתוך הקישורים הזמינים
+  /// למשל: "רמב"ן" → "רמב"ן על בבא מציעא"
+  Map<String, String?> _resolveCommentatorNames(
+      Map<String, String?> config, List<Link> links) {
+    // קבלת רשימת שמות המפרשים הזמינים
+    final availableCommentators = links
+        .where((link) =>
+            link.connectionType == 'commentary' ||
+            link.connectionType == 'targum')
+        .map((link) => utils.getTitleFromPath(link.path2))
+        .toSet()
+        .toList();
+
+    return Map.fromEntries(config.entries.map((entry) {
+      return MapEntry(
+        entry.key,
+        _findMatchingCommentator(entry.value, availableCommentators),
+      );
+    }));
+  }
+
+  /// מחפש מפרש שמתאים לשם הנתון (בסיסי או מלא)
+  String? _findMatchingCommentator(String? shortName, List<String> available) {
+    if (shortName == null) return null;
+
+    // The order of matching is important: exact, then startsWith, then contains.
+    return available.firstWhereOrNull((name) => name == shortName) ??
+        available.firstWhereOrNull((name) => name.startsWith(shortName)) ??
+        available.firstWhereOrNull((name) => name.contains(shortName));
   }
 
   /// הסתרת טור
