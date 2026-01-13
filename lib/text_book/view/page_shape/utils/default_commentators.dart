@@ -26,13 +26,23 @@ class DefaultCommentators {
     if (bookPath.isEmpty) {
       bookPath = book.category?.path ?? book.categoryPath ?? '';
     }
+    
+    // Debug
+    print('DEBUG DefaultCommentators: book.title = ${book.title}');
+    print('DEBUG DefaultCommentators: bookPath = $bookPath');
+    print('DEBUG DefaultCommentators: book.categoryPath = ${book.categoryPath}');
+    print('DEBUG DefaultCommentators: book.heCategories = ${book.heCategories}');
 
     // קבלת שמות המפרשים מה-JSON
     final defaults = _getDefaultsFromConfig(config, book.title, bookPath);
+    
+    print('DEBUG DefaultCommentators: defaults from config = $defaults');
 
     // אם יש links, נחפש את השמות המלאים של המפרשים
     if (links != null && links.isNotEmpty) {
-      return _resolveCommentatorNames(defaults, links);
+      final resolved = _resolveCommentatorNames(defaults, links);
+      print('DEBUG DefaultCommentators: resolved = $resolved');
+      return resolved;
     }
 
     return defaults;

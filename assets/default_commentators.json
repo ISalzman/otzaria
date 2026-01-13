@@ -138,6 +138,17 @@
       }
     },
     {
+      "id": "shulchan_aruch_harav",
+      "name": "שולחן ערוך הרב",
+      "pathContainsAny": ["שולחן ערוך הרב"],
+      "commentators": {
+        "right": "קצות השולחן",
+        "left": "שולחן ערוך הרב עם צירופים",
+        "bottom": null,
+        "bottomRight": null
+      }
+    },
+    {
       "id": "shulchan_aruch_oc",
       "name": "שולחן ערוך - אורח חיים",
       "pathContains": ["שולחן ערוך", "אורח חיים"],

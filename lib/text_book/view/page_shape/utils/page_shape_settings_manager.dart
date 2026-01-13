@@ -38,15 +38,23 @@ class PageShapeSettingsManager {
   
   /// חילוץ רשימת קטגוריות מ-heCategories (מסנן קטגוריות כלליות מדי)
   /// למשל: "הלכה, משנה תורה, ספר מדע" → ["משנה תורה", "ספר מדע"]
+  /// אם אין קטגוריות אחרי הסינון, מחזיר את כל הקטגוריות (כולל הכלליות)
   static List<String> parseCategories(String? heCategories) {
     if (heCategories == null || heCategories.isEmpty) {
       return [];
     }
-    return heCategories
+    final allCategories = heCategories
         .split(',')
         .map((c) => c.trim())
-        .where((c) => c.isNotEmpty && !_tooGeneralCategories.contains(c))
+        .where((c) => c.isNotEmpty)
         .toList();
+    
+    final filtered = allCategories
+        .where((c) => !_tooGeneralCategories.contains(c))
+        .toList();
+    
+    // אם הסינון הסיר הכל, החזר את הקטגוריות המקוריות
+    return filtered.isNotEmpty ? filtered : allCategories;
   }
   
   /// קבלת קטגוריית האב הראשית (למשל "משנה תורה" מתוך "הלכה, משנה תורה, ספר מדע")
