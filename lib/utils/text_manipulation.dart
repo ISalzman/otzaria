@@ -193,6 +193,16 @@ String getTitleFromPath(String path) {
 // Cache for the CSV data to avoid reading the file multiple times
 Map<String, String>? _csvCache;
 
+// Era categories constant - used across multiple functions
+const List<String> _eraCategories = [
+  'תורה שבכתב',
+  'חז"ל',
+  'ראשונים',
+  'אחרונים',
+  'מחברי זמננו',
+];
+const String _defaultCategory = 'מפרשים נוספים';
+
 int countMatches(String text, String searchQuery) {
   if (searchQuery.isEmpty) return 0;
   // אותו רג'קס כמו ב-highLight
@@ -298,20 +308,11 @@ List<String> _parseCsvLine(String line) {
 
 // Helper function to map CSV generation to our categories
 String _mapGenerationToCategory(String generation) {
-  switch (generation) {
-    case 'תורה שבכתב':
-      return 'תורה שבכתב';
-    case 'חז"ל':
-      return 'חז"ל';
-    case 'ראשונים':
-      return 'ראשונים';
-    case 'אחרונים':
-      return 'אחרונים';
-    case 'מחברי זמננו':
-      return 'מחברי זמננו';
-    default:
-      return 'מפרשים נוספים';
+  // Check if generation matches any of the era categories
+  if (_eraCategories.contains(generation)) {
+    return generation;
   }
+  return _defaultCategory;
 }
 
 // Matches the Tetragrammaton with any Hebrew diacritics or cantillation marks.
@@ -714,14 +715,10 @@ Future<Map<String, List<String>>> splitByEra(
   // טעינת titleToPath פעם אחת (לא בכל איטרציה)
   final titleToPath = await FileSystemData.instance.titleToPath;
 
-  // יוצרים מבנה נתונים ריק לכל הקטגוריות החדשות
+  // יוצרים מבנה נתונים ריק לכל הקטגוריות
   final Map<String, List<String>> byEra = {
-    'תורה שבכתב': [],
-    'חז"ל': [],
-    'ראשונים': [],
-    'אחרונים': [],
-    'מחברי זמננו': [],
-    'מפרשים נוספים': [],
+    for (var category in _eraCategories) category: [],
+    _defaultCategory: [],
   };
 
   // ממיינים כל פרשן לקטגוריה הראשונה שמתאימה לו (סינכרוני!)
@@ -745,12 +742,10 @@ String _getTopicSync(String title, Map<String, String> titleToPath) {
   // Fallback לפי נתיב
   final path = titleToPath[title];
   if (path != null) {
-    if (path.contains('תורה שבכתב')) return 'תורה שבכתב';
-    if (path.contains('חז"ל')) return 'חז"ל';
-    if (path.contains('ראשונים')) return 'ראשונים';
-    if (path.contains('אחרונים')) return 'אחרונים';
-    if (path.contains('מחברי זמננו')) return 'מחברי זמננו';
+    for (var category in _eraCategories) {
+      if (path.contains(category)) return category;
+    }
   }
 
-  return 'מפרשים נוספים';
+  return _defaultCategory;
 }

@@ -139,28 +139,22 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         .toSet()
         .toList();
 
-    return {
-      'left': _findMatchingCommentator(config['left'], availableCommentators),
-      'right': _findMatchingCommentator(config['right'], availableCommentators),
-      'bottom': _findMatchingCommentator(config['bottom'], availableCommentators),
-      'bottomRight': _findMatchingCommentator(config['bottomRight'], availableCommentators),
-    };
+    return Map.fromEntries(config.entries.map((entry) {
+      return MapEntry(
+        entry.key,
+        _findMatchingCommentator(entry.value, availableCommentators),
+      );
+    }));
   }
 
   /// מחפש מפרש שמתאים לשם הנתון (בסיסי או מלא)
   String? _findMatchingCommentator(String? shortName, List<String> available) {
     if (shortName == null) return null;
 
-    // 1. התאמה מדויקת (אם השם כבר מלא)
-    String? match = available.firstWhereOrNull((name) => name == shortName);
-    if (match != null) return match;
-
-    // 2. התאמה של התחלה (שם בסיסי → שם מלא)
-    match = available.firstWhereOrNull((name) => name.startsWith(shortName));
-    if (match != null) return match;
-
-    // 3. התאמה של הכלה
-    return available.firstWhereOrNull((name) => name.contains(shortName));
+    // The order of matching is important: exact, then startsWith, then contains.
+    return available.firstWhereOrNull((name) => name == shortName) ??
+        available.firstWhereOrNull((name) => name.startsWith(shortName)) ??
+        available.firstWhereOrNull((name) => name.contains(shortName));
   }
 
   /// הסתרת טור

@@ -195,9 +195,8 @@ class PageShapeSettingsManager {
   }) async {
     if (saveToCategory != null) {
       // שמירה לקטגוריה - שומרים רק את השמות הבסיסיים של המפרשים
-      final baseConfig = <String, String?>{};
-      config.forEach((key, value) {
-        baseConfig[key] = extractBaseCommentatorName(value);
+      final baseConfig = config.map((key, value) {
+        return MapEntry(key, extractBaseCommentatorName(value));
       });
       final configString = _serializeConfiguration(baseConfig);
       await Settings.setValue<String>('$_categoryConfigPrefix$saveToCategory', configString);
