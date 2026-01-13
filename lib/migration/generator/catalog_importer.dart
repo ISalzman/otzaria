@@ -3,7 +3,6 @@ import 'package:csv/csv.dart';
 import 'package:logging/logging.dart';
 import 'package:otzaria/migration/core/models/author.dart';
 import 'package:otzaria/migration/core/models/book.dart';
-import 'package:otzaria/migration/core/models/category.dart';
 import 'package:otzaria/migration/core/models/pub_date.dart';
 import 'package:otzaria/migration/core/models/pub_place.dart';
 import 'package:otzaria/migration/core/models/topic.dart';
@@ -86,66 +85,68 @@ class CatalogImporter {
     final db = await repository.database.database;
     await db.transaction((txn) async {
       final batchSize = 500;
-        final pendingBooks = <Book>[];
-        
-        // Get category ID once
-        final catId = await _getOrCreateExternalCategory(txn, 'אוצר החוכמה');
+      final pendingBooks = <Book>[];
 
-        for (int i = 1; i < rows.length; i++) {
-           final row = rows[i];
-           if (row.length < 2) continue;
+      // Get category ID once
+      final catId = await _getOrCreateExternalCategory(txn, 'אוצר החוכמה');
 
-           try {
-             final externalId = row[0].toString();
-             if (existingExternalIds.contains(externalId)) continue;
-             
-             final title = row[1].toString().trim();
-             final authorStr = row.length > 2 ? row[2].toString().trim() : '';
-             final placeStr = row.length > 3 ? row[3].toString().trim() : '';
-             final yearStr = row.length > 4 ? row[4].toString().trim() : '';
-             final topicsStr = row.length > 5 ? row[5].toString().trim() : '';
-             final link = row.last.toString().trim();
+      for (int i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.length < 2) continue;
 
-             final authors = _parseAuthors(authorStr);
-             final pubPlaces = placeStr.isNotEmpty ? [PubPlace(name: placeStr)] : <PubPlace>[];
-             final pubDates = yearStr.isNotEmpty ? [PubDate(date: yearStr)] : <PubDate>[];
-             final topics = _parseTopics(topicsStr);
+        try {
+          final externalId = row[0].toString();
+          if (existingExternalIds.contains(externalId)) continue;
 
-             final book = Book(
-                id: _nextBookId++,
-                categoryId: catId,
-                sourceId: sourceId,
-                title: title,
-                authors: authors,
-                pubPlaces: pubPlaces,
-                pubDates: pubDates,
-                topics: topics,
-                order: 999.0,
-                isBaseBook: false,
-                isExternal: true,
-                filePath: link,
-                fileType: 'url',
-                externalId: externalId
-             );
-             
-             pendingBooks.add(book);
-             existingExternalIds.add(externalId); // Add to set to handle duplicates within the file itself if any
-             
-             if (pendingBooks.length >= batchSize) {
-               await _flushPendingBooks(txn, pendingBooks);
-               pendingBooks.clear();
-               onProgress?.call(i/rows.length, 'מעבד אוצר החוכמה: $i/${rows.length}');
-             }
+          final title = row[1].toString().trim();
+          final authorStr = row.length > 2 ? row[2].toString().trim() : '';
+          final placeStr = row.length > 3 ? row[3].toString().trim() : '';
+          final yearStr = row.length > 4 ? row[4].toString().trim() : '';
+          final topicsStr = row.length > 5 ? row[5].toString().trim() : '';
+          final link = row.last.toString().trim();
 
-           } catch (e) {
-             _log.warning('Error processing row $i in otzar_books.csv', e);
-           }
+          final authors = _parseAuthors(authorStr);
+          final pubPlaces =
+              placeStr.isNotEmpty ? [PubPlace(name: placeStr)] : <PubPlace>[];
+          final pubDates =
+              yearStr.isNotEmpty ? [PubDate(date: yearStr)] : <PubDate>[];
+          final topics = _parseTopics(topicsStr);
+
+          final book = Book(
+              id: _nextBookId++,
+              categoryId: catId,
+              sourceId: sourceId,
+              title: title,
+              authors: authors,
+              pubPlaces: pubPlaces,
+              pubDates: pubDates,
+              topics: topics,
+              order: 999.0,
+              isBaseBook: false,
+              isExternal: true,
+              filePath: link,
+              fileType: 'url',
+              externalId: externalId);
+
+          pendingBooks.add(book);
+          existingExternalIds.add(
+              externalId); // Add to set to handle duplicates within the file itself if any
+
+          if (pendingBooks.length >= batchSize) {
+            await _flushPendingBooks(txn, pendingBooks);
+            pendingBooks.clear();
+            onProgress?.call(
+                i / rows.length, 'מעבד אוצר החוכמה: $i/${rows.length}');
+          }
+        } catch (e) {
+          _log.warning('Error processing row $i in otzar_books.csv', e);
         }
-        
-        // Commit remaining
-        if (pendingBooks.isNotEmpty) {
-          await _flushPendingBooks(txn, pendingBooks);
-        }
+      }
+
+      // Commit remaining
+      if (pendingBooks.isNotEmpty) {
+        await _flushPendingBooks(txn, pendingBooks);
+      }
     });
   }
 
@@ -166,69 +167,70 @@ class CatalogImporter {
 
     // 1. Pre-fetch existing external IDs
     final existingExternalIds = await _getExistingExternalIds(sourceId);
-    
+
     final db = await repository.database.database;
     await db.transaction((txn) async {
-        final batchSize = 500;
-        final pendingBooks = <Book>[];
+      final batchSize = 500;
+      final pendingBooks = <Book>[];
 
-        final catId = await _getOrCreateExternalCategory(txn, 'HebrewBooks');
+      final catId = await _getOrCreateExternalCategory(txn, 'HebrewBooks');
 
-        for (int i = 1; i < rows.length; i++) {
-           final row = rows[i];
-           if (row.length < 2) continue;
+      for (int i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.length < 2) continue;
 
-           try {
-             final externalId = row[0].toString();
-             if (existingExternalIds.contains(externalId)) continue;
+        try {
+          final externalId = row[0].toString();
+          if (existingExternalIds.contains(externalId)) continue;
 
-             final title = row[1].toString().trim();
-             final authorStr = row.length > 2 ? row[2].toString().trim() : '';
-             final placeStr = row.length > 3 ? row[3].toString().trim() : '';
-             final yearStr = row.length > 4 ? row[4].toString().trim() : '';
-             final topicsStr = row.length > 15 ? row[15].toString().trim() : ''; 
-             
-             final link = 'https://hebrewbooks.org/$externalId';
+          final title = row[1].toString().trim();
+          final authorStr = row.length > 2 ? row[2].toString().trim() : '';
+          final placeStr = row.length > 3 ? row[3].toString().trim() : '';
+          final yearStr = row.length > 4 ? row[4].toString().trim() : '';
+          final topicsStr = row.length > 15 ? row[15].toString().trim() : '';
 
-             final authors = _parseAuthors(authorStr);
-             final pubPlaces = placeStr.isNotEmpty ? [PubPlace(name: placeStr)] : <PubPlace>[];
-             final pubDates = yearStr.isNotEmpty ? [PubDate(date: yearStr)] : <PubDate>[];
-             final topics = _parseTopics(topicsStr);
+          final link = 'https://hebrewbooks.org/$externalId';
 
-             final book = Book(
-                id: _nextBookId++,
-                categoryId: catId,
-                sourceId: sourceId,
-                title: title,
-                authors: authors,
-                pubPlaces: pubPlaces,
-                pubDates: pubDates,
-                topics: topics,
-                order: 999.0,
-                isBaseBook: false,
-                isExternal: true,
-                filePath: link,
-                fileType: 'url',
-                externalId: externalId
-             );
-             
-             pendingBooks.add(book);
-             existingExternalIds.add(externalId);
-             
-             if (pendingBooks.length >= batchSize) {
-               await _flushPendingBooks(txn, pendingBooks);
-               pendingBooks.clear();
-               onProgress?.call(i/rows.length, 'מעבד HebrewBooks: $i/${rows.length}');
-             }
+          final authors = _parseAuthors(authorStr);
+          final pubPlaces =
+              placeStr.isNotEmpty ? [PubPlace(name: placeStr)] : <PubPlace>[];
+          final pubDates =
+              yearStr.isNotEmpty ? [PubDate(date: yearStr)] : <PubDate>[];
+          final topics = _parseTopics(topicsStr);
 
-           } catch (e) {
-             _log.warning('Error processing row $i in hebrew_books.csv', e);
-           }
+          final book = Book(
+              id: _nextBookId++,
+              categoryId: catId,
+              sourceId: sourceId,
+              title: title,
+              authors: authors,
+              pubPlaces: pubPlaces,
+              pubDates: pubDates,
+              topics: topics,
+              order: 999.0,
+              isBaseBook: false,
+              isExternal: true,
+              filePath: link,
+              fileType: 'url',
+              externalId: externalId);
+
+          pendingBooks.add(book);
+          existingExternalIds.add(externalId);
+
+          if (pendingBooks.length >= batchSize) {
+            await _flushPendingBooks(txn, pendingBooks);
+            pendingBooks.clear();
+            onProgress?.call(
+                i / rows.length, 'מעבד HebrewBooks: $i/${rows.length}');
+          }
+        } catch (e) {
+          _log.warning('Error processing row $i in hebrew_books.csv', e);
         }
-        
-        if (pendingBooks.isNotEmpty) {
-           await _flushPendingBooks(txn, pendingBooks);
-        }
+      }
+
+      if (pendingBooks.isNotEmpty) {
+        await _flushPendingBooks(txn, pendingBooks);
+      }
     });
   }
 
@@ -241,27 +243,31 @@ class CatalogImporter {
   }
 
   Future<void> _flushPendingBooks(Transaction txn, List<Book> books) async {
-      if (books.isEmpty) return;
-      
-      final bookPlaceholders = books.map((_) => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(',');
-      final bookValues = books.expand((b) => [
-          b.id,
-          b.categoryId,
-          b.sourceId,
-          b.title,
-          b.heShortDesc,
-          b.order,
-          b.isBaseBook ? 1 : 0,
-          b.isExternal ? 1 : 0,
-          b.notesContent,
-          b.filePath,
-          b.fileType,
-          b.fileSize,
-          b.lastModified,
-          b.externalId,
-      ]).toList();
+    if (books.isEmpty) return;
 
-      await txn.rawInsert('''
+    final bookPlaceholders = books
+        .map((_) => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .join(',');
+    final bookValues = books
+        .expand((b) => [
+              b.id,
+              b.categoryId,
+              b.sourceId,
+              b.title,
+              b.heShortDesc,
+              b.order,
+              b.isBaseBook ? 1 : 0,
+              b.isExternal ? 1 : 0,
+              b.notesContent,
+              b.filePath,
+              b.fileType,
+              b.fileSize,
+              b.lastModified,
+              b.externalId,
+            ])
+        .toList();
+
+    await txn.rawInsert('''
          INSERT INTO book (
              id, categoryId, sourceId, title, heShortDesc, order_index, 
              isBaseBook, isExternal, notesContent, filePath, fileType, 
@@ -269,34 +275,40 @@ class CatalogImporter {
          ) VALUES $bookPlaceholders
       ''', bookValues);
 
-      // Helper to prepare junction inserts
-      Future<void> insertJunction(
-          String table, 
-          String colTwo, 
-          List<({int bookId, String val})> pairs
-      ) async {
-          if (pairs.isEmpty) return;
-          final placeholders = pairs.map((_) => '(?, ?)').join(',');
-          final values = pairs.expand((p) => [p.bookId, p.val]).toList();
-          await txn.rawInsert('INSERT INTO $table (bookId, $colTwo) VALUES $placeholders', values);
+    // Helper to prepare junction inserts
+    Future<void> insertJunction(String table, String colTwo,
+        List<({int bookId, String val})> pairs) async {
+      if (pairs.isEmpty) return;
+      final placeholders = pairs.map((_) => '(?, ?)').join(',');
+      final values = pairs.expand((p) => [p.bookId, p.val]).toList();
+      await txn.rawInsert(
+          'INSERT INTO $table (bookId, $colTwo) VALUES $placeholders', values);
+    }
+
+    final authorPairs = <({int bookId, String val})>[];
+    final placePairs = <({int bookId, String val})>[];
+    final datePairs = <({int bookId, String val})>[];
+    final topicPairs = <({int bookId, String val})>[];
+
+    for (final book in books) {
+      for (final a in book.authors) {
+        authorPairs.add((bookId: book.id, val: a.name));
       }
-
-      final authorPairs = <({int bookId, String val})>[];
-      final placePairs = <({int bookId, String val})>[];
-      final datePairs = <({int bookId, String val})>[];
-      final topicPairs = <({int bookId, String val})>[];
-
-      for (final book in books) {
-          for (final a in book.authors) authorPairs.add((bookId: book.id, val: a.name));
-          for (final p in book.pubPlaces) placePairs.add((bookId: book.id, val: p.name));
-          for (final d in book.pubDates) datePairs.add((bookId: book.id, val: d.date));
-          for (final t in book.topics) topicPairs.add((bookId: book.id, val: t.name));
+      for (final p in book.pubPlaces) {
+        placePairs.add((bookId: book.id, val: p.name));
       }
+      for (final d in book.pubDates) {
+        datePairs.add((bookId: book.id, val: d.date));
+      }
+      for (final t in book.topics) {
+        topicPairs.add((bookId: book.id, val: t.name));
+      }
+    }
 
-      await insertJunction('book_author', 'author', authorPairs);
-      await insertJunction('book_pub_place', 'pubPlace', placePairs);
-      await insertJunction('book_pub_date', 'pubDate', datePairs);
-      await insertJunction('book_topic', 'topic', topicPairs);
+    await insertJunction('book_author', 'author', authorPairs);
+    await insertJunction('book_pub_place', 'pubPlace', placePairs);
+    await insertJunction('book_pub_date', 'pubDate', datePairs);
+    await insertJunction('book_topic', 'topic', topicPairs);
   }
 
   List<Author> _parseAuthors(String str) {
@@ -320,8 +332,9 @@ class CatalogImporter {
   }
 
   Future<int> _getOrCreateExternalCategory(Transaction txn, String name) async {
-    if (_externalCategoryCache.containsKey(name))
+    if (_externalCategoryCache.containsKey(name)) {
       return _externalCategoryCache[name]!;
+    }
 
     final rootTitle = 'ספריות חיצוניות';
 

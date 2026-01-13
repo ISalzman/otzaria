@@ -9,7 +9,23 @@ import 'package:otzaria/find_ref/reference_books_cache.dart';
 class FindRefRepository {
   final DataRepository dataRepository;
 
-  FindRefRepository({required this.dataRepository});
+  final Future<void> Function()? warmUpReferenceBooksCache;
+  final bool Function()? isReferenceBooksCacheLoaded;
+  final List<ReferenceBookHit> Function(String query, {int limit})?
+      searchReferenceBooks;
+  final Future<List<Map<String, dynamic>>> Function(
+    int bookId,
+    String bookTitle, {
+    List<String>? queryTokens,
+  })? getTocEntriesForReference;
+
+  FindRefRepository({
+    required this.dataRepository,
+    this.warmUpReferenceBooksCache,
+    this.isReferenceBooksCacheLoaded,
+    this.searchReferenceBooks,
+    this.getTocEntriesForReference,
+  });
 
   Future<List<DbReferenceResult>> findRefs(String ref) async {
     final cleanedQuery = _normalizeForMatch(ref);
@@ -22,20 +38,46 @@ class FindRefRepository {
       return const [];
     }
 
-    // Get repository from SqliteDataProvider
-    final repository = SqliteDataProvider.instance.repository;
-    if (repository == null) {
+    // Get repository from SqliteDataProvider.
+    // In tests we may inject [getTocEntriesForReference] to avoid requiring
+    // a real SQLite DB.
+    final SeforimRepository? repository =
+        SqliteDataProvider.instance.repository;
+    if (repository == null && getTocEntriesForReference == null) {
       debugPrint('[FindRef] Database not initialized');
       return const [];
     }
 
+    Future<List<Map<String, dynamic>>> fetchTocEntries(
+      int bookId,
+      String bookTitle, {
+      List<String>? queryTokens,
+    }) {
+      final injected = getTocEntriesForReference;
+      if (injected != null) {
+        return injected(bookId, bookTitle, queryTokens: queryTokens);
+      }
+      return repository!.getTocEntriesForReference(
+        bookId,
+        bookTitle,
+        queryTokens: queryTokens,
+      );
+    }
+
     // Search for books by title or acronym from in-memory cache.
     // This avoids hitting SQLite on every keystroke.
-    if (!ReferenceBooksCache.instance.isLoaded) {
-      await ReferenceBooksCache.instance.warmUp();
+    final cacheLoaded = isReferenceBooksCacheLoaded?.call() ??
+        ReferenceBooksCache.instance.isLoaded;
+    if (!cacheLoaded) {
+      await (warmUpReferenceBooksCache?.call() ??
+          ReferenceBooksCache.instance.warmUp());
     }
+
     final bookHits =
-        ReferenceBooksCache.instance.search(queryTokens.first, limit: 50);
+        (searchReferenceBooks ?? ReferenceBooksCache.instance.search)(
+      queryTokens.first,
+      limit: 50,
+    );
 
     debugPrint(
         '[FindRef] Found ${bookHits.length} books matching first word (memory)');
@@ -68,7 +110,8 @@ class FindRefRepository {
     // Example: "בראשית א" - if "א" doesn't match any book exactly, search TOC
     // But "בראשית רבא" - "רבא" matches a book, so don't search TOC for "בראשית"
 
-    final secondWordMatches = ReferenceBooksCache.instance.search(
+    final secondWordMatches =
+        (searchReferenceBooks ?? ReferenceBooksCache.instance.search)(
       queryTokens.length > 1 ? queryTokens[1] : '',
       limit: 50,
     );
@@ -89,14 +132,19 @@ class FindRefRepository {
 
       // Get remaining tokens after matching book title
       final titleTokens = _tokenize(_normalizeForMatch(title));
-      final remainingTokens = _getRemainingTokens(queryTokens, titleTokens);
+      // If the book was matched by acronym, the first query token is NOT part
+      // of the title or TOC reference path (e.g., "משנב ב" should search TOC
+      // for ["ב"], not ["משנב", "ב"]).
+      final matchedByAcronym = hit.matchRank >= 3;
+      final remainingTokens = _getRemainingTokens(
+        queryTokens,
+        titleTokens,
+        stripFirstQueryToken: matchedByAcronym,
+      );
 
       if (remainingTokens.isEmpty) {
         // Query is just the book name - return book root and top-level TOC entries
-        final tocEntries = await repository.getTocEntriesForReference(
-          bookId,
-          title,
-        );
+        final tocEntries = await fetchTocEntries(bookId, title);
 
         // Add book root
         results.add(DbReferenceResult(
@@ -124,7 +172,7 @@ class FindRefRepository {
       } else if (!hasExactSecondWordMatch) {
         // Step 3: Only search TOC if second word doesn't have exact book match
         // This prevents "בראשית א" from matching "בראשית רבא"
-        final tocEntries = await repository.getTocEntriesForReference(
+        final tocEntries = await fetchTocEntries(
           bookId,
           title,
           queryTokens: remainingTokens,
@@ -154,8 +202,13 @@ class FindRefRepository {
 
   /// Gets tokens that remain after matching book title tokens
   List<String> _getRemainingTokens(
-      List<String> queryTokens, List<String> titleTokens) {
+      List<String> queryTokens, List<String> titleTokens,
+      {bool stripFirstQueryToken = false}) {
     final remaining = List<String>.from(queryTokens);
+
+    if (stripFirstQueryToken && remaining.isNotEmpty) {
+      remaining.removeAt(0);
+    }
 
     for (final token in titleTokens) {
       final idx = remaining.indexOf(token);
