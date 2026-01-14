@@ -466,14 +466,27 @@ class FileSyncService {
     bool wasUpdated = false;
 
     if (existingBook != null) {
-      wasUpdated = true;
-      await generator.createAndProcessBook(
-        filePath,
-        categoryId,
-        metadata,
-        updateExisting: true,
-        insertContent: true,
-      );
+      // Book exists - check if file has changed
+      final file = File(filePath);
+      final fileStat = await file.stat();
+      final fileSize = fileStat.size;
+      final lastModified = fileStat.modified.millisecondsSinceEpoch;
+
+      // Only update content if file has actually changed
+      final fileChanged = existingBook.fileSize != fileSize ||
+          existingBook.lastModified != lastModified;
+
+      if (fileChanged) {
+        wasUpdated = true;
+        await generator.createAndProcessBook(
+          filePath,
+          categoryId,
+          metadata,
+          updateExisting: true,
+          insertContent: true,
+        );
+      }
+      // If file hasn't changed, do nothing (no need to update metadata either)
     } else {
       wasAdded = true;
       await generator.createAndProcessBook(
