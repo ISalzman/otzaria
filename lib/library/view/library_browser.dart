@@ -1120,7 +1120,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     int maxButtons;
 
     if (screenWidth < 400) {
-      maxButtons = 1; // כפתור אחד + "..." במסכים קטנים מאוד
+      maxButtons = 2; // מינימום 2 כדי להשאיר סינכרון מחוץ לתפריט
     } else if (screenWidth < 500) {
       maxButtons = 2; // 2 כפתורים + "..." במסכים קטנים
     } else if (screenWidth < 600) {
@@ -1136,11 +1136,36 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return ResponsiveActionBar(
       key: ValueKey('action-bar-offline-${settingsState.isOfflineMode}'),
       actions: _buildPrioritizedLibraryActions(context, state, settingsState),
+      alwaysInMenu:
+          _buildAlwaysInMenuLibraryActions(context, state, settingsState),
       originalOrder:
           _buildOriginalOrderLibraryActions(context, state, settingsState),
       maxVisibleButtons: maxButtons,
       overflowOnRight: true, // כפתור "..." ימני במסך הספרייה
     );
+  }
+
+  List<ActionButtonData> _buildAlwaysInMenuLibraryActions(
+    BuildContext context,
+    LibraryState state,
+    SettingsState settingsState,
+  ) {
+    final actions = <ActionButtonData>[];
+
+    // DB exists indicator goes into the overflow menu.
+    if (!(Platform.isAndroid || Platform.isIOS) &&
+        _showDbGenerationButton == false) {
+      actions.add(
+        ActionButtonData(
+          widget: const SizedBox.shrink(),
+          icon: FluentIcons.database_arrow_right_24_regular,
+          tooltip: 'מסד נתונים כבר קיים',
+          onPressed: null,
+        ),
+      );
+    }
+
+    return actions;
   }
 
   /// בניית כפתור סינכרון - משותף לשתי הפונקציות
@@ -1248,26 +1273,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         },
       ),
 
-      // יצירת מסד נתונים - מוצג תמיד במחשב (לא במובייל)
+      // יצירת מסד נתונים - אם אין DB: בחוץ. אם יש: עובר לתפריט "...".
       if (!(Platform.isAndroid || Platform.isIOS) &&
-          _showDbGenerationButton != null)
+          _showDbGenerationButton == true)
         ActionButtonData(
-          widget: _showDbGenerationButton == true
-              ? _BlinkingDatabaseButton(
-                  onPressed: () => showDatabaseGenerationDialog(context),
-                )
-              : IconButton(
-                  icon: const Icon(FluentIcons.database_arrow_right_24_regular),
-                  tooltip: 'מסד נתונים כבר קיים',
-                  onPressed: null,
-                ),
+          widget: _BlinkingDatabaseButton(
+            onPressed: () => showDatabaseGenerationDialog(context),
+          ),
           icon: FluentIcons.database_arrow_right_24_regular,
-          tooltip: _showDbGenerationButton == true
-              ? 'יצירת מסד נתונים'
-              : 'מסד נתונים כבר קיים',
-          onPressed: _showDbGenerationButton == true
-              ? () => showDatabaseGenerationDialog(context)
-              : null,
+          tooltip: 'יצירת מסד נתונים',
+          onPressed: () => showDatabaseGenerationDialog(context),
         ),
 
       // סינכרון - מוצג רק אם מצב אופליין לא מופעל
@@ -1339,7 +1354,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     SettingsState settingsState,
   ) {
     return [
-      // 1) חזור לתיקיה קודמת, חזרה לתיקיה ראשית (החשובים ביותר)
+      // 1) חזור לתיקיה קודמת + סינכרון (חייב להיות תמיד מחוץ לתפריט)
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.arrow_up_24_regular),
@@ -1383,6 +1398,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         },
       ),
 
+      // סינכרון - עדיפות גבוהה כדי שלא יכנס לתפריט "..."
+      if (!settingsState.isOfflineMode) _buildSyncActionButton(),
+
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.home_24_regular),
@@ -1412,26 +1430,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         },
       ),
 
-      // יצירת מסד נתונים - מוצג תמיד במחשב (לא במובייל)
+      // יצירת מסד נתונים - אם אין DB: בחוץ. אם יש: עובר לתפריט "...".
       if (!(Platform.isAndroid || Platform.isIOS) &&
-          _showDbGenerationButton != null)
+          _showDbGenerationButton == true)
         ActionButtonData(
-          widget: _showDbGenerationButton == true
-              ? _BlinkingDatabaseButton(
-                  onPressed: () => showDatabaseGenerationDialog(context),
-                )
-              : IconButton(
-                  icon: const Icon(FluentIcons.database_arrow_right_24_regular),
-                  tooltip: 'מסד נתונים כבר קיים',
-                  onPressed: null,
-                ),
+          widget: _BlinkingDatabaseButton(
+            onPressed: () => showDatabaseGenerationDialog(context),
+          ),
           icon: FluentIcons.database_arrow_right_24_regular,
-          tooltip: _showDbGenerationButton == true
-              ? 'יצירת מסד נתונים'
-              : 'מסד נתונים כבר קיים',
-          onPressed: _showDbGenerationButton == true
-              ? () => showDatabaseGenerationDialog(context)
-              : null,
+          tooltip: 'יצירת מסד נתונים',
+          onPressed: () => showDatabaseGenerationDialog(context),
         ),
 
       // 2) הצג היסטוריה, הצג סימניות
@@ -1473,9 +1481,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         tooltip: 'החלף שולחן עבודה',
         onPressed: () => _showSwitchWorkspaceDialog(context),
       ),
-
-      // 4) סינכרון - מוצג רק אם מצב אופליין לא מופעל
-      if (!settingsState.isOfflineMode) _buildSyncActionButton(),
 
       // 5) טעינה מחדש של רשימת הספרים
       ActionButtonData(
