@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 import 'package:pdfrx/pdfrx.dart';
@@ -534,10 +535,10 @@ class DatabaseGenerator {
       final title = path.basenameWithoutExtension(bookPath);
       _log.severe('❌ Critical error processing book: $title at $bookPath', e,
           stackTrace);
-      print('❌ Critical error processing book: $title');
-      print('   Path: $bookPath');
-      print('   Error: $e');
-      print('   Stack trace: $stackTrace');
+      debugPrint('❌ Critical error processing book: $title');
+      debugPrint('   Path: $bookPath');
+      debugPrint('   Error: $e');
+      debugPrint('   Stack trace: $stackTrace');
       rethrow; // Re-throw so FileSyncService can handle it
     }
   }
@@ -644,12 +645,12 @@ class DatabaseGenerator {
       return content.split('\n');
     } on FormatException catch (e) {
       // Try with latin1 encoding if UTF-8 fails
-      print('⚠️ UTF-8 decoding failed for $bookPath, trying latin1: $e');
+      debugPrint('⚠️ UTF-8 decoding failed for $bookPath, trying latin1: $e');
       try {
         final content = await file.readAsString(encoding: latin1);
         return content.split('\n');
       } catch (e2) {
-        print('❌ Failed to read file with both UTF-8 and latin1: $bookPath');
+        debugPrint('❌ Failed to read file with both UTF-8 and latin1: $bookPath');
         rethrow;
       }
     }

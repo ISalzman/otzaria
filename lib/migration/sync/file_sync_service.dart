@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
@@ -408,8 +409,8 @@ class FileSyncService {
         _log.warning(errorMsg, e, stackTrace);
         errors.add('Error processing ${path.basename(filePath)}: $e');
         // Print to console for debugging
-        print('❌ $errorMsg');
-        print('Stack trace: $stackTrace');
+        debugPrint('❌ $errorMsg');
+        debugPrint('Stack trace: $stackTrace');
       }
     }
 

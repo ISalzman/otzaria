@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' as sqflite_ffi;
 import 'package:path/path.dart' as p;
@@ -200,10 +201,11 @@ class MyDatabase {
       // Migration from version 1 to 2: Add externalId column to book table
       try {
         await db.execute('ALTER TABLE book ADD COLUMN externalId TEXT;');
-        print('✅ Migration v1→v2: Added externalId column to book table');
+        debugPrint('✅ Migration v1→v2: Added externalId column to book table');
       } catch (e) {
         // Column might already exist, ignore error
-        print('⚠️ Migration v1→v2: externalId column might already exist: $e');
+        debugPrint(
+            '⚠️ Migration v1→v2: externalId column might already exist: $e');
       }
     }
 
