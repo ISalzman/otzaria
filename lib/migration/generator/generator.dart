@@ -4,6 +4,7 @@ import 'dart:isolate';
 
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
+import 'package:pdfrx/pdfrx.dart';
 
 import '../core/models/author.dart';
 import '../core/models/book.dart';
@@ -323,7 +324,8 @@ class DatabaseGenerator {
           .checkBookExistsInCategoryWithFileType(title, categoryId, fileType);
       if (existingBook != null) {
         if (updateExisting) {
-          if ((fileType == 'txt' || fileType == 'docx') && insertContent) {
+          if ((fileType == 'txt' || fileType == 'docx' || fileType == 'pdf') &&
+              insertContent) {
             await repository.clearBookContent(existingBook.id);
             await processBookContent(bookPath, existingBook.id);
             // Keep file stats in sync for externally-referenced files too.
@@ -546,7 +548,10 @@ class DatabaseGenerator {
   /// [bookId] The ID of the book in the database
   Future<void> processBookContent(String bookPath, int bookId) async {
     final ext = path.extension(bookPath).toLowerCase();
+
     if (ext == '.pdf') {
+      // Process PDF outline as TOC
+      await _processPdfOutline(bookPath, bookId);
       await repository.updateBookTotalLines(bookId, 0);
       return;
     }
@@ -571,6 +576,64 @@ class DatabaseGenerator {
 
     // Update the total number of lines
     await repository.updateBookTotalLines(bookId, lines.length);
+  }
+
+  /// Processes PDF outline and inserts TOC entries into the database.
+  Future<void> _processPdfOutline(String bookPath, int bookId) async {
+    try {
+      final document = await PdfDocument.openFile(bookPath);
+      final outline = await document.loadOutline();
+
+      if (outline.isEmpty) {
+        _log.info('No outline found in PDF: $bookPath');
+        return;
+      }
+
+      // Convert outline to TOC entries and insert them
+      await _insertPdfOutlineNodes(outline, bookId, null, level: 1);
+
+      _log.info('Processed PDF outline: $bookPath');
+    } catch (e, stackTrace) {
+      _log.warning('Failed to process PDF outline: $bookPath', e, stackTrace);
+    }
+  }
+
+  /// Recursively inserts PDF outline nodes as TOC entries.
+  Future<void> _insertPdfOutlineNodes(
+    List<PdfOutlineNode> nodes,
+    int bookId,
+    int? parentId, {
+    required int level,
+  }) async {
+    for (int i = 0; i < nodes.length; i++) {
+      final node = nodes[i];
+      final pageNumber = node.dest?.pageNumber ?? 0;
+      final isLastChild = i == nodes.length - 1;
+      final hasChildren = node.children.isNotEmpty;
+
+      // Create and insert the TOC entry
+      final entry = TocEntry(
+        bookId: bookId,
+        parentId: parentId,
+        text: node.title,
+        level: level,
+        lineIndex: pageNumber, // Using page number as lineIndex for PDFs
+        isLastChild: isLastChild,
+        hasChildren: hasChildren,
+      );
+
+      final insertedId = await repository.insertTocEntry(entry);
+
+      // Process children recursively with the inserted ID as parent
+      if (hasChildren) {
+        await _insertPdfOutlineNodes(
+          node.children,
+          bookId,
+          insertedId,
+          level: level + 1,
+        );
+      }
+    }
   }
 
   /// Reads book lines from file

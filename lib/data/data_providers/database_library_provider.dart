@@ -12,6 +12,7 @@ import 'package:otzaria/migration/core/models/toc_entry.dart' as db_models;
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/utils/docx_to_otzaria.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 /// Library provider that loads books from the SQLite database.
 class DatabaseLibraryProvider implements LibraryProvider {
@@ -428,18 +429,26 @@ class DatabaseLibraryProvider implements LibraryProvider {
     try {
       final lowerPath = file.path.toLowerCase();
 
-      String content;
-      if (lowerPath.endsWith('.docx')) {
-        final title = getTitleFromPath(file.path);
-        final bytes = await file.readAsBytes();
-        content = await Isolate.run(() => docxToText(bytes, title));
-      } else {
-        content = await file.readAsString();
-      }
+      List<TocEntry> tocEntries;
 
-      // Parse TOC using the existing TocParser
-      final tocEntries =
-          await Isolate.run(() => TocParser.parseEntriesFromContent(content));
+      if (lowerPath.endsWith('.pdf')) {
+        // Parse PDF outline
+        tocEntries = await _parsePdfOutline(file);
+      } else {
+        // Parse text content (TXT or DOCX)
+        String content;
+        if (lowerPath.endsWith('.docx')) {
+          final title = getTitleFromPath(file.path);
+          final bytes = await file.readAsBytes();
+          content = await Isolate.run(() => docxToText(bytes, title));
+        } else {
+          content = await file.readAsString();
+        }
+
+        // Parse TOC using the existing TocParser
+        tocEntries =
+            await Isolate.run(() => TocParser.parseEntriesFromContent(content));
+      }
 
       if (tocEntries.isEmpty) {
         return null;
@@ -453,6 +462,57 @@ class DatabaseLibraryProvider implements LibraryProvider {
     } catch (e) {
       debugPrint('⚠️ Failed to parse TOC for external book: $e');
       return null;
+    }
+  }
+
+  /// Parses PDF outline and converts to TocEntry format.
+  Future<List<TocEntry>> _parsePdfOutline(File file) async {
+    try {
+      final document = await PdfDocument.openFile(file.path);
+      final outline = await document.loadOutline();
+
+      if (outline.isEmpty) {
+        return [];
+      }
+
+      final entries = <TocEntry>[];
+      _convertPdfOutlineToTocEntries(outline, entries, level: 1);
+
+      return entries;
+    } catch (e) {
+      debugPrint('⚠️ Failed to parse PDF outline: $e');
+      return [];
+    }
+  }
+
+  /// Recursively converts PDF outline nodes to TocEntry format.
+  void _convertPdfOutlineToTocEntries(
+    List<PdfOutlineNode> nodes,
+    List<TocEntry> entries, {
+    required int level,
+    TocEntry? parent,
+  }) {
+    for (final node in nodes) {
+      final pageNumber = node.dest?.pageNumber ?? 0;
+
+      final entry = TocEntry(
+        text: node.title,
+        index: pageNumber,
+        level: level,
+        parent: parent,
+      );
+
+      // Process children recursively
+      if (node.children.isNotEmpty) {
+        _convertPdfOutlineToTocEntries(
+          node.children,
+          entry.children,
+          level: level + 1,
+          parent: entry,
+        );
+      }
+
+      entries.add(entry);
     }
   }
 
@@ -865,9 +925,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
       // Get or create category in DB
       final categoryId = await _getOrCreateCategoryInDb(categoryPath);
 
-      // Parse TOC for text-like files
+      // Parse TOC for text-like files and PDFs
       List<db_models.TocEntry>? tocEntries;
-      if (fileType == 'txt' || fileType == 'docx') {
+      if (fileType == 'txt' || fileType == 'docx' || fileType == 'pdf') {
         tocEntries = await _parseTocForExternalBook(file, categoryId);
       }
 
