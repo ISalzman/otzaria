@@ -404,8 +404,12 @@ class FileSyncService {
         // We don't report progress here to avoid spamming the main progress callback
         // or we could use a sub-progress callback if needed
       } catch (e, stackTrace) {
-        _log.warning('Error processing file $filePath', e, stackTrace);
+        final errorMsg = 'Error processing file $filePath: $e';
+        _log.warning(errorMsg, e, stackTrace);
         errors.add('Error processing ${path.basename(filePath)}: $e');
+        // Print to console for debugging
+        print('❌ $errorMsg');
+        print('Stack trace: $stackTrace');
       }
     }
 

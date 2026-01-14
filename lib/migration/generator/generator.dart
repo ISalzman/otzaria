@@ -297,36 +297,48 @@ class DatabaseGenerator {
     bool insertContent = true,
     bool updateExisting = false,
   }) async {
-    final filename = path.basename(bookPath);
-    final title = path.basenameWithoutExtension(filename);
-    final meta = metadata[title];
-    // Apply source blacklist
-    final srcName = _getSourceNameFor(bookPath);
-    if (_sourceBlacklist.contains(srcName)) {
-      _processedBooksCount++;
-      onProgress?.call(
-          _processedBooksCount /
-              (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
-          'מדלג על ספר: $title');
-      return;
-    }
+    try {
+      final filename = path.basename(bookPath);
+      final title = path.basenameWithoutExtension(filename);
+      final meta = metadata[title];
+      // Apply source blacklist
+      final srcName = _getSourceNameFor(bookPath);
+      if (_sourceBlacklist.contains(srcName)) {
+        _processedBooksCount++;
+        onProgress?.call(
+            _processedBooksCount /
+                (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
+            'מדלג על ספר: $title');
+        return;
+      }
 
-    // Extract file type from the file path
-    final fileExtension = path.extension(bookPath).toLowerCase();
-    final fileType = fileExtension.startsWith('.')
-        ? fileExtension.substring(1)
-        : fileExtension;
+      // Extract file type from the file path
+      final fileExtension = path.extension(bookPath).toLowerCase();
+      final fileType = fileExtension.startsWith('.')
+          ? fileExtension.substring(1)
+          : fileExtension;
 
-    // Check for duplicates in the same category with the same file type (for performance measurement)
-    final existingBook = await repository.checkBookExistsInCategoryWithFileType(
-        title, categoryId, fileType);
-    if (existingBook != null) {
-      if (updateExisting) {
-        if ((fileType == 'txt' || fileType == 'docx') && insertContent) {
-          await repository.clearBookContent(existingBook.id);
-          await processBookContent(bookPath, existingBook.id);
-          // Keep file stats in sync for externally-referenced files too.
-          if (fileType != 'txt') {
+      // Check for duplicates in the same category with the same file type (for performance measurement)
+      final existingBook = await repository
+          .checkBookExistsInCategoryWithFileType(title, categoryId, fileType);
+      if (existingBook != null) {
+        if (updateExisting) {
+          if ((fileType == 'txt' || fileType == 'docx') && insertContent) {
+            await repository.clearBookContent(existingBook.id);
+            await processBookContent(bookPath, existingBook.id);
+            // Keep file stats in sync for externally-referenced files too.
+            if (fileType != 'txt') {
+              try {
+                final file = File(bookPath);
+                final stat = await file.stat();
+                await repository.updateExternalBookMetadata(existingBook.id,
+                    stat.size, stat.modified.millisecondsSinceEpoch);
+              } catch (e) {
+                _log.warning(
+                    'Failed to update stats for external file: $bookPath', e);
+              }
+            }
+          } else {
             try {
               final file = File(bookPath);
               final stat = await file.stat();
@@ -337,53 +349,53 @@ class DatabaseGenerator {
                   'Failed to update stats for external file: $bookPath', e);
             }
           }
+
+          _processedBooksCount++;
+          final pct = _totalBooksToProcess > 0
+              ? (_processedBooksCount * 100 ~/ _totalBooksToProcess)
+              : 0;
+          onProgress?.call(
+              _processedBooksCount /
+                  (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
+              'עודכן ספר: $title ($pct%)');
+
+          // Delete source files if it's a txt file
+          if (fileType == 'txt') {
+            try {
+              final file = File(bookPath);
+              if (await file.exists()) {
+                await file.delete();
+              }
+              // Also delete companion notes file if it exists
+              final dir = Directory(path.dirname(bookPath));
+              final notesTitle = 'הערות על $title';
+              final notesPath = path.join(dir.path, '$notesTitle.txt');
+              final notesFile = File(notesPath);
+              if (await notesFile.exists()) {
+                await notesFile.delete();
+              }
+            } catch (e) {
+              _log.warning('Failed to delete source file(s) for $title', e);
+            }
+          }
+          return;
+        }
+
+        // Call the callback if provided
+        if (onDuplicateBook != null) {
+          final shouldReplace = await onDuplicateBook!(title, categoryId);
+          if (!shouldReplace) {
+            onProgress?.call(
+                _processedBooksCount /
+                    (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
+                'מדלג על כפילות: $title');
+            _processedBooksCount++;
+            return;
+          }
+          // Delete the existing book and continue with insertion
+          await repository.deleteBookCompletely(existingBook.id);
         } else {
-          try {
-            final file = File(bookPath);
-            final stat = await file.stat();
-            await repository.updateExternalBookMetadata(existingBook.id,
-                stat.size, stat.modified.millisecondsSinceEpoch);
-          } catch (e) {
-            _log.warning(
-                'Failed to update stats for external file: $bookPath', e);
-          }
-        }
-
-        _processedBooksCount++;
-        final pct = _totalBooksToProcess > 0
-            ? (_processedBooksCount * 100 ~/ _totalBooksToProcess)
-            : 0;
-        onProgress?.call(
-            _processedBooksCount /
-                (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
-            'עודכן ספר: $title ($pct%)');
-
-        // Delete source files if it's a txt file
-        if (fileType == 'txt') {
-          try {
-            final file = File(bookPath);
-            if (await file.exists()) {
-              await file.delete();
-            }
-            // Also delete companion notes file if it exists
-            final dir = Directory(path.dirname(bookPath));
-            final notesTitle = 'הערות על $title';
-            final notesPath = path.join(dir.path, '$notesTitle.txt');
-            final notesFile = File(notesPath);
-            if (await notesFile.exists()) {
-              await notesFile.delete();
-            }
-          } catch (e) {
-            _log.warning('Failed to delete source file(s) for $title', e);
-          }
-        }
-        return;
-      }
-
-      // Call the callback if provided
-      if (onDuplicateBook != null) {
-        final shouldReplace = await onDuplicateBook!(title, categoryId);
-        if (!shouldReplace) {
+          // Default behavior: skip duplicates
           onProgress?.call(
               _processedBooksCount /
                   (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
@@ -391,141 +403,140 @@ class DatabaseGenerator {
           _processedBooksCount++;
           return;
         }
-        // Delete the existing book and continue with insertion
-        await repository.deleteBookCompletely(existingBook.id);
-      } else {
-        // Default behavior: skip duplicates
-        onProgress?.call(
-            _processedBooksCount /
-                (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
-            'מדלג על כפילות: $title');
-        _processedBooksCount++;
-        return;
       }
-    }
 
-    // Assign a unique ID to this book
-    final currentBookId = _nextBookId++;
+      // Assign a unique ID to this book
+      final currentBookId = _nextBookId++;
 
-    // Create author list if author is available in metadata
-    final authors =
-        meta?.author != null ? [Author(name: meta!.author!)] : <Author>[];
+      // Create author list if author is available in metadata
+      final authors =
+          meta?.author != null ? [Author(name: meta!.author!)] : <Author>[];
 
-    // Create publication places list if pubPlace is available in metadata
-    final pubPlaces = meta?.pubPlace != null
-        ? [PubPlace(name: meta!.pubPlace!)]
-        : <PubPlace>[];
+      // Create publication places list if pubPlace is available in metadata
+      final pubPlaces = meta?.pubPlace != null
+          ? [PubPlace(name: meta!.pubPlace!)]
+          : <PubPlace>[];
 
-    // Create publication dates list if pubDate is available in metadata
-    final pubDates =
-        meta?.pubDate != null ? [PubDate(date: meta!.pubDate!)] : <PubDate>[];
+      // Create publication dates list if pubDate is available in metadata
+      final pubDates =
+          meta?.pubDate != null ? [PubDate(date: meta!.pubDate!)] : <PubDate>[];
 
-    // Detect companion notes file named 'הערות על <title>.txt' in the same directory
-    String? notesContent;
-    try {
-      final dir = Directory(path.dirname(bookPath));
-      final notesTitle = 'הערות על $title';
-      final candidate = path.join(dir.path, '$notesTitle.txt');
-      final candidateFile = File(candidate);
-      if (await candidateFile.exists()) {
-        // Prefer preloaded cache if available
-        final key = _toLibraryRelativeKey(candidate);
-        final lines = _bookContentCache[key];
-        notesContent = lines != null
-            ? lines.join('\n')
-            : await candidateFile.readAsString();
-      }
-    } catch (e) {
-      // Ignore errors reading notes
-    }
-
-    // For non-txt files (external), get file stats
-    int? fileSize;
-    int? lastModified;
-    if (fileType != 'txt' || !insertContent) {
+      // Detect companion notes file named 'הערות על <title>.txt' in the same directory
+      String? notesContent;
       try {
-        final file = File(bookPath);
-        final stat = await file.stat();
-        fileSize = stat.size;
-        lastModified = stat.modified.millisecondsSinceEpoch;
-      } catch (e) {
-        _log.warning('Failed to get stats for external file: $bookPath', e);
-      }
-    }
-
-    final sourceId = await _resolveSourceIdFor(bookPath);
-    final book = Book(
-      id: currentBookId,
-      categoryId: categoryId,
-      sourceId: sourceId,
-      title: title,
-      authors: authors,
-      pubPlaces: pubPlaces,
-      pubDates: pubDates,
-      heShortDesc: meta?.heShortDesc,
-      notesContent: notesContent,
-      order: meta?.order ?? 999.0,
-      topics: extractTopics(bookPath),
-      isBaseBook: isBaseBook,
-      filePath: (fileType != "txt" || !insertContent) ? bookPath : null,
-      fileType: fileType,
-      fileSize: fileSize,
-      lastModified: lastModified,
-    );
-
-    final insertedBookId = await repository.insertBook(book);
-
-    // Verify categoryId is correct
-    final insertedBook = await repository.getBook(insertedBookId);
-    if (insertedBook?.categoryId != categoryId) {
-      await repository.updateBookCategoryId(insertedBookId, categoryId);
-    }
-
-    // Insert acronyms for this book
-    try {
-      final terms = await fetchAcronymsForTitle(title);
-      if (terms.isNotEmpty) {
-        await repository.bulkInsertBookAcronyms(insertedBookId, terms);
-      }
-    } catch (e) {
-      // Ignore acronym errors
-    }
-
-    // Process content of the book
-    if (insertContent) {
-      await processBookContent(bookPath, insertedBookId);
-    } else {
-      await repository.updateBookTotalLines(insertedBookId, 0);
-    }
-
-    // Book-level progress
-    _processedBooksCount++;
-    final pct = _totalBooksToProcess > 0
-        ? (_processedBooksCount * 100 ~/ _totalBooksToProcess)
-        : 0;
-    onProgress?.call(
-        _processedBooksCount /
-            (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
-        'מעבד ספר: $title ($pct%)');
-
-    // Delete source files if it's a txt file
-    if (fileType == 'txt' && insertContent) {
-      try {
-        final file = File(bookPath);
-        if (await file.exists()) {
-          await file.delete();
-        }
-        // Also delete companion notes file if it exists
         final dir = Directory(path.dirname(bookPath));
         final notesTitle = 'הערות על $title';
-        final notesPath = path.join(dir.path, '$notesTitle.txt');
-        final notesFile = File(notesPath);
-        if (await notesFile.exists()) {
-          await notesFile.delete();
+        final candidate = path.join(dir.path, '$notesTitle.txt');
+        final candidateFile = File(candidate);
+        if (await candidateFile.exists()) {
+          // Prefer preloaded cache if available
+          final key = _toLibraryRelativeKey(candidate);
+          final lines = _bookContentCache[key];
+          notesContent = lines != null
+              ? lines.join('\n')
+              : await candidateFile.readAsString();
         }
       } catch (e) {
-        _log.warning('Failed to delete source file(s) for $title', e);
+        // Ignore errors reading notes
       }
+
+      // For non-txt files (external), get file stats
+      int? fileSize;
+      int? lastModified;
+      if (fileType != 'txt' || !insertContent) {
+        try {
+          final file = File(bookPath);
+          final stat = await file.stat();
+          fileSize = stat.size;
+          lastModified = stat.modified.millisecondsSinceEpoch;
+        } catch (e) {
+          _log.warning('Failed to get stats for external file: $bookPath', e);
+        }
+      }
+
+      final sourceId = await _resolveSourceIdFor(bookPath);
+      final book = Book(
+        id: currentBookId,
+        categoryId: categoryId,
+        sourceId: sourceId,
+        title: title,
+        authors: authors,
+        pubPlaces: pubPlaces,
+        pubDates: pubDates,
+        heShortDesc: meta?.heShortDesc,
+        notesContent: notesContent,
+        order: meta?.order ?? 999.0,
+        topics: extractTopics(bookPath),
+        isBaseBook: isBaseBook,
+        filePath: (fileType != "txt" || !insertContent) ? bookPath : null,
+        fileType: fileType,
+        fileSize: fileSize,
+        lastModified: lastModified,
+      );
+
+      final insertedBookId = await repository.insertBook(book);
+
+      // Verify categoryId is correct
+      final insertedBook = await repository.getBook(insertedBookId);
+      if (insertedBook?.categoryId != categoryId) {
+        await repository.updateBookCategoryId(insertedBookId, categoryId);
+      }
+
+      // Insert acronyms for this book
+      try {
+        final terms = await fetchAcronymsForTitle(title);
+        if (terms.isNotEmpty) {
+          await repository.bulkInsertBookAcronyms(insertedBookId, terms);
+        }
+      } catch (e) {
+        // Ignore acronym errors
+      }
+
+      // Process content of the book
+      if (insertContent) {
+        await processBookContent(bookPath, insertedBookId);
+      } else {
+        await repository.updateBookTotalLines(insertedBookId, 0);
+      }
+
+      // Book-level progress
+      _processedBooksCount++;
+      final pct = _totalBooksToProcess > 0
+          ? (_processedBooksCount * 100 ~/ _totalBooksToProcess)
+          : 0;
+      onProgress?.call(
+          _processedBooksCount /
+              (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
+          'מעבד ספר: $title ($pct%)');
+
+      // Delete source files if it's a txt file
+      if (fileType == 'txt' && insertContent) {
+        try {
+          final file = File(bookPath);
+          if (await file.exists()) {
+            await file.delete();
+          }
+          // Also delete companion notes file if it exists
+          final dir = Directory(path.dirname(bookPath));
+          final notesTitle = 'הערות על $title';
+          final notesPath = path.join(dir.path, '$notesTitle.txt');
+          final notesFile = File(notesPath);
+          if (await notesFile.exists()) {
+            await notesFile.delete();
+          }
+        } catch (e) {
+          _log.warning('Failed to delete source file(s) for $title', e);
+        }
+      }
+    } catch (e, stackTrace) {
+      final title = path.basenameWithoutExtension(bookPath);
+      _log.severe('❌ Critical error processing book: $title at $bookPath', e,
+          stackTrace);
+      print('❌ Critical error processing book: $title');
+      print('   Path: $bookPath');
+      print('   Error: $e');
+      print('   Stack trace: $stackTrace');
+      rethrow; // Re-throw so FileSyncService can handle it
     }
   }
 
@@ -565,8 +576,20 @@ class DatabaseGenerator {
   /// Reads book lines from file
   static Future<List<String>> readBookLines(String bookPath) async {
     final file = File(bookPath);
-    final content = await file.readAsString(encoding: utf8);
-    return content.split('\n');
+    try {
+      final content = await file.readAsString(encoding: utf8);
+      return content.split('\n');
+    } on FormatException catch (e) {
+      // Try with latin1 encoding if UTF-8 fails
+      print('⚠️ UTF-8 decoding failed for $bookPath, trying latin1: $e');
+      try {
+        final content = await file.readAsString(encoding: latin1);
+        return content.split('\n');
+      } catch (e2) {
+        print('❌ Failed to read file with both UTF-8 and latin1: $bookPath');
+        rethrow;
+      }
+    }
   }
 
   /// Processes lines of a book, identifying and creating TOC entries.

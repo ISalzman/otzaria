@@ -53,54 +53,67 @@ class MyDatabase {
     _ensureDaosInitialized();
     return _authorDao!;
   }
+
   BookAcronymDao get bookAcronymDao {
     _ensureDaosInitialized();
     return _bookAcronymDao!;
   }
+
   BookDao get bookDao {
     _ensureDaosInitialized();
     return _bookDao!;
   }
+
   BookHasLinksDao get bookHasLinksDao {
     _ensureDaosInitialized();
     return _bookHasLinksDao!;
   }
+
   CategoryDao get categoryDao {
     _ensureDaosInitialized();
     return _categoryDao!;
   }
+
   ConnectionTypeDao get connectionTypeDao {
     _ensureDaosInitialized();
     return _connectionTypeDao!;
   }
+
   LineDao get lineDao {
     _ensureDaosInitialized();
     return _lineDao!;
   }
+
   LinkDao get linkDao {
     _ensureDaosInitialized();
     return _linkDao!;
   }
+
   PubDateDao get pubDateDao {
     _ensureDaosInitialized();
     return _pubDateDao!;
   }
+
   PubPlaceDao get pubPlaceDao {
     _ensureDaosInitialized();
     return _pubPlaceDao!;
   }
+
   SearchDao get searchDao {
     _ensureDaosInitialized();
     return _searchDao!;
   }
+
   TocDao get tocDao {
     _ensureDaosInitialized();
     return _tocDao!;
   }
+
   TocTextDao get tocTextDao {
     _ensureDaosInitialized();
     return _tocTextDao!;
   }
+
   TopicDao get topicDao {
     _ensureDaosInitialized();
     return _topicDao!;
@@ -153,7 +166,7 @@ class MyDatabase {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // Incremented version to trigger migration
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onOpen: _onOpen,
@@ -182,11 +195,26 @@ class MyDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Handle database upgrades if needed
-    // For now, just recreate
+    // Handle database upgrades
+    if (oldVersion < 2) {
+      // Migration from version 1 to 2: Add externalId column to book table
+      try {
+        await db.execute('ALTER TABLE book ADD COLUMN externalId TEXT;');
+        print('✅ Migration v1→v2: Added externalId column to book table');
+      } catch (e) {
+        // Column might already exist, ignore error
+        print('⚠️ Migration v1→v2: externalId column might already exist: $e');
+      }
+    }
+
+    // Ensure all other tables exist (for any missing tables)
     final createScripts = _getCreateScripts();
     for (final script in createScripts) {
-      await db.execute(script);
+      try {
+        await db.execute(script);
+      } catch (e) {
+        // Ignore errors for tables that already exist
+      }
     }
   }
 
