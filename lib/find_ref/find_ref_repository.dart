@@ -232,11 +232,33 @@ class FindRefRepository {
       final bTitle = _normalize(b.title);
       final query = queryTokens.join(' ');
 
+      // התאמה מלאה של כל שם הספר
       if (aTitle == query && bTitle != query) return -1;
       if (bTitle == query && aTitle != query) return 1;
 
+      // התאמה של התחלת שם הספר
       if (aTitle.startsWith(query) && !bTitle.startsWith(query)) return -1;
       if (bTitle.startsWith(query) && !aTitle.startsWith(query)) return 1;
+
+      // מיון לפי התאמת מילים בודדות (מילה שנייה ואילך)
+      if (queryTokens.length >= 2) {
+        final aTitleTokens = _tokenize(aTitle);
+        final bTitleTokens = _tokenize(bTitle);
+
+        // בדיקת התאמה מילה-במילה החל מהמילה השנייה
+        for (int i = 1; i < queryTokens.length; i++) {
+          final queryToken = queryTokens[i];
+
+          // בדיקה אם יש מילה מתאימה בשם הספר שמתחילה עם מילת החיפוש
+          final aHasMatch =
+              i < aTitleTokens.length && aTitleTokens[i].startsWith(queryToken);
+          final bHasMatch =
+              i < bTitleTokens.length && bTitleTokens[i].startsWith(queryToken);
+
+          if (aHasMatch && !bHasMatch) return -1;
+          if (bHasMatch && !aHasMatch) return 1;
+        }
+      }
 
       return a.reference.length.compareTo(b.reference.length);
     });
