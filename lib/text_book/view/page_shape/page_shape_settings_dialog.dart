@@ -84,9 +84,9 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     // אם אין קטגוריות, נסה לחלץ מהכותרת
     if (_availableCategories.isEmpty && widget.bookTitle.contains(',')) {
       // למשל: "משנה תורה, הלכות שבת" → ["משנה תורה"]
-      final parts = widget.bookTitle.split(',');
-      if (parts.isNotEmpty) {
-        _availableCategories = [parts[0].trim()];
+      final firstPart = widget.bookTitle.split(',').first.trim();
+      if (firstPart.isNotEmpty) {
+        _availableCategories = [firstPart];
       }
     }
 
@@ -100,8 +100,8 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _commentatorSaveScope = CommentatorSaveScope.book;
       // בחירת קטגוריית ברירת מחדל
       _selectedCategory = _availableCategories.isNotEmpty 
-          ? _availableCategories[0]
-          : PageShapeSettingsManager.getParentCategory(widget.heCategories);
+          ? _availableCategories.first
+          : null;
     }
 
     setState(() {
