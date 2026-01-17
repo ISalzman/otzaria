@@ -1470,9 +1470,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     if (!context.mounted) return;
 
-    debugPrint(
-        'Toggle PDF->Text: Found textBook: ${textBook.title} (${textBook.runtimeType})');
-
     final index = await pdfToTextPage(
         widget.tab.book, currentOutline, currentPage, context);
 
@@ -1742,7 +1739,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final togglePdfShortcut =
         Settings.getValue<String>('key-shortcut-toggle-pdf-view') ??
-            ShortcutValidator.defaultShortcuts['key-shortcut-toggle-pdf-view']!;
+            ShortcutValidator
+                .defaultShortcuts['key-shortcut-toggle-pdf-view'] ??
+            'ctrl+shift+p';
     if (ShortcutHelper.matchesShortcut(event, togglePdfShortcut)) {
       _handleTextButtonPress(context);
     }
