@@ -1,6 +1,6 @@
 import 'package:otzaria/models/books.dart'; // Import Book model
 import 'package:equatable/equatable.dart';
-import 'package:search_engine/search_engine.dart';
+import 'package:otzaria/find_ref/db_reference_result.dart';
 
 abstract class FindRefState extends Equatable {
   const FindRefState();
@@ -14,7 +14,7 @@ class FindRefInitial extends FindRefState {}
 class FindRefLoading extends FindRefState {}
 
 class FindRefSuccess extends FindRefState {
-  final List<ReferenceSearchResult> refs;
+  final List<DbReferenceResult> refs;
   const FindRefSuccess(this.refs);
 
   @override
@@ -29,18 +29,7 @@ class FindRefError extends FindRefState {
   List<Object> get props => [message];
 }
 
-class FindRefIndexingStatus extends FindRefState {
-  final int? booksProcessed;
-  final int? totalBooks;
-
-  const FindRefIndexingStatus({this.booksProcessed, this.totalBooks});
-
-  @override
-  List<Object> get props => [booksProcessed ?? 0, totalBooks ?? 0];
-}
-
 class FindRefBookOpening extends FindRefState {
-  // Add BookOpening state
   final Book book;
   final int index;
 

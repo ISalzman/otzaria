@@ -47,7 +47,9 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         searchQuery: null,
         selectedTopics: null,
       ));
+      developer.log('📚 LibraryBloc: State emitted with isLoading=false', name: 'LibraryBloc');
     } catch (e) {
+      developer.log('📚 LibraryBloc: Error loading library: $e', name: 'LibraryBloc');
       emit(state.copyWith(
         error: e.toString(),
         isLoading: false,
@@ -102,7 +104,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       }
       
       try {
-        TantivyDataProvider.instance.reopenIndex();
+        await TantivyDataProvider.instance.reopenIndex();
       } catch (e) {
         // אם יש בעיה עם פתיחת האינדקס מחדש, נמשיך בלי זה
         // הספרייה עדיין תתרענן אבל החיפוש עלול לא לעבוד עד להפעלה מחדש
@@ -186,7 +188,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       
       // פתיחה מחדש של אינדקס החיפוש
       try {
-        TantivyDataProvider.instance.reopenIndex();
+        await TantivyDataProvider.instance.reopenIndex();
       } catch (e) {
         developer.log('Warning: Could not reopen search index', name: 'LibraryBloc', error: e);
       }

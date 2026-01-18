@@ -22,6 +22,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/printing/printing_screen.dart';
@@ -29,6 +30,7 @@ import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
 import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
@@ -40,6 +42,7 @@ import 'package:otzaria/models/phone_report_data.dart';
 import 'package:otzaria/services/phone_report_service.dart';
 import 'package:otzaria/services/sources_books_service.dart';
 import 'package:otzaria/utils/shortcut_helper.dart';
+import 'package:otzaria/utils/shortcut_validator.dart';
 import 'package:otzaria/utils/fullscreen_helper.dart';
 
 import 'package:otzaria/widgets/responsive_action_bar.dart';
@@ -165,8 +168,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       try {
         // קבלת נתיב הספר
-        final titleToPath = await state.book.data.titleToPath;
-        final bookPath = titleToPath[bookTitle];
+        final location = await BookLocator.locateBook(bookTitle);
+        final bookPath = location?.filePath;
 
         if (bookPath != null) {
           debugPrint('Book path: $bookPath');
@@ -984,8 +987,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                       return KeyboardListener(
                         focusNode: _bookContentFocusNode,
                         autofocus: true,
-                        onKeyEvent: (event) =>
-                            _handleGlobalKeyEvent(event, context, state),
+                        onKeyEvent: (event) => _handleGlobalKeyEvent(
+                            event, context, state, widget.tab),
                         child: Scaffold(
                           appBar: _buildAppBar(context, state, wideScreen),
                           body: _buildBody(context, state, wideScreen),
@@ -1045,12 +1048,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       tooltip: 'הגדרות צורת הדף',
       onPressed: () async {
         // טעינת ההגדרות הנוכחיות
-        final config =
-            PageShapeSettingsManager.loadConfiguration(state.book.title);
+        final config = PageShapeSettingsManager.loadConfiguration(
+          state.book.title,
+          heCategories: state.book.heCategories,
+        );
 
         // אם אין הגדרות שמורות, נשתמש בברירות מחדל
-        final currentSettings =
-            config ?? await DefaultCommentators.getDefaults(state.book);
+        final currentSettings = config ??
+            await DefaultCommentators.getDefaults(state.book,
+                links: state.links);
 
         if (!context.mounted) return;
 
@@ -1061,6 +1067,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           builder: (builderContext) => PageShapeSettingsDialog(
             availableCommentators: availableCommentators,
             bookTitle: bookTitle,
+            heCategories: state.book.heCategories,
             currentLeft: currentSettings['left'],
             currentRight: currentSettings['right'],
             currentBottom: currentSettings['bottom'],
@@ -1082,30 +1089,49 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       return const SizedBox.shrink();
     }
 
-    const style = TextStyle(fontSize: 17);
+    const titleStyle = TextStyle(fontSize: 17);
+    const authorStyle = TextStyle(fontSize: 12, color: Colors.grey);
     final text = state.currentTitle!;
+    final author = state.book.author;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final textPainter = TextPainter(
-          text: TextSpan(text: text, style: style),
+          text: TextSpan(text: text, style: titleStyle),
           maxLines: 1,
           textDirection: TextDirection.rtl,
         )..layout(minWidth: 0, maxWidth: constraints.maxWidth);
 
-        final child = SelectionArea(
+        final titleWidget = SelectionArea(
           child: Text(
             text,
-            style: style,
+            style: titleStyle,
             textAlign: TextAlign.end,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         );
 
+        // אם יש מחבר, מציגים אותו מתחת לכותרת
+        final child = author != null && author.isNotEmpty
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  titleWidget,
+                  Text(
+                    author,
+                    style: authorStyle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              )
+            : titleWidget;
+
         if (textPainter.didExceedMaxLines) {
           return Tooltip(
-            message: text,
+            message: author != null ? '$text\n$author' : text,
             child: child,
           );
         }
@@ -1384,7 +1410,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           if (_isBookTrackedInShamorZachor(state.book.title)) {
             _markShamorZachorProgress(state.book.title);
           } else {
-            _addBookToShamorZachorTracking(state.book.title);
+            _addBookToShamorZachorTracking(state.book);
           }
         },
       ),
@@ -1489,40 +1515,38 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildPdfButton(BuildContext context, TextBookLoaded state) {
-    return FutureBuilder(
+    return FutureBuilder<Book?>(
       future: DataRepository.instance.library.then(
         (library) => library.findBookByTitle(state.book.title, PdfBook),
       ),
-      builder: (context, snapshot) => snapshot.hasData
-          ? IconButton(
-              icon: const Icon(FluentIcons.document_pdf_24_regular),
-              tooltip: 'פתח ספר במהדורה מודפסת ',
-              onPressed: () async {
-                final currentIndex = state
-                        .positionsListener.itemPositions.value.isNotEmpty
+      builder: (context, snapshot) {
+        // Show button only if PDF book exists (snapshot.data is not null)
+        final pdfBook = snapshot.data;
+        if (pdfBook == null) {
+          return const SizedBox.shrink();
+        }
+
+        return IconButton(
+          icon: const Icon(FluentIcons.document_pdf_24_regular),
+          tooltip: 'פתח ספר במהדורה מודפסת ',
+          onPressed: () async {
+            final currentIndex =
+                state.positionsListener.itemPositions.value.isNotEmpty
                     ? state.positionsListener.itemPositions.value.first.index
                     : 0;
-                widget.tab.index = currentIndex;
+            widget.tab.index = currentIndex;
 
-                final library = await DataRepository.instance.library;
-                if (!context.mounted) return;
+            final index = await textToPdfPage(
+              state.book,
+              currentIndex,
+            );
 
-                final book = library.findBookByTitle(state.book.title, PdfBook);
-                if (book == null) {
-                  return;
-                }
+            if (!context.mounted) return;
 
-                final index = await textToPdfPage(
-                  state.book,
-                  currentIndex,
-                );
-
-                if (!context.mounted) return;
-
-                openBook(context, book, index ?? 1, '', ignoreHistory: true);
-              },
-            )
-          : const SizedBox.shrink(),
+            openBook(context, pdfBook, index ?? 1, '', ignoreHistory: true);
+          },
+        );
+      },
     );
   }
 
@@ -1828,10 +1852,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// ניווט לכותרת הקודמת ב-TOC
   void _navigateToPreviousToc(TextBookLoaded state) {
-    final currentIndex =
-        state.positionsListener.itemPositions.value.isNotEmpty
-            ? state.positionsListener.itemPositions.value.first.index
-            : 0;
+    final currentIndex = state.positionsListener.itemPositions.value.isNotEmpty
+        ? state.positionsListener.itemPositions.value.first.index
+        : 0;
     final prevIndex = _findPreviousTocIndex(
         state.tableOfContents, currentIndex, state.book.title);
     if (prevIndex != null) {
@@ -1844,10 +1867,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// ניווט לכותרת הבאה ב-TOC
   void _navigateToNextToc(TextBookLoaded state) {
-    final currentIndex =
-        state.positionsListener.itemPositions.value.isNotEmpty
-            ? state.positionsListener.itemPositions.value.first.index
-            : 0;
+    final currentIndex = state.positionsListener.itemPositions.value.isNotEmpty
+        ? state.positionsListener.itemPositions.value.first.index
+        : 0;
     final nextIndex = _findNextTocIndex(
         state.tableOfContents, currentIndex, state.book.title);
     if (nextIndex != null) {
@@ -1919,7 +1941,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           _markShamorZachorProgress(state.book.title);
         } else {
           // Book is not tracked - add to tracking
-          _addBookToShamorZachorTracking(state.book.title);
+          _addBookToShamorZachorTracking(state.book);
         }
       },
       icon: isTracked
@@ -1935,9 +1957,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   /// Add book to Shamor Zachor tracking
-  Future<void> _addBookToShamorZachorTracking(String bookTitle) async {
+  Future<void> _addBookToShamorZachorTracking(Book book) async {
     try {
-      final state = context.read<TextBookBloc>().state as TextBookLoaded;
       final dataProvider = context.read<ShamorZachorDataProvider>();
 
       // Check if provider supports dynamic loading
@@ -1947,9 +1968,62 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         return;
       }
 
-      // 1. Get book path from library
-      final titleToPath = await state.book.data.titleToPath;
-      final bookPath = titleToPath[bookTitle];
+      final bookTitle = book.title;
+
+      // 1. Get book path from library or database
+      String? bookPath = book.filePath;
+
+      if (bookPath == null) {
+        final location = await BookLocator.locateBook(bookTitle);
+        bookPath = location?.filePath;
+      }
+
+      // If not found in file system, try to get category from database
+      if (bookPath == null) {
+        String categoryPath = '';
+        // Try to use the category path from the book object first
+        if (book.categoryPath != null && book.categoryPath!.isNotEmpty) {
+          categoryPath = book.categoryPath!.replaceAll(', ', '/');
+        } else {
+          final dbProvider = SqliteDataProvider.instance;
+          if (await dbProvider.databaseExists() && dbProvider.isInitialized) {
+            try {
+              final repository = dbProvider.repository;
+              if (repository != null) {
+                final dbBook = await repository.getBookByTitle(bookTitle);
+                if (dbBook != null) {
+                  final category =
+                      await repository.getCategory(dbBook.categoryId);
+                  if (category != null) {
+                    final categoryParts = <String>[];
+                    dynamic currentCategory = category;
+                    while (currentCategory != null) {
+                      categoryParts.insert(0, currentCategory.title);
+                      if (currentCategory.parentId != null) {
+                        currentCategory = await repository
+                            .getCategory(currentCategory.parentId!);
+                      } else {
+                        break;
+                      }
+                    }
+                    categoryPath = categoryParts.join('/');
+                  }
+                }
+              }
+            } catch (e) {
+              debugPrint('Error getting category from DB: $e');
+            }
+          }
+        }
+
+        if (categoryPath.isNotEmpty) {
+          final libraryPath =
+              Settings.getValue<String>('key-library-path') ?? '.';
+          bookPath =
+              '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}$categoryPath${Platform.pathSeparator}$bookTitle.txt';
+          debugPrint('Book path from DB: $bookPath');
+        }
+      }
 
       if (bookPath == null) {
         UiSnack.showError('לא נמצא נתיב לספר');
@@ -1982,9 +2056,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         contentType = 'הלכה';
       }
 
-      debugPrint(
-          'Detected - Category: $categoryName, ContentType: $contentType');
-
       // 3. Extract clean book name
       String cleanBookName = bookTitle;
       if (bookTitle.contains(' - ')) {
@@ -1993,7 +2064,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       }
 
       // 4. Show loading indicator
-      UiSnack.show('סורק ספר ומוסיף למעקב...');
+      UiSnack.show('מוסיף ספר למעקב...');
 
       // 5. Add book via provider
       await dataProvider.addCustomBook(
@@ -2002,13 +2073,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         bookPath: bookPath,
         contentType: contentType,
       );
-
-      debugPrint(
-          'Book added to tracking: $cleanBookName in category $categoryName');
-      debugPrint(
-          'All categories after add: ${dataProvider.getCategoryNames()}');
-      debugPrint(
-          'Has category "$categoryName": ${dataProvider.getCategory(categoryName) != null}');
 
       // 6. Success message
       UiSnack.show('הספר "$cleanBookName" נוסף למעקב בהצלחה!');
@@ -2373,10 +2437,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget _buildTabBar(TextBookLoaded state) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (state.showLeftPane && !Platform.isAndroid && !_isInitialFocusDone) {
-        if (tabController.index == 1) {
-          textSearchFocusNode.requestFocus();
-        } else if (tabController.index == 0) {
-          navigationSearchFocusNode.requestFocus();
+        final hasSearchText = state.searchText.trim().isNotEmpty;
+        if (hasSearchText) {
+          if (tabController.index == 1) {
+            textSearchFocusNode.requestFocus();
+          } else if (tabController.index == 0) {
+            navigationSearchFocusNode.requestFocus();
+          }
         }
         _isInitialFocusDone = true;
       }
@@ -2556,8 +2623,8 @@ void _handleFullFileEditorPress(BuildContext context, TextBookLoaded state) {
   context.read<TextBookBloc>().add(OpenFullFileEditor());
 }
 
-bool _handleGlobalKeyEvent(
-    KeyEvent event, BuildContext context, TextBookLoaded state) {
+bool _handleGlobalKeyEvent(KeyEvent event, BuildContext context,
+    TextBookLoaded state, TextBookTab tab) {
   // קריאת קיצורים מההגדרות
   final editSectionShortcut =
       Settings.getValue<String>('key-shortcut-edit-section') ?? 'ctrl+e';
@@ -2569,6 +2636,10 @@ bool _handleGlobalKeyEvent(
       Settings.getValue<String>('key-shortcut-add-bookmark') ?? 'ctrl+b';
   final addNoteShortcut =
       Settings.getValue<String>('key-shortcut-add-note') ?? 'ctrl+n';
+  final togglePdfShortcut =
+      Settings.getValue<String>('key-shortcut-toggle-pdf-view') ??
+          ShortcutValidator.defaultShortcuts['key-shortcut-toggle-pdf-view'] ??
+          'ctrl+shift+p';
 
   // עריכת קטע
   if (ShortcutHelper.matchesShortcut(event, editSectionShortcut)) {
@@ -2623,6 +2694,12 @@ bool _handleGlobalKeyEvent(
   // הוספת הערה
   if (ShortcutHelper.matchesShortcut(event, addNoteShortcut)) {
     _addNoteFromKeyboard(context, state);
+    return true;
+  }
+
+  // מעבר ל-PDF
+  if (ShortcutHelper.matchesShortcut(event, togglePdfShortcut)) {
+    _togglePdfView(context, state, tab);
     return true;
   }
 
@@ -2849,7 +2926,11 @@ void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
   try {
     // Try to reload content from file system
     final dataProvider = FileSystemData.instance;
-    freshContent = await dataProvider.getBookText(state.book.title);
+    freshContent = await dataProvider.getBookText(
+      state.book.title,
+      category: state.book.categoryPath,
+      fileType: state.book.fileType,
+    );
   } catch (e) {
     debugPrint('Failed to load fresh content: $e');
     // Fall back to cached content
@@ -2865,6 +2946,8 @@ void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
       value: context.read<TextBookBloc>(),
       child: TextSectionEditorDialog(
         bookId: state.book.title,
+        category: state.book.categoryPath,
+        fileType: state.book.fileType,
         sectionIndex: state.editorIndex!,
         sectionId: state.editorSectionId!,
         initialContent:
@@ -2880,4 +2963,29 @@ void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
 
   // Close editor when dialog is dismissed
   context.read<TextBookBloc>().add(const CloseEditor());
+}
+
+void _togglePdfView(
+    BuildContext context, TextBookLoaded state, TextBookTab tab) async {
+  final currentIndex = state.positionsListener.itemPositions.value.isNotEmpty
+      ? state.positionsListener.itemPositions.value.first.index
+      : 0;
+  tab.index = currentIndex;
+
+  final library = await DataRepository.instance.library;
+  if (!context.mounted) return;
+
+  final book = library.findBookByTitle(state.book.title, PdfBook);
+  if (book == null) {
+    return;
+  }
+
+  final index = await textToPdfPage(
+    state.book,
+    currentIndex,
+  );
+
+  if (!context.mounted) return;
+
+  openBook(context, book, index ?? 1, '', ignoreHistory: true);
 }

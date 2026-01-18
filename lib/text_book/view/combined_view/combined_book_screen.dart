@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
@@ -55,9 +56,10 @@ class CombinedView extends StatefulWidget {
 
 class _CombinedViewState extends State<CombinedView> {
   // שמירת הטקסט הנבחר האחרון
-  String? _savedSelectedText;
+  final ValueNotifier<String?> _savedSelectedText =
+      ValueNotifier<String?>(null);
   // שמירת האינדקס של השורה שממנה הטקסט הודגש
-  int? _savedSelectedIndex;
+  final ValueNotifier<int?> _savedSelectedIndex = ValueNotifier<int?>(null);
 
   // שמירת reference ל-BLoC לשימוש ב-listeners
   late final TextBookBloc _textBookBloc;
@@ -74,6 +76,8 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   late final FocusNode _focusNode;
+
+  bool _didRequestInitialFocus = false;
 
   // שמירת גובה הבלוק בפועל לחישובים דינאמיים
   double _viewportHeight = 0;
@@ -109,12 +113,31 @@ class _CombinedViewState extends State<CombinedView> {
         });
       }
     });
+
+    // מוודא שהפוקוס מגיע לאזור הקריאה מיד אחרי פתיחת ספר
+    // כדי שגלילה בחיצים תעבוד בלי לחיצה בעכבר, אך בלי לגנוב פוקוס משדות טקסט.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _didRequestInitialFocus) return;
+      _didRequestInitialFocus = true;
+
+      final primaryFocus = FocusManager.instance.primaryFocus;
+      final focusContext = primaryFocus?.context;
+      final isTextInputFocused = focusContext?.widget is EditableText ||
+          focusContext?.findAncestorWidgetOfExactType<EditableText>() != null;
+
+      if (!isTextInputFocused && !_focusNode.hasFocus) {
+        _focusNode.requestFocus();
+      }
+    });
   }
 
   @override
   void dispose() {
     widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
     widget.tab.positionsListener.itemPositions.removeListener(_updateTabIndex);
+    _savedSelectedText.dispose();
+    _savedSelectedIndex.dispose();
+    _currentSelectedIndex.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -149,7 +172,7 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   // מעקב אחר האינדקס הנוכחי שנבחר (לשימוש בהעתקה עם כותרות)
-  int? _currentSelectedIndex;
+  final ValueNotifier<int?> _currentSelectedIndex = ValueNotifier<int?>(null);
 
   /// helper קטן שמחזיר רשימת MenuEntry מקבוצה אחת, כולל כפתור הצג/הסתר הכל
   List<ctx.MenuItem<void>> _buildGroup(
@@ -200,8 +223,8 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   // בניית תפריט קונטקסט "מקובע" לאינדקס ספציפי של פסקה
-  ctx.ContextMenu _buildContextMenuForIndex(
-      TextBookLoaded state, int paragraphIndex, BuildContext menuContext) {
+  ctx.ContextMenu _buildContextMenuForIndex(TextBookLoaded state,
+      int paragraphIndex, BuildContext menuContext, String? selectedText) {
     // אם זה מצב תצוגה מקדימה, החזר תפריט מצומצם
     if (widget.isPreviewMode) {
       return ctx.ContextMenu(
@@ -209,8 +232,7 @@ class _CombinedViewState extends State<CombinedView> {
           ctx.MenuItem(
             label: const Text('העתק'),
             icon: const Icon(FluentIcons.copy_24_regular),
-            enabled: _savedSelectedText != null &&
-                _savedSelectedText!.trim().isNotEmpty,
+            enabled: selectedText != null && selectedText.trim().isNotEmpty,
             onSelected: (_) => _copyFormattedText(),
           ),
         ],
@@ -358,8 +380,7 @@ class _CombinedViewState extends State<CombinedView> {
         ctx.MenuItem(
           label: const Text('העתק'),
           icon: const Icon(FluentIcons.copy_24_regular),
-          enabled: _savedSelectedText != null &&
-              _savedSelectedText!.trim().isNotEmpty,
+          enabled: selectedText != null && selectedText.trim().isNotEmpty,
           onSelected: (_) => _copyFormattedText(),
         ),
         ctx.MenuItem(
@@ -504,10 +525,10 @@ $textWithBreaks
   /// העתקת טקסט מעוצב (HTML) ללוח
   Future<void> _copyFormattedText() async {
     // משתמש בטקסט השמור שנבחר לפני פתיחת התפריט
-    final plainText = _savedSelectedText;
+    final plainText = _savedSelectedText.value;
 
     debugPrint('_copyFormattedText called with: "$plainText"');
-    debugPrint('_currentSelectedIndex: $_currentSelectedIndex');
+    debugPrint('_currentSelectedIndex: ${_currentSelectedIndex.value}');
 
     if (plainText == null || plainText.trim().isEmpty) {
       UiSnack.show('אנא בחר טקסט להעתקה');
@@ -525,10 +546,11 @@ $textWithBreaks
         String htmlContentToUse = plainText;
 
         // אם יש לנו אינדקס נוכחי, ננסה למצוא את הטקסט המקורי
-        if (_currentSelectedIndex != null &&
-            _currentSelectedIndex! >= 0 &&
-            _currentSelectedIndex! < widget.data.length) {
-          final originalData = widget.data[_currentSelectedIndex!];
+        final selectedIndex = _currentSelectedIndex.value;
+        if (selectedIndex != null &&
+            selectedIndex >= 0 &&
+            selectedIndex < widget.data.length) {
+          final originalData = widget.data[selectedIndex];
 
           // בדיקה אם הטקסט הפשוט מופיע בטקסט המקורי
           final plainTextCleaned =
@@ -550,7 +572,7 @@ $textWithBreaks
         if (settingsState.copyWithHeaders != 'none' &&
             textBookState is TextBookLoaded) {
           final bookName = CopyUtils.extractBookName(textBookState.book);
-          final currentIndex = _currentSelectedIndex ?? 0;
+          final currentIndex = _currentSelectedIndex.value ?? 0;
           final currentPath = await CopyUtils.extractCurrentPath(
             textBookState.book,
             currentIndex,
@@ -600,10 +622,10 @@ $textWithBreaks
     if (state is! TextBookLoaded) return;
 
     // שמירת הטקסט הנבחר לפני פתיחת הדיאלוג
-    final selectedText = _savedSelectedText;
+    final selectedText = _savedSelectedText.value;
 
     // משתמש בשורה שממנה הודגש טקסט (אם קיים), אחרת בשורה הנבחרת, אחרת בשורה הראשונה הנראית
-    final currentIndex = _savedSelectedIndex ??
+    final currentIndex = _savedSelectedIndex.value ??
         state.selectedIndex ??
         (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
 
@@ -673,61 +695,99 @@ $textWithBreaks
                 return const SizedBox.shrink();
               },
               onSelectionChanged: (selection) {
-                if (selection != null && selection.plainText.isNotEmpty) {
-                  // מחשב את מספר השורה המדויק של הטקסט המודגש
-                  // משתמש באותה לוגיקה כמו בדיווח שגיאות
-                  final state = _textBookBloc.state;
-                  int? foundIndex;
+                final plain = selection?.plainText;
+                if (plain == null || plain.trim().isEmpty) {
+                  return;
+                }
 
-                  if (state is TextBookLoaded) {
-                    // מקבל את השורה הראשונה הנראית
-                    final baseIndex = state.visibleIndices.isNotEmpty
-                        ? state.visibleIndices.first
-                        : 0;
+                // חשוב: כדי ש-Ctrl+C יעבוד מיד אחרי סימון טקסט עם העכבר
+                // נוודא שהפוקוס נמצא על אזור הקריאה.
+                _focusNode.requestFocus();
 
-                    // בונה את הטקסט הנראה
-                    final visibleText = state.visibleIndices
-                        .map((idx) =>
-                            widget.data[idx].replaceAll(RegExp(r'<[^>]*>'), ''))
-                        .join('\n');
+                // מחשב את מספר השורה המדויק של הטקסט המודגש
+                // משתמש באותה לוגיקה כמו בדיווח שגיאות
+                final state = _textBookBloc.state;
+                int? foundIndex;
 
-                    // מוצא את המיקום של הטקסט המודגש
-                    final selectionStart =
-                        visibleText.indexOf(selection.plainText);
+                if (state is TextBookLoaded) {
+                  // מקבל את השורה הראשונה הנראית
+                  final baseIndex = state.visibleIndices.isNotEmpty
+                      ? state.visibleIndices.first
+                      : 0;
 
-                    if (selectionStart >= 0) {
-                      // סופר כמה שורות יש לפני הטקסט המודגש
-                      final before = visibleText.substring(0, selectionStart);
-                      final offset = '\n'.allMatches(before).length;
-                      foundIndex = baseIndex + offset;
-                    }
+                  // בונה את הטקסט הנראה
+                  final visibleText = state.visibleIndices
+                      .map((idx) =>
+                          widget.data[idx].replaceAll(RegExp(r'<[^>]*>'), ''))
+                      .join('\n');
+
+                  // מוצא את המיקום של הטקסט המודגש
+                  final selectionStart = visibleText.indexOf(plain);
+
+                  if (selectionStart >= 0) {
+                    // סופר כמה שורות יש לפני הטקסט המודגש
+                    final before = visibleText.substring(0, selectionStart);
+                    final offset = '\n'.allMatches(before).length;
+                    foundIndex = baseIndex + offset;
                   }
 
-                  setState(() {
-                    _savedSelectedText = selection.plainText;
-                    _savedSelectedIndex = foundIndex;
-                    _currentSelectedIndex = foundIndex;
-                  });
+                  // fallback: אם לא הצלחנו לחשב אינדקס, נשתמש בשורה שנבחרה (אם קיימת)
+                  foundIndex ??= state.selectedIndex;
+                }
+
+                if (mounted) {
+                  _savedSelectedText.value = plain;
+                  _savedSelectedIndex.value = foundIndex;
+                  _currentSelectedIndex.value = foundIndex;
                 }
               },
               child: Directionality(
                 textDirection: widget.isPreviewMode
                     ? TextDirection.ltr
                     : TextDirection.rtl,
-                child: ScrollConfiguration(
-                  // מונע בעיות של Scrollbar עם ScrollController לא מחובר
-                  behavior: ScrollConfiguration.of(context).copyWith(
-                    scrollbars: false,
-                  ),
-                  child: Directionality(
-                    textDirection: TextDirection.rtl,
-                    child: ProgressiveScroll(
-                      focusNode: _focusNode,
-                      maxSpeed: 10000.0,
-                      curve: 10.0,
-                      accelerationFactor: 5,
-                      scrollController: widget.tab.mainOffsetController,
-                      child: buildOuterList(state),
+                child: Scrollbar(
+                  thumbVisibility: widget.isPreviewMode,
+                  thickness: 8.0,
+                  radius: const Radius.circular(4.0),
+                  child: Shortcuts(
+                    shortcuts: <ShortcutActivator, Intent>{
+                      // Windows/Linux
+                      LogicalKeySet(
+                        LogicalKeyboardKey.control,
+                        LogicalKeyboardKey.keyC,
+                      ): const _CopySelectedTextIntent(),
+                      // Windows "classic" copy
+                      LogicalKeySet(
+                        LogicalKeyboardKey.control,
+                        LogicalKeyboardKey.insert,
+                      ): const _CopySelectedTextIntent(),
+                      // macOS (למקרה שמריצים שם)
+                      LogicalKeySet(
+                        LogicalKeyboardKey.meta,
+                        LogicalKeyboardKey.keyC,
+                      ): const _CopySelectedTextIntent(),
+                    },
+                    child: Actions(
+                      actions: <Type, Action<Intent>>{
+                        _CopySelectedTextIntent:
+                            CallbackAction<_CopySelectedTextIntent>(
+                          onInvoke: (_) {
+                            _copyFormattedText();
+                            return null;
+                          },
+                        ),
+                      },
+                      child: Directionality(
+                        textDirection: TextDirection.rtl,
+                        child: ProgressiveScroll(
+                          focusNode: _focusNode,
+                          maxSpeed: 10000.0,
+                          curve: 10.0,
+                          accelerationFactor: 5,
+                          scrollController: widget.tab.mainOffsetController,
+                          child: buildOuterList(state),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -789,10 +849,10 @@ $textWithBreaks
             onTap: () {
               _focusNode.requestFocus();
               // מאפס את הטקסט השמור כשלוחצים על הפסקה
-              setState(() {
-                _savedSelectedText = null;
-                _currentSelectedIndex = null;
-              });
+              if (mounted) {
+                _savedSelectedText.value = null;
+                _currentSelectedIndex.value = null;
+              }
               // פשוט מעדכן את selectedIndex - זה יגרום לבנייה מחדש
               if (isSelected) {
                 _textBookBloc.add(const UpdateSelectedIndex(null));
@@ -828,12 +888,12 @@ $textWithBreaks
             },
             onSecondaryTapDown: (details) {
               // שומר את האינדקס הנוכחי לשימוש בתפריט ההקשר
-              setState(() {
-                _currentSelectedIndex = index;
-              });
+              if (mounted) {
+                _currentSelectedIndex.value = index;
+              }
             },
-            child: ctx.ContextMenuRegion(
-              contextMenu: _buildContextMenuForIndex(state, index, context),
+            child: ValueListenableBuilder<String?>(
+              valueListenable: _savedSelectedText,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4.0),
                 child: LayoutBuilder(
@@ -941,6 +1001,13 @@ $textWithBreaks
                   },
                 ),
               ),
+              builder: (context, selectedText, child) {
+                return ctx.ContextMenuRegion(
+                  contextMenu: _buildContextMenuForIndex(
+                      state, index, context, selectedText),
+                  child: child!,
+                );
+              },
             ),
           ),
         ),
@@ -1083,4 +1150,8 @@ class _CommentaryCardState extends State<_CommentaryCard> {
       },
     );
   }
+}
+
+class _CopySelectedTextIntent extends Intent {
+  const _CopySelectedTextIntent();
 }

@@ -135,21 +135,13 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
           workspaces: updatedWorkspaces, currentWorkspace: newWorkspaceIndex));
 
       // Now switch to the selected workspace
-      // Close all current tabs
-      _tabsBloc.add(CloseAllTabs());
-
-      // Add tabs from the selected workspace
-      for (final tab in event.workspace.tabs) {
-        _tabsBloc.add(AddTab(tab));
-      }
-
-      // Set the current tab
+      int newCurrentTab = 0;
       if (event.workspace.tabs.isNotEmpty) {
-        _tabsBloc.add(SetCurrentTab(
-            event.workspace.currentTab < event.workspace.tabs.length
-                ? event.workspace.currentTab
-                : 0));
+        newCurrentTab = event.workspace.currentTab < event.workspace.tabs.length
+            ? event.workspace.currentTab
+            : 0;
       }
+      _tabsBloc.add(ReplaceAllTabs(event.workspace.tabs, newCurrentTab));
     } catch (e) {
       emit(state.copyWith(
         error: 'Failed to switch workspace: $e',

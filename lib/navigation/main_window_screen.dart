@@ -33,6 +33,9 @@ import 'package:otzaria/widgets/ad_popup_dialog.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/main.dart' show appWindowListener;
 import 'package:otzaria/navigation/custom_title_bar.dart';
+import 'package:otzaria/migration/sync/background_sync_initializer.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/library/bloc/library_event.dart';
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
@@ -88,6 +91,34 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     // Setup fullscreen sync with window manager
     _setupFullscreenSync();
+
+    // Start background file sync after app is loaded
+    // This runs in the background without blocking the UI
+    _initializeBackgroundSync();
+  }
+
+  /// Initialize background file sync
+  /// This scans אוצריא and links folders for new files and adds them to the DB
+  void _initializeBackgroundSync() {
+    BackgroundSyncInitializer.initializeAfterDelay(
+      delaySeconds: 5, // Wait 5 seconds after app startup
+      onComplete: (result) {
+        if (!mounted) return;
+        if (result.addedBooks > 0 ||
+            result.updatedBooks > 0 ||
+            result.addedLinks > 0) {
+          debugPrint('📚 סנכרון קבצים הושלם: ${result.addedBooks} ספרים חדשים, '
+              '${result.updatedBooks} עודכנו, ${result.addedLinks} קישורים');
+
+          // Refresh the library browser to show new books
+          try {
+            context.read<LibraryBloc>().add(RefreshLibrary());
+          } catch (e) {
+            debugPrint('Could not refresh library: $e');
+          }
+        }
+      },
+    );
   }
 
   /// Setup synchronization between window fullscreen state and settings
@@ -376,140 +407,147 @@ class MainWindowScreenState extends State<MainWindowScreen>
                         Expanded(
                           child: OrientationBuilder(
                             builder: (context, orientation) {
-                        _handleOrientationChange(context, orientation);
+                              _handleOrientationChange(context, orientation);
 
-                        final pageView = PageView(
-                          controller: pageController,
-                          scrollDirection: orientation == Orientation.landscape
-                              ? Axis.vertical
-                              : Axis.horizontal,
-                          physics: const NeverScrollableScrollPhysics(),
-                          children: _pages,
-                        );
+                              final pageView = PageView(
+                                controller: pageController,
+                                scrollDirection:
+                                    orientation == Orientation.landscape
+                                        ? Axis.vertical
+                                        : Axis.horizontal,
+                                physics: const NeverScrollableScrollPhysics(),
+                                children: _pages,
+                              );
 
-                        if (orientation == Orientation.landscape) {
-                          return Row(
-                            children: [
-                              SizedBox.fromSize(
-                                size: const Size.fromWidth(74),
-                                child: Material(
-                                  color: Theme.of(context).colorScheme.surface,
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      // חישוב גובה משוער לכל הכפתורים
-                                      const buttonHeight =
-                                          60.0; // גובה משוער לכפתור + padding
-                                      final totalButtonsHeight =
-                                          7 * buttonHeight;
-                                      final minSpacerHeight = 20.0;
-                                      final needsScroll =
-                                          totalButtonsHeight + minSpacerHeight >
-                                              constraints.maxHeight;
+                              if (orientation == Orientation.landscape) {
+                                return Row(
+                                  children: [
+                                    SizedBox.fromSize(
+                                      size: const Size.fromWidth(74),
+                                      child: Material(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .surface,
+                                        child: LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            // חישוב גובה משוער לכל הכפתורים
+                                            const buttonHeight =
+                                                60.0; // גובה משוער לכפתור + padding
+                                            final totalButtonsHeight =
+                                                7 * buttonHeight;
+                                            final minSpacerHeight = 20.0;
+                                            final needsScroll =
+                                                totalButtonsHeight +
+                                                        minSpacerHeight >
+                                                    constraints.maxHeight;
 
-                                      if (needsScroll) {
-                                        // אם אין מספיק מקום, השתמש בגלילה
-                                        return SingleChildScrollView(
-                                          child: Column(
-                                            children: [
-                                              for (int i = 0; i < 7; i++)
-                                                _buildNavButton(
-                                                  context,
-                                                  _buildNavigationDestinations()[
-                                                      i],
-                                                  i,
-                                                  state.currentScreen,
+                                            if (needsScroll) {
+                                              // אם אין מספיק מקום, השתמש בגלילה
+                                              return SingleChildScrollView(
+                                                child: Column(
+                                                  children: [
+                                                    for (int i = 0; i < 7; i++)
+                                                      _buildNavButton(
+                                                        context,
+                                                        _buildNavigationDestinations()[
+                                                            i],
+                                                        i,
+                                                        state.currentScreen,
+                                                      ),
+                                                  ],
                                                 ),
-                                            ],
-                                          ),
-                                        );
-                                      } else {
-                                        // אם יש מספיק מקום, השתמש ב-Spacer
-                                        return Column(
-                                          children: [
-                                            // כפתורים עליונים
-                                            for (int i = 0; i < 5; i++)
-                                              _buildNavButton(
-                                                context,
-                                                _buildNavigationDestinations()[
-                                                    i],
-                                                i,
-                                                state.currentScreen,
-                                              ),
-                                            // רווח גמיש
-                                            const Spacer(),
-                                            // כפתורים תחתונים
-                                            for (int i = 5; i < 7; i++)
-                                              _buildNavButton(
-                                                context,
-                                                _buildNavigationDestinations()[
-                                                    i],
-                                                i,
-                                                state.currentScreen,
-                                              ),
-                                          ],
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ),
-                              const VerticalDivider(thickness: 1, width: 1),
-                              Expanded(child: pageView),
-                            ],
-                          );
-                        } else {
-                          return Column(
-                            children: [
-                              Expanded(child: pageView),
-                              NavigationBar(
-                                destinations: _buildNavigationDestinations(),
-                                selectedIndex: _getSelectedIndex(
-                                  state.currentScreen,
-                                ),
-                                onDestinationSelected: (index) async {
-                                  // אם בחרו שוב באותו היעד – רק סנכרנו את ה-PageView למסך
-                                  final currentIndex =
-                                      _getSelectedIndex(state.currentScreen);
-                                  if (index == currentIndex &&
-                                      index != Screen.search.index &&
-                                      index != Screen.find.index) {
-                                    // סנכרון ידני – שימושי כאשר מסיבה כלשהי ה-PageView סטה מהמצב
-                                    await _syncPageWithState();
-                                    return;
-                                  }
-                                  if (index == Screen.search.index) {
-                                    _handleSearchTabOpen(context);
-                                  } else if (index == Screen.find.index) {
-                                    _handleFindRefOpen(context);
-                                  } else if (index == Screen.about.index) {
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) =>
-                                          const AboutDialogWidget(),
-                                    );
-                                  } else {
-                                    context.read<NavigationBloc>().add(
-                                          NavigateToScreen(
-                                              Screen.values[index]),
-                                        );
-                                  }
-                                  if (index == Screen.library.index) {
-                                    context
-                                        .read<FocusRepository>()
-                                        .requestLibrarySearchFocus(
-                                          selectAll: true,
-                                        );
-                                  }
-                                },
-                              ),
-                            ],
-                          );
-                        }
-                      },
-                    ),
+                                              );
+                                            } else {
+                                              // אם יש מספיק מקום, השתמש ב-Spacer
+                                              return Column(
+                                                children: [
+                                                  // כפתורים עליונים
+                                                  for (int i = 0; i < 5; i++)
+                                                    _buildNavButton(
+                                                      context,
+                                                      _buildNavigationDestinations()[
+                                                          i],
+                                                      i,
+                                                      state.currentScreen,
+                                                    ),
+                                                  // רווח גמיש
+                                                  const Spacer(),
+                                                  // כפתורים תחתונים
+                                                  for (int i = 5; i < 7; i++)
+                                                    _buildNavButton(
+                                                      context,
+                                                      _buildNavigationDestinations()[
+                                                          i],
+                                                      i,
+                                                      state.currentScreen,
+                                                    ),
+                                                ],
+                                              );
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    const VerticalDivider(
+                                        thickness: 1, width: 1),
+                                    Expanded(child: pageView),
+                                  ],
+                                );
+                              } else {
+                                return Column(
+                                  children: [
+                                    Expanded(child: pageView),
+                                    NavigationBar(
+                                      destinations:
+                                          _buildNavigationDestinations(),
+                                      selectedIndex: _getSelectedIndex(
+                                        state.currentScreen,
+                                      ),
+                                      onDestinationSelected: (index) async {
+                                        // אם בחרו שוב באותו היעד – רק סנכרנו את ה-PageView למסך
+                                        final currentIndex = _getSelectedIndex(
+                                            state.currentScreen);
+                                        if (index == currentIndex &&
+                                            index != Screen.search.index &&
+                                            index != Screen.find.index) {
+                                          // סנכרון ידני – שימושי כאשר מסיבה כלשהי ה-PageView סטה מהמצב
+                                          await _syncPageWithState();
+                                          return;
+                                        }
+                                        if (index == Screen.search.index) {
+                                          _handleSearchTabOpen(context);
+                                        } else if (index == Screen.find.index) {
+                                          _handleFindRefOpen(context);
+                                        } else if (index ==
+                                            Screen.about.index) {
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) =>
+                                                const AboutDialogWidget(),
+                                          );
+                                        } else {
+                                          context.read<NavigationBloc>().add(
+                                                NavigateToScreen(
+                                                    Screen.values[index]),
+                                              );
+                                        }
+                                        if (index == Screen.library.index) {
+                                          context
+                                              .read<FocusRepository>()
+                                              .requestLibrarySearchFocus(
+                                                selectAll: true,
+                                              );
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                );
+                              }
+                            },
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -33,9 +34,14 @@ import 'package:otzaria/widgets/workspace_icon_button.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/settings/library_settings_dialog.dart';
+import 'package:otzaria/ui/database_generation_dialog.dart';
+import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class LibraryBrowser extends StatefulWidget {
@@ -57,6 +63,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   ViewMode _viewMode = ViewMode.grid; // מצב תצוגה: רשת או רשימה
   final Set<String> _expandedCategories = {}; // קטגוריות שנפתחו בתצוגת רשימה
 
+  // Database generation button visibility
+  bool?
+      _showDbGenerationButton; // null = לא נבדק עדיין, true = הצג, false = אל תציג
   // FileSyncBloc יווצר פעם אחת בלבד
   late final FileSyncBloc _fileSyncBloc;
 
@@ -66,12 +75,18 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     context.read<LibraryBloc>().add(LoadLibrary());
     _loadViewPreferences();
 
+    // בדיקה אסינכרונית אם להציג כפתור יצירת DB (ברקע, לא חוסם)
+    _checkDbGenerationButtonVisibility();
     // יצירת FileSyncBloc פעם אחת בלבד
     _fileSyncBloc = FileSyncBloc(
       repository: FileSyncRepository(
         githubOwner: "Y-PLONI",
         repositoryName: "otzaria-library",
         branch: "main",
+        // Callback to delete book from DB when removed from GitHub
+        onDeleteBookFromDb: _deleteBookFromDb,
+        // Callback to sync new files to DB after GitHub sync completes
+        onSyncCompleted: _syncFilesToDb,
       ),
     );
   }
@@ -84,6 +99,82 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           ? ViewMode.list
           : ViewMode.grid;
     });
+  }
+
+  /// בדיקה אסינכרונית אם להציג כפתור יצירת DB
+  /// הבדיקה מתבצעת ברקע ולא חוסמת את עליית התוכנה
+  ///
+  /// לוגיקה:
+  /// - במצב דיבאגר (debug/profile): הכפתור תמיד מוצג
+  /// - במצב פרודקשן (release): הכפתור מוצג רק אם קובץ DB לא קיים
+  /// - עד לסיום הבדיקה: הכפתור לא מוצג (_showDbGenerationButton = null)
+  Future<void> _checkDbGenerationButtonVisibility() async {
+    // במצב דיבאגר - תמיד הצג את הכפתור חיווי אם חסר
+    // const bool.fromEnvironment('dart.vm.product') מחזיר false בדיבאגר, true בפרודקשן
+    if (const bool.fromEnvironment('dart.vm.product') == false) {
+      // בדוק אם DB קיים גם בדיבאג כדי לדעת אם להבהב או לא
+    }
+
+    try {
+      // בדיקה אם קובץ DB קיים
+      final libraryPath = await AppPaths.getLibraryPath();
+      final dbPath = DatabaseConstants.getDatabasePathForLibrary(libraryPath);
+      final dbFile = File(dbPath);
+      final dbExists = await dbFile.exists();
+
+      if (mounted) {
+        setState(() {
+          // הצג חיווי מהבהב ר אם DB לא קיים
+          _showDbGenerationButton = !dbExists;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking DB file existence: $e');
+      // במקרה של שגיאה - נניח שה-DB קיים כדי לא לבלבל
+      if (mounted) {
+        setState(() {
+          _showDbGenerationButton = false;
+        });
+      }
+    }
+  }
+
+  /// Delete a book from the database when it's removed from GitHub
+  Future<bool> _deleteBookFromDb(String filePath) async {
+    try {
+      final repository = SqliteDataProvider.instance.repository;
+      if (repository == null) return false;
+
+      final syncService = await FileSyncService.getInstance(repository);
+      if (syncService == null) return false;
+
+      return await syncService.deleteBookByFilePath(filePath);
+    } catch (e) {
+      debugPrint('Error deleting book from DB: $e');
+      return false;
+    }
+  }
+
+  /// Sync new files to the database after GitHub sync completes
+  Future<void> _syncFilesToDb() async {
+    try {
+      final repository = SqliteDataProvider.instance.repository;
+      if (repository == null) return;
+
+      final syncService = await FileSyncService.getInstance(repository);
+      if (syncService == null) return;
+
+      final result = await syncService.syncFiles();
+      debugPrint(
+          '📚 DB sync after GitHub: ${result.addedBooks} added, ${result.updatedBooks} updated');
+
+      // Refresh the library to show new books
+      if (mounted && (result.addedBooks > 0 || result.updatedBooks > 0)) {
+        context.read<LibraryBloc>().add(RefreshLibrary());
+      }
+    } catch (e) {
+      debugPrint('Error syncing files to DB: $e');
+    }
   }
 
   @override
@@ -172,8 +263,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                           ? (screenWidth * 2 / 3)
                           : (screenWidth / 3);
 
-                      final maxPreviewWidth =
-                          (screenWidth - 350).clamp(minPreviewWidth, screenWidth);
+                      final maxPreviewWidth = (screenWidth - 350)
+                          .clamp(minPreviewWidth, screenWidth);
 
                       return Row(
                         children: [
@@ -626,7 +717,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   Widget _buildBookItem(Book book, {bool showTopics = false}) {
-    if (book is ExternalBook) {
+    if (book is ExternalLibraryBook) {
       return BookGridItem(
         book: book,
         onBookClickCallback: () => _openOtzarBook(book),
@@ -670,6 +761,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   final index = book is PdfBook ? 1 : 0;
                   _openBookInReader(book, index);
                 }
+              },
+              onBookDeleted: () {
+                // רענון הספרייה לאחר מחיקת ספר
+                context.read<LibraryBloc>().add(RefreshLibrary());
               },
             ),
           ),
@@ -788,7 +883,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   /// פריט ספר בתצוגת רשימה
   Widget _buildListBookItem(Book book, int level) {
-    if (book is ExternalBook) {
+    if (book is ExternalLibraryBook) {
       return _buildExternalBookListItem(book, level);
     }
 
@@ -879,7 +974,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   /// פריט ספר חיצוני בתצוגת רשימה
-  Widget _buildExternalBookListItem(ExternalBook book, int level) {
+  Widget _buildExternalBookListItem(ExternalLibraryBook book, int level) {
     return InkWell(
       onTap: () => _openOtzarBook(book),
       child: Container(
@@ -950,7 +1045,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     _refocusSearchBar();
   }
 
-  void _openOtzarBook(ExternalBook book) {
+  void _openOtzarBook(ExternalLibraryBook book) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1025,7 +1120,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     int maxButtons;
 
     if (screenWidth < 400) {
-      maxButtons = 1; // כפתור אחד + "..." במסכים קטנים מאוד
+      maxButtons = 2; // מינימום 2 כדי להשאיר סינכרון מחוץ לתפריט
     } else if (screenWidth < 500) {
       maxButtons = 2; // 2 כפתורים + "..." במסכים קטנים
     } else if (screenWidth < 600) {
@@ -1041,11 +1136,36 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return ResponsiveActionBar(
       key: ValueKey('action-bar-offline-${settingsState.isOfflineMode}'),
       actions: _buildPrioritizedLibraryActions(context, state, settingsState),
+      alwaysInMenu:
+          _buildAlwaysInMenuLibraryActions(context, state, settingsState),
       originalOrder:
           _buildOriginalOrderLibraryActions(context, state, settingsState),
       maxVisibleButtons: maxButtons,
       overflowOnRight: true, // כפתור "..." ימני במסך הספרייה
     );
+  }
+
+  List<ActionButtonData> _buildAlwaysInMenuLibraryActions(
+    BuildContext context,
+    LibraryState state,
+    SettingsState settingsState,
+  ) {
+    final actions = <ActionButtonData>[];
+
+    // DB exists indicator goes into the overflow menu.
+    if (!(Platform.isAndroid || Platform.isIOS) &&
+        _showDbGenerationButton == false) {
+      actions.add(
+        ActionButtonData(
+          widget: const SizedBox.shrink(),
+          icon: FluentIcons.database_arrow_right_24_regular,
+          tooltip: 'מסד נתונים כבר קיים',
+          onPressed: null,
+        ),
+      );
+    }
+
+    return actions;
   }
 
   /// בניית כפתור סינכרון - משותף לשתי הפונקציות
@@ -1078,58 +1198,49 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     LibraryState state,
     SettingsState settingsState,
   ) {
-    // בדיקה אם נמצאים בתיקיה הראשית
-    final isAtRoot = _depth == 0;
-
     return [
       // חזור לתיקיה קודמת (ראשון במסך הרחב)
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.arrow_up_24_regular),
           tooltip: 'חזרה לתיקיה הקודמת',
-          onPressed: isAtRoot
-              ? null
-              : () {
-                  // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-                  if (_viewMode == ViewMode.list &&
-                      _expandedCategories.isNotEmpty) {
-                    setState(() {
-                      _expandedCategories.remove(_expandedCategories.last);
-                    });
-                  }
-                  // בתצוגת רשת - חזור לקטגוריה הקודמת
-                  else if (state.currentCategory?.parent != null) {
-                    setState(() {
-                      _depth = _depth > 0 ? _depth - 1 : 0;
-                    });
-                    context.read<LibraryBloc>().add(NavigateUp());
-                    context.read<LibraryBloc>().add(const SearchBooks());
-                    _refocusSearchBar(selectAll: true);
-                  }
-                },
+          onPressed: () {
+            // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
+            if (_viewMode == ViewMode.list && _expandedCategories.isNotEmpty) {
+              setState(() {
+                _expandedCategories.remove(_expandedCategories.last);
+              });
+            }
+            // בתצוגת רשת - חזור לקטגוריה הקודמת
+            else if (state.currentCategory?.parent != null) {
+              setState(() {
+                _depth = _depth > 0 ? _depth - 1 : 0;
+              });
+              context.read<LibraryBloc>().add(NavigateUp());
+              context.read<LibraryBloc>().add(const SearchBooks());
+              _refocusSearchBar(selectAll: true);
+            }
+          },
         ),
         icon: FluentIcons.arrow_up_24_regular,
         tooltip: 'חזרה לתיקיה הקודמת',
-        onPressed: isAtRoot
-            ? null
-            : () {
-                // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-                if (_viewMode == ViewMode.list &&
-                    _expandedCategories.isNotEmpty) {
-                  setState(() {
-                    _expandedCategories.remove(_expandedCategories.last);
-                  });
-                }
-                // בתצוגת רשת - חזור לקטגוריה הקודמת
-                else if (state.currentCategory?.parent != null) {
-                  setState(() {
-                    _depth = _depth > 0 ? _depth - 1 : 0;
-                  });
-                  context.read<LibraryBloc>().add(NavigateUp());
-                  context.read<LibraryBloc>().add(const SearchBooks());
-                  _refocusSearchBar(selectAll: true);
-                }
-              },
+        onPressed: () {
+          // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
+          if (_viewMode == ViewMode.list && _expandedCategories.isNotEmpty) {
+            setState(() {
+              _expandedCategories.remove(_expandedCategories.last);
+            });
+          }
+          // בתצוגת רשת - חזור לקטגוריה הקודמת
+          else if (state.currentCategory?.parent != null) {
+            setState(() {
+              _depth = _depth > 0 ? _depth - 1 : 0;
+            });
+            context.read<LibraryBloc>().add(NavigateUp());
+            context.read<LibraryBloc>().add(const SearchBooks());
+            _refocusSearchBar(selectAll: true);
+          }
+        },
       ),
 
       // חזרה לתיקיה ראשית
@@ -1137,37 +1248,42 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         widget: IconButton(
           icon: const Icon(FluentIcons.home_24_regular),
           tooltip: 'חזרה לתיקיה הראשית',
-          onPressed: isAtRoot
-              ? null
-              : () {
-                  setState(() {
-                    _depth = 0;
-                    _expandedCategories.clear(); // נקה את העץ הפתוח
-                  });
-                  context.read<LibraryBloc>().add(LoadLibrary());
-                  context
-                      .read<FocusRepository>()
-                      .librarySearchController
-                      .clear();
-                  _update(context, state, settingsState);
-                  _refocusSearchBar(selectAll: true);
-                },
+          onPressed: () {
+            setState(() {
+              _depth = 0;
+              _expandedCategories.clear(); // נקה את העץ הפתוח
+            });
+            context.read<LibraryBloc>().add(LoadLibrary());
+            context.read<FocusRepository>().librarySearchController.clear();
+            _update(context, state, settingsState);
+            _refocusSearchBar(selectAll: true);
+          },
         ),
         icon: FluentIcons.home_24_regular,
         tooltip: 'חזרה לתיקיה הראשית',
-        onPressed: isAtRoot
-            ? null
-            : () {
-                setState(() {
-                  _depth = 0;
-                  _expandedCategories.clear(); // נקה את העץ הפתוח
-                });
-                context.read<LibraryBloc>().add(LoadLibrary());
-                context.read<FocusRepository>().librarySearchController.clear();
-                _update(context, state, settingsState);
-                _refocusSearchBar(selectAll: true);
-              },
+        onPressed: () {
+          setState(() {
+            _depth = 0;
+            _expandedCategories.clear(); // נקה את העץ הפתוח
+          });
+          context.read<LibraryBloc>().add(LoadLibrary());
+          context.read<FocusRepository>().librarySearchController.clear();
+          _update(context, state, settingsState);
+          _refocusSearchBar(selectAll: true);
+        },
       ),
+
+      // יצירת מסד נתונים - אם אין DB: בחוץ. אם יש: עובר לתפריט "...".
+      if (!(Platform.isAndroid || Platform.isIOS) &&
+          _showDbGenerationButton == true)
+        ActionButtonData(
+          widget: _BlinkingDatabaseButton(
+            onPressed: () => showDatabaseGenerationDialog(context),
+          ),
+          icon: FluentIcons.database_arrow_right_24_regular,
+          tooltip: 'יצירת מסד נתונים',
+          onPressed: () => showDatabaseGenerationDialog(context),
+        ),
 
       // סינכרון - מוצג רק אם מצב אופליין לא מופעל
       if (!settingsState.isOfflineMode) _buildSyncActionButton(),
@@ -1237,95 +1353,94 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     LibraryState state,
     SettingsState settingsState,
   ) {
-    // בדיקה אם נמצאים בתיקיה הראשית
-    final isAtRoot = _depth == 0;
-
     return [
-      // 1) חזור לתיקיה קודמת, חזרה לתיקיה ראשית (החשובים ביותר)
+      // 1) חזור לתיקיה קודמת + סינכרון (חייב להיות תמיד מחוץ לתפריט)
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.arrow_up_24_regular),
           tooltip: 'חזרה לתיקיה הקודמת',
-          onPressed: isAtRoot
-              ? null
-              : () {
-                  // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-                  if (_viewMode == ViewMode.list &&
-                      _expandedCategories.isNotEmpty) {
-                    setState(() {
-                      _expandedCategories.remove(_expandedCategories.last);
-                    });
-                  }
-                  // בתצוגת רשת - חזור לקטגוריה הקודמת
-                  else if (state.currentCategory?.parent != null) {
-                    setState(() {
-                      _depth = _depth > 0 ? _depth - 1 : 0;
-                    });
-                    context.read<LibraryBloc>().add(NavigateUp());
-                    context.read<LibraryBloc>().add(const SearchBooks());
-                    _refocusSearchBar(selectAll: true);
-                  }
-                },
+          onPressed: () {
+            // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
+            if (_viewMode == ViewMode.list && _expandedCategories.isNotEmpty) {
+              setState(() {
+                _expandedCategories.remove(_expandedCategories.last);
+              });
+            }
+            // בתצוגת רשת - חזור לקטגוריה הקודמת
+            else if (state.currentCategory?.parent != null) {
+              setState(() {
+                _depth = _depth > 0 ? _depth - 1 : 0;
+              });
+              context.read<LibraryBloc>().add(NavigateUp());
+              context.read<LibraryBloc>().add(const SearchBooks());
+              _refocusSearchBar(selectAll: true);
+            }
+          },
         ),
         icon: FluentIcons.arrow_up_24_regular,
         tooltip: 'חזרה לתיקיה הקודמת',
-        onPressed: isAtRoot
-            ? null
-            : () {
-                // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-                if (_viewMode == ViewMode.list &&
-                    _expandedCategories.isNotEmpty) {
-                  setState(() {
-                    _expandedCategories.remove(_expandedCategories.last);
-                  });
-                }
-                // בתצוגת רשת - חזור לקטגוריה הקודמת
-                else if (state.currentCategory?.parent != null) {
-                  setState(() {
-                    _depth = _depth > 0 ? _depth - 1 : 0;
-                  });
-                  context.read<LibraryBloc>().add(NavigateUp());
-                  context.read<LibraryBloc>().add(const SearchBooks());
-                  _refocusSearchBar(selectAll: true);
-                }
-              },
+        onPressed: () {
+          // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
+          if (_viewMode == ViewMode.list && _expandedCategories.isNotEmpty) {
+            setState(() {
+              _expandedCategories.remove(_expandedCategories.last);
+            });
+          }
+          // בתצוגת רשת - חזור לקטגוריה הקודמת
+          else if (state.currentCategory?.parent != null) {
+            setState(() {
+              _depth = _depth > 0 ? _depth - 1 : 0;
+            });
+            context.read<LibraryBloc>().add(NavigateUp());
+            context.read<LibraryBloc>().add(const SearchBooks());
+            _refocusSearchBar(selectAll: true);
+          }
+        },
       ),
+
+      // סינכרון - עדיפות גבוהה כדי שלא יכנס לתפריט "..."
+      if (!settingsState.isOfflineMode) _buildSyncActionButton(),
 
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.home_24_regular),
           tooltip: 'חזרה לתיקיה הראשית',
-          onPressed: isAtRoot
-              ? null
-              : () {
-                  setState(() {
-                    _depth = 0;
-                    _expandedCategories.clear(); // נקה את העץ הפתוח
-                  });
-                  context.read<LibraryBloc>().add(LoadLibrary());
-                  context
-                      .read<FocusRepository>()
-                      .librarySearchController
-                      .clear();
-                  _update(context, state, settingsState);
-                  _refocusSearchBar(selectAll: true);
-                },
+          onPressed: () {
+            setState(() {
+              _depth = 0;
+              _expandedCategories.clear(); // נקה את העץ הפתוח
+            });
+            context.read<LibraryBloc>().add(LoadLibrary());
+            context.read<FocusRepository>().librarySearchController.clear();
+            _update(context, state, settingsState);
+            _refocusSearchBar(selectAll: true);
+          },
         ),
         icon: FluentIcons.home_24_regular,
         tooltip: 'חזרה לתיקיה הראשית',
-        onPressed: isAtRoot
-            ? null
-            : () {
-                setState(() {
-                  _depth = 0;
-                  _expandedCategories.clear(); // נקה את העץ הפתוח
-                });
-                context.read<LibraryBloc>().add(LoadLibrary());
-                context.read<FocusRepository>().librarySearchController.clear();
-                _update(context, state, settingsState);
-                _refocusSearchBar(selectAll: true);
-              },
+        onPressed: () {
+          setState(() {
+            _depth = 0;
+            _expandedCategories.clear(); // נקה את העץ הפתוח
+          });
+          context.read<LibraryBloc>().add(LoadLibrary());
+          context.read<FocusRepository>().librarySearchController.clear();
+          _update(context, state, settingsState);
+          _refocusSearchBar(selectAll: true);
+        },
       ),
+
+      // יצירת מסד נתונים - אם אין DB: בחוץ. אם יש: עובר לתפריט "...".
+      if (!(Platform.isAndroid || Platform.isIOS) &&
+          _showDbGenerationButton == true)
+        ActionButtonData(
+          widget: _BlinkingDatabaseButton(
+            onPressed: () => showDatabaseGenerationDialog(context),
+          ),
+          icon: FluentIcons.database_arrow_right_24_regular,
+          tooltip: 'יצירת מסד נתונים',
+          onPressed: () => showDatabaseGenerationDialog(context),
+        ),
 
       // 2) הצג היסטוריה, הצג סימניות
       ActionButtonData(
@@ -1366,9 +1481,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         tooltip: 'החלף שולחן עבודה',
         onPressed: () => _showSwitchWorkspaceDialog(context),
       ),
-
-      // 4) סינכרון - מוצג רק אם מצב אופליין לא מופעל
-      if (!settingsState.isOfflineMode) _buildSyncActionButton(),
 
       // 5) טעינה מחדש של רשימת הספרים
       ActionButtonData(
@@ -1442,6 +1554,91 @@ class _LoadingDotsTextState extends State<_LoadingDotsText>
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Widget של כפתור יצירת מסד נתונים עם אנימציית הבהוב אדום עדין
+/// מהבהב 5 פעמים ואז נעצר
+class _BlinkingDatabaseButton extends StatefulWidget {
+  final VoidCallback onPressed;
+
+  const _BlinkingDatabaseButton({required this.onPressed});
+
+  @override
+  State<_BlinkingDatabaseButton> createState() =>
+      _BlinkingDatabaseButtonState();
+}
+
+class _BlinkingDatabaseButtonState extends State<_BlinkingDatabaseButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Color?> _colorAnimation;
+  int _blinkCount = 0;
+  static const int maxBlinks = 5;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _blinkCount++;
+        if (_blinkCount < maxBlinks) {
+          _controller.reverse();
+        }
+      } else if (status == AnimationStatus.dismissed) {
+        if (_blinkCount < maxBlinks) {
+          _controller.forward();
+        }
+      }
+    });
+
+    // התחל את האנימציה
+    _controller.forward();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // יצירת אנימציית צבע עדינה מהרקע הרגיל לאדום עדין
+    _colorAnimation = ColorTween(
+      begin: Theme.of(context).colorScheme.surfaceContainerHighest,
+      end: Colors.red.withValues(alpha: 0.3), // אדום עדין מאוד
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _colorAnimation,
+      builder: (context, child) {
+        return IconButton(
+          icon: const Icon(FluentIcons.database_arrow_right_24_regular),
+          tooltip: 'יצירת מסד נתונים - לחץ כאן!',
+          onPressed: widget.onPressed,
+          style: IconButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            backgroundColor: _colorAnimation.value,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       },
