@@ -17,6 +17,7 @@ import 'package:otzaria/history/history_dialog.dart';
 import 'package:otzaria/bookmarks/bookmarks_dialog.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:otzaria/settings/reading_settings_dialog.dart';
+import 'package:otzaria/settings/library_settings_dialog.dart';
 import 'package:otzaria/utils/fullscreen_helper.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
@@ -26,6 +27,8 @@ import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/library/bloc/library_state.dart';
 
 class CustomTitleBar extends StatefulWidget {
   const CustomTitleBar({super.key});
@@ -163,17 +166,58 @@ class _CustomTitleBarState extends State<CustomTitleBar>
       SettingsState settingsState) {
     if (navState.currentScreen == Screen.reading) {
       return _buildReadingTabs(context, settingsState);
+    } else if (navState.currentScreen == Screen.library) {
+      return _buildLibraryTitle(context);
     } else {
       return _buildStandardTitle(context, navState);
     }
   }
 
+  Widget _buildLibraryTitle(BuildContext context) {
+    return BlocBuilder<LibraryBloc, LibraryState>(
+      buildWhen: (previous, current) =>
+          previous.currentCategory != current.currentCategory,
+      builder: (context, libraryState) {
+        final title = libraryState.currentCategory?.title ?? '';
+        return Row(
+          children: [
+            Expanded(
+              child: DragToMoveArea(
+                child: Center(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.secondary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: IconButton(
+                icon: const Icon(FluentIcons.settings_24_regular, size: 18),
+                tooltip: 'הגדרות ספרייה',
+                onPressed: () => showLibrarySettingsDialog(context),
+                style: _kIconButtonStyle.copyWith(
+                  foregroundColor: WidgetStatePropertyAll(
+                      Theme.of(context).colorScheme.onSurfaceVariant),
+                  backgroundColor: WidgetStatePropertyAll(
+                      Theme.of(context).colorScheme.surfaceContainerHighest),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildStandardTitle(BuildContext context, NavigationState navState) {
     String title = 'אוצריא';
     switch (navState.currentScreen) {
-      case Screen.library:
-        title = 'ספרייה';
-        break;
       case Screen.find:
         title = 'איתור';
         break;
