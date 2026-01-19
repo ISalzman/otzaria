@@ -47,9 +47,9 @@ import 'package:otzaria/utils/fullscreen_helper.dart';
 
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/widgets/resizable_drag_handle.dart';
-import 'package:shamor_zachor/providers/shamor_zachor_data_provider.dart';
-import 'package:shamor_zachor/providers/shamor_zachor_progress_provider.dart';
-import 'package:shamor_zachor/models/book_model.dart';
+import 'package:otzaria/shamor_zachor/providers/shamor_zachor_data_provider.dart';
+import 'package:otzaria/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
+import 'package:otzaria/shamor_zachor/models/book_model.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';

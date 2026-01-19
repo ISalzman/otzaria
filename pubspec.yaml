@@ -112,8 +112,6 @@ dependencies:
   super_clipboard: ^0.9.1
   flutter_local_notifications: ^19.5.0
   timezone: ^0.10.1
-  shamor_zachor:
-    path: ./packages/shamor_zachor
   flutter_single_instance: ^1.7.0
   xml: ^6.6.1
   flutter_markdown: ^0.7.7
@@ -173,6 +171,7 @@ flutter:
     - assets/
     - assets/logos/
     - assets/ca/
+    - assets/shamor_zachor/data/
     - assets/icon/logo_nedarim.png
     - assets/icon/memorial_candle.svg
     - assets/icon/שמור וזכור.png
