@@ -12,6 +12,7 @@ import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
+import 'package:otzaria/settings/custom_folders/custom_folders_tile.dart';
 
 /// טאב הגדרות ספרייה
 class LibrarySettingsTab extends StatelessWidget {
@@ -33,10 +34,13 @@ class LibrarySettingsTab extends StatelessWidget {
                 children: [
                   SwitchListTile(
                     secondary: const Icon(FluentIcons.globe_24_regular),
-                    title: const Text('האם להציג ספרים מאתרים חיצוניים?', style: TextStyle(fontSize: 16)),
-                    subtitle: Text(state.showExternalBooks
-                        ? 'יוצגו גם ספרים מאתרים חיצוניים'
-                        : 'יוצגו רק ספרים מספריית אוצריא', style: const TextStyle(fontSize: 13)),
+                    title: const Text('האם להציג ספרים מאתרים חיצוניים?',
+                        style: TextStyle(fontSize: 16)),
+                    subtitle: Text(
+                        state.showExternalBooks
+                            ? 'יוצגו גם ספרים מאתרים חיצוניים'
+                            : 'יוצגו רק ספרים מספריית אוצריא',
+                        style: const TextStyle(fontSize: 13)),
                     value: state.showExternalBooks,
                     onChanged: (value) {
                       context
@@ -55,7 +59,8 @@ class LibrarySettingsTab extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(right: 32.0),
                       child: CheckboxListTile(
-                        title: const Text('הצג ספרים מאוצר החכמה', style: TextStyle(fontSize: 16)),
+                        title: const Text('הצג ספרים מאוצר החכמה',
+                            style: TextStyle(fontSize: 16)),
                         value: state.showOtzarHachochma,
                         onChanged: (value) {
                           if (value != null) {
@@ -69,7 +74,8 @@ class LibrarySettingsTab extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(right: 32.0),
                       child: CheckboxListTile(
-                        title: const Text('הצג ספרים מהיברובוקס', style: TextStyle(fontSize: 16)),
+                        title: const Text('הצג ספרים מהיברובוקס',
+                            style: TextStyle(fontSize: 16)),
                         value: state.showHebrewBooks,
                         onChanged: (value) {
                           if (value != null) {
@@ -93,13 +99,16 @@ class LibrarySettingsTab extends StatelessWidget {
                   children: [
                     ListTile(
                       leading: const Icon(FluentIcons.folder_24_regular),
-                      title: const Text('מיקום הספרייה', style: TextStyle(fontSize: 16)),
+                      title: const Text('מיקום הספרייה',
+                          style: TextStyle(fontSize: 16)),
                       subtitle: Text(
-                        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ??
+                        Settings.getValue<String>(
+                                SettingsRepository.keyLibraryPath) ??
                             'לא קיים',
                         style: const TextStyle(fontSize: 13),
                       ),
-                      trailing: const Icon(FluentIcons.chevron_right_24_regular),
+                      trailing:
+                          const Icon(FluentIcons.chevron_right_24_regular),
                       onTap: () async {
                         String? path =
                             await FilePicker.platform.getDirectoryPath();
@@ -118,9 +127,11 @@ class LibrarySettingsTab extends StatelessWidget {
                       message: 'במידה וקיימים ברשותך ספרים ממאגר זה',
                       child: ListTile(
                         leading: const Icon(FluentIcons.folder_24_regular),
-                        title: const Text('מיקום ספרי היברובוקס', style: TextStyle(fontSize: 16)),
+                        title: const Text('מיקום ספרי היברובוקס',
+                            style: TextStyle(fontSize: 16)),
                         subtitle: Text(
-                          Settings.getValue<String>(SettingsRepository.keyHebrewBooksPath) ??
+                          Settings.getValue<String>(
+                                  SettingsRepository.keyHebrewBooksPath) ??
                               'לא קיים',
                           style: const TextStyle(fontSize: 13),
                         ),
@@ -140,6 +151,18 @@ class LibrarySettingsTab extends StatelessWidget {
                         },
                       ),
                     ),
+                  ],
+                ),
+              ],
+
+              // תיקיות מותאמות אישית (רק בדסקטופ)
+              if (!(Platform.isAndroid || Platform.isIOS)) ...[
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  context: context,
+                  title: 'תיקיות מותאמות אישית',
+                  children: const [
+                    CustomFoldersTile(),
                   ],
                 ),
               ],
