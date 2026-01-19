@@ -30,6 +30,8 @@ class ReadingScreen extends StatefulWidget {
 
 class _ReadingScreenState extends State<ReadingScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  TabController? _tabController;
+
   @override
   void initState() {
     super.initState();
@@ -46,8 +48,47 @@ class _ReadingScreenState extends State<ReadingScreen>
         // Ignore errors during disposal
       }
     }
+    _tabController?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _handleTabControllerChange() {
+    final controller = _tabController;
+    if (controller == null) return;
+    final tabsState = context.read<TabsBloc>().state;
+    if (!tabsState.hasOpenTabs) return;
+
+    if (controller.indexIsChanging &&
+        tabsState.currentTabIndex < tabsState.tabs.length) {
+      context.read<HistoryBloc>().add(
+          CaptureStateForHistory(tabsState.tabs[tabsState.currentTabIndex]));
+      context.read<TabsBloc>().add(const SaveTabs());
+    }
+
+    if (controller.index != tabsState.currentTabIndex) {
+      context.read<TabsBloc>().add(SetCurrentTab(controller.index));
+    }
+  }
+
+  void _ensureTabController(TabsState state) {
+    if (!state.hasOpenTabs) return;
+
+    final validIndex = state.currentTabIndex.clamp(0, state.tabs.length - 1);
+    if (_tabController == null || _tabController!.length != state.tabs.length) {
+      _tabController?.dispose();
+      _tabController = TabController(
+        length: state.tabs.length,
+        vsync: this,
+        initialIndex: validIndex,
+      )..addListener(_handleTabControllerChange);
+      return;
+    }
+
+    if (_tabController!.index != validIndex &&
+        !_tabController!.indexIsChanging) {
+      _tabController!.animateTo(validIndex);
+    }
   }
 
   @override
@@ -123,45 +164,14 @@ class _ReadingScreenState extends State<ReadingScreen>
                 );
               }
 
-              // וידוא שהאינדקס תקף לפני יצירת ה-TabController
-              final validIndex =
-                  state.currentTabIndex.clamp(0, state.tabs.length - 1);
-              final controller = TabController(
-                length: state.tabs.length,
-                vsync: this,
-                initialIndex: validIndex,
-              );
-
-              controller.addListener(() {
-                // בדיקה אם TabBarView קיים (לא במצב side-by-side)
-                try {
-                  if (controller.indexIsChanging &&
-                      state.currentTabIndex < state.tabs.length) {
-                    // שמירת המצב הנוכחי לפני המעבר לטאב אחר
-                    context.read<HistoryBloc>().add(CaptureStateForHistory(
-                        state.tabs[state.currentTabIndex]));
-                    // שמירת כל הטאבים לדיסק
-                    context.read<TabsBloc>().add(const SaveTabs());
-                  }
-                  if (controller.index != state.currentTabIndex) {
-                    debugPrint('DEBUG: עדכון טאב נוכחי ל-${controller.index}');
-                    context
-                        .read<TabsBloc>()
-                        .add(SetCurrentTab(controller.index));
-                  }
-                } catch (e) {
-                  // אם TabBarView לא קיים, מתעלמים
-                  debugPrint(
-                      'DEBUG: TabController listener error (expected in side-by-side mode): $e');
-                }
-              });
+              _ensureTabController(state);
 
               return Scaffold(
                 body: SizedBox.fromSize(
                   size: MediaQuery.of(context).size,
                   child: TabBarView(
                     key: const ValueKey('normal_tab_view'),
-                    controller: controller,
+                    controller: _tabController,
                     children:
                         state.tabs.map((tab) => _buildTabView(tab)).toList(),
                   ),
@@ -246,7 +256,6 @@ class _ReadingScreenState extends State<ReadingScreen>
     }
     return const SizedBox.shrink();
   }
-
 }
 
 // Widget להצגת 2 ספרים זה לצד זה
@@ -333,5 +342,3 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
     );
   }
 }
-
-
