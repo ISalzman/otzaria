@@ -64,6 +64,38 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     super.dispose();
   }
 
+  void _handleReadingTabControllerChange() {
+    final controller = _tabController;
+    if (controller == null) return;
+    final tabsState = context.read<TabsBloc>().state;
+    if (!tabsState.hasOpenTabs) return;
+
+    if (controller.indexIsChanging &&
+        controller.index != tabsState.currentTabIndex) {
+      context.read<TabsBloc>().add(SetCurrentTab(controller.index));
+    }
+  }
+
+  void _ensureReadingTabController(TabsState state) {
+    if (!state.hasOpenTabs) return;
+
+    final validIndex = state.currentTabIndex.clamp(0, state.tabs.length - 1);
+    if (_tabController == null || _tabController!.length != state.tabs.length) {
+      _tabController?.dispose();
+      _tabController = TabController(
+        length: state.tabs.length,
+        vsync: this,
+        initialIndex: validIndex,
+      )..addListener(_handleReadingTabControllerChange);
+      return;
+    }
+
+    if (_tabController!.index != validIndex &&
+        !_tabController!.indexIsChanging) {
+      _tabController!.animateTo(validIndex);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<NavigationBloc, NavigationState>(
@@ -255,34 +287,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           );
         }
 
-        // ניהול ה-TabController
-        final validIndex =
-            state.currentTabIndex.clamp(0, state.tabs.length - 1);
-
-        // יצירה מחדש של הקונטרולר אם צריך (כמו ב-ReadingScreen)
-        if (_tabController == null ||
-            _tabController!.length != state.tabs.length) {
-          _tabController?.dispose();
-          _tabController = TabController(
-            length: state.tabs.length,
-            vsync: this,
-            initialIndex: validIndex,
-          );
-          _tabController!.addListener(() {
-            if (_tabController!.indexIsChanging) {
-              // עדכון ה-Bloc כשהמשתמש לוחץ על טאב
-              if (_tabController!.index != state.currentTabIndex) {
-                context
-                    .read<TabsBloc>()
-                    .add(SetCurrentTab(_tabController!.index));
-              }
-            }
-          });
-        } else if (_tabController!.index != validIndex &&
-            !_tabController!.indexIsChanging) {
-          // סנכרון הקונטרולר אם ה-Bloc השתנה ממקור אחר (למשל סגירת טאב)
-          _tabController!.animateTo(validIndex);
-        }
+        _ensureReadingTabController(state);
 
         // חישוב מרווחים למרכוז
         double leftSpacerWidth = 0;
