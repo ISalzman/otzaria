@@ -36,8 +36,10 @@ class CustomTitleBar extends StatefulWidget {
 
 const double _kAppBarControlsWidth = 125.0;
 const double _kAppBarControlsWidthRightAligned = 105.0;
-const int _kActionButtonsCount = 2; // fullscreen + settings
+const int _kActionButtonsCount = 1; // settings בלבד
 const double _kActionButtonWidth = 56.0;
+const double _kWindowCaptionButtonsWidth = 138.0;
+const double _kWindowCaptionButtonWidth = 46.0;
 
 /// סגנון משותף לכפתורי האייקון בשורת הכותרת
 final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
@@ -65,32 +67,49 @@ class _CustomTitleBarState extends State<CustomTitleBar>
       builder: (context, navState) {
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
-            return Container(
+            return SizedBox(
               height: 40, // גובה הכותרת
-              color: Theme.of(context).colorScheme.surface,
-              child: Row(
+              child: Stack(
                 children: [
-                  // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים
-                  _buildActionButtons(context, settingsState),
+                  Container(
+                    color: Theme.of(context).colorScheme.surface,
+                    child: Row(
+                      children: [
+                        // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים
+                        _buildActionButtons(context, settingsState),
 
-                  // תוכן הכותרת (טאבים או כותרת רגילה)
-                  Expanded(
-                    child: _buildContent(context, navState, settingsState),
-                  ),
+                        // תוכן הכותרת (טאבים או כותרת רגילה)
+                        Expanded(
+                          child:
+                              _buildContent(context, navState, settingsState),
+                        ),
 
-                  // כפתורי חלון (רק בדסקטופ)
-                  if (!kIsWeb &&
-                      (Platform.isWindows ||
-                          Platform.isLinux ||
-                          Platform.isMacOS))
-                    const SizedBox(
-                      width: 138,
-                      height: 50,
-                      child: WindowCaption(
-                        brightness: Brightness.light,
-                        backgroundColor: Colors.transparent,
-                      ),
+                        // כפתורי חלון (רק בדסקטופ)
+                        if (!kIsWeb &&
+                            (Platform.isWindows ||
+                                Platform.isLinux ||
+                                Platform.isMacOS))
+                          SizedBox(
+                            height: 50,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildFullscreenCaptionButton(
+                                    context, settingsState),
+                                const SizedBox(
+                                  width: _kWindowCaptionButtonsWidth,
+                                  height: 50,
+                                  child: WindowCaption(
+                                    brightness: Brightness.light,
+                                    backgroundColor: Colors.transparent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
+                  ),
                 ],
               ),
             );
@@ -128,12 +147,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
             tooltip: 'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
             onPressed: () => _showBookmarksDialog(context),
             style: _kIconButtonStyle,
-          ),
-          Container(
-            height: 20,
-            width: 1,
-            color: Colors.grey.shade400,
-            margin: const EdgeInsets.symmetric(horizontal: 2),
           ),
           IconButton(
             icon: const Icon(FluentIcons.add_square_24_regular, size: 18),
@@ -234,10 +247,11 @@ class _CustomTitleBarState extends State<CustomTitleBar>
         if (!settingsState.alignTabsToRight) {
           bool showWindowControls = !kIsWeb &&
               (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
-          double windowControlsWidth = showWindowControls ? 138.0 : 0.0;
+          double windowControlsWidth = showWindowControls
+              ? _kWindowCaptionButtonsWidth + _kWindowCaptionButtonWidth
+              : 0.0;
           double actionButtonsWidth = _kAppBarControlsWidth;
-          double extraButtonsWidth =
-              _kActionButtonsCount * _kActionButtonWidth;
+          double extraButtonsWidth = _kActionButtonsCount * _kActionButtonWidth;
 
           double totalLeft = actionButtonsWidth;
           double totalRight = extraButtonsWidth + windowControlsWidth;
@@ -274,22 +288,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
               ),
             ),
 
-            // כפתורים נוספים (מסך מלא, הגדרות)
-            IconButton(
-              icon: Icon(
-                settingsState.isFullscreen
-                    ? FluentIcons.full_screen_minimize_24_regular
-                    : FluentIcons.full_screen_maximize_24_regular,
-                size: 18,
-              ),
-              tooltip: settingsState.isFullscreen ? 'צא ממסך מלא' : 'מסך מלא',
-              onPressed: () async {
-                final newFullscreenState = !settingsState.isFullscreen;
-                await FullscreenHelper.toggleFullscreen(
-                    context, newFullscreenState);
-              },
-              style: _kIconButtonStyle,
-            ),
+            // כפתורים נוספים (הגדרות)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4.0),
               child: IconButton(
@@ -332,6 +331,21 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     showDialog(
       context: context,
       builder: (context) => const WorkspaceSwitcherDialog(),
+    );
+  }
+
+  Widget _buildFullscreenCaptionButton(
+      BuildContext context, SettingsState settingsState) {
+    return _CaptionActionButton(
+      brightness: Brightness.light,
+      tooltip: settingsState.isFullscreen ? 'צא ממסך מלא' : 'מסך מלא',
+      icon: settingsState.isFullscreen
+          ? FluentIcons.full_screen_minimize_24_regular
+          : FluentIcons.full_screen_maximize_24_regular,
+      onPressed: () async {
+        final newFullscreenState = !settingsState.isFullscreen;
+        await FullscreenHelper.toggleFullscreen(context, newFullscreenState);
+      },
     );
   }
 
@@ -676,4 +690,93 @@ class _TabBackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CaptionActionButton extends StatefulWidget {
+  const _CaptionActionButton({
+    required this.onPressed,
+    required this.icon,
+    required this.brightness,
+    this.tooltip,
+  });
+
+  final VoidCallback onPressed;
+  final IconData icon;
+  final Brightness brightness;
+  final String? tooltip;
+
+  @override
+  State<_CaptionActionButton> createState() => _CaptionActionButtonState();
+}
+
+class _CaptionActionButtonState extends State<_CaptionActionButton> {
+  bool _isHovering = false;
+  bool _isPressed = false;
+
+  void _onHover(bool hovered) {
+    if (_isHovering != hovered) {
+      setState(() => _isHovering = hovered);
+    }
+  }
+
+  void _onPressedState(bool pressed) {
+    if (_isPressed != pressed) {
+      setState(() => _isPressed = pressed);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.brightness == Brightness.dark;
+
+    Color bgColor = Colors.transparent;
+    Color iconColor =
+        isDark ? Colors.white : Colors.black.withValues(alpha: 0.8956);
+
+    if (_isHovering) {
+      bgColor = isDark
+          ? Colors.white.withValues(alpha: 0.0605)
+          : Colors.black.withValues(alpha: 0.0373);
+    }
+    if (_isPressed) {
+      bgColor = isDark
+          ? Colors.white.withValues(alpha: 0.0419)
+          : Colors.black.withValues(alpha: 0.0241);
+      iconColor = isDark
+          ? Colors.white.withValues(alpha: 0.786)
+          : Colors.black.withValues(alpha: 0.6063);
+    }
+
+    final button = MouseRegion(
+      onExit: (_) => _onHover(false),
+      onHover: (_) => _onHover(true),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _onPressedState(true),
+        onTapCancel: () => _onPressedState(false),
+        onTapUp: (_) => _onPressedState(false),
+        onTap: widget.onPressed,
+        child: Container(
+          constraints: const BoxConstraints(
+            minWidth: _kWindowCaptionButtonWidth,
+            minHeight: 32,
+          ),
+          decoration: BoxDecoration(color: bgColor),
+          child: Center(
+            child: Icon(
+              widget.icon,
+              size: 16,
+              color: iconColor,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (widget.tooltip == null) {
+      return button;
+    }
+
+    return Tooltip(message: widget.tooltip!, child: button);
+  }
 }
