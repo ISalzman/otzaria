@@ -424,68 +424,86 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                   children: [
                                     SizedBox.fromSize(
                                       size: const Size.fromWidth(74),
-                                      child: Material(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .surface,
-                                        child: LayoutBuilder(
-                                          builder: (context, constraints) {
-                                            // חישוב גובה משוער לכל הכפתורים
-                                            const buttonHeight =
-                                                60.0; // גובה משוער לכפתור + padding
-                                            final totalButtonsHeight =
-                                                7 * buttonHeight;
-                                            final minSpacerHeight = 20.0;
-                                            final needsScroll =
-                                                totalButtonsHeight +
-                                                        minSpacerHeight >
-                                                    constraints.maxHeight;
+                                      child: Column(
+                                        children: [
+                                          const Divider(
+                                            height: 1,
+                                            thickness: 1,
+                                          ),
+                                          Expanded(
+                                            child: Material(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .surface,
+                                              child: LayoutBuilder(
+                                                builder:
+                                                    (context, constraints) {
+                                                  // חישוב גובה משוער לכל הכפתורים
+                                                  const buttonHeight =
+                                                      60.0; // גובה משוער לכפתור + padding
+                                                  final totalButtonsHeight =
+                                                      7 * buttonHeight;
+                                                  final minSpacerHeight = 20.0;
+                                                  final needsScroll =
+                                                      totalButtonsHeight +
+                                                              minSpacerHeight >
+                                                          constraints.maxHeight;
 
-                                            if (needsScroll) {
-                                              // אם אין מספיק מקום, השתמש בגלילה
-                                              return SingleChildScrollView(
-                                                child: Column(
-                                                  children: [
-                                                    for (int i = 0; i < 7; i++)
-                                                      _buildNavButton(
-                                                        context,
-                                                        _buildNavigationDestinations()[
-                                                            i],
-                                                        i,
-                                                        state.currentScreen,
+                                                  if (needsScroll) {
+                                                    // אם אין מספיק מקום, השתמש בגלילה
+                                                    return SingleChildScrollView(
+                                                      child: Column(
+                                                        children: [
+                                                          for (int i = 0;
+                                                              i < 7;
+                                                              i++)
+                                                            _buildNavButton(
+                                                              context,
+                                                              _buildNavigationDestinations()[
+                                                                  i],
+                                                              i,
+                                                              state
+                                                                  .currentScreen,
+                                                            ),
+                                                        ],
                                                       ),
-                                                  ],
-                                                ),
-                                              );
-                                            } else {
-                                              // אם יש מספיק מקום, השתמש ב-Spacer
-                                              return Column(
-                                                children: [
-                                                  // כפתורים עליונים
-                                                  for (int i = 0; i < 5; i++)
-                                                    _buildNavButton(
-                                                      context,
-                                                      _buildNavigationDestinations()[
-                                                          i],
-                                                      i,
-                                                      state.currentScreen,
-                                                    ),
-                                                  // רווח גמיש
-                                                  const Spacer(),
-                                                  // כפתורים תחתונים
-                                                  for (int i = 5; i < 7; i++)
-                                                    _buildNavButton(
-                                                      context,
-                                                      _buildNavigationDestinations()[
-                                                          i],
-                                                      i,
-                                                      state.currentScreen,
-                                                    ),
-                                                ],
-                                              );
-                                            }
-                                          },
-                                        ),
+                                                    );
+                                                  } else {
+                                                    // אם יש מספיק מקום, השתמש ב-Spacer
+                                                    return Column(
+                                                      children: [
+                                                        // כפתורים עליונים
+                                                        for (int i = 0;
+                                                            i < 5;
+                                                            i++)
+                                                          _buildNavButton(
+                                                            context,
+                                                            _buildNavigationDestinations()[
+                                                                i],
+                                                            i,
+                                                            state.currentScreen,
+                                                          ),
+                                                        // רווח גמיש
+                                                        const Spacer(),
+                                                        // כפתורים תחתונים
+                                                        for (int i = 5;
+                                                            i < 7;
+                                                            i++)
+                                                          _buildNavButton(
+                                                            context,
+                                                            _buildNavigationDestinations()[
+                                                                i],
+                                                            i,
+                                                            state.currentScreen,
+                                                          ),
+                                                      ],
+                                                    );
+                                                  }
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     const VerticalDivider(
