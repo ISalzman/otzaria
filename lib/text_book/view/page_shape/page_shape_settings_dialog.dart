@@ -80,6 +80,15 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     // טעינת קטגוריות זמינות
     _availableCategories =
         PageShapeSettingsManager.parseCategories(widget.heCategories);
+    
+    // אם אין קטגוריות, נסה לחלץ מהכותרת
+    if (_availableCategories.isEmpty && widget.bookTitle.contains(',')) {
+      // למשל: "משנה תורה, הלכות שבת" → ["משנה תורה"]
+      final firstPart = widget.bookTitle.split(',').first.trim();
+      if (firstPart.isNotEmpty) {
+        _availableCategories = [firstPart];
+      }
+    }
 
     // בדיקה מאיפה נטענו הגדרות המפרשים
     final activeCategory =
@@ -89,9 +98,10 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _selectedCategory = activeCategory;
     } else {
       _commentatorSaveScope = CommentatorSaveScope.book;
-      // בחירת קטגוריית ברירת מחדל (השנייה אם יש, אחרת הראשונה)
-      _selectedCategory =
-          PageShapeSettingsManager.getParentCategory(widget.heCategories);
+      // בחירת קטגוריית ברירת מחדל
+      _selectedCategory = _availableCategories.isNotEmpty 
+          ? _availableCategories.first
+          : null;
     }
 
     setState(() {
@@ -366,94 +376,94 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
               ),
 
               // בחירת היכן לשמור את הגדרות המפרשים
-              if (_availableCategories.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
                     color: Theme.of(context)
                         .colorScheme
-                        .primaryContainer
+                        .primary
                         .withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.3),
-                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            FluentIcons.save_24_regular,
-                            size: 20,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          FluentIcons.save_24_regular,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'שמירת בחירת מפרשים',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
                             color: Theme.of(context).colorScheme.primary,
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'שמירת בחירת מפרשים',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // אפשרות 1: לספר הנוכחי
-                      RadioGroup<CommentatorSaveScope>(
-                        groupValue: _commentatorSaveScope,
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _commentatorSaveScope = value;
-                              _hasChanges = true;
-                            });
-                            _saveSettings();
-                          }
-                        },
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Radio<CommentatorSaveScope>(
-                                  value: CommentatorSaveScope.book,
-                                ),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        _commentatorSaveScope =
-                                            CommentatorSaveScope.book;
-                                        _hasChanges = true;
-                                      });
-                                      _saveSettings();
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 8.0),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const Text('לספר הנוכחי בלבד'),
-                                          Text(
-                                            'המפרשים יחולו רק על "${widget.bookTitle}"',
-                                            style:
-                                                const TextStyle(fontSize: 11),
-                                          ),
-                                        ],
-                                      ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // אפשרות 1: לספר הנוכחי
+                    RadioGroup<CommentatorSaveScope>(
+                      groupValue: _commentatorSaveScope,
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _commentatorSaveScope = value;
+                            _hasChanges = true;
+                          });
+                          _saveSettings();
+                        }
+                      },
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Radio<CommentatorSaveScope>(
+                                value: CommentatorSaveScope.book,
+                              ),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _commentatorSaveScope =
+                                          CommentatorSaveScope.book;
+                                      _hasChanges = true;
+                                    });
+                                    _saveSettings();
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 8.0),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('לספר הנוכחי בלבד'),
+                                        Text(
+                                          'המפרשים יחולו רק על "${widget.bookTitle}"',
+                                          style:
+                                              const TextStyle(fontSize: 11),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
-                            // אפשרות 2: לקטגוריה
+                              ),
+                            ],
+                          ),
+                          // אפשרות 2: לקטגוריה - רק אם יש קטגוריות זמינות
+                          if (_availableCategories.isNotEmpty)
                             Row(
                               children: [
                                 Radio<CommentatorSaveScope>(
@@ -490,43 +500,43 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                                 ),
                               ],
                             ),
-                          ],
-                        ),
+                        ],
                       ),
-                      // בחירת קטגוריה
-                      if (_commentatorSaveScope ==
-                          CommentatorSaveScope.category) ...[
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedCategory,
-                          decoration: InputDecoration(
-                            labelText: 'בחר קטגוריה',
-                            border: const OutlineInputBorder(),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surface,
-                          ),
-                          items: _availableCategories.map((category) {
-                            return DropdownMenuItem<String>(
-                              value: category,
-                              child: Text(category,
-                                  style: const TextStyle(fontSize: 13)),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedCategory = value;
-                              _hasChanges = true;
-                            });
-                            _saveSettings();
-                          },
+                    ),
+                    // בחירת קטגוריה
+                    if (_commentatorSaveScope ==
+                            CommentatorSaveScope.category &&
+                        _availableCategories.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedCategory,
+                        decoration: InputDecoration(
+                          labelText: 'בחר קטגוריה',
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          filled: true,
+                          fillColor: Theme.of(context).colorScheme.surface,
                         ),
-                      ],
+                        items: _availableCategories.map((category) {
+                          return DropdownMenuItem<String>(
+                            value: category,
+                            child: Text(category,
+                                style: const TextStyle(fontSize: 13)),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedCategory = value;
+                            _hasChanges = true;
+                          });
+                          _saveSettings();
+                        },
+                      ),
                     ],
-                  ),
+                  ],
                 ),
-              ],
+              ),
 
               const SizedBox(height: 16),
               const Text(
