@@ -77,6 +77,10 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     on<LoadPerBookSettings>(_onLoadPerBookSettings);
     on<SavePerBookSettings>(_onSavePerBookSettings);
     on<ResetPerBookSettings>(_onResetPerBookSettings);
+
+    // UI state events
+    on<SetRightPaneHovering>(_onSetRightPaneHovering);
+    on<SetLoadingState>(_onSetLoadingState);
   }
 
   @override
@@ -649,5 +653,30 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       tab.savedZoom = 1.0;
       emit(current.copyWith(zoom: 1.0));
     }
+  }
+
+  // ============ UI State Event Handlers ============
+
+  void _onSetRightPaneHovering(
+    SetRightPaneHovering event,
+    Emitter<PdfBookState> emit,
+  ) {
+    final current = state;
+    if (current is! PdfBookLoaded) return;
+
+    emit(current.copyWith(isRightPaneHovering: event.isHovering));
+  }
+
+  void _onSetLoadingState(
+    SetLoadingState event,
+    Emitter<PdfBookState> emit,
+  ) {
+    final current = state;
+    if (current is! PdfBookLoaded) return;
+
+    emit(current.copyWith(
+      isLoading: event.isLoading,
+      loadSucceeded: event.succeeded,
+    ));
   }
 }
