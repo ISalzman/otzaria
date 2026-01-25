@@ -55,20 +55,8 @@ enum TextBookViewMode {
   pageShape,
 }
 
-/// Extension to convert view mode to strategy
+/// Extension to get display name for view modes
 extension TextBookViewModeExtension on TextBookViewMode {
-  /// Returns the strategy instance for this view mode
-  TextBookViewStrategy get strategy {
-    switch (this) {
-      case TextBookViewMode.split:
-        return SplitViewStrategy();
-      case TextBookViewMode.combined:
-        return CombinedViewStrategy();
-      case TextBookViewMode.pageShape:
-        return PageShapeStrategy();
-    }
-  }
-
   /// Returns display name for UI
   String get displayName {
     switch (this) {
@@ -79,39 +67,5 @@ extension TextBookViewModeExtension on TextBookViewMode {
       case TextBookViewMode.pageShape:
         return 'צורת הדף';
     }
-  }
-}
-
-// Forward declarations - actual implementations in separate files
-class SplitViewStrategy extends TextBookViewStrategy {
-  @override
-  String get displayName => TextBookViewMode.split.displayName;
-
-  @override
-  Widget buildView(BuildContext context, TextBookViewConfig config) {
-    // Implementation in split_view_strategy.dart
-    throw UnimplementedError('Use SplitViewStrategyImpl');
-  }
-}
-
-class CombinedViewStrategy extends TextBookViewStrategy {
-  @override
-  String get displayName => TextBookViewMode.combined.displayName;
-
-  @override
-  Widget buildView(BuildContext context, TextBookViewConfig config) {
-    // Implementation in combined_view_strategy.dart
-    throw UnimplementedError('Use CombinedViewStrategyImpl');
-  }
-}
-
-class PageShapeStrategy extends TextBookViewStrategy {
-  @override
-  String get displayName => TextBookViewMode.pageShape.displayName;
-
-  @override
-  Widget buildView(BuildContext context, TextBookViewConfig config) {
-    // Implementation in page_shape_strategy.dart
-    throw UnimplementedError('Use PageShapeStrategyImpl');
   }
 }
