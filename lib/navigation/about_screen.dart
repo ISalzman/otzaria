@@ -225,7 +225,7 @@ class _AboutScreenState extends State<AboutScreen> {
         'url': 'https://mitmachim.top/user/sivan22',
       },
       {
-        'name': 'יהודי צעיר', // יהודי צעיר
+        'name': 'י. צ.', // יהודי צעיר
         'url':
             'https://forum.otzaria.org/user/%D7%99%D7%94%D7%95%D7%93%D7%99-%D7%A6%D7%A2%D7%99%D7%A8',
       },
@@ -265,6 +265,10 @@ class _AboutScreenState extends State<AboutScreen> {
         'name': 'ה. ה.', // גאון גדול - הבל הבלים
         'url':
             'https://forum.otzaria.org/user/%D7%94%D7%91%D7%9C-%D7%94%D7%91%D7%9C%D7%99%D7%9D',
+      },
+      {
+        'name': 'י. א. ח.', // U88
+        'url': 'https://otzaria.org/forum/user/u88',
       },
     ];
 
