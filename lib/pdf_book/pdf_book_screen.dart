@@ -651,38 +651,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                           await document.loadOutline();
 
                                       // 1.1. שליחת אירוע DocumentReady ל-Bloc
+                                      // ה-Bloc יטפל גם בשחזור הזום (מהגדרות פר-ספר או מ-savedZoom)
                                       _bloc.add(pdf_events.DocumentReady(
                                         documentRef: controller.documentRef,
                                         outline: widget.tab.outline.value,
                                         totalPages: document.pages.length,
                                       ));
-
-                                      // 1.5. שחזור מצב הזום אם נשמר קודם
-                                      if (widget.tab.savedZoom != null &&
-                                          widget.tab.savedZoom != 1.0) {
-                                        // שימוש בלולאת retry במקום Future.delayed
-                                        // למניעת מצב שהקונטרולר לא מוכן
-                                        const maxAttempts = 10;
-                                        const retryDelay =
-                                            Duration(milliseconds: 50);
-
-                                        for (int attempt = 0;
-                                            attempt < maxAttempts;
-                                            attempt++) {
-                                          if (!mounted) break;
-                                          if (widget.tab.pdfViewerController
-                                              .isReady) {
-                                            widget.tab.pdfViewerController
-                                                .setZoom(
-                                              widget.tab.pdfViewerController
-                                                  .centerPosition,
-                                              widget.tab.savedZoom!,
-                                            );
-                                            break;
-                                          }
-                                          await Future.delayed(retryDelay);
-                                        }
-                                      }
 
                                       // 2. עדכון הכותרת הנוכחית
                                       final currentPage =
