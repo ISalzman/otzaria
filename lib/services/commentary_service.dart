@@ -118,12 +118,12 @@ class CommentaryService {
   static Future<List<LinkGroup>> sortGroupsByEra(List<LinkGroup> groups) async {
     if (groups.isEmpty) return groups;
 
-    // יצירת מפה של כל שם ספר לדור שלו
-    final Map<String, CommentaryEra> eraMap = {};
-
-    for (final group in groups) {
-      eraMap[group.bookTitle] = await getBookEra(group.bookTitle);
-    }
+    // יצירת מפה של כל שם ספר לדור שלו - הרצה במקביל לשיפור ביצועים
+    final eraFutures = groups.map((group) => getBookEra(group.bookTitle));
+    final eras = await Future.wait(eraFutures);
+    final Map<String, CommentaryEra> eraMap = {
+      for (int i = 0; i < groups.length; i++) groups[i].bookTitle: eras[i],
+    };
 
     // מיון הקבוצות לפי הדור
     final sortedGroups = List<LinkGroup>.from(groups);
