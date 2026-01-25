@@ -594,18 +594,28 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     final current = state;
     if (current is! PdfBookLoaded) return;
 
-    // Check if per-book settings are enabled
+    // בדיקה אם הגדרות פר-ספר מופעלות
     final enablePerBookSettings =
         Settings.getValue<bool>('key-enable-per-book-settings') ?? false;
-    if (!enablePerBookSettings) return;
 
-    final settings = await PdfBookPerBookSettings.load(current.book.title);
-    if (settings == null) return;
+    double? zoomToApply;
 
-    // Apply zoom if saved
-    if (settings.zoom != null) {
-      // Use retry loop instead of arbitrary delay
-      // This ensures we wait until the controller is actually ready
+    if (enablePerBookSettings) {
+      // נסה לטעון הגדרות פר-ספר
+      final settings = await PdfBookPerBookSettings.load(current.book.title);
+      if (settings?.zoom != null) {
+        zoomToApply = settings!.zoom;
+      }
+    }
+
+    // אם אין הגדרות פר-ספר, נסה לשחזר זום מהסשן (שנשמר ב-tab.savedZoom)
+    if (zoomToApply == null && tab.savedZoom != null && tab.savedZoom != 1.0) {
+      zoomToApply = tab.savedZoom;
+    }
+
+    // אם יש זום להחיל, מחילים אותו
+    if (zoomToApply != null) {
+      // Use retry loop to ensure controller is ready
       const maxAttempts = 10;
       const retryDelay = Duration(milliseconds: 50);
 
@@ -613,10 +623,10 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
         if (pdfController.isReady) {
           pdfController.setZoom(
             pdfController.centerPosition,
-            settings.zoom!,
+            zoomToApply,
           );
-          tab.savedZoom = settings.zoom;
-          emit(current.copyWith(zoom: settings.zoom!));
+          tab.savedZoom = zoomToApply;
+          emit(current.copyWith(zoom: zoomToApply));
           break;
         }
         // Wait before next attempt
