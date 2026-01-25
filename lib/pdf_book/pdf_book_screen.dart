@@ -464,8 +464,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   },
                   builder: (context, state) {
                     if (state is! PdfBookLoaded) return const SizedBox.shrink();
-                    if (!widget.tab.showLeftPane.value)
+                    if (!widget.tab.showLeftPane.value) {
                       return const SizedBox.shrink();
+                    }
                     return ResizableDragHandle(
                       isVertical: true,
                       hitSize: 4,
@@ -756,11 +757,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                           return true;
                         },
                         builder: (context, state) {
-                          if (state is! PdfBookLoaded)
+                          if (state is! PdfBookLoaded) {
                             return const SizedBox.shrink();
+                          }
                           // מציג את הכפתור רק כשהחלונית סגורה
-                          if (state.showRightPane)
+                          if (state.showRightPane) {
                             return const SizedBox.shrink();
+                          }
 
                           final isHovering = state.isRightPaneHovering;
 
