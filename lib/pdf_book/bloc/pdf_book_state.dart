@@ -101,6 +101,11 @@ class PdfBookLoaded extends PdfBookState {
   final List<Link> links;
   final int? currentTextLineNumber;
 
+  // UI state
+  final bool isRightPaneHovering;
+  final bool isLoading;
+  final bool loadSucceeded;
+
   const PdfBookLoaded({
     required this.book,
     this.documentRef,
@@ -127,6 +132,9 @@ class PdfBookLoaded extends PdfBookState {
     this.pdfHeadings,
     this.links = const [],
     this.currentTextLineNumber,
+    this.isRightPaneHovering = false,
+    this.isLoading = true,
+    this.loadSucceeded = true,
   });
 
   /// Create a copy with updated fields
@@ -156,6 +164,9 @@ class PdfBookLoaded extends PdfBookState {
     PdfHeadings? pdfHeadings,
     List<Link>? links,
     int? currentTextLineNumber,
+    bool? isRightPaneHovering,
+    bool? isLoading,
+    bool? loadSucceeded,
     // Special handling for nullable fields that need to be explicitly cleared
     bool clearDocumentRef = false,
     bool clearOutline = false,
@@ -196,6 +207,9 @@ class PdfBookLoaded extends PdfBookState {
       currentTextLineNumber: clearCurrentTextLineNumber
           ? null
           : (currentTextLineNumber ?? this.currentTextLineNumber),
+      isRightPaneHovering: isRightPaneHovering ?? this.isRightPaneHovering,
+      isLoading: isLoading ?? this.isLoading,
+      loadSucceeded: loadSucceeded ?? this.loadSucceeded,
     );
   }
 
@@ -218,5 +232,8 @@ class PdfBookLoaded extends PdfBookState {
         currentSearchMatchIndex,
         currentTextLineNumber,
         totalPages,
+        isRightPaneHovering,
+        isLoading,
+        loadSucceeded,
       ];
 }

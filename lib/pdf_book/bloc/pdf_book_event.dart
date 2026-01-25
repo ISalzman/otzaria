@@ -289,3 +289,26 @@ class SavePerBookSettings extends PdfBookEvent {
 class ResetPerBookSettings extends PdfBookEvent {
   const ResetPerBookSettings();
 }
+
+// ============ UI State Events ============
+
+/// Update right pane hovering state
+class SetRightPaneHovering extends PdfBookEvent {
+  final bool isHovering;
+
+  const SetRightPaneHovering(this.isHovering);
+
+  @override
+  List<Object?> get props => [isHovering];
+}
+
+/// Update loading state
+class SetLoadingState extends PdfBookEvent {
+  final bool isLoading;
+  final bool succeeded;
+
+  const SetLoadingState({required this.isLoading, this.succeeded = true});
+
+  @override
+  List<Object?> get props => [isLoading, succeeded];
+}
