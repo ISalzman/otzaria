@@ -59,7 +59,7 @@ dependencies:
   hive: ^4.0.0-dev.2
   isar_flutter_libs: ^4.0.0-dev.14
   isar: ^4.0.0-dev.14
-  msix: ^3.16.12
+  msix: ^3.16.13
   path_provider: ^2.1.5
   html: ^0.15.1
   pdfrx: ^2.2.24
