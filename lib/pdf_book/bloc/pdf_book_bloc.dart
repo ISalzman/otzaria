@@ -601,16 +601,30 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     if (settings == null) return;
 
     // Apply zoom if saved
-    if (settings.zoom != null && pdfController.isReady) {
-      // Small delay to ensure viewer is ready
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (pdfController.isReady) {
-        pdfController.setZoom(
-          pdfController.centerPosition,
-          settings.zoom!,
-        );
-        tab.savedZoom = settings.zoom;
-        emit(current.copyWith(zoom: settings.zoom!));
+    if (settings.zoom != null) {
+      // Use retry loop instead of arbitrary delay
+      // This ensures we wait until the controller is actually ready
+      const maxAttempts = 10;
+      const retryDelay = Duration(milliseconds: 50);
+
+      for (int attempt = 0; attempt < maxAttempts; attempt++) {
+        if (pdfController.isReady) {
+          pdfController.setZoom(
+            pdfController.centerPosition,
+            settings.zoom!,
+          );
+          tab.savedZoom = settings.zoom;
+          emit(current.copyWith(zoom: settings.zoom!));
+          break;
+        }
+        // Wait before next attempt
+        await Future.delayed(retryDelay);
+      }
+
+      // Log warning if zoom couldn't be applied
+      if (!pdfController.isReady) {
+        debugPrint(
+            'Warning: Could not apply saved zoom - controller not ready after $maxAttempts attempts');
       }
     }
   }
