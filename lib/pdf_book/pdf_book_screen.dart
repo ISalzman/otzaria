@@ -4,11 +4,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/pdf_headings.dart';
+import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
+import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart' as pdf_events;
+import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
 import 'package:otzaria/pdf_book/pdf_page_number_dispaly.dart';
 import 'package:otzaria/pdf_book/pdf_commentary_panel.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
@@ -60,6 +64,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   bool get wantKeepAlive => true;
 
   late final PdfViewerController pdfController;
+  late final PdfBookBloc _bloc;
   PdfTextSearcher? textSearcher;
   TabController? _leftPaneTabController;
   int _currentLeftPaneTabIndex = 0;
@@ -147,6 +152,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     super.initState();
     pdfController = PdfViewerController();
     widget.tab.pdfViewerController = pdfController;
+
+    // יצירת ה-Bloc עם המצב ההתחלתי
+    _bloc = PdfBookBloc(
+      tab: widget.tab,
+      initialState: PdfBookInitial(
+        book: widget.tab.book,
+        initialPageNumber: widget.tab.pageNumber,
+        searchText: widget.tab.searchText,
+        searchOptions: widget.tab.searchOptions,
+        alternativeWords: widget.tab.alternativeWords,
+        spacingValues: widget.tab.spacingValues,
+        searchMode: widget.tab.searchMode,
+      ),
+    );
 
     // textSearcher ייוצר ב-onDocumentChanged כשה-document מוכן
 
@@ -241,35 +260,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _rightPaneWidth.dispose();
     _showRightPane.dispose();
     _settingsSub.cancel();
+    _bloc.close();
     super.dispose();
-  }
-
-  /// שמירת הגדרות פר-ספר
-  Future<void> _savePerBookSettings() async {
-    final settingsBloc = context.read<SettingsBloc>();
-    if (!settingsBloc.state.enablePerBookSettings) return;
-
-    if (!widget.tab.pdfViewerController.isReady) return;
-
-    final settings = PdfBookPerBookSettings(
-      zoom: widget.tab.pdfViewerController.value.zoom,
-    );
-
-    await settings.save(widget.tab.book.title);
   }
 
   /// איפוס הגדרות פר-ספר
   Future<void> _resetPerBookSettings() async {
-    await PdfBookPerBookSettings.delete(widget.tab.book.title);
-
-    // איפוס הזום לברירת מחדל
-    if (widget.tab.pdfViewerController.isReady) {
-      widget.tab.pdfViewerController.setZoom(
-        widget.tab.pdfViewerController.centerPosition,
-        1.0,
-      );
-    }
-
+    _bloc.add(const pdf_events.ResetPerBookSettings());
     if (mounted) {
       UiSnack.show('ההגדרות הפר-ספריות אופסו בהצלחה');
     }
@@ -387,6 +384,40 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    return BlocProvider.value(
+      value: _bloc,
+      child: BlocListener<PdfBookBloc, PdfBookState>(
+        listener: _onBlocStateChanged,
+        child: _buildContent(context),
+      ),
+    );
+  }
+
+  /// מאזין לשינויים ב-Bloc ומסנכרן עם ה-ValueNotifiers
+  void _onBlocStateChanged(BuildContext context, PdfBookState state) {
+    if (state is PdfBookLoaded) {
+      // סנכרון עם ה-ValueNotifiers הקיימים
+      if (_showRightPane.value != state.showRightPane) {
+        _showRightPane.value = state.showRightPane;
+      }
+      if (_sidebarWidth.value != state.sidebarWidth) {
+        _sidebarWidth.value = state.sidebarWidth;
+      }
+      if (_rightPaneWidth.value != state.rightPaneWidth) {
+        _rightPaneWidth.value = state.rightPaneWidth;
+      }
+      if (_showZoomBar != state.showZoomBar) {
+        setState(() {
+          _showZoomBar = state.showZoomBar;
+        });
+      }
+      if (_rightPaneInitialTabIndex != state.rightPaneInitialTabIndex) {
+        _rightPaneInitialTabIndex = state.rightPaneInitialTabIndex;
+      }
+    }
+  }
+
+  Widget _buildContent(BuildContext context) {
     return LayoutBuilder(builder: (context, constrains) {
       final wideScreen = (MediaQuery.of(context).size.width >= 600);
       return CallbackShortcuts(
@@ -985,69 +1016,24 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
   }
 
-  void _showZoomBarTemporarily() {
-    setState(() {
-      _showZoomBar = true;
-    });
-    _zoomBarTimer?.cancel();
-    _zoomBarTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _showZoomBar = false;
-        });
-      }
-    });
-  }
-
   void _zoomIn() {
-    if (!widget.tab.pdfViewerController.isReady) return;
-    final currentZoom = widget.tab.pdfViewerController.value.zoom;
-    final newZoom = currentZoom * 1.1; // הגדלה ב-10%
-    widget.tab.pdfViewerController.setZoom(
-      widget.tab.pdfViewerController.centerPosition,
-      newZoom,
-    );
-    _showZoomBarTemporarily();
-    _savePerBookSettings();
+    _bloc.add(const pdf_events.ZoomIn());
   }
 
   void _zoomOut() {
-    if (!widget.tab.pdfViewerController.isReady) return;
-    final currentZoom = widget.tab.pdfViewerController.value.zoom;
-    final newZoom = currentZoom / 1.1; // הקטנה ב-10%
-    widget.tab.pdfViewerController.setZoom(
-      widget.tab.pdfViewerController.centerPosition,
-      newZoom,
-    );
-    _showZoomBarTemporarily();
-    _savePerBookSettings();
+    _bloc.add(const pdf_events.ZoomOut());
   }
 
   void _resetZoom() {
-    if (!widget.tab.pdfViewerController.isReady) return;
-    widget.tab.pdfViewerController.setZoom(
-      widget.tab.pdfViewerController.centerPosition,
-      1.0,
-    );
-    _showZoomBarTemporarily();
-    _savePerBookSettings();
+    _bloc.add(const pdf_events.ResetZoom());
   }
 
   void _goNextPage() {
-    if (widget.tab.pdfViewerController.isReady) {
-      final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
-      final nextPage =
-          min(currentPage + 1, widget.tab.pdfViewerController.pageCount);
-      widget.tab.pdfViewerController.goToPage(pageNumber: nextPage);
-    }
+    _bloc.add(const pdf_events.GoToNextPage());
   }
 
   void _goPreviousPage() {
-    if (widget.tab.pdfViewerController.isReady) {
-      final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
-      final prevPage = max(currentPage - 1, 1);
-      widget.tab.pdfViewerController.goToPage(pageNumber: prevPage);
-    }
+    _bloc.add(const pdf_events.GoToPreviousPage());
   }
 
   Future<void> navigateToUrl(Uri url) async {
