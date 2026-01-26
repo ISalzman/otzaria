@@ -187,10 +187,19 @@ void main() async {
               create: (context) => BookmarkBloc(BookmarkRepository()),
             ),
             BlocProvider<WorkspaceBloc>(
-              create: (context) => WorkspaceBloc(
-                repository: WorkspaceRepository(),
-                tabsBloc: context.read<TabsBloc>(),
-              )..add(LoadWorkspaces()),
+              create: (context) {
+                final tabsBloc = context.read<TabsBloc>();
+                return WorkspaceBloc(
+                  repository: WorkspaceRepository(),
+                  onWorkspaceTabsChanged: (tabs, activeIndex) {
+                    // This callback coordinates workspace switching with TabsBloc
+                    tabsBloc.add(ReplaceAllTabs(
+                      tabs.cast(),
+                      activeIndex,
+                    ));
+                  },
+                )..add(LoadWorkspaces());
+              },
             ),
             ChangeNotifierProvider<ShamorZachorDataProvider>(
               lazy: true, // Create only when needed
