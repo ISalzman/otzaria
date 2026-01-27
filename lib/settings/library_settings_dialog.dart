@@ -16,6 +16,33 @@ void showLibrarySettingsDialog(BuildContext context) {
           title: 'הגדרות ספרייה',
           width: 500,
           items: [
+            // תצוגת רשת/רשימה
+            SwitchSettingsItem(
+              title: 'תצוגת רשימה (עץ מתרחב)',
+              subtitle: currentSettingsState.libraryViewMode == 'list'
+                  ? 'מוצגת תצוגת רשימה'
+                  : 'מוצגת תצוגת רשת',
+              value: currentSettingsState.libraryViewMode == 'list',
+              onChanged: (value) {
+                context.read<SettingsBloc>().add(
+                      UpdateLibraryViewMode(value ? 'list' : 'grid'),
+                    );
+              },
+            ),
+            // תצוגה מקדימה
+            SwitchSettingsItem(
+              title: 'הצג תצוגה מקדימה',
+              subtitle: currentSettingsState.libraryShowPreview
+                  ? 'תצוגה מקדימה מוצגת'
+                  : 'תצוגה מקדימה מוסתרת',
+              value: currentSettingsState.libraryShowPreview,
+              onChanged: (value) {
+                context.read<SettingsBloc>().add(
+                      UpdateLibraryShowPreview(value),
+                    );
+              },
+            ),
+            // ספרים חיצוניים
             SwitchSettingsItem(
               title: 'האם להציג ספרים מאתרים חיצוניים?',
               subtitle: currentSettingsState.showExternalBooks

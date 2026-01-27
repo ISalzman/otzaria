@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/text_book/view/splited_view/splited_view_screen.dart';
-import 'package:otzaria/text_book/view/page_shape/page_shape_screen.dart';
+import 'package:otzaria/text_book/view/strategies/strategies.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 
+/// Scaffold for text book viewing that uses Strategy Pattern
+/// to select the appropriate view mode.
+///
+/// This replaces the previous if/else chains with a cleaner
+/// strategy-based approach that makes adding new view modes easier.
 class TextBookScaffold extends StatelessWidget {
   final List<String> content;
   final Function(OpenedTab) openBookCallback;
@@ -31,32 +35,40 @@ class TextBookScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextBookStateBuilder(
       builder: (context, state) {
-        if (state.showPageShapeView) {
-          final page = PageShapeScreen(
-            key: pageShapeKey,
-            openBookCallback: openBookCallback,
-          );
+        // Select the appropriate strategy based on current state
+        final strategy = _selectStrategy(state);
 
-          final boundaryKey = pageShapePrintBoundaryKey;
-          if (boundaryKey == null) return page;
-
-          return RepaintBoundary(
-            key: boundaryKey,
-            child: page,
-          );
-        }
-
-        // תמיד משתמשים ב-SplitedViewScreen, הוא יחליט אם להציג split או לא
-        return SplitedViewScreen(
+        // Create configuration for the strategy
+        final config = TextBookViewConfig(
           content: content,
           openBookCallback: openBookCallback,
-          searchTextController: searchTextController,
           openLeftPaneTab: openLeftPaneTab,
+          searchTextController: searchTextController,
           tab: tab,
-          initialTabIndex: initialSidebarTabIndex,
-          showSplitView: state.showSplitView,
+          initialSidebarTabIndex: initialSidebarTabIndex,
+          pageShapeKey: pageShapeKey,
+          pageShapePrintBoundaryKey: pageShapePrintBoundaryKey,
         );
+
+        // Build the view using the selected strategy
+        return strategy.buildView(context, config);
       },
     );
+  }
+
+  /// Selects the appropriate view strategy based on the current state
+  TextBookViewStrategy _selectStrategy(dynamic state) {
+    // Check for page shape view first (highest priority)
+    if (state.showPageShapeView) {
+      return PageShapeStrategyImpl();
+    }
+
+    // Check for split view (commentaries on side)
+    if (state.showSplitView) {
+      return SplitViewStrategyImpl();
+    }
+
+    // Default to combined view (commentaries below)
+    return CombinedViewStrategyImpl();
   }
 }

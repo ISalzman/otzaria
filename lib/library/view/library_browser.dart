@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/focus/focus_repository.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -25,15 +24,8 @@ import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/library/view/otzar_book_dialog.dart';
 import 'package:otzaria/library/view/book_preview_panel.dart';
 import 'package:otzaria/library/view/resizable_preview_panel.dart';
-import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
-import 'package:otzaria/history/history_dialog.dart';
-import 'package:otzaria/history/bloc/history_bloc.dart';
-import 'package:otzaria/history/bloc/history_event.dart';
-import 'package:otzaria/bookmarks/bookmarks_dialog.dart';
-import 'package:otzaria/widgets/workspace_icon_button.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/utils/open_book.dart';
-import 'package:otzaria/settings/library_settings_dialog.dart';
 import 'package:otzaria/ui/database_generation_dialog.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
@@ -51,16 +43,12 @@ class LibraryBrowser extends StatefulWidget {
   State<LibraryBrowser> createState() => _LibraryBrowserState();
 }
 
-enum ViewMode { grid, list }
-
 class _LibraryBrowserState extends State<LibraryBrowser>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
 
   int _depth = 0;
-  bool _showPreview = true; // האם להציג את התצוגה המקדימה
-  ViewMode _viewMode = ViewMode.grid; // מצב תצוגה: רשת או רשימה
   final Set<String> _expandedCategories = {}; // קטגוריות שנפתחו בתצוגת רשימה
 
   // Database generation button visibility
@@ -73,7 +61,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   void initState() {
     super.initState();
     context.read<LibraryBloc>().add(LoadLibrary());
-    _loadViewPreferences();
 
     // בדיקה אסינכרונית אם להציג כפתור יצירת DB (ברקע, לא חוסם)
     _checkDbGenerationButtonVisibility();
@@ -89,16 +76,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         onSyncCompleted: _syncFilesToDb,
       ),
     );
-  }
-
-  void _loadViewPreferences() {
-    final settingsState = context.read<SettingsBloc>().state;
-    setState(() {
-      _showPreview = settingsState.libraryShowPreview;
-      _viewMode = settingsState.libraryViewMode == 'list'
-          ? ViewMode.list
-          : ViewMode.grid;
-    });
   }
 
   /// בדיקה אסינכרונית אם להציג כפתור יצירת DB
@@ -218,38 +195,29 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 Scaffold(
                   backgroundColor: Theme.of(context).colorScheme.surface,
                   appBar: AppBar(
-                    title: Stack(
-                      alignment: Alignment.center,
+                    // Keep the AppBar visually consistent when scrolling
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    surfaceTintColor: Colors.transparent,
+                    title: Row(
                       children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: DafYomi(
-                            onDafYomiTap: (tractate, daf) {
-                              openDafYomiBook(context, tractate, ' $daf.');
-                            },
-                            onCalendarTap: () {
-                              // Reset to calendar BEFORE navigation using GlobalKey
-                              (moreScreenKey.currentState as dynamic)
-                                  ?.resetToCalendar();
-                              // Then navigate
-                              context.read<NavigationBloc>().add(
-                                    const NavigateToScreen(Screen.more),
-                                  );
-                            },
-                          ),
-                        ),
-                        Text(
-                          state.currentCategory?.title ?? '',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.secondary,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: _buildLibraryActions(
-                              context, state, settingsState),
+                        _buildLibraryActions(context, state, settingsState),
+                        const SizedBox(width: 8),
+                        Expanded(child: _buildSearchBar(state)),
+                        DafYomi(
+                          onDafYomiTap: (tractate, daf) {
+                            openDafYomiBook(context, tractate, ' $daf.');
+                          },
+                          onCalendarTap: () {
+                            // Reset to calendar BEFORE navigation using GlobalKey
+                            (moreScreenKey.currentState as dynamic)
+                                ?.resetToCalendar();
+                            // Then navigate
+                            context.read<NavigationBloc>().add(
+                                  const NavigateToScreen(Screen.more),
+                                );
+                          },
                         ),
                       ],
                     ),
@@ -259,9 +227,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                       final screenWidth = constraints.maxWidth;
                       const minPreviewWidth = 8.0;
                       // ברירת מחדל: שליש ברשת, שני שליש ברשימה
-                      final previewWidth = _viewMode == ViewMode.list
-                          ? (screenWidth * 2 / 3)
-                          : (screenWidth / 3);
+                      final previewWidth =
+                          settingsState.libraryViewMode == 'list'
+                              ? (screenWidth * 2 / 3)
+                              : (screenWidth / 3);
 
                       final maxPreviewWidth = (screenWidth - 350)
                           .clamp(minPreviewWidth, screenWidth);
@@ -272,8 +241,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                           Expanded(
                             child: Column(
                               children: [
-                                // שורת חיפוש והגדרות
-                                _buildSearchBar(state),
                                 if (context
                                         .read<FocusRepository>()
                                         .librarySearchController
@@ -288,7 +255,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                             ),
                           ),
                           // פאנל תצוגה מקדימה בצד שמאל עם מסגרת ואפשרות שינוי גודל
-                          if (_showPreview)
+                          if (settingsState.libraryShowPreview)
                             Padding(
                               padding: const EdgeInsets.all(8.0),
                               child: ResizablePreviewPanel(
@@ -340,9 +307,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                                               }
                                             },
                                             onClose: () {
-                                              setState(() {
-                                                _showPreview = false;
-                                              });
                                               context.read<SettingsBloc>().add(
                                                     const UpdateLibraryShowPreview(
                                                         false),
@@ -400,126 +364,37 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   Widget _buildSearchBar(LibraryState state) {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: BlocBuilder<SettingsBloc, SettingsState>(
-        builder: (context, settingsState) {
-          final focusRepository = context.read<FocusRepository>();
-          return Row(
-            children: [
-              Expanded(
-                child: RtlTextField(
-                  controller: focusRepository.librarySearchController,
-                  focusNode:
-                      context.read<FocusRepository>().librarySearchFocusNode,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    constraints: const BoxConstraints(maxWidth: 400),
-                    prefixIcon: const Icon(FluentIcons.search_24_regular),
-                    suffixIcon: IconButton(
-                      onPressed: () {
-                        focusRepository.librarySearchController.clear();
-                        _update(context, state, settingsState);
-                        _refocusSearchBar();
-                      },
-                      icon: const Icon(FluentIcons.dismiss_24_regular),
-                    ),
-                    border: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(8.0)),
-                    ),
-                    hintText:
-                        'איתור ספר או מחבר ב${state.currentCategory?.title ?? ""}',
-                  ),
-                  onChanged: (value) {
-                    context.read<LibraryBloc>().add(UpdateSearchQuery(value));
-                    context.read<LibraryBloc>().add(const SelectTopics([]));
-                    _update(context, state, settingsState);
-                  },
-                ),
-              ),
-              // כפתור מעבר בין תצוגת רשת לרשימה
-              Padding(
-                padding: const EdgeInsets.only(left: 2.0, right: 8.0),
-                child: IconButton(
-                  icon: Icon(_viewMode == ViewMode.grid
-                      ? FluentIcons.list_24_regular
-                      : FluentIcons.grid_24_regular),
-                  tooltip: _viewMode == ViewMode.grid
-                      ? 'תצוגת רשימה (עץ מתרחב)'
-                      : 'תצוגת רשת',
-                  onPressed: () {
-                    final newViewMode = _viewMode == ViewMode.grid
-                        ? ViewMode.list
-                        : ViewMode.grid;
-                    setState(() {
-                      _viewMode = newViewMode;
-                    });
-                    context.read<SettingsBloc>().add(
-                          UpdateLibraryViewMode(
-                              newViewMode == ViewMode.list ? 'list' : 'grid'),
-                        );
-                  },
-                  style: IconButton.styleFrom(
-                    foregroundColor:
-                        Theme.of(context).colorScheme.onSurfaceVariant,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              if (!_showPreview)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                  child: IconButton(
-                    icon: const Icon(FluentIcons.eye_24_regular),
-                    tooltip: 'הצג תצוגה מקדימה',
-                    onPressed: () {
-                      setState(() {
-                        _showPreview = true;
-                      });
-                      context.read<SettingsBloc>().add(
-                            const UpdateLibraryShowPreview(true),
-                          );
-                    },
-                    style: IconButton.styleFrom(
-                      foregroundColor:
-                          Theme.of(context).colorScheme.onSurfaceVariant,
-                      backgroundColor:
-                          Theme.of(context).colorScheme.surfaceContainerHighest,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              _buildSettingsButton(context, settingsState, state),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSettingsButton(
-      BuildContext context, SettingsState settingsState, LibraryState state) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2.0),
-      child: IconButton(
-        icon: const Icon(FluentIcons.settings_24_regular),
-        tooltip: 'הגדרות',
-        onPressed: () => showLibrarySettingsDialog(context),
-        style: IconButton.styleFrom(
-          foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
-          backgroundColor:
-              Theme.of(context).colorScheme.surfaceContainerHighest,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      builder: (context, settingsState) {
+        final focusRepository = context.read<FocusRepository>();
+        return RtlTextField(
+          controller: focusRepository.librarySearchController,
+          focusNode: context.read<FocusRepository>().librarySearchFocusNode,
+          autofocus: true,
+          decoration: InputDecoration(
+            constraints: const BoxConstraints(maxWidth: 400),
+            prefixIcon: const Icon(FluentIcons.search_24_regular),
+            suffixIcon: IconButton(
+              onPressed: () {
+                focusRepository.librarySearchController.clear();
+                _update(context, state, settingsState);
+                _refocusSearchBar();
+              },
+              icon: const Icon(FluentIcons.dismiss_24_regular),
+            ),
+            border: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(8.0)),
+            ),
+            hintText:
+                'איתור ספר או מחבר ב${state.currentCategory?.title ?? ""}',
           ),
-        ),
-      ),
+          onChanged: (value) {
+            context.read<LibraryBloc>().add(UpdateSearchQuery(value));
+            context.read<LibraryBloc>().add(const SelectTopics([]));
+            _update(context, state, settingsState);
+          },
+        );
+      },
     );
   }
 
@@ -596,8 +471,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       return const Center(child: SizedBox.shrink());
     }
 
+    final settingsState = context.read<SettingsBloc>().state;
     // במצב תצוגת רשת - תמיד רשת
-    if (_viewMode == ViewMode.grid) {
+    if (settingsState.libraryViewMode == 'grid') {
       final items = state.searchResults != null
           ? _buildSearchResults(state.searchResults!)
           : _buildCategoryContent(state.currentCategory!);
@@ -755,7 +631,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               onBookClickCallback: () {
                 // אם תצוגה מקדימה מוצגת - הצג את הספר בתצוגה
                 // אחרת - פתח את הספר בעיון
-                if (_showPreview) {
+                final settingsState = context.read<SettingsBloc>().state;
+                if (settingsState.libraryShowPreview) {
                   _showBookPreview(book);
                 } else {
                   final index = book is PdfBook ? 1 : 0;
@@ -899,7 +776,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           onTap: () {
             // אם תצוגה מקדימה מוצגת - הצג את הספר בתצוגה
             // אחרת - פתח את הספר בעיון
-            if (_showPreview) {
+            final settingsState = context.read<SettingsBloc>().state;
+            if (settingsState.libraryShowPreview) {
               _showBookPreview(book);
             } else {
               final index = book is PdfBook ? 1 : 0;
@@ -1055,13 +933,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     _refocusSearchBar();
   }
 
-  void _showSwitchWorkspaceDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => const WorkspaceSwitcherDialog(),
-    );
-  }
-
   List<String> _getAllTopics(List<Book> books) {
     final Set<String> topics = {};
     for (final book in books) {
@@ -1096,21 +967,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   void _refocusSearchBar({bool selectAll = false}) {
     final focusRepository = context.read<FocusRepository>();
     focusRepository.requestLibrarySearchFocus(selectAll: selectAll);
-  }
-
-  void _showHistoryDialog(BuildContext context) {
-    context.read<HistoryBloc>().add(FlushHistory());
-    showDialog(
-      context: context,
-      builder: (context) => const HistoryDialog(),
-    );
-  }
-
-  void _showBookmarksDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => const BookmarksDialog(),
-    );
   }
 
   /// בניית כפתורי הפעולה של הספרייה עם רכיב רספונסיבי
@@ -1206,7 +1062,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           tooltip: 'חזרה לתיקיה הקודמת',
           onPressed: () {
             // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-            if (_viewMode == ViewMode.list && _expandedCategories.isNotEmpty) {
+            if (settingsState.libraryViewMode == 'list' &&
+                _expandedCategories.isNotEmpty) {
               setState(() {
                 _expandedCategories.remove(_expandedCategories.last);
               });
@@ -1226,7 +1083,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         tooltip: 'חזרה לתיקיה הקודמת',
         onPressed: () {
           // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-          if (_viewMode == ViewMode.list && _expandedCategories.isNotEmpty) {
+          if (settingsState.libraryViewMode == 'list' &&
+              _expandedCategories.isNotEmpty) {
             setState(() {
               _expandedCategories.remove(_expandedCategories.last);
             });
@@ -1303,47 +1161,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           context.read<LibraryBloc>().add(RefreshLibrary());
         },
       ),
-
-      // היסטוריה
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.history_24_regular),
-          tooltip:
-              'הצג היסטוריה (${(Settings.getValue<String>('key-shortcut-open-history') ?? 'ctrl+h').toUpperCase()})',
-          onPressed: () => _showHistoryDialog(context),
-        ),
-        icon: FluentIcons.history_24_regular,
-        tooltip:
-            'הצג היסטוריה (${(Settings.getValue<String>('key-shortcut-open-history') ?? 'ctrl+h').toUpperCase()})',
-        onPressed: () => _showHistoryDialog(context),
-      ),
-
-      // סימניות
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.bookmark_24_regular),
-          tooltip:
-              'הצג סימניות (${(Settings.getValue<String>('key-shortcut-open-bookmarks') ?? 'ctrl+shift+b').toUpperCase()})',
-          onPressed: () => _showBookmarksDialog(context),
-        ),
-        icon: FluentIcons.bookmark_24_regular,
-        tooltip:
-            'הצג סימניות (${(Settings.getValue<String>('key-shortcut-open-bookmarks') ?? 'ctrl+shift+b').toUpperCase()})',
-        onPressed: () => _showBookmarksDialog(context),
-      ),
-
-      // החלף שולחן עבודה
-      ActionButtonData(
-        widget: SizedBox(
-          width: 180,
-          child: WorkspaceIconButton(
-            onPressed: () => _showSwitchWorkspaceDialog(context),
-          ),
-        ),
-        icon: FluentIcons.grid_24_regular,
-        tooltip: 'החלף שולחן עבודה',
-        onPressed: () => _showSwitchWorkspaceDialog(context),
-      ),
     ];
   }
 
@@ -1361,7 +1178,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           tooltip: 'חזרה לתיקיה הקודמת',
           onPressed: () {
             // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-            if (_viewMode == ViewMode.list && _expandedCategories.isNotEmpty) {
+            if (settingsState.libraryViewMode == 'list' &&
+                _expandedCategories.isNotEmpty) {
               setState(() {
                 _expandedCategories.remove(_expandedCategories.last);
               });
@@ -1381,7 +1199,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         tooltip: 'חזרה לתיקיה הקודמת',
         onPressed: () {
           // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-          if (_viewMode == ViewMode.list && _expandedCategories.isNotEmpty) {
+          if (settingsState.libraryViewMode == 'list' &&
+              _expandedCategories.isNotEmpty) {
             setState(() {
               _expandedCategories.remove(_expandedCategories.last);
             });
@@ -1428,58 +1247,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           _update(context, state, settingsState);
           _refocusSearchBar(selectAll: true);
         },
-      ),
-
-      // יצירת מסד נתונים - אם אין DB: בחוץ. אם יש: עובר לתפריט "...".
-      if (!(Platform.isAndroid || Platform.isIOS) &&
-          _showDbGenerationButton == true)
-        ActionButtonData(
-          widget: _BlinkingDatabaseButton(
-            onPressed: () => showDatabaseGenerationDialog(context),
-          ),
-          icon: FluentIcons.database_arrow_right_24_regular,
-          tooltip: 'יצירת מסד נתונים',
-          onPressed: () => showDatabaseGenerationDialog(context),
-        ),
-
-      // 2) הצג היסטוריה, הצג סימניות
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.history_24_regular),
-          tooltip:
-              'הצג היסטוריה (${(Settings.getValue<String>('key-shortcut-open-history') ?? 'ctrl+h').toUpperCase()})',
-          onPressed: () => _showHistoryDialog(context),
-        ),
-        icon: FluentIcons.history_24_regular,
-        tooltip:
-            'הצג היסטוריה (${(Settings.getValue<String>('key-shortcut-open-history') ?? 'ctrl+h').toUpperCase()})',
-        onPressed: () => _showHistoryDialog(context),
-      ),
-
-      ActionButtonData(
-        widget: IconButton(
-          icon: const Icon(FluentIcons.bookmark_24_regular),
-          tooltip:
-              'הצג סימניות (${(Settings.getValue<String>('key-shortcut-open-bookmarks') ?? 'ctrl+shift+b').toUpperCase()})',
-          onPressed: () => _showBookmarksDialog(context),
-        ),
-        icon: FluentIcons.bookmark_24_regular,
-        tooltip:
-            'הצג סימניות (${(Settings.getValue<String>('key-shortcut-open-bookmarks') ?? 'ctrl+shift+b').toUpperCase()})',
-        onPressed: () => _showBookmarksDialog(context),
-      ),
-
-      // 3) החלף שולחן עבודה
-      ActionButtonData(
-        widget: SizedBox(
-          width: 180,
-          child: WorkspaceIconButton(
-            onPressed: () => _showSwitchWorkspaceDialog(context),
-          ),
-        ),
-        icon: FluentIcons.grid_24_regular,
-        tooltip: 'החלף שולחן עבודה',
-        onPressed: () => _showSwitchWorkspaceDialog(context),
       ),
 
       // 5) טעינה מחדש של רשימת הספרים
