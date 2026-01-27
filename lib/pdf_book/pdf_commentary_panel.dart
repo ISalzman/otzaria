@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,7 +8,6 @@ import 'package:otzaria/widgets/commentators_filter_button.dart';
 import 'package:otzaria/widgets/commentators_filter_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
-import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -25,16 +23,50 @@ import 'package:pdfrx/pdfrx.dart';
 import 'dart:async'; // Added for Timer
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
-// Type alias לתאימות לאחור - משתמש ב-LinkGroup מה-Service
-typedef CommentaryGroup = LinkGroup;
+/// מייצג קבוצת קטעי פירוש רצופים מאותו ספר
+class CommentaryGroup {
+  final String bookTitle;
+  final List<Link> links;
 
-// פונקציות לתאימות לאחור - משתמש ב-Service
-List<CommentaryGroup> _groupConsecutiveLinks(List<Link> links) {
-  return CommentaryService.groupConsecutiveLinks(links);
+  CommentaryGroup({required this.bookTitle, required this.links});
 }
 
-Future<List<CommentaryGroup>> _sortGroupsByEra(List<CommentaryGroup> groups) {
-  return CommentaryService.sortGroupsByEra(groups);
+/// מקבץ רשימת קישורים לקבוצות לפי שם הספר (רק קטעים רצופים)
+List<CommentaryGroup> _groupConsecutiveLinks(List<Link> links) {
+  if (links.isEmpty) return [];
+
+  final groups = <CommentaryGroup>[];
+  String? currentTitle;
+  List<Link> currentGroup = [];
+
+  for (final link in links) {
+    final title = utils.getTitleFromPath(link.path2);
+
+    if (currentTitle == null || currentTitle != title) {
+      // ספר חדש - שומר את הקבוצה הקודמת ומתחיל קבוצה חדשה
+      if (currentGroup.isNotEmpty) {
+        groups.add(CommentaryGroup(
+          bookTitle: currentTitle!,
+          links: List.from(currentGroup),
+        ));
+      }
+      currentTitle = title;
+      currentGroup = [link];
+    } else {
+      // אותו ספר - מוסיף לקבוצה הנוכחית
+      currentGroup.add(link);
+    }
+  }
+
+  // מוסיף את הקבוצה האחרונה
+  if (currentGroup.isNotEmpty) {
+    groups.add(CommentaryGroup(
+      bookTitle: currentTitle!,
+      links: List.from(currentGroup),
+    ));
+  }
+
+  return groups;
 }
 
 /// Widget שמציג מפרשים וקישורים עבור PDF
@@ -85,13 +117,6 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   final Map<String, GlobalKey> _itemKeys = {};
   List<Link> _orderedLinks = [];
   List<CommentaryGroup> _orderedGroups = [];
-
-  // State for caching and updates
-  int? _lastProcessedLineNumber;
-  List<String> _lastActiveCommentators = [];
-  int _lastLinksCount = 0;
-  bool _hasCommentaryLinksAvailable = false;
-  bool _hasRelevantLinks = false;
 
   String _getLinkKey(Link link) => '${link.path2}_${link.index2}';
 
@@ -471,11 +496,10 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                     : FluentIcons.arrow_expand_all_24_regular,
               ),
               tooltip:
-                  _allExpanded ? 'כווץ את כל המפרשים' : 'הצג את כל המפרשים',
+                  _allExpanded ? 'סגור את כל המפרשים' : 'פתח את כל המפרשים',
               onPressed: () {
                 setState(() {
                   _allExpanded = !_allExpanded;
-                  _expansionStates.clear();
                 });
               },
             ),
@@ -484,101 +508,26 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     );
   }
 
-  void _checkForUpdates() {
-    final currentLine = widget.tab.currentTextLineNumber;
-    final currentLinksCount = widget.tab.links.length;
-    final currentActiveCommentators = widget.tab.activeCommentators;
-
-    if (currentLine != _lastProcessedLineNumber ||
-        currentLinksCount != _lastLinksCount ||
-        !listEquals(currentActiveCommentators, _lastActiveCommentators)) {
-      _updateCommentaries();
+  Widget _buildCommentariesView() {
+    if (_showFilterTab) {
+      return _buildCommentatorsFilter();
     }
+
+    return Column(
+      children: [
+        _buildSearchBar(),
+        Expanded(
+          child: _buildCommentariesListContent(),
+        ),
+      ],
+    );
   }
 
-  Future<void> _updateCommentaries() async {
-    final currentLine = widget.tab.currentTextLineNumber;
-    final currentLinksCount = widget.tab.links.length;
-    final currentActiveCommentators =
-        List<String>.from(widget.tab.activeCommentators);
-
-    // Update trackers immediately to prevent re-entry/loops
-    _lastProcessedLineNumber = currentLine;
-    _lastLinksCount = currentLinksCount;
-    _lastActiveCommentators = currentActiveCommentators;
-
-    if (currentLine == null) {
-      if (mounted) {
-        setState(() {
-          _orderedGroups = [];
-          _orderedLinks = [];
-          _hasRelevantLinks = false;
-        });
-      }
-      return;
-    }
-
-    // Logic from original code
-    int startLine = currentLine;
-    int endLine = startLine;
-
-    if (widget.tab.pdfHeadings != null) {
-      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
-      final currentIndex =
-          sortedHeadings.indexWhere((e) => e.value == currentLine);
-
-      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
-        endLine = sortedHeadings[currentIndex + 1].value - 1;
-      } else {
-        endLine = startLine + 50;
-      }
-    } else {
-      endLine = startLine + 50;
-    }
-
-    final relevantLinks = widget.tab.links
-        .where((link) =>
-            link.index1 >= startLine &&
-            link.index1 <= endLine &&
-            (link.connectionType == "COMMENTARY" ||
-                link.connectionType == "TARGUM") &&
-            widget.tab.activeCommentators
-                .contains(utils.getTitleFromPath(link.path2)))
-        .toList();
-
-    // Sort relevant links
-    relevantLinks.sort((a, b) {
-      final titleA = utils.getTitleFromPath(a.path2);
-      final titleB = utils.getTitleFromPath(b.path2);
-      final titleCompare = titleA.compareTo(titleB);
-      if (titleCompare != 0) return titleCompare;
-      return a.index1.compareTo(b.index1);
-    });
-
-    final groups = _groupConsecutiveLinks(relevantLinks);
-
-    // Calculate empty state info
-    bool hasCommentaryLinksAvailable = false;
-    if (relevantLinks.isEmpty) {
-      final allLinksInRange = widget.tab.links
-          .where((link) => link.index1 >= startLine && link.index1 <= endLine)
-          .toList();
-
-      final hasCommentaryLinks = allLinksInRange.any((link) =>
-          link.connectionType == "COMMENTARY" ||
-          link.connectionType == "TARGUM");
-
-      // אם יש מפרשים זמינים אבל לא נבחרו בכלל - פתח אוטומטית את מסך הבחירה
-      if (hasCommentaryLinks && widget.tab.activeCommentators.isEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !_showFilterTab) {
-            setState(() {
-              _showFilterTab = true;
-            });
-          }
-        });
-        return const Center(child: CircularProgressIndicator());
-      }
+  Widget _buildCommentariesListContent() {
+    debugPrint('=== PDF Commentary Debug ===');
+    debugPrint('currentTextLineNumber: ${widget.tab.currentTextLineNumber}');
+    debugPrint('total links: ${widget.tab.links.length}');
+    debugPrint('activeCommentators: ${widget.tab.activeCommentators}');
 
     // בדיקה אם יש מספר שורה נוכחי
     if (widget.tab.currentTextLineNumber == null) {
@@ -609,12 +558,80 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       );
     }
 
-    if (!_hasRelevantLinks) {
-      if (_hasCommentaryLinksAvailable &&
-          widget.tab.activeCommentators.isEmpty) {
+    // סינון מפרשים לפי טווח השורות של העמוד הנוכחי
+    final currentLine = widget.tab.currentTextLineNumber!;
+
+    // מציאת טווח השורות של העמוד הנוכחי
+    int startLine = currentLine;
+    int endLine = startLine;
+
+    if (widget.tab.pdfHeadings != null) {
+      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
+      final currentIndex =
+          sortedHeadings.indexWhere((e) => e.value == currentLine);
+
+      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
+        endLine = sortedHeadings[currentIndex + 1].value - 1;
+      } else {
+        // אם זה העמוד האחרון, נניח טווח של 50 שורות
+        endLine = startLine + 50;
+      }
+    } else {
+      // אם אין headings, נניח טווח של 50 שורות
+      endLine = startLine + 50;
+    }
+
+    debugPrint('Looking for links in range: $startLine-$endLine');
+    debugPrint('Active commentators: ${widget.tab.activeCommentators.length}');
+
+    final relevantLinks = widget.tab.links
+        .where((link) =>
+            link.index1 >= startLine &&
+            link.index1 <= endLine &&
+            (link.connectionType == "COMMENTARY" ||
+                link.connectionType == "TARGUM") &&
+            widget.tab.activeCommentators
+                .contains(utils.getTitleFromPath(link.path2)))
+        .toList();
+
+    // מיון הקישורים קודם לפי שם הספר ואז לפי מספר השורה
+    // כך כל הקישורים של אותו מפרש יהיו ביחד ויקובצו נכון
+    relevantLinks.sort((a, b) {
+      // קודם לפי שם הספר
+      final titleA = utils.getTitleFromPath(a.path2);
+      final titleB = utils.getTitleFromPath(b.path2);
+      final titleCompare = titleA.compareTo(titleB);
+      if (titleCompare != 0) return titleCompare;
+
+      // אם אותו ספר, לפי מספר השורה
+      return a.index1.compareTo(b.index1);
+    });
+
+    debugPrint('Found ${relevantLinks.length} relevant links');
+
+    if (relevantLinks.isEmpty) {
+      // בדיקה מפורטת למה אין קישורים
+      final allLinksInRange = widget.tab.links
+          .where((link) => link.index1 >= startLine && link.index1 <= endLine)
+          .toList();
+
+      final hasCommentaryLinks = allLinksInRange.any((link) =>
+          link.connectionType == "COMMENTARY" ||
+          link.connectionType == "TARGUM");
+
+      // אם יש מפרשים זמינים אבל לא נבחרו בכלל - פתח אוטומטית את מסך הבחירה
+      if (hasCommentaryLinks && widget.tab.activeCommentators.isEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_showFilterTab) {
+            setState(() {
+              _showFilterTab = true;
+            });
+          }
+        });
         return const Center(child: CircularProgressIndicator());
       }
 
+      // אין מפרשים בכלל לקטע הזה, או שיש מפרשים נבחרים אבל הם לא רלוונטיים לדף
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -622,7 +639,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                _hasCommentaryLinksAvailable
+                hasCommentaryLinks
                     ? 'לא נמצאו מפרשים מהנבחרים לדף זה'
                     : 'לא נמצאו מפרשים לקטע הנבחר',
                 style: TextStyle(
@@ -631,7 +648,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                 ),
                 textAlign: TextAlign.center,
               ),
-              if (_hasCommentaryLinksAvailable) ...[
+              if (hasCommentaryLinks) ...[
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: () {
@@ -655,20 +672,56 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       );
     }
 
-    return ScrollConfiguration(
-      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-      child: ScrollablePositionedList.builder(
-        key: PageStorageKey(
-            'commentary_${widget.tab.currentTextLineNumber}_${widget.tab.activeCommentators.hashCode}_$_allExpanded'),
-        itemCount: _orderedGroups.length,
-        itemScrollController: _itemScrollController,
-        itemPositionsListener: _itemPositionsListener,
-        scrollOffsetController: _scrollOffsetController,
-        itemBuilder: (context, index) {
-          final group = _orderedGroups[index];
-          return _buildCommentaryGroupTile(group);
-        },
-      ),
+    // קיבוץ המפרשים לפי ספר
+    final groups = _groupConsecutiveLinks(relevantLinks);
+
+    // מיון הקבוצות לפי סדר הדורות
+    return FutureBuilder<List<CommentaryGroup>>(
+      future: _sortGroupsByEra(groups),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final sortedGroups = snapshot.data!;
+        _orderedGroups = sortedGroups;
+
+        // Rebuild _orderedLinks based on groups
+        _orderedLinks = [];
+        for (final group in sortedGroups) {
+          // We need to verify link order inside group.
+          // In _buildCommentariesView, relevantLinks are sorted by title then index.
+          // _groupConsecutiveLinks groups them.
+          // So the links inside group.links should already be in order.
+          _orderedLinks.addAll(group.links);
+        }
+
+        // Initialize keys
+        final currentLinkKeys =
+            _orderedLinks.map((l) => _getLinkKey(l)).toSet();
+        _itemKeys.removeWhere((key, value) => !currentLinkKeys.contains(key));
+        for (final key in currentLinkKeys) {
+          if (!_itemKeys.containsKey(key)) {
+            _itemKeys[key] = GlobalKey();
+          }
+        }
+
+        return ScrollConfiguration(
+            behavior:
+                ScrollConfiguration.of(context).copyWith(scrollbars: false),
+            child: ScrollablePositionedList.builder(
+              key: PageStorageKey(
+                  'commentary_${widget.tab.currentTextLineNumber}_${widget.tab.activeCommentators.hashCode}_$_allExpanded'),
+              itemCount: sortedGroups.length,
+              itemScrollController: _itemScrollController,
+              itemPositionsListener: _itemPositionsListener,
+              scrollOffsetController: _scrollOffsetController,
+              itemBuilder: (context, index) {
+                final group = sortedGroups[index];
+                return _buildCommentaryGroupTile(group);
+              },
+            ));
+      },
     );
   }
 
@@ -800,6 +853,48 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         }
       }
     });
+  }
+
+  /// ממיין קבוצות מפרשים לפי סדר הדורות
+  Future<List<CommentaryGroup>> _sortGroupsByEra(
+      List<CommentaryGroup> groups) async {
+    // יצירת מפה של כל שם ספר לדור שלו
+    final Map<String, int> eraOrder = {};
+
+    for (final group in groups) {
+      final title = group.bookTitle;
+
+      // בדיקה לאיזה דור שייך הספר
+      if (await utils.hasTopic(title, 'תורה שבכתב')) {
+        eraOrder[title] = 0;
+      } else if (await utils.hasTopic(title, 'חז"ל')) {
+        eraOrder[title] = 1;
+      } else if (await utils.hasTopic(title, 'ראשונים')) {
+        eraOrder[title] = 2;
+      } else if (await utils.hasTopic(title, 'אחרונים')) {
+        eraOrder[title] = 3;
+      } else if (await utils.hasTopic(title, 'מחברי זמננו')) {
+        eraOrder[title] = 4;
+      } else {
+        eraOrder[title] = 5; // שאר מפרשים
+      }
+    }
+
+    // מיון הקבוצות לפי הדור
+    final sortedGroups = List<CommentaryGroup>.from(groups);
+    sortedGroups.sort((a, b) {
+      final orderA = eraOrder[a.bookTitle] ?? 5;
+      final orderB = eraOrder[b.bookTitle] ?? 5;
+
+      if (orderA != orderB) {
+        return orderA.compareTo(orderB);
+      }
+
+      // אם שני הספרים באותו דור, ממיינים לפי שם
+      return a.bookTitle.compareTo(b.bookTitle);
+    });
+
+    return sortedGroups;
   }
 
   Widget _buildCommentaryGroupTile(CommentaryGroup group) {
