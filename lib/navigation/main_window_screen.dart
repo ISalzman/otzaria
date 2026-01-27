@@ -426,10 +426,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                       size: const Size.fromWidth(74),
                                       child: Column(
                                         children: [
-                                          const Divider(
-                                            height: 1,
-                                            thickness: 1,
-                                          ),
                                           Expanded(
                                             child: Material(
                                               color: Theme.of(context)
