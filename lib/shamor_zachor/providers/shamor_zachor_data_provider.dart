@@ -41,8 +41,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
   /// Legacy constructor with DataLoaderService (static JSON)
   ShamorZachorDataProvider({DataLoaderService? dataLoaderService})
       : _dataLoaderService = dataLoaderService ??
-            DataLoaderService(
-                assetsBasePath: 'packages/shamor_zachor/assets/data/'),
+            DataLoaderService(assetsBasePath: 'assets/shamor_zachor/data/'),
         _dynamicDataLoaderService = null {
     _loadInitialData();
   }
