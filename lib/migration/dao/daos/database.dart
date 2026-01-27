@@ -167,7 +167,7 @@ class MyDatabase {
 
     return await openDatabase(
       path,
-      version: 2, // Incremented version to trigger migration
+      version: 3, // Incremented version to trigger migration for lineIndex
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onOpen: _onOpen,
@@ -206,6 +206,18 @@ class MyDatabase {
         // Column might already exist, ignore error
         debugPrint(
             '⚠️ Migration v1→v2: externalId column might already exist: $e');
+      }
+    }
+
+    if (oldVersion < 3) {
+      // Migration from version 2 to 3: Add lineIndex column to tocEntry table
+      try {
+        await db.execute('ALTER TABLE tocEntry ADD COLUMN lineIndex INTEGER;');
+        debugPrint('✅ Migration v2→v3: Added lineIndex column to tocEntry table');
+      } catch (e) {
+        // Column might already exist, ignore error
+        debugPrint(
+            '⚠️ Migration v2→v3: lineIndex column might already exist: $e');
       }
     }
 
@@ -255,10 +267,12 @@ class MyDatabase {
           parentId INTEGER,
           title TEXT NOT NULL,
           level INTEGER NOT NULL DEFAULT 0,
+          orderIndex INTEGER NOT NULL DEFAULT 999,
           FOREIGN KEY (parentId) REFERENCES category(id) ON DELETE CASCADE
       );
       ''',
       'CREATE INDEX IF NOT EXISTS idx_category_parent ON category(parentId);',
+      'CREATE INDEX IF NOT EXISTS idx_category_order ON category(orderIndex);',
 
       // Category closure table
       '''
@@ -324,22 +338,27 @@ class MyDatabase {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           categoryId INTEGER NOT NULL,
           sourceId INTEGER NOT NULL,
-          externalId TEXT,
           title TEXT NOT NULL,
           heShortDesc TEXT,
           notesContent TEXT,
           orderIndex INTEGER NOT NULL DEFAULT 999,
           totalLines INTEGER NOT NULL DEFAULT 0,
           isBaseBook INTEGER NOT NULL DEFAULT 0,
-          isExternal INTEGER NOT NULL DEFAULT 0,
-          filePath TEXT,
-          fileType TEXT,
-          fileSize INTEGER,
-          lastModified INTEGER,
           hasTargumConnection INTEGER NOT NULL DEFAULT 0,
           hasReferenceConnection INTEGER NOT NULL DEFAULT 0,
+          hasSourceConnection INTEGER NOT NULL DEFAULT 0,
           hasCommentaryConnection INTEGER NOT NULL DEFAULT 0,
           hasOtherConnection INTEGER NOT NULL DEFAULT 0,
+          hasAltStructures INTEGER NOT NULL DEFAULT 0,
+          hasTeamim INTEGER NOT NULL DEFAULT 0,
+          hasNekudot INTEGER NOT NULL DEFAULT 0,
+          isContentExternal INTEGER DEFAULT 0,
+          externalLibraryId TEXT DEFAULT NULL,
+          isPersonal INTEGER DEFAULT 0,
+          filePath TEXT DEFAULT NULL,
+          fileType TEXT DEFAULT 'txt',
+          fileSize INTEGER DEFAULT NULL,
+          lastModified INTEGER DEFAULT NULL,
           FOREIGN KEY (categoryId) REFERENCES category(id) ON DELETE CASCADE,
           FOREIGN KEY (sourceId) REFERENCES source(id) ON DELETE RESTRICT
       );
@@ -348,8 +367,6 @@ class MyDatabase {
       'CREATE INDEX IF NOT EXISTS idx_book_title ON book(title);',
       'CREATE INDEX IF NOT EXISTS idx_book_order ON book(orderIndex);',
       'CREATE INDEX IF NOT EXISTS idx_book_source ON book(sourceId);',
-      'CREATE INDEX IF NOT EXISTS idx_book_external ON book(isExternal);',
-      'CREATE INDEX IF NOT EXISTS idx_book_file_type ON book(fileType);',
 
       // Book-publication place junction table
       '''
@@ -410,6 +427,7 @@ class MyDatabase {
           bookId INTEGER NOT NULL,
           lineIndex INTEGER NOT NULL,
           content TEXT NOT NULL,
+          heRef TEXT,
           tocEntryId INTEGER,
           FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE,
           FOREIGN KEY (tocEntryId) REFERENCES tocEntry(id) ON DELETE SET NULL
@@ -417,6 +435,7 @@ class MyDatabase {
       ''',
       'CREATE INDEX IF NOT EXISTS idx_line_book_index ON line(bookId, lineIndex);',
       'CREATE INDEX IF NOT EXISTS idx_line_toc ON line(tocEntryId);',
+      'CREATE INDEX IF NOT EXISTS idx_line_heref ON line(heRef);',
 
       // TOC texts table
       '''
@@ -437,6 +456,7 @@ class MyDatabase {
           textId INTEGER NOT NULL,
           level INTEGER NOT NULL,
           lineId INTEGER,
+          lineIndex INTEGER,
           isLastChild INTEGER NOT NULL DEFAULT 0,
           hasChildren INTEGER NOT NULL DEFAULT 0,
           FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE,
@@ -482,6 +502,7 @@ class MyDatabase {
       'CREATE INDEX IF NOT EXISTS idx_link_target_book ON link(targetBookId);',
       'CREATE INDEX IF NOT EXISTS idx_link_target_line ON link(targetLineId);',
       'CREATE INDEX IF NOT EXISTS idx_link_type ON link(connectionTypeId);',
+      'CREATE INDEX IF NOT EXISTS idx_link_type_source_line ON link(connectionTypeId, sourceLineId);',
 
       // FTS5 removed - no longer using SQLite full-text search
       // View and virtual table have been removed
@@ -519,6 +540,86 @@ class MyDatabase {
       );
       ''',
       'CREATE INDEX IF NOT EXISTS idx_book_acronym_term ON book_acronym(term);',
+
+      // Alternative TOC structures (e.g., Parasha/Aliyah)
+      '''
+      CREATE TABLE IF NOT EXISTS alt_toc_structure (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          bookId INTEGER NOT NULL,
+          key TEXT NOT NULL,
+          title TEXT,
+          heTitle TEXT,
+          UNIQUE (bookId, key),
+          FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE
+      );
+      ''',
+      'CREATE INDEX IF NOT EXISTS idx_alt_toc_structure_book ON alt_toc_structure(bookId);',
+      'CREATE INDEX IF NOT EXISTS idx_alt_toc_structure_key ON alt_toc_structure(key);',
+
+      // Alternative TOC entries
+      '''
+      CREATE TABLE IF NOT EXISTS alt_toc_entry (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          structureId INTEGER NOT NULL,
+          parentId INTEGER,
+          textId INTEGER NOT NULL,
+          level INTEGER NOT NULL,
+          lineId INTEGER,
+          isLastChild INTEGER NOT NULL DEFAULT 0,
+          hasChildren INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (structureId) REFERENCES alt_toc_structure(id) ON DELETE CASCADE,
+          FOREIGN KEY (parentId) REFERENCES alt_toc_entry(id) ON DELETE CASCADE,
+          FOREIGN KEY (textId) REFERENCES tocText(id) ON DELETE CASCADE,
+          FOREIGN KEY (lineId) REFERENCES line(id) ON DELETE SET NULL
+      );
+      ''',
+      'CREATE INDEX IF NOT EXISTS idx_alt_toc_entry_structure ON alt_toc_entry(structureId);',
+      'CREATE INDEX IF NOT EXISTS idx_alt_toc_entry_parent ON alt_toc_entry(parentId);',
+      'CREATE INDEX IF NOT EXISTS idx_alt_toc_entry_text ON alt_toc_entry(textId);',
+      'CREATE INDEX IF NOT EXISTS idx_alt_toc_entry_line ON alt_toc_entry(lineId);',
+
+      // Line to alternative TOC mapping
+      '''
+      CREATE TABLE IF NOT EXISTS line_alt_toc (
+          lineId INTEGER NOT NULL,
+          structureId INTEGER NOT NULL,
+          altTocEntryId INTEGER NOT NULL,
+          PRIMARY KEY (lineId, structureId),
+          FOREIGN KEY (lineId) REFERENCES line(id) ON DELETE CASCADE,
+          FOREIGN KEY (structureId) REFERENCES alt_toc_structure(id) ON DELETE CASCADE,
+          FOREIGN KEY (altTocEntryId) REFERENCES alt_toc_entry(id) ON DELETE CASCADE
+      );
+      ''',
+      'CREATE INDEX IF NOT EXISTS idx_line_alt_toc_entry ON line_alt_toc(altTocEntryId);',
+      'CREATE INDEX IF NOT EXISTS idx_line_alt_toc_structure ON line_alt_toc(structureId);',
+
+      // Default commentators table
+      '''
+      CREATE TABLE IF NOT EXISTS default_commentator (
+          bookId INTEGER NOT NULL,
+          commentatorBookId INTEGER NOT NULL,
+          position INTEGER NOT NULL,
+          PRIMARY KEY (bookId, commentatorBookId),
+          FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE,
+          FOREIGN KEY (commentatorBookId) REFERENCES book(id) ON DELETE CASCADE
+      );
+      ''',
+      'CREATE INDEX IF NOT EXISTS idx_default_commentator_book ON default_commentator(bookId);',
+      'CREATE INDEX IF NOT EXISTS idx_default_commentator_commentator ON default_commentator(commentatorBookId);',
+
+      // Default targum table
+      '''
+      CREATE TABLE IF NOT EXISTS default_targum (
+          bookId INTEGER NOT NULL,
+          targumBookId INTEGER NOT NULL,
+          position INTEGER NOT NULL,
+          PRIMARY KEY (bookId, targumBookId),
+          FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE,
+          FOREIGN KEY (targumBookId) REFERENCES book(id) ON DELETE CASCADE
+      );
+      ''',
+      'CREATE INDEX IF NOT EXISTS idx_default_targum_book ON default_targum(bookId);',
+      'CREATE INDEX IF NOT EXISTS idx_default_targum_target ON default_targum(targumBookId);',
     ];
   }
 }

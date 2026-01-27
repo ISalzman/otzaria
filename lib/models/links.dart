@@ -103,7 +103,7 @@ Future<List<Link>> getLinksforIndexs(
   final allLinks = links.where((link) {
     // בדיקות מהירות קודם
     if (!indexSet.contains(link.index1)) return false;
-    if (link.connectionType != "commentary" && link.connectionType != "targum") return false;
+    if (link.connectionType != "COMMENTARY" && link.connectionType != "TARGUM") return false;
     if (link.path2.isEmpty || link.index2 <= 0) return false;
     
     // בדיקה איטית יותר בסוף

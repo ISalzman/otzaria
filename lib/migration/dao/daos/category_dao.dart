@@ -51,22 +51,32 @@ class CategoryDao {
     return result.map((row) => Category.fromJson(row)).toList();
   }
 
-  Future<int> insertCategory(int? parentId, String title, int level) async {
+  Future<int> insertCategory(int? parentId, String title, int level, {int orderIndex = 999}) async {
     final db = await database;
-    return await db.rawInsert(_queries['insert']!, [parentId, title, level]);
+    return await db.rawInsert(_queries['insert']!, [parentId, title, level, orderIndex]);
+  }
+
+  Future<int> insertCategoryWithId(int id, int? parentId, String title, int level, {int orderIndex = 999}) async {
+    final db = await database;
+    return await db.rawInsert(_queries['insertWithId']!, [id, parentId, title, level, orderIndex]);
   }
 
   Future<int> insertCategoryAndGetId(
-      int? parentId, String title, int level) async {
+      int? parentId, String title, int level, {int orderIndex = 999}) async {
     final db = await database;
-    await db.rawInsert(_queries['insert']!, [parentId, title, level]);
+    await db.rawInsert(_queries['insert']!, [parentId, title, level, orderIndex]);
     final result = await db.rawQuery(_queries['lastInsertRowId']!);
     return result.first.values.first as int;
   }
 
-  Future<int> updateCategory(int id, String title) async {
+  Future<int> updateCategory(int id, String title, {int? orderIndex}) async {
     final db = await database;
-    return await db.rawUpdate(_queries['update']!, [title, id]);
+    return await db.rawUpdate(_queries['update']!, [title, orderIndex ?? 999, id]);
+  }
+
+  Future<int> updateCategoryOrderIndex(int id, int orderIndex) async {
+    final db = await database;
+    return await db.rawUpdate(_queries['updateOrderIndex']!, [orderIndex, id]);
   }
 
   Future<int> deleteCategory(int id) async {

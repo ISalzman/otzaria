@@ -12,11 +12,15 @@ class Line {
   /// The original HTML content of the line
   final String content;
 
+  /// Hebrew reference (e.g., "בראשית א:א") for the line
+  final String? heRef;
+
   const Line({
     this.id = 0,
     required this.bookId,
     required this.lineIndex,
     required this.content,
+    this.heRef,
   });
 
   /// Creates a new [Line] instance by copying the current instance and
@@ -26,12 +30,14 @@ class Line {
     int? bookId,
     int? lineIndex,
     String? content,
+    String? heRef,
   }) {
     return Line(
       id: id ?? this.id,
       bookId: bookId ?? this.bookId,
       lineIndex: lineIndex ?? this.lineIndex,
       content: content ?? this.content,
+      heRef: heRef ?? this.heRef,
     );
   }
 
@@ -42,6 +48,7 @@ class Line {
       bookId: json['bookId'] as int,
       lineIndex: json['lineIndex'] as int,
       content: json['content'] as String,
+      heRef: json['heRef'] as String?,
     );
   }
 
@@ -52,12 +59,13 @@ class Line {
       'bookId': bookId,
       'lineIndex': lineIndex,
       'content': content,
+      'heRef': heRef,
     };
   }
 
   @override
   String toString() {
-    return 'Line(id: $id, bookId: $bookId, lineIndex: $lineIndex, content: "$content")';
+    return 'Line(id: $id, bookId: $bookId, lineIndex: $lineIndex, heRef: $heRef, content: "$content")';
   }
 
   @override
@@ -68,7 +76,8 @@ class Line {
         other.id == id &&
         other.bookId == bookId &&
         other.lineIndex == lineIndex &&
-        other.content == content;
+        other.content == content &&
+        other.heRef == heRef;
   }
 
   @override
@@ -78,6 +87,7 @@ class Line {
       bookId,
       lineIndex,
       content,
+      heRef,
     );
   }
 }

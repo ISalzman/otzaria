@@ -58,8 +58,8 @@ class _PdfCommentatorsSelectorState extends State<PdfCommentatorsSelector> {
     // חילוץ רשימת המפרשים הייחודיים מה-links
     final commentatorsSet = <String>{};
     for (final link in widget.tab.links) {
-      if (link.connectionType == "commentary" ||
-          link.connectionType == "targum") {
+      if (link.connectionType == "COMMENTARY" ||
+          link.connectionType == "TARGUM") {
         final commentatorName = utils.getTitleFromPath(link.path2);
         commentatorsSet.add(commentatorName);
       }

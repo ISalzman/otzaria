@@ -1,16 +1,16 @@
 -- Queries for categories
 
 selectAll:
-SELECT * FROM category ORDER BY title;
+SELECT * FROM category ORDER BY orderIndex, title;
 
 selectById:
 SELECT * FROM category WHERE id = ?;
 
 selectByParentId:
-SELECT * FROM category WHERE parentId = ? ORDER BY title;
+SELECT * FROM category WHERE parentId = ? ORDER BY orderIndex, title;
 
 selectRoot:
-SELECT * FROM category WHERE parentId IS NULL ORDER BY title;
+SELECT * FROM category WHERE parentId IS NULL ORDER BY orderIndex, title;
 
 selectByTitle:
 SELECT * FROM category WHERE title = ? LIMIT 1;
@@ -19,19 +19,27 @@ selectByTitleAndParent:
 SELECT * FROM category WHERE title = ? AND (parentId = ? OR (parentId IS NULL AND ? IS NULL)) LIMIT 1;
 
 selectByTitleLike:
-SELECT * FROM category WHERE title LIKE ? ORDER BY level ASC, title LIMIT 1;
+SELECT * FROM category WHERE title LIKE ? ORDER BY level ASC, orderIndex, title LIMIT 1;
 
 selectManyByTitleLike:
-SELECT * FROM category WHERE title LIKE ? ORDER BY level ASC, title LIMIT ?;
+SELECT * FROM category WHERE title LIKE ? ORDER BY level ASC, orderIndex, title LIMIT ?;
 
 insert:
-INSERT INTO category (parentId, title, level)
-VALUES (?, ?, ?);
+INSERT INTO category (parentId, title, level, orderIndex)
+VALUES (?, ?, ?, ?);
+
+insertWithId:
+INSERT INTO category (id, parentId, title, level, orderIndex)
+VALUES (?, ?, ?, ?, ?);
 
 update:
 UPDATE category SET
-    title = ?
+    title = ?,
+    orderIndex = ?
 WHERE id = ?;
+
+updateOrderIndex:
+UPDATE category SET orderIndex = ? WHERE id = ?;
 
 delete:
 DELETE FROM category WHERE id = ?;

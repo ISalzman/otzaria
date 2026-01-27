@@ -5,6 +5,7 @@ enum ConnectionType {
   commentary,
   targum,
   reference,
+  source,
   other;
 
   /// Creates a ConnectionType from a string value.
@@ -13,12 +14,14 @@ enum ConnectionType {
   /// Returns [ConnectionType.other] if the value is not recognized.
   static ConnectionType fromString(String value) {
     switch (value.toLowerCase()) {
-      case 'commentary':
+      case 'COMMENTARY':
         return ConnectionType.commentary;
-      case 'targum':
+      case 'TARGUM':
         return ConnectionType.targum;
-      case 'reference':
+      case 'REFERENCE':
         return ConnectionType.reference;
+      case 'SOURCE':
+        return ConnectionType.source;
       default:
         return ConnectionType.other;
     }

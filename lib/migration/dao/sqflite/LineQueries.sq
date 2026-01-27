@@ -16,16 +16,25 @@ ORDER BY lineIndex;
 selectByBookIdAndIndex:
 SELECT * FROM line WHERE bookId = ? AND lineIndex = ?;
 
+selectByHeRef:
+SELECT * FROM line WHERE heRef = ? LIMIT 1;
+
+selectByHeRefLike:
+SELECT * FROM line WHERE heRef LIKE ? ORDER BY bookId, lineIndex LIMIT ?;
+
 insert:
-INSERT INTO line (bookId, lineIndex, content, tocEntryId)
-VALUES (?, ?, ?, ?);
+INSERT INTO line (bookId, lineIndex, content, heRef, tocEntryId)
+VALUES (?, ?, ?, ?, ?);
 
 insertWithId:
-INSERT INTO line (id, bookId, lineIndex, content, tocEntryId)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO line (id, bookId, lineIndex, content, heRef, tocEntryId)
+VALUES (?, ?, ?, ?, ?, ?);
 
 updateTocEntryId:
 UPDATE line SET tocEntryId = ? WHERE id = ?;
+
+updateHeRef:
+UPDATE line SET heRef = ? WHERE id = ?;
 
 delete:
 DELETE FROM line WHERE id = ?;

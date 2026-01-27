@@ -48,26 +48,33 @@ class Book {
   final bool isBaseBook;
   final bool hasTargumConnection;
   final bool hasReferenceConnection;
+  final bool hasSourceConnection;
   final bool hasCommentaryConnection;
   final bool hasOtherConnection;
+  final bool hasAltStructures;
+  final bool hasTeamim;
+  final bool hasNekudot;
 
-  /// Whether this book is external (file-based, metadata only in DB)
-  final bool isExternal;
+  /// Whether this book's content is stored externally (not in DB lines table)
+  final bool isContentExternal;
 
-  /// File path for external books (null for internal books)
+  /// External library ID (e.g., Sefaria ref) for books from external sources
+  final String? externalLibraryId;
+
+  /// Whether this is a personal/user-added book
+  final bool isPersonal;
+
+  /// File path for external content books
   final String? filePath;
 
-  /// File type for external books (pdf, txt, docx, etc.)
+  /// File type (txt, pdf, epub, etc.)
   final String? fileType;
 
-  /// File size in bytes for external books
+  /// File size in bytes
   final int? fileSize;
 
-  /// Last modified timestamp for external books (milliseconds since epoch)
+  /// Last modified timestamp (milliseconds since epoch)
   final int? lastModified;
-
-  /// Optional external ID for books from external sources
-  final String? externalId;
 
   const Book({
     this.id = 0,
@@ -85,14 +92,19 @@ class Book {
     this.isBaseBook = false,
     this.hasTargumConnection = false,
     this.hasReferenceConnection = false,
+    this.hasSourceConnection = false,
     this.hasCommentaryConnection = false,
     this.hasOtherConnection = false,
-    this.isExternal = false,
+    this.hasAltStructures = false,
+    this.hasTeamim = false,
+    this.hasNekudot = false,
+    this.isContentExternal = false,
+    this.externalLibraryId,
+    this.isPersonal = false,
     this.filePath,
     this.fileType,
     this.fileSize,
     this.lastModified,
-    this.externalId,
   });
 
   Book copyWith({
@@ -111,14 +123,19 @@ class Book {
     bool? isBaseBook,
     bool? hasTargumConnection,
     bool? hasReferenceConnection,
+    bool? hasSourceConnection,
     bool? hasCommentaryConnection,
     bool? hasOtherConnection,
-    bool? isExternal,
+    bool? hasAltStructures,
+    bool? hasTeamim,
+    bool? hasNekudot,
+    bool? isContentExternal,
+    String? externalLibraryId,
+    bool? isPersonal,
     String? filePath,
     String? fileType,
     int? fileSize,
     int? lastModified,
-    String? externalId,
   }) {
     return Book(
       id: id ?? this.id,
@@ -137,15 +154,20 @@ class Book {
       hasTargumConnection: hasTargumConnection ?? this.hasTargumConnection,
       hasReferenceConnection:
           hasReferenceConnection ?? this.hasReferenceConnection,
+      hasSourceConnection: hasSourceConnection ?? this.hasSourceConnection,
       hasCommentaryConnection:
           hasCommentaryConnection ?? this.hasCommentaryConnection,
       hasOtherConnection: hasOtherConnection ?? this.hasOtherConnection,
-      isExternal: isExternal ?? this.isExternal,
+      hasAltStructures: hasAltStructures ?? this.hasAltStructures,
+      hasTeamim: hasTeamim ?? this.hasTeamim,
+      hasNekudot: hasNekudot ?? this.hasNekudot,
+      isContentExternal: isContentExternal ?? this.isContentExternal,
+      externalLibraryId: externalLibraryId ?? this.externalLibraryId,
+      isPersonal: isPersonal ?? this.isPersonal,
       filePath: filePath ?? this.filePath,
       fileType: fileType ?? this.fileType,
       fileSize: fileSize ?? this.fileSize,
       lastModified: lastModified ?? this.lastModified,
-      externalId: externalId ?? this.externalId,
     );
   }
 
@@ -181,15 +203,21 @@ class Book {
       hasTargumConnection: safeBoolFromJson(json['hasTargumConnection'], false),
       hasReferenceConnection:
           safeBoolFromJson(json['hasReferenceConnection'], false),
+      hasSourceConnection:
+          safeBoolFromJson(json['hasSourceConnection'], false),
       hasCommentaryConnection:
           safeBoolFromJson(json['hasCommentaryConnection'], false),
       hasOtherConnection: safeBoolFromJson(json['hasOtherConnection'], false),
-      isExternal: safeBoolFromJson(json['isExternal'], false),
+      hasAltStructures: safeBoolFromJson(json['hasAltStructures'], false),
+      hasTeamim: safeBoolFromJson(json['hasTeamim'], false),
+      hasNekudot: safeBoolFromJson(json['hasNekudot'], false),
+      isContentExternal: safeBoolFromJson(json['isContentExternal'], false),
+      externalLibraryId: json['externalLibraryId'] as String?,
+      isPersonal: safeBoolFromJson(json['isPersonal'], false),
       filePath: json['filePath'] as String?,
       fileType: json['fileType'] as String?,
       fileSize: json['fileSize'] as int?,
       lastModified: json['lastModified'] as int?,
-      externalId: json['externalId'] as String?,
     );
   }
 
@@ -210,20 +238,25 @@ class Book {
       'isBaseBook': isBaseBook,
       'hasTargumConnection': hasTargumConnection,
       'hasReferenceConnection': hasReferenceConnection,
+      'hasSourceConnection': hasSourceConnection,
       'hasCommentaryConnection': hasCommentaryConnection,
       'hasOtherConnection': hasOtherConnection,
-      'isExternal': isExternal,
+      'hasAltStructures': hasAltStructures,
+      'hasTeamim': hasTeamim,
+      'hasNekudot': hasNekudot,
+      'isContentExternal': isContentExternal,
+      'externalLibraryId': externalLibraryId,
+      'isPersonal': isPersonal,
       'filePath': filePath,
       'fileType': fileType,
       'fileSize': fileSize,
       'lastModified': lastModified,
-      'externalId': externalId,
     };
   }
 
   @override
   String toString() =>
-      'Book(id: $id, title: $title, isExternal: $isExternal, externalId: $externalId)';
+      'Book(id: $id, title: $title, isContentExternal: $isContentExternal, isPersonal: $isPersonal)';
 
   @override
   bool operator ==(Object other) =>
@@ -245,14 +278,19 @@ class Book {
           isBaseBook == other.isBaseBook &&
           hasTargumConnection == other.hasTargumConnection &&
           hasReferenceConnection == other.hasReferenceConnection &&
+          hasSourceConnection == other.hasSourceConnection &&
           hasCommentaryConnection == other.hasCommentaryConnection &&
           hasOtherConnection == other.hasOtherConnection &&
-          isExternal == other.isExternal &&
+          hasAltStructures == other.hasAltStructures &&
+          hasTeamim == other.hasTeamim &&
+          hasNekudot == other.hasNekudot &&
+          isContentExternal == other.isContentExternal &&
+          externalLibraryId == other.externalLibraryId &&
+          isPersonal == other.isPersonal &&
           filePath == other.filePath &&
           fileType == other.fileType &&
           fileSize == other.fileSize &&
-          lastModified == other.lastModified &&
-          externalId == other.externalId;
+          lastModified == other.lastModified;
 
   @override
   int get hashCode =>
@@ -271,12 +309,17 @@ class Book {
       isBaseBook.hashCode ^
       hasTargumConnection.hashCode ^
       hasReferenceConnection.hashCode ^
+      hasSourceConnection.hashCode ^
       hasCommentaryConnection.hashCode ^
       hasOtherConnection.hashCode ^
-      isExternal.hashCode ^
+      hasAltStructures.hashCode ^
+      hasTeamim.hashCode ^
+      hasNekudot.hashCode ^
+      isContentExternal.hashCode ^
+      externalLibraryId.hashCode ^
+      isPersonal.hashCode ^
       filePath.hashCode ^
       fileType.hashCode ^
       fileSize.hashCode ^
-      lastModified.hashCode ^
-      externalId.hashCode;
+      lastModified.hashCode;
 }

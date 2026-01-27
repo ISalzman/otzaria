@@ -588,8 +588,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         .where((link) =>
             link.index1 >= startLine &&
             link.index1 <= endLine &&
-            (link.connectionType == "commentary" ||
-                link.connectionType == "targum") &&
+            (link.connectionType == "COMMENTARY" ||
+                link.connectionType == "TARGUM") &&
             widget.tab.activeCommentators
                 .contains(utils.getTitleFromPath(link.path2)))
         .toList();
@@ -616,8 +616,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           .toList();
 
       final hasCommentaryLinks = allLinksInRange.any((link) =>
-          link.connectionType == "commentary" ||
-          link.connectionType == "targum");
+          link.connectionType == "COMMENTARY" ||
+          link.connectionType == "TARGUM");
 
       // אם יש מפרשים זמינים אבל לא נבחרו בכלל - פתח אוטומטית את מסך הבחירה
       if (hasCommentaryLinks && widget.tab.activeCommentators.isEmpty) {

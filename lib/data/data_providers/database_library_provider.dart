@@ -218,7 +218,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
         final book = await _sqliteProvider.repository!
             .getBookByTitleCategoryAndFileType(title, categoryId, fileType);
-        if (book != null && book.isExternal && book.filePath != null) {
+        if (book != null && book.isContentExternal && book.filePath != null) {
           final file = File(book.filePath!);
           if (await file.exists()) {
             return await file.readAsString();
@@ -321,7 +321,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
     debugPrint('💾 Loaded ${allCategories.length} categories');
 
     // Build catalog tree starting from root categories (parentId = null)
-    final rootCategories = categoriesByParent[null] ?? [];
+    // Sort root categories by orderIndex (like Kotlin: sortedBy { it.order })
+    final rootCategories = (categoriesByParent[null] ?? [])
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     final Library library = Library(categories: []);
 
     debugPrint('💾 Found ${rootCategories.length} root categories');
@@ -341,8 +343,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
       debugPrint('💾 Finished category: ${rootCategory.title}');
     }
 
-    // Sort all categories and books
-    _sortLibraryRecursive(library);
+    // NOTE: Sorting is now done during build (like Kotlin), no need for post-sort
+    // _sortLibraryRecursive(library); // Removed - sorting happens in _buildCatalogCategoryRecursiveOptimized
 
     // Mark titles as cached
     _titlesCached = true;
@@ -534,7 +536,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
         parentId: parentId,
         text: entry.text,
         level: entry.level,
-        lineId: entry.index, // Using index as lineId for external books
+        lineId: null, // No line table entry for external books
+        lineIndex: entry.index, // Store the index directly for external books
         isLastChild: isLastChild,
         hasChildren: hasChildren,
       );
@@ -551,6 +554,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
   }
 
   /// Recursively builds a catalog category with its subcategories and books (OPTIMIZED - no async).
+  /// Mirrors the Kotlin buildCatalogCategoryRecursive logic:
+  /// - Books are sorted by order
+  /// - Subcategories are sorted by orderIndex
   Category _buildCatalogCategoryRecursiveOptimized(
     db_models.Category dbCategory,
     Map<int, List<db_models.Book>> booksByCategory,
@@ -558,19 +564,20 @@ class DatabaseLibraryProvider implements LibraryProvider {
     Category parent,
     Map<String, Map<String, dynamic>> metadata,
   ) {
-    // Create the category
+    // Create the category using orderIndex from DB (like Kotlin uses category.order)
     final category = Category(
       title: dbCategory.title,
       description: metadata[dbCategory.title]?['heDesc'] ?? '',
       shortDescription: metadata[dbCategory.title]?['heShortDesc'] ?? '',
-      order: metadata[dbCategory.title]?['order'] ?? 999,
+      order: dbCategory.orderIndex, // Use DB orderIndex instead of metadata
       subCategories: [],
       books: [],
       parent: parent,
     );
 
-    // Add books in this category
-    final dbBooks = booksByCategory[dbCategory.id] ?? [];
+    // Get books for this category and sort by order (like Kotlin: sortedBy { it.order })
+    final dbBooks = (booksByCategory[dbCategory.id] ?? [])
+      ..sort((a, b) => a.order.compareTo(b.order));
     for (final dbBook in dbBooks) {
       final book = _convertDbBookToBook(dbBook, category, metadata);
       category.books.add(book);
@@ -584,8 +591,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
       }
     }
 
-    // Get subcategories and build them recursively
-    final children = categoriesByParent[dbCategory.id] ?? [];
+    // Get subcategories sorted by orderIndex (like Kotlin: sortedBy { it.order })
+    final children = (categoriesByParent[dbCategory.id] ?? [])
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    
     for (final child in children) {
       final subCategory = _buildCatalogCategoryRecursiveOptimized(
         child,
@@ -932,7 +941,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       }
 
       // Insert the external book
-      await repository.insertExternalBook(
+      await repository.insertExternalContentBook(
         categoryId: categoryId,
         title: title,
         filePath: file.path,

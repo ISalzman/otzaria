@@ -39,12 +39,27 @@ class LineDao {
     return _mapToLine(result.first);
   }
 
+  Future<Line?> selectByHeRef(String heRef) async {
+    final db = await database;
+    final result = await db.rawQuery(_queries['selectByHeRef']!, [heRef]);
+    if (result.isEmpty) return null;
+    return _mapToLine(result.first);
+  }
+
+  Future<List<Line>> selectByHeRefLike(String heRefPattern, int limit) async {
+    final db = await database;
+    final result = await db.rawQuery(_queries['selectByHeRefLike']!, [heRefPattern, limit]);
+    return result.map((row) => _mapToLine(row)).toList();
+  }
+
   Future<int> insertLine(Line line) async {
     final db = await database;
     return await db.rawInsert(_queries['insert']!, [
       line.bookId,
       line.lineIndex,
-      line.content
+      line.content,
+      line.heRef,
+      null, // tocEntryId - set later
     ]);
   }
 
@@ -54,13 +69,20 @@ class LineDao {
       line.id,
       line.bookId,
       line.lineIndex,
-      line.content
+      line.content,
+      line.heRef,
+      null, // tocEntryId - set later
     ]);
   }
 
   Future<int> updateTocEntryId(int lineId, int tocEntryId) async {
     final db = await database;
     return await db.rawUpdate(_queries['updateTocEntryId']!, [tocEntryId, lineId]);
+  }
+
+  Future<int> updateHeRef(int lineId, String heRef) async {
+    final db = await database;
+    return await db.rawUpdate(_queries['updateHeRef']!, [heRef, lineId]);
   }
 
   Future<int> delete(int id) async {
@@ -90,7 +112,8 @@ class LineDao {
       id: map['id'] as int,
       bookId: map['bookId'] as int,
       lineIndex: map['lineIndex'] as int,
-      content: map['content'] as String
+      content: map['content'] as String,
+      heRef: map['heRef'] as String?,
     );
   }
 }

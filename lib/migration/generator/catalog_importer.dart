@@ -123,10 +123,10 @@ class CatalogImporter {
               topics: topics,
               order: 999.0,
               isBaseBook: false,
-              isExternal: true,
+              isContentExternal: true,
               filePath: link,
               fileType: 'url',
-              externalId: externalId);
+              externalLibraryId: externalId);
 
           pendingBooks.add(book);
           existingExternalIds.add(
@@ -209,10 +209,10 @@ class CatalogImporter {
               topics: topics,
               order: 999.0,
               isBaseBook: false,
-              isExternal: true,
+              isContentExternal: true,
               filePath: link,
               fileType: 'url',
-              externalId: externalId);
+              externalLibraryId: externalId);
 
           pendingBooks.add(book);
           existingExternalIds.add(externalId);
@@ -257,21 +257,21 @@ class CatalogImporter {
               b.heShortDesc,
               b.order,
               b.isBaseBook ? 1 : 0,
-              b.isExternal ? 1 : 0,
+              b.isContentExternal ? 1 : 0,
               b.notesContent,
               b.filePath,
               b.fileType,
               b.fileSize,
               b.lastModified,
-              b.externalId,
+              b.externalLibraryId,
             ])
         .toList();
 
     await txn.rawInsert('''
          INSERT INTO book (
              id, categoryId, sourceId, title, heShortDesc, order_index, 
-             isBaseBook, isExternal, notesContent, filePath, fileType, 
-             fileSize, lastModified, externalId
+             isBaseBook, isContentExternal, notesContent, filePath, fileType, 
+             fileSize, lastModified, externalLibraryId
          ) VALUES $bookPlaceholders
       ''', bookValues);
 
