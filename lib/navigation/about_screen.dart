@@ -9,7 +9,6 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:path/path.dart' as p;
 import '../settings/settings_repository.dart';
 import '../services/data_collection_service.dart';
-import '../widgets/ad_popup_dialog.dart';
 import 'dart:io';
 
 class AboutScreen extends StatefulWidget {
@@ -17,6 +16,45 @@ class AboutScreen extends StatefulWidget {
 
   @override
   State<AboutScreen> createState() => _AboutScreenState();
+}
+
+Future<String?> _getOtzariaSitePath() async {
+  final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
+  if (libraryPath == null || libraryPath.isEmpty) return null;
+
+  // התיקייה otzaria-site נמצאת באותה תיקייה שבה נמצא "גירסת ספריה.txt"
+  final otzariaSitePath = Directory(
+      '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}otzaria-site');
+  if (await otzariaSitePath.exists()) {
+    return otzariaSitePath.path;
+  }
+  return null;
+}
+
+Future<void> openLocalHtmlFile(BuildContext context, String fileName) async {
+  final sitePath = await _getOtzariaSitePath();
+  if (!context.mounted) return;
+  if (sitePath == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('לא נמצאה תיקיית otzaria-site')),
+    );
+    return;
+  }
+
+  final htmlFile = File('$sitePath/$fileName');
+  final exists = await htmlFile.exists();
+  if (!context.mounted) return;
+  if (!exists) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('הקובץ $fileName לא נמצא')),
+    );
+    return;
+  }
+
+  final uri = Uri.file(htmlFile.path);
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
+  }
 }
 
 // קבועים לגדלים ומרווחים
@@ -94,9 +132,9 @@ class _AboutScreenState extends State<AboutScreen> {
         'url': 'https://github.com/Sivan22',
       },
       {
-        'name': 'ר. נבון',
+        'name': 'rachelGrayover',
         'url': 'https://github.com/rachelGrayover',
-        'description': 'השקעה עצומה במעבר מקבצי טקסט ל-SQLite'
+        'description': 'השקעה עצומה במעבר ל-SQLite'
       },
       {'name': 'Y.PL.', 'url': 'https://github.com/Y-PLONI'},
       {'name': 'YOSEFTT', 'url': 'https://github.com/YOSEFTT'},
@@ -106,7 +144,6 @@ class _AboutScreenState extends State<AboutScreen> {
       {
         'name': 'mosh-dvd',
         'url': 'https://github.com/mosh-dvd',
-        'description': 'ממפתחי ממשק צורת הדף'
       },
       {
         'name': 'NHLOCAL',
@@ -359,82 +396,32 @@ class _AboutScreenState extends State<AboutScreen> {
     );
   }
 
-  Widget _buildTechnicalDetails() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // במסכים קטנים, הצג בעמודה
-        if (constraints.maxWidth < 500) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildCompactInfoItem('גרסת תוכנה', appVersion ?? 'לא ידוע'),
-              const SizedBox(height: 8),
-              _buildCompactInfoItem('גרסת ספרייה', libraryVersion ?? 'לא ידוע'),
-              const SizedBox(height: 8),
-              _buildCompactInfoItem('מספר ספרים', '${bookCount ?? 'לא ידוע'}'),
-            ],
-          );
-        }
-        // במסכים רחבים, השתמש ב-Wrap
-        return Wrap(
-          spacing: 30,
-          runSpacing: 8,
-          children: [
-            _buildCompactInfoItem('גרסת תוכנה', appVersion ?? 'לא ידוע'),
-            _buildCompactInfoItem('גרסת ספרייה', libraryVersion ?? 'לא ידוע'),
-            _buildCompactInfoItem('מספר ספרים', '${bookCount ?? 'לא ידוע'}'),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildCompactInfoItem(String label, String value) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          '$label: ',
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[700],
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ],
-    );
-  }
-
   Widget _buildMemorialCardsRow() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // אם הרוחב קטן מ-700, הצג בעמודה
-        if (constraints.maxWidth < 700) {
-          return _buildMemorialCardsColumn();
-        }
-        // אחרת, הצג בשורה
-        return Row(
+        final cardHeight = 140.0;
+        final totalSpacing = 32.0;
+        final itemWidth =
+            (constraints.maxWidth - totalSpacing).clamp(1, double.infinity) / 3;
+        final aspectRatio = itemWidth / cardHeight;
+
+        return GridView.count(
+          crossAxisCount: 3,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: aspectRatio,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
           children: [
-            Expanded(
-              child: _buildMemorialCard(
-                'לע"נ ר\' משה בן יהודה ראה ז"ל',
-                'סכום משמעותי לפיתוח התוכנה',
-              ),
+            _buildMemorialCard(
+              'לע"נ ר\' משה בן יהודה ראה ז"ל',
+              'סכום משמעותי לפיתוח התוכנה',
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildDonationMemorialCard(
-                'מקום זה יכול להיות מונצח לע"נ יקירך',
-              ),
+            _buildDonationMemorialCard(
+              'מקום זה יכול להיות מונצח לע"נ יקירך',
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildDonationMemorialCard(
-                'מקום זה יכול להיות מונצח לע"נ יקירך',
-              ),
+            _buildDonationMemorialCard(
+              'מקום זה יכול להיות מונצח לע"נ יקירך',
             ),
           ],
         );
@@ -630,42 +617,8 @@ class _AboutScreenState extends State<AboutScreen> {
     bookCount = await dataService.getTotalBookCount();
   }
 
-  Future<String?> _getOtzariaSitePath() async {
-    final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
-    if (libraryPath == null || libraryPath.isEmpty) return null;
-
-    // התיקייה otzaria-site נמצאת באותה תיקייה שבה נמצא "גירסת ספריה.txt"
-    final otzariaSitePath = Directory(
-        '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}otzaria-site');
-    if (await otzariaSitePath.exists()) {
-      return otzariaSitePath.path;
-    }
-    return null;
-  }
-
   Future<void> _openLocalHtmlFile(String fileName) async {
-    final sitePath = await _getOtzariaSitePath();
-    if (sitePath == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('לא נמצאה תיקיית otzaria-site')),
-      );
-      return;
-    }
-
-    final htmlFile = File('$sitePath/$fileName');
-    if (!await htmlFile.exists()) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('הקובץ $fileName לא נמצא')),
-      );
-      return;
-    }
-
-    final uri = Uri.file(htmlFile.path);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
+    await openLocalHtmlFile(context, fileName);
   }
 
   Future<void> _showChangelogDialog(BuildContext context) async {
@@ -739,65 +692,6 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSupportCard(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.blue.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(FluentIcons.shield_task_24_filled,
-                  color: Colors.blue, size: 24),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'אוצריא מתגייסת לעזרת לומדי התורה',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'קווי חירום וארגוני סיוע ללומדי תורה',
-            style: TextStyle(fontSize: 14),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  barrierDismissible: true,
-                  builder: (context) => const AdPopupDialog(
-                    title: 'אוצריא מתגייסת לעזרת לומדי התורה',
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-              icon: const Icon(FluentIcons.shield_task_24_filled, size: 18),
-              label: const Text('לחץ לפרטים'),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -940,9 +834,16 @@ class _AboutScreenState extends State<AboutScreen> {
 
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: isSmallScreen
-          ? _buildSmallScreenLayout(context)
-          : _buildWideScreenLayout(context),
+      child: Column(
+        children: [
+          Expanded(
+            child: isSmallScreen
+                ? _buildSmallScreenLayout(context)
+                : _buildWideScreenLayout(context),
+          ),
+          _buildTechnicalFooter(context),
+        ],
+      ),
     );
   }
 
@@ -962,7 +863,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 Row(
                   children: [
                     Image.asset(
-                      'assets/icon/icon.png',
+                      'assets/icon/iconnew.png',
                       width: 80,
                       height: 80,
                     ),
@@ -1034,40 +935,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 ),
                 const SizedBox(height: 16),
                 _buildBookEditorsList(),
-                const SizedBox(height: 32),
-
-                // פרטים טכניים
-                const Text(
-                  'פרטים טכניים',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildTechnicalDetails(),
-                const SizedBox(height: 16),
-
-                // כפתור יומן שינויים
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () => _showChangelogDialog(context),
-                        icon: const Icon(FluentIcons.history_24_regular),
-                        label: const Text('יומן שינויים בתוכנה'),
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: () => _showLibraryChangelogDialog(context),
-                        icon: const Icon(FluentIcons.library_24_regular),
-                        label: const Text('יומן שינויים בספרייה'),
-                      ),
-                    ],
-                  ),
-                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -1086,16 +954,16 @@ class _AboutScreenState extends State<AboutScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildSupportCard(context),
+                    _buildDonationCard(),
                     const SizedBox(height: 20),
                     _buildActionCard(
-                      title: 'אודות התוכנה',
+                      title: 'הצטרף לצוות העריכה',
                       description:
-                          'מידע נוסף על התוכנה, תכונות, ומדריכים לשימוש.',
-                      buttonText: 'אודות התוכנה',
-                      icon: FluentIcons.info_24_regular,
+                          'עזור לנו להוסיף ספרים חדשים לספריית אוצריא ולהרחיב את המאגר התורני.',
+                      buttonText: 'הצטרף לעריכה',
+                      icon: FluentIcons.edit_24_regular,
                       color: Colors.grey[600]!,
-                      onTap: () => _openLocalHtmlFile('index.html'),
+                      onTap: () => _openLocalHtmlFile('tutorial-dicta.html'),
                     ),
                     const SizedBox(height: 20),
                     _buildActionCard(
@@ -1109,18 +977,6 @@ class _AboutScreenState extends State<AboutScreen> {
                       onTap: () =>
                           _openLocalHtmlFile('tutorial-development.html'),
                     ),
-                    const SizedBox(height: 20),
-                    _buildActionCard(
-                      title: 'הצטרף לצוות העריכה',
-                      description:
-                          'עזור לנו להוסיף ספרים חדשים לספריית אוצריא ולהרחיב את המאגר התורני.',
-                      buttonText: 'הצטרף לעריכה',
-                      icon: FluentIcons.edit_24_regular,
-                      color: Colors.grey[600]!,
-                      onTap: () => _openLocalHtmlFile('tutorial-dicta.html'),
-                    ),
-                    const SizedBox(height: 20),
-                    _buildDonationCard(),
                   ],
                 ),
               ),
@@ -1137,9 +993,6 @@ class _AboutScreenState extends State<AboutScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // כרטיס אוצריא מתגייסת
-          _buildSupportCard(context),
-          const SizedBox(height: 24),
           // סמל וכותרת
           _buildHeader(),
           const SizedBox(height: 16),
@@ -1152,13 +1005,16 @@ class _AboutScreenState extends State<AboutScreen> {
           const SizedBox(height: 24),
 
           // כארדים של פעולות (למעלה במסכים קטנים)
+          _buildDonationCard(),
+          const SizedBox(height: 16),
           _buildActionCard(
-            title: 'אודות התוכנה',
-            description: 'מידע נוסף על התוכנה, תכונות, ומדריכים לשימוש.',
-            buttonText: 'אודות התוכנה',
-            icon: FluentIcons.info_24_regular,
+            title: 'הצטרף לצוות העריכה',
+            description:
+                'עזור לנו להוסיף ספרים חדשים לספריית אוצריא ולהרחיב את המאגר התורני.',
+            buttonText: 'הצטרף לעריכה',
+            icon: FluentIcons.edit_24_regular,
             color: Colors.grey[600]!,
-            onTap: () => _openLocalHtmlFile('index.html'),
+            onTap: () => _openLocalHtmlFile('tutorial-dicta.html'),
           ),
           const SizedBox(height: 16),
           _buildActionCard(
@@ -1171,18 +1027,6 @@ class _AboutScreenState extends State<AboutScreen> {
             showGitHubIcon: true,
             onTap: () => _openLocalHtmlFile('tutorial-development.html'),
           ),
-          const SizedBox(height: 16),
-          _buildActionCard(
-            title: 'הצטרף לצוות העריכה',
-            description:
-                'עזור לנו להוסיף ספרים חדשים לספריית אוצריא ולהרחיב את המאגר התורני.',
-            buttonText: 'הצטרף לעריכה',
-            icon: FluentIcons.edit_24_regular,
-            color: Colors.grey[600]!,
-            onTap: () => _openLocalHtmlFile('tutorial-dicta.html'),
-          ),
-          const SizedBox(height: 16),
-          _buildDonationCard(),
           const SizedBox(height: 24),
 
           // תורמים
@@ -1191,7 +1035,7 @@ class _AboutScreenState extends State<AboutScreen> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
-          _buildMemorialCardsColumn(),
+          _buildMemorialCardsRow(),
           const SizedBox(height: 24),
 
           // מפתחים
@@ -1212,32 +1056,7 @@ class _AboutScreenState extends State<AboutScreen> {
           _buildBookEditorsList(),
           const SizedBox(height: 24),
 
-          // פרטים טכניים
-          const Text(
-            'פרטים טכניים',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          _buildTechnicalDetails(),
-          const SizedBox(height: 16),
-
-          // כפתור יומן שינויים
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ElevatedButton.icon(
-                onPressed: () => _showChangelogDialog(context),
-                icon: const Icon(FluentIcons.history_24_regular),
-                label: const Text('יומן שינויים בתוכנה'),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => _showLibraryChangelogDialog(context),
-                icon: const Icon(FluentIcons.library_24_regular),
-                label: const Text('יומן שינויים בספרייה'),
-              ),
-            ],
-          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -1250,7 +1069,7 @@ class _AboutScreenState extends State<AboutScreen> {
         return Row(
           children: [
             Image.asset(
-              'assets/icon/icon.png',
+              'assets/icon/iconnew.png',
               width: isVerySmall ? 50 : 60,
               height: isVerySmall ? 50 : 60,
             ),
@@ -1282,21 +1101,88 @@ class _AboutScreenState extends State<AboutScreen> {
     );
   }
 
-  Widget _buildMemorialCardsColumn() {
-    return Column(
+  Widget _buildTechnicalFooter(BuildContext context) {
+    final footerItems = [
+      _buildFooterInfoItem(
+        label: 'גרסת תוכנה',
+        value: appVersion ?? 'לא ידוע',
+        onHistoryTap: () => _showChangelogDialog(context),
+      ),
+      _buildFooterInfoItem(
+        label: 'גרסת ספרייה',
+        value: libraryVersion ?? 'לא ידוע',
+        onHistoryTap: () => _showLibraryChangelogDialog(context),
+      ),
+      _buildFooterInfoItem(
+        label: 'מספר ספרים',
+        value: '${bookCount ?? 'לא ידוע'}',
+      ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: Colors.grey[300]!),
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 600) {
+            return Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              children: footerItems,
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: footerItems[0]),
+              Expanded(child: footerItems[1]),
+              Expanded(child: footerItems[2]),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFooterInfoItem({
+    required String label,
+    required String value,
+    VoidCallback? onHistoryTap,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _buildMemorialCard(
-          'לע"נ ר\' משה בן יהודה ראה ז"ל',
-          'סכום משמעותי לפיתוח התוכנה',
+        Text(
+          '$label: ',
+          style: TextStyle(
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[700],
+          ),
         ),
-        const SizedBox(height: 12),
-        _buildDonationMemorialCard(
-          'מקום זה יכול להיות מונצח לע"נ יקירך',
+        Flexible(
+          child: Text(
+            value,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
-        const SizedBox(height: 12),
-        _buildDonationMemorialCard(
-          'מקום זה יכול להיות מונצח לע"נ יקירך',
-        ),
+        if (onHistoryTap != null) ...[
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: 'יומן שינויים',
+            icon: const Icon(FluentIcons.history_20_regular),
+            iconSize: 18,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+            onPressed: onHistoryTap,
+          ),
+        ],
       ],
     );
   }

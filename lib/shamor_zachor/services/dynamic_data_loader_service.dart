@@ -22,7 +22,7 @@ class DynamicDataLoaderService {
   static final Logger _logger = Logger('DynamicDataLoaderService');
 
   static const String _builtInAssetPath =
-      'packages/shamor_zachor/assets/data/built_in_tracked_books.json';
+      'assets/shamor_zachor/data/built_in_tracked_books.json';
 
   final BookScannerService _scannerService;
   final CustomBooksService _customBooksService;

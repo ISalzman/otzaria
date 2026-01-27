@@ -43,6 +43,8 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
       // המילון נמצא תחת המפתח "מילון פשיטא"
       final List<dynamic> entries = jsonData['מילון פשיטא'] ?? [];
 
+      if (!mounted) return;
+
       setState(() {
         _dictionaryData = entries
             .map((entry) {
@@ -59,10 +61,10 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
       if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         UiSnack.show('שגיאה בטעינת המילון: $e');
       }
     }
