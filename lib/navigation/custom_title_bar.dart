@@ -107,7 +107,18 @@ class _CustomTitleBarState extends State<CustomTitleBar>
               child: Stack(
                 children: [
                   Container(
-                    color: Theme.of(context).colorScheme.surface,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outlineVariant
+                              .withValues(alpha: 0.6),
+                          width: 1,
+                        ),
+                      ),
+                    ),
                     child: Row(
                       children: [
                         // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים

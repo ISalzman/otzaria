@@ -195,6 +195,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 Scaffold(
                   backgroundColor: Theme.of(context).colorScheme.surface,
                   appBar: AppBar(
+                    // Keep the AppBar visually consistent when scrolling
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    surfaceTintColor: Colors.transparent,
                     title: Row(
                       children: [
                         _buildLibraryActions(context, state, settingsState),
