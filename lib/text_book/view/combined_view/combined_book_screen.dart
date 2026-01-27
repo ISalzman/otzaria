@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
@@ -22,9 +21,10 @@ import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/utils/copy_utils.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:super_clipboard/super_clipboard.dart';
-import 'package:otzaria/utils/html_link_handler.dart';
 import 'package:otzaria/utils/text_with_inline_links.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/widgets/scrollable_positioned_list_scrollbar.dart';
+import 'package:otzaria/widgets/smart_text/smart_text.dart';
 
 class CombinedView extends StatefulWidget {
   const CombinedView({
@@ -82,9 +82,14 @@ class _CombinedViewState extends State<CombinedView> {
   // שמירת גובה הבלוק בפועל לחישובים דינאמיים
   double _viewportHeight = 0;
 
+  ScrollController? _previewScrollController;
+
   @override
   void initState() {
     super.initState();
+    if (widget.isPreviewMode) {
+      _previewScrollController = ScrollController();
+    }
     _focusNode = FocusNode();
     // שמירת ה-BLoC מראש
     _textBookBloc = context.read<TextBookBloc>();
@@ -133,6 +138,7 @@ class _CombinedViewState extends State<CombinedView> {
 
   @override
   void dispose() {
+    _previewScrollController?.dispose();
     widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
     widget.tab.positionsListener.itemPositions.removeListener(_updateTabIndex);
     _savedSelectedText.dispose();
@@ -742,52 +748,67 @@ $textWithBreaks
                 }
               },
               child: Directionality(
-                textDirection: widget.isPreviewMode
-                    ? TextDirection.ltr
-                    : TextDirection.rtl,
-                child: Scrollbar(
-                  thumbVisibility: widget.isPreviewMode,
-                  thickness: 8.0,
-                  radius: const Radius.circular(4.0),
-                  child: Shortcuts(
-                    shortcuts: <ShortcutActivator, Intent>{
-                      // Windows/Linux
-                      LogicalKeySet(
-                        LogicalKeyboardKey.control,
-                        LogicalKeyboardKey.keyC,
-                      ): const _CopySelectedTextIntent(),
-                      // Windows "classic" copy
-                      LogicalKeySet(
-                        LogicalKeyboardKey.control,
-                        LogicalKeyboardKey.insert,
-                      ): const _CopySelectedTextIntent(),
-                      // macOS (למקרה שמריצים שם)
-                      LogicalKeySet(
-                        LogicalKeyboardKey.meta,
-                        LogicalKeyboardKey.keyC,
-                      ): const _CopySelectedTextIntent(),
-                    },
-                    child: Actions(
-                      actions: <Type, Action<Intent>>{
-                        _CopySelectedTextIntent:
-                            CallbackAction<_CopySelectedTextIntent>(
-                          onInvoke: (_) {
-                            _copyFormattedText();
-                            return null;
-                          },
-                        ),
-                      },
-                      child: Directionality(
-                        textDirection: TextDirection.rtl,
-                        child: ProgressiveScroll(
-                          focusNode: _focusNode,
-                          maxSpeed: 10000.0,
-                          curve: 10.0,
-                          accelerationFactor: 5,
-                          scrollController: widget.tab.mainOffsetController,
-                          child: buildOuterList(state),
-                        ),
+                textDirection: TextDirection.rtl,
+                child: Shortcuts(
+                  shortcuts: <ShortcutActivator, Intent>{
+                    // Windows/Linux
+                    LogicalKeySet(
+                      LogicalKeyboardKey.control,
+                      LogicalKeyboardKey.keyC,
+                    ): const _CopySelectedTextIntent(),
+                    // Windows "classic" copy
+                    LogicalKeySet(
+                      LogicalKeyboardKey.control,
+                      LogicalKeyboardKey.insert,
+                    ): const _CopySelectedTextIntent(),
+                    // macOS (למקרה שמריצים שם)
+                    LogicalKeySet(
+                      LogicalKeyboardKey.meta,
+                      LogicalKeyboardKey.keyC,
+                    ): const _CopySelectedTextIntent(),
+                  },
+                  child: Actions(
+                    actions: <Type, Action<Intent>>{
+                      _CopySelectedTextIntent:
+                          CallbackAction<_CopySelectedTextIntent>(
+                        onInvoke: (_) {
+                          _copyFormattedText();
+                          return null;
+                        },
                       ),
+                    },
+                    child: Directionality(
+                      textDirection: TextDirection.rtl,
+                      child: widget.isPreviewMode
+                          ? Scrollbar(
+                              controller: _previewScrollController,
+                              thumbVisibility: true,
+                              thickness: 8.0,
+                              radius: const Radius.circular(4.0),
+                              child: ListView.builder(
+                                controller: _previewScrollController,
+                                itemCount: widget.data.length,
+                                itemBuilder: (context, index) {
+                                  return buildExpansiomTile(
+                                      ExpansibleController(), index, state);
+                                },
+                              ),
+                            )
+                          : ScrollablePositionedListScrollbar(
+                              scrollController: widget.tab.scrollController,
+                              itemPositionsListener:
+                                  widget.tab.positionsListener,
+                              itemCount: widget.data.length,
+                              child: ProgressiveScroll(
+                                focusNode: _focusNode,
+                                maxSpeed: 10000.0,
+                                curve: 10.0,
+                                accelerationFactor: 5,
+                                scrollController:
+                                    widget.tab.mainOffsetController,
+                                child: buildOuterList(state),
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -934,54 +955,24 @@ $textWithBreaks
                           }
                         }
 
-                        // עיבודים נוספים
-                        if (!settingsState.showTeamim) {
-                          dataWithLinks = utils.removeTeamim(dataWithLinks);
-                        }
-                        if (settingsState.replaceHolyNames) {
-                          dataWithLinks = utils.replaceHolyNames(dataWithLinks);
-                        }
-
-                        String processedData = state.removeNikud
-                            ? utils.highLight(
-                                utils.removeVolwels('$dataWithLinks\n'),
-                                state.searchText,
-                                searchOptions: state.searchOptions,
-                                alternativeWords: state.alternativeWords,
-                                spacingValues: state.spacingValues,
-                                isFuzzy: state.searchMode == SearchMode.fuzzy,
-                              )
-                            : utils.highLight(
-                                '$dataWithLinks\n',
-                                state.searchText,
-                                searchOptions: state.searchOptions,
-                                alternativeWords: state.alternativeWords,
-                                spacingValues: state.spacingValues,
-                                isFuzzy: state.searchMode == SearchMode.fuzzy,
-                              );
-
-                        processedData =
-                            utils.formatTextWithParentheses(processedData);
-
-                        final textWidget = HtmlWidget(
-                          '''
-                          <div style="text-align: justify; direction: rtl;">
-                            $processedData
-                          </div>
-                          ''',
-                          key: ValueKey('html_${widget.tab.book.title}_$index'),
-                          textStyle: TextStyle(
+                        final textWidget = SmartTextWidget(
+                          text: dataWithLinks,
+                          widgetKey:
+                              ValueKey('html_${widget.tab.book.title}_$index'),
+                          settings: RenderSettings(
+                            removeNikud: state.removeNikud,
+                            removeTeamim: !settingsState.showTeamim,
+                            replaceHolyNames: settingsState.replaceHolyNames,
+                            searchText: state.searchText,
+                            searchOptions: state.searchOptions,
+                            alternativeWords: state.alternativeWords,
+                            spacingValues: state.spacingValues,
+                            isFuzzySearch: state.searchMode == SearchMode.fuzzy,
+                            searchMode: state.searchMode,
                             fontSize: widget.textSize,
                             fontFamily: settingsState.fontFamily,
-                            height: 1.5,
                           ),
-                          onTapUrl: (url) async {
-                            return await HtmlLinkHandler.handleLink(
-                              context,
-                              url,
-                              (tab) => widget.openBookCallback(tab),
-                            );
-                          },
+                          onOpenBook: widget.openBookCallback,
                         );
 
                         // אם textMaxWidth הוא 0, הטקסט ימלא את כל הרוחב

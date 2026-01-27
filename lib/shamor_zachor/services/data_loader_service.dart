@@ -14,8 +14,7 @@ class DataLoaderService {
   final String _assetsBasePath;
 
   DataLoaderService({String? assetsBasePath})
-      : _assetsBasePath =
-            assetsBasePath ?? 'packages/shamor_zachor/assets/data/';
+      : _assetsBasePath = assetsBasePath ?? 'assets/shamor_zachor/data/';
 
   /// Clear the cached data
   void clearCache() {

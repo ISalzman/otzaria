@@ -1,4 +1,4 @@
-import 'package:shamor_zachor/models/book_model.dart';
+import 'book_model.dart';
 
 /// Represents a book that is being tracked for learning progress
 /// Can be either a built-in book or a custom user-added book

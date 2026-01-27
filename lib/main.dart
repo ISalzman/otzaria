@@ -50,10 +50,10 @@ import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
-import 'package:shamor_zachor/providers/shamor_zachor_data_provider.dart';
-import 'package:shamor_zachor/providers/shamor_zachor_progress_provider.dart';
-import 'package:shamor_zachor/services/shamor_zachor_service_factory.dart';
-import 'package:shamor_zachor/services/dynamic_data_loader_service.dart';
+import 'package:otzaria/shamor_zachor/providers/shamor_zachor_data_provider.dart';
+import 'package:otzaria/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
+import 'package:otzaria/shamor_zachor/services/shamor_zachor_service_factory.dart';
+import 'package:otzaria/shamor_zachor/services/dynamic_data_loader_service.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/services/sources_books_service.dart';
@@ -233,7 +233,7 @@ Future<void> initialize() async {
     // Configure window manager for proper close handling
     WindowOptions windowOptions = const WindowOptions(
       skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.normal,
+      titleBarStyle: TitleBarStyle.hidden,
     );
 
     // Add window listener for proper close handling
