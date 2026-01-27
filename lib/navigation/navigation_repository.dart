@@ -1,34 +1,21 @@
 import 'dart:io';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 
 class NavigationRepository {
+  /// בודק אם הספרייה ריקה - כלומר אם קובץ seforim.db לא קיים
   bool checkLibraryIsEmpty() {
     final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath);
-    if (libraryPath == null) {
+    if (libraryPath == null || libraryPath.isEmpty) {
       return true;
     }
 
-    // בדיקה שהתיקייה הראשית קיימת
-    final rootDir = Directory(libraryPath);
-    if (!rootDir.existsSync()) {
-      return true;
-    }
-
-    // בדיקה שתיקיית אוצריא קיימת
-    final libraryDir = Directory('$libraryPath${Platform.pathSeparator}אוצריא');
-    if (!libraryDir.existsSync()) {
-      return true;
-    }
-
-    // בדיקה שהתיקייה לא ריקה
-    try {
-      final contents = libraryDir.listSync();
-      if (contents.isEmpty) {
-        return true;
-      }
-    } catch (e) {
-      // אם יש שגיאה בגישה לתיקייה, נחשיב אותה כריקה
+    // בדיקה שקובץ seforim.db קיים בנתיב המתאים
+    final databasePath = DatabaseConstants.getDatabasePathForLibrary(libraryPath);
+    final databaseFile = File(databasePath);
+    
+    if (!databaseFile.existsSync()) {
       return true;
     }
 

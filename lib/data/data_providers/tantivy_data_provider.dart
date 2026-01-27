@@ -51,49 +51,80 @@ class TantivyDataProvider {
 
   Future<SearchEngine> _initEngine() async {
     String? indexPath;
+    File? sentinelFile;
+
     try {
       indexPath = await AppPaths.getIndexPath();
-      return SearchEngine(path: indexPath);
-    } catch (e) {
-      debugPrint('❌ Failed to initialize search engine: $e');
-      if (indexPath != null) {
-        debugPrint(
-            '⚠️ Attempting to recover by resetting index at $indexPath...');
-        try {
-          final indexDirectory = Directory(indexPath);
-
-          // Attempt to delete the lock file specifically first
-          final lockFile = File('${indexDirectory.path}/.tantivy-writer.lock');
-          if (lockFile.existsSync()) {
-            try {
-              lockFile.deleteSync();
-              debugPrint('🔓 Deleted stale lock file');
-            } catch (e) {
-              debugPrint('⚠️ Failed to delete lock file: $e');
-            }
-          }
-
-          if (indexDirectory.existsSync()) {
-            try {
-              indexDirectory.deleteSync(recursive: true);
-            } catch (e) {
-              debugPrint('❌ Failed to delete index directory: $e');
-              // If we can't delete the directory, we probably can't use it.
-              rethrow;
-            }
-          }
-          indexDirectory.createSync(recursive: true);
-          return SearchEngine(path: indexPath);
-        } catch (e2) {
-          debugPrint('❌ Failed to recover search engine: $e2');
-        }
+      final parentDir = Directory(indexPath).parent;
+      if (!parentDir.existsSync()) {
+        parentDir.createSync(recursive: true);
       }
 
-      // Fallback to temporary directory to prevent app crash
+      sentinelFile = File('${parentDir.path}/.engine_init_started');
+
+      // Check for previous crash
+      if (sentinelFile.existsSync()) {
+        debugPrint(
+            '⚠️ Detected crash during previous engine init. Moving corrupted index aside.');
+        try {
+          if (Directory(indexPath).existsSync()) {
+            // Use rename instead of delete - much safer on Windows
+            final corruptedPath =
+                '${indexPath}_corrupted_${DateTime.now().millisecondsSinceEpoch}';
+            Directory(indexPath).renameSync(corruptedPath);
+            debugPrint('📦 Moved corrupted index to $corruptedPath');
+          }
+        } catch (e) {
+          debugPrint('❌ Failed to rename corrupted index: $e');
+          // If rename fails, force use a new path
+          indexPath =
+              '${indexPath}_new_${DateTime.now().millisecondsSinceEpoch}';
+        }
+
+        // Try to clear sentinel
+        try {
+          sentinelFile.deleteSync();
+        } catch (_) {}
+      }
+
+      // Create sentinel for THIS run
+      try {
+        await sentinelFile.writeAsString(DateTime.now().toString());
+      } catch (e) {
+        debugPrint('⚠️ Failed to create sentinel file: $e');
+      }
+
+      // Try to open engine
+      // If this CRASHES the process, the sentinel remains for next run.
+      // If it throws an Exception, we catch it below.
+      final engine = SearchEngine(path: indexPath!);
+
+      // If we got here, success! Remove sentinel.
+      try {
+        await sentinelFile.delete();
+      } catch (_) {}
+
+      return engine;
+    } catch (e) {
+      debugPrint('❌ Failed to initialize search engine: $e');
+
+      // Cleanup sentinel since it was a soft error
+      if (sentinelFile != null && sentinelFile.existsSync()) {
+        try {
+          sentinelFile.deleteSync();
+        } catch (_) {}
+      }
+
+      // Recover by falling back to temp memory index
       debugPrint('⚠️ Falling back to temporary in-memory index');
-      final tempDir =
-          Directory.systemTemp.createTempSync('otzaria_temp_index_');
-      return SearchEngine(path: tempDir.path);
+      try {
+        final tempDir =
+            Directory.systemTemp.createTempSync('otzaria_temp_index_');
+        return SearchEngine(path: tempDir.path);
+      } catch (e2) {
+        debugPrint('❌ CRITICAL: Failed to create temp index: $e2');
+        rethrow;
+      }
     }
   }
 

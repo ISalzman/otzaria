@@ -53,6 +53,7 @@ class TocDao {
       entry.textId,
       entry.level,
       entry.lineId,
+      entry.lineIndex,
       entry.isLastChild ? 1 : 0,
       entry.hasChildren ? 1 : 0,
     ]);
@@ -67,6 +68,7 @@ class TocDao {
       entry.textId,
       entry.level,
       entry.lineId,
+      entry.lineIndex,
       entry.isLastChild ? 1 : 0,
       entry.hasChildren ? 1 : 0,
     ]);

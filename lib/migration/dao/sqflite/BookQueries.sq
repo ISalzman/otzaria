@@ -43,29 +43,41 @@ selectBaseIds:
 SELECT id FROM book WHERE isBaseBook = 1 ORDER BY orderIndex, title;
 
 insert:
-INSERT INTO book (categoryId, sourceId, title, heShortDesc, notesContent, orderIndex, totalLines, isBaseBook, filePath, fileType, externalId)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO book (categoryId, sourceId, title, heShortDesc, notesContent, orderIndex, totalLines, isBaseBook, 
+    hasTargumConnection, hasReferenceConnection, hasSourceConnection, hasCommentaryConnection, hasOtherConnection,
+    hasAltStructures, hasTeamim, hasNekudot, isContentExternal, externalLibraryId, isPersonal, filePath, fileType, fileSize, lastModified)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 insertWithId:
-INSERT INTO book (id, categoryId, sourceId, title, heShortDesc, notesContent, orderIndex, totalLines, isBaseBook, filePath, fileType, externalId)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO book (id, categoryId, sourceId, title, heShortDesc, notesContent, orderIndex, totalLines, isBaseBook,
+    hasTargumConnection, hasReferenceConnection, hasSourceConnection, hasCommentaryConnection, hasOtherConnection,
+    hasAltStructures, hasTeamim, hasNekudot, isContentExternal, externalLibraryId, isPersonal, filePath, fileType, fileSize, lastModified)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
--- Insert external book (file-based book with metadata only in DB)
-insertExternal:
-INSERT INTO book (categoryId, sourceId, title, heShortDesc, orderIndex, isExternal, filePath, fileType, fileSize, lastModified)
-VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?);
+-- Insert external content book (content stored externally, metadata in DB)
+insertExternalContent:
+INSERT INTO book (categoryId, sourceId, title, heShortDesc, orderIndex, isContentExternal, externalLibraryId, isPersonal, filePath, fileType, fileSize, lastModified)
+VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?);
 
 -- Update external book metadata
 updateExternalMetadata:
 UPDATE book SET fileSize = ?, lastModified = ? WHERE id = ?;
 
--- Select external books only
-selectExternal:
-SELECT * FROM book WHERE isExternal = 1 ORDER BY orderIndex, title;
+-- Select external content books only
+selectExternalContent:
+SELECT * FROM book WHERE isContentExternal = 1 ORDER BY orderIndex, title;
+
+-- Select personal books only
+selectPersonal:
+SELECT * FROM book WHERE isPersonal = 1 ORDER BY orderIndex, title;
 
 -- Select external book by file path
 selectByFilePath:
 SELECT * FROM book WHERE filePath = ? LIMIT 1;
+
+-- Select by external library ID
+selectByExternalLibraryId:
+SELECT * FROM book WHERE externalLibraryId = ? LIMIT 1;
 
 updateTotalLines:
 UPDATE book SET totalLines = ? WHERE id = ?;
@@ -90,9 +102,22 @@ updateConnectionFlags:
 UPDATE book SET 
     hasTargumConnection = ?,
     hasReferenceConnection = ?,
+    hasSourceConnection = ?,
     hasCommentaryConnection = ?,
     hasOtherConnection = ?
 WHERE id = ?;
+
+-- Update alt structures flag
+updateAltStructuresFlag:
+UPDATE book SET hasAltStructures = ? WHERE id = ?;
+
+-- Update teamim flag
+updateTeamimFlag:
+UPDATE book SET hasTeamim = ? WHERE id = ?;
+
+-- Update nekudot flag
+updateNekudotFlag:
+UPDATE book SET hasNekudot = ? WHERE id = ?;
 
 lastInsertRowId:
 SELECT last_insert_rowid();

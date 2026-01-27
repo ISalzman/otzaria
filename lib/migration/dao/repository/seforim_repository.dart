@@ -684,9 +684,22 @@ class SeforimRepository {
           book.totalLines,
           book.isBaseBook,
           book.notesContent,
-          book.filePath,
-          book.fileType,
-          book.externalId);
+          hasTargumConnection: book.hasTargumConnection,
+          hasReferenceConnection: book.hasReferenceConnection,
+          hasSourceConnection: book.hasSourceConnection,
+          hasCommentaryConnection: book.hasCommentaryConnection,
+          hasOtherConnection: book.hasOtherConnection,
+          hasAltStructures: book.hasAltStructures,
+          hasTeamim: book.hasTeamim,
+          hasNekudot: book.hasNekudot,
+          isContentExternal: book.isContentExternal,
+          externalLibraryId: book.externalLibraryId,
+          isPersonal: book.isPersonal,
+          filePath: book.filePath,
+          fileType: book.fileType,
+          fileSize: book.fileSize,
+          lastModified: book.lastModified,
+      );
 
       // Process authors
       for (final author in book.authors) {
@@ -724,9 +737,22 @@ class SeforimRepository {
           book.totalLines,
           book.isBaseBook,
           book.notesContent,
-          book.filePath,
-          book.fileType,
-          book.externalId);
+          hasTargumConnection: book.hasTargumConnection,
+          hasReferenceConnection: book.hasReferenceConnection,
+          hasSourceConnection: book.hasSourceConnection,
+          hasCommentaryConnection: book.hasCommentaryConnection,
+          hasOtherConnection: book.hasOtherConnection,
+          hasAltStructures: book.hasAltStructures,
+          hasTeamim: book.hasTeamim,
+          hasNekudot: book.hasNekudot,
+          isContentExternal: book.isContentExternal,
+          externalLibraryId: book.externalLibraryId,
+          isPersonal: book.isPersonal,
+          filePath: book.filePath,
+          fileType: book.fileType,
+          fileSize: book.fileSize,
+          lastModified: book.lastModified,
+      );
 
       // Check if insertion failed
       if (id == 0) {
@@ -805,10 +831,10 @@ class SeforimRepository {
     await _database.bookDao.updateBookCategoryId(bookId, categoryId);
   }
 
-  // --- External Books ---
+  // --- External Content Books ---
 
-  /// Inserts an external book (file-based book with metadata only in DB).
-  /// External books have isExternal=1 and store file path, type, size, and last modified.
+  /// Inserts an external content book (content stored externally, metadata in DB).
+  /// External content books have isContentExternal=1 and store file path, type, size, and last modified.
   /// Also creates TOC entries for the book if it's a text file.
   ///
   /// @param categoryId The category ID for the book
@@ -819,9 +845,11 @@ class SeforimRepository {
   /// @param lastModified The last modified timestamp (milliseconds since epoch)
   /// @param heShortDesc Optional short description
   /// @param orderIndex Optional order index (defaults to 999)
+  /// @param externalLibraryId Optional external library ID (e.g., Sefaria ref)
+  /// @param isPersonal Whether this is a personal/user-added book
   /// @param tocEntries Optional list of TOC entries to create
   /// @return The ID of the inserted book
-  Future<int> insertExternalBook({
+  Future<int> insertExternalContentBook({
     required int categoryId,
     required String title,
     required String filePath,
@@ -830,17 +858,21 @@ class SeforimRepository {
     required int lastModified,
     String? heShortDesc,
     double orderIndex = 999,
+    String? externalLibraryId,
+    bool isPersonal = false,
     List<TocEntry>? tocEntries,
   }) async {
-    // Get or create a source for external books
+    // Get or create a source for external content books
     final sourceId = await insertSource('external');
 
-    final bookId = await _database.bookDao.insertExternalBook(
+    final bookId = await _database.bookDao.insertExternalContentBook(
       categoryId: categoryId,
       sourceId: sourceId,
       title: title,
       heShortDesc: heShortDesc,
       orderIndex: orderIndex,
+      externalLibraryId: externalLibraryId,
+      isPersonal: isPersonal,
       filePath: filePath,
       fileType: fileType,
       fileSize: fileSize,
@@ -868,9 +900,14 @@ class SeforimRepository {
     return await _database.bookDao.getBookByFilePath(filePath);
   }
 
-  /// Gets all external books.
-  Future<List<Book>> getAllExternalBooks() async {
-    return await _database.bookDao.getExternalBooks();
+  /// Gets a book by its external library ID.
+  Future<Book?> getBookByExternalLibraryId(String externalLibraryId) async {
+    return await _database.bookDao.getBookByExternalLibraryId(externalLibraryId);
+  }
+
+  /// Gets all external content books.
+  Future<List<Book>> getAllExternalContentBooks() async {
+    return await _database.bookDao.getExternalContentBooks();
   }
 
   /// Inserts TOC entries for an external book.
@@ -885,13 +922,15 @@ class SeforimRepository {
       final textId = await _getOrCreateTocText(entry.text);
 
       // Create toc_entry with the book ID
+      // For external books, use lineIndex (not lineId) to store the line number
       final tocEntry = TocEntry(
         id: 0,
         bookId: bookId,
         parentId: entry.parentId,
         textId: textId,
         level: entry.level,
-        lineId: entry.lineId,
+        lineId: null, // No line table entry for external books
+        lineIndex: entry.lineIndex, // Use lineIndex for external books
         isLastChild: entry.isLastChild,
         hasChildren: entry.hasChildren,
       );
@@ -1260,7 +1299,7 @@ class SeforimRepository {
   Future<void> initializeConnectionTypes() async {
     if (_connectionTypeCache.isNotEmpty) return;
 
-    final types = ['commentary', 'targum', 'reference', 'other'];
+    final types = ['OTHER','COMMENTARY','SOURCE','TARGUM','REFERENCE'];
 
     for (final type in types) {
       // Force creation/retrieval and cache it
@@ -1745,9 +1784,9 @@ class SeforimRepository {
   }
 
   Future<void> updateBookConnectionFlags(int bookId, bool hasTargum,
-      bool hasReference, bool hasCommentary, bool hasOther) async {
+      bool hasReference, bool hasSource, bool hasCommentary, bool hasOther) async {
     await _database.bookDao.updateBookConnectionFlags(
-        bookId, hasTargum, hasReference, hasCommentary, hasOther);
+        bookId, hasTargum, hasReference, hasSource, hasCommentary, hasOther);
   }
 
   /// Optimized version that updates all book connection flags in a single query
