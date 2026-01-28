@@ -3,6 +3,7 @@ import 'package:otzaria/workspaces/bloc/workspace_event.dart';
 import 'package:otzaria/workspaces/bloc/workspace_state.dart';
 import 'package:otzaria/workspaces/workspace.dart';
 import 'package:otzaria/workspaces/workspace_repository.dart';
+import 'package:otzaria/tabs/models/tab.dart';
 
 /// Bloc for managing workspaces.
 ///
@@ -20,7 +21,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
 
   /// Callback function to notify when workspace tabs should be loaded.
   /// The UI should provide this to coordinate with TabsBloc.
-  final void Function(List tabs, int activeIndex)? onWorkspaceTabsChanged;
+  final void Function(List<OpenedTab> tabs, int activeIndex)?
+      onWorkspaceTabsChanged;
 
   WorkspaceBloc({
     required WorkspaceRepository repository,
