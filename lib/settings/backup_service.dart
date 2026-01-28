@@ -176,26 +176,27 @@ class BackupService {
   static Future<List<Map<String, dynamic>>> _backupNotes() async {
     final database = PersonalNotesDatabase.instance;
     final booksWithNotes = await database.listBooksWithNotes();
-    
+
     final List<Map<String, dynamic>> result = [];
-    
+
     for (final bookInfo in booksWithNotes) {
       try {
         final notes = await database.loadNotes(bookInfo.bookId);
         if (notes.isEmpty) continue;
-        
+
         result.add({
           'bookId': bookInfo.bookId,
           'notes': notes.map((note) => _noteToBackupJson(note)).toList(),
         });
       } catch (e) {
-        _logger.warning('Skipping notes for book ${bookInfo.bookId} due to error: $e');
+        _logger.warning(
+            'Skipping notes for book ${bookInfo.bookId} due to error: $e');
       }
     }
-    
+
     return result;
   }
-  
+
   /// Convert PersonalNote to backup JSON format
   static Map<String, dynamic> _noteToBackupJson(PersonalNote note) {
     return {
@@ -337,20 +338,21 @@ class BackupService {
     List<Map<String, dynamic>> notesData,
   ) async {
     final database = PersonalNotesDatabase.instance;
-    
+
     for (final entry in notesData) {
       try {
         final bookId = (entry['bookId'] as String?)?.trim();
         if (bookId == null || bookId.isEmpty) {
           continue;
         }
-        
+
         // Handle new format (SQLite backup)
         if (entry.containsKey('notes')) {
           final notesList = entry['notes'] as List<dynamic>;
           for (final noteData in notesList) {
             try {
-              final note = _noteFromBackupJson(noteData as Map<String, dynamic>);
+              final note =
+                  _noteFromBackupJson(noteData as Map<String, dynamic>);
               await database.insertNote(note);
             } catch (e) {
               _logger.warning('Failed to restore single note from backup: $e');
@@ -366,7 +368,7 @@ class BackupService {
       }
     }
   }
-  
+
   /// Convert backup JSON to PersonalNote
   static PersonalNote _noteFromBackupJson(Map<String, dynamic> json) {
     return PersonalNote(
@@ -381,7 +383,7 @@ class BackupService {
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
   }
-  
+
   /// Restore notes from legacy file-based backup format
   static Future<void> _restoreLegacyNotes(
     Map<String, dynamic> entry,
@@ -390,19 +392,19 @@ class BackupService {
     final bookId = entry['bookId'] as String;
     final annotations = entry['annotations'] as Map<String, dynamic>;
     final notesList = annotations['notes'] as List<dynamic>? ?? [];
-    
+
     // Parse the text file content to extract note contents
     final textContent = entry['text'] as String? ?? '';
     final noteContents = _parseLegacyNoteContents(textContent);
-    
+
     for (final noteData in notesList) {
       try {
         final map = noteData as Map<String, dynamic>;
         final noteId = map['id'] as String;
-        
+
         // Get content from parsed text file, or empty string if not found
         final content = noteContents[noteId] ?? '';
-        
+
         final note = PersonalNote(
           id: noteId,
           bookId: bookId,
@@ -414,39 +416,39 @@ class BackupService {
           createdAt: DateTime.parse(map['created_at'] as String),
           updatedAt: DateTime.parse(map['updated_at'] as String),
         );
-        
+
         await database.insertNote(note);
       } catch (e) {
         _logger.warning('Failed to restore legacy note: $e');
       }
     }
   }
-  
+
   /// Parse legacy TXT file format to extract note contents by ID
   static Map<String, String> _parseLegacyNoteContents(String textContent) {
     final contents = <String, String>{};
     if (textContent.isEmpty) return contents;
-    
+
     const noteHeaderPrefix = '### NOTE ';
     const noteFooter = '### END NOTE';
-    
+
     final lines = textContent.split('\n');
     var index = 0;
-    
+
     while (index < lines.length) {
       final line = lines[index];
       if (line.startsWith(noteHeaderPrefix)) {
         final id = line.substring(noteHeaderPrefix.length).trim();
         index++;
         final buffer = StringBuffer();
-        
+
         while (index < lines.length && lines[index] != noteFooter) {
           buffer.writeln(lines[index]);
           index++;
         }
-        
+
         contents[id] = buffer.toString().trimRight();
-        
+
         if (index < lines.length && lines[index] == noteFooter) {
           index++;
         }
@@ -458,7 +460,7 @@ class BackupService {
         index++;
       }
     }
-    
+
     return contents;
   }
 
@@ -470,7 +472,12 @@ class BackupService {
     final repo = WorkspaceRepository();
     final workspaces =
         workspacesData.map((data) => Workspace.fromJson(data)).toList();
-    repo.saveWorkspaces(workspaces, currentWorkspace);
+    // Get the workspace ID from the index, or use the first workspace's ID
+    final currentId =
+        (currentWorkspace >= 0 && currentWorkspace < workspaces.length)
+            ? workspaces[currentWorkspace].id
+            : (workspaces.isNotEmpty ? workspaces.first.id : null);
+    repo.saveWorkspaces(workspaces, currentId);
   }
 
   /// Restore Shamor Zachor data - restores ALL backed up keys

@@ -81,10 +81,9 @@ class _WorkspaceIconButtonState extends State<WorkspaceIconButton>
   Widget build(BuildContext context) {
     return BlocBuilder<WorkspaceBloc, WorkspaceState>(
       builder: (context, workspaceState) {
-        final currentWorkspaceName = workspaceState.workspaces.isNotEmpty &&
-                workspaceState.currentWorkspace != null
-            ? workspaceState.workspaces[workspaceState.currentWorkspace!].name
-            : 'ברירת מחדל';
+        // Use the new activeWorkspace getter instead of index-based access
+        final currentWorkspaceName =
+            workspaceState.activeWorkspace?.name ?? 'ברירת מחדל';
 
         return _buildButtonWidget(context, currentWorkspaceName);
       },
