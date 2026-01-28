@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
@@ -245,6 +246,9 @@ class CalendarState extends Equatable {
 
 // Calendar Cubit
 class CalendarCubit extends Cubit<CalendarState> {
+  static const String _primaryGoogleCalendarId = 'primary';
+  static const int _zmanScheduleDaysAhead = 45;
+
   final SettingsRepository _settingsRepository;
   final NotificationService _notificationService;
   final GoogleCalendarService _googleCalendarService;
@@ -329,8 +333,6 @@ class CalendarCubit extends Cubit<CalendarState> {
       await syncGoogleCalendar(interactive: false);
     }
   }
-
-  static const int _zmanScheduleDaysAhead = 45;
 
   static Map<String, ZmanAlertPreference> _parseZmanAlertPreferences(
       String jsonStr) {
@@ -805,7 +807,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     await _settingsRepository.updateGoogleCalendarSyncFutureDays(days);
   }
 
-  Future<void> connectGoogleCalendar() async {
+  Future<bool> connectGoogleCalendar() async {
     emit(state.copyWith(googleCalendarSyncInProgress: true));
 
     try {
@@ -817,7 +819,7 @@ class CalendarCubit extends Cubit<CalendarState> {
           googleCalendarConnected: false,
           googleCalendarSyncError: 'לא הצלחנו להתחבר לחשבון Google.',
         ));
-        return;
+        return false;
       }
 
       apiClient.close();
@@ -827,22 +829,28 @@ class CalendarCubit extends Cubit<CalendarState> {
         clearGoogleCalendarSyncError: true,
       ));
       await syncGoogleCalendar(interactive: false);
+      return true;
     } catch (e) {
-      String errorMessage = 'שגיאה בהתחברות ל-Google Calendar: $e';
-
-      // Check if it's the credentials not configured error
-      if (e.toString().contains('not configured')) {
-        errorMessage = 'Google Calendar לא מוגדר.\n'
-            'יש לעדכן את Client ID ו-Client Secret בקוד.\n'
-            'ראה את הקובץ GOOGLE_CALENDAR_SETUP.md להוראות.';
-      }
+      final errorMessage = _formatGoogleCalendarError(e);
 
       emit(state.copyWith(
         googleCalendarSyncInProgress: false,
         googleCalendarConnected: false,
         googleCalendarSyncError: errorMessage,
       ));
+      return false;
     }
+  }
+
+  String _formatGoogleCalendarError(dynamic error) {
+    String errorMessage = error.toString();
+
+    // Remove "Exception: " prefix if present
+    if (errorMessage.startsWith('Exception: ')) {
+      errorMessage = errorMessage.substring('Exception: '.length);
+    }
+
+    return errorMessage;
   }
 
   Future<void> disconnectGoogleCalendar() async {
@@ -926,13 +934,7 @@ class CalendarCubit extends Cubit<CalendarState> {
         apiClient.close();
       }
     } catch (e) {
-      String errorMessage = 'שגיאה בהתחברות ל-Google Calendar: $e';
-
-      if (e.toString().contains('not configured')) {
-        errorMessage = 'Google Calendar לא מוגדר.\n'
-            'יש לעדכן את Client ID ו-Client Secret בקוד.\n'
-            'ראה את הקובץ GOOGLE_CALENDAR_SETUP.md להוראות.';
-      }
+      final errorMessage = _formatGoogleCalendarError(e);
 
       emit(state.copyWith(
         googleCalendarSyncInProgress: false,
@@ -962,18 +964,17 @@ class CalendarCubit extends Cubit<CalendarState> {
     try {
       final timeZoneId = _resolveTimeZone();
       final googleEvent = _toGoogleEvent(event, timeZoneId);
-      final primaryCalendar = 'primary'; // Always use primary for new events
 
       if (event.googleEventId == null || event.googleEventId!.isEmpty) {
         final created = await apiClient.api.events.insert(
           googleEvent,
-          primaryCalendar,
+          _primaryGoogleCalendarId,
         );
         return created.id;
       } else {
         final updated = await apiClient.api.events.update(
           googleEvent,
-          primaryCalendar,
+          _primaryGoogleCalendarId,
           event.googleEventId!,
         );
         return updated.id ?? event.googleEventId;
@@ -996,7 +997,7 @@ class CalendarCubit extends Cubit<CalendarState> {
 
     try {
       await apiClient.api.events.delete(
-        'primary', // Always use primary
+        _primaryGoogleCalendarId,
         event.googleEventId!,
       );
     } catch (e) {
@@ -1101,16 +1102,14 @@ class CalendarCubit extends Cubit<CalendarState> {
         recurrenceType = RecurrenceType.weekly;
       } else if (rrule.contains('FREQ=MONTHLY')) {
         // Check for Hebrew monthly marker
-        if (rrule.contains('X-OTZARIA-TYPE=otzaria_hebrew_monthly') ||
-            rrule.contains('otzaria_hebrew_monthly')) {
+        if (rrule.contains('X-OTZARIA-TYPE=otzaria_hebrew_monthly')) {
           recurrenceType = RecurrenceType.monthlyHebrew;
         } else {
           recurrenceType = RecurrenceType.monthlyGregorian;
         }
       } else if (rrule.contains('FREQ=YEARLY')) {
         // Check for Hebrew yearly marker
-        if (rrule.contains('X-OTZARIA-TYPE=otzaria_hebrew_yearly') ||
-            rrule.contains('otzaria_hebrew_yearly')) {
+        if (rrule.contains('X-OTZARIA-TYPE=otzaria_hebrew_yearly')) {
           recurrenceType = RecurrenceType.annualHebrew;
         } else {
           recurrenceType = RecurrenceType.annualGregorian;
@@ -1136,7 +1135,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   String _generateUniqueId() {
     // Generate a more reliable unique ID
     final timestamp = DateTime.now().microsecondsSinceEpoch;
-    final random = timestamp.hashCode;
+    final random = Random().nextInt(0x7FFFFFFF);
     return 'otzaria_${timestamp}_$random';
   }
 
@@ -1246,7 +1245,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   }) async {
     final baseJewish = JewishDate.fromDateTime(baseGregorianDate);
     final newEvent = CustomEvent(
-      id: DateTime.now().millisecondsSinceEpoch.toString(), // יצירת ID ייחודי
+      id: _generateUniqueId(), // יצירת ID ייחודי
       title: title,
       description: description ?? '',
       createdAt: DateTime.now(),
