@@ -33,6 +33,7 @@ import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_event.dart';
@@ -187,10 +188,20 @@ void main() async {
               create: (context) => BookmarkBloc(BookmarkRepository()),
             ),
             BlocProvider<WorkspaceBloc>(
-              create: (context) => WorkspaceBloc(
-                repository: WorkspaceRepository(),
-                tabsBloc: context.read<TabsBloc>(),
-              )..add(LoadWorkspaces()),
+              create: (context) {
+                final tabsBloc = context.read<TabsBloc>();
+                return WorkspaceBloc(
+                  repository: WorkspaceRepository(),
+                  onWorkspaceTabsChanged:
+                      (List<OpenedTab> tabs, int activeIndex) {
+                    // This callback coordinates workspace switching with TabsBloc
+                    tabsBloc.add(ReplaceAllTabs(
+                      tabs,
+                      activeIndex,
+                    ));
+                  },
+                )..add(LoadWorkspaces());
+              },
             ),
             ChangeNotifierProvider<ShamorZachorDataProvider>(
               lazy: true, // Create only when needed
