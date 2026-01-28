@@ -31,9 +31,9 @@ class NotificationService {
 
     final DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
-      requestSoundPermission: false,
-      requestBadgePermission: false,
-      requestAlertPermission: false,
+      requestSoundPermission: true,
+      requestBadgePermission: true,
+      requestAlertPermission: true,
     );
 
     const LinuxInitializationSettings initializationSettingsLinux =
@@ -151,18 +151,60 @@ class NotificationService {
         }
       }
     } else if (Platform.isIOS || Platform.isMacOS) {
-      final iosPlugin =
-          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>();
+      try {
+        final iosPlugin = flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin>();
 
-      final granted = await iosPlugin?.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+        if (iosPlugin != null) {
+          if (kDebugMode) {
+            debugPrint('Requesting iOS/macOS notification permissions...');
+          }
 
-      _permissionsGranted = granted ?? false;
-      return _permissionsGranted;
+          final granted = await iosPlugin.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+
+          _permissionsGranted = granted ?? false;
+
+          if (kDebugMode) {
+            debugPrint(
+                'iOS/macOS notification permissions granted: $_permissionsGranted');
+          }
+
+          // On macOS, sometimes we need to wait a bit and check again
+          if (Platform.isMacOS && !_permissionsGranted) {
+            if (kDebugMode) {
+              debugPrint(
+                  'macOS permissions denied, waiting and trying again...');
+            }
+
+            await Future.delayed(const Duration(seconds: 1));
+
+            final secondTry = await iosPlugin.requestPermissions(
+              alert: true,
+              badge: true,
+              sound: true,
+            );
+
+            _permissionsGranted = secondTry ?? false;
+
+            if (kDebugMode) {
+              debugPrint('macOS second attempt result: $_permissionsGranted');
+            }
+          }
+
+          return _permissionsGranted;
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Error requesting iOS/macOS permissions: $e');
+        }
+        _permissionsGranted = false;
+        return false;
+      }
     }
 
     // Windows and Linux don't require permissions
@@ -203,6 +245,39 @@ class NotificationService {
           }
           return false;
         }
+      }
+    } else if (Platform.isIOS || Platform.isMacOS) {
+      // For iOS/macOS, we need to request permissions to check them
+      // There's no separate check method in the plugin
+      try {
+        final iosPlugin = flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin>();
+
+        if (iosPlugin != null) {
+          // On macOS, we can try to get current settings
+          // If this fails, permissions are likely not granted
+          final granted = await iosPlugin.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+
+          _permissionsGranted = granted ?? false;
+
+          if (kDebugMode) {
+            debugPrint(
+                'iOS/macOS permissions check result: $_permissionsGranted');
+          }
+
+          return _permissionsGranted;
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Error checking iOS/macOS permissions: $e');
+        }
+        _permissionsGranted = false;
+        return false;
       }
     }
 
@@ -359,5 +434,61 @@ class NotificationService {
         debugPrint('Failed to send test notification: $e');
       }
     }
+  }
+
+  /// Force re-request permissions (useful for macOS troubleshooting)
+  Future<bool> forceRequestPermissions() async {
+    if (Platform.isMacOS) {
+      if (kDebugMode) {
+        debugPrint('Force requesting macOS permissions...');
+      }
+
+      final iosPlugin =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>();
+
+      if (iosPlugin != null) {
+        try {
+          // Try multiple times with different approaches
+          for (int i = 0; i < 3; i++) {
+            if (kDebugMode) {
+              debugPrint('macOS permission attempt ${i + 1}/3');
+            }
+
+            final granted = await iosPlugin.requestPermissions(
+              alert: true,
+              badge: true,
+              sound: true,
+            );
+
+            if (granted == true) {
+              _permissionsGranted = true;
+              if (kDebugMode) {
+                debugPrint('macOS permissions granted on attempt ${i + 1}');
+              }
+              return true;
+            }
+
+            // Wait between attempts
+            if (i < 2) {
+              await Future.delayed(Duration(seconds: i + 1));
+            }
+          }
+
+          if (kDebugMode) {
+            debugPrint('All macOS permission attempts failed');
+          }
+          return false;
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('Error in force request permissions: $e');
+          }
+          return false;
+        }
+      }
+    }
+
+    // For other platforms, use regular request
+    return await requestPermissions();
   }
 }

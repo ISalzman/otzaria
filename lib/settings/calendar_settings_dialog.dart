@@ -203,6 +203,22 @@ class _CalendarSettingsDialogState extends State<_CalendarSettingsDialog> {
                             },
                           ),
                           const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              final notificationService =
+                                  widget.calendarCubit.notificationService;
+                              await notificationService.sendTestNotification();
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('התראת בדיקה נשלחה'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            icon: const Icon(FluentIcons.alert_24_regular),
+                            label: const Text('שלח התראת בדיקה'),
+                          ),
                         ],
                       ),
                     ),
