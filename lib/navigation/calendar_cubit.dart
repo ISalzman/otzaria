@@ -874,33 +874,48 @@ class CalendarCubit extends Cubit<CalendarState> {
       }
 
       try {
-        // Fetch events from all selected calendars (no time limit)
+        // Calculate date range for sync
+        final now = DateTime.now();
+        final timeMin =
+            now.subtract(Duration(days: state.googleCalendarSyncPastDays));
+        final timeMax =
+            now.add(Duration(days: state.googleCalendarSyncFutureDays));
+
+        // Fetch events from all selected calendars with pagination
         List<cal.Event> allGoogleEvents = [];
         for (final calendarId in state.googleCalendarSelectedIds) {
           try {
-            final result = await apiClient.api.events.list(
-              calendarId,
-              singleEvents: true,
-              orderBy: 'startTime',
-              maxResults: 2500, // Google's max per request
-            );
-            allGoogleEvents.addAll(result.items ?? []);
+            String? pageToken;
+            do {
+              final result = await apiClient.api.events.list(
+                calendarId,
+                singleEvents: true,
+                orderBy: 'startTime',
+                timeMin: timeMin.toUtc(),
+                timeMax: timeMax.toUtc(),
+                maxResults: 2500, // Google's max per request
+                pageToken: pageToken,
+              );
+              allGoogleEvents.addAll(result.items ?? []);
+              pageToken = result.nextPageToken;
+            } while (pageToken != null);
           } catch (e) {
             // Continue with other calendars if one fails
+            debugPrint('Failed to sync calendar $calendarId: $e');
           }
         }
 
         final merged = _mergeGoogleEvents(state.events, allGoogleEvents);
-        final now = DateTime.now();
+        final syncTime = DateTime.now();
         emit(state.copyWith(
           events: merged,
           googleCalendarConnected: true,
           googleCalendarSyncInProgress: false,
-          googleCalendarLastSync: now,
+          googleCalendarLastSync: syncTime,
         ));
 
         await _settingsRepository
-            .updateGoogleCalendarLastSync(now.millisecondsSinceEpoch);
+            .updateGoogleCalendarLastSync(syncTime.millisecondsSinceEpoch);
         await _saveEventsToStorage(merged);
       } catch (e) {
         emit(state.copyWith(
@@ -963,7 +978,9 @@ class CalendarCubit extends Cubit<CalendarState> {
         );
         return updated.id ?? event.googleEventId;
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Failed to upsert Google event: $e');
+      // Return null to indicate failure, but don't crash the app
       return null;
     } finally {
       apiClient.close();
@@ -982,7 +999,8 @@ class CalendarCubit extends Cubit<CalendarState> {
         'primary', // Always use primary
         event.googleEventId!,
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Failed to delete Google event: $e');
       // Ignore delete failures to avoid blocking local delete
     } finally {
       apiClient.close();
@@ -1073,10 +1091,22 @@ class CalendarCubit extends Cubit<CalendarState> {
     final jewishDate = JewishDate.fromDateTime(date);
     final otzariaId = gEvent.extendedProperties?.private?['otzaria_event_id'];
 
+    // Parse recurrence from Google event
+    RecurrenceType recurrenceType = RecurrenceType.none;
+
+    if (gEvent.recurrence != null && gEvent.recurrence!.isNotEmpty) {
+      final rrule = gEvent.recurrence!.first;
+      if (rrule.contains('FREQ=YEARLY')) {
+        if (rrule.contains('otzaria_hebrew_yearly')) {
+          recurrenceType = RecurrenceType.annualHebrew;
+        } else {
+          recurrenceType = RecurrenceType.annualGregorian;
+        }
+      }
+    }
+
     return CustomEvent(
-      id: otzariaId ??
-          gEvent.id ??
-          DateTime.now().millisecondsSinceEpoch.toString(),
+      id: otzariaId ?? gEvent.id ?? _generateUniqueId(),
       title: gEvent.summary ?? 'אירוע ללא כותרת',
       description: gEvent.description ?? '',
       createdAt: gEvent.created ?? DateTime.now(),
@@ -1084,16 +1114,33 @@ class CalendarCubit extends Cubit<CalendarState> {
       baseJewishYear: jewishDate.getJewishYear(),
       baseJewishMonth: jewishDate.getJewishMonth(),
       baseJewishDay: jewishDate.getJewishDayOfMonth(),
-      recurrenceType: RecurrenceType.none,
-      recurringYears: null,
+      recurrenceType: recurrenceType,
+      recurringYears: null, // Not used in current implementation
       googleEventId: gEvent.id,
     );
+  }
+
+  String _generateUniqueId() {
+    // Generate a more reliable unique ID
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    final random = timestamp.hashCode;
+    return 'otzaria_${timestamp}_$random';
   }
 
   cal.Event _toGoogleEvent(CustomEvent event, String timeZoneId) {
     final baseDate = event.baseGregorianDate;
     final startDate = DateTime(baseDate.year, baseDate.month, baseDate.day);
     final endDate = startDate.add(const Duration(days: 1));
+
+    final extendedProps = {
+      'otzaria_event_id': event.id,
+      'otzaria_recurrence_type': event.recurrenceType.index.toString(),
+    };
+
+    // Store recurring years if set
+    if (event.recurringYears != null) {
+      extendedProps['recurring_years'] = event.recurringYears.toString();
+    }
 
     final googleEvent = cal.Event()
       ..summary = event.title
@@ -1104,13 +1151,8 @@ class CalendarCubit extends Cubit<CalendarState> {
       ..end = (cal.EventDateTime()
         ..date = endDate
         ..timeZone = timeZoneId)
-      ..extendedProperties = (cal.EventExtendedProperties()
-        ..private = {
-          'otzaria_event_id': event.id,
-          'otzaria_recurrence_type': event.recurrenceType.index.toString(),
-          if (event.recurringYears != null)
-            'otzaria_recurring_years': event.recurringYears.toString(),
-        });
+      ..extendedProperties =
+          (cal.EventExtendedProperties()..private = extendedProps);
 
     final recurrence = _googleRecurrenceRule(event);
     if (recurrence != null) {
