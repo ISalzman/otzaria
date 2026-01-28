@@ -2069,12 +2069,28 @@ class CalendarWidget extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      event.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            event.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        if (event.googleEventId != null &&
+                            event.googleEventId!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Icon(
+                              FluentIcons.arrow_sync_24_regular,
+                              size: 14,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     if (event.description.isNotEmpty) ...[
@@ -2333,6 +2349,47 @@ class _TimesAndEventsTabViewState extends State<_TimesAndEventsTabView>
                               textStyle: const TextStyle(fontSize: 12),
                             ),
                           ),
+                          if (widget.state.googleCalendarEnabled) ...[
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed:
+                                  widget.state.googleCalendarSyncInProgress
+                                      ? null
+                                      : () {
+                                          final cubit =
+                                              context.read<CalendarCubit>();
+                                          if (widget
+                                              .state.googleCalendarConnected) {
+                                            cubit.syncGoogleCalendar(
+                                                interactive: true);
+                                          } else {
+                                            cubit.connectGoogleCalendar();
+                                          }
+                                        },
+                              icon: widget.state.googleCalendarSyncInProgress
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      FluentIcons.arrow_sync_24_regular,
+                                      size: 16,
+                                    ),
+                              label: Text(
+                                widget.state.googleCalendarConnected
+                                    ? 'סנכרן Google'
+                                    : 'חבר ל-Google',
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                textStyle: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
                           const Spacer(),
                           // כפתור "הצג הכל" בצד שמאל
                           ElevatedButton.icon(

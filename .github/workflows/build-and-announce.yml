@@ -35,6 +35,18 @@ jobs:
           flutter-version: '3.35.7'
           cache: true
 
+      - name: Create Google Calendar Credentials
+        shell: pwsh
+        run: |
+          $credentialsContent = @"
+          class GoogleCalendarCredentials {
+            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
+            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+          }
+          "@
+          $credentialsContent | Out-File -FilePath "lib/services/google_calendar_credentials.dart" -Encoding UTF8
+          Write-Host "Google Calendar credentials file created"
+
       # - name: Install Rust (stable)
       #   uses: dtolnay/rust-toolchain@stable
 
@@ -233,6 +245,17 @@ jobs:
           flutter-version: '3.35.7'
           cache: true
 
+      - name: Create Google Calendar Credentials
+        shell: bash
+        run: |
+          cat > lib/services/google_calendar_credentials.dart << 'EOF'
+          class GoogleCalendarCredentials {
+            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
+            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+          }
+          EOF
+          echo "Google Calendar credentials file created"
+
       - name: Install Rust (stable) with rustup
         uses: dtolnay/rust-toolchain@stable
 
@@ -423,6 +446,17 @@ jobs:
           flutter-version: '3.35.7'
           cache: false  # השבתת cache כדי למנוע בעיות מקום
       
+      - name: Create Google Calendar Credentials
+        shell: bash
+        run: |
+          cat > lib/services/google_calendar_credentials.dart << 'EOF'
+          class GoogleCalendarCredentials {
+            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
+            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+          }
+          EOF
+          echo "Google Calendar credentials file created"
+      
       - run: sudo apt install ninja-build
       
       - name: Install Android SDK Platform 36
@@ -472,6 +506,17 @@ jobs:
         with:
           flutter-version: '3.35.7'
           cache: true
+
+      - name: Create Google Calendar Credentials
+        shell: bash
+        run: |
+          cat > lib/services/google_calendar_credentials.dart << 'EOF'
+          class GoogleCalendarCredentials {
+            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
+            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+          }
+          EOF
+          echo "Google Calendar credentials file created"
 
       # התקנת Rust יציבה לפני flutter build
       - name: Install Rust (stable)
