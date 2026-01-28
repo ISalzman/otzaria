@@ -15,7 +15,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   Future<void> _onPickDirectoryRequested(
       PickDirectoryRequested event, Emitter<EmptyLibraryState> emit) async {
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    String? selectedDirectory = await FilePicker.getDirectoryPath();
 
     if (selectedDirectory == null) {
       return;

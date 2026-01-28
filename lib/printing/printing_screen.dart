@@ -616,7 +616,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
         actions: [
           OutlinedButton.icon(
             onPressed: () async {
-              final path = await FilePicker.platform.saveFile(
+              final path = await FilePicker.saveFile(
                   dialogTitle: "שמירת קובץ PDF", allowedExtensions: ['pdf']);
               if (path != null) {
                 final file = File('$path.pdf');
