@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -253,6 +254,9 @@ class CalendarCubit extends Cubit<CalendarState> {
   final NotificationService _notificationService;
   final GoogleCalendarService _googleCalendarService;
 
+  // Getter for accessing notification service from outside
+  NotificationService get notificationService => _notificationService;
+
   CalendarCubit({
     SettingsRepository? settingsRepository,
     NotificationService? notificationService,
@@ -383,17 +387,35 @@ class CalendarCubit extends Cubit<CalendarState> {
 
     bool hasPermission = await notificationService.checkPermissions();
     if (!hasPermission) {
-      hasPermission = await notificationService.requestPermissions();
+      if (Platform.isMacOS) {
+        hasPermission = await notificationService.forceRequestPermissions();
+      } else {
+        hasPermission = await notificationService.requestPermissions();
+      }
     }
 
     if (!hasPermission) {
+      String message;
+      String actionLabel = 'הבנתי';
+
+      if (Platform.isMacOS) {
+        message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+            'עבור להגדרות המערכת > פרטיות ואבטחה > התראות > אוצריא\n'
+            'או הפעל מחדש את האפליקציה ואשר את בקשת ההרשאות';
+      } else if (Platform.isIOS) {
+        message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+            'עבור להגדרות > התראות > אוצריא';
+      } else {
+        message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+            'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות';
+      }
+
       UiSnack.showWithAction(
-        message: 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
-            'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
-        actionLabel: 'הבנתי',
+        message: message,
+        actionLabel: actionLabel,
         onAction: () {},
         backgroundColor: Colors.orange,
-        duration: const Duration(seconds: 8),
+        duration: const Duration(seconds: 10),
       );
       return;
     }
