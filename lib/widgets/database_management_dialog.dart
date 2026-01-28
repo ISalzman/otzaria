@@ -53,7 +53,7 @@ class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
       }
 
       // Ask user where to save
-      final result = await FilePicker.platform.saveFile(
+        final result = await FilePicker.saveFile(
         dialogTitle: 'שמור מסד נתונים',
         fileName: 'otzaria_backup_${DateTime.now().millisecondsSinceEpoch}.db',
         type: FileType.custom,
@@ -120,7 +120,7 @@ class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
 
     try {
       // Pick database file
-      final result = await FilePicker.platform.pickFiles(
+        final result = await FilePicker.pickFiles(
         dialogTitle: 'בחר קובץ מסד נתונים',
         type: FileType.custom,
         allowedExtensions: ['db'],

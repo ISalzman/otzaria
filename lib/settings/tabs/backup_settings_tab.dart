@@ -151,8 +151,7 @@ class _BackupSettingsTabState extends State<BackupSettingsTab> {
   }
 
   Future<void> _restoreBackup() async {
-    String? filePath = await FilePicker.platform
-        .pickFiles(
+    String? filePath = await FilePicker.pickFiles(
           type: FileType.custom,
           allowedExtensions: ['json'],
           dialogTitle: 'בחר קובץ גיבוי',

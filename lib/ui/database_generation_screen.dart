@@ -119,7 +119,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
   Future<void> _selectLibraryFolder() async {
     try {
-      String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
+      String? selectedDirectory = await FilePicker.getDirectoryPath(
         dialogTitle: 'בחר תיקיית אוצריא (תיקיית האב)',
       );
 
