@@ -32,5 +32,9 @@
 	<array>
 		<string>mailto</string>
 	</array>
+	<key>NSUserNotificationAlertStyle</key>
+	<string>alert</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>אוצריא זקוקה להרשאות התראות כדי להזכיר לך על זמנים חשובים ואירועים בלוח השנה</string>
 </dict>
 </plist>
