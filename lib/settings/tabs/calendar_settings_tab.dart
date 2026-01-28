@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/navigation/calendar_cubit.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/dialogs.dart';
 
 /// טאב הגדרות לוח שנה
 class CalendarSettingsTab extends StatefulWidget {
@@ -79,15 +80,18 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                       child: Column(
                         children: [
                           RadioListTile<CalendarType>(
-                            title: const Text('לוח עברי', style: TextStyle(fontSize: 16)),
+                            title: const Text('לוח עברי',
+                                style: TextStyle(fontSize: 16)),
                             value: CalendarType.hebrew,
                           ),
                           RadioListTile<CalendarType>(
-                            title: const Text('לוח לועזי', style: TextStyle(fontSize: 16)),
+                            title: const Text('לוח לועזי',
+                                style: TextStyle(fontSize: 16)),
                             value: CalendarType.gregorian,
                           ),
                           RadioListTile<CalendarType>(
-                            title: const Text('לוח משולב', style: TextStyle(fontSize: 16)),
+                            title: const Text('לוח משולב',
+                                style: TextStyle(fontSize: 16)),
                             value: CalendarType.combined,
                           ),
                         ],
@@ -105,8 +109,10 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   children: [
                     ListTile(
                       leading: const Icon(FluentIcons.location_24_regular),
-                      title: const Text('עיר נבחרת', style: TextStyle(fontSize: 16)),
-                      subtitle: Text(state.selectedCity, style: const TextStyle(fontSize: 13)),
+                      title: const Text('עיר נבחרת',
+                          style: TextStyle(fontSize: 16)),
+                      subtitle: Text(state.selectedCity,
+                          style: const TextStyle(fontSize: 13)),
                       trailing: ElevatedButton(
                         onPressed: () {
                           setState(() {
@@ -157,9 +163,9 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   title: 'התראות',
                   children: [
                     SwitchListTile(
-                      secondary:
-                          const Icon(FluentIcons.alert_24_regular),
-                      title: const Text('הפעל התראות על אירועים', style: TextStyle(fontSize: 16)),
+                      secondary: const Icon(FluentIcons.alert_24_regular),
+                      title: const Text('הפעל התראות על אירועים',
+                          style: TextStyle(fontSize: 16)),
                       value: state.calendarNotificationsEnabled,
                       onChanged: (value) {
                         cubit.changeCalendarNotificationsEnabled(value);
@@ -170,7 +176,8 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                       Padding(
                         padding: const EdgeInsets.only(right: 16.0, left: 16.0),
                         child: SwitchListTile(
-                          title: const Text('השמע צליל בהתראה', style: TextStyle(fontSize: 16)),
+                          title: const Text('השמע צליל בהתראה',
+                              style: TextStyle(fontSize: 16)),
                           value: state.calendarNotificationSound,
                           onChanged: (value) {
                             cubit.changeCalendarNotificationSound(value);
@@ -198,6 +205,186 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                               cubit.changeCalendarNotificationTime(value);
                             }
                           },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                _buildSectionCard(
+                  context: context,
+                  title: 'Google Calendar',
+                  children: [
+                    SwitchListTile(
+                      secondary: const Icon(FluentIcons.arrow_sync_24_regular),
+                      title: const Text('הפעל סנכרון עם Google Calendar',
+                          style: TextStyle(fontSize: 16)),
+                      value: state.googleCalendarEnabled,
+                      onChanged: (value) {
+                        cubit.setGoogleCalendarEnabled(value);
+                      },
+                    ),
+                    if (state.googleCalendarEnabled) ...[
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: state.googleCalendarConnected
+                                  ? () async {
+                                      final calendars =
+                                          await cubit.getAvailableCalendars();
+                                      if (!context.mounted) return;
+
+                                      if (calendars.isEmpty) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                                'לא נמצאו לוחות שנה. נסה להתחבר מחדש.'),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      final selected =
+                                          await showMultiSelectionDialog<
+                                              String>(
+                                        context: context,
+                                        title: 'בחר לוחות שנה',
+                                        items: calendars
+                                            .map((cal) =>
+                                                MultiSelectionItem<String>(
+                                                  label: cal.name,
+                                                  value: cal.id,
+                                                  subtitle: cal.isPrimary
+                                                      ? 'לוח שנה ראשי'
+                                                      : null,
+                                                ))
+                                            .toList(),
+                                        initialSelectedValues:
+                                            state.googleCalendarSelectedIds,
+                                        searchHint: 'חפש לוח שנה...',
+                                        emptyMessage: 'לא נמצאו לוחות שנה',
+                                      );
+
+                                      if (selected != null &&
+                                          selected.isNotEmpty) {
+                                        cubit.updateGoogleCalendarSelectedIds(
+                                            selected);
+                                        cubit.syncGoogleCalendar(
+                                            interactive: false);
+                                      }
+                                    }
+                                  : null,
+                              icon: const Icon(Icons.calendar_today),
+                              label: Text(
+                                  'בחר לוחות שנה (${state.googleCalendarSelectedIds.length})'),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: state.googleCalendarSyncInProgress
+                                      ? null
+                                      : () async {
+                                          if (state.googleCalendarConnected) {
+                                            cubit.syncGoogleCalendar(
+                                                interactive: true);
+                                          } else {
+                                            cubit.connectGoogleCalendar();
+                                            // After connection, show calendar selection
+                                            await Future.delayed(
+                                                const Duration(seconds: 1));
+                                            if (!context.mounted) return;
+                                            final calendars = await cubit
+                                                .getAvailableCalendars();
+                                            if (!context.mounted) return;
+                                            final selected =
+                                                await showMultiSelectionDialog<
+                                                    String>(
+                                              context: context,
+                                              title: 'בחר לוחות שנה',
+                                              items: calendars
+                                                  .map((cal) =>
+                                                      MultiSelectionItem<
+                                                          String>(
+                                                        label: cal.name,
+                                                        value: cal.id,
+                                                        subtitle: cal.isPrimary
+                                                            ? 'לוח שנה ראשי'
+                                                            : null,
+                                                      ))
+                                                  .toList(),
+                                              initialSelectedValues: state
+                                                  .googleCalendarSelectedIds,
+                                              searchHint: 'חפש לוח שנה...',
+                                              emptyMessage:
+                                                  'לא נמצאו לוחות שנה',
+                                            );
+                                            if (selected != null &&
+                                                selected.isNotEmpty) {
+                                              cubit
+                                                  .updateGoogleCalendarSelectedIds(
+                                                      selected);
+                                              cubit.syncGoogleCalendar(
+                                                  interactive: false);
+                                            }
+                                          }
+                                        },
+                                  icon: state.googleCalendarSyncInProgress
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          FluentIcons.arrow_sync_24_regular,
+                                          size: 16,
+                                        ),
+                                  label: Text(state.googleCalendarConnected
+                                      ? 'סנכרן עכשיו'
+                                      : 'התחבר ל-Google'),
+                                ),
+                                const SizedBox(width: 8),
+                                if (state.googleCalendarConnected)
+                                  TextButton(
+                                    onPressed: () =>
+                                        cubit.disconnectGoogleCalendar(),
+                                    child: const Text('התנתק'),
+                                  ),
+                              ],
+                            ),
+                            if (state.googleCalendarLastSync != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  'סנכרון אחרון: ${state.googleCalendarLastSync}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            if (state.googleCalendarSyncError != null &&
+                                state.googleCalendarSyncError!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  state.googleCalendarSyncError!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ],
