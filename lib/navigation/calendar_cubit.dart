@@ -1096,8 +1096,21 @@ class CalendarCubit extends Cubit<CalendarState> {
 
     if (gEvent.recurrence != null && gEvent.recurrence!.isNotEmpty) {
       final rrule = gEvent.recurrence!.first;
-      if (rrule.contains('FREQ=YEARLY')) {
-        if (rrule.contains('otzaria_hebrew_yearly')) {
+
+      if (rrule.contains('FREQ=WEEKLY')) {
+        recurrenceType = RecurrenceType.weekly;
+      } else if (rrule.contains('FREQ=MONTHLY')) {
+        // Check for Hebrew monthly marker
+        if (rrule.contains('X-OTZARIA-TYPE=otzaria_hebrew_monthly') ||
+            rrule.contains('otzaria_hebrew_monthly')) {
+          recurrenceType = RecurrenceType.monthlyHebrew;
+        } else {
+          recurrenceType = RecurrenceType.monthlyGregorian;
+        }
+      } else if (rrule.contains('FREQ=YEARLY')) {
+        // Check for Hebrew yearly marker
+        if (rrule.contains('X-OTZARIA-TYPE=otzaria_hebrew_yearly') ||
+            rrule.contains('otzaria_hebrew_yearly')) {
           recurrenceType = RecurrenceType.annualHebrew;
         } else {
           recurrenceType = RecurrenceType.annualGregorian;
@@ -1164,6 +1177,7 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   String? _googleRecurrenceRule(CustomEvent event) {
     String? freq;
+    String? marker; // Marker to identify Hebrew recurrences
 
     switch (event.recurrenceType) {
       case RecurrenceType.weekly:
@@ -1172,16 +1186,30 @@ class CalendarCubit extends Cubit<CalendarState> {
       case RecurrenceType.monthlyGregorian:
         freq = 'MONTHLY';
         break;
+      case RecurrenceType.monthlyHebrew:
+        // Store as monthly with a marker in extended properties
+        freq = 'MONTHLY';
+        marker = 'otzaria_hebrew_monthly';
+        break;
       case RecurrenceType.annualGregorian:
         freq = 'YEARLY';
         break;
-      case RecurrenceType.monthlyHebrew:
       case RecurrenceType.annualHebrew:
+        // Store as yearly with a marker in extended properties
+        freq = 'YEARLY';
+        marker = 'otzaria_hebrew_yearly';
+        break;
       case RecurrenceType.none:
         return null;
     }
 
     final buffer = StringBuffer('RRULE:FREQ=$freq');
+
+    // Add marker for Hebrew recurrences as a comment
+    if (marker != null) {
+      buffer.write(';X-OTZARIA-TYPE=$marker');
+    }
+
     if (event.recurringYears != null && event.recurringYears! > 0) {
       final until = DateTime(
         event.baseGregorianDate.year + event.recurringYears!,
