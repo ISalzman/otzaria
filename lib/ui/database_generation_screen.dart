@@ -119,7 +119,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
   Future<void> _selectLibraryFolder() async {
     try {
-      String? selectedDirectory = await FilePicker.getDirectoryPath(
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
         dialogTitle: 'בחר תיקיית אוצריא (תיקיית האב)',
       );
 
@@ -250,7 +250,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
     });
 
     try {
-
       MyDatabase.initialize();
       final database = MyDatabase.withPath(_selectedDbPath!);
       final repository = SeforimRepository(database);
@@ -321,7 +320,7 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
 
       // Delete acronym.json file after successful generation
       await _deleteAcronymFileAfterGeneration();
-      
+
       await repository.close();
       _timer?.cancel();
 
@@ -363,7 +362,6 @@ class _DatabaseGenerationScreenState extends State<DatabaseGenerationScreen> {
       _timer?.cancel();
     }
   }
-
 
   /// Delete acronym.json file after successful database generation
   Future<void> _deleteAcronymFileAfterGeneration() async {

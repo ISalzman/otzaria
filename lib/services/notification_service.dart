@@ -54,8 +54,10 @@ class NotificationService {
             linux: initializationSettingsLinux,
             windows: initializationSettingsWindows);
 
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings,
-        onDidReceiveNotificationResponse: onDidReceiveNotificationResponse);
+    await flutterLocalNotificationsPlugin.initialize(
+      settings: initializationSettings,
+      onDidReceiveNotificationResponse: onDidReceiveNotificationResponse,
+    );
 
     _isInitialized = true;
 
@@ -271,11 +273,13 @@ class NotificationService {
 
     try {
       await flutterLocalNotificationsPlugin.zonedSchedule(
-        id,
-        title,
-        body,
-        tz.TZDateTime.from(scheduleTime, tz.local),
-        notificationDetails,
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: tz.TZDateTime.from(scheduleTime, tz.local),
+        notificationDetails: notificationDetails,
+        // dateInterpretation removed: not present in latest API
+        matchDateTimeComponents: null,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
     } catch (e) {
@@ -293,7 +297,7 @@ class NotificationService {
   Future<void> cancelNotification(int id) async {
     if (!_isInitialized) return;
     try {
-      await flutterLocalNotificationsPlugin.cancel(id);
+      await flutterLocalNotificationsPlugin.cancel(id: id);
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Failed to cancel notification $id: $e');
@@ -340,10 +344,11 @@ class NotificationService {
 
     try {
       await flutterLocalNotificationsPlugin.show(
-        999, // Test notification ID
-        'בדיקת התראות',
-        'התראה זו מוצגת במערכת ההפעלה, לא בתוך האפליקציה',
-        notificationDetails,
+        id: 999, // Test notification ID
+        title: 'בדיקת התראות',
+        body: 'התראה זו מוצגת במערכת ההפעלה, לא בתוך האפליקציה',
+        notificationDetails: notificationDetails,
+        payload: null,
       );
 
       if (kDebugMode) {

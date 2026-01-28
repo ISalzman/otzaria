@@ -198,8 +198,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
   Future<Uint8List> _createBasePdf(PdfPageFormat format) async {
     final override = widget.createPdfOverride;
     if (override != null) {
-      final effectiveFormat =
-          orientation == pw.PageOrientation.landscape ? format.landscape : format;
+      final effectiveFormat = orientation == pw.PageOrientation.landscape
+          ? format.landscape
+          : format;
       return override(effectiveFormat);
     }
     return createPdf(format);
@@ -372,100 +373,98 @@ class _PrintingScreenState extends State<PrintingScreen> {
                         .copyWith(color: PdfColors.grey)));
           },
           build: (pw.Context context) {
-            return blocks
-                .map((b) {
-                  final kind = b['kind'];
-                  final title = b['title'];
-                  final text = (b['text'] ?? '').replaceAll('\n', '');
+            return blocks.map((b) {
+              final kind = b['kind'];
+              final title = b['title'];
+              final text = (b['text'] ?? '').replaceAll('\n', '');
 
-                  if (kind == 'commentaryTitle') {
-                    return pw.Padding(
-                      padding: const pw.EdgeInsets.only(
-                        top: 6,
-                        right: 8,
-                        left: 8,
-                      ),
-                      child: pw.Text(
-                        title ?? 'מפרשים',
-                        style: pw.TextStyle(
-                          fontSize: max(10.0, fontSize * 0.9),
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.grey800,
-                        ),
-                      ),
-                    );
-                  }
-
-                  if (kind == 'commentaryGroupTitle') {
-                    return pw.Padding(
-                      padding: const pw.EdgeInsets.only(
-                        top: 4,
-                        right: 12,
-                        left: 8,
-                      ),
-                      child: pw.Text(
-                        title ?? '',
-                        style: pw.TextStyle(
-                          fontSize: max(10.0, fontSize * 0.9),
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.grey900,
-                        ),
-                      ),
-                    );
-                  }
-
-                  if (kind == 'noteTitle') {
-                    return pw.Padding(
-                      padding: const pw.EdgeInsets.only(
-                        top: 6,
-                        right: 8,
-                        left: 8,
-                      ),
-                      child: pw.Text(
-                        title ?? 'הערות אישיות',
-                        style: pw.TextStyle(
-                          fontSize: max(10.0, fontSize * 0.9),
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.grey800,
-                        ),
-                      ),
-                    );
-                  }
-
-                  final effectiveFontSize = switch (kind) {
-                    'commentary' || 'note' => max(10.0, fontSize * 0.9),
-                    _ => fontSize,
-                  };
-
-                  final padding = switch (kind) {
-                    'commentary' || 'note' => const pw.EdgeInsets.only(
-                        top: 2,
-                        bottom: 2,
-                        right: 18,
-                        left: 8,
-                      ),
-                    'commentaryGroupTitle' => const pw.EdgeInsets.only(
-                        top: 4,
-                        bottom: 2,
-                        right: 12,
-                        left: 8,
-                      ),
-                    _ => const pw.EdgeInsets.all(8.0),
-                  };
-
-                  return pw.Padding(
-                    padding: padding,
-                    child: pw.Paragraph(
-                      text: text,
-                      textAlign: pw.TextAlign.justify,
-                      style: pw.TextStyle(
-                        fontSize: effectiveFontSize,
-                        font: font,
-                      ),
+              if (kind == 'commentaryTitle') {
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.only(
+                    top: 6,
+                    right: 8,
+                    left: 8,
+                  ),
+                  child: pw.Text(
+                    title ?? 'מפרשים',
+                    style: pw.TextStyle(
+                      fontSize: max(10.0, fontSize * 0.9),
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.grey800,
                     ),
-                  );
-                })
-                .toList();
+                  ),
+                );
+              }
+
+              if (kind == 'commentaryGroupTitle') {
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.only(
+                    top: 4,
+                    right: 12,
+                    left: 8,
+                  ),
+                  child: pw.Text(
+                    title ?? '',
+                    style: pw.TextStyle(
+                      fontSize: max(10.0, fontSize * 0.9),
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.grey900,
+                    ),
+                  ),
+                );
+              }
+
+              if (kind == 'noteTitle') {
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.only(
+                    top: 6,
+                    right: 8,
+                    left: 8,
+                  ),
+                  child: pw.Text(
+                    title ?? 'הערות אישיות',
+                    style: pw.TextStyle(
+                      fontSize: max(10.0, fontSize * 0.9),
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.grey800,
+                    ),
+                  ),
+                );
+              }
+
+              final effectiveFontSize = switch (kind) {
+                'commentary' || 'note' => max(10.0, fontSize * 0.9),
+                _ => fontSize,
+              };
+
+              final padding = switch (kind) {
+                'commentary' || 'note' => const pw.EdgeInsets.only(
+                    top: 2,
+                    bottom: 2,
+                    right: 18,
+                    left: 8,
+                  ),
+                'commentaryGroupTitle' => const pw.EdgeInsets.only(
+                    top: 4,
+                    bottom: 2,
+                    right: 12,
+                    left: 8,
+                  ),
+                _ => const pw.EdgeInsets.all(8.0),
+              };
+
+              return pw.Padding(
+                padding: padding,
+                child: pw.Paragraph(
+                  text: text,
+                  textAlign: pw.TextAlign.justify,
+                  style: pw.TextStyle(
+                    fontSize: effectiveFontSize,
+                    font: font,
+                  ),
+                ),
+              );
+            }).toList();
           }));
 
       return await pdfData.save();
@@ -616,10 +615,12 @@ class _PrintingScreenState extends State<PrintingScreen> {
         actions: [
           OutlinedButton.icon(
             onPressed: () async {
-              final path = await FilePicker.saveFile(
-                  dialogTitle: "שמירת קובץ PDF", allowedExtensions: ['pdf']);
+              final path = await FilePicker.platform.saveFile(
+                dialogTitle: "שמירת קובץ PDF",
+                fileName: "output.pdf",
+              );
               if (path != null) {
-                final file = File('$path.pdf');
+                final file = File(path);
                 await file.writeAsBytes(await pdf);
               }
             },
@@ -814,8 +815,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         (context, size, handleLinkTap) => [
                                       PdfViewerScrollThumb(
                                         controller: _pdfViewerController,
-                                        orientation:
-                                            ScrollbarOrientation.right,
+                                        orientation: ScrollbarOrientation.right,
                                         thumbSize: const Size(40, 25),
                                         thumbBuilder: (context, thumbSize,
                                                 pageNumber, controller) =>
@@ -1186,7 +1186,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                     child: Text(
                                       'גופן',
                                       style: TextStyle(
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -1195,14 +1197,17 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                     child: InkWell(
                                       onTap: () async {
                                         final fontItems = fontNames.entries
-                                            .map((entry) => SelectionItem<String>(
+                                            .map((entry) =>
+                                                SelectionItem<String>(
                                                   label: entry.value,
                                                   value: entry.key,
-                                                  searchValue: '${entry.value} ${entry.key}',
+                                                  searchValue:
+                                                      '${entry.value} ${entry.key}',
                                                 ))
                                             .toList();
 
-                                        final result = await showSelectionDialog<String>(
+                                        final result =
+                                            await showSelectionDialog<String>(
                                           context: context,
                                           title: 'בחירת גופן להדפסה',
                                           items: fontItems,
@@ -1217,14 +1222,17 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       },
                                       child: InputDecorator(
                                         decoration: InputDecoration(
-                                          contentPadding: const EdgeInsets.symmetric(
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
                                             horizontal: 12,
                                             vertical: 8,
                                           ),
                                           border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
                                           ),
-                                          suffixIcon: const Icon(Icons.arrow_drop_down),
+                                          suffixIcon:
+                                              const Icon(Icons.arrow_drop_down),
                                         ),
                                         child: Text(
                                           fontNames[fontName] ?? fontName,
@@ -1398,8 +1406,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         (context, size, handleLinkTap) => [
                                       PdfViewerScrollThumb(
                                         controller: _pdfViewerController,
-                                        orientation:
-                                            ScrollbarOrientation.right,
+                                        orientation: ScrollbarOrientation.right,
                                         thumbSize: const Size(40, 25),
                                         thumbBuilder: (context, thumbSize,
                                                 pageNumber, controller) =>
@@ -1421,7 +1428,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       }
                                     },
                                     onViewerReady: (document, controller) {
-                                      _documentRef.value = controller.documentRef;
+                                      _documentRef.value =
+                                          controller.documentRef;
                                     },
                                   ),
                                 );
