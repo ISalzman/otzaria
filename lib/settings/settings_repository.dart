@@ -61,6 +61,23 @@ class SettingsRepository {
   static const String keyCalendarEventNotificationIds =
       'key-calendar-event-notification-ids';
 
+  // Google Calendar integration
+  static const String keyGoogleCalendarEnabled = 'key-google-calendar-enabled';
+  static const String keyGoogleCalendarSelectedIds =
+      'key-google-calendar-selected-ids';
+  static const String keyGoogleCalendarClientId =
+      'key-google-calendar-client-id';
+  static const String keyGoogleCalendarClientSecret =
+      'key-google-calendar-client-secret';
+  static const String keyGoogleCalendarCredentialsJson =
+      'key-google-calendar-credentials-json';
+  static const String keyGoogleCalendarSyncPastDays =
+      'key-google-calendar-sync-past-days';
+  static const String keyGoogleCalendarSyncFutureDays =
+      'key-google-calendar-sync-future-days';
+  static const String keyGoogleCalendarLastSync =
+      'key-google-calendar-last-sync';
+
   final SettingsWrapper _settings;
 
   SettingsRepository({SettingsWrapper? settings})
@@ -212,6 +229,40 @@ class SettingsRepository {
       'calendarZmanAlerts': _settings.getValue<String>(
         keyCalendarZmanAlerts,
         defaultValue: '{}',
+      ),
+
+      // Google Calendar integration
+      'googleCalendarEnabled': _settings.getValue<bool>(
+        keyGoogleCalendarEnabled,
+        defaultValue: false,
+      ),
+      'googleCalendarSelectedIds': _settings.getValue<String>(
+        keyGoogleCalendarSelectedIds,
+        defaultValue: 'primary',
+      ),
+      'googleCalendarClientId': _settings.getValue<String>(
+        keyGoogleCalendarClientId,
+        defaultValue: '',
+      ),
+      'googleCalendarClientSecret': _settings.getValue<String>(
+        keyGoogleCalendarClientSecret,
+        defaultValue: '',
+      ),
+      'googleCalendarCredentialsJson': _settings.getValue<String>(
+        keyGoogleCalendarCredentialsJson,
+        defaultValue: '',
+      ),
+      'googleCalendarSyncPastDays': _settings.getValue<int>(
+        keyGoogleCalendarSyncPastDays,
+        defaultValue: 60,
+      ),
+      'googleCalendarSyncFutureDays': _settings.getValue<int>(
+        keyGoogleCalendarSyncFutureDays,
+        defaultValue: 365,
+      ),
+      'googleCalendarLastSync': _settings.getValue<int>(
+        keyGoogleCalendarLastSync,
+        defaultValue: 0,
       ),
     };
   }
@@ -384,6 +435,54 @@ class SettingsRepository {
     await _settings.setValue(keyCalendarEventNotificationIds, json);
   }
 
+  // Google Calendar integration
+  String getGoogleCalendarCredentialsJson() {
+    return _settings.getValue<String>(keyGoogleCalendarCredentialsJson,
+        defaultValue: '');
+  }
+
+  String getGoogleCalendarClientId() {
+    return _settings.getValue<String>(keyGoogleCalendarClientId,
+        defaultValue: '');
+  }
+
+  String getGoogleCalendarClientSecret() {
+    return _settings.getValue<String>(keyGoogleCalendarClientSecret,
+        defaultValue: '');
+  }
+
+  Future<void> updateGoogleCalendarEnabled(bool value) async {
+    await _settings.setValue(keyGoogleCalendarEnabled, value);
+  }
+
+  Future<void> updateGoogleCalendarSelectedIds(List<String> value) async {
+    await _settings.setValue(keyGoogleCalendarSelectedIds, value.join(','));
+  }
+
+  Future<void> updateGoogleCalendarClientId(String value) async {
+    await _settings.setValue(keyGoogleCalendarClientId, value);
+  }
+
+  Future<void> updateGoogleCalendarClientSecret(String value) async {
+    await _settings.setValue(keyGoogleCalendarClientSecret, value);
+  }
+
+  Future<void> updateGoogleCalendarCredentialsJson(String value) async {
+    await _settings.setValue(keyGoogleCalendarCredentialsJson, value);
+  }
+
+  Future<void> updateGoogleCalendarSyncPastDays(int value) async {
+    await _settings.setValue(keyGoogleCalendarSyncPastDays, value);
+  }
+
+  Future<void> updateGoogleCalendarSyncFutureDays(int value) async {
+    await _settings.setValue(keyGoogleCalendarSyncFutureDays, value);
+  }
+
+  Future<void> updateGoogleCalendarLastSync(int value) async {
+    await _settings.setValue(keyGoogleCalendarLastSync, value);
+  }
+
   Future<Map<String, String>> getShortcuts() async {
     // Start with the default shortcuts
     final shortcuts =
@@ -488,6 +587,16 @@ class SettingsRepository {
 
     // Internal tracking of scheduled calendar event notification IDs
     await _settings.setValue(keyCalendarEventNotificationIds, '[]');
+
+    // Google Calendar integration defaults
+    await _settings.setValue(keyGoogleCalendarEnabled, false);
+    await _settings.setValue(keyGoogleCalendarSelectedIds, 'primary');
+    await _settings.setValue(keyGoogleCalendarClientId, '');
+    await _settings.setValue(keyGoogleCalendarClientSecret, '');
+    await _settings.setValue(keyGoogleCalendarCredentialsJson, '');
+    await _settings.setValue(keyGoogleCalendarSyncPastDays, 60);
+    await _settings.setValue(keyGoogleCalendarSyncFutureDays, 365);
+    await _settings.setValue(keyGoogleCalendarLastSync, 0);
 
     // Mark as initialized
     await _settings.setValue('settings_initialized', true);
