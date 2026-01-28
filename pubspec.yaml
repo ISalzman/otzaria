@@ -88,6 +88,8 @@ dependencies:
   crypto: ^3.0.7
   path: ^1.9.1
   http: ^1.4.0
+  googleapis: ^13.2.0
+  googleapis_auth: ^1.6.0
   sqflite: ^2.4.2
   characters: ^1.4.0
   flutter_document_picker:
