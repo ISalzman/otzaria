@@ -76,6 +76,3 @@ flutter/
 
 seforim.db
 LOG.txt
-
-# Google Calendar OAuth credentials (DO NOT COMMIT!)
-lib/services/google_calendar_credentials.dart

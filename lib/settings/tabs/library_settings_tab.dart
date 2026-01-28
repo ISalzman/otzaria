@@ -111,7 +111,7 @@ class LibrarySettingsTab extends StatelessWidget {
                           const Icon(FluentIcons.chevron_right_24_regular),
                       onTap: () async {
                         String? path =
-                            await FilePicker.getDirectoryPath();
+                            await FilePicker.platform.getDirectoryPath();
                         if (path != null && context.mounted) {
                           context
                               .read<LibraryBloc>()
@@ -139,7 +139,7 @@ class LibrarySettingsTab extends StatelessWidget {
                             const Icon(FluentIcons.chevron_right_24_regular),
                         onTap: () async {
                           String? path =
-                              await FilePicker.getDirectoryPath();
+                              await FilePicker.platform.getDirectoryPath();
                           if (path != null && context.mounted) {
                             context
                                 .read<LibraryBloc>()
