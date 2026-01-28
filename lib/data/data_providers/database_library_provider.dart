@@ -594,7 +594,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     // Get subcategories sorted by orderIndex (like Kotlin: sortedBy { it.order })
     final children = (categoriesByParent[dbCategory.id] ?? [])
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-    
+
     for (final child in children) {
       final subCategory = _buildCatalogCategoryRecursiveOptimized(
         child,
@@ -698,16 +698,6 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return 1 +
         category.subCategories
             .fold(0, (sum, sub) => sum + _countCategories(sub));
-  }
-
-  /// Recursively sorts all categories and books in the library.
-  void _sortLibraryRecursive(Category category) {
-    category.subCategories.sort((a, b) => a.order.compareTo(b.order));
-    category.books.sort((a, b) => a.order.compareTo(b.order));
-
-    for (final subCat in category.subCategories) {
-      _sortLibraryRecursive(subCat);
-    }
   }
 
   @override
