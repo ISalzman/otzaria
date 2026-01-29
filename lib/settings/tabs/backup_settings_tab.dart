@@ -151,13 +151,10 @@ class _BackupSettingsTabState extends State<BackupSettingsTab> {
   }
 
   Future<void> _restoreBackup() async {
-    String? filePath = await FilePicker.platform
-        .pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['json'],
-          dialogTitle: 'בחר קובץ גיבוי',
-        )
-        .then((result) => result?.files.single.path);
+    String? filePath = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    ).then((result) => result?.files.single.path);
 
     if (filePath == null) return;
 
@@ -165,8 +162,7 @@ class _BackupSettingsTabState extends State<BackupSettingsTab> {
     final confirmed = await showConfirmationDialog(
       context: context,
       title: 'שחזור מגיבוי?',
-      content:
-          'פעולה זו תחליף את הנתונים הקיימים בנתונים מהגיבוי. האם להמשיך?',
+      content: 'פעולה זו תחליף את הנתונים הקיימים בנתונים מהגיבוי. האם להמשיך?',
       isDangerous: true,
     );
 
@@ -231,7 +227,8 @@ class _BackupSettingsTabState extends State<BackupSettingsTab> {
             children: [
               ListTile(
                 leading: const Icon(FluentIcons.calendar_clock_24_regular),
-                title: const Text('גיבוי אוטומטי', style: TextStyle(fontSize: 16)),
+                title:
+                    const Text('גיבוי אוטומטי', style: TextStyle(fontSize: 16)),
                 trailing: SegmentedButton<String>(
                   style: ButtonStyle(
                     shape: WidgetStateProperty.all(

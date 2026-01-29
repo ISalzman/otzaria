@@ -9,7 +9,8 @@ class DatabaseManagementDialog extends StatefulWidget {
   const DatabaseManagementDialog({super.key});
 
   @override
-  State<DatabaseManagementDialog> createState() => _DatabaseManagementDialogState();
+  State<DatabaseManagementDialog> createState() =>
+      _DatabaseManagementDialogState();
 }
 
 class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
@@ -37,8 +38,9 @@ class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
     setState(() => _isProcessing = true);
 
     try {
-      final sqliteProvider = FileSystemData.instance.databaseProvider.sqliteProvider;
-      
+      final sqliteProvider =
+          FileSystemData.instance.databaseProvider.sqliteProvider;
+
       // Check if database exists
       if (!await sqliteProvider.databaseExists()) {
         if (mounted) {
@@ -56,13 +58,11 @@ class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
       final result = await FilePicker.platform.saveFile(
         dialogTitle: 'שמור מסד נתונים',
         fileName: 'otzaria_backup_${DateTime.now().millisecondsSinceEpoch}.db',
-        type: FileType.custom,
-        allowedExtensions: ['db'],
       );
 
       if (result != null) {
         await sqliteProvider.exportDatabase(result);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -121,21 +121,21 @@ class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
     try {
       // Pick database file
       final result = await FilePicker.platform.pickFiles(
-        dialogTitle: 'בחר קובץ מסד נתונים',
         type: FileType.custom,
         allowedExtensions: ['db'],
       );
 
       if (result != null && result.files.single.path != null) {
         final sourcePath = result.files.single.path!;
-        
+
         // Verify it's a valid database file
         final file = File(sourcePath);
         if (!await file.exists()) {
           throw Exception('הקובץ לא נמצא');
         }
 
-        final sqliteProvider = FileSystemData.instance.databaseProvider.sqliteProvider;
+        final sqliteProvider =
+            FileSystemData.instance.databaseProvider.sqliteProvider;
         await sqliteProvider.importDatabase(sourcePath);
 
         // Reload stats
@@ -148,10 +148,10 @@ class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
               backgroundColor: Colors.green,
             ),
           );
-          
+
           // Close dialog and suggest restart
           Navigator.of(context).pop();
-          
+
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
@@ -223,8 +223,10 @@ class _DatabaseManagementDialogState extends State<DatabaseManagementDialog> {
                         textAlign: TextAlign.right,
                       ),
                       const SizedBox(height: 8),
-                      _buildStatRow('סטטוס', _dbStats!['enabled'] ? 'פעיל' : 'לא פעיל'),
-                      _buildStatRow('ספרים במסד נתונים', '${_dbStats!['books']}'),
+                      _buildStatRow(
+                          'סטטוס', _dbStats!['enabled'] ? 'פעיל' : 'לא פעיל'),
+                      _buildStatRow(
+                          'ספרים במסד נתונים', '${_dbStats!['books']}'),
                       _buildStatRow('קישורים', '${_dbStats!['links']}'),
                     ],
                   ),

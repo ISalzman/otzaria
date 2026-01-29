@@ -102,7 +102,8 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                       } else {
                         // Workspace tile
                         final workspace = state.workspaces[index];
-                        final isActive = state.currentWorkspace == index;
+                        final isActive =
+                            state.activeWorkspaceId == workspace.id;
                         return _buildWorkspaceTile(
                             context, workspace, isActive);
                       }
@@ -167,7 +168,13 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
         children: [
           InkWell(
             onTap: () {
-              context.read<WorkspaceBloc>().add(SwitchToWorkspace(workspace));
+              // Get current tab data from TabsBloc to save before switching
+              final tabsState = context.read<TabsBloc>().state;
+              context.read<WorkspaceBloc>().add(SwitchToWorkspace(
+                    targetWorkspaceId: workspace.id,
+                    currentTabsToSave: tabsState.tabs,
+                    currentTabIndexToSave: tabsState.currentTabIndex,
+                  ));
               Navigator.of(context).pop();
             },
             child: Column(
@@ -205,8 +212,8 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                         if (newName.isNotEmpty && newName != workspace.name) {
                           context.read<WorkspaceBloc>().add(
                                 RenameWorkspace(
-                                  workspace,
-                                  newName,
+                                  workspaceId: workspace.id,
+                                  newName: newName,
                                 ),
                               );
                         }
@@ -288,7 +295,9 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                       backgroundColor: Theme.of(context).colorScheme.error);
                   return;
                 }
-                context.read<WorkspaceBloc>().add(RemoveWorkspace(workspace));
+                context
+                    .read<WorkspaceBloc>()
+                    .add(RemoveWorkspace(workspace.id));
                 UiSnack.show('שולחן העבודה נמחק');
               },
             ),
