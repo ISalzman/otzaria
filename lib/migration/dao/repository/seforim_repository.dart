@@ -698,8 +698,6 @@ class SeforimRepository {
   /// @return The ID of the inserted book
   Future<int> insertBook(Book book) async {
     // Use the ID from the book object if it's greater than 0
-    print('\x1B[32m Inserting book: ${book.title} with ID: ${book.id}\x1B[0m');
-    print("book details: ${book.toJson()}");
     if (book.id != 0) {
       await _database.bookDao.insertBookWithId(
         book.id,
@@ -754,7 +752,7 @@ class SeforimRepository {
 
       return book.id;
     } else {
-      print("\x1B[33m error generat negetive id\x1B[0m");
+      _logger.warning("\x1B[33m error generat negetive id\x1B[0m");
       // Fall back to auto-generated ID if book.id is 0
       // final id = await _database.bookDao.insertBook(
       //     book.categoryId,
