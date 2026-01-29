@@ -109,8 +109,10 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
       children: [
         ListTile(
           leading: const Icon(FluentIcons.arrow_reset_24_regular),
-          title: const Text('איפוס קיצורי מקשים', style: TextStyle(fontSize: 16)),
-          subtitle: const Text('החזר את כל קיצורי המקשים לברירת מחדל', style: TextStyle(fontSize: 13)),
+          title:
+              const Text('איפוס קיצורי מקשים', style: TextStyle(fontSize: 16)),
+          subtitle: const Text('החזר את כל קיצורי המקשים לברירת מחדל',
+              style: TextStyle(fontSize: 13)),
           onTap: () async {
             final confirmed = await showConfirmationDialog(
               context: context,
@@ -142,14 +144,14 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: _buildColumns(3, [
-                _buildShortcutTile('key-shortcut-open-library-browser', 'ספרייה',
-                    'ctrl+l', FluentIcons.library_24_regular),
-                _buildShortcutTile('key-shortcut-open-find-ref', 'איתור', 'ctrl+o',
-                    FluentIcons.book_search_24_regular),
+                _buildShortcutTile('key-shortcut-open-library-browser',
+                    'ספרייה', 'ctrl+l', FluentIcons.library_24_regular),
+                _buildShortcutTile('key-shortcut-open-find-ref', 'איתור',
+                    'ctrl+o', FluentIcons.book_search_24_regular),
                 _buildShortcutTile('key-shortcut-open-reading-screen', 'עיון',
                     'ctrl+r', FluentIcons.book_open_24_regular),
-                _buildShortcutTile('key-shortcut-open-new-search', 'חלון חיפוש חדש',
-                    'ctrl+q', FluentIcons.search_24_regular),
+                _buildShortcutTile('key-shortcut-open-new-search',
+                    'חלון חיפוש חדש', 'ctrl+q', FluentIcons.search_24_regular),
                 _buildShortcutTile('key-shortcut-open-settings', 'הגדרות',
                     'ctrl+comma', FluentIcons.settings_24_regular),
                 _buildShortcutTile('key-shortcut-open-more', 'כלים', 'ctrl+m',
@@ -178,14 +180,17 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
                     'ctrl+e', FluentIcons.document_edit_24_regular),
                 _buildShortcutTile('key-shortcut-print', 'הדפסה', 'ctrl+p',
                     FluentIcons.print_24_regular),
-                _buildShortcutTile('key-shortcut-add-bookmark', 'הוספת סימניה',
+                _buildShortcutTile('key-shortcut-add-bookmark', 'הוסף סימניה',
                     'ctrl+b', FluentIcons.bookmark_24_regular),
-                _buildShortcutTile('key-shortcut-add-note', 'הוספת הערה', 'ctrl+n',
-                    FluentIcons.note_24_regular),
+                _buildShortcutTile('key-shortcut-add-note', 'הוספת הערה',
+                    'ctrl+n', FluentIcons.note_24_regular),
                 _buildShortcutTile('key-shortcut-close-tab', 'סגור ספר נוכחי',
                     'ctrl+w', FluentIcons.dismiss_circle_24_regular),
-                _buildShortcutTile('key-shortcut-close-all-tabs', 'סגור כל הספרים',
-                    'ctrl+shift+w', FluentIcons.dismiss_24_regular),
+                _buildShortcutTile(
+                    'key-shortcut-close-all-tabs',
+                    'סגור כל הספרים',
+                    'ctrl+shift+w',
+                    FluentIcons.dismiss_24_regular),
               ]),
             ),
           ],
@@ -262,10 +267,13 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
       children: [
         SwitchListTile(
           secondary: const Icon(FluentIcons.search_24_regular),
-          title: const Text('חיפוש מהיר באמצעות אינדקס', style: TextStyle(fontSize: 16)),
-          subtitle: Text(state.useFastSearch
-              ? 'חיפוש מהיר יותר, נדרש ליצור אינדקס'
-              : 'חיפוש איטי יותר, לא נדרש אינדקס', style: const TextStyle(fontSize: 13)),
+          title: const Text('חיפוש מהיר באמצעות אינדקס',
+              style: TextStyle(fontSize: 16)),
+          subtitle: Text(
+              state.useFastSearch
+                  ? 'חיפוש מהיר יותר, נדרש ליצור אינדקס'
+                  : 'חיפוש איטי יותר, לא נדרש אינדקס',
+              style: const TextStyle(fontSize: 13)),
           value: state.useFastSearch,
           onChanged: (value) {
             context.read<SettingsBloc>().add(UpdateUseFastSearch(value));
@@ -274,10 +282,13 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
         const Divider(height: 1),
         SwitchListTile(
           secondary: const Icon(FluentIcons.arrow_clockwise_24_regular),
-          title: const Text('עדכון אינדקס אוטומטי', style: TextStyle(fontSize: 16)),
-          subtitle: Text(state.autoUpdateIndex
-              ? 'אינדקס החיפוש יתעדכן אוטומטית'
-              : 'אינדקס החיפוש לא יתעדכן אוטומטית', style: const TextStyle(fontSize: 13)),
+          title: const Text('עדכון אינדקס אוטומטי',
+              style: TextStyle(fontSize: 16)),
+          subtitle: Text(
+              state.autoUpdateIndex
+                  ? 'אינדקס החיפוש יתעדכן אוטומטית'
+                  : 'אינדקס החיפוש לא יתעדכן אוטומטית',
+              style: const TextStyle(fontSize: 13)),
           value: state.autoUpdateIndex,
           onChanged: (value) {
             context.read<SettingsBloc>().add(UpdateAutoUpdateIndex(value));
@@ -289,11 +300,13 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
             return ListTile(
               leading: const Icon(FluentIcons.table_24_regular),
               title: const Text('אינדקס חיפוש', style: TextStyle(fontSize: 16)),
-              subtitle: Text(indexingState is IndexingInProgress
-                  ? 'התקדמות האינדקס: ${indexingState.booksProcessed}/${indexingState.totalBooks}'
-                  : indexingState is IndexingComplete
-                      ? 'האינדקס מעודכן'
-                      : 'האינדקס לא מעודכן', style: const TextStyle(fontSize: 13)),
+              subtitle: Text(
+                  indexingState is IndexingInProgress
+                      ? 'התקדמות האינדקס: ${indexingState.booksProcessed}/${indexingState.totalBooks}'
+                      : indexingState is IndexingComplete
+                          ? 'האינדקס מעודכן'
+                          : 'האינדקס לא מעודכן',
+                  style: const TextStyle(fontSize: 13)),
               trailing: indexingState is IndexingInProgress
                   ? const SizedBox(
                       width: 24,
@@ -326,7 +339,8 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
         ListTile(
           leading: const Icon(FluentIcons.delete_24_regular),
           title: const Text('איפוס אינדקס', style: TextStyle(fontSize: 16)),
-          subtitle: const Text('מחק את אינדקס החיפוש', style: TextStyle(fontSize: 13)),
+          subtitle: const Text('מחק את אינדקס החיפוש',
+              style: TextStyle(fontSize: 13)),
           onTap: () async {
             final result = await showConfirmationDialog(
               context: context,
@@ -355,11 +369,13 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
         if (!state.isOfflineMode)
           SwitchListTile(
             secondary: const Icon(FluentIcons.arrow_sync_24_regular),
-            title: const Text('סינכרון הספרייה באופן אוטומטי', style: TextStyle(fontSize: 16)),
+            title: const Text('סינכרון הספרייה באופן אוטומטי',
+                style: TextStyle(fontSize: 16)),
             subtitle: Text(
                 Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true
                     ? 'מאגר הספרים המובנה יתעדכן אוטומטית מאתר אוצריא'
-                    : 'מאגר הספרים לא יתעדכן אוטומטית', style: const TextStyle(fontSize: 13)),
+                    : 'מאגר הספרים לא יתעדכן אוטומטית',
+                style: const TextStyle(fontSize: 13)),
             value:
                 Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true,
             onChanged: (value) {
@@ -371,11 +387,13 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
         if (!(Platform.isAndroid || Platform.isIOS) && !state.isOfflineMode)
           SwitchListTile(
             secondary: const Icon(FluentIcons.bug_24_regular),
-            title: const Text('עדכון לגרסאות מפתחים', style: TextStyle(fontSize: 16)),
+            title: const Text('עדכון לגרסאות מפתחים',
+                style: TextStyle(fontSize: 16)),
             subtitle: Text(
                 Settings.getValue<bool>('key-dev-channel') ?? false
                     ? 'קבלת עדכונים על גרסאות בדיקה, ייתכנו באגים וחוסר יציבות'
-                    : 'קבלת עדכונים על גרסאות יציבות בלבד', style: const TextStyle(fontSize: 13)),
+                    : 'קבלת עדכונים על גרסאות יציבות בלבד',
+                style: const TextStyle(fontSize: 13)),
             value: Settings.getValue<bool>('key-dev-channel') ?? false,
             onChanged: (value) {
               Settings.setValue<bool>('key-dev-channel', value);
@@ -389,9 +407,11 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
           child: ListTile(
             leading: const Icon(FluentIcons.globe_24_regular),
             title: const Text('מצב חיבור לרשת', style: TextStyle(fontSize: 16)),
-            subtitle: Text(state.isOfflineMode
-                ? 'התוכנה מנותקת לגמרי מהרשת, כל התכונות המקוונות מושבתות'
-                : 'התוכנה יכולה להתחבר לרשת', style: const TextStyle(fontSize: 13)),
+            subtitle: Text(
+                state.isOfflineMode
+                    ? 'התוכנה מנותקת לגמרי מהרשת, כל התכונות המקוונות מושבתות'
+                    : 'התוכנה יכולה להתחבר לרשת',
+                style: const TextStyle(fontSize: 13)),
             trailing: SegmentedButton<bool>(
               segments: const [
                 ButtonSegment<bool>(
@@ -423,7 +443,8 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
               },
               style: ButtonStyle(
                 shape: WidgetStateProperty.all(
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 backgroundColor: WidgetStateProperty.resolveWith<Color?>(
                   (states) {
@@ -449,8 +470,9 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
         ListTile(
           leading: const Icon(FluentIcons.arrow_reset_24_regular),
           title: const Text('איפוס הגדרות', style: TextStyle(fontSize: 16)),
-          subtitle:
-              const Text('פעולה זו תמחק את כל ההגדרות ותחזיר את התוכנה למצב ההתחלתי', style: TextStyle(fontSize: 13)),
+          subtitle: const Text(
+              'פעולה זו תמחק את כל ההגדרות ותחזיר את התוכנה למצב ההתחלתי',
+              style: TextStyle(fontSize: 13)),
           onTap: () async {
             final confirmed = await showConfirmationDialog(
               context: context,

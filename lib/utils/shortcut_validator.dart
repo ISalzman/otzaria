@@ -59,7 +59,7 @@ class ShortcutValidator {
     'key-shortcut-search-in-book': 'חיפוש בספר',
     'key-shortcut-edit-section': 'עריכת קטע',
     'key-shortcut-print': 'הדפסה',
-    'key-shortcut-add-bookmark': 'הוספת סימניה',
+    'key-shortcut-add-bookmark': 'הוסף סימניה',
     'key-shortcut-add-note': 'הוספת הערה',
     'key-shortcut-switch-workspace': 'החלף שולחן עבודה',
     'key-shortcut-toggle-pdf-view': 'החלף מצב תצוגה (PDF/טקסט)',

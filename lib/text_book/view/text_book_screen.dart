@@ -872,22 +872,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                               widget: IconButton(
                                 icon:
                                     const Icon(FluentIcons.zoom_in_24_regular),
-                                tooltip: 'הגדלת טקסט',
+                                tooltip: 'הגדל את גודל הטקסט',
                                 onPressed: null,
                               ),
                               icon: FluentIcons.zoom_in_24_regular,
-                              tooltip: 'הגדלת טקסט',
+                              tooltip: 'הגדל את גודל הטקסט',
                               onPressed: null,
                             ),
                             ActionButtonData(
                               widget: IconButton(
                                 icon:
                                     const Icon(FluentIcons.zoom_out_24_regular),
-                                tooltip: 'הקטנת טקסט',
+                                tooltip: 'הקטן את גודל הטקסט',
                                 onPressed: null,
                               ),
                               icon: FluentIcons.zoom_out_24_regular,
-                              tooltip: 'הקטנת טקסט',
+                              tooltip: 'הקטן את גודל הטקסט',
                               onPressed: null,
                             ),
                             ActionButtonData(
@@ -1255,7 +1255,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       ActionButtonData(
         widget: _buildZoomInButton(context, state),
         icon: FluentIcons.zoom_in_24_regular,
-        tooltip: 'הגדלת טקסט',
+        tooltip: 'הגדל את גודל הטקסט',
         onPressed: () async {
           final newSize = min(50.0, state.fontSize + 3);
           context.read<TextBookBloc>().add(UpdateFontSize(newSize));
@@ -1267,7 +1267,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       ActionButtonData(
         widget: _buildZoomOutButton(context, state),
         icon: FluentIcons.zoom_out_24_regular,
-        tooltip: 'הקטנת טקסט',
+        tooltip: 'הקטן את גודל הטקסט',
         onPressed: () async {
           final newSize = max(15.0, state.fontSize - 3);
           context.read<TextBookBloc>().add(UpdateFontSize(newSize));
@@ -1375,7 +1375,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       ActionButtonData(
         widget: _buildBookmarkButton(context, state),
         icon: FluentIcons.bookmark_add_24_regular,
-        tooltip: 'הוספת סימניה',
+        tooltip: 'הוסף סימניה',
         onPressed: () => _handleBookmarkPress(context, state),
       ),
 
@@ -1589,7 +1589,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     return PopupMenuButton<String>(
       key: key,
-      tooltip: 'בחירת תצוגה',
+      tooltip: 'בחר סוג תצוגת מפרשים',
       icon: iconWidget,
       enabled: !widget.isInCombinedView,
       position: PopupMenuPosition.under,
@@ -1708,7 +1708,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
       },
       icon: const Icon(FluentIcons.bookmark_add_24_regular),
-      tooltip: 'הוספת סימניה (${shortcut.toUpperCase()})',
+      tooltip: 'הוסף סימניה (${shortcut.toUpperCase()})',
     );
   }
 
@@ -1729,7 +1729,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget _buildZoomInButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
       icon: const Icon(FluentIcons.zoom_in_24_regular),
-      tooltip: 'הגדלת טקסט (CTRL + +)',
+      tooltip: 'הגדל את גודל הטקסט (CTRL + +)',
       onPressed: () async {
         final newSize = min(50.0, state.fontSize + 3);
         context.read<TextBookBloc>().add(UpdateFontSize(newSize));
@@ -1741,7 +1741,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget _buildZoomOutButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
       icon: const Icon(FluentIcons.zoom_out_24_regular),
-      tooltip: 'הקטנת טקסט (CTRL + -)',
+      tooltip: 'הקטן את גודל הטקסט (CTRL + -)',
       onPressed: () async {
         final newSize = max(15.0, state.fontSize - 3);
         context.read<TextBookBloc>().add(UpdateFontSize(newSize));
@@ -2712,7 +2712,7 @@ bool _handleGlobalKeyEvent(KeyEvent event, BuildContext context,
   // קיצורים קבועים (לא ניתנים להתאמה אישית)
   if (event is KeyDownEvent && HardwareKeyboard.instance.isControlPressed) {
     switch (event.logicalKey) {
-      // הגדלת טקסט (Ctrl++ או Ctrl+=)
+      // הגדל את גודל הטקסט (Ctrl++ או Ctrl+=)
       case LogicalKeyboardKey.equal:
       case LogicalKeyboardKey.add:
         final newSize = min(50.0, state.fontSize + 3);
@@ -2720,7 +2720,7 @@ bool _handleGlobalKeyEvent(KeyEvent event, BuildContext context,
         _savePerBookSettingsDirectly(context, state, fontSize: newSize);
         return true;
 
-      // הקטנת טקסט (Ctrl+-)
+      // הקטן את גודל הטקסט (Ctrl+-)
       case LogicalKeyboardKey.minus:
         final newSize = max(15.0, state.fontSize - 3);
         context.read<TextBookBloc>().add(UpdateFontSize(newSize));
