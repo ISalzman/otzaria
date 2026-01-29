@@ -14,6 +14,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         super(SettingsState.initial()) {
     on<LoadSettings>(_onLoadSettings);
     on<UpdateDarkMode>(_onUpdateDarkMode);
+    on<UpdateFollowSystemTheme>(_onUpdateFollowSystemTheme);
     on<UpdateSeedColor>(_onUpdateSeedColor);
     on<UpdateDarkSeedColor>(_onUpdateDarkSeedColor);
     on<UpdateTextMaxWidth>(_onUpdateTextMaxWidth);
@@ -57,10 +58,12 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
 
     // בדסקטופ: אם המשתמש בחר גופן מערכת בעבר, נטען אותו כדי שיהיה זמין ב-TextStyle.
     await AppFonts.ensureFontLoaded(settings['fontFamily'] as String);
-    await AppFonts.ensureFontLoaded(settings['commentatorsFontFamily'] as String);
+    await AppFonts.ensureFontLoaded(
+        settings['commentatorsFontFamily'] as String);
 
     emit(SettingsState(
       isDarkMode: settings['isDarkMode'],
+      followSystemTheme: settings['followSystemTheme'] ?? false,
       seedColor: settings['seedColor'],
       darkSeedColor: settings['darkSeedColor'],
       textMaxWidth: settings['textMaxWidth'],
@@ -135,6 +138,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateDarkMode(event.isDarkMode);
     emit(state.copyWith(isDarkMode: event.isDarkMode));
+  }
+
+  Future<void> _onUpdateFollowSystemTheme(
+    UpdateFollowSystemTheme event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateFollowSystemTheme(event.followSystemTheme);
+    emit(state.copyWith(followSystemTheme: event.followSystemTheme));
   }
 
   Future<void> _onUpdateSeedColor(

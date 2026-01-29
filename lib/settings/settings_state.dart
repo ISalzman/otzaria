@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 
 class SettingsState extends Equatable {
   final bool isDarkMode;
+  final bool followSystemTheme;
   final Color seedColor;
   final Color darkSeedColor;
   final double textMaxWidth; // רוחב מקסימלי לטקסט בפיקסלים (0 = ללא הגבלה)
@@ -37,6 +38,7 @@ class SettingsState extends Equatable {
 
   const SettingsState({
     required this.isDarkMode,
+    required this.followSystemTheme,
     required this.seedColor,
     required this.darkSeedColor,
     required this.textMaxWidth,
@@ -73,6 +75,7 @@ class SettingsState extends Equatable {
   factory SettingsState.initial() {
     return const SettingsState(
       isDarkMode: false,
+      followSystemTheme: false,
       seedColor: Colors.brown,
       darkSeedColor: Color(0xFFCE93D8), // סגול בהיר למצב כהה
       textMaxWidth:
@@ -110,6 +113,7 @@ class SettingsState extends Equatable {
 
   SettingsState copyWith({
     bool? isDarkMode,
+    bool? followSystemTheme,
     Color? seedColor,
     Color? darkSeedColor,
     double? textMaxWidth,
@@ -144,6 +148,7 @@ class SettingsState extends Equatable {
   }) {
     return SettingsState(
       isDarkMode: isDarkMode ?? this.isDarkMode,
+      followSystemTheme: followSystemTheme ?? this.followSystemTheme,
       seedColor: seedColor ?? this.seedColor,
       darkSeedColor: darkSeedColor ?? this.darkSeedColor,
       textMaxWidth: textMaxWidth ?? this.textMaxWidth,
@@ -184,6 +189,7 @@ class SettingsState extends Equatable {
   @override
   List<Object?> get props => [
         isDarkMode,
+        followSystemTheme,
         seedColor,
         darkSeedColor,
         textMaxWidth,

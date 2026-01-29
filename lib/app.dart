@@ -49,6 +49,8 @@ class App extends StatelessWidget {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         final state = settingsState;
+        final lightColorScheme =
+            _createColorScheme(state.seedColor, Brightness.light);
         return MaterialApp(
           scaffoldMessengerKey: scaffoldMessengerKey,
           localizationsDelegates: const [
@@ -61,73 +63,70 @@ class App extends StatelessWidget {
           ],
           locale: const Locale("he", "IL"),
           title: 'אוצריא',
-          theme: state.isDarkMode
-              ? ThemeData.dark(useMaterial3: true).copyWith(
-                  scaffoldBackgroundColor: AppColors.darkScaffold,
-                  canvasColor: AppColors.darkScaffold,
-                  cardColor: AppColors.darkCard,
-                  colorScheme: ColorScheme.dark(
-                    surface: AppColors.darkScaffold,
-                    surfaceContainer: AppColors.darkCard,
-                    onSurface: AppColors.darkOnSurface,
-                    primary: state.darkSeedColor,
-                    onPrimary: Colors.white,
-                    secondary: state.darkSeedColor.withValues(alpha: 0.7),
-                    onSecondary: Colors.white,
-                    outline: AppColors.darkOutline,
-                  ),
-                  textTheme: ThemeData.dark()
-                      .textTheme
-                      .apply(
-                        fontFamily: 'Roboto',
-                        bodyColor: AppColors.darkOnSurface,
-                        displayColor: AppColors.darkOnSurface,
-                      )
-                      .copyWith(
-                        bodyMedium: const TextStyle(
-                          fontSize: 18.0,
-                          fontFamily: 'candara',
-                          color: AppColors.darkOnSurface,
-                        ),
-                      ),
-                  cardTheme: CardThemeData(
-                    color: AppColors.darkCard,
-                    elevation: 3,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(
-                        color: AppColors.darkOutline,
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  appBarTheme: const AppBarTheme(
-                    backgroundColor: AppColors.darkAppBar,
-                    foregroundColor: AppColors.darkOnSurface,
-                  ),
-                  dialogTheme: const DialogThemeData(
-                    barrierColor: AppColors.dialogBarrier,
-                    backgroundColor: AppColors.darkAppBar,
-                  ),
-                )
-              : ThemeData(
-                  visualDensity: VisualDensity.adaptivePlatformDensity,
+          theme: ThemeData(
+            visualDensity: VisualDensity.adaptivePlatformDensity,
+            fontFamily: 'Roboto',
+            colorScheme: lightColorScheme,
+            textTheme: const TextTheme(
+              bodyMedium: TextStyle(fontSize: 18.0, fontFamily: 'candara'),
+            ),
+          ).copyWith(
+            dialogTheme: DialogThemeData(
+              barrierColor: AppColors.dialogBarrier,
+              backgroundColor: lightColorScheme.surface,
+            ),
+          ),
+          darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
+            scaffoldBackgroundColor: AppColors.darkScaffold,
+            canvasColor: AppColors.darkScaffold,
+            cardColor: AppColors.darkCard,
+            colorScheme: ColorScheme.dark(
+              surface: AppColors.darkScaffold,
+              surfaceContainer: AppColors.darkCard,
+              onSurface: AppColors.darkOnSurface,
+              primary: state.darkSeedColor,
+              onPrimary: Colors.white,
+              secondary: state.darkSeedColor.withValues(alpha: 0.7),
+              onSecondary: Colors.white,
+              outline: AppColors.darkOutline,
+            ),
+            textTheme: ThemeData.dark()
+                .textTheme
+                .apply(
                   fontFamily: 'Roboto',
-                  colorScheme:
-                      _createColorScheme(state.seedColor, Brightness.light),
-                  textTheme: const TextTheme(
-                    bodyMedium:
-                        TextStyle(fontSize: 18.0, fontFamily: 'candara'),
-                  ),
-                ).copyWith(
-                  dialogTheme: DialogThemeData(
-                    barrierColor: AppColors.dialogBarrier,
-                    backgroundColor: ThemeData(
-                      colorScheme:
-                          _createColorScheme(state.seedColor, Brightness.light),
-                    ).scaffoldBackgroundColor,
+                  bodyColor: AppColors.darkOnSurface,
+                  displayColor: AppColors.darkOnSurface,
+                )
+                .copyWith(
+                  bodyMedium: const TextStyle(
+                    fontSize: 18.0,
+                    fontFamily: 'candara',
+                    color: AppColors.darkOnSurface,
                   ),
                 ),
+            cardTheme: CardThemeData(
+              color: AppColors.darkCard,
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(
+                  color: AppColors.darkOutline,
+                  width: 1,
+                ),
+              ),
+            ),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: AppColors.darkAppBar,
+              foregroundColor: AppColors.darkOnSurface,
+            ),
+            dialogTheme: const DialogThemeData(
+              barrierColor: AppColors.dialogBarrier,
+              backgroundColor: AppColors.darkAppBar,
+            ),
+          ),
+          themeMode: state.followSystemTheme
+              ? ThemeMode.system
+              : (state.isDarkMode ? ThemeMode.dark : ThemeMode.light),
           home: const MainWindowScreen(),
         );
       },

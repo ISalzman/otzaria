@@ -31,8 +31,10 @@ class AppearanceSettingsTab extends StatelessWidget {
                       leading: Icon(state.isFullscreen
                           ? FluentIcons.full_screen_minimize_24_regular
                           : FluentIcons.full_screen_maximize_24_regular),
-                      title: const Text('מסך מלא', style: TextStyle(fontSize: 16)),
-                      subtitle: const Text('החלף מצב מסך מלא', style: TextStyle(fontSize: 13)),
+                      title:
+                          const Text('מסך מלא', style: TextStyle(fontSize: 16)),
+                      subtitle: const Text('החלף מצב מסך מלא',
+                          style: TextStyle(fontSize: 13)),
                       trailing: Switch(
                         value: state.isFullscreen,
                         onChanged: (value) async {
@@ -55,20 +57,41 @@ class AppearanceSettingsTab extends StatelessWidget {
                 title: 'ערכת נושא',
                 children: [
                   SwitchListTile(
-                    secondary: const Icon(FluentIcons.weather_moon_24_regular),
-                    title: const Text('מצב כהה', style: TextStyle(fontSize: 16)),
-                    subtitle: Text(state.isDarkMode ? 'מופעל' : 'לא מופעל', style: const TextStyle(fontSize: 13)),
-                    value: state.isDarkMode,
+                    secondary: const Icon(FluentIcons.settings_24_regular),
+                    title: const Text('מעקב אחר צבע המערכת',
+                        style: TextStyle(fontSize: 16)),
+                    subtitle: Text(
+                        state.followSystemTheme ? 'מופעל' : 'לא מופעל',
+                        style: const TextStyle(fontSize: 13)),
+                    value: state.followSystemTheme,
                     onChanged: (value) {
-                      context.read<SettingsBloc>().add(UpdateDarkMode(value));
+                      context
+                          .read<SettingsBloc>()
+                          .add(UpdateFollowSystemTheme(value));
                     },
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(FluentIcons.weather_moon_24_regular),
+                    title:
+                        const Text('מצב כהה', style: TextStyle(fontSize: 16)),
+                    subtitle: Text(state.isDarkMode ? 'מופעל' : 'לא מופעל',
+                        style: const TextStyle(fontSize: 13)),
+                    value: state.isDarkMode,
+                    onChanged: state.followSystemTheme
+                        ? null
+                        : (value) {
+                            context
+                                .read<SettingsBloc>()
+                                .add(UpdateDarkMode(value));
+                          },
                   ),
                   ClipRect(
                     child: Align(
                       alignment: Alignment.topCenter,
                       heightFactor: 0.92,
                       child: ColorPickerSettingsTile(
-                        key: ValueKey('color-picker-${state.isDarkMode ? 'dark' : 'light'}'),
+                        key: ValueKey(
+                            'color-picker-${state.isDarkMode ? 'dark' : 'light'}'),
                         title: 'צבע בסיס',
                         leading: const Icon(FluentIcons.color_24_regular),
                         settingKey: state.isDarkMode
@@ -100,10 +123,13 @@ class AppearanceSettingsTab extends StatelessWidget {
                 children: [
                   SwitchListTile(
                     secondary: const Icon(FluentIcons.eye_off_24_regular),
-                    title: const Text('הסתרת שמות הקודש', style: TextStyle(fontSize: 16)),
-                    subtitle: Text(state.replaceHolyNames
-                        ? 'השמות הקדושים יוחלפו מפאת קדושתם'
-                        : 'השמות הקדושים יוצגו ככתיבתם', style: const TextStyle(fontSize: 13)),
+                    title: const Text('הסתרת שמות הקודש',
+                        style: TextStyle(fontSize: 16)),
+                    subtitle: Text(
+                        state.replaceHolyNames
+                            ? 'השמות הקדושים יוחלפו מפאת קדושתם'
+                            : 'השמות הקדושים יוצגו ככתיבתם',
+                        style: const TextStyle(fontSize: 13)),
                     value: state.replaceHolyNames,
                     onChanged: (value) {
                       context
@@ -147,7 +173,8 @@ class AppearanceSettingsTab extends StatelessWidget {
               ),
               child: Text(
                 title,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
           ...children,

@@ -50,6 +50,16 @@ class MockSettingsRepository extends _i1.Mock
       ) as _i3.Future<void>);
 
   @override
+  _i3.Future<void> updateFollowSystemTheme(bool? value) => (super.noSuchMethod(
+        Invocation.method(
+          #updateFollowSystemTheme,
+          [value],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
   _i3.Future<void> updateSeedColor(_i4.Color? value) => (super.noSuchMethod(
         Invocation.method(
           #updateSeedColor,
