@@ -21,6 +21,10 @@ void main() {
       when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyDarkMode,
               defaultValue: false))
           .thenReturn(false);
+      when(mockSettingsWrapper.getValue<bool>(
+              SettingsRepository.keyFollowSystemTheme,
+              defaultValue: false))
+          .thenReturn(false);
       when(mockSettingsWrapper.getValue<String>(
               SettingsRepository.keySwatchColor,
               defaultValue: '#ff2c1b02'))
@@ -75,8 +79,7 @@ void main() {
               SettingsRepository.keyDefaultSidebarOpen,
               defaultValue: false))
           .thenReturn(false);
-      when(mockSettingsWrapper.getValue<bool>(
-              SettingsRepository.keyPinSidebar,
+      when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyPinSidebar,
               defaultValue: false))
           .thenReturn(false);
 
@@ -84,6 +87,7 @@ void main() {
 
       // Verify default values are returned
       expect(settings['isDarkMode'], false);
+      expect(settings['followSystemTheme'], false);
       expect(settings['seedColor'], ColorUtils.colorFromString('#ff2c1b02'));
       expect(settings['textMaxWidth'], 0.0);
       expect(settings['fontSize'], 16.0);
@@ -104,6 +108,10 @@ void main() {
     test('loadSettings returns custom values when settings are set', () async {
       // Setup mock to return custom values
       when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyDarkMode,
+              defaultValue: false))
+          .thenReturn(true);
+      when(mockSettingsWrapper.getValue<bool>(
+              SettingsRepository.keyFollowSystemTheme,
               defaultValue: false))
           .thenReturn(true);
       when(mockSettingsWrapper.getValue<String>(
@@ -160,8 +168,7 @@ void main() {
               SettingsRepository.keyDefaultSidebarOpen,
               defaultValue: false))
           .thenReturn(true);
-      when(mockSettingsWrapper.getValue<bool>(
-              SettingsRepository.keyPinSidebar,
+      when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyPinSidebar,
               defaultValue: false))
           .thenReturn(true);
 
@@ -169,6 +176,7 @@ void main() {
 
       // Verify custom values are returned
       expect(settings['isDarkMode'], true);
+      expect(settings['followSystemTheme'], true);
       expect(settings['seedColor'], ColorUtils.colorFromString('#ff0000ff'));
       expect(settings['textMaxWidth'], 800.0);
       expect(settings['fontSize'], 20.0);
@@ -189,6 +197,14 @@ void main() {
     test('updateDarkMode calls setValue on settings wrapper', () async {
       await repository.updateDarkMode(true);
       verify(mockSettingsWrapper.setValue(SettingsRepository.keyDarkMode, true))
+          .called(1);
+    });
+
+    test('updateFollowSystemTheme calls setValue on settings wrapper',
+        () async {
+      await repository.updateFollowSystemTheme(true);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyFollowSystemTheme, true))
           .called(1);
     });
 
@@ -239,11 +255,11 @@ void main() {
 
     test('loadSettings initializes defaults when fontFamily is null', () async {
 // Setup mock to return null for fontFamily (indicating first launch)
-when(mockSettingsWrapper.getValue<String?>(
-        SettingsRepository.keyFontFamily, 
-        defaultValue: null)) // שינוי: הוספנו defaultValue
-    .thenReturn(null);
-      
+      when(mockSettingsWrapper.getValue<String?>(
+              SettingsRepository.keyFontFamily,
+              defaultValue: null)) // שינוי: הוספנו defaultValue
+          .thenReturn(null);
+
       // Setup mock to return default values after initialization
       when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyDarkMode,
               defaultValue: false))
@@ -302,33 +318,63 @@ when(mockSettingsWrapper.getValue<String?>(
       await repository.loadSettings();
 
       // Verify that all defaults were written to storage
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyDarkMode, false)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keySwatchColor, '#ff2c1b02')).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyTextMaxWidth, 0)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyFontSize, 16.0)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyFontFamily, 'FrankRuhlCLM')).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyShowOtzarHachochma, false)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyShowHebrewBooks, false)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyShowExternalBooks, false)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyShowTeamim, true)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyUseFastSearch, true)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyReplaceHolyNames, true)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyAutoUpdateIndex, true)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyDefaultNikud, false)).called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyDarkMode, false))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keySwatchColor, '#ff2c1b02'))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyTextMaxWidth, 0))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(SettingsRepository.keyFontSize, 16.0))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyFontFamily, 'FrankRuhlCLM'))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyShowOtzarHachochma, false))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyShowHebrewBooks, false))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyShowExternalBooks, false))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyShowTeamim, true))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyUseFastSearch, true))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyReplaceHolyNames, true))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyAutoUpdateIndex, true))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyDefaultNikud, false))
+          .called(1);
       verify(mockSettingsWrapper.setValue(
               SettingsRepository.keyRemoveNikudFromTanach, false))
           .called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyDefaultSidebarOpen, false)).called(1);
-      verify(mockSettingsWrapper.setValue(SettingsRepository.keyPinSidebar, false)).called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyDefaultSidebarOpen, false))
+          .called(1);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyPinSidebar, false))
+          .called(1);
     });
 
-    test('loadSettings does not initialize defaults when fontFamily exists', () async {
-    // Setup mock to return existing fontFamily value
-    when(mockSettingsWrapper.getValue<String?>(
-            SettingsRepository.keyFontFamily,
-            defaultValue: null))
-        .thenReturn('FrankRuhlCLM');
-        
+    test('loadSettings does not initialize defaults when fontFamily exists',
+        () async {
+      // Setup mock to return existing fontFamily value
+      when(mockSettingsWrapper.getValue<String?>(
+              SettingsRepository.keyFontFamily,
+              defaultValue: null))
+          .thenReturn('FrankRuhlCLM');
+
       // Setup mock to return values for loadSettings
       when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyDarkMode,
               defaultValue: false))

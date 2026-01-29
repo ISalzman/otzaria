@@ -28,6 +28,7 @@ void main() {
     group('LoadSettings', () {
       final mockSettings = {
         'isDarkMode': true,
+        'followSystemTheme': false,
         'seedColor': Colors.blue,
         'darkSeedColor': const Color(0xFFCE93D8),
         'textMaxWidth': 800.0,
@@ -70,6 +71,8 @@ void main() {
         expect: () => [
           SettingsState(
             isDarkMode: mockSettings['isDarkMode'] as bool,
+            followSystemTheme:
+                mockSettings['followSystemTheme'] as bool? ?? false,
             seedColor: mockSettings['seedColor'] as Color,
             darkSeedColor: mockSettings['darkSeedColor'] as Color,
             textMaxWidth: mockSettings['textMaxWidth'] as double,
@@ -125,6 +128,20 @@ void main() {
         ],
         verify: (_) {
           verify(mockRepository.updateDarkMode(true)).called(1);
+        },
+      );
+    });
+
+    group('UpdateFollowSystemTheme', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'emits updated state when UpdateFollowSystemTheme is added',
+        build: () => settingsBloc,
+        act: (bloc) => bloc.add(const UpdateFollowSystemTheme(true)),
+        expect: () => [
+          settingsBloc.state.copyWith(followSystemTheme: true),
+        ],
+        verify: (_) {
+          verify(mockRepository.updateFollowSystemTheme(true)).called(1);
         },
       );
     });

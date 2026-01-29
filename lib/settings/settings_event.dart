@@ -19,6 +19,15 @@ class UpdateDarkMode extends SettingsEvent {
   List<Object?> get props => [isDarkMode];
 }
 
+class UpdateFollowSystemTheme extends SettingsEvent {
+  final bool followSystemTheme;
+
+  const UpdateFollowSystemTheme(this.followSystemTheme);
+
+  @override
+  List<Object?> get props => [followSystemTheme];
+}
+
 class UpdateSeedColor extends SettingsEvent {
   final Color seedColor;
 
