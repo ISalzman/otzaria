@@ -232,7 +232,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                   // כפתור הגדלה
                   IconButton(
                     icon: const Icon(FluentIcons.zoom_in_24_regular, size: 20),
-                    tooltip: 'הגדל',
+                    tooltip: 'הגדל את גודל הטקסט',
                     onPressed: () => _pdfController?.zoomUp(),
                     padding: const EdgeInsets.all(8),
                     constraints: const BoxConstraints(
@@ -243,7 +243,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                   // כפתור הקטנה
                   IconButton(
                     icon: const Icon(FluentIcons.zoom_out_24_regular, size: 20),
-                    tooltip: 'הקטן',
+                    tooltip: 'הקטן את גודל הטקסט',
                     onPressed: () => _pdfController?.zoomDown(),
                     padding: const EdgeInsets.all(8),
                     constraints: const BoxConstraints(
@@ -403,7 +403,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                 // כפתור הקטנת טקסט
                 IconButton(
                   icon: const Icon(FluentIcons.zoom_out_24_regular, size: 20),
-                  tooltip: 'הקטן טקסט',
+                  tooltip: 'הקטן את גודל הטקסט',
                   onPressed: () {
                     setState(() {
                       _fontSize = (_fontSize - 2).clamp(10.0, 50.0);

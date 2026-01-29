@@ -1174,11 +1174,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.zoom_in_24_regular),
-          tooltip: 'הגדל',
+          tooltip: 'הגדל את גודל הטקסט',
           onPressed: _zoomIn,
         ),
         icon: FluentIcons.zoom_in_24_regular,
-        tooltip: 'הגדל',
+        tooltip: 'הגדל את גודל הטקסט',
         onPressed: _zoomIn,
       ),
 
@@ -1186,11 +1186,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.zoom_out_24_regular),
-          tooltip: 'הקטן',
+          tooltip: 'הקטן את גודל הטקסט',
           onPressed: _zoomOut,
         ),
         icon: FluentIcons.zoom_out_24_regular,
-        tooltip: 'הקטן',
+        tooltip: 'הקטן את גודל הטקסט',
         onPressed: _zoomOut,
       ),
 
@@ -1424,15 +1424,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: () => _handleAddNotePress(context),
       ),
 
-      // 3) הוספת סימניה
+      // 3) הוסף סימניה
       ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.bookmark_add_24_regular),
-          tooltip: 'הוספת סימניה',
+          tooltip: 'הוסף סימניה',
           onPressed: () => _handleBookmarkPress(context),
         ),
         icon: FluentIcons.bookmark_add_24_regular,
-        tooltip: 'הוספת סימניה',
+        tooltip: 'הוסף סימניה',
         onPressed: () => _handleBookmarkPress(context),
       ),
 
@@ -1549,7 +1549,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     } catch (e) {
       debugPrint('Error adding bookmark: $e');
       if (mounted) {
-        UiSnack.show('שגיאה בהוספת סימניה');
+        UiSnack.show('שגיאה בהוספת הסימניה');
       }
     }
   }
