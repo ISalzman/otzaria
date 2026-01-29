@@ -97,7 +97,7 @@ class TantivyDataProvider {
       // Try to open engine
       // If this CRASHES the process, the sentinel remains for next run.
       // If it throws an Exception, we catch it below.
-      final engine = SearchEngine(path: indexPath!);
+      final engine = SearchEngine(path: indexPath);
 
       // If we got here, success! Remove sentinel.
       try {
