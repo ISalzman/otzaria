@@ -8,7 +8,6 @@ import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 
 import '../core/models/book.dart';
-import '../core/models/book_metadata.dart';
 import '../core/models/category.dart';
 import '../dao/repository/seforim_repository.dart';
 import '../../settings/custom_folders/custom_folder.dart';
