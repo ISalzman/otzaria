@@ -49,6 +49,8 @@ class App extends StatelessWidget {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         final state = settingsState;
+        final lightColorScheme =
+            _createColorScheme(state.seedColor, Brightness.light);
         return MaterialApp(
           scaffoldMessengerKey: scaffoldMessengerKey,
           localizationsDelegates: const [
@@ -64,17 +66,14 @@ class App extends StatelessWidget {
           theme: ThemeData(
             visualDensity: VisualDensity.adaptivePlatformDensity,
             fontFamily: 'Roboto',
-            colorScheme: _createColorScheme(state.seedColor, Brightness.light),
+            colorScheme: lightColorScheme,
             textTheme: const TextTheme(
               bodyMedium: TextStyle(fontSize: 18.0, fontFamily: 'candara'),
             ),
           ).copyWith(
             dialogTheme: DialogThemeData(
               barrierColor: AppColors.dialogBarrier,
-              backgroundColor: ThemeData(
-                colorScheme:
-                    _createColorScheme(state.seedColor, Brightness.light),
-              ).scaffoldBackgroundColor,
+              backgroundColor: lightColorScheme.surface,
             ),
           ),
           darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
