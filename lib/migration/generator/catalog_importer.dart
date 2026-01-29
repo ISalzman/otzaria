@@ -19,22 +19,11 @@ class CatalogImporter {
   // Cache for external category IDs
   final Map<String, int> _externalCategoryCache = {};
 
-  // ID counter will be synchronized with generator
-  int _nextBookId = 1;
-
   CatalogImporter({
     required this.repository,
     required this.sourceDirectory,
     this.onProgress,
   });
-
-  void setNextBookId(int id) {
-    _nextBookId = id;
-  }
-
-  int getNextBookId() {
-    return _nextBookId;
-  }
 
   Future<void> importExternalCatalogs() async {
     _log.info('Starting import of external catalogs...');
@@ -42,7 +31,7 @@ class CatalogImporter {
 
     // Process Otzar HaChochma
     try {
-      final otzarSourceId = await repository.insertSource('Otzar HaChochma');
+      final otzarSourceId = await repository.insertSource('Otzar HaChochma',-2);
       await _importOtzarBooks(otzarSourceId);
     } catch (e, stackTrace) {
       _log.severe('Error importing Otzar HaChochma books', e, stackTrace);
@@ -50,7 +39,7 @@ class CatalogImporter {
 
     // Process HebrewBooks
     try {
-      final hbSourceId = await repository.insertSource('HebrewBooks');
+      final hbSourceId = await repository.insertSource('HebrewBooks',-3);
       await _importHebrewBooks(hbSourceId);
     } catch (e, stackTrace) {
       _log.severe('Error importing HebrewBooks', e, stackTrace);
@@ -113,7 +102,7 @@ class CatalogImporter {
           final topics = _parseTopics(topicsStr);
 
           final book = Book(
-              id: _nextBookId++,
+              id: await repository.getNextNegativeBookId(),
               categoryId: catId,
               sourceId: sourceId,
               title: title,
@@ -199,7 +188,7 @@ class CatalogImporter {
           final topics = _parseTopics(topicsStr);
 
           final book = Book(
-              id: _nextBookId++,
+              id: await repository.getNextNegativeBookId(),
               categoryId: catId,
               sourceId: sourceId,
               title: title,
