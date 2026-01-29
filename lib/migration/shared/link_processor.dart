@@ -194,6 +194,7 @@ class LinkProcessor {
       final linksToInsert = <Link>[];
       var skipped = 0;
 
+
       for (final linkData in linksData) {
         try {
           // Handle paths with backslashes
@@ -252,7 +253,11 @@ class LinkProcessor {
             continue;
           }
 
+          // קבל מזהה לינק שלילי חדש
+          final negativeLinkId = await _repository.getNextNegativeLinkId();
+
           linksToInsert.add(Link(
+            id: negativeLinkId,
             sourceBookId: sourceBookId,
             targetBookId: targetBookId,
             sourceLineId: sourceLineId,
@@ -299,4 +304,241 @@ class LinkProcessor {
   void clearLineCache() {
     _bookLineIndexToId.clear();
   }
+
+  /// Process all link files in a directory with transaction support.
+  /// 
+  /// This is the unified method for processing links, combining the best
+  /// practices from both generator and file sync operations:
+  /// - Uses database transactions for atomicity and performance
+  /// - Commits in batches to avoid memory issues
+  /// - Clears line cache periodically to prevent memory explosion
+  /// - Optionally updates the book_has_links table
+  /// 
+  /// [linksPath] The path to the links directory
+  /// [onProgress] Optional callback for progress updates (0.0 to 1.0)
+  /// [updateBookHasLinks] Whether to update the book_has_links table after processing
+  /// [batchCommitSize] Number of files to process before committing (default: 50)
+  /// 
+  /// Returns a [LinkDirectoryResult] with processing statistics
+  Future<LinkDirectoryResult> processLinksDirectory({
+    required String linksPath,
+    void Function(double progress, String message)? onProgress,
+    bool updateBookHasLinks = true,
+    int batchCommitSize = 50,
+  }) async {
+    final linksDir = Directory(linksPath);
+
+    if (!await linksDir.exists()) {
+      _log.info('Links directory does not exist: $linksPath');
+      return const LinkDirectoryResult();
+    }
+
+    // Ensure books cache is loaded
+    await loadBooksCache();
+
+    // Collect all JSON link files (excluding _headings.json files)
+    final linkFiles = <File>[];
+    await for (final entity in linksDir.list()) {
+      if (entity is File && 
+          path.extension(entity.path) == '.json' &&
+          !path.basename(entity.path).endsWith('_headings.json')) {
+        linkFiles.add(entity);
+      }
+    }
+
+    if (linkFiles.isEmpty) {
+      _log.info('No JSON link files found in: $linksPath');
+      return const LinkDirectoryResult();
+    }
+
+    final totalFiles = linkFiles.length;
+    var processedFiles = 0;
+    var totalLinks = 0;
+    var skippedLinks = 0;
+    var deletedFiles = 0;
+    final errors = <String>[];
+
+    _log.info('Found $totalFiles link files to process');
+    onProgress?.call(0.0, 'מתחיל עיבוד קישורים (0/$totalFiles קבצים)');
+
+    // Process all link files within a transaction for better performance
+    await _repository.beginTransaction();
+
+    // Track files to delete after successful commit
+    final filesToDelete = <File>[];
+
+    try {
+      for (final file in linkFiles) {
+        try {
+          final result = await processLinkFile(file.path);
+          totalLinks += result.processedLinks;
+          skippedLinks += result.skippedLinks;
+          processedFiles++;
+
+          // Update progress
+          final progress = totalFiles > 0 ? processedFiles / totalFiles : 0.0;
+          final fileName = path.basename(file.path);
+          onProgress?.call(progress,
+              'מעבד קישורים: $fileName ($processedFiles/$totalFiles)');
+
+          // Add to deletion list only if successful
+          if (result.success && result.processedLinks > 0) {
+            filesToDelete.add(file);
+          }
+
+          // Commit transaction every batchCommitSize files to avoid excessive memory usage
+          if (processedFiles % batchCommitSize == 0) {
+            await _repository.commitTransaction();
+
+            // Delete files that were just committed
+            for (final f in filesToDelete) {
+              try {
+                if (await f.exists()) {
+                  await f.delete();
+                  deletedFiles++;
+                  _log.info('Deleted processed link file: ${f.path}');
+                }
+              } catch (e) {
+                _log.warning('Failed to delete link file ${f.path}', e);
+              }
+            }
+            filesToDelete.clear();
+
+            // Clear line cache to prevent memory explosion
+            clearLineCache();
+            await _repository.beginTransaction();
+          }
+        } catch (e, stackTrace) {
+          _log.warning('Error processing link file: ${file.path}', e, stackTrace);
+          errors.add('Error processing ${path.basename(file.path)}: $e');
+        }
+      }
+
+      // Commit the final transaction
+      await _repository.commitTransaction();
+
+      // Delete remaining files
+      for (final f in filesToDelete) {
+        try {
+          if (await f.exists()) {
+            await f.delete();
+            deletedFiles++;
+            _log.info('Deleted processed link file: ${f.path}');
+          }
+        } catch (e) {
+          _log.warning('Failed to delete link file ${f.path}', e);
+        }
+      }
+      filesToDelete.clear();
+
+      // Clear caches to free memory
+      clearCaches();
+    } catch (e) {
+      // Rollback on error
+      _log.severe('Error during link processing, rolling back transaction', e);
+      await _repository.rollbackTransaction();
+      rethrow;
+    }
+
+    // Optionally update the book_has_links table
+    if (updateBookHasLinks && totalLinks > 0) {
+      onProgress?.call(1.0, 'מעדכן טבלת קישורים לספרים...');
+      await _updateBookHasLinksTable();
+    }
+
+    // Delete links directory if it became empty
+    await _deleteIfEmpty(linksDir);
+
+    final resultMessage = 'הושלם עיבוד $totalLinks קישורים מ-$totalFiles קבצים';
+    onProgress?.call(1.0, resultMessage);
+    _log.info(resultMessage);
+
+    return LinkDirectoryResult(
+      processedLinks: totalLinks,
+      skippedLinks: skippedLinks,
+      totalFiles: totalFiles,
+      deletedFiles: deletedFiles,
+      errors: errors,
+    );
+  }
+
+  /// Updates the book_has_links table to indicate which books have source/target links.
+  Future<void> _updateBookHasLinksTable() async {
+    // Update book_has_links table using bulk SQL
+    await _repository.executeRawQuery('''
+      INSERT OR REPLACE INTO book_has_links (bookId, hasSourceLinks, hasTargetLinks)
+      SELECT 
+        b.id,
+        CASE WHEN EXISTS (SELECT 1 FROM link WHERE sourceBookId = b.id) THEN 1 ELSE 0 END,
+        CASE WHEN EXISTS (SELECT 1 FROM link WHERE targetBookId = b.id) THEN 1 ELSE 0 END
+      FROM book b
+      WHERE 
+        EXISTS (SELECT 1 FROM link WHERE sourceBookId = b.id) 
+        OR 
+        EXISTS (SELECT 1 FROM link WHERE targetBookId = b.id)
+    ''');
+
+    // Update connection flags in book table
+    await _repository.executeRawQuery('''
+      WITH booctions AS (
+        SELECT 
+            book_id,
+            MAX(CASE WHEN connectionTypeId = 2 THEN 1 ELSE 0 END) as has_targum,
+            MAX(CASE WHEN connectionTypeId = 3 THEN 1 ELSE 0 END) as has_reference,
+            MAX(CASE WHEN connectionTypeId = 1 THEN 1 ELSE 0 END) as has_commentary,
+            MAX(CASE WHEN connectionTypeId = 4 THEN 1 ELSE 0 END) as has_other
+        FROM (
+            SELECT sourceBookId as book_id, connectionTypeId FROM link
+            UNION ALL
+            SELECT targetBookId as book_id, connectionTypeId FROM link
+        ) all_connections
+        GROUP BY book_id
+      )
+      UPDATE book 
+      SET 
+          hasTargumConnection = COALESCE(bc.has_targum, 0),
+          hasReferenceConnection = COALESCE(bc.has_reference, 0),
+          hasCommentaryConnection = COALESCE(bc.has_commentary, 0),
+          hasOtherConnection = COALESCE(bc.has_other, 0)
+      FROM book_connections bc
+      WHERE book.id = bc.book_id
+    ''');
+
+    _log.info('Book_has_links table updated');
+  }
+
+  /// Deletes a directory if it is empty.
+  Future<void> _deleteIfEmpty(Directory dir) async {
+    try {
+      if (!await dir.exists()) return;
+      if (await dir.list().isEmpty) {
+        await dir.delete();
+        _log.info('Deleted empty directory: ${dir.path}');
+      }
+    } catch (e) {
+      // Ignore deletion errors (e.g. permissions)
+    }
+  }
+}
+
+/// Result of processing a links directory
+class LinkDirectoryResult {
+  final int processedLinks;
+  final int skippedLinks;
+  final int totalFiles;
+  final int deletedFiles;
+  final List<String> errors;
+
+  const LinkDirectoryResult({
+    this.processedLinks = 0,
+    this.skippedLinks = 0,
+    this.totalFiles = 0,
+    this.deletedFiles = 0,
+    this.errors = const [],
+  });
+
+  @override
+  String toString() =>
+      'LinkDirectoryResult(processed: $processedLinks, skipped: $skippedLinks, '
+      'files: $totalFiles, deleted: $deletedFiles, errors: ${errors.length})';
 }

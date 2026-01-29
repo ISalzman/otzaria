@@ -61,12 +61,6 @@ class FileSyncService {
   /// Progress callback for UI updates
   void Function(double progress, String message)? onProgress;
 
-  /// Counter for IDs
-  int _nextBookId = 0;
-  int _nextLineId = 0;
-  int _nextTocEntryId = 0;
-  int _nextCategoryId = 0;
-
   FileSyncService._(this._repository);
 
   /// Get singleton instance
@@ -345,8 +339,7 @@ class FileSyncService {
     required String rootPath,
     required List<String> categoryPrefix,
     required bool deleteOriginals,
-    required DatabaseGenerator generator,
-    Map<String, BookMetadata> metadata = const {},
+    required DatabaseGenerator generator
   }) async {
     int addedBooks = 0;
     int updatedBooks = 0;
@@ -374,7 +367,6 @@ class FileSyncService {
           basePath: rootPath,
           categoryPrefix: categoryPrefix,
           generator: generator,
-          metadata: metadata,
         );
 
         if (result.wasAdded) {
@@ -435,7 +427,6 @@ class FileSyncService {
     required String basePath,
     required List<String> categoryPrefix,
     required DatabaseGenerator generator,
-    required Map<String, BookMetadata> metadata,
   }) async {
     final title = path.basenameWithoutExtension(filePath);
     final extension = path.extension(filePath).toLowerCase();
@@ -449,8 +440,8 @@ class FileSyncService {
       return const _FileProcessResult(wasAdded: false, wasUpdated: false);
     }
 
-    // Find or create category chain
-    final categoryResult = await _findOrCreateCategoryChain(categoryPath);
+    // Find or create category chain using generator's unified method
+    final categoryResult = await generator.findOrCreateCategoryChain(categoryPath);
     final categoryId = categoryResult.categoryId;
     final categoriesCreated = categoryResult.categoriesCreated;
 
@@ -481,8 +472,6 @@ class FileSyncService {
         await generator.createAndProcessBook(
           filePath,
           categoryId,
-          metadata,
-          updateExisting: true,
           insertContent: true,
         );
       }
@@ -492,17 +481,9 @@ class FileSyncService {
       await generator.createAndProcessBook(
         filePath,
         categoryId,
-        metadata,
-        updateExisting: false,
         insertContent: true,
       );
     }
-
-    // Update local ID counters from generator
-    final ids = generator.getIds();
-    _nextBookId = ids.bookId;
-    _nextLineId = ids.lineId;
-    _nextTocEntryId = ids.tocId;
 
     return _FileProcessResult(
       wasAdded: wasAdded,
@@ -539,22 +520,12 @@ class FileSyncService {
         return const FileSyncResult(errors: ['Library path not set']);
       }
 
-      // Initialize ID counters from database
-      await _initializeIdCounters();
-
       // Setup Generator
       final generator =
           DatabaseGenerator(libraryPath, _repository, onProgress: onProgress);
-      generator.setIds(_nextBookId, _nextLineId, _nextTocEntryId);
       generator.initializeForSync(
           libraryRoot: path.join(libraryPath, 'אוצריא'));
       // Load metadata
-      Map<String, BookMetadata> metadata = {};
-      try {
-        metadata = await generator.loadMetadata();
-      } catch (e) {
-        _log.warning('Failed to load metadata', e);
-      }
 
       // Scan אוצריא folder for TXT files only
       final otzariaPath = path.join(libraryPath, 'אוצריא');
@@ -570,7 +541,6 @@ class FileSyncService {
           categoryPrefix: [],
           deleteOriginals: true, // Keep existing behavior
           generator: generator,
-          metadata: metadata,
         );
 
         addedBooks += otzariaResult.addedBooks;
@@ -610,8 +580,7 @@ class FileSyncService {
             rootPath: folder.path,
             categoryPrefix: ['ספרים אישיים', folder.name],
             deleteOriginals: true, // Keep existing behavior
-            generator: generator,
-            metadata: metadata,
+            generator: generator
           );
 
           addedBooks += result.addedBooks;
@@ -630,21 +599,20 @@ class FileSyncService {
         _log.info('Scanning links folder: $linksPath');
         _reportProgress(0.6, 'סורק תיקיית קישורים...');
 
-        final linksResult = await _scanAndSyncLinkFiles(linksPath);
-        addedLinks += linksResult.addedLinks;
+        // Use unified link processor method
+        final linkProcessor = LinkProcessor(_repository);
+        final linksResult = await linkProcessor.processLinksDirectory(
+          linksPath: linksPath,
+          onProgress: (progress, message) {
+            // Map progress from 0-1 to 0.6-0.9 range
+            _reportProgress(0.6 + (progress * 0.3), message);
+          },
+          updateBookHasLinks: true,
+        );
+        addedLinks += linksResult.processedLinks;
         deletedFiles += linksResult.deletedFiles;
-        skippedFiles += linksResult.skippedFiles;
         errors.addAll(linksResult.errors);
       }
-
-      // Check for acronym.json file and update book_acronym table if found
-      _reportProgress(0.85, 'בודק קובץ acronym.json...');
-      final acronymResult = await _checkAndProcessAcronymFile(libraryPath);
-      if (acronymResult.processed) {
-        _log.info(
-            'Processed acronym.json: ${acronymResult.updatedBooks} books updated, ${acronymResult.newTerms} new terms');
-      }
-      errors.addAll(acronymResult.errors);
 
       // Rebuild category closure if categories were added
       if (addedCategories > 0) {
@@ -674,87 +642,6 @@ class FileSyncService {
 
     _log.info('Sync completed: $result');
     return result;
-  }
-
-  /// Initialize ID counters from database
-  Future<void> _initializeIdCounters() async {
-    // Use repository extension method to get max IDs
-    final maxIds = await _repository.getMaxIds();
-
-    _nextBookId = maxIds.maxBookId + 1;
-    _nextLineId = maxIds.maxLineId + 1;
-    _nextTocEntryId = maxIds.maxTocId + 1;
-    _nextCategoryId = maxIds.maxCategoryId + 1;
-
-    _log.info('Initialized ID counters: book=$_nextBookId, line=$_nextLineId, '
-        'toc=$_nextTocEntryId, category=$_nextCategoryId');
-  }
-
-  /// Scan links folder and sync JSON files to database
-  Future<FileSyncResult> _scanAndSyncLinkFiles(String folderPath) async {
-    int addedLinks = 0;
-    int deletedFiles = 0;
-    int skippedFiles = 0;
-    final errors = <String>[];
-
-    // Create link processor and load books cache
-    final linkProcessor = LinkProcessor(_repository);
-    await linkProcessor.loadBooksCache();
-
-    // Find JSON files in links folder
-    final linksDir = Directory(folderPath);
-    final jsonFiles = <String>[];
-
-    await for (final entity in linksDir.list()) {
-      if (entity is File && path.extension(entity.path) == '.json') {
-        jsonFiles.add(entity.path);
-      }
-    }
-
-    if (jsonFiles.isEmpty) {
-      _log.info('No JSON files found in links folder');
-      return const FileSyncResult();
-    }
-
-    _log.info('Found ${jsonFiles.length} JSON link files to process');
-
-    int processed = 0;
-    for (final filePath in jsonFiles) {
-      try {
-        final result = await linkProcessor.processLinkFile(filePath);
-        if (result.processedLinks > 0) {
-          addedLinks += result.processedLinks;
-
-          // Delete the JSON file after successful processing
-          try {
-            await File(filePath).delete();
-            deletedFiles++;
-            _log.info(
-                'Deleted processed link file: ${path.basename(filePath)}');
-          } catch (e) {
-            _log.warning('Failed to delete link file $filePath: $e');
-          }
-        } else {
-          skippedFiles++;
-        }
-
-        processed++;
-        _reportProgress(
-          0.6 + (0.3 * processed / jsonFiles.length),
-          'מעבד קישורים ${path.basename(filePath)}...',
-        );
-      } catch (e, stackTrace) {
-        _log.warning('Error processing link file $filePath', e, stackTrace);
-        errors.add('Error processing ${path.basename(filePath)}: $e');
-      }
-    }
-
-    return FileSyncResult(
-      addedLinks: addedLinks,
-      deletedFiles: deletedFiles,
-      skippedFiles: skippedFiles,
-      errors: errors,
-    );
   }
 
   /// Find new or updated files to sync to the database
@@ -805,63 +692,6 @@ class FileSyncService {
     return parts.sublist(0, parts.length - 1);
   }
 
-  /// Find or create a category chain and return the leaf category ID
-  Future<_CategoryResult> _findOrCreateCategoryChain(
-    List<String> categoryPath,
-  ) async {
-    int? currentParentId;
-    int categoriesCreated = 0;
-
-    for (int i = 0; i < categoryPath.length; i++) {
-      final categoryName = categoryPath[i];
-      final level = i;
-
-      // Try to find existing category
-      final existingCategory =
-          await _findCategory(categoryName, currentParentId);
-
-      if (existingCategory != null) {
-        currentParentId = existingCategory.id;
-      } else {
-        // Create new category using repository method
-        // Repository's insertCategory handles duplicates and returns existing ID if found
-        final category = Category(
-          id: _nextCategoryId++,
-          parentId: currentParentId,
-          title: categoryName,
-          level: level,
-        );
-
-        final insertedId = await _repository.insertCategory(category);
-        currentParentId = insertedId;
-        categoriesCreated++;
-
-        _log.info('Created new category: $categoryName (id: $insertedId)');
-      }
-    }
-
-    return _CategoryResult(
-      categoryId: currentParentId!,
-      categoriesCreated: categoriesCreated,
-    );
-  }
-
-  /// Find a category by name and parent ID
-  Future<Category?> _findCategory(String name, int? parentId) async {
-    // Use repository methods to get categories by parent
-    final categories = parentId == null
-        ? await _repository.getRootCategories()
-        : await _repository.getCategoryChildren(parentId);
-
-    // Find category with matching name
-    for (final cat in categories) {
-      if (cat.title == name) {
-        return cat;
-      }
-    }
-    return null;
-  }
-
   Future<void> _removeEmptyDirectories(String basePath) async {
     final dir = Directory(basePath);
     final entities = await dir.list(recursive: true).toList();
@@ -889,115 +719,6 @@ class FileSyncService {
     onProgress?.call(progress, message);
     _log.fine('Progress: ${(progress * 100).toStringAsFixed(1)}% - $message');
   }
-
-  /// Check for acronym.json file in "אודות התוכנה" folder and update book_acronym table
-  /// Updates existing books by matching book_title to book.title in the database
-  /// After processing, deletes the acronym.json file
-  Future<_AcronymProcessResult> _checkAndProcessAcronymFile(
-      String libraryPath) async {
-    final errors = <String>[];
-    int updatedBooks = 0;
-    int newTerms = 0;
-
-    try {
-      final acronymPath =
-          path.join(libraryPath, 'אוצריא', 'אודות התוכנה', 'acronym.json');
-      final acronymFile = File(acronymPath);
-
-      if (!await acronymFile.exists()) {
-        _log.fine('No acronym.json file found at $acronymPath');
-        return const _AcronymProcessResult(processed: false);
-      }
-
-      _log.info('Found acronym.json file, processing...');
-
-      // Read and parse the file
-      final content = await acronymFile.readAsString();
-      final decoded = jsonDecode(content);
-
-      // Convert to list format (handle both Map and List)
-      List<Map<String, dynamic>> acronymEntries = [];
-      if (decoded is List) {
-        acronymEntries = decoded.cast<Map<String, dynamic>>();
-      } else if (decoded is Map<String, dynamic>) {
-        // Convert map to list format
-        decoded.forEach((key, value) {
-          if (value is Map<String, dynamic>) {
-            acronymEntries.add(value);
-          }
-        });
-      }
-
-      _log.info('Loaded ${acronymEntries.length} acronym entries from file');
-
-      // Process each entry - match by book_title to find the book in DB
-      for (final entry in acronymEntries) {
-        final bookTitle = entry['book_title'] as String?;
-        final termsRaw = entry['terms'] as String?;
-
-        if (bookTitle == null || bookTitle.isEmpty) {
-          continue;
-        }
-
-        // Find the book by title in the database
-        final existingBook = await _repository.checkBookExists(bookTitle);
-        if (existingBook == null) {
-          _log.fine('Book not found in DB for acronym update: $bookTitle');
-          continue;
-        }
-
-        final bookId = existingBook.id;
-
-        // Parse terms (comma-separated)
-        final terms = (termsRaw == null || termsRaw.isEmpty)
-            ? <String>[]
-            : termsRaw
-                .split(',')
-                .map((t) => DatabaseGenerator.sanitizeAcronymTerm(t))
-                .where((t) => t.isNotEmpty)
-                .toList();
-
-        // Full replacement: delete all existing terms and insert new ones
-        // This handles additions, removals, and updates
-        await _repository.deleteBookAcronyms(bookId);
-
-        if (terms.isNotEmpty) {
-          await _repository.bulkInsertBookAcronyms(bookId, terms);
-          newTerms += terms.length;
-        }
-
-        updatedBooks++;
-        _log.fine(
-            'Replaced acronym terms for book: $bookTitle (id: $bookId) with ${terms.length} terms');
-      }
-
-      // Delete the acronym.json file after successful processing
-      try {
-        await acronymFile.delete();
-        _log.info('Deleted acronym.json file after processing');
-      } catch (e) {
-        _log.warning('Failed to delete acronym.json file: $e');
-        errors.add('Failed to delete acronym.json: $e');
-      }
-
-      _log.info(
-          'Acronym processing complete: $updatedBooks books updated, $newTerms new terms added');
-
-      return _AcronymProcessResult(
-        processed: true,
-        updatedBooks: updatedBooks,
-        newTerms: newTerms,
-        errors: errors,
-      );
-    } catch (e, stackTrace) {
-      _log.warning('Error processing acronym.json', e, stackTrace);
-      errors.add('Error processing acronym.json: $e');
-      return _AcronymProcessResult(
-        processed: false,
-        errors: errors,
-      );
-    }
-  }
 }
 
 /// Result of processing a single file
@@ -1010,17 +731,6 @@ class _FileProcessResult {
     required this.wasAdded,
     required this.wasUpdated,
     this.categoriesCreated = 0,
-  });
-}
-
-/// Result of finding/creating category chain
-class _CategoryResult {
-  final int categoryId;
-  final int categoriesCreated;
-
-  const _CategoryResult({
-    required this.categoryId,
-    required this.categoriesCreated,
   });
 }
 
@@ -1046,21 +756,6 @@ class _RestoreResult {
   const _RestoreResult({
     this.books = 0,
     this.categories = 0,
-    this.errors = const [],
-  });
-}
-
-/// Result of processing acronym.json file
-class _AcronymProcessResult {
-  final bool processed;
-  final int updatedBooks;
-  final int newTerms;
-  final List<String> errors;
-
-  const _AcronymProcessResult({
-    this.processed = false,
-    this.updatedBooks = 0,
-    this.newTerms = 0,
     this.errors = const [],
   });
 }
