@@ -26,7 +26,6 @@ import 'package:otzaria/library/view/book_preview_panel.dart';
 import 'package:otzaria/library/view/resizable_preview_panel.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/utils/open_book.dart';
-import 'package:otzaria/ui/database_generation_dialog.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -1130,18 +1129,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           _refocusSearchBar(selectAll: true);
         },
       ),
-
-      // יצירת מסד נתונים - אם אין DB: בחוץ. אם יש: עובר לתפריט "...".
-      if (!(Platform.isAndroid || Platform.isIOS) &&
-          _showDbGenerationButton == true)
-        ActionButtonData(
-          widget: _BlinkingDatabaseButton(
-            onPressed: () => showDatabaseGenerationDialog(context),
-          ),
-          icon: FluentIcons.database_arrow_right_24_regular,
-          tooltip: 'יצירת מסד נתונים',
-          onPressed: () => showDatabaseGenerationDialog(context),
-        ),
 
       // סינכרון - מוצג רק אם מצב אופליין לא מופעל
       if (!settingsState.isOfflineMode) _buildSyncActionButton(),
