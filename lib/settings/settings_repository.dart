@@ -6,6 +6,7 @@ import 'package:otzaria/utils/settings_wrapper.dart';
 
 class SettingsRepository {
   static const String keyDarkMode = 'key-dark-mode';
+  static const String keyFollowSystemTheme = 'key-follow-system-theme';
   static const String keySwatchColor = 'key-swatch-color';
   static const String keyDarkSwatchColor = 'key-dark-swatch-color';
   static const String keyTextMaxWidth = 'key-text-max-width';
@@ -89,6 +90,8 @@ class SettingsRepository {
 
     return {
       'isDarkMode': _settings.getValue<bool>(keyDarkMode, defaultValue: false),
+      'followSystemTheme':
+          _settings.getValue<bool>(keyFollowSystemTheme, defaultValue: false),
       'seedColor': ColorUtils.colorFromString(
         _settings.getValue<String>(keySwatchColor, defaultValue: '#ff2c1b02'),
       ),
@@ -269,6 +272,10 @@ class SettingsRepository {
 
   Future<void> updateDarkMode(bool value) async {
     await _settings.setValue(keyDarkMode, value);
+  }
+
+  Future<void> updateFollowSystemTheme(bool value) async {
+    await _settings.setValue(keyFollowSystemTheme, value);
   }
 
   Future<void> updateSeedColor(Color value) async {
