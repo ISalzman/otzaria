@@ -161,70 +161,21 @@ class DataCollectionService {
     }
   }
 
-  /// Get total number of books from database or CSV
-  /// Returns the number of books
+  /// Get total number of books from database
+  /// Returns the number of books in the database
   Future<int> getTotalBookCount() async {
     try {
-      // Try reading from database first
       final dbProvider = SqliteDataProvider.instance;
       if (await dbProvider.databaseExists() && dbProvider.isInitialized) {
-        try {
-          final stats = await dbProvider.getDatabaseStats();
-          final bookCount = stats['books'] ?? 0;
-          if (bookCount > 0) {
-            debugPrint('Book count from DB: $bookCount');
-            return bookCount;
-          }
-        } catch (e) {
-          debugPrint('Error reading book count from DB: $e');
-          // Fall through to CSV reading
-        }
+        final stats = await dbProvider.getDatabaseStats();
+        final bookCount = stats['books'] ?? 0;
+        debugPrint('Book count from DB: $bookCount');
+        return bookCount;
       }
-
-      // Fallback to CSV reading
-      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
-      if (libraryPath == null || libraryPath.isEmpty) {
-        debugPrint('Library path not set');
-        return 0;
-      }
-
-      final csvFile =
-          File('$libraryPath${Platform.pathSeparator}$_sourceBooksPath');
-
-      if (!await csvFile.exists()) {
-        debugPrint('SourcesBooks.csv file not found: ${csvFile.path}');
-        return 0;
-      }
-
-      final inputStream = csvFile.openRead();
-      final converter = const CsvToListConverter();
-
-      int bookCount = 0;
-      bool isFirstLine = true;
-
-      await for (final line in inputStream
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())) {
-        // Skip header line
-        if (isFirstLine) {
-          isFirstLine = false;
-          continue;
-        }
-
-        try {
-          final row = converter.convert(line).first;
-          if (row.isNotEmpty) {
-            bookCount++;
-          }
-        } catch (e) {
-          debugPrint('Error parsing CSV line for count: $line, Error: $e');
-          continue;
-        }
-      }
-
-      return bookCount;
+      debugPrint('Database not available');
+      return 0;
     } catch (e) {
-      debugPrint('Error counting books: $e');
+      debugPrint('Error counting books from DB: $e');
       return 0;
     }
   }
