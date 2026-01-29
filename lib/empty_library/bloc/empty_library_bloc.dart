@@ -27,15 +27,17 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     // נבדוק שני מקרים:
     // 1. המשתמש בחר תיקייה שמכילה את תיקיית "אוצריא" (למשל: C:\Library שמכילה C:\Library\אוצריא\seforim.db)
     // 2. המשתמש בחר ישירות את תיקיית "אוצריא" (למשל: C:\Library\אוצריא שמכילה seforim.db)
-    
+
     String libraryPath;
-    
+
     // נתיב אפשרות 1: התיקייה שנבחרה מכילה את תיקיית אוצריא
-    final databasePathWithOtzaria = DatabaseConstants.getDatabasePathForLibrary(selectedDirectory);
+    final databasePathWithOtzaria =
+        DatabaseConstants.getDatabasePathForLibrary(selectedDirectory);
     final databaseFileWithOtzaria = File(databasePathWithOtzaria);
-    
+
     // נתיב אפשרות 2: התיקייה שנבחרה היא תיקיית אוצריא עצמה (seforim.db ישירות בתוכה)
-    final databasePathDirect = path.join(selectedDirectory, DatabaseConstants.databaseFileName);
+    final databasePathDirect =
+        path.join(selectedDirectory, DatabaseConstants.databaseFileName);
     final databaseFileDirect = File(databasePathDirect);
 
     if (databaseFileWithOtzaria.existsSync()) {
@@ -56,7 +58,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
     // שמירת הנתיב בהגדרות
     await Settings.setValue(SettingsRepository.keyLibraryPath, libraryPath);
-    
+
     emit(EmptyLibraryDirectorySelected(selectedPath: libraryPath));
   }
 }

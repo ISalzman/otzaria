@@ -1,10 +1,14 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:googleapis/calendar/v3.dart' as cal;
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/services/notification_service.dart';
+import 'package:otzaria/services/google_calendar_service.dart';
 import 'package:otzaria/shamor_zachor/utils/message_utils.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -69,6 +73,14 @@ class CalendarState extends Equatable {
   final int calendarNotificationTime;
   final bool calendarNotificationSound;
   final Map<String, ZmanAlertPreference> zmanAlerts;
+  final bool googleCalendarEnabled;
+  final bool googleCalendarConnected;
+  final List<String> googleCalendarSelectedIds;
+  final bool googleCalendarSyncInProgress;
+  final String? googleCalendarSyncError;
+  final DateTime? googleCalendarLastSync;
+  final int googleCalendarSyncPastDays;
+  final int googleCalendarSyncFutureDays;
 
   const CalendarState({
     required this.selectedJewishDate,
@@ -88,6 +100,14 @@ class CalendarState extends Equatable {
     this.calendarNotificationTime = 60,
     this.calendarNotificationSound = true,
     this.zmanAlerts = const {},
+    this.googleCalendarEnabled = false,
+    this.googleCalendarConnected = false,
+    this.googleCalendarSelectedIds = const ['primary'],
+    this.googleCalendarSyncInProgress = false,
+    this.googleCalendarSyncError,
+    this.googleCalendarLastSync,
+    this.googleCalendarSyncPastDays = 60,
+    this.googleCalendarSyncFutureDays = 365,
   });
 
   factory CalendarState.initial() {
@@ -106,6 +126,12 @@ class CalendarState extends Equatable {
       searchInDescriptions: false,
       inIsrael: true,
       showAllEvents: false,
+      googleCalendarEnabled: false,
+      googleCalendarConnected: false,
+      googleCalendarSelectedIds: const ['primary'],
+      googleCalendarSyncInProgress: false,
+      googleCalendarSyncPastDays: 60,
+      googleCalendarSyncFutureDays: 365,
     );
   }
 
@@ -127,6 +153,15 @@ class CalendarState extends Equatable {
     int? calendarNotificationTime,
     bool? calendarNotificationSound,
     Map<String, ZmanAlertPreference>? zmanAlerts,
+    bool? googleCalendarEnabled,
+    bool? googleCalendarConnected,
+    List<String>? googleCalendarSelectedIds,
+    bool? googleCalendarSyncInProgress,
+    String? googleCalendarSyncError,
+    DateTime? googleCalendarLastSync,
+    int? googleCalendarSyncPastDays,
+    int? googleCalendarSyncFutureDays,
+    bool clearGoogleCalendarSyncError = false,
   }) {
     return CalendarState(
       selectedJewishDate: selectedJewishDate ?? this.selectedJewishDate,
@@ -150,6 +185,23 @@ class CalendarState extends Equatable {
       calendarNotificationSound:
           calendarNotificationSound ?? this.calendarNotificationSound,
       zmanAlerts: zmanAlerts ?? this.zmanAlerts,
+      googleCalendarEnabled:
+          googleCalendarEnabled ?? this.googleCalendarEnabled,
+      googleCalendarConnected:
+          googleCalendarConnected ?? this.googleCalendarConnected,
+      googleCalendarSelectedIds:
+          googleCalendarSelectedIds ?? this.googleCalendarSelectedIds,
+      googleCalendarSyncInProgress:
+          googleCalendarSyncInProgress ?? this.googleCalendarSyncInProgress,
+      googleCalendarSyncError: clearGoogleCalendarSyncError
+          ? null
+          : (googleCalendarSyncError ?? this.googleCalendarSyncError),
+      googleCalendarLastSync:
+          googleCalendarLastSync ?? this.googleCalendarLastSync,
+      googleCalendarSyncPastDays:
+          googleCalendarSyncPastDays ?? this.googleCalendarSyncPastDays,
+      googleCalendarSyncFutureDays:
+          googleCalendarSyncFutureDays ?? this.googleCalendarSyncFutureDays,
     );
   }
 
@@ -182,19 +234,37 @@ class CalendarState extends Equatable {
         calendarNotificationTime,
         calendarNotificationSound,
         zmanAlerts,
+        googleCalendarEnabled,
+        googleCalendarConnected,
+        googleCalendarSelectedIds,
+        googleCalendarSyncInProgress,
+        googleCalendarSyncError,
+        googleCalendarLastSync,
+        googleCalendarSyncPastDays,
+        googleCalendarSyncFutureDays,
       ];
 }
 
 // Calendar Cubit
 class CalendarCubit extends Cubit<CalendarState> {
+  static const String _primaryGoogleCalendarId = 'primary';
+  static const int _zmanScheduleDaysAhead = 45;
+
   final SettingsRepository _settingsRepository;
   final NotificationService _notificationService;
+  final GoogleCalendarService _googleCalendarService;
+
+  // Getter for accessing notification service from outside
+  NotificationService get notificationService => _notificationService;
 
   CalendarCubit({
     SettingsRepository? settingsRepository,
     NotificationService? notificationService,
+    GoogleCalendarService? googleCalendarService,
   })  : _settingsRepository = settingsRepository ?? SettingsRepository(),
         _notificationService = notificationService ?? NotificationService(),
+        _googleCalendarService =
+            googleCalendarService ?? GoogleCalendarService(),
         super(CalendarState.initial()) {
     _initializeCalendar();
   }
@@ -213,6 +283,20 @@ class CalendarCubit extends Cubit<CalendarState> {
     final bool calendarNotificationSound =
         settings['calendarNotificationSound'] as bool;
     final String zmanAlertsJson = settings['calendarZmanAlerts'] as String;
+    final bool googleCalendarEnabled =
+        settings['googleCalendarEnabled'] as bool;
+    final String googleCalendarSelectedIdsStr =
+        settings['googleCalendarSelectedIds'] as String;
+    final List<String> googleCalendarSelectedIds = googleCalendarSelectedIdsStr
+        .split(',')
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final int googleCalendarSyncPastDays =
+        settings['googleCalendarSyncPastDays'] as int;
+    final int googleCalendarSyncFutureDays =
+        settings['googleCalendarSyncFutureDays'] as int;
+    final int googleCalendarLastSyncRaw =
+        settings['googleCalendarLastSync'] as int;
 
     final Map<String, ZmanAlertPreference> zmanAlerts =
         _parseZmanAlertPreferences(zmanAlertsJson);
@@ -237,13 +321,22 @@ class CalendarCubit extends Cubit<CalendarState> {
       calendarNotificationTime: calendarNotificationTime,
       calendarNotificationSound: calendarNotificationSound,
       zmanAlerts: zmanAlerts,
+      googleCalendarEnabled: googleCalendarEnabled,
+      googleCalendarSelectedIds: googleCalendarSelectedIds,
+      googleCalendarSyncPastDays: googleCalendarSyncPastDays,
+      googleCalendarSyncFutureDays: googleCalendarSyncFutureDays,
+      googleCalendarLastSync: googleCalendarLastSyncRaw > 0
+          ? DateTime.fromMillisecondsSinceEpoch(googleCalendarLastSyncRaw)
+          : null,
     ));
     _updateTimesForDate(state.selectedGregorianDate, selectedCity);
     await _rescheduleNotifications();
     await _rescheduleZmanAlerts();
+    await _refreshGoogleConnectionStatus();
+    if (googleCalendarEnabled) {
+      await syncGoogleCalendar(interactive: false);
+    }
   }
-
-  static const int _zmanScheduleDaysAhead = 45;
 
   static Map<String, ZmanAlertPreference> _parseZmanAlertPreferences(
       String jsonStr) {
@@ -294,17 +387,35 @@ class CalendarCubit extends Cubit<CalendarState> {
 
     bool hasPermission = await notificationService.checkPermissions();
     if (!hasPermission) {
-      hasPermission = await notificationService.requestPermissions();
+      if (Platform.isMacOS) {
+        hasPermission = await notificationService.forceRequestPermissions();
+      } else {
+        hasPermission = await notificationService.requestPermissions();
+      }
     }
 
     if (!hasPermission) {
+      String message;
+      String actionLabel = 'הבנתי';
+
+      if (Platform.isMacOS) {
+        message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+            'עבור להגדרות המערכת > פרטיות ואבטחה > התראות > אוצריא\n'
+            'או הפעל מחדש את האפליקציה ואשר את בקשת ההרשאות';
+      } else if (Platform.isIOS) {
+        message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+            'עבור להגדרות > התראות > אוצריא';
+      } else {
+        message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+            'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות';
+      }
+
       UiSnack.showWithAction(
-        message: 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
-            'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
-        actionLabel: 'הבנתי',
+        message: message,
+        actionLabel: actionLabel,
         onAction: () {},
         backgroundColor: Colors.orange,
-        duration: const Duration(seconds: 8),
+        duration: const Duration(seconds: 10),
       );
       return;
     }
@@ -654,18 +765,509 @@ class CalendarCubit extends Cubit<CalendarState> {
     };
   }
 
+  // --- Google Calendar Integration ---
+
+  Future<void> setGoogleCalendarEnabled(bool enabled) async {
+    emit(state.copyWith(googleCalendarEnabled: enabled));
+    await _settingsRepository.updateGoogleCalendarEnabled(enabled);
+
+    if (!enabled) {
+      await _googleCalendarService.signOut();
+      emit(state.copyWith(
+        googleCalendarConnected: false,
+        clearGoogleCalendarSyncError: true,
+      ));
+      return;
+    }
+
+    await _refreshGoogleConnectionStatus();
+    if (state.googleCalendarConnected) {
+      await syncGoogleCalendar(interactive: false);
+    }
+  }
+
+  Future<void> updateGoogleCalendarSelectedIds(List<String> calendarIds) async {
+    emit(state.copyWith(googleCalendarSelectedIds: calendarIds));
+    await _settingsRepository.updateGoogleCalendarSelectedIds(calendarIds);
+  }
+
+  Future<List<GoogleCalendarInfo>> getAvailableCalendars() async {
+    final apiClient =
+        await _googleCalendarService.getApiClient(interactive: false);
+    if (apiClient == null) return [];
+
+    try {
+      final calendarList = await apiClient.api.calendarList.list();
+      final calendars = <GoogleCalendarInfo>[];
+
+      for (final item in calendarList.items ?? []) {
+        if (item.id != null && item.summary != null) {
+          calendars.add(GoogleCalendarInfo(
+            id: item.id!,
+            name: item.summary!,
+            isPrimary: item.primary ?? false,
+          ));
+        }
+      }
+
+      return calendars;
+    } catch (e) {
+      // Failed to fetch calendars
+      return [];
+    } finally {
+      apiClient.close();
+    }
+  }
+
+  Future<void> updateGoogleCalendarSyncPastDays(int days) async {
+    emit(state.copyWith(googleCalendarSyncPastDays: days));
+    await _settingsRepository.updateGoogleCalendarSyncPastDays(days);
+  }
+
+  Future<void> updateGoogleCalendarSyncFutureDays(int days) async {
+    emit(state.copyWith(googleCalendarSyncFutureDays: days));
+    await _settingsRepository.updateGoogleCalendarSyncFutureDays(days);
+  }
+
+  Future<bool> connectGoogleCalendar() async {
+    emit(state.copyWith(googleCalendarSyncInProgress: true));
+
+    try {
+      final apiClient =
+          await _googleCalendarService.getApiClient(interactive: true);
+      if (apiClient == null) {
+        emit(state.copyWith(
+          googleCalendarSyncInProgress: false,
+          googleCalendarConnected: false,
+          googleCalendarSyncError: 'לא הצלחנו להתחבר לחשבון Google.',
+        ));
+        return false;
+      }
+
+      apiClient.close();
+      emit(state.copyWith(
+        googleCalendarConnected: true,
+        googleCalendarSyncInProgress: false,
+        clearGoogleCalendarSyncError: true,
+      ));
+      await syncGoogleCalendar(interactive: false);
+      return true;
+    } catch (e) {
+      final errorMessage = _formatGoogleCalendarError(e);
+
+      emit(state.copyWith(
+        googleCalendarSyncInProgress: false,
+        googleCalendarConnected: false,
+        googleCalendarSyncError: errorMessage,
+      ));
+      return false;
+    }
+  }
+
+  String _formatGoogleCalendarError(dynamic error) {
+    String errorMessage = error.toString();
+
+    // Remove "Exception: " prefix if present
+    if (errorMessage.startsWith('Exception: ')) {
+      errorMessage = errorMessage.substring('Exception: '.length);
+    }
+
+    return errorMessage;
+  }
+
+  Future<void> disconnectGoogleCalendar() async {
+    await _googleCalendarService.signOut();
+    emit(state.copyWith(
+      googleCalendarConnected: false,
+      clearGoogleCalendarSyncError: true,
+    ));
+  }
+
+  Future<void> syncGoogleCalendar({required bool interactive}) async {
+    if (!state.googleCalendarEnabled) return;
+
+    emit(state.copyWith(
+      googleCalendarSyncInProgress: true,
+      clearGoogleCalendarSyncError: true,
+    ));
+
+    try {
+      final apiClient =
+          await _googleCalendarService.getApiClient(interactive: interactive);
+      if (apiClient == null) {
+        emit(state.copyWith(
+          googleCalendarSyncInProgress: false,
+          googleCalendarConnected: false,
+          googleCalendarSyncError: 'לא הצלחנו להתחבר לחשבון Google.',
+        ));
+        return;
+      }
+
+      try {
+        // Calculate date range for sync
+        final now = DateTime.now();
+        final timeMin =
+            now.subtract(Duration(days: state.googleCalendarSyncPastDays));
+        final timeMax =
+            now.add(Duration(days: state.googleCalendarSyncFutureDays));
+
+        // Fetch events from all selected calendars with pagination
+        List<cal.Event> allGoogleEvents = [];
+        for (final calendarId in state.googleCalendarSelectedIds) {
+          try {
+            String? pageToken;
+            do {
+              final result = await apiClient.api.events.list(
+                calendarId,
+                singleEvents: true,
+                orderBy: 'startTime',
+                timeMin: timeMin.toUtc(),
+                timeMax: timeMax.toUtc(),
+                maxResults: 2500, // Google's max per request
+                pageToken: pageToken,
+              );
+              allGoogleEvents.addAll(result.items ?? []);
+              pageToken = result.nextPageToken;
+            } while (pageToken != null);
+          } catch (e) {
+            // Continue with other calendars if one fails
+            debugPrint('Failed to sync calendar $calendarId: $e');
+          }
+        }
+
+        final merged = _mergeGoogleEvents(state.events, allGoogleEvents);
+        final syncTime = DateTime.now();
+        emit(state.copyWith(
+          events: merged,
+          googleCalendarConnected: true,
+          googleCalendarSyncInProgress: false,
+          googleCalendarLastSync: syncTime,
+        ));
+
+        await _settingsRepository
+            .updateGoogleCalendarLastSync(syncTime.millisecondsSinceEpoch);
+        await _saveEventsToStorage(merged);
+      } catch (e) {
+        emit(state.copyWith(
+          googleCalendarSyncInProgress: false,
+          googleCalendarSyncError: 'שגיאה בסנכרון עם Google Calendar: $e',
+        ));
+      } finally {
+        apiClient.close();
+      }
+    } catch (e) {
+      final errorMessage = _formatGoogleCalendarError(e);
+
+      emit(state.copyWith(
+        googleCalendarSyncInProgress: false,
+        googleCalendarConnected: false,
+        googleCalendarSyncError: errorMessage,
+      ));
+    }
+  }
+
+  Future<void> _refreshGoogleConnectionStatus() async {
+    if (!state.googleCalendarEnabled) {
+      emit(state.copyWith(googleCalendarConnected: false));
+      return;
+    }
+
+    final signedIn = await _googleCalendarService.isSignedIn();
+    emit(state.copyWith(googleCalendarConnected: signedIn));
+  }
+
+  Future<String?> _upsertGoogleEvent(CustomEvent event) async {
+    if (!state.googleCalendarEnabled) return null;
+
+    final apiClient =
+        await _googleCalendarService.getApiClient(interactive: false);
+    if (apiClient == null) return null;
+
+    try {
+      final timeZoneId = _resolveTimeZone();
+      final googleEvent = _toGoogleEvent(event, timeZoneId);
+
+      if (event.googleEventId == null || event.googleEventId!.isEmpty) {
+        final created = await apiClient.api.events.insert(
+          googleEvent,
+          _primaryGoogleCalendarId,
+        );
+        return created.id;
+      } else {
+        final updated = await apiClient.api.events.update(
+          googleEvent,
+          _primaryGoogleCalendarId,
+          event.googleEventId!,
+        );
+        return updated.id ?? event.googleEventId;
+      }
+    } catch (e) {
+      debugPrint('Failed to upsert Google event: $e');
+      // Return null to indicate failure, but don't crash the app
+      return null;
+    } finally {
+      apiClient.close();
+    }
+  }
+
+  Future<void> _deleteGoogleEvent(CustomEvent event) async {
+    if (event.googleEventId == null || event.googleEventId!.isEmpty) return;
+
+    final apiClient =
+        await _googleCalendarService.getApiClient(interactive: false);
+    if (apiClient == null) return;
+
+    try {
+      await apiClient.api.events.delete(
+        _primaryGoogleCalendarId,
+        event.googleEventId!,
+      );
+    } catch (e) {
+      debugPrint('Failed to delete Google event: $e');
+      // Ignore delete failures to avoid blocking local delete
+    } finally {
+      apiClient.close();
+    }
+  }
+
+  String _resolveTimeZone() {
+    final cityData = _getCityData(state.selectedCity);
+    if (cityData == null) return 'Asia/Jerusalem';
+    return cityData['timezone'] as String? ?? 'Asia/Jerusalem';
+  }
+
+  void _replaceEventWithGoogleId(String eventId, String googleEventId) {
+    final events = List<CustomEvent>.from(state.events);
+    final index = events.indexWhere((e) => e.id == eventId);
+    if (index == -1) return;
+    events[index] = events[index].copyWith(googleEventId: googleEventId);
+    emit(state.copyWith(events: events));
+    _saveEventsToStorage(events);
+  }
+
+  List<CustomEvent> _mergeGoogleEvents(
+    List<CustomEvent> existing,
+    List<cal.Event> googleEvents,
+  ) {
+    final updated = List<CustomEvent>.from(existing);
+    final byGoogleId = <String, int>{};
+    final byLocalId = <String, int>{};
+
+    for (int i = 0; i < updated.length; i++) {
+      final e = updated[i];
+      byLocalId[e.id] = i;
+      if (e.googleEventId != null && e.googleEventId!.isNotEmpty) {
+        byGoogleId[e.googleEventId!] = i;
+      }
+    }
+
+    for (final gEvent in googleEvents) {
+      if (gEvent.status == 'cancelled') continue;
+
+      final mapped = _fromGoogleEvent(gEvent);
+      if (mapped == null) continue;
+
+      final otzariaId = gEvent.extendedProperties?.private?['otzaria_event_id'];
+      final googleId = gEvent.id ?? '';
+
+      if (googleId.isNotEmpty && byGoogleId.containsKey(googleId)) {
+        final index = byGoogleId[googleId]!;
+        updated[index] = updated[index].copyWith(
+          title: mapped.title,
+          description: mapped.description,
+          baseGregorianDate: mapped.baseGregorianDate,
+          baseJewishYear: mapped.baseJewishYear,
+          baseJewishMonth: mapped.baseJewishMonth,
+          baseJewishDay: mapped.baseJewishDay,
+        );
+        continue;
+      }
+
+      if (otzariaId != null && byLocalId.containsKey(otzariaId)) {
+        final index = byLocalId[otzariaId]!;
+        updated[index] = updated[index].copyWith(
+          title: mapped.title,
+          description: mapped.description,
+          baseGregorianDate: mapped.baseGregorianDate,
+          baseJewishYear: mapped.baseJewishYear,
+          baseJewishMonth: mapped.baseJewishMonth,
+          baseJewishDay: mapped.baseJewishDay,
+          googleEventId: googleId.isEmpty ? null : googleId,
+        );
+        continue;
+      }
+
+      updated.add(mapped);
+      if (googleId.isNotEmpty) {
+        byGoogleId[googleId] = updated.length - 1;
+      }
+    }
+
+    return updated;
+  }
+
+  CustomEvent? _fromGoogleEvent(cal.Event gEvent) {
+    final start = gEvent.start?.dateTime ?? gEvent.start?.date;
+    if (start == null) return null;
+
+    final date = DateTime(start.year, start.month, start.day);
+    final jewishDate = JewishDate.fromDateTime(date);
+    final otzariaId = gEvent.extendedProperties?.private?['otzaria_event_id'];
+
+    // Parse recurrence from Google event
+    RecurrenceType recurrenceType = RecurrenceType.none;
+
+    if (gEvent.recurrence != null && gEvent.recurrence!.isNotEmpty) {
+      final rrule = gEvent.recurrence!.first;
+
+      if (rrule.contains('FREQ=WEEKLY')) {
+        recurrenceType = RecurrenceType.weekly;
+      } else if (rrule.contains('FREQ=MONTHLY')) {
+        // Check for Hebrew monthly marker
+        if (rrule.contains('X-OTZARIA-TYPE=otzaria_hebrew_monthly')) {
+          recurrenceType = RecurrenceType.monthlyHebrew;
+        } else {
+          recurrenceType = RecurrenceType.monthlyGregorian;
+        }
+      } else if (rrule.contains('FREQ=YEARLY')) {
+        // Check for Hebrew yearly marker
+        if (rrule.contains('X-OTZARIA-TYPE=otzaria_hebrew_yearly')) {
+          recurrenceType = RecurrenceType.annualHebrew;
+        } else {
+          recurrenceType = RecurrenceType.annualGregorian;
+        }
+      }
+    }
+
+    return CustomEvent(
+      id: otzariaId ?? gEvent.id ?? _generateUniqueId(),
+      title: gEvent.summary ?? 'אירוע ללא כותרת',
+      description: gEvent.description ?? '',
+      createdAt: gEvent.created ?? DateTime.now(),
+      baseGregorianDate: DateTime(date.year, date.month, date.day),
+      baseJewishYear: jewishDate.getJewishYear(),
+      baseJewishMonth: jewishDate.getJewishMonth(),
+      baseJewishDay: jewishDate.getJewishDayOfMonth(),
+      recurrenceType: recurrenceType,
+      recurringYears: null, // Not used in current implementation
+      googleEventId: gEvent.id,
+    );
+  }
+
+  String _generateUniqueId() {
+    // Generate a more reliable unique ID
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    final random = Random().nextInt(0x7FFFFFFF);
+    return 'otzaria_${timestamp}_$random';
+  }
+
+  cal.Event _toGoogleEvent(CustomEvent event, String timeZoneId) {
+    final baseDate = event.baseGregorianDate;
+    final startDate = DateTime(baseDate.year, baseDate.month, baseDate.day);
+    final endDate = startDate.add(const Duration(days: 1));
+
+    final extendedProps = {
+      'otzaria_event_id': event.id,
+      'otzaria_recurrence_type': event.recurrenceType.index.toString(),
+    };
+
+    // Store recurring years if set
+    if (event.recurringYears != null) {
+      extendedProps['recurring_years'] = event.recurringYears.toString();
+    }
+
+    final googleEvent = cal.Event()
+      ..summary = event.title
+      ..description = event.description
+      ..start = (cal.EventDateTime()
+        ..date = startDate
+        ..timeZone = timeZoneId)
+      ..end = (cal.EventDateTime()
+        ..date = endDate
+        ..timeZone = timeZoneId)
+      ..extendedProperties =
+          (cal.EventExtendedProperties()..private = extendedProps);
+
+    final recurrence = _googleRecurrenceRule(event);
+    if (recurrence != null) {
+      googleEvent.recurrence = [recurrence];
+    }
+
+    return googleEvent;
+  }
+
+  String? _googleRecurrenceRule(CustomEvent event) {
+    String? freq;
+    String? marker; // Marker to identify Hebrew recurrences
+
+    switch (event.recurrenceType) {
+      case RecurrenceType.weekly:
+        freq = 'WEEKLY';
+        break;
+      case RecurrenceType.monthlyGregorian:
+        freq = 'MONTHLY';
+        break;
+      case RecurrenceType.monthlyHebrew:
+        // Store as monthly with a marker in extended properties
+        freq = 'MONTHLY';
+        marker = 'otzaria_hebrew_monthly';
+        break;
+      case RecurrenceType.annualGregorian:
+        freq = 'YEARLY';
+        break;
+      case RecurrenceType.annualHebrew:
+        // Store as yearly with a marker in extended properties
+        freq = 'YEARLY';
+        marker = 'otzaria_hebrew_yearly';
+        break;
+      case RecurrenceType.none:
+        return null;
+    }
+
+    final buffer = StringBuffer('RRULE:FREQ=$freq');
+
+    // Add marker for Hebrew recurrences as a comment
+    if (marker != null) {
+      buffer.write(';X-OTZARIA-TYPE=$marker');
+    }
+
+    if (event.recurringYears != null && event.recurringYears! > 0) {
+      final until = DateTime(
+        event.baseGregorianDate.year + event.recurringYears!,
+        event.baseGregorianDate.month,
+        event.baseGregorianDate.day,
+        23,
+        59,
+        59,
+      ).toUtc();
+      buffer.write(';UNTIL=${_formatRRuleUntil(until)}');
+    }
+
+    return buffer.toString();
+  }
+
+  String _formatRRuleUntil(DateTime dateUtc) {
+    final y = dateUtc.year.toString().padLeft(4, '0');
+    final m = dateUtc.month.toString().padLeft(2, '0');
+    final d = dateUtc.day.toString().padLeft(2, '0');
+    final h = dateUtc.hour.toString().padLeft(2, '0');
+    final min = dateUtc.minute.toString().padLeft(2, '0');
+    final s = dateUtc.second.toString().padLeft(2, '0');
+    return '$y$m${d}T$h$min${s}Z';
+  }
+
   // --- ניהול אירועים ---
 
-  void addEvent({
+  Future<void> addEvent({
     required String title,
     String? description,
     required DateTime baseGregorianDate,
     required RecurrenceType recurrenceType,
     int? recurringYears,
-  }) {
+  }) async {
     final baseJewish = JewishDate.fromDateTime(baseGregorianDate);
     final newEvent = CustomEvent(
-      id: DateTime.now().millisecondsSinceEpoch.toString(), // יצירת ID ייחודי
+      id: _generateUniqueId(), // יצירת ID ייחודי
       title: title,
       description: description ?? '',
       createdAt: DateTime.now(),
@@ -683,23 +1285,48 @@ class CalendarCubit extends Cubit<CalendarState> {
     final updated = List<CustomEvent>.from(state.events)..add(newEvent);
     emit(state.copyWith(events: updated));
     _saveEventsToStorage(updated);
+
+    if (state.googleCalendarEnabled) {
+      final googleId = await _upsertGoogleEvent(newEvent);
+      if (googleId != null) {
+        _replaceEventWithGoogleId(newEvent.id, googleId);
+      }
+    }
   }
 
-  void updateEvent(CustomEvent updatedEvent) {
+  Future<void> updateEvent(CustomEvent updatedEvent) async {
     final events = List<CustomEvent>.from(state.events);
     final index = events.indexWhere((e) => e.id == updatedEvent.id);
     if (index != -1) {
       events[index] = updatedEvent;
       emit(state.copyWith(events: events));
       _saveEventsToStorage(events);
+
+      if (state.googleCalendarEnabled) {
+        final googleId = await _upsertGoogleEvent(updatedEvent);
+        if (googleId != null && googleId != updatedEvent.googleEventId) {
+          _replaceEventWithGoogleId(updatedEvent.id, googleId);
+        }
+      }
     }
   }
 
-  void deleteEvent(String eventId) {
+  Future<void> deleteEvent(String eventId) async {
+    CustomEvent? existing;
+    for (final e in state.events) {
+      if (e.id == eventId) {
+        existing = e;
+        break;
+      }
+    }
     final events = List<CustomEvent>.from(state.events)
       ..removeWhere((e) => e.id == eventId);
     emit(state.copyWith(events: events));
     _saveEventsToStorage(events);
+
+    if (state.googleCalendarEnabled && existing != null) {
+      await _deleteGoogleEvent(existing);
+    }
   }
 
   List<CustomEvent> eventsForDate(DateTime date) {
@@ -1015,6 +1642,7 @@ class CustomEvent extends Equatable {
   final int baseJewishDay;
   final RecurrenceType recurrenceType;
   final int? recurringYears; // כמה שנים האירוע יחזור
+  final String? googleEventId;
 
   bool get recurring => recurrenceType != RecurrenceType.none;
   bool get recurOnHebrew =>
@@ -1032,6 +1660,7 @@ class CustomEvent extends Equatable {
     required this.baseJewishDay,
     required this.recurrenceType,
     this.recurringYears,
+    this.googleEventId,
   });
 
   // פונקציה שמאפשרת ליצור עותק של אירוע עם שינויים
@@ -1046,6 +1675,7 @@ class CustomEvent extends Equatable {
     int? baseJewishDay,
     RecurrenceType? recurrenceType,
     int? recurringYears,
+    String? googleEventId,
   }) {
     return CustomEvent(
       id: id ?? this.id,
@@ -1058,6 +1688,7 @@ class CustomEvent extends Equatable {
       baseJewishDay: baseJewishDay ?? this.baseJewishDay,
       recurrenceType: recurrenceType ?? this.recurrenceType,
       recurringYears: recurringYears ?? this.recurringYears,
+      googleEventId: googleEventId ?? this.googleEventId,
     );
   }
 
@@ -1074,6 +1705,7 @@ class CustomEvent extends Equatable {
       'baseJewishDay': baseJewishDay,
       'recurrenceType': recurrenceType.index,
       'recurringYears': recurringYears,
+      'googleEventId': googleEventId,
     };
   }
 
@@ -1107,6 +1739,7 @@ class CustomEvent extends Equatable {
       baseJewishDay: json['baseJewishDay'] as int,
       recurrenceType: type,
       recurringYears: json['recurringYears'] as int?,
+      googleEventId: json['googleEventId'] as String?,
     );
   }
 
@@ -1122,6 +1755,7 @@ class CustomEvent extends Equatable {
         baseJewishDay,
         recurrenceType,
         recurringYears,
+        googleEventId,
       ];
 }
 
@@ -2216,4 +2850,17 @@ String _calendarTypeToString(CalendarType type) {
     case CalendarType.combined:
       return 'combined';
   }
+}
+
+// Google Calendar Info
+class GoogleCalendarInfo {
+  final String id;
+  final String name;
+  final bool isPrimary;
+
+  GoogleCalendarInfo({
+    required this.id,
+    required this.name,
+    required this.isPrimary,
+  });
 }

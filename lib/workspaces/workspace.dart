@@ -1,31 +1,66 @@
+import 'package:equatable/equatable.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
 /// Represents a workspace in the application.
 ///
-/// A `Workspace` object has a [name] which is the name of the workspace,
-/// a [bookmarks] list which is a list of bookmarks in the workspace,
-/// and a [currentTab] which is the index of the current tab.
-class Workspace {
-  String name;
+/// A `Workspace` object has a unique [id], a [name],
+/// a list of [tabs], and the [activeTabIndex].
+///
+/// This class is immutable - use [copyWith] to create modified copies.
+class Workspace extends Equatable {
+  final String id;
+  final String name;
   final List<OpenedTab> tabs;
-  int currentTab;
+  final int activeTabIndex;
 
-  Workspace({required this.name, required this.tabs, this.currentTab = 0});
+  Workspace({
+    String? id,
+    required this.name,
+    required this.tabs,
+    this.activeTabIndex = 0,
+  }) : id = id ?? _generateId();
+
+  /// Generates a unique ID using timestamp and random component
+  static String _generateId() {
+    final now = DateTime.now();
+    return '${now.millisecondsSinceEpoch}-${now.microsecond}';
+  }
+
+  /// Creates a copy of this workspace with the given fields replaced.
+  Workspace copyWith({
+    String? name,
+    List<OpenedTab>? tabs,
+    int? activeTabIndex,
+  }) {
+    return Workspace(
+      id: id, // ID remains the same
+      name: name ?? this.name,
+      tabs: tabs ?? this.tabs,
+      activeTabIndex: activeTabIndex ?? this.activeTabIndex,
+    );
+  }
 
   factory Workspace.fromJson(Map<String, dynamic> json) {
     return Workspace(
-        name: json['name'],
-        tabs: List<OpenedTab>.from(
-          json['tabs'].map((tab) => OpenedTab.fromJson(tab)),
-        ),
-        currentTab: json['currentTab']);
+      id: json['id'] as String?,
+      name: json['name'] as String,
+      tabs: (json['tabs'] as List?)
+              ?.map((tab) => OpenedTab.fromJson(tab as Map<String, dynamic>))
+              .toList() ??
+          [],
+      activeTabIndex: json['currentTab'] as int? ?? 0,
+    );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'tabs': tabs.map((tab) => tab.toJson()).toList(),
-      'currentTab': currentTab
+      'currentTab': activeTabIndex,
     };
   }
+
+  @override
+  List<Object?> get props => [id, name, tabs, activeTabIndex];
 }

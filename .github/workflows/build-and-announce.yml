@@ -32,8 +32,20 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.7'
+          channel: stable
           cache: true
+
+      - name: Create Google Calendar Credentials
+        shell: pwsh
+        run: |
+          $credentialsContent = @"
+          class GoogleCalendarCredentials {
+            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
+            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+          }
+          "@
+          $credentialsContent | Out-File -FilePath "lib/services/google_calendar_credentials.dart" -Encoding UTF8
+          Write-Host "Google Calendar credentials file created"
 
       # - name: Install Rust (stable)
       #   uses: dtolnay/rust-toolchain@stable
@@ -230,8 +242,19 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.7'
+          channel: stable
           cache: true
+
+      - name: Create Google Calendar Credentials
+        shell: bash
+        run: |
+          cat > lib/services/google_calendar_credentials.dart << 'EOF'
+          class GoogleCalendarCredentials {
+            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
+            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+          }
+          EOF
+          echo "Google Calendar credentials file created"
 
       - name: Install Rust (stable) with rustup
         uses: dtolnay/rust-toolchain@stable
@@ -420,16 +443,61 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.7'
-          cache: false  # השבתת cache כדי למנוע בעיות מקום
+          channel: stable
+          cache: true
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Cache Pub
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+      
+      - name: Create Google Calendar Credentials
+        shell: bash
+        run: |
+          cat > lib/services/google_calendar_credentials.dart << 'EOF'
+          class GoogleCalendarCredentials {
+            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
+            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+          }
+          EOF
+          echo "Google Calendar credentials file created"
       
       - run: sudo apt install ninja-build
       
-      - name: Install Android SDK Platform 36
+      - name: Gradle performance flags
         run: |
-          ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install \
-            "platforms;android-36" \
-            "build-tools;36.0.0"
+          mkdir -p ~/.gradle
+          cat >> ~/.gradle/gradle.properties << 'EOF'
+          org.gradle.daemon=true
+          org.gradle.parallel=true
+          org.gradle.caching=true
+          org.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8
+          kotlin.incremental=true
+          EOF
+
+      - name: Ensure Android SDK Platform 36
+        run: |
+          set -e
+          if [ ! -d "${ANDROID_SDK_ROOT}/platforms/android-36" ]; then
+            ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-36"
+          fi
+          if [ ! -d "${ANDROID_SDK_ROOT}/build-tools/36.0.0" ]; then
+            ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "build-tools;36.0.0"
+          fi
       
       - name: Build Android APK
         run: |
@@ -450,9 +518,8 @@ jobs:
       - name: Final cleanup
         if: always()
         run: |
-          # ניקוי סופי של כל קבצי build וcache
+          # ניקוי סופי של כל קבצי build וcache (נשמר Cache לריצות הבאות)
           rm -rf build || true
-          rm -rf ~/.gradle/caches || true
           echo "Disk space after final cleanup:"
           df -h
 
@@ -470,8 +537,19 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.7'
+          channel: stable
           cache: true
+
+      - name: Create Google Calendar Credentials
+        shell: bash
+        run: |
+          cat > lib/services/google_calendar_credentials.dart << 'EOF'
+          class GoogleCalendarCredentials {
+            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
+            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+          }
+          EOF
+          echo "Google Calendar credentials file created"
 
       # התקנת Rust יציבה לפני flutter build
       - name: Install Rust (stable)

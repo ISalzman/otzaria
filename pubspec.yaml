@@ -63,7 +63,7 @@ dependencies:
   path_provider: ^2.1.5
   html: ^0.15.1
   pdfrx: ^2.2.24
-  url_launcher: ^6.3.1
+  url_launcher: ^6.3.2
   flutter_widget_from_html: ^0.17.0
   scrollable_positioned_list: ^0.3.8
   search_highlight_text: ^1.0.0+2
@@ -88,6 +88,8 @@ dependencies:
   crypto: ^3.0.7
   path: ^1.9.1
   http: ^1.4.0
+  googleapis: ^15.0.0
+  googleapis_auth: ^2.0.0
   sqflite: ^2.4.2
   characters: ^1.4.0
   flutter_document_picker:
@@ -106,11 +108,11 @@ dependencies:
   toggle_switch: ^2.3.0
   logging: ^1.3.0
   synchronized: ^3.3.1
-  sqflite_common_ffi: ^2.3.6
-  sqlite3_flutter_libs: 0.5.40
+  sqflite_common_ffi: ^2.4.0
+  sqlite3_flutter_libs: ^0.5.41
   shared_preferences: ^2.5.4
   super_clipboard: ^0.9.1
-  flutter_local_notifications: ^19.5.0
+  flutter_local_notifications: ^20.0.0
   timezone: ^0.10.1
   flutter_single_instance: ^1.7.0
   xml: ^6.6.1

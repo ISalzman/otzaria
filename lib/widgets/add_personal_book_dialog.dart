@@ -29,7 +29,6 @@ class _AddPersonalBookDialogState extends State<AddPersonalBookDialog> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['txt', 'docx'],
-        dialogTitle: 'בחר קובץ ספר',
       );
 
       if (result != null && result.files.single.path != null) {
@@ -37,7 +36,8 @@ class _AddPersonalBookDialogState extends State<AddPersonalBookDialog> {
           _selectedFilePath = result.files.single.path;
           // Auto-fill title from filename if empty
           if (_titleController.text.isEmpty) {
-            final filename = path.basenameWithoutExtension(result.files.single.name);
+            final filename =
+                path.basenameWithoutExtension(result.files.single.name);
             _titleController.text = filename;
           }
         });
@@ -60,10 +60,10 @@ class _AddPersonalBookDialogState extends State<AddPersonalBookDialog> {
 
     try {
       final fileSystemData = FileSystemData.instance;
-      
+
       // Ensure personal folder exists
       await fileSystemData.ensurePersonalFolderExists();
-      
+
       final personalPath = fileSystemData.getPersonalBooksPath();
       final title = _titleController.text.trim();
       final extension = path.extension(_selectedFilePath!);
