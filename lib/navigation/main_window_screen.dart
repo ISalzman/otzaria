@@ -580,9 +580,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case Screen.search:
         return 1;
       case Screen.more:
-        return 2;
-      case Screen.settings:
         return 3;
+      case Screen.settings:
+        return 4;
       case Screen.find:
       case Screen.about:
         return null;
