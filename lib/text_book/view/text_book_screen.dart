@@ -659,7 +659,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
-  void _loadPerBookSettings() async {
+  Future<void> _loadPerBookSettings() async {
     final settingsBloc = context.read<SettingsBloc>();
     debugPrint(
         '🔧 _loadPerBookSettings: enablePerBookSettings = ${settingsBloc.state.enablePerBookSettings}');
