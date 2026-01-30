@@ -1022,8 +1022,8 @@ $textWithBreaks
     // בדיקה אם יש קישורים רלוונטיים לאינדקס הזה
     final hasRelevantLinks = state.links.any((link) =>
         link.index1 == index + 1 &&
-        (link.connectionType == "commentary" ||
-            link.connectionType == "targum") &&
+        (link.connectionType.toUpperCase() == "COMMENTARY" ||
+            link.connectionType.toUpperCase() == "TARGUM") &&
         state.activeCommentators.contains(utils.getTitleFromPath(link.path2)));
 
     return hasRelevantLinks;

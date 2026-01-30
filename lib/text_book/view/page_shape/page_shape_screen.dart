@@ -133,8 +133,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     // קבלת רשימת שמות המפרשים הזמינים
     final availableCommentators = links
         .where((link) =>
-            link.connectionType == 'commentary' ||
-            link.connectionType == 'targum')
+            link.connectionType.toUpperCase() == 'COMMENTARY' ||
+            link.connectionType.toUpperCase() == 'TARGUM')
         .map((link) => utils.getTitleFromPath(link.path2))
         .toSet()
         .toList();
@@ -224,8 +224,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     // קבלת רשימת המפרשים הזמינים
     final availableCommentators = state.links
         .where((link) =>
-            link.connectionType == 'commentary' ||
-            link.connectionType == 'targum')
+            link.connectionType.toUpperCase() == 'COMMENTARY' ||
+            link.connectionType.toUpperCase() == 'TARGUM')
         .map((link) => utils.getTitleFromPath(link.path2))
         .toSet()
         .toList();
@@ -649,8 +649,8 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         _relevantLinks = state.links.where((link) {
           final linkTitle = utils.getTitleFromPath(link.path2);
           return linkTitle == widget.commentatorName &&
-              (link.connectionType == 'commentary' ||
-                  link.connectionType == 'targum');
+              (link.connectionType.toUpperCase() == 'COMMENTARY' ||
+                  link.connectionType.toUpperCase() == 'TARGUM');
         }).toList();
 
         // אם עדיין אין נתיב, ננסה לחלץ מקישורים (Fallback)

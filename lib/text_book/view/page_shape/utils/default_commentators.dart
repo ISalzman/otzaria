@@ -43,7 +43,8 @@ class DefaultCommentators {
       Map<String, String?> defaults, List<Link> links) {
     // קבלת רשימת שמות המפרשים הזמינים
     final availableLinks = links.where((link) =>
-        link.connectionType == 'commentary' || link.connectionType == 'targum');
+        link.connectionType.toUpperCase() == 'COMMENTARY' ||
+        link.connectionType.toUpperCase() == 'TARGUM');
 
     final availableCommentators = availableLinks
         .map((link) => utils.getTitleFromPath(link.path2))

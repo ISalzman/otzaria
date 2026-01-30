@@ -419,8 +419,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
                 final hasAnyCommentaryLinks = state.links.any((link) =>
                     currentIndexes.contains(link.index1 - 1) &&
-                    (link.connectionType == "commentary" ||
-                        link.connectionType == "targum"));
+                    (link.connectionType.toUpperCase() == "COMMENTARY" ||
+                        link.connectionType.toUpperCase() == "TARGUM"));
 
                 // סינון מהיר של קישורים רלוונטיים
                 final hasRelevantLinks = state.links.any((link) =>

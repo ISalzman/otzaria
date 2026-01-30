@@ -587,8 +587,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           .where(
             (link) =>
                 link.index1 == index + 1 &&
-                link.connectionType != 'COMMENTARY' &&
-                link.connectionType != 'TARGUM' &&
+                link.connectionType.toUpperCase() != 'COMMENTARY' &&
+                link.connectionType.toUpperCase() != 'TARGUM' &&
                 // מסנן קישורים מבוססי תווים (inline links) - הם אמורים להופיע רק בתוך הטקסט
                 link.start == null &&
                 link.end == null,
