@@ -149,8 +149,7 @@ class _ScrollableTabBarWithArrowsState
   @override
   Widget build(BuildContext context) {
     final bool hasOverflow = _canScrollLeft || _canScrollRight;
-    final bool showArrows =
-        !widget.hideArrowsWhenNotScrollable || hasOverflow;
+    final bool showArrows = !widget.hideArrowsWhenNotScrollable || hasOverflow;
 
     return Row(
       children: [
@@ -194,20 +193,23 @@ class _ScrollableTabBarWithArrowsState
                       _attachAndSyncPosition();
                     });
                   }
-                  return TabBar(
-                    controller: widget.controller,
-                    isScrollable: true,
-                    tabs: widget.tabs,
-                    tabAlignment: widget.tabAlignment,
-                    padding: EdgeInsets.zero,
-                    labelPadding: EdgeInsets.zero,
-                    indicatorPadding: EdgeInsets.zero,
-                    dividerColor: Colors.transparent,
-                    // הסרת האינדיקטור מתחת לטאב
-                    indicator: const BoxDecoration(),
-                    // הסרת ה-hover המרובע
-                    overlayColor: WidgetStateProperty.all(Colors.transparent),
-                    splashFactory: NoSplash.splashFactory,
+                  return Align(
+                    alignment: Alignment.bottomCenter,
+                    child: TabBar(
+                      controller: widget.controller,
+                      isScrollable: true,
+                      tabs: widget.tabs,
+                      tabAlignment: widget.tabAlignment,
+                      padding: EdgeInsets.zero,
+                      labelPadding: EdgeInsets.zero,
+                      indicatorPadding: EdgeInsets.zero,
+                      dividerColor: Colors.transparent,
+                      // הסרת האינדיקטור מתחת לטאב
+                      indicator: const BoxDecoration(),
+                      // הסרת ה-hover המרובע
+                      overlayColor: WidgetStateProperty.all(Colors.transparent),
+                      splashFactory: NoSplash.splashFactory,
+                    ),
                   );
                 },
               ),
