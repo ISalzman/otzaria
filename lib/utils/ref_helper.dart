@@ -77,6 +77,11 @@ Future<String> refFromIndex(
       if (entry.index > index) {
         return;
       }
+      // Safety check: skip entries with level <= 0 to prevent RangeError
+      if (entry.level <= 0) {
+        searchToc(entry.children, index);
+        continue;
+      }
       if (entry.level > texts.length) {
         texts.add(entry.text);
       } else {
@@ -96,9 +101,9 @@ Future<String> refFromIndex(
 
 Future<String> refFromPageNumber(
   int pageNumber,
-  List<PdfOutlineNode>? outline,
-  [String? bookTitle,
-  ]) async {
+  List<PdfOutlineNode>? outline, [
+  String? bookTitle,
+]) async {
   if (outline == null) return "";
 
   List<String> texts = [];

@@ -29,6 +29,7 @@ import 'package:otzaria/printing/printing_screen.dart';
 import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
+import 'package:otzaria/text_book/view/alt_toc_sidebar_view.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/page_converter.dart';
@@ -566,7 +567,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     // יוצרים את בקר הלשוניות עם האינדקס ההתחלתי שקבענו
     tabController = TabController(
-      length: 2, // יש 2 לשוניות: ניווט וחיפוש
+      length: 3, // יש 3 לשוניות: ניווט, חיפוש וכותרות
       vsync: this,
       initialIndex: initialIndex,
     );
@@ -2497,6 +2498,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                                 child: Text('חיפוש',
                                     style: TextStyle(fontSize: 12)),
                               ),
+                              Tab(
+                                icon:
+                                    Icon(FluentIcons.list_24_regular, size: 18),
+                                iconMargin: EdgeInsets.only(bottom: 2),
+                                height: 48,
+                                child: Text('כותרות',
+                                    style: TextStyle(fontSize: 12)),
+                              ),
                             ],
                             labelColor: Theme.of(context).colorScheme.primary,
                             unselectedLabelColor: Theme.of(context)
@@ -2567,6 +2576,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                           },
                         },
                         child: _buildSearchView(context, state),
+                      ),
+                      AltTocSidebarView(
+                        book: widget.tab.book,
+                        closeLeftPaneCallback: () => context
+                            .read<TextBookBloc>()
+                            .add(const ToggleLeftPane(false)),
+                        scrollController: state.scrollController,
                       ),
                     ],
                   ),

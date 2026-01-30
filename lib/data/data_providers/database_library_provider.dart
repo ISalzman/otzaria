@@ -9,6 +9,8 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/migration/core/models/category.dart' as db_models;
 import 'package:otzaria/migration/core/models/book.dart' as db_models;
 import 'package:otzaria/migration/core/models/toc_entry.dart' as db_models;
+import 'package:otzaria/migration/core/models/alt_toc_structure.dart';
+import 'package:otzaria/migration/core/models/alt_toc_entry.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/utils/docx_to_otzaria.dart';
@@ -801,7 +803,158 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
   }
 
-  /// Scans a custom folder and adds all books as external books to the database.
+  /// Get all alternative TOC structures available in the database for a specific book
+  Future<List<AltTocStructure>> getAlternativeStructuresForBook(
+      String bookTitle) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return [];
+    }
+
+    try {
+      final db = await _sqliteProvider.repository!.database.database;
+
+      // First get the book ID
+      final bookResults = await db.query(
+        'book',
+        columns: ['id'],
+        where: 'title = ?',
+        whereArgs: [bookTitle],
+      );
+
+      if (bookResults.isEmpty) {
+        return [];
+      }
+
+      final bookId = bookResults.first['id'] as int;
+
+      // Then get the structures
+      final results = await db.query(
+        'alt_toc_structure',
+        where: 'bookId = ?',
+        whereArgs: [bookId],
+      );
+
+      return results.map((json) => AltTocStructure.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint(
+          '⚠️ Error getting alternative structures for book "$bookTitle": $e');
+      return [];
+    }
+  }
+
+  /// Get all alternative TOC structures available in the database
+  Future<List<AltTocStructure>> getAlternativeStructures() async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return [];
+    }
+
+    try {
+      final db = await _sqliteProvider.repository!.database.database;
+      final results = await db.query('alt_toc_structure');
+
+      return results.map((json) => AltTocStructure.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('⚠️ Error getting alternative structures: $e');
+      return [];
+    }
+  }
+
+  /// Get all alternative TOC entries for a specific structure
+  Future<List<AltTocEntry>> getAllAlternativeEntries(int structureId) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return [];
+    }
+
+    try {
+      final db = await _sqliteProvider.repository!.database.database;
+
+      // We join with tocText to get the actual text
+      // Order by ID to ensure consistent order (or maybe level/parentId)
+      final results = await db.rawQuery('''
+        SELECT e.*, t.text
+        FROM alt_toc_entry e
+        JOIN tocText t ON e.textId = t.id
+        WHERE e.structureId = ?
+        ORDER BY e.id
+      ''', [structureId]);
+
+      return results.map((json) => AltTocEntry.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('⚠️ Error getting all alternative entries: $e');
+      return [];
+    }
+  }
+
+  /// Get links (books/lines) associated with a specific alternative TOC entry
+  Future<List<Link>> getLinksForAltTocEntry(
+      int structureId, int altTocEntryId) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return [];
+    }
+
+    try {
+      final db = await _sqliteProvider.repository!.database.database;
+
+      // Join line_alt_toc -> line -> book
+      final results = await db.rawQuery('''
+        SELECT 
+          b.title as bookTitle,
+          l.lineIndex,
+          l.heRef
+        FROM line_alt_toc lat
+        JOIN line l ON lat.lineId = l.id
+        JOIN book b ON l.bookId = b.id
+        WHERE lat.structureId = ? AND lat.altTocEntryId = ?
+        ORDER BY b.title, l.lineIndex
+      ''', [structureId, altTocEntryId]);
+
+      return results.map((row) {
+        final bookTitle = row['bookTitle'] as String;
+        final lineIndex = row['lineIndex'] as int;
+
+        return Link(
+          heRef: row['heRef'] as String? ?? '$bookTitle ${lineIndex + 1}',
+          index1: 0, // Not relevant here
+          path2: bookTitle,
+          index2: lineIndex + 1, // 1-based index for UI
+          connectionType: 'alt_toc',
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('⚠️ Error getting links for alt toc entry: $e');
+      return [];
+    }
+  }
+
+  /// Get the alternative TOC entry associated with a specific book line
+  Future<int?> getAltTocEntryForLine(
+      String bookTitle, int lineIndex, int structureId) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return null;
+    }
+
+    try {
+      final db = await _sqliteProvider.repository!.database.database;
+
+      final results = await db.rawQuery('''
+        SELECT lat.altTocEntryId
+        FROM line_alt_toc lat
+        JOIN line l ON lat.lineId = l.id
+        JOIN book b ON l.bookId = b.id
+        WHERE b.title = ? AND l.lineIndex = ? AND lat.structureId = ?
+        LIMIT 1
+      ''', [bookTitle, lineIndex, structureId]);
+
+      if (results.isNotEmpty) {
+        return results.first['altTocEntryId'] as int;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ Error getting alt toc entry for line: $e');
+      return null;
+    }
+  }
+
   /// This is called when a new custom folder is added.
   ///
   /// [folderPath] - The full path to the folder to scan
