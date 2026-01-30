@@ -1121,7 +1121,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         border: Border(
@@ -1140,9 +1140,23 @@ class _AboutScreenState extends State<AboutScreen> {
 
           return Row(
             children: [
-              Expanded(child: footerItems[0]),
-              Expanded(child: footerItems[1]),
-              Expanded(child: footerItems[2]),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: footerItems[0],
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: footerItems[1],
+                ),
+              ),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: footerItems[2],
+                ),
+              ),
             ],
           );
         },
@@ -1155,7 +1169,9 @@ class _AboutScreenState extends State<AboutScreen> {
     required String value,
     VoidCallback? onHistoryTap,
   }) {
-    return Row(
+    final bool isButton = onHistoryTap != null;
+
+    Widget content = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
@@ -1169,21 +1185,51 @@ class _AboutScreenState extends State<AboutScreen> {
           child: Text(
             value,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
-        if (onHistoryTap != null) ...[
-          const SizedBox(width: 6),
-          IconButton(
-            tooltip: 'יומן שינויים',
-            icon: const Icon(FluentIcons.history_20_regular),
-            iconSize: 18,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-            onPressed: onHistoryTap,
-          ),
-        ],
       ],
     );
+
+    if (isButton) {
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onHistoryTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.3),
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Tooltip(
+              message: 'הצג יומן שינויים',
+              child: content,
+            ),
+          ),
+        ),
+      );
+    } else {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: content,
+      );
+    }
   }
 }
