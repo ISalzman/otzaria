@@ -105,24 +105,57 @@ class _CustomTitleBarState extends State<CustomTitleBar>
             return SizedBox(
               height: 40, // גובה הכותרת
               child: Stack(
+                clipBehavior: Clip.none,
                 children: [
                   Container(
+                    clipBehavior: Clip.none,
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.surface,
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .outlineVariant
-                              .withValues(alpha: 0.6),
-                          width: 1,
-                        ),
-                      ),
+                      border: (navState.currentScreen == Screen.reading ||
+                              navState.currentScreen == Screen.search)
+                          ? null
+                          : Border(
+                              bottom: BorderSide(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant
+                                    .withValues(alpha: 0.6),
+                                width: 1,
+                              ),
+                            ),
                     ),
                     child: Row(
                       children: [
                         // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים
-                        _buildActionButtons(context, settingsState),
+                        SizedBox(
+                          height: 40,
+                          child: Stack(
+                            children: [
+                              Center(
+                                child:
+                                    _buildActionButtons(context, settingsState),
+                              ),
+                              if (navState.currentScreen == Screen.reading ||
+                                  navState.currentScreen == Screen.search)
+                                Positioned(
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: Align(
+                                    alignment: AlignmentDirectional.bottomStart,
+                                    child: Container(
+                                      width: 74,
+                                      height: 1,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .outlineVariant
+                                          .withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
 
                         // תוכן הכותרת (טאבים או כותרת רגילה)
                         Expanded(
@@ -248,8 +281,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                 style: _kIconButtonStyle.copyWith(
                   foregroundColor: WidgetStatePropertyAll(
                       Theme.of(context).colorScheme.onSurfaceVariant),
-                  backgroundColor: WidgetStatePropertyAll(
-                      Theme.of(context).colorScheme.surfaceContainerHighest),
                 ),
               ),
             ),
@@ -359,8 +390,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                 style: _kIconButtonStyle.copyWith(
                   foregroundColor: WidgetStatePropertyAll(
                       Theme.of(context).colorScheme.onSurfaceVariant),
-                  backgroundColor: WidgetStatePropertyAll(
-                      Theme.of(context).colorScheme.surfaceContainerHighest),
                 ),
               ),
             ),
@@ -710,8 +739,8 @@ class _TabBackgroundPainter extends CustomPainter {
 
     final path = Path();
     final topRadius = 8.0;
-    final bottomRadius = 12.0;
-    final bottomOffset = 6.0;
+    final bottomRadius = 15.0;
+    final bottomOffset = 5.0;
 
     path.moveTo(-bottomRadius, size.height + bottomOffset);
 

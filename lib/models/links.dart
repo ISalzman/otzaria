@@ -39,7 +39,8 @@ class Link {
   });
 
   /// Returns the content of the link as a [Future] of [String].
-  Future<String> get content => LibraryProviderManager.instance.getLinkContent(this);
+  Future<String> get content =>
+      LibraryProviderManager.instance.getLinkContent(this);
 
   /// Constructs a [Link] object from a JSON object.
   ///
@@ -98,14 +99,15 @@ Future<List<Link>> getLinksforIndexs(
   // יצירת Set לחיפוש מהיר יותר
   final indexSet = indexes.map((i) => i + 1).toSet();
   final commentatorsSet = commentatorsToShow.toSet();
-  
+
   // סינון אחד במקום לולאה עם סינונים מרובים
   final allLinks = links.where((link) {
     // בדיקות מהירות קודם
     if (!indexSet.contains(link.index1)) return false;
-    if (link.connectionType != "COMMENTARY" && link.connectionType != "TARGUM") return false;
+    final type = link.connectionType.toUpperCase();
+    if (type != "COMMENTARY" && type != "TARGUM") return false;
     if (link.path2.isEmpty || link.index2 <= 0) return false;
-    
+
     // בדיקה איטית יותר בסוף
     return commentatorsSet.contains(utils.getTitleFromPath(link.path2));
   }).toList();
@@ -121,11 +123,11 @@ Future<List<Link>> getLinksforIndexs(
     final commentatorComparison = commentatorsToShow
         .indexOf(utils.getTitleFromPath(a.path2))
         .compareTo(commentatorsToShow.indexOf(utils.getTitleFromPath(b.path2)));
-    
+
     if (commentatorComparison != 0) {
       return commentatorComparison;
     }
-    
+
     // אם אותו מפרש, מיון לפי heRef
     return a.heRef
         .replaceAll(' טו,', ' ,יה')
