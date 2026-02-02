@@ -38,6 +38,15 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return '$title|$category|$fileType';
   }
 
+  /// Helper method to build topics string from database book and category path
+  String _buildTopics(db_models.Book dbBook, String categoryPath) {
+    String topics = dbBook.topics.map((t) => t.name).join(', ');
+    if (topics.isEmpty && categoryPath.isNotEmpty) {
+      topics = categoryPath.split('/').where((p) => p.isNotEmpty).join(', ');
+    }
+    return topics;
+  }
+
   @override
   String get providerId => 'database';
 
@@ -114,6 +123,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
         final categoryName =
             dbBook.topics.isNotEmpty ? dbBook.topics.first.name : 'ללא קטגוריה';
 
+        final topics = _buildTopics(dbBook, categoryPath);
+
         final book = TextBook(
           title: dbBook.title,
           author: dbBook.authors.isNotEmpty ? dbBook.authors.first.name : null,
@@ -123,7 +134,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           pubPlace:
               dbBook.pubPlaces.isNotEmpty ? dbBook.pubPlaces.first.name : null,
           order: dbBook.order.toInt(),
-          topics: dbBook.topics.map((t) => t.name).join(', '),
+          topics: topics,
           fileType: dbBook.fileType,
           categoryPath: categoryPath,
         );
@@ -655,6 +666,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     final categoryPath = getCategoryPath(category);
 
+    final topics = _buildTopics(dbBook, categoryPath);
+
     if (dbBook.filePath != null && dbBook.fileType == 'pdf') {
       return PdfBook(
           title: dbBook.title,
@@ -671,7 +684,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
               ? dbBook.pubPlaces.first.name
               : bookMeta?['pubPlace'],
           order: dbBook.order.toInt(),
-          topics: dbBook.topics.map((t) => t.name).join(', '),
+          topics: topics,
           filePath: dbBook.filePath,
           categoryPath: categoryPath);
     }
@@ -692,7 +705,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
               ? dbBook.pubPlaces.first.name
               : bookMeta?['pubPlace'],
           order: dbBook.order.toInt(),
-          topics: dbBook.topics.map((t) => t.name).join(', '),
+          topics: topics,
           filePath: dbBook.filePath,
           categoryPath: categoryPath);
     }
@@ -711,7 +724,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
             ? dbBook.pubPlaces.first.name
             : bookMeta?['pubPlace'],
         order: dbBook.order.toInt(),
-        topics: dbBook.topics.map((t) => t.name).join(', '),
+        topics: topics,
         categoryPath: categoryPath);
   }
 

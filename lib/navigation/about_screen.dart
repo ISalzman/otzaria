@@ -132,7 +132,7 @@ class _AboutScreenState extends State<AboutScreen> {
         'url': 'https://github.com/Sivan22',
       },
       {
-        'name': 'rachelGrayover',
+        'name': 'ר. נבון',
         'url': 'https://github.com/rachelGrayover',
         'description': 'השקעה עצומה במעבר ל-SQLite'
       },
@@ -322,7 +322,7 @@ class _AboutScreenState extends State<AboutScreen> {
             'https://forum.otzaria.org/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1',
       },
       {
-        'name': 'איש צדיק מידי', // איש צדיק מידי
+        'name': 'א. צ. מ.', // איש צדיק מידי
         'url':
             'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99',
       },
@@ -335,6 +335,9 @@ class _AboutScreenState extends State<AboutScreen> {
         'name': 'י. ד.', // יאיר דניאל
         'url':
             'https://forum.otzaria.org/user/%D7%99%D7%90%D7%99%D7%A8-%D7%93%D7%A0%D7%99%D7%90%D7%9C',
+      },
+      {
+        'name': 'ש. נ.', // שילה נוי
       },
     ];
 
@@ -709,7 +712,7 @@ class _AboutScreenState extends State<AboutScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.volunteer_activism_outlined,
+              Icon(FluentIcons.heart_24_regular,
                   color: Colors.grey[600]!, size: 24),
               const SizedBox(width: 8),
               Text(

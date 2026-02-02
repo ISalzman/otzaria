@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -391,27 +392,23 @@ $detailsSection
       final String? sourceFolder = bookDetails['תיקיית המקור'];
       
       // קביעת כתובות המייל לפי מקור הספר
-      String emailAddress;
-      if (sourceFolder?.contains('sefaria') == true ||
-          sourceFolder?.contains('sefariaToOtzaria') == true) {
-        emailAddress = 'corrections@sefaria.org';
-      } else if (sourceFolder?.contains('wiki_jewish_books') == true) {
-        emailAddress = 'WikiJewishBooks@gmail.com';
-      } else if (sourceFolder?.contains('wikiSource') == true) {
-        // שליחה גם לאוצריא וגם ל-wikiSource
-        emailAddress = '$_fallbackMail,novartza@gmail.com';
-      } else if (sourceFolder?.contains('Pninim') == true) {
-        // שליחה גם לאוצריא וגם ל-Pninim
-        emailAddress = '$_fallbackMail,contact@pninim.org';
-      } else if (sourceFolder?.contains('Tashma') == true) {
-        // שליחה גם לאוצריא וגם ל-Tashma
-        emailAddress = '$_fallbackMail,jewishoffice@gmail.com';
-      } else if (sourceFolder?.contains('Ben-Yehuda') == true) {
-        // שליחה גם לאוצריא וגם ל-Ben-Yehuda
-        emailAddress = '$_fallbackMail,editor@benyehuda.org';
-      } else {
-        emailAddress = _fallbackMail;
-      }
+      // סדר המפתחות חשוב כדי לחקות את סדר הבדיקות המקורי
+      final sourceToEmailMap = {
+        'sefariaToOtzaria': 'corrections@sefaria.org',
+        'sefaria': 'corrections@sefaria.org',
+        'wiki_jewish_books': '$_fallbackMail,WikiJewishBooks@gmail.com', // שליחה גם לאוצריא וגם ל-WikiJewishBooks
+        'wikiSource': '$_fallbackMail,novartza@gmail.com', // שליחה גם לאוצריא וגם ל-wikiSource
+        'Pninim': '$_fallbackMail,contact@pninim.org', // שליחה גם לאוצריא וגם ל-Pninim
+        'Tashma': '$_fallbackMail,jewishoffice@gmail.com', // שליחה גם לאוצריא וגם ל-Tashma
+        'Ben-Yehuda': '$_fallbackMail,editor@benyehuda.org', // שליחה גם לאוצריא וגם ל-Ben-Yehuda
+      };
+
+      final emailAddress = sourceFolder == null
+          ? _fallbackMail
+          : sourceToEmailMap.entries
+                  .firstWhereOrNull((entry) => sourceFolder.contains(entry.key))
+                  ?.value ??
+              _fallbackMail;
 
       final emailUri = Uri(
         scheme: 'mailto',
