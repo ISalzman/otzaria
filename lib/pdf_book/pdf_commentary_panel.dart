@@ -976,8 +976,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         .where((link) =>
             link.index1 >= startLine &&
             link.index1 <= endLine &&
-            link.connectionType != "commentary" &&
-            link.connectionType != "targum" &&
+            link.connectionType.toUpperCase() != "COMMENTARY" &&
+            link.connectionType.toUpperCase() != "TARGUM" &&
             link.start == null &&
             link.end == null)
         .toList();

@@ -21,6 +21,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
@@ -29,6 +30,7 @@ import 'package:otzaria/printing/printing_screen.dart';
 import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
+import 'package:otzaria/text_book/view/alt_toc_sidebar_view.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/page_converter.dart';
@@ -560,16 +562,21 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     // וודא שהמיקום הנוכחי נשמר בטאב
 
-    // אם יש טקסט חיפוש (searchText), נתחיל בלשונית 'חיפוש' (שנמצאת במקום ה-1)
+    // אם יש טקסט חיפוש (searchText), נתחיל בלשונית 'חיפוש' (שנמצאת במקום ה-2)
     // אחרת, נתחיל בלשונית 'ניווט' (שנמצאת במקום ה-0)
-    final int initialIndex = widget.tab.searchText.isNotEmpty ? 1 : 0;
+    // הערה: נעדכן את זה שוב אחרי הבדיקה של כותרות
+    final int initialIndex = widget.tab.searchText.isNotEmpty ? 2 : 0;
 
     // יוצרים את בקר הלשוניות עם האינדקס ההתחלתי שקבענו
     tabController = TabController(
-      length: 2, // יש 2 לשוניות: ניווט וחיפוש
+      length: 3, // ברירת מחדל, יעודכן ב-_checkAltTitles
       vsync: this,
       initialIndex: initialIndex,
     );
+
+    // בדיקה האם יש כותרות חלופיות
+    _checkAltTitles();
+
     _sidebarWidth = ValueNotifier<double>(
         Settings.getValue<double>('key-sidebar-width', defaultValue: 300)!);
 
@@ -619,6 +626,39 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   /// טעינת הגדרות פר-ספר
+  Future<void> _checkAltTitles() async {
+    try {
+      final structures = await DatabaseLibraryProvider.instance
+          .getAlternativeStructuresForBook(widget.tab.book.title);
+
+      if (!mounted) return;
+
+      final hasAltTitles = structures.isNotEmpty;
+      if (hasAltTitles != _hasAltTitles) {
+        setState(() {
+          _hasAltTitles = hasAltTitles;
+
+          // Recreate tab controller with correct length
+          final int newLength = hasAltTitles ? 3 : 2;
+          // Adjust index if needed
+          int newIndex = tabController.index;
+          if (newIndex >= newLength) {
+            newIndex = newLength - 1;
+          }
+
+          tabController.dispose();
+          tabController = TabController(
+            length: newLength,
+            vsync: this,
+            initialIndex: newIndex,
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking alt titles: $e');
+    }
+  }
+
   Future<void> _loadPerBookSettings() async {
     final settingsBloc = context.read<SettingsBloc>();
     debugPrint(
@@ -690,6 +730,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       UiSnack.show('ההגדרות הפר-ספריות אופסו בהצלחה');
     }
   }
+
+  bool _hasAltTitles = true; // נניח שיש בהתחלה, נעדכן אחרי בדיקה
 
   @override
   void dispose() {
@@ -1246,7 +1288,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         tooltip: 'חיפוש',
         onPressed: () {
           context.read<TextBookBloc>().add(const ToggleLeftPane(true));
-          tabController.index = 1;
+          tabController.index = _hasAltTitles ? 2 : 1;
           textSearchFocusNode.requestFocus();
         },
       ),
@@ -1718,7 +1760,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       onPressed: () {
         context.read<TextBookBloc>().add(const ToggleLeftPane(true));
-        tabController.index = 1;
+        tabController.index = _hasAltTitles ? 2 : 1;
         textSearchFocusNode.requestFocus();
       },
       icon: const Icon(FluentIcons.search_24_regular),
@@ -2420,7 +2462,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 LogicalKeyboardKey.keyF,
               ): () {
                 context.read<TextBookBloc>().add(const ToggleLeftPane(true));
-                tabController.index = 1;
+                tabController.index = _hasAltTitles ? 2 : 1;
                 textSearchFocusNode.requestFocus();
               },
             },
@@ -2445,7 +2487,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       if (state.showLeftPane && !Platform.isAndroid && !_isInitialFocusDone) {
         final hasSearchText = state.searchText.trim().isNotEmpty;
         if (hasSearchText) {
-          if (tabController.index == 1) {
+          if (tabController.index == (_hasAltTitles ? 2 : 1)) {
             textSearchFocusNode.requestFocus();
           } else if (tabController.index == 0) {
             navigationSearchFocusNode.requestFocus();
@@ -2480,8 +2522,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                         Expanded(
                           child: TabBar(
                             controller: tabController,
-                            tabs: const [
-                              Tab(
+                            tabs: [
+                              const Tab(
                                 icon: Icon(FluentIcons.navigation_24_regular,
                                     size: 18),
                                 iconMargin: EdgeInsets.only(bottom: 2),
@@ -2489,7 +2531,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                                 child: Text('ניווט',
                                     style: TextStyle(fontSize: 12)),
                               ),
-                              Tab(
+                              if (_hasAltTitles)
+                                const Tab(
+                                  icon: Icon(FluentIcons.list_24_regular,
+                                      size: 18),
+                                  iconMargin: EdgeInsets.only(bottom: 2),
+                                  height: 48,
+                                  child: Text('כותרות',
+                                      style: TextStyle(fontSize: 12)),
+                                ),
+                              const Tab(
                                 icon: Icon(FluentIcons.search_24_regular,
                                     size: 18),
                                 iconMargin: EdgeInsets.only(bottom: 2),
@@ -2553,6 +2604,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     controller: tabController,
                     children: [
                       _buildTocViewer(context, state),
+                      if (_hasAltTitles)
+                        AltTocSidebarView(
+                          book: widget.tab.book,
+                          closeLeftPaneCallback: () => context
+                              .read<TextBookBloc>()
+                              .add(const ToggleLeftPane(false)),
+                          scrollController: state.scrollController,
+                        ),
                       CallbackShortcuts(
                         bindings: <ShortcutActivator, VoidCallback>{
                           LogicalKeySet(
@@ -2562,7 +2621,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                             context.read<TextBookBloc>().add(
                                   const ToggleLeftPane(true),
                                 );
-                            tabController.index = 1;
+                            // Adjust index based on whether alt titles are shown
+                            tabController.index = _hasAltTitles ? 2 : 1;
                             textSearchFocusNode.requestFocus();
                           },
                         },

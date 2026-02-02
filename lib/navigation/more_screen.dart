@@ -33,7 +33,7 @@ class _MoreScreenState extends State<MoreScreen>
       icon: Icons.calendar_month_outlined,
     ),
     const _TabInfo(
-      label: 'זכור ושמור',
+      label: 'שמור וזכור',
       icon: null,
       imageIcon: 'assets/icon/זכור ושמור.png',
     ),

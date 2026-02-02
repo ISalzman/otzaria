@@ -77,12 +77,11 @@ Future<String> refFromIndex(
       if (entry.index > index) {
         return;
       }
-
-      // Guard against invalid level values
+      // Guard against invalid level values, but still search children
       if (entry.level <= 0) {
+        searchToc(entry.children, index);
         continue;
       }
-
       if (entry.level > texts.length) {
         texts.add(entry.text);
       } else {

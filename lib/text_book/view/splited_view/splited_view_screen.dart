@@ -165,8 +165,8 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     // בדיקה אם יש קישורים מסוג מפרשים לאינדקסים הנראים
     return state.links.any((link) =>
         visibleIndicesSet.contains(link.index1 - 1) &&
-        (link.connectionType == "commentary" ||
-            link.connectionType == "targum"));
+        (link.connectionType.toUpperCase() == "COMMENTARY" ||
+            link.connectionType.toUpperCase() == "TARGUM"));
   }
 
   void _openPane() {

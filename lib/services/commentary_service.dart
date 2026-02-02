@@ -204,8 +204,8 @@ class CommentaryService {
 
     return links.any((link) {
       if (!indexSet.contains(link.index1)) return false;
-      if (link.connectionType != "commentary" &&
-          link.connectionType != "targum") {
+      final type = link.connectionType.toUpperCase();
+      if (type != "COMMENTARY" && type != "TARGUM") {
         return false;
       }
       return commentatorsSet.contains(utils.getTitleFromPath(link.path2));
