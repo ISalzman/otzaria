@@ -148,7 +148,7 @@ class _AboutScreenState extends State<AboutScreen> {
       {
         'name': 'NHLOCAL',
         'url': 'https://github.com/NHLOCAL/Shamor-Zachor',
-        'description': "מפתח 'זכור ושמור'"
+        'description': "מפתח 'שמור וזכור'"
       },
     ];
 

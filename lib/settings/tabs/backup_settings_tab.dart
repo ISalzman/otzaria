@@ -367,7 +367,7 @@ class _BackupSettingsTabState extends State<BackupSettingsTab> {
                     ),
                     _buildBackupOption(
                       icon: FluentIcons.book_24_regular,
-                      title: 'זכור ושמור',
+                      title: 'שמור וזכור',
                       subtitle: 'ספרים ומעקב לימוד',
                       settingKey: _keyBackupShamorZachor,
                     ),
