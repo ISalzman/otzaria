@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:flutter/foundation.dart';
+import 'package:search_engine/search_engine.dart';
 
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final SearchRepository _repository = SearchRepository();
@@ -92,8 +97,10 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         results: results,
         totalResults: totalResults,
         isLoading: false,
-        facetCounts: {}, // Start with empty facet counts, will be filled by individual requests
+        facetCounts: {}, // Start with empty facet counts, will be filled by full counts
       ));
+
+      unawaited(_refreshFacetCountsForAllBooks(event));
 
       // Prefetch disabled - too slow and causes duplicates
       // _prefetchCommonFacetCounts(event.query, event.customSpacing,
@@ -105,6 +112,47 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         isLoading: false,
       ));
     }
+  }
+
+  Future<void> _refreshFacetCountsForAllBooks(UpdateSearchQuery event) async {
+    final query = event.query;
+    if (query.isEmpty) return;
+
+    // קבל את כל הספרים מהספרייה כדי למפות title -> Book
+    final library = await DataRepository.instance.library;
+    final allBooks = library.getAllBooks();
+    final bookByTitle = <String, Book>{};
+    for (final book in allBooks) {
+      bookByTitle.putIfAbsent(book.title, () => book);
+    }
+
+    // עשה חיפוש גדול שמחזיר הרבה תוצאות (במקום לספור כל facet בנפרד)
+    // זה הרבה יותר מהיר מ-6876 ספירות נפרדות!
+    const int kFacetAggregationLimit = 50000;
+    final largeResults = await _repository.searchTexts(
+      query.replaceAll('"', '\\"'),
+      state.currentFacets,
+      kFacetAggregationLimit, // limit גדול כדי לקבל את רוב/כל התוצאות
+      fuzzy: state.fuzzy,
+      distance: state.distance,
+      order: ResultsOrder.relevance,
+      customSpacing: event.customSpacing,
+      alternativeWords: event.alternativeWords,
+      searchOptions: event.searchOptions,
+    );
+
+    // Ignore stale results if query changed while searching
+    if (state.searchQuery != query) {
+      return;
+    }
+
+    // ספור את התוצאות לפי ספר באמצעות FacetHelper
+    final aggregated = FacetHelper.buildFacetCountsFromResults(
+      largeResults,
+      bookByTitle,
+    );
+
+    add(UpdateFacetCounts(aggregated));
   }
 
   void _onUpdateFilterQuery(

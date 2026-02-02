@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
+import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
@@ -12,6 +13,7 @@ import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/view/enhanced_search_field.dart';
+import 'package:otzaria/search/view/advanced_search_controls.dart';
 import 'package:otzaria/search/view/full_text_settings_widgets.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -19,9 +21,10 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/widgets/indexing_warning.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
+import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/widgets/nikud_search_button.dart';
 
 /// דיאלוג חיפוש מתקדם - מכיל את כל פקדי החיפוש וההגדרות
 /// כשמבצעים חיפוש, הדיאלוג נסגר ונפתחת לשונית תוצאות
@@ -47,12 +50,9 @@ class _SearchDialogState extends State<SearchDialog> {
   late SearchingTab _searchTab;
   bool _showIndexWarning = false;
   bool _showHistoryDropdown = false;
-  final TextEditingController _alternativeWordController =
-      TextEditingController();
-  final Map<String, TextEditingController> _spacingControllers = {};
-  final Map<String, FocusNode> _spacingFocusNodes = {};
-  final FocusNode _alternativeWordFocusNode = FocusNode();
-  final List<String> _currentAlternatives = [];
+  final ValueNotifier<bool> _advancedControlsHasFocus = ValueNotifier(false);
+  late final VoidCallback _queryListener;
+  bool _searchWithNikud = false;
 
   @override
   void initState() {
@@ -84,20 +84,15 @@ class _SearchDialogState extends State<SearchDialog> {
     _showIndexWarning = indexingState is IndexingInProgress;
 
     // מאזין לשינויים בתיבת החיפוש כדי לעדכן את האפשרויות ולשמור את ההקלדה
-    _searchTab.queryController.addListener(() {
-      if (mounted) {
-        // שמירת ההקלדה הנוכחית
-        Settings.setValue<String>(
-          'key-last-search-typing',
-          _searchTab.queryController.text,
-        );
-        setState(() {
-          // עדכון התצוגה כשהטקסט או מיקום הסמן משתנים
-          // עדכון רשימת המילים החילופיות לפי המילה הנוכחית
-          _updateAlternativesList();
-        });
-      }
-    });
+    _queryListener = () {
+      if (!mounted) return;
+      // שמירת ההקלדה הנוכחית
+      Settings.setValue<String>(
+        'key-last-search-typing',
+        _searchTab.queryController.text,
+      );
+    };
+    _searchTab.queryController.addListener(_queryListener);
 
     // בקשת פוקוס לתיבת החיפוש
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -119,169 +114,116 @@ class _SearchDialogState extends State<SearchDialog> {
     );
   }
 
-  // שמירת חיפוש להיסטוריה (מקסימום 5)
-  void _saveSearchToHistory(String query) {
-    // שמירה כ-String מופרד בפסיקים
-    final historyString = Settings.getValue<String>('key-search-history') ?? '';
-    final history =
-        historyString.isEmpty ? <String>[] : historyString.split('|||');
-
-    // הסרת החיפוש אם הוא כבר קיים
-    history.remove(query);
-
-    // הוספה בתחילת הרשימה
-    history.insert(0, query);
-
-    // שמירת רק 5 אחרונים
-    if (history.length > 5) {
-      history.removeRange(5, history.length);
-    }
-
-    Settings.setValue<String>('key-search-history', history.join('|||'));
-  }
-
-  // קבלת היסטוריית חיפושים
-  List<String> _getSearchHistory() {
-    final historyString = Settings.getValue<String>('key-search-history') ?? '';
-    if (historyString.isEmpty) return [];
-    return historyString.split('|||');
-  }
-
-  // בניית מגירת ההיסטוריה
+  // בניית מגירת ההיסטוריה - מציג רק חיפושים מההיסטוריה הכללית
   Widget _buildHistoryDropdown() {
-    final history = _getSearchHistory();
-    if (history.isEmpty) return const SizedBox.shrink();
+    return BlocBuilder<HistoryBloc, HistoryState>(
+      builder: (context, state) {
+        // סינון רק חיפושים
+        final searchHistory =
+            state.history.where((item) => item.isSearch).toList();
 
-    return Container(
-      margin: const EdgeInsets.only(top: 4),
-      constraints: const BoxConstraints(maxHeight: 200),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        padding: EdgeInsets.zero,
-        itemCount: history.length,
-        separatorBuilder: (context, index) => Divider(
-          height: 1,
-          thickness: 1,
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-        ),
-        itemBuilder: (context, index) {
-          final query = history[index];
-          return ListTile(
-            dense: true,
-            leading: const Icon(FluentIcons.search_24_regular, size: 18),
-            title: Text(
-              query,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 14),
+        if (searchHistory.isEmpty) return const SizedBox.shrink();
+
+        // הגבלה ל-5 אחרונים
+        final recentSearches = searchHistory.take(5).toList();
+
+        return Container(
+          margin: const EdgeInsets.only(top: 4),
+          constraints: const BoxConstraints(maxHeight: 200),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color:
+                  Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
             ),
-            onTap: () {
-              _searchTab.queryController.text = query;
-              setState(() => _showHistoryDropdown = false);
-              _searchTab.searchFieldFocusNode.requestFocus();
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            itemCount: recentSearches.length,
+            separatorBuilder: (context, index) => Divider(
+              height: 1,
+              thickness: 1,
+              color:
+                  Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            ),
+            itemBuilder: (context, index) {
+              final bookmark = recentSearches[index];
+              final query = bookmark.book.title; // הטקסט הפשוט של החיפוש
+              final displayText =
+                  bookmark.ref; // הטקסט המעוצב (עם קידומות וסיומות)
+
+              return ListTile(
+                dense: true,
+                leading: const Icon(FluentIcons.search_24_regular, size: 18),
+                title: Text(
+                  displayText,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontSize: 14),
+                ),
+                onTap: () {
+                  // שחזור הטקסט הפשוט (ללא קידומות וסיומות)
+                  _searchTab.queryController.text = query;
+
+                  // שחזור האפשרויות הנוספות
+                  if (bookmark.searchOptions != null) {
+                    _searchTab.searchOptions.clear();
+                    _searchTab.searchOptions.addAll(bookmark.searchOptions!);
+                  }
+                  if (bookmark.alternativeWords != null) {
+                    _searchTab.alternativeWords.clear();
+                    _searchTab.alternativeWords
+                        .addAll(bookmark.alternativeWords!);
+                  }
+                  if (bookmark.spacingValues != null) {
+                    _searchTab.spacingValues.clear();
+                    _searchTab.spacingValues.addAll(bookmark.spacingValues!);
+                  }
+
+                  // עדכון התצוגה
+                  setState(() {
+                    _showHistoryDropdown = false;
+                  });
+
+                  _searchTab.searchFieldFocusNode.requestFocus();
+                },
+              );
             },
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
-  }
-
-  void _updateAlternativesList() {
-    final wordIndex = _getCurrentWordIndex();
-    debugPrint(
-      '🟣 Dialog _updateAlternativesList: wordIndex=$wordIndex, searchOptions keys=${_searchTab.searchOptions.keys.toList()}',
-    );
-    if (wordIndex != null) {
-      // עדכון הרשימה לפי המילים החילופיות השמורות ב-tab
-      final alternatives = _searchTab.alternativeWords[wordIndex] ?? [];
-      // רק אם הרשימה באמת השתנתה
-      if (_currentAlternatives.length != alternatives.length ||
-          !_currentAlternatives.every((alt) => alternatives.contains(alt))) {
-        _currentAlternatives.clear();
-        _currentAlternatives.addAll(alternatives);
-      }
-
-      // עדכון המרווח - עכשיו משתמשים במפה של controllers
-      final words = _searchTab.queryController.text.trim().split(
-            RegExp(r'\s+'),
-          );
-      final totalWords = words.where((w) => w.isNotEmpty).length;
-      if (wordIndex < totalWords - 1) {
-        final key = '$wordIndex-${wordIndex + 1}';
-        final controller = _getSpacingController(wordIndex, wordIndex + 1);
-        final spacing = _searchTab.spacingValues[key] ?? '';
-        if (controller.text != spacing) {
-          controller.text = spacing;
-        }
-      }
-    } else {
-      // אם אין מילה נוכחית, נקה את הרשימה
-      if (_currentAlternatives.isNotEmpty) {
-        _currentAlternatives.clear();
-      }
-    }
-  }
-
-  TextEditingController _getSpacingController(int leftIndex, int rightIndex) {
-    final key = '$leftIndex-$rightIndex';
-    if (!_spacingControllers.containsKey(key)) {
-      final controller = TextEditingController();
-      // טעינת הערך השמור אם קיים
-      if (_searchTab.spacingValues.containsKey(key)) {
-        controller.text = _searchTab.spacingValues[key]!;
-      }
-      _spacingControllers[key] = controller;
-    }
-    return _spacingControllers[key]!;
-  }
-
-  FocusNode _getSpacingFocusNode(int leftIndex, int rightIndex) {
-    final key = '$leftIndex-$rightIndex';
-    if (!_spacingFocusNodes.containsKey(key)) {
-      _spacingFocusNodes[key] = FocusNode();
-    }
-    return _spacingFocusNodes[key]!;
   }
 
   @override
   void dispose() {
-    _searchTab.queryController.removeListener(() {});
-    _alternativeWordController.dispose();
-    _alternativeWordFocusNode.dispose();
-    for (final controller in _spacingControllers.values) {
-      controller.dispose();
-    }
-    for (final focusNode in _spacingFocusNodes.values) {
-      focusNode.dispose();
-    }
+    _searchTab.queryController.removeListener(_queryListener);
+    _advancedControlsHasFocus.dispose();
     super.dispose();
   }
 
   void _performSearch() {
-    final query = _searchTab.queryController.text.trim();
+    String query = _searchTab.queryController.text.trim();
 
     if (query.isEmpty) {
       UiSnack.show('נא להזין טקסט לחיפוש');
       return;
     }
 
-    // שמירת החיפוש להיסטוריה
-    _saveSearchToHistory(query);
+    // הסרת ניקוד כברירת מחדל, אלא אם המשתמש לחץ על כפתור "עם ניקוד"
+    if (!_searchWithNikud && utils.hasNikud(query)) {
+      query = utils.removeVolwels(query);
+    }
 
-    // שמירת מצב החיפוש האחרון (לא את הטקסט - הוא כבר נשמר בזמן ההקלדה)
+    // שמירת מצב החיפוש האחרון
     final currentMode = _searchTab.searchBloc.state.configuration.searchMode;
     final modeString = currentMode == SearchMode.advanced
         ? 'advanced'
@@ -335,521 +277,6 @@ class _SearchDialogState extends State<SearchDialog> {
 
     // מעבר למסך העיון
     navigationBloc.add(const NavigateToScreen(Screen.search));
-  }
-
-  String? _getCurrentWord() {
-    final text = _searchTab.queryController.text;
-    final cursorPosition = _searchTab.queryController.selection.baseOffset;
-
-    if (text.isEmpty || cursorPosition < 0) return null;
-
-    final words = text.trim().split(RegExp(r'\s+'));
-    int currentPos = 0;
-
-    for (final word in words) {
-      if (word.isEmpty) continue;
-
-      final wordStart = text.indexOf(word, currentPos);
-      if (wordStart == -1) continue;
-      final wordEnd = wordStart + word.length;
-
-      if (cursorPosition >= wordStart && cursorPosition <= wordEnd) {
-        return word;
-      }
-
-      currentPos = wordEnd;
-    }
-
-    return null;
-  }
-
-  int? _getCurrentWordIndex() {
-    final text = _searchTab.queryController.text;
-    final cursorPosition = _searchTab.queryController.selection.baseOffset;
-
-    if (text.isEmpty || cursorPosition < 0) return null;
-
-    final words = text.trim().split(RegExp(r'\s+'));
-    int currentPos = 0;
-
-    for (int i = 0; i < words.length; i++) {
-      final word = words[i];
-      if (word.isEmpty) continue;
-
-      final wordStart = text.indexOf(word, currentPos);
-      if (wordStart == -1) continue;
-      final wordEnd = wordStart + word.length;
-
-      if (cursorPosition >= wordStart && cursorPosition <= wordEnd) {
-        return i;
-      }
-
-      currentPos = wordEnd;
-    }
-
-    return null;
-  }
-
-  Widget _buildSearchOptionsRow(
-    bool isEnabled,
-    String? currentWord,
-    int? wordIndex,
-  ) {
-    // סדר מחדש: קידומות דקדוקיות, סיומות דקדוקיות, קידומות, סיומות, כתיב מלא/חסר, חלק ממילה
-    const List<String> options = [
-      'קידומות דקדוקיות',
-      'סיומות דקדוקיות',
-      'קידומות',
-      'סיומות',
-      'כתיב מלא/חסר',
-      'חלק ממילה',
-    ];
-
-    // חישוב מספר המילים
-    final words = _searchTab.queryController.text.trim().split(RegExp(r'\s+'));
-    final totalWords = words.where((w) => w.isNotEmpty).length;
-
-    Widget buildCheckbox(String option) {
-      bool isChecked = false;
-
-      if (isEnabled && currentWord != null && wordIndex != null) {
-        final key = '${currentWord}_$wordIndex';
-        isChecked = _searchTab.searchOptions[key]?[option] ?? false;
-      }
-
-      return Opacity(
-        opacity: isEnabled ? 1.0 : 0.5,
-        child: InkWell(
-          onTap: () {
-            debugPrint(
-              '🔴 Dialog: Checkbox clicked! isEnabled=$isEnabled, currentWord=$currentWord, wordIndex=$wordIndex',
-            );
-            if (isEnabled && currentWord != null && wordIndex != null) {
-              setState(() {
-                final key = '${currentWord}_$wordIndex';
-                if (!_searchTab.searchOptions.containsKey(key)) {
-                  _searchTab.searchOptions[key] = {};
-                }
-                _searchTab.searchOptions[key]![option] = !isChecked;
-                debugPrint(
-                  '🔵 Dialog: Set search option $key[$option] = ${!isChecked}',
-                );
-                debugPrint(
-                  '🔵 Dialog: Total search options: ${_searchTab.searchOptions.keys.toList()}',
-                );
-              });
-            } else {
-              debugPrint('❌ Dialog: Cannot set option - conditions not met');
-            }
-          },
-          borderRadius: BorderRadius.circular(4),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-            child: Row(
-              children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: isEnabled && isChecked
-                          ? Theme.of(context).primaryColor
-                          : Colors.grey.shade600,
-                      width: 2,
-                    ),
-                    borderRadius: BorderRadius.circular(3),
-                    color: isEnabled && isChecked
-                        ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-                        : Colors.transparent,
-                  ),
-                  child: isEnabled && isChecked
-                      ? Icon(
-                          FluentIcons.checkmark_24_regular,
-                          size: 14,
-                          color: Theme.of(context).primaryColor,
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    option,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isEnabled
-                          ? Theme.of(context).textTheme.bodyMedium?.color
-                          : Colors.grey.shade500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final useSingleColumn = constraints.maxWidth < 600;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ניווט בין מילים - ממורכז
-              Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(FluentIcons.chevron_left_24_regular),
-                      onPressed: isEnabled && wordIndex != null && wordIndex > 0
-                          ? () {
-                              final text = _searchTab.queryController.text;
-                              int currentPos = 0;
-                              for (int i = 0; i < wordIndex - 1; i++) {
-                                final wordStart = text.indexOf(
-                                  words[i],
-                                  currentPos,
-                                );
-                                currentPos = wordStart + words[i].length;
-                              }
-                              final targetWordStart = text.indexOf(
-                                words[wordIndex - 1],
-                                currentPos,
-                              );
-                              _searchTab.queryController.selection =
-                                  TextSelection.collapsed(
-                                offset: targetWordStart +
-                                    words[wordIndex - 1].length ~/ 2,
-                              );
-                              setState(() {});
-                            }
-                          : null,
-                      tooltip: 'מילה קודמת',
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      child: Text(
-                        isEnabled ? currentWord! : 'בחר מילה',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: isEnabled
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.grey.shade500,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(FluentIcons.chevron_right_24_regular),
-                      onPressed: isEnabled &&
-                              wordIndex != null &&
-                              wordIndex < totalWords - 1
-                          ? () {
-                              final text = _searchTab.queryController.text;
-                              int currentPos = 0;
-                              for (int i = 0; i <= wordIndex; i++) {
-                                final wordStart = text.indexOf(
-                                  words[i],
-                                  currentPos,
-                                );
-                                currentPos = wordStart + words[i].length;
-                              }
-                              final targetWordStart = text.indexOf(
-                                words[wordIndex + 1],
-                                currentPos,
-                              );
-                              _searchTab.queryController.selection =
-                                  TextSelection.collapsed(
-                                offset: targetWordStart +
-                                    words[wordIndex + 1].length ~/ 2,
-                              );
-                              setState(() {});
-                            }
-                          : null,
-                      tooltip: 'מילה הבאה',
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // שורה עם תיבות טקסט ותיבות סימון
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // תיבות טקסט משמאל
-                  if (isEnabled) ...[
-                    SizedBox(
-                      width: 200,
-                      child: Column(
-                        children: [
-                          // תיבת מרווח - מעל (תמיד גלויה)
-                          Opacity(
-                            opacity: isEnabled && wordIndex != null ? 1.0 : 0.5,
-                            child: RtlTextField(
-                              enabled: isEnabled && wordIndex != null,
-                              focusNode: wordIndex != null
-                                  ? _getSpacingFocusNode(
-                                      wordIndex,
-                                      wordIndex + 1,
-                                    )
-                                  : null,
-                              decoration: InputDecoration(
-                                labelText: 'מרווח למילה הבאה',
-                                hintText: '0-30',
-                                border: const OutlineInputBorder(),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                suffixIcon: IconButton(
-                                  icon: const Icon(
-                                    FluentIcons.dismiss_24_regular,
-                                    size: 20,
-                                  ),
-                                  onPressed: isEnabled && wordIndex != null
-                                      ? () {
-                                          final key =
-                                              '$wordIndex-${wordIndex + 1}';
-                                          _searchTab.spacingValues.remove(key);
-                                          _searchTab
-                                              .spacingValuesChanged.value++;
-                                          _getSpacingController(
-                                            wordIndex,
-                                            wordIndex + 1,
-                                          ).clear();
-                                        }
-                                      : null,
-                                  tooltip: 'מחק מרווח',
-                                ),
-                              ),
-                              controller: wordIndex != null
-                                  ? _getSpacingController(
-                                      wordIndex,
-                                      wordIndex + 1,
-                                    )
-                                  : TextEditingController(),
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                                FilteringTextInputFormatter.allow(
-                                  RegExp(r'^([0-9]|[12][0-9]|30)$'),
-                                ),
-                              ],
-                              style: const TextStyle(fontSize: 14),
-                              textAlign: TextAlign.right,
-                              onChanged: (text) {
-                                if (isEnabled &&
-                                    wordIndex != null &&
-                                    text.trim().isNotEmpty) {
-                                  final key = '$wordIndex-${wordIndex + 1}';
-                                  _searchTab.spacingValues[key] = text.trim();
-                                  _searchTab.spacingValuesChanged.value++;
-                                }
-                              },
-                              onSubmitted: (text) {
-                                if (text.trim().isNotEmpty &&
-                                    wordIndex != null) {
-                                  // יש ערך - שמור אותו
-                                  final key = '$wordIndex-${wordIndex + 1}';
-                                  _searchTab.spacingValues[key] = text.trim();
-                                  _searchTab.spacingValuesChanged.value++;
-                                } else {
-                                  // תיבה ריקה - בצע חיפוש
-                                  _performSearch();
-                                }
-                              },
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // תיבת מילה חילופית - מתחת
-                          RtlTextField(
-                            controller: _alternativeWordController,
-                            focusNode: _alternativeWordFocusNode,
-                            decoration: InputDecoration(
-                              labelText: 'מילה חילופית',
-                              hintText: 'הקלד מילה...',
-                              border: const OutlineInputBorder(),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              prefixIcon: IconButton(
-                                icon: const Icon(
-                                  FluentIcons.add_24_regular,
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  final text =
-                                      _alternativeWordController.text.trim();
-                                  if (text.isNotEmpty && wordIndex != null) {
-                                    setState(() {
-                                      if (!_currentAlternatives.contains(
-                                        text,
-                                      )) {
-                                        _currentAlternatives.add(text);
-                                      }
-                                    });
-                                    if (!_searchTab.alternativeWords
-                                        .containsKey(wordIndex)) {
-                                      _searchTab.alternativeWords[wordIndex] =
-                                          [];
-                                    }
-                                    if (!_searchTab.alternativeWords[wordIndex]!
-                                        .contains(text)) {
-                                      _searchTab.alternativeWords[wordIndex]!
-                                          .add(text);
-                                    }
-                                    _searchTab.alternativeWordsChanged.value++;
-                                    _alternativeWordController.clear();
-                                  }
-                                },
-                              ),
-                            ),
-                            style: const TextStyle(fontSize: 14),
-                            textAlign: TextAlign.right,
-                            onSubmitted: (text) {
-                              final wordIndex = _getCurrentWordIndex();
-                              if (text.trim().isNotEmpty && wordIndex != null) {
-                                setState(() {
-                                  if (!_currentAlternatives
-                                      .contains(text.trim())) {
-                                    _currentAlternatives.add(text.trim());
-                                  }
-                                });
-                                if (!_searchTab.alternativeWords
-                                    .containsKey(wordIndex)) {
-                                  _searchTab.alternativeWords[wordIndex] = [];
-                                }
-                                if (!_searchTab.alternativeWords[wordIndex]!
-                                    .contains(text.trim())) {
-                                  _searchTab.alternativeWords[wordIndex]!
-                                      .add(text.trim());
-                                }
-                                _searchTab.alternativeWordsChanged.value++;
-                                _alternativeWordController.clear();
-                              } else {
-                                // תיבה ריקה - בצע חיפוש
-                                _performSearch();
-                              }
-                            },
-                          ),
-
-                          // רשימת מילים חילופיות
-                          if (_currentAlternatives.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              constraints: const BoxConstraints(maxHeight: 100),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: ListView.builder(
-                                shrinkWrap: true,
-                                itemCount: _currentAlternatives.length,
-                                itemBuilder: (context, index) {
-                                  return ListTile(
-                                    dense: true,
-                                    title: Text(
-                                      _currentAlternatives[index],
-                                      textAlign: TextAlign.right,
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                    trailing: IconButton(
-                                      icon: const Icon(
-                                        FluentIcons.delete_24_regular,
-                                        size: 16,
-                                      ),
-                                      onPressed: () {
-                                        final wordToRemove =
-                                            _currentAlternatives[index];
-                                        setState(() {
-                                          _currentAlternatives.removeAt(index);
-                                        });
-                                        if (wordIndex != null &&
-                                            _searchTab.alternativeWords
-                                                .containsKey(wordIndex)) {
-                                          _searchTab
-                                              .alternativeWords[wordIndex]!
-                                              .remove(wordToRemove);
-                                          if (_searchTab
-                                              .alternativeWords[wordIndex]!
-                                              .isEmpty) {
-                                            _searchTab.alternativeWords.remove(
-                                              wordIndex,
-                                            );
-                                          }
-                                          _searchTab
-                                              .alternativeWordsChanged.value++;
-                                        }
-                                      },
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                  ],
-
-                  // תיבות סימון - בשורות של 2
-                  Expanded(
-                    flex: 2,
-                    child: useSingleColumn
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: options.map(buildCheckbox).toList(),
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // שורה 1: קידומות דקדוקיות, סיומות דקדוקיות
-                              Row(
-                                children: [
-                                  Expanded(child: buildCheckbox(options[0])),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: buildCheckbox(options[1])),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              // שורה 2: קידומות, סיומות
-                              Row(
-                                children: [
-                                  Expanded(child: buildCheckbox(options[2])),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: buildCheckbox(options[3])),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              // שורה 3: כתיב מלא/חסר, חלק ממילה
-                              Row(
-                                children: [
-                                  Expanded(child: buildCheckbox(options[4])),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: buildCheckbox(options[5])),
-                                ],
-                              ),
-                            ],
-                          ),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
-    );
   }
 
   Widget _buildNavButton(
@@ -919,16 +346,10 @@ class _SearchDialogState extends State<SearchDialog> {
             // תפיסת Enter ברמת הדיאלוג - FocusScope תופס אירועים מכל הילדים
             if (event is KeyDownEvent &&
                 event.logicalKey == LogicalKeyboardKey.enter) {
-              // בדיקה אם הפוקוס בתיבת מילה חילופית או מרווח - תן להם לטפל
-              if (_alternativeWordFocusNode.hasFocus) {
-                return KeyEventResult.ignored; // תן ל-onSubmitted לטפל
+              // אם הפוקוס בתוך אפשרויות מתקדמות - תן לשדה לטפל
+              if (_advancedControlsHasFocus.value) {
+                return KeyEventResult.ignored;
               }
-              for (final focusNode in _spacingFocusNodes.values) {
-                if (focusNode.hasFocus) {
-                  return KeyEventResult.ignored; // תן ל-onSubmitted לטפל
-                }
-              }
-              // אחרת, בצע חיפוש
               _performSearch();
               return KeyEventResult.handled;
             }
@@ -1080,6 +501,26 @@ class _SearchDialogState extends State<SearchDialog> {
                                                   ),
                                                 ),
                                               ),
+                                              // כפתור "עם ניקוד" - מופיע רק כאשר יש ניקוד
+                                              if (utils.hasNikud(_searchTab
+                                                  .queryController.text))
+                                                Positioned(
+                                                  left: 96,
+                                                  top: 8,
+                                                  bottom: 8,
+                                                  child: Center(
+                                                    child: NikudSearchButton(
+                                                      isActive:
+                                                          _searchWithNikud,
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          _searchWithNikud =
+                                                              !_searchWithNikud;
+                                                        });
+                                                      },
+                                                    ),
+                                                  ),
+                                                ),
                                               // כפתור היסטוריה - ליד כפתור ה-X
                                               Positioned(
                                                 left: 48,
@@ -1150,16 +591,12 @@ class _SearchDialogState extends State<SearchDialog> {
                                     return const SizedBox.shrink();
                                   }
 
-                                  final currentWord = _getCurrentWord();
-                                  final wordIndex = _getCurrentWordIndex();
-                                  final hasWord = currentWord != null &&
-                                      currentWord.isNotEmpty &&
-                                      wordIndex != null;
-
-                                  return _buildSearchOptionsRow(
-                                    hasWord,
-                                    currentWord,
-                                    wordIndex,
+                                  return AdvancedSearchControls(
+                                    tab: _searchTab,
+                                    compactMode: true,
+                                    onEmptySubmit: _performSearch,
+                                    inputFocusNotifier:
+                                        _advancedControlsHasFocus,
                                   );
                                 },
                               ),

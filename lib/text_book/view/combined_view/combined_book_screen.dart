@@ -25,6 +25,8 @@ import 'package:otzaria/utils/text_with_inline_links.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/widgets/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
+import 'package:otzaria/text_book/view/selection/text_selection_manager.dart';
+import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
 
 class CombinedView extends StatefulWidget {
   const CombinedView({
@@ -66,6 +68,21 @@ class _CombinedViewState extends State<CombinedView> {
 
   bool _hasScrolledToInitialPosition = false;
 
+  // מנהל בחירת טקסט משופר
+  late final TextSelectionManager _selectionManager;
+
+  // מפתח גלובלי ל-SelectionArea כדי לכפות rebuild
+  final GlobalKey _selectionAreaKey = GlobalKey();
+
+  // listener לניקוי בחירה - נשמור אותו כדי להסיר אותו ב-dispose
+  void _onSelectionModeChanged() {
+    if (!_selectionManager.isInSelectionMode && mounted) {
+      // כשיוצאים ממצב בחירה, קוראים ל-setState כדי לכפות בנייה מחדש
+      // של SelectionArea ולנקות את הבחירה באופן ויזואלי.
+      setState(() {});
+    }
+  }
+
   /// פתיחת חלון הצד של המפרשים רק אם מוסיפים מפרשים ומפרשים מוגדרים בצד הטקסט (לא מתחת)
   void _openCommentatorsPane({required bool isAdding}) {
     if (isAdding &&
@@ -93,6 +110,12 @@ class _CombinedViewState extends State<CombinedView> {
     _focusNode = FocusNode();
     // שמירת ה-BLoC מראש
     _textBookBloc = context.read<TextBookBloc>();
+
+    // אתחול מנהל הבחירה
+    _selectionManager = TextSelectionManager();
+
+    // האזנה לשינויים במצב הבחירה כדי לכפות rebuild של SelectionArea
+    _selectionManager.addListener(_onSelectionModeChanged);
 
     // האזנה לשינויים במיקומי הפריטים כדי לאפס את הבחירה בגלילה
     widget.tab.positionsListener.itemPositions.addListener(_onScroll);
@@ -145,6 +168,8 @@ class _CombinedViewState extends State<CombinedView> {
     _savedSelectedIndex.dispose();
     _currentSelectedIndex.dispose();
     _focusNode.dispose();
+    _selectionManager.removeListener(_onSelectionModeChanged);
+    _selectionManager.dispose();
     super.dispose();
   }
 
@@ -696,6 +721,7 @@ $textWithBreaks
             _viewportHeight = constraints.maxHeight;
 
             return SelectionArea(
+              key: _selectionAreaKey,
               // SelectionArea אחד לכל הרשימה - מאפשר בחירה רציפה בין פסקאות
               contextMenuBuilder: (context, selectableRegionState) {
                 return const SizedBox.shrink();
@@ -703,7 +729,19 @@ $textWithBreaks
               onSelectionChanged: (selection) {
                 final plain = selection?.plainText;
                 if (plain == null || plain.trim().isEmpty) {
+                  // אם הבחירה נוקתה, יוצאים ממצב בחירה
+                  _selectionManager.exitSelectionMode();
                   return;
+                }
+
+                // כניסה למצב בחירה כשיש טקסט נבחר
+                if (!_selectionManager.isInSelectionMode) {
+                  // שימוש באינדקס הראשון הנראה במקום 0
+                  final positions =
+                      widget.tab.positionsListener.itemPositions.value;
+                  final firstVisibleIndex =
+                      positions.isNotEmpty ? positions.first.index : 0;
+                  _selectionManager.setAnchor(firstVisibleIndex);
                 }
 
                 // חשוב: כדי ש-Ctrl+C יעבוד מיד אחרי סימון טקסט עם העכבר
@@ -766,6 +804,10 @@ $textWithBreaks
                       LogicalKeyboardKey.meta,
                       LogicalKeyboardKey.keyC,
                     ): const _CopySelectedTextIntent(),
+                    // Esc לניקוי בחירה
+                    LogicalKeySet(
+                      LogicalKeyboardKey.escape,
+                    ): const ClearSelectionIntent(),
                   },
                   child: Actions(
                     actions: <Type, Action<Intent>>{
@@ -773,6 +815,24 @@ $textWithBreaks
                           CallbackAction<_CopySelectedTextIntent>(
                         onInvoke: (_) {
                           _copyFormattedText();
+                          return null;
+                        },
+                      ),
+                      CopySelectionTextIntent:
+                          CallbackAction<CopySelectionTextIntent>(
+                        onInvoke: (_) {
+                          _copyFormattedText();
+                          return null;
+                        },
+                      ),
+                      ClearSelectionIntent:
+                          CallbackAction<ClearSelectionIntent>(
+                        onInvoke: (_) {
+                          _selectionManager.exitSelectionMode();
+                          // ניקוי הבחירה ב-SelectionArea
+                          _savedSelectedText.value = null;
+                          _savedSelectedIndex.value = null;
+                          _currentSelectedIndex.value = null;
                           return null;
                         },
                       ),
@@ -865,9 +925,15 @@ $textWithBreaks
           decoration: backgroundColor != null
               ? BoxDecoration(color: backgroundColor)
               : null,
-          child: GestureDetector(
+          child: EnhancedGestureDetector(
             behavior: HitTestBehavior.translucent,
-            onTap: () {
+            onDragSelectionStart: () {
+              // כניסה למצב בחירה בגלל drag
+              if (!_selectionManager.isInSelectionMode) {
+                _selectionManager.setAnchor(index);
+              }
+            },
+            onSingleTap: () {
               _focusNode.requestFocus();
               // מאפס את הטקסט השמור כשלוחצים על הפסקה
               if (mounted) {
@@ -906,6 +972,24 @@ $textWithBreaks
                   });
                 }
               }
+            },
+            onDoubleTap: () {
+              // Double-click → בחירת פסקה שלמה
+              // הערה: SelectionArea של Flutter לא תומך בבחירה פרוגרמטית,
+              // לכן הפיצ'ר הזה לא מומש במלואו. SelectionArea יבצע את פעולת
+              // ברירת המחדל שלו (בחירת מילה). לבחירת פסקה, המשתמש יכול
+              // להשתמש ב-Shift+Click או Drag.
+              _focusNode.requestFocus();
+              _selectionManager.enterDoubleClickMode(index);
+            },
+            onShiftClick: () {
+              // Shift+Click → בחירת טווח
+              _focusNode.requestFocus();
+              if (!_selectionManager.hasAnchor()) {
+                // אם אין anchor, קובעים אותו
+                _selectionManager.setAnchor(index);
+              }
+              // SelectionArea יטפל בבחירת הטווח
             },
             onSecondaryTapDown: (details) {
               // שומר את האינדקס הנוכחי לשימוש בתפריט ההקשר

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -13,6 +14,7 @@ import 'package:otzaria/widgets/loading_indicator.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -95,12 +97,15 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 
   Future<void> _loadConfiguration() async {
     final state = context.read<TextBookBloc>().state;
-    if (state is! TextBookLoaded) return;
+    if (state is! TextBookLoaded) {
+      return;
+    }
 
     final config = PageShapeSettingsManager.loadConfiguration(
       state.book.title,
       heCategories: state.book.heCategories,
     );
+
     _columnVisibility =
         PageShapeSettingsManager.getColumnVisibility(state.book.title);
 
@@ -132,18 +137,15 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       Map<String, String?> config, List<Link> links) {
     // קבלת רשימת שמות המפרשים הזמינים
     final availableCommentators = links
-        .where((link) =>
-            link.connectionType.toUpperCase() == 'COMMENTARY' ||
-            link.connectionType.toUpperCase() == 'TARGUM')
+        .where((link) => LinkTypes.isCommentaryOrTargum(link.connectionType))
         .map((link) => utils.getTitleFromPath(link.path2))
         .toSet()
         .toList();
 
     return Map.fromEntries(config.entries.map((entry) {
-      return MapEntry(
-        entry.key,
-        _findMatchingCommentator(entry.value, availableCommentators),
-      );
+      final resolved =
+          _findMatchingCommentator(entry.value, availableCommentators);
+      return MapEntry(entry.key, resolved);
     }));
   }
 
@@ -191,7 +193,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
           children: [
             ElevatedButton.icon(
               onPressed: onSelectCommentator,
-              icon: const Icon(Icons.book_outlined),
+              icon: const Icon(FluentIcons.book_24_regular),
               label: const Text('בחר מפרש'),
               style: ElevatedButton.styleFrom(
                 padding:
@@ -201,7 +203,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
             const SizedBox(height: 12),
             TextButton.icon(
               onPressed: onHideColumn,
-              icon: const Icon(Icons.visibility_off_outlined, size: 18),
+              icon: const Icon(FluentIcons.eye_off_24_regular, size: 18),
               label: const Text('הסתר טור זה'),
               style: TextButton.styleFrom(
                 foregroundColor: Theme.of(context)
@@ -219,18 +221,20 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   /// פתיחת דיאלוג בחירת מפרש לטור ספציפי
   Future<void> _openCommentatorSelector(String column) async {
     final state = context.read<TextBookBloc>().state;
-    if (state is! TextBookLoaded) return;
+    if (state is! TextBookLoaded) {
+      return;
+    }
 
     // קבלת רשימת המפרשים הזמינים
     final availableCommentators = state.links
-        .where((link) =>
-            link.connectionType.toUpperCase() == 'COMMENTARY' ||
-            link.connectionType.toUpperCase() == 'TARGUM')
+        .where((link) => LinkTypes.isCommentaryOrTargum(link.connectionType))
         .map((link) => utils.getTitleFromPath(link.path2))
         .toSet()
         .toList();
 
-    if (availableCommentators.isEmpty) return;
+    if (availableCommentators.isEmpty) {
+      return;
+    }
 
     final result = await showDialog<bool>(
       context: context,
@@ -557,6 +561,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   @override
   void didUpdateWidget(_CommentaryPane oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // אם שם המפרש השתנה, טען מחדש את התוכן
     if (oldWidget.commentatorName != widget.commentatorName) {
       _loadCommentary();
     }
@@ -645,12 +650,11 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       final state = bloc.state;
 
       if (state is TextBookLoaded) {
-        // סינון קישורים לפי שם המפרש ולפי סוג הקישור (commentary/targum)
+        // סינון קישורים לפי שם המפרש ולפי סוג הקישור (COMMENTARY/TARGUM)
         _relevantLinks = state.links.where((link) {
           final linkTitle = utils.getTitleFromPath(link.path2);
           return linkTitle == widget.commentatorName &&
-              (link.connectionType.toUpperCase() == 'COMMENTARY' ||
-                  link.connectionType.toUpperCase() == 'TARGUM');
+              LinkTypes.isCommentaryOrTargum(link.connectionType);
         }).toList();
 
         // אם עדיין אין נתיב, ננסה לחלץ מקישורים (Fallback)
@@ -681,11 +685,26 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
                 normalizedPath.replaceAll('/', ', ').replaceAll('\\', ', ');
           }
         }
+
+        // אם עדיין אין נתיב, ננסה להשתמש בנתיב של הספר הראשי
+        if (categoryPath == null || categoryPath.isEmpty) {
+          // נסיון אחרון: להשתמש בקטגוריה של הספר הראשי
+          final mainBookCategory =
+              state.book.categoryPath ?? state.book.heCategories;
+          if (mainBookCategory != null && mainBookCategory.isNotEmpty) {
+            categoryPath = mainBookCategory;
+          }
+        }
       }
 
       final book =
           TextBook(title: widget.commentatorName, categoryPath: categoryPath);
       final bookContent = await book.text;
+
+      if (bookContent.isEmpty) {
+        throw Exception('Book text is empty for "${widget.commentatorName}"');
+      }
+
       final lines = bookContent.split('\n');
 
       if (!mounted) return;
@@ -810,11 +829,25 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               isMainText: false,
               bookTitle: widget.commentatorName, // לפתיחה בטאב נפרד
               highlightedIndices: _highlightedIndices, // הדגשות מקומיות
+              onCommentatorChanged: _reloadCommentary, // callback לרענון
             );
           },
         );
       },
     );
+  }
+
+  /// טעינה מחדש של המפרש (אחרי החלפה)
+  void _reloadCommentary() {
+    // נטען מחדש את ההגדרות מה-parent
+    if (mounted) {
+      // נאלץ את ה-parent לטעון מחדש את ההגדרות
+      final parentState =
+          context.findAncestorStateOfType<_PageShapeScreenState>();
+      if (parentState != null) {
+        parentState._loadConfiguration();
+      }
+    }
   }
 }
 
