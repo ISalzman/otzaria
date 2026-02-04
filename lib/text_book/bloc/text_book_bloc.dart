@@ -63,6 +63,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<CloseEditor>(_onCloseEditor);
     on<UpdateEditorText>(_onUpdateEditorText);
     on<AutoSaveDraft>(_onAutoSaveDraft);
+    on<UpdateLinks>(_onUpdateLinks);
   }
 
   Future<void> _onLoadContent(
@@ -132,8 +133,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         );
 
         if (preview != null && preview.isNotEmpty) {
-          debugPrint(
-              '⚡ Showing quick preview, loading full book in background...');
           content = preview;
 
           // Load full book in background
@@ -145,7 +144,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         }
       }
 
-      final links = await repository.getBookLinks(book);
+      // טעינת TOC בלבד - קישורים יטענו אחרי הצגת הספר
       final tableOfContents = await repository.getTableOfContents(book);
 
       // טעינת metadata של הספר אם חסר (למשל כשפותחים מחיפוש)
@@ -208,11 +207,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final removeNikud =
           defaultRemoveNikud && (removeNikudFromTanach || !isTanach);
 
-      final visibleLinks = _getVisibleLinks(
-        links: links,
-        visibleIndices: visibleIndices,
-        selectedIndex: null,
-      );
+      // קישורים מתחילים ריקים - יטענו ברקע אחרי הצגת הספר
+      const List<Link> emptyLinks = [];
+      const List<Link> emptyVisibleLinks = [];
 
       // Set up position listener with debouncing to prevent excessive updates
       // Remove old listener if exists
@@ -243,7 +240,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       emit(TextBookLoaded(
         book: book,
         content: content.split('\n'),
-        links: links,
+        links: emptyLinks,
         availableCommentators: availableCommentators,
         tableOfContents: tableOfContents,
         fontSize: event.fontSize,
@@ -267,7 +264,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         scrollController: scrollController,
         positionsListener: positionsListener,
         currentTitle: currentTitle,
-        visibleLinks: visibleLinks,
+        visibleLinks: emptyVisibleLinks,
         selectedTextForNote: state is TextBookLoaded
             ? (state as TextBookLoaded).selectedTextForNote
             : null,
@@ -278,6 +275,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             ? (state as TextBookLoaded).selectedTextEnd
             : null,
       ));
+      
+      // טעינת קישורים ברקע אחרי הצגת הספר
+      _loadLinksInBackground(book, visibleIndices);
+      
     } catch (e) {
       if (state is TextBookInitial) {
         final initial = state as TextBookInitial;
@@ -887,35 +888,70 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     List<String> commentators,
   ) async {
     try {
-      debugPrint('📚 Loading full book in background...');
-
       // Load full content
       final fullContent = await repository.getBookContent(book);
 
       // Check if still in the same book (user might have navigated away)
       if (isClosed || state is! TextBookLoaded) {
-        debugPrint('⚠️ Bloc closed or state changed, aborting background load');
         return;
       }
 
       final currentState = state as TextBookLoaded;
       if (currentState.book.title != book.title) {
-        debugPrint(
-            '⚠️ User navigated to different book, aborting background load');
         return;
       }
-
-      debugPrint('✅ Full book loaded, updating state...');
 
       // Update state with full content
       emit(currentState.copyWith(
         content: fullContent.split('\n'),
       ));
-
-      debugPrint('✅ State updated with full book content');
     } catch (e) {
-      debugPrint('❌ Error loading full book in background: $e');
-      // Don't emit error - user already has preview
+      // Silent fail - user already has preview
+    }
+  }
+
+  /// Loads links in the background after the book is displayed
+  void _loadLinksInBackground(TextBook book, List<int> visibleIndices) async {
+    try {
+      // Load all links for the book
+      final links = await repository.getBookLinks(book);
+
+      // Check if still in the same book
+      if (isClosed || state is! TextBookLoaded) {
+        return;
+      }
+
+      final currentState = state as TextBookLoaded;
+      if (currentState.book.title != book.title) {
+        return;
+      }
+
+      // Use event to update links
+      add(UpdateLinks(links));
+    } catch (e) {
+      // Silent fail - user already has the book displayed
+    }
+  }
+
+  void _onUpdateLinks(
+    UpdateLinks event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is TextBookLoaded) {
+      final currentState = state as TextBookLoaded;
+      final links = event.links.cast<Link>();
+      
+      // Calculate visible links
+      final visibleLinks = _getVisibleLinks(
+        links: links,
+        visibleIndices: currentState.visibleIndices,
+        selectedIndex: currentState.selectedIndex,
+      );
+
+      emit(currentState.copyWith(
+        links: links,
+        visibleLinks: visibleLinks,
+      ));
     }
   }
 

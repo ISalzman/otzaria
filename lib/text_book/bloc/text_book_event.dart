@@ -247,6 +247,16 @@ class AutoSaveDraft extends TextBookEvent {
   List<Object?> get props => [index, sectionId, markdown];
 }
 
+/// Event to update links after they're loaded in background
+class UpdateLinks extends TextBookEvent {
+  final List<dynamic> links;
+
+  const UpdateLinks(this.links);
+
+  @override
+  List<Object?> get props => [links];
+}
+
 class OpenFullFileEditor extends TextBookEvent {
   const OpenFullFileEditor();
 
