@@ -1,8 +1,7 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/settings/settings_repository.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/migration/core/models/toc_entry.dart'
+  as migration_models;
 
 /// מודל לניהול קבצי headings של PDF
 /// מקשר בין כותרות ב-PDF למספרי שורות בקובץ הטקסט
@@ -15,49 +14,98 @@ class PdfHeadings {
     required this.bookTitle,
   });
 
-  /// טוען קובץ headings JSON עבור ספר מסוים
-  static Future<PdfHeadings?> loadFromFile(String bookTitle) async {
+  /// טוען headings עבור ספר PDF מתוך ה-DB (טבלת tocEntry).
+  ///
+  /// הנתונים נשענים על השדות: bookId, textId, lineIndex.
+  static Future<PdfHeadings?> loadFromDatabase(String bookTitle) async {
     try {
-      // קבלת נתיב הספרייה
-      final libraryPath =
-          Settings.getValue<String>(SettingsRepository.keyLibraryPath);
-      if (libraryPath == null || libraryPath.isEmpty) {
-        debugPrint('Library path not set');
+      final provider = SqliteDataProvider.instance;
+      if (!provider.isInitialized) {
+        await provider.initialize();
+      }
+
+      final repository = provider.repository;
+      if (repository == null) {
+        debugPrint('Database repository not initialized');
         return null;
       }
 
-      // נתיב לקובץ ה-JSON בתיקיית links
-      final fileName = '${bookTitle}_headings.json';
-      final filePath =
-          '$libraryPath${Platform.pathSeparator}links${Platform.pathSeparator}$fileName';
-
-      final file = File(filePath);
-      if (!await file.exists()) {
-        debugPrint('Headings file not found: $filePath');
+      final book = await repository.getBookByTitle(bookTitle);
+      if (book == null) {
+        debugPrint('Book not found in DB for headings: $bookTitle');
         return null;
       }
 
-      final jsonString = await file.readAsString();
-      final Map<String, dynamic> jsonData = json.decode(jsonString);
-
-      // המרה ל-Map<String, int>
-      final Map<String, int> headingsMap = {};
-      jsonData.forEach((key, value) {
-        if (value is int) {
-          headingsMap[key] = value;
-        } else if (value is String) {
-          headingsMap[key] = int.tryParse(value) ?? 0;
-        }
-      });
-
-      return PdfHeadings(
-        headingsMap: headingsMap,
+      return await loadFromDatabaseByBookId(
+        book.id,
         bookTitle: bookTitle,
       );
     } catch (e) {
-      debugPrint('Error loading headings file for $bookTitle: $e');
+      debugPrint('Error loading headings from DB for $bookTitle: $e');
       return null;
     }
+  }
+
+  /// טוען headings עבור ספר PDF מתוך ה-DB לפי מזהה ספר.
+  static Future<PdfHeadings?> loadFromDatabaseByBookId(
+    int bookId, {
+    String? bookTitle,
+  }) async {
+    try {
+      final provider = SqliteDataProvider.instance;
+      if (!provider.isInitialized) {
+        await provider.initialize();
+      }
+
+      final repository = provider.repository;
+      if (repository == null) {
+        debugPrint('Database repository not initialized');
+        return null;
+      }
+
+      final tocEntries = await repository.getBookTocs(bookId);
+      final headingsMap = buildHeadingsMapFromTocEntries(tocEntries);
+
+      if (headingsMap.isEmpty) {
+        debugPrint('No PDF headings found in DB for bookId: $bookId');
+        return null;
+      }
+
+      String resolvedTitle = bookTitle ?? '';
+      if (resolvedTitle.isEmpty) {
+        final book = await repository.getBook(bookId);
+        resolvedTitle = book?.title ?? '';
+      }
+
+      return PdfHeadings(
+        headingsMap: headingsMap,
+        bookTitle: resolvedTitle,
+      );
+    } catch (e) {
+      debugPrint('Error loading headings from DB for bookId $bookId: $e');
+      return null;
+    }
+  }
+
+  /// בונה מפת headings מתוך רשומות TOC מה-DB.
+  static Map<String, int> buildHeadingsMapFromTocEntries(
+      List<migration_models.TocEntry> entries) {
+    final Map<String, int> headingsMap = {};
+
+    for (final entry in entries) {
+      final title = entry.text.trim();
+      final lineIndex = entry.lineIndex;
+      if (title.isEmpty || lineIndex == null) {
+        continue;
+      }
+
+      final existing = headingsMap[title];
+      if (existing == null || lineIndex < existing) {
+        headingsMap[title] = lineIndex;
+      }
+    }
+
+    return headingsMap;
   }
 
   /// מחזיר את מספר השורה בטקסט עבור כותרת מסוימת

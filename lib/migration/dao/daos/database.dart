@@ -167,7 +167,7 @@ class MyDatabase {
 
     return await openDatabase(
       path,
-      version: 3, // Incremented version to trigger migration for lineIndex
+      version: 5, // Incremented version to align book_file/db_meta schema
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onOpen: _onOpen,
@@ -219,6 +219,112 @@ class MyDatabase {
         // Column might already exist, ignore error
         debugPrint(
             '⚠️ Migration v2→v3: lineIndex column might already exist: $e');
+      }
+    }
+
+    if (oldVersion < 4) {
+      // Migration from version 3 to 4: Add book_file table
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS book_file (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bookId INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            data BLOB NOT NULL,
+            size INTEGER NOT NULL,
+            sha256 TEXT NOT NULL,
+            originalRelPath TEXT,
+            createdAt INTEGER NOT NULL,
+            FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE
+          );
+        ''');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_book_file_book ON book_file(bookId);');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_book_file_kind ON book_file(kind);');
+        await db.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_book_file_book_kind ON book_file(bookId, kind);');
+        await db.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_book_file_kind_sha ON book_file(kind, sha256);');
+        debugPrint('✅ Migration v3→v4: Added book_file table');
+      } catch (e) {
+        debugPrint('⚠️ Migration v3→v4: book_file table might already exist: $e');
+      }
+    }
+
+    if (oldVersion < 5) {
+      // Migration from version 4 to 5: Align book_file schema + add db_meta
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS book_file_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bookId INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            data BLOB NOT NULL,
+            size INTEGER NOT NULL,
+            sha256 TEXT NOT NULL,
+            originalRelPath TEXT,
+            createdAt INTEGER NOT NULL,
+            FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE
+          );
+        ''');
+
+        // Try to migrate data from legacy table if exists
+        try {
+          await db.execute('''
+            INSERT INTO book_file_new (bookId, kind, data, size, sha256, originalRelPath, createdAt)
+            SELECT bookId,
+                   'pdf' AS kind,
+                   data AS data,
+                   LENGTH(data) AS size,
+                   '' AS sha256,
+                   NULL AS originalRelPath,
+                   COALESCE(createdAt, 0) AS createdAt
+            FROM book_file;
+          ''');
+        } catch (_) {
+          try {
+            await db.execute('''
+              INSERT INTO book_file_new (bookId, kind, data, size, sha256, originalRelPath, createdAt)
+              SELECT bookId,
+                     'pdf' AS kind,
+                     content AS data,
+                     LENGTH(content) AS size,
+                     '' AS sha256,
+                     NULL AS originalRelPath,
+                     COALESCE(createAt, 0) AS createdAt
+              FROM book_file;
+            ''');
+          } catch (_) {
+            // Ignore if legacy table or columns do not exist
+          }
+        }
+
+        await db.execute('DROP TABLE IF EXISTS book_file;');
+        await db.execute('ALTER TABLE book_file_new RENAME TO book_file;');
+
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_book_file_book ON book_file(bookId);');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_book_file_kind ON book_file(kind);');
+        await db.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_book_file_book_kind ON book_file(bookId, kind);');
+        await db.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_book_file_kind_sha ON book_file(kind, sha256);');
+
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS db_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          );
+        ''');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_db_meta_key ON db_meta(key);');
+
+        debugPrint('✅ Migration v4→v5: Aligned book_file and added db_meta');
+      } catch (e) {
+        debugPrint(
+            '⚠️ Migration v4→v5: book_file/db_meta migration issue: $e');
       }
     }
 
@@ -369,6 +475,25 @@ class MyDatabase {
       'CREATE INDEX IF NOT EXISTS idx_book_order ON book(orderIndex);',
       'CREATE INDEX IF NOT EXISTS idx_book_source ON book(sourceId);',
 
+        // Book file table (PDF binary content)
+        '''
+        CREATE TABLE IF NOT EXISTS book_file (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bookId INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            data BLOB NOT NULL,
+            size INTEGER NOT NULL,
+            sha256 TEXT NOT NULL,
+            originalRelPath TEXT,
+            createdAt INTEGER NOT NULL,
+            FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE
+        );
+        ''',
+        'CREATE INDEX IF NOT EXISTS idx_book_file_book ON book_file(bookId);',
+          'CREATE INDEX IF NOT EXISTS idx_book_file_kind ON book_file(kind);',
+          'CREATE UNIQUE INDEX IF NOT EXISTS uq_book_file_book_kind ON book_file(bookId, kind);',
+          'CREATE UNIQUE INDEX IF NOT EXISTS uq_book_file_kind_sha ON book_file(kind, sha256);',
+
       // Book-publication place junction table
       '''
       CREATE TABLE IF NOT EXISTS book_pub_place (
@@ -481,6 +606,15 @@ class MyDatabase {
       );
       ''',
       'CREATE INDEX IF NOT EXISTS idx_connection_type_name ON connection_type(name);',
+
+        // DB meta table
+        '''
+        CREATE TABLE IF NOT EXISTS db_meta (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
+        ''',
+        'CREATE INDEX IF NOT EXISTS idx_db_meta_key ON db_meta(key);',
 
       // Links table
       '''
