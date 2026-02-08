@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
@@ -75,6 +77,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   final FocusNode _searchFieldFocusNode = FocusNode();
   final FocusNode _navigationFieldFocusNode = FocusNode();
   late final StreamSubscription<SettingsState> _settingsSub;
+
+  Future<Uint8List?>? _pdfBytesFuture;
 
   // Local UI state that syncs with Bloc
   int _rightPaneInitialTabIndex = 0;
@@ -173,6 +177,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     debugPrint('DEBUG: אתחול PDF טאב - דף התחלתי: ${widget.tab.pageNumber}');
 
+    if ((widget.tab.book.fileType ?? 'pdf').toLowerCase() == 'pdf') {
+      _pdfBytesFuture = _loadPdfBytesFromDb();
+    }
+
     // הגדרת ערכים התחלתיים מ-Settings
     final settingsBloc = context.read<SettingsBloc>();
     _settingsSub = settingsBloc.stream.listen((state) {
@@ -231,6 +239,140 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _loadPerBookSettings();
   }
 
+  Future<Uint8List?> _loadPdfBytesFromDb() async {
+    final provider = SqliteDataProvider.instance;
+    return provider.getPdfBytesFromDb(widget.tab.book);
+  }
+
+  PdfViewerParams _buildPdfViewerParams() {
+    return PdfViewerParams(
+      onDocumentLoadFinished: (documentRef, succeeded) {
+        if (!mounted) return;
+        _bloc.add(pdf_events.SetLoadingState(
+          isLoading: false,
+          succeeded: succeeded,
+        ));
+      },
+      backgroundColor: Colors
+          .white, // תמיד לבן - ה-ColorFilter יהפוך לשחור במצב כהה
+      maxScale: 10,
+      horizontalCacheExtent: 1,
+      verticalCacheExtent: 1,
+      onInteractionStart: (_) {
+        if (!(widget.tab.pinLeftPane.value ||
+            (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
+          widget.tab.showLeftPane.value = false;
+        }
+      },
+      viewerOverlayBuilder: (context, size, handleLinkTap) => [
+        // פס גלילה אנכי עם track מלא
+        PdfScrollbar(
+          controller: widget.tab.pdfViewerController,
+          orientation: ScrollbarOrientation.right,
+          trackThickness: 16.0,
+          thumbMinSize: 50.0,
+        ),
+        // פס גלילה אופקי דינמי
+        PdfHorizontalScrollbar(
+          controller: widget.tab.pdfViewerController,
+          trackThickness: 10.0,
+        ),
+      ],
+      loadingBannerBuilder: (context, bytesDownloaded, totalBytes) => Center(
+        child: CircularProgressIndicator(
+          value: totalBytes != null ? bytesDownloaded / totalBytes : null,
+          backgroundColor: Colors.grey,
+        ),
+      ),
+      linkWidgetBuilder: (context, link, size) => Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () async {
+            if (link.url != null) {
+              navigateToUrl(link.url!);
+            } else if (link.dest != null) {
+              widget.tab.pdfViewerController.goToDest(link.dest);
+            }
+          },
+          hoverColor: Colors.blue.withValues(alpha: 0.2),
+        ),
+      ),
+      pagePaintCallbacks:
+          textSearcher != null ? [textSearcher!.pageTextMatchPaintCallback] : null,
+      onDocumentChanged: (document) async {
+        if (document == null) {
+          widget.tab.documentRef.value = null;
+          widget.tab.outline.value = null;
+        }
+      },
+      onViewerReady: (document, controller) async {
+        // 0. יצירת textSearcher רק אחרי שה-controller מוכן
+        if (!mounted) return;
+        textSearcher = PdfTextSearcher(pdfController)
+          ..addListener(_onTextSearcherUpdated);
+        // 1. הגדרת המידע הראשוני מהמסמך
+        widget.tab.documentRef.value = controller.documentRef;
+        widget.tab.outline.value = await document.loadOutline();
+
+        // 1.1. שליחת אירוע DocumentReady ל-Bloc
+        // ה-Bloc יטפל גם בשחזור הזום (מהגדרות פר-ספר או מ-savedZoom)
+        _bloc.add(pdf_events.DocumentReady(
+          documentRef: controller.documentRef,
+          outline: widget.tab.outline.value,
+          totalPages: document.pages.length,
+        ));
+
+        // 2. עדכון הכותרת הנוכחית
+        final currentPage = widget.tab.pdfViewerController.isReady
+            ? (widget.tab.pdfViewerController.pageNumber ?? 1)
+            : 1;
+        final title = await refFromPageNumber(
+            currentPage, widget.tab.outline.value, widget.tab.book.title);
+        widget.tab.currentTitle.value = title;
+
+        // 2.5. עדכון מספר השורה בטקסט לפי הכותרת הראשונית
+        if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
+          final lineNumber =
+              widget.tab.pdfHeadings!.getLineNumberForHeading(title);
+          if (lineNumber != null) {
+            widget.tab.currentTextLineNumber = lineNumber;
+            debugPrint(
+                '✅ Initial currentTextLineNumber set to: $lineNumber for title: "$title"');
+          }
+        }
+
+        // 3. הפעלת החיפוש הראשוני (עכשיו עם מנגנון ניסיונות חוזרים)
+        _runInitialSearchIfNeeded();
+
+        // 4. הצגת חלונית הצד אם צריך
+        if (mounted &&
+            (widget.tab.showLeftPane.value || widget.tab.searchText.isNotEmpty)) {
+          widget.tab.showLeftPane.value = true;
+        }
+      },
+    );
+  }
+
+  Widget _buildPdfViewerFromFile() {
+    return PdfViewer.file(
+      widget.tab.book.path,
+      initialPageNumber: widget.tab.pageNumber,
+      passwordProvider: () => passwordDialog(context),
+      controller: widget.tab.pdfViewerController,
+      useProgressiveLoading: false,
+      params: _buildPdfViewerParams(),
+    );
+  }
+
+  Widget _buildPdfViewerFromBytes(Uint8List bytes) {
+    return PdfViewer.data(
+      bytes,
+      sourceName: widget.tab.book.title,
+      controller: widget.tab.pdfViewerController,
+      params: _buildPdfViewerParams(),
+    );
+  }
+
   /// טעינת הגדרות פר-ספר
   Future<void> _loadPerBookSettings() async {
     final settingsBloc = context.read<SettingsBloc>();
@@ -277,15 +419,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       debugPrint('Book title: ${widget.tab.book.title}');
       debugPrint('Book path: ${widget.tab.book.path}');
 
-      // טעינת headings
-      final headings = await PdfHeadings.loadFromFile(widget.tab.book.title);
+        // טעינת headings מה-DB
+        final headings =
+          await PdfHeadings.loadFromDatabase(widget.tab.book.title);
       if (headings != null) {
         widget.tab.pdfHeadings = headings;
         debugPrint('✅ Loaded ${headings.headingsMap.length} headings');
         debugPrint(
             'Sample headings: ${headings.headingsMap.entries.take(3).map((e) => '${e.key}: ${e.value}').join(', ')}');
       } else {
-        debugPrint('❌ Failed to load headings file');
+        debugPrint('❌ Failed to load headings from DB');
       }
 
       // טעינת links
@@ -537,151 +680,28 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                             ),
                             child: Stack(
                               children: [
-                                PdfViewer.file(
-                                  widget.tab.book.path,
-                                  initialPageNumber: widget.tab.pageNumber,
-                                  passwordProvider: () =>
-                                      passwordDialog(context),
-                                  controller: widget.tab.pdfViewerController,
-                                  useProgressiveLoading: false,
-                                  params: PdfViewerParams(
-                                    onDocumentLoadFinished:
-                                        (documentRef, succeeded) {
-                                      if (!mounted) return;
-                                      _bloc.add(pdf_events.SetLoadingState(
-                                        isLoading: false,
-                                        succeeded: succeeded,
-                                      ));
-                                    },
-                                    backgroundColor: Colors
-                                        .white, // תמיד לבן - ה-ColorFilter יהפוך לשחור במצב כהה
-                                    maxScale: 10,
-                                    horizontalCacheExtent: 1,
-                                    verticalCacheExtent: 1,
-                                    onInteractionStart: (_) {
-                                      if (!(widget.tab.pinLeftPane.value ||
-                                          (Settings.getValue<bool>(
-                                                  'key-pin-sidebar') ??
-                                              false))) {
-                                        widget.tab.showLeftPane.value = false;
-                                      }
-                                    },
-                                    viewerOverlayBuilder:
-                                        (context, size, handleLinkTap) => [
-                                      // פס גלילה אנכי עם track מלא
-                                      PdfScrollbar(
-                                        controller:
-                                            widget.tab.pdfViewerController,
-                                        orientation: ScrollbarOrientation.right,
-                                        trackThickness: 16.0,
-                                        thumbMinSize: 50.0,
-                                      ),
-                                      // פס גלילה אופקי דינמי
-                                      PdfHorizontalScrollbar(
-                                        controller:
-                                            widget.tab.pdfViewerController,
-                                        trackThickness: 10.0,
-                                      ),
-                                    ],
-                                    loadingBannerBuilder: (context,
-                                            bytesDownloaded, totalBytes) =>
-                                        Center(
-                                      child: CircularProgressIndicator(
-                                        value: totalBytes != null
-                                            ? bytesDownloaded / totalBytes
-                                            : null,
-                                        backgroundColor: Colors.grey,
-                                      ),
-                                    ),
-                                    linkWidgetBuilder: (context, link, size) =>
-                                        Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        onTap: () async {
-                                          if (link.url != null) {
-                                            navigateToUrl(link.url!);
-                                          } else if (link.dest != null) {
-                                            widget.tab.pdfViewerController
-                                                .goToDest(link.dest);
+                                _pdfBytesFuture == null
+                                    ? _buildPdfViewerFromFile()
+                                    : FutureBuilder<Uint8List?>(
+                                        future: _pdfBytesFuture,
+                                        builder: (context, snapshot) {
+                                          if (snapshot.connectionState ==
+                                              ConnectionState.waiting) {
+                                            return const Center(
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            );
                                           }
+
+                                          if (snapshot.hasData &&
+                                              snapshot.data != null) {
+                                            return _buildPdfViewerFromBytes(
+                                                snapshot.data!);
+                                          }
+
+                                          return _buildPdfViewerFromFile();
                                         },
-                                        hoverColor:
-                                            Colors.blue.withValues(alpha: 0.2),
                                       ),
-                                    ),
-                                    pagePaintCallbacks: textSearcher != null
-                                        ? [
-                                            textSearcher!
-                                                .pageTextMatchPaintCallback
-                                          ]
-                                        : null,
-                                    onDocumentChanged: (document) async {
-                                      if (document == null) {
-                                        widget.tab.documentRef.value = null;
-                                        widget.tab.outline.value = null;
-                                      }
-                                    },
-                                    onViewerReady:
-                                        (document, controller) async {
-                                      // 0. יצירת textSearcher רק אחרי שה-controller מוכן
-                                      if (!mounted) return;
-                                      textSearcher = PdfTextSearcher(
-                                          pdfController)
-                                        ..addListener(_onTextSearcherUpdated);
-                                      // 1. הגדרת המידע הראשוני מהמסמך
-                                      widget.tab.documentRef.value =
-                                          controller.documentRef;
-                                      widget.tab.outline.value =
-                                          await document.loadOutline();
-
-                                      // 1.1. שליחת אירוע DocumentReady ל-Bloc
-                                      // ה-Bloc יטפל גם בשחזור הזום (מהגדרות פר-ספר או מ-savedZoom)
-                                      _bloc.add(pdf_events.DocumentReady(
-                                        documentRef: controller.documentRef,
-                                        outline: widget.tab.outline.value,
-                                        totalPages: document.pages.length,
-                                      ));
-
-                                      // 2. עדכון הכותרת הנוכחית
-                                      final currentPage =
-                                          widget.tab.pdfViewerController.isReady
-                                              ? (widget.tab.pdfViewerController
-                                                      .pageNumber ??
-                                                  1)
-                                              : 1;
-                                      final title = await refFromPageNumber(
-                                          currentPage,
-                                          widget.tab.outline.value,
-                                          widget.tab.book.title);
-                                      widget.tab.currentTitle.value = title;
-
-                                      // 2.5. עדכון מספר השורה בטקסט לפי הכותרת הראשונית
-                                      if (widget.tab.pdfHeadings != null &&
-                                          title.isNotEmpty) {
-                                        final lineNumber = widget
-                                            .tab.pdfHeadings!
-                                            .getLineNumberForHeading(title);
-                                        if (lineNumber != null) {
-                                          widget.tab.currentTextLineNumber =
-                                              lineNumber;
-                                          debugPrint(
-                                              '✅ Initial currentTextLineNumber set to: $lineNumber for title: "$title"');
-                                        }
-                                      }
-
-                                      // 3. הפעלת החיפוש הראשוני (עכשיו עם מנגנון ניסיונות חוזרים)
-                                      _runInitialSearchIfNeeded();
-
-                                      // 4. הצגת חלונית הצד אם צריך
-                                      if (mounted &&
-                                          (widget.tab.showLeftPane.value ||
-                                              widget
-                                                  .tab.searchText.isNotEmpty)) {
-                                        widget.tab.showLeftPane.value = true;
-                                      }
-                                    },
-                                  ),
-                                ),
                                 // Loading and error indicators
                                 BlocBuilder<PdfBookBloc, PdfBookState>(
                                   buildWhen: (prev, curr) {

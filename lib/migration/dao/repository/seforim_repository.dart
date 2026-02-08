@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:logging/logging.dart';
 
 import '../../core/models/author.dart';
@@ -56,6 +57,23 @@ class SeforimRepository {
   bool _initialized = false;
 
   SeforimRepository(this._database);
+
+  /// מחזיר את תוכן ה-PDF הבינארי עבור ספר מהטבלה book_file.
+  ///
+  /// [bookId] - מזהה הספר בטבלת book.
+  /// מחזיר [Uint8List] או null אם לא נמצא.
+  Future<Uint8List?> getBookFileContent(int bookId) async {
+    final db = await _database.database;
+    final result = await db.rawQuery(
+      'SELECT data FROM book_file WHERE bookId = ? AND kind = ?',
+      [bookId, 'pdf'],
+    );
+    if (result.isEmpty) return null;
+    final content = result.first['data'];
+    if (content is Uint8List) return content;
+    if (content is List<int>) return Uint8List.fromList(content);
+    return null;
+  }
 
   /// Ensures the database is initialized before use
   Future<void> ensureInitialized() async {

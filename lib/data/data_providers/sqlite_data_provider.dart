@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/migration/core/models/book.dart' as migration;
@@ -194,6 +195,33 @@ class SqliteDataProvider {
       return rootEntries;
     } catch (e) {
       debugPrint('Error getting book TOC from database: $e');
+      return null;
+    }
+  }
+
+  /// Retrieves PDF bytes from the database (book_file) for a given PDF book.
+  /// Returns null if not found or DB not initialized.
+  Future<Uint8List?> getPdfBytesFromDb(PdfBook book) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+    if (!_isInitialized) return null;
+
+    try {
+      migration.Book? dbBook;
+      final filePath = book.filePath ?? book.path;
+
+      if (filePath.isNotEmpty) {
+        dbBook = await _repository.getExternalBookByFilePath(filePath);
+      }
+
+      dbBook ??= await _repository.getBookByTitle(book.title);
+
+      if (dbBook == null) return null;
+
+      return await _repository.getBookFileContent(dbBook.id);
+    } catch (e) {
+      debugPrint('Error getting PDF bytes from database: $e');
       return null;
     }
   }

@@ -109,8 +109,8 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       debugPrint('=== Loading PDF Headings and Links ===');
       debugPrint('Book title: ${book.title}');
 
-      // Load headings
-      final headings = await PdfHeadings.loadFromFile(book.title);
+      // Load headings from DB
+      final headings = await PdfHeadings.loadFromDatabase(book.title);
       if (headings != null) {
         debugPrint('✅ Loaded ${headings.headingsMap.length} headings');
       }
