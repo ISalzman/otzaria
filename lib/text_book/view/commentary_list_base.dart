@@ -697,7 +697,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                           ),
                           tooltip: _allExpanded
                               ? 'כווץ את כל המפרשים'
-                              : 'הצג את כל המפרשים',
+                              : 'הרחב את כל המפרשים',
                           onPressed: () {
                             setState(() {
                               _allExpanded = !_allExpanded;
@@ -773,7 +773,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         ),
                         tooltip: _allExpanded
                             ? 'כווץ את כל המפרשים'
-                            : 'הצג את כל המפרשים',
+                            : 'הרחב את כל המפרשים',
                         onPressed: () {
                           setState(() {
                             _allExpanded = !_allExpanded;

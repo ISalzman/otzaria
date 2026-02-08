@@ -34,6 +34,8 @@ class PdfCommentaryContent extends StatefulWidget {
 
 class _PdfCommentaryContentState extends State<PdfCommentaryContent> {
   late Future<String> content;
+  String _lastReportedQuery = '';
+  int? _lastReportedSearchCount;
 
   @override
   void initState() {
@@ -49,7 +51,25 @@ class _PdfCommentaryContentState extends State<PdfCommentaryContent> {
         oldWidget.link.index2 != widget.link.index2 ||
         oldWidget.link.heRef != widget.link.heRef) {
       content = widget.link.content;
+      _lastReportedQuery = '';
+      _lastReportedSearchCount = null;
     }
+  }
+
+  void _reportSearchCountIfNeeded(int count) {
+    final normalizedQuery = widget.searchQuery.trim();
+    if (_lastReportedQuery == normalizedQuery &&
+        _lastReportedSearchCount == count) {
+      return;
+    }
+
+    _lastReportedQuery = normalizedQuery;
+    _lastReportedSearchCount = count;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onSearchResultsCountChanged?.call(count);
+    });
   }
 
   @override
@@ -73,17 +93,9 @@ class _PdfCommentaryContentState extends State<PdfCommentaryContent> {
             if (widget.searchQuery.isNotEmpty) {
               final searchCount = TextRendererService.countSearchMatches(
                   text, widget.searchQuery);
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  widget.onSearchResultsCountChanged?.call(searchCount);
-                }
-              });
+              _reportSearchCountIfNeeded(searchCount);
             } else {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  widget.onSearchResultsCountChanged?.call(0);
-                }
-              });
+              _reportSearchCountIfNeeded(0);
             }
 
             return BlocBuilder<SettingsBloc, SettingsState>(

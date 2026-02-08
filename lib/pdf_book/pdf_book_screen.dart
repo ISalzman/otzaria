@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
@@ -253,8 +252,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           succeeded: succeeded,
         ));
       },
-      backgroundColor: Colors
-          .white, // תמיד לבן - ה-ColorFilter יהפוך לשחור במצב כהה
+      backgroundColor:
+          Colors.white, // תמיד לבן - ה-ColorFilter יהפוך לשחור במצב כהה
       maxScale: 10,
       horizontalCacheExtent: 1,
       verticalCacheExtent: 1,
@@ -297,8 +296,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           hoverColor: Colors.blue.withValues(alpha: 0.2),
         ),
       ),
-      pagePaintCallbacks:
-          textSearcher != null ? [textSearcher!.pageTextMatchPaintCallback] : null,
+      pagePaintCallbacks: textSearcher != null
+          ? [textSearcher!.pageTextMatchPaintCallback]
+          : null,
       onDocumentChanged: (document) async {
         if (document == null) {
           widget.tab.documentRef.value = null;
@@ -346,7 +346,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
         // 4. הצגת חלונית הצד אם צריך
         if (mounted &&
-            (widget.tab.showLeftPane.value || widget.tab.searchText.isNotEmpty)) {
+            (widget.tab.showLeftPane.value ||
+                widget.tab.searchText.isNotEmpty)) {
           widget.tab.showLeftPane.value = true;
         }
       },
@@ -419,8 +420,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       debugPrint('Book title: ${widget.tab.book.title}');
       debugPrint('Book path: ${widget.tab.book.path}');
 
-        // טעינת headings מה-DB
-        final headings =
+      // טעינת headings מה-DB
+      final headings =
           await PdfHeadings.loadFromDatabase(widget.tab.book.title);
       if (headings != null) {
         widget.tab.pdfHeadings = headings;

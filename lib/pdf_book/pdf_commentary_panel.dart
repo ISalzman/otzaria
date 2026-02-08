@@ -118,7 +118,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   List<Link> _orderedLinks = [];
   List<CommentaryGroup> _orderedGroups = [];
 
-  String _getLinkKey(Link link) => '${link.path2}_${link.index2}';
+  String _getLinkKey(Link link) =>
+      '${link.path2}_${link.index1}_${link.index2}';
 
   // Helper to determine relative index for highlighting
   int _getItemSearchIndex(Link link) {
@@ -179,13 +180,28 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   void _updateSearchResultsCount(Link link, int count) {
     if (!mounted) return;
 
-    final key = '${link.path2}_${link.index2}';
+    final key = _getLinkKey(link);
+    final currentValue = _searchResultsPerLink[key];
+    final pendingValue = _pendingCounts[key];
+    if (currentValue == count && pendingValue == count) {
+      return;
+    }
+
     _pendingCounts[key] = count;
 
     if (_searchUpdateDebounce?.isActive ?? false) return;
 
     _searchUpdateDebounce = Timer(const Duration(milliseconds: 150), () {
       if (!mounted) return;
+      final bool hasActualChange = _pendingCounts.entries.any(
+        (entry) => _searchResultsPerLink[entry.key] != entry.value,
+      );
+
+      if (!hasActualChange) {
+        _pendingCounts.clear();
+        return;
+      }
+
       setState(() {
         _searchResultsPerLink.addAll(_pendingCounts);
         _pendingCounts.clear();
@@ -496,10 +512,19 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                     : FluentIcons.arrow_expand_all_24_regular,
               ),
               tooltip:
-                  _allExpanded ? 'סגור את כל המפרשים' : 'פתח את כל המפרשים',
+                  _allExpanded ? 'כווץ את כל המפרשים' : 'הרחב את כל המפרשים',
               onPressed: () {
                 setState(() {
-                  _allExpanded = !_allExpanded;
+                  final nextExpanded = !_allExpanded;
+                  _allExpanded = nextExpanded;
+
+                  // החל על כל הקבוצות שכבר נצפו/נטענו כדי שהלחצן ישפיע מיידית
+                  for (final key in _expansionStates.keys.toList()) {
+                    _expansionStates[key] = nextExpanded;
+                  }
+                  for (final group in _orderedGroups) {
+                    _expansionStates[group.bookTitle] = nextExpanded;
+                  }
                 });
               },
             ),
@@ -1010,7 +1035,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   Widget _buildLinkTile(Link link) {
-    final keyStr = '${link.path2}_${link.index2}';
+    final keyStr = _getLinkKey(link);
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         return ctx.ContextMenuRegion(
@@ -1274,7 +1299,7 @@ class _CollapsibleCommentaryGroupState
                     const SizedBox(height: 4),
                     PdfCommentaryContent(
                       key: ValueKey(
-                          '${link.path2}_${link.index2}_${widget.tab.currentTextLineNumber}'),
+                          '${link.path2}_${link.index1}_${link.index2}_${widget.tab.currentTextLineNumber}'),
                       link: link,
                       fontSize: widget.fontSize,
                       openBookCallback: widget.openBookCallback,
