@@ -91,6 +91,15 @@ class UpdateCommentatorsFontSize extends SettingsEvent {
   List<Object?> get props => [commentatorsFontSize];
 }
 
+class UpdateLineHeight extends SettingsEvent {
+  final double lineHeight;
+
+  const UpdateLineHeight(this.lineHeight);
+
+  @override
+  List<Object?> get props => [lineHeight];
+}
+
 class UpdateShowOtzarHachochma extends SettingsEvent {
   final bool showOtzarHachochma;
 
