@@ -520,6 +520,7 @@ $textWithBreaks
                   searchText: searchText,
                   fontSize: widget.fontSize,
                   fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+                  lineHeight: settingsState.lineHeight,
                 ),
                 onOpenBook: widget.openBookCallback,
               );

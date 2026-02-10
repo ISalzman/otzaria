@@ -11,6 +11,8 @@ class SettingsState extends Equatable {
   final String fontFamily;
   final String commentatorsFontFamily;
   final double commentatorsFontSize;
+  final double
+      lineHeight; // מרווח בין שורות (1.0 = רגיל, 1.5 = מרווח וחצי, וכו')
   final bool showOtzarHachochma;
   final bool showHebrewBooks;
   final bool showExternalBooks;
@@ -47,6 +49,7 @@ class SettingsState extends Equatable {
     required this.fontFamily,
     required this.commentatorsFontFamily,
     required this.commentatorsFontSize,
+    required this.lineHeight,
     required this.showOtzarHachochma,
     required this.showHebrewBooks,
     required this.showExternalBooks,
@@ -86,6 +89,7 @@ class SettingsState extends Equatable {
       fontFamily: 'FrankRuhlCLM',
       commentatorsFontFamily: 'NotoRashiHebrew',
       commentatorsFontSize: 22,
+      lineHeight: 1.5,
       showOtzarHachochma: false,
       showHebrewBooks: false,
       showExternalBooks: false,
@@ -124,6 +128,7 @@ class SettingsState extends Equatable {
     String? fontFamily,
     String? commentatorsFontFamily,
     double? commentatorsFontSize,
+    double? lineHeight,
     bool? showOtzarHachochma,
     bool? showHebrewBooks,
     bool? showExternalBooks,
@@ -161,6 +166,7 @@ class SettingsState extends Equatable {
       commentatorsFontFamily:
           commentatorsFontFamily ?? this.commentatorsFontFamily,
       commentatorsFontSize: commentatorsFontSize ?? this.commentatorsFontSize,
+      lineHeight: lineHeight ?? this.lineHeight,
       showOtzarHachochma: showOtzarHachochma ?? this.showOtzarHachochma,
       showHebrewBooks: showHebrewBooks ?? this.showHebrewBooks,
       showExternalBooks: showExternalBooks ?? this.showExternalBooks,
@@ -203,6 +209,7 @@ class SettingsState extends Equatable {
         fontFamily,
         commentatorsFontFamily,
         commentatorsFontSize,
+        lineHeight,
         showOtzarHachochma,
         showHebrewBooks,
         showExternalBooks,

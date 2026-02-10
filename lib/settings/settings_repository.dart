@@ -15,6 +15,7 @@ class SettingsRepository {
   static const String keyCommentatorsFontFamily =
       'key-commentators-font-family';
   static const String keyCommentatorsFontSize = 'key-commentators-font-size';
+  static const String keyLineHeight = 'key-line-height';
   static const String keyShowOtzarHachochma = 'key-show-otzar-hachochma';
   static const String keyShowHebrewBooks = 'key-show-hebrew-books';
   static const String keyShowExternalBooks = 'key-show-external-books';
@@ -115,6 +116,10 @@ class SettingsRepository {
       'commentatorsFontSize': _settings.getValue<double>(
         keyCommentatorsFontSize,
         defaultValue: 22,
+      ),
+      'lineHeight': _settings.getValue<double>(
+        keyLineHeight,
+        defaultValue: 1.5,
       ),
       'showOtzarHachochma': _settings.getValue<bool>(
         keyShowOtzarHachochma,
@@ -311,6 +316,10 @@ class SettingsRepository {
 
   Future<void> updateCommentatorsFontSize(double value) async {
     await _settings.setValue(keyCommentatorsFontSize, value);
+  }
+
+  Future<void> updateLineHeight(double value) async {
+    await _settings.setValue(keyLineHeight, value);
   }
 
   Future<void> updateShowOtzarHachochma(bool value) async {
@@ -569,6 +578,7 @@ class SettingsRepository {
     await _settings.setValue(
         keyCommentatorsFontFamily, AppFonts.defaultCommentatorsFont);
     await _settings.setValue(keyCommentatorsFontSize, 22.0);
+    await _settings.setValue(keyLineHeight, 1.5);
     await _settings.setValue(keyShowOtzarHachochma, false);
     await _settings.setValue(keyShowHebrewBooks, false);
     await _settings.setValue(keyShowExternalBooks, false);

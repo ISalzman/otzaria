@@ -551,7 +551,8 @@ $detailsSection
           ? _fallbackMail
           : sourceToEmailMap.entries
                   .firstWhereOrNull(
-                    (entry) => normalizedSource.contains(entry.key.toLowerCase()),
+                    (entry) =>
+                        normalizedSource.contains(entry.key.toLowerCase()),
                   )
                   ?.value ??
               _fallbackMail;
@@ -657,7 +658,8 @@ $detailsSection
           currentLineNumber,
           state.book.tableOfContents,
         );
-        final bookDetails = await BookDetailsService().getBookDetails(state.book);
+        final bookDetails =
+            await BookDetailsService().getBookDetails(state.book);
 
         // ביצוע הפעולה שנבחרה
         if (result.action == ErrorReportAction.sendEmail ||

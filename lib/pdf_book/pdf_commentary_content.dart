@@ -108,6 +108,7 @@ class _PdfCommentaryContentState extends State<PdfCommentaryContent> {
                     currentSearchIndex: widget.currentSearchIndex,
                     fontSize: settingsState.commentatorsFontSize,
                     fontFamily: settingsState.commentatorsFontFamily,
+                    lineHeight: settingsState.lineHeight,
                   ),
                 );
               },

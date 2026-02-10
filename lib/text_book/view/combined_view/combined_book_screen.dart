@@ -432,8 +432,8 @@ class _CombinedViewState extends State<CombinedView> {
           label: const Text('דווח על טעות בספר'),
           icon: const Icon(FluentIcons.error_circle_24_regular),
           enabled: selectedText != null && selectedText.trim().isNotEmpty,
-          onSelected: (_) =>
-              _openErrorReportDialog(selectedText!, fallbackLineIndex: paragraphIndex),
+          onSelected: (_) => _openErrorReportDialog(selectedText!,
+              fallbackLineIndex: paragraphIndex),
         ),
         const ctx.MenuDivider(),
         // העתקה
@@ -1146,6 +1146,7 @@ $textWithBreaks
                             searchMode: state.searchMode,
                             fontSize: widget.textSize,
                             fontFamily: settingsState.fontFamily,
+                            lineHeight: settingsState.lineHeight,
                           ),
                           onOpenBook: widget.openBookCallback,
                         );

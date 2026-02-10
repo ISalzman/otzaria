@@ -159,7 +159,9 @@ class BookDetailsService {
 
   bool _isAbsolutePath(String path) {
     if (path.startsWith('/')) return true;
-    if (path.length > 2 && path[1] == ':' && path[2] == Platform.pathSeparator) {
+    if (path.length > 2 &&
+        path[1] == ':' &&
+        path[2] == Platform.pathSeparator) {
       return true;
     }
     return false;
