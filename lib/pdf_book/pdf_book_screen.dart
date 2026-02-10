@@ -559,17 +559,30 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               _zoomOut,
           LogicalKeySet(LogicalKeyboardKey.control,
               LogicalKeyboardKey.numpadSubtract): _zoomOut,
-          LogicalKeySet(LogicalKeyboardKey.arrowRight): _goNextPage,
-          LogicalKeySet(LogicalKeyboardKey.arrowLeft): _goPreviousPage,
-          LogicalKeySet(LogicalKeyboardKey.arrowDown): _goNextPage,
-          LogicalKeySet(LogicalKeyboardKey.arrowUp): _goPreviousPage,
-          LogicalKeySet(LogicalKeyboardKey.pageDown): _goNextPage,
-          LogicalKeySet(LogicalKeyboardKey.pageUp): _goPreviousPage,
         },
         child: Focus(
           autofocus: !Platform.isAndroid,
           onKeyEvent: (node, event) {
+            debugPrint(
+                'PDF Screen onKeyEvent: logicalKey=${event.logicalKey}, physicalKey=${event.physicalKey}');
+            if (event is KeyDownEvent) {
+              debugPrint(
+                  'PDF Screen KeyDownEvent: logicalKey=${event.logicalKey}, physicalKey=${event.physicalKey}');
+              if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+                  event.logicalKey == LogicalKeyboardKey.pageDown) {
+                debugPrint('Calling _goNextPage()');
+                _goNextPage();
+                return KeyEventResult.handled;
+              }
+              if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
+                  event.logicalKey == LogicalKeyboardKey.pageUp) {
+                debugPrint('Calling _goPreviousPage()');
+                _goPreviousPage();
+                return KeyEventResult.handled;
+              }
+            }
             _handleGlobalKeyEvent(event);
+            debugPrint('PDF Screen onKeyEvent: returning ignored');
             return KeyEventResult.ignored;
           },
           child: Scaffold(
@@ -1082,10 +1095,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   void _goNextPage() {
+    debugPrint('_goNextPage called');
     _bloc.add(const pdf_events.GoToNextPage());
   }
 
   void _goPreviousPage() {
+    debugPrint('_goPreviousPage called');
     _bloc.add(const pdf_events.GoToPreviousPage());
   }
 

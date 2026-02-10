@@ -16,6 +16,7 @@ import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/widgets/dialogs.dart';
 import 'markdown_toolbar.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/settings/protected_settings_wrapper.dart';
 
 /// Full-screen dialog for editing text sections with split-pane interface
 ///
@@ -206,7 +207,12 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
         'שים לב: השינויים נשמרים מקומית בלבד, ובמקרה של עדכון הספרייה, השינויים ימחקו!');
   }
 
-  void _save() {
+  void _save() async {
+    // במצב מוגן, נדרוש סיסמה לפני שמירה
+    if (!await verifyPasswordForAction(context)) {
+      return;
+    }
+
     context.read<TextBookBloc>().add(SaveEditedSection(
           index: widget.sectionIndex,
           sectionId: widget.sectionId,

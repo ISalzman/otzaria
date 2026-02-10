@@ -118,6 +118,8 @@ void main() {
             personalNotesCollapsedByDefault:
                 mockSettings['personalNotesCollapsedByDefault'] as bool? ??
                     true,
+            protectedModeEnabled:
+                mockSettings['protectedModeEnabled'] as bool? ?? false,
           ),
         ],
         verify: (_) {

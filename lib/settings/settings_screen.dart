@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/settings/tabs/settings_tabs.dart';
+import 'package:otzaria/settings/protected_settings_wrapper.dart';
 
 class MySettingsScreen extends StatefulWidget {
   const MySettingsScreen({super.key});
@@ -12,7 +13,7 @@ class MySettingsScreen extends StatefulWidget {
 class _MySettingsScreenState extends State<MySettingsScreen>
     with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => false; // שינוי ל-false כדי שלא ישמור את המצב
 
   late TabController _tabController;
 
@@ -63,7 +64,8 @@ class _MySettingsScreenState extends State<MySettingsScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
-    return Scaffold(
+    return ProtectedSettingsWrapper(
+      child: Scaffold(
       appBar: AppBar(
         toolbarHeight: 72,
         title: TabBar(
@@ -100,6 +102,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
           AdvancedSettingsTab(),
         ],
       ),
+    ),
     );
   }
 }
