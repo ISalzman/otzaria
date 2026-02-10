@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
+import 'package:otzaria/settings/protected_settings_wrapper.dart';
 
 class InlineNoteEditor extends StatefulWidget {
   final PersonalNote? note;
@@ -47,7 +48,11 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
     super.dispose();
   }
 
-  void _handleSave() {
+  void _handleSave() async {
+    // במצב מוגן, נדרוש סיסמה לפני שמירה
+    if (!await verifyPasswordForAction(context)) {
+      return;
+    }
     final result = _controller.buildResult();
     if (result.contentPlain.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

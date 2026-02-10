@@ -15,6 +15,7 @@ import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
+import 'package:otzaria/settings/protected_mode_settings.dart';
 
 /// טאב הגדרות מתקדמות
 class AdvancedSettingsTab extends StatefulWidget {
@@ -94,6 +95,10 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
 
               // איפוס
               _buildResetSection(context),
+              const SizedBox(height: 16),
+
+              // מצב מוגן
+              const ProtectedModeSettings(),
             ],
           ),
         );
