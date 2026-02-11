@@ -149,12 +149,49 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       // טעינת metadata של הספר אם חסר (למשל כשפותחים מחיפוש)
       if (book.heCategories == null || book.heCategories!.isEmpty) {
-        final metadata = await FileSystemData.instance.metadata;
-        final bookMetadata = metadata[book.title];
-        if (bookMetadata != null) {
-          book.heCategories = bookMetadata['heCategories'];
-          book.author = bookMetadata['author'];
-          book.heEra = bookMetadata['heEra'];
+        debugPrint('📚 TextBookBloc: heCategories חסר עבור "${book.title}", מנסה לטעון...');
+        
+        // קודם ננסה לטעון ממסד הנתונים
+        final sqliteProvider = SqliteDataProvider.instance;
+        if (await sqliteProvider.databaseExists() && sqliteProvider.isInitialized) {
+          try {
+            final repository = sqliteProvider.repository;
+            if (repository != null) {
+              final dbBook = await repository.getBookByTitle(book.title);
+              if (dbBook != null) {
+                // בניית שרשרת הקטגוריות מה-DB
+                final category = await repository.getCategory(dbBook.categoryId);
+                if (category != null) {
+                  final categoryParts = <String>[];
+                  dynamic currentCategory = category;
+                  while (currentCategory != null) {
+                    categoryParts.insert(0, currentCategory.title);
+                    if (currentCategory.parentId != null) {
+                      currentCategory = await repository.getCategory(currentCategory.parentId!);
+                    } else {
+                      break;
+                    }
+                  }
+                  book.heCategories = categoryParts.join(', ');
+                  debugPrint('📚 TextBookBloc: נטען heCategories מה-DB: "${book.heCategories}"');
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('⚠️ TextBookBloc: שגיאה בטעינת heCategories מה-DB: $e');
+          }
+        }
+        
+        // אם לא הצלחנו לטעון מה-DB, ננסה מ-metadata
+        if (book.heCategories == null || book.heCategories!.isEmpty) {
+          final metadata = await FileSystemData.instance.metadata;
+          final bookMetadata = metadata[book.title];
+          if (bookMetadata != null) {
+            book.heCategories = bookMetadata['heCategories'];
+            book.author = bookMetadata['author'];
+            book.heEra = bookMetadata['heEra'];
+            debugPrint('📚 TextBookBloc: נטען heCategories מ-metadata: "${book.heCategories}"');
+          }
         }
 
         // אם עדיין אין קטגוריות, נחלץ אותן מהנתיב של הספר
@@ -172,9 +209,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
               final categories =
                   pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
               book.heCategories = categories.join(', ');
+              debugPrint('📚 TextBookBloc: נטען heCategories מהנתיב: "${book.heCategories}"');
             }
           }
         }
+        
+        if (book.heCategories == null || book.heCategories!.isEmpty) {
+          debugPrint('⚠️ TextBookBloc: לא הצלחנו לטעון heCategories עבור "${book.title}"');
+        }
+      } else {
+        debugPrint('📚 TextBookBloc: heCategories כבר קיים עבור "${book.title}": "${book.heCategories}"');
       }
 
       // Update current title if we're preserving state
