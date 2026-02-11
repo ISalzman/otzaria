@@ -1,5 +1,6 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
+import 'package:otzaria/settings/settings_repository.dart';
 
 /// סקריפט חירום לאיפוס מצב מוגן
 /// הרץ עם: dart run reset_protected_mode.dart
