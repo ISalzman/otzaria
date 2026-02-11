@@ -51,6 +51,9 @@ class SeforimRepository {
   final MyDatabase _database;
   final Logger _logger = Logger('SeforimRepository');
 
+  /// מטמון לקטגוריות - מונע קריאות חוזרות למסד הנתונים
+  final Map<int, Category> _categoryCache = {};
+
   /// Expose database for advanced operations
   MyDatabase get database => _database;
 
@@ -315,7 +318,27 @@ class SeforimRepository {
   /// @param id The ID of the category to retrieve
   /// @return The category if found, null otherwise
   Future<Category?> getCategory(int id) async {
-    return await _database.categoryDao.getCategoryById(id);
+    // בדוק אם הקטגוריה כבר במטמון
+    if (_categoryCache.containsKey(id)) {
+      return _categoryCache[id];
+    }
+
+    // שלוף מהדאטהבייס
+    final category = await _database.categoryDao.getCategoryById(id);
+
+    // שמור במטמון אם נמצא
+    if (category != null) {
+      _categoryCache[id] = category;
+    }
+
+    return category;
+  }
+
+  /// מנקה את מטמון הקטגוריות
+  /// יש לקרוא למתודה זו אחרי עדכון/מחיקה של קטגוריות
+  void clearCategoryCache() {
+    _categoryCache.clear();
+    _logger.info('Category cache cleared');
   }
 
   /// Retrieves all root categories (categories without a parent).
