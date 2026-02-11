@@ -424,6 +424,9 @@ jobs:
   build_android:
     if: github.event_name != 'release'
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_HOME: ${{ github.workspace }}/.rustup
+      CARGO_HOME: ${{ github.workspace }}/.cargo
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
@@ -445,6 +448,67 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add cargo to PATH & verify toolchain
+        run: |
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+          rustc -Vv
+          cargo -V
+          rustup show
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/registry
+            ${{ env.CARGO_HOME }}/git
+            ${{ env.RUSTUP_HOME }}
+          key: ${{ runner.os }}-rust-android-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-android-
+
+      - name: Pre-install Android Rust targets (with retry)
+        run: |
+          set -e
+          # פונקציה להתקנת target עם retry
+          install_target_with_retry() {
+            local target=$1
+            local max_attempts=3
+            local attempt=1
+            
+            while [ $attempt -le $max_attempts ]; do
+              echo "Installing $target (attempt $attempt/$max_attempts)..."
+              if rustup target add --toolchain stable "$target"; then
+                echo "✓ Successfully installed $target"
+                return 0
+              fi
+              
+              echo "Failed to install $target, cleaning up..."
+              # ניקוי קבצים זמניים שעלולים לגרום לבעיה
+              rm -rf ~/.rustup/downloads/*.partial || true
+              rm -rf ~/.rustup/tmp/* || true
+              
+              attempt=$((attempt + 1))
+              if [ $attempt -le $max_attempts ]; then
+                echo "Waiting 10 seconds before retry..."
+                sleep 10
+              fi
+            done
+            
+            echo "::error::Failed to install $target after $max_attempts attempts"
+            return 1
+          }
+          
+          # התקנת כל ה-targets הנדרשים
+          install_target_with_retry "armv7-linux-androideabi"
+          install_target_with_retry "aarch64-linux-android"
+          install_target_with_retry "x86_64-linux-android"
+          install_target_with_retry "i686-linux-android"
+          
+          echo "All Android Rust targets installed successfully"
 
       - name: Cache Gradle
         uses: actions/cache@v4
