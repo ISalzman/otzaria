@@ -290,7 +290,6 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     GoToNextPage event,
     Emitter<PdfBookState> emit,
   ) {
-    
     if (!pdfController.isReady) {
       return;
     }
@@ -307,7 +306,6 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     GoToPreviousPage event,
     Emitter<PdfBookState> emit,
   ) {
-    
     if (!pdfController.isReady) {
       return;
     }

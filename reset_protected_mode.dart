@@ -7,15 +7,16 @@ import 'package:otzaria/settings/settings_repository.dart';
 void main() async {
   // ignore: avoid_print
   print('מאפס מצב מוגן...');
-  
+
   try {
     // אתחול Settings
     await Settings.init(cacheProvider: HiveCache());
-    
+
     // מאפס את המצב המוגן והסיסמה
     await Settings.setValue(SettingsRepository.keyProtectedModeEnabled, false);
-    await Settings.setValue(SettingsRepository.keyProtectedModePasswordHash, '');
-    
+    await Settings.setValue(
+        SettingsRepository.keyProtectedModePasswordHash, '');
+
     // ignore: avoid_print
     print('✓ המצב המוגן אופס בהצלחה!');
     // ignore: avoid_print
