@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
@@ -59,6 +60,7 @@ class SimpleTextViewer extends StatefulWidget {
 class _SimpleTextViewerState extends State<SimpleTextViewer> {
   late final ItemScrollController _scrollController;
   late final ItemPositionsListener _positionsListener;
+  late final FocusNode _focusNode;
   String? _savedSelectedText;
   int? _savedSelectedIndex;
 
@@ -68,6 +70,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     _scrollController = widget.scrollController ?? ItemScrollController();
     _positionsListener =
         widget.positionsListener ?? ItemPositionsListener.create();
+    _focusNode = FocusNode();
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
@@ -87,6 +90,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
   }
 
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
   /// גלילה למיקום הנוכחי (selectedIndex או visibleIndices)
   void _scrollToCurrentPosition() {
     final bloc = context.read<TextBookBloc>();
@@ -99,6 +108,107 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         _scrollController.jumpTo(index: targetIndex);
       }
     }
+  }
+
+  /// טיפול באירועי מקלדת - חיצים לניווט
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    if (!widget.isMainText) return false; // רק בטקסט המרכזי
+
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded) return false;
+
+    // חיצים למעלה ולמטה
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      final currentIndex = state.selectedIndex ?? 0;
+      final nextIndex = (currentIndex + 1).clamp(0, widget.content.length - 1);
+      if (nextIndex != currentIndex) {
+        context.read<TextBookBloc>().add(UpdateSelectedIndex(nextIndex));
+        if (_scrollController.isAttached) {
+          _scrollController.scrollTo(
+            index: nextIndex,
+            duration: const Duration(milliseconds: 200),
+            alignment: 0.5,
+          );
+        }
+      }
+      return true;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      final currentIndex = state.selectedIndex ?? 0;
+      final prevIndex = (currentIndex - 1).clamp(0, widget.content.length - 1);
+      if (prevIndex != currentIndex) {
+        context.read<TextBookBloc>().add(UpdateSelectedIndex(prevIndex));
+        if (_scrollController.isAttached) {
+          _scrollController.scrollTo(
+            index: prevIndex,
+            duration: const Duration(milliseconds: 200),
+            alignment: 0.5,
+          );
+        }
+      }
+      return true;
+    }
+
+    // Page Down
+    if (event.logicalKey == LogicalKeyboardKey.pageDown) {
+      final currentIndex = state.selectedIndex ?? 0;
+      final nextIndex = (currentIndex + 10).clamp(0, widget.content.length - 1);
+      context.read<TextBookBloc>().add(UpdateSelectedIndex(nextIndex));
+      if (_scrollController.isAttached) {
+        _scrollController.scrollTo(
+          index: nextIndex,
+          duration: const Duration(milliseconds: 300),
+          alignment: 0.5,
+        );
+      }
+      return true;
+    }
+
+    // Page Up
+    if (event.logicalKey == LogicalKeyboardKey.pageUp) {
+      final currentIndex = state.selectedIndex ?? 0;
+      final prevIndex = (currentIndex - 10).clamp(0, widget.content.length - 1);
+      context.read<TextBookBloc>().add(UpdateSelectedIndex(prevIndex));
+      if (_scrollController.isAttached) {
+        _scrollController.scrollTo(
+          index: prevIndex,
+          duration: const Duration(milliseconds: 300),
+          alignment: 0.5,
+        );
+      }
+      return true;
+    }
+
+    // Home - תחילת הספר
+    if (event.logicalKey == LogicalKeyboardKey.home &&
+        HardwareKeyboard.instance.isControlPressed) {
+      context.read<TextBookBloc>().add(const UpdateSelectedIndex(0));
+      if (_scrollController.isAttached) {
+        _scrollController.scrollTo(
+          index: 0,
+          duration: const Duration(milliseconds: 300),
+        );
+      }
+      return true;
+    }
+
+    // End - סוף הספר
+    if (event.logicalKey == LogicalKeyboardKey.end &&
+        HardwareKeyboard.instance.isControlPressed) {
+      final lastIndex = widget.content.length - 1;
+      context.read<TextBookBloc>().add(UpdateSelectedIndex(lastIndex));
+      if (_scrollController.isAttached) {
+        _scrollController.scrollTo(
+          index: lastIndex,
+          duration: const Duration(milliseconds: 300),
+        );
+      }
+      return true;
+    }
+
+    return false;
   }
 
   /// תפריט הקשר - מעתיק מהתצוגה הרגילה
@@ -356,75 +466,84 @@ $textWithBreaks
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // כותרת אופציונלית
-        if (widget.title != null)
-          Container(
-            padding: const EdgeInsets.all(12.0),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface.withAlpha(128),
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: 0.5,
+    return KeyboardListener(
+      focusNode: _focusNode,
+      autofocus: widget.isMainText,
+      onKeyEvent: (event) {
+        if (_handleKeyEvent(event)) {
+          // האירוע טופל
+        }
+      },
+      child: Column(
+        children: [
+          // כותרת אופציונלית
+          if (widget.title != null)
+            Container(
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withAlpha(128),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Theme.of(context).dividerColor,
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  widget.title!,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
               ),
             ),
-            child: Center(
-              child: Text(
-                widget.title!,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-        // תוכן
-        Expanded(
-          child: BlocBuilder<TextBookBloc, TextBookState>(
-            builder: (context, state) {
-              if (state is! TextBookLoaded) {
-                return const Center(child: CircularProgressIndicator());
-              }
+          // תוכן
+          Expanded(
+            child: BlocBuilder<TextBookBloc, TextBookState>(
+              builder: (context, state) {
+                if (state is! TextBookLoaded) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-              return BlocBuilder<PersonalNotesBloc, PersonalNotesState>(
-                builder: (context, notesState) {
-                  final noteMap = <int, List<PersonalNote>>{};
-                  if (notesState.bookId == state.book.title) {
-                    for (final note in notesState.locatedNotes) {
-                      final line = note.lineNumber;
-                      if (line == null) continue;
-                      noteMap.putIfAbsent(line, () => []).add(note);
-                    }
-                  }
-
-                  return SelectionArea(
-                    onSelectionChanged: (selection) {
-                      // שמירת הטקסט הנבחר
-                      if (selection != null) {
-                        setState(() {
-                          _savedSelectedText = selection.plainText;
-                        });
+                return BlocBuilder<PersonalNotesBloc, PersonalNotesState>(
+                  builder: (context, notesState) {
+                    final noteMap = <int, List<PersonalNote>>{};
+                    if (notesState.bookId == state.book.title) {
+                      for (final note in notesState.locatedNotes) {
+                        final line = note.lineNumber;
+                        if (line == null) continue;
+                        noteMap.putIfAbsent(line, () => []).add(note);
                       }
-                    },
-                    child: ScrollablePositionedList.builder(
-                      itemScrollController: _scrollController,
-                      itemPositionsListener: _positionsListener,
-                      itemCount: widget.content.length,
-                      padding: const EdgeInsets.all(4),
-                      itemBuilder: (context, index) =>
-                          _buildLine(index, state, context, noteMap),
-                    ),
-                  );
-                },
-              );
-            },
+                    }
+
+                    return SelectionArea(
+                      onSelectionChanged: (selection) {
+                        // שמירת הטקסט הנבחר
+                        if (selection != null) {
+                          setState(() {
+                            _savedSelectedText = selection.plainText;
+                          });
+                        }
+                      },
+                      child: ScrollablePositionedList.builder(
+                        itemScrollController: _scrollController,
+                        itemPositionsListener: _positionsListener,
+                        itemCount: widget.content.length,
+                        padding: const EdgeInsets.all(4),
+                        itemBuilder: (context, index) =>
+                            _buildLine(index, state, context, noteMap),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
