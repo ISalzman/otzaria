@@ -12,7 +12,6 @@ import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
-import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
@@ -366,24 +365,25 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
       context: context,
       title: 'סינכרון ורשת',
       children: [
-        if (!state.isOfflineMode)
-          SwitchListTile(
-            secondary: const Icon(FluentIcons.arrow_sync_24_regular),
-            title: const Text('סינכרון הספרייה באופן אוטומטי',
-                style: TextStyle(fontSize: 16)),
-            subtitle: Text(
-                Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true
-                    ? 'מאגר הספרים המובנה יתעדכן אוטומטית מאתר אוצריא'
-                    : 'מאגר הספרים לא יתעדכן אוטומטית',
-                style: const TextStyle(fontSize: 13)),
-            value:
-                Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true,
-            onChanged: (value) {
-              Settings.setValue<bool>(SettingsRepository.keyAutoSync, value);
-              setState(() {});
-            },
-          ),
-        if (!state.isOfflineMode) const Divider(height: 1),
+        // TEMPORARILY DISABLED - Sync settings hidden
+        // if (!state.isOfflineMode)
+        //   SwitchListTile(
+        //     secondary: const Icon(FluentIcons.arrow_sync_24_regular),
+        //     title: const Text('סינכרון הספרייה באופן אוטומטי',
+        //         style: TextStyle(fontSize: 16)),
+        //     subtitle: Text(
+        //         Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true
+        //             ? 'מאגר הספרים המובנה יתעדכן אוטומטית מאתר אוצריא'
+        //             : 'מאגר הספרים לא יתעדכן אוטומטית',
+        //         style: const TextStyle(fontSize: 13)),
+        //     value:
+        //         Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true,
+        //     onChanged: (value) {
+        //       Settings.setValue<bool>(SettingsRepository.keyAutoSync, value);
+        //       setState(() {});
+        //     },
+        //   ),
+        // if (!state.isOfflineMode) const Divider(height: 1),
         if (!(Platform.isAndroid || Platform.isIOS) && !state.isOfflineMode)
           SwitchListTile(
             secondary: const Icon(FluentIcons.bug_24_regular),
