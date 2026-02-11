@@ -69,16 +69,13 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
 
     final verified = await showDialog<bool>(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: PasswordVerificationDialog(
-          title: 'הזן סיסמה',
-          hint: 'הנך במצב מוגן.\nהזן את הסיסמה כדי לגשת להגדרות',
-          onVerify: (password) async {
-            return repository.verifyProtectedModePassword(password);
-          },
-        ),
+      barrierDismissible: true,
+      builder: (dialogContext) => PasswordVerificationDialog(
+        title: 'הזן סיסמה',
+        hint: 'הנך במצב מוגן.\nהזן את הסיסמה כדי לגשת להגדרות',
+        onVerify: (password) async {
+          return repository.verifyProtectedModePassword(password);
+        },
       ),
     );
 
