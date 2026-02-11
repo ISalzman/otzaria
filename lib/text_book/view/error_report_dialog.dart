@@ -159,14 +159,31 @@ class ErrorReportHelper {
         final occurrencesInLine = _findAllOccurrences(lineText, selectedText);
 
         if (occurrencesInLine.length == 1) {
+          // מופע יחיד בשורה — חד-משמעי
           selectionStart = lineStart + occurrencesInLine.first;
         } else if (occurrencesInLine.length > 1) {
-          // במקרה עמום (אותו טקסט מופיע כמה פעמים באותה שורה) אין לנו
-          // offset מדויק מה-SelectionArea, לכן בוחרים מופע אחרון בשורה.
-          // זה מונע חזרה אוטומטית למופע הראשון ומחזיר הקשר קצר (4+4).
-          selectionStart = lineStart + occurrencesInLine.last;
+          // עמימות: אותו טקסט מופיע כמה פעמים באותה שורה.
+          // ל-SelectionArea של Flutter אין API שחושף את ה-offset המדויק
+          // של הבחירה, לכן אין לנו דרך לדעת איזה מופע נבחר.
+          // במקום לנחש (ראשון/אחרון), נחזיר את כל השורה כהקשר —
+          // כך מי שקורא את הדיווח יראה את כל המופעים ויוכל להבין
+          // בשילוב עם תיאור השגיאה של המשתמש.
           usedLineFallback = true;
+          final contextText = buildContextAroundSelection(
+            allText,
+            lineStart,
+            lineEnd,
+            wordsBefore: wordsBefore,
+            wordsAfter: wordsAfter,
+          );
+          return SelectionContextResolution(
+            contextText: contextText,
+            selectionStart: lineStart,
+            selectionEnd: lineEnd,
+            usedLineFallback: usedLineFallback,
+          );
         } else {
+          // הטקסט לא נמצא בשורה המועדפת — מחפשים מהשורה ואילך
           selectionStart = allText.indexOf(selectedText, lineStart);
         }
       } else {
