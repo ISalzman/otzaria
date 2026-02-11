@@ -201,7 +201,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         
         // אם הפוקוס עבר ל-Root Focus Scope או null (כלומר אין פוקוס ספציפי),
         // והחלונית השמאלית סגורה, החזר את הפוקוס ל-PDF
-        if ((currentFocus?.debugLabel == 'Root Focus Scope' || currentFocus == null) && 
+        if ((currentFocus != _searchFieldFocusNode && currentFocus != _navigationFieldFocusNode) && 
             !widget.tab.showLeftPane.value) {
           // שימוש ב-SchedulerBinding למהירות מקסימלית
           SchedulerBinding.instance.addPostFrameCallback((_) {
