@@ -13,7 +13,8 @@ class FileSyncState {
     this.currentProgress = 0,
     this.totalFiles = 0,
     this.message = 'לחץ לסנכרון',
-    this.hasNewSync = false,
+    this.hasNewSync =
+        false, // TEMPORARILY DISABLED - always false to hide sync queue
     this.errorMessage,
   });
 
@@ -30,7 +31,8 @@ class FileSyncState {
       currentProgress: currentProgress ?? this.currentProgress,
       totalFiles: totalFiles ?? this.totalFiles,
       message: message ?? this.message,
-      hasNewSync: hasNewSync ?? this.hasNewSync,
+      hasNewSync:
+          false, // TEMPORARILY DISABLED - always false to hide sync queue
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
