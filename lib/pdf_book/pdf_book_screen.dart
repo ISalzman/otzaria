@@ -91,8 +91,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final String query = controller.text.trim();
     if (query.isEmpty) return;
 
-    debugPrint(
-        'DEBUG: Triggering search by simulating user input for "$query"');
 
     // שיטה 1: הוספה והסרה מהירה
     controller.text = '$query '; // הוסף תו זמני
@@ -171,10 +169,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         searchMode: widget.tab.searchMode,
       ),
     );
-
-    // textSearcher ייוצר ב-onDocumentChanged כשה-document מוכן
-
-    debugPrint('DEBUG: אתחול PDF טאב - דף התחלתי: ${widget.tab.pageNumber}');
 
     if ((widget.tab.book.fileType ?? 'pdf').toLowerCase() == 'pdf') {
       _pdfBytesFuture = _loadPdfBytesFromDb();
@@ -370,8 +364,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               widget.tab.pdfHeadings!.getLineNumberForHeading(title);
           if (lineNumber != null) {
             widget.tab.currentTextLineNumber = lineNumber;
-            debugPrint(
-                '✅ Initial currentTextLineNumber set to: $lineNumber for title: "$title"');
           }
         }
 
@@ -500,43 +492,30 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Future<void> _loadPdfHeadingsAndLinks() async {
     try {
-      debugPrint('=== Loading PDF Headings and Links ===');
-      debugPrint('Book title: ${widget.tab.book.title}');
-      debugPrint('Book path: ${widget.tab.book.path}');
 
       // טעינת headings מה-DB
       final headings =
           await PdfHeadings.loadFromDatabase(widget.tab.book.title);
       if (headings != null) {
         widget.tab.pdfHeadings = headings;
-        debugPrint('✅ Loaded ${headings.headingsMap.length} headings');
-        debugPrint(
-            'Sample headings: ${headings.headingsMap.entries.take(3).map((e) => '${e.key}: ${e.value}').join(', ')}');
       } else {
         debugPrint('❌ Failed to load headings from DB');
       }
 
       // טעינת links
-      debugPrint('📚 Starting to load library...');
       final library = await DataRepository.instance.library;
-      debugPrint('✅ Library loaded successfully');
 
       debugPrint(
           '🔍 Searching for TextBook with title: "${widget.tab.book.title}"');
       final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
-      debugPrint('TextBook found: ${textBook != null}');
 
       if (textBook != null) {
-        debugPrint('📖 TextBook type: ${textBook.runtimeType}');
         if (textBook is TextBook) {
-          debugPrint('🔗 Loading links from TextBook...');
           final loadedLinks = await textBook.links;
           widget.tab.links = loadedLinks;
-          debugPrint('✅ Loaded ${widget.tab.links.length} links');
 
           // הצגת דוגמאות של links
           if (widget.tab.links.isNotEmpty) {
-            debugPrint('Sample links:');
             for (final link in widget.tab.links.take(3)) {
               debugPrint(
                   '  - Line ${link.index1}: ${link.heRef} (${link.connectionType})');
@@ -580,20 +559,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (token == _lastComputedForPage) {
       widget.tab.currentTitle.value = title;
 
-      debugPrint('=== Page Changed ===');
-      debugPrint('Page: $newPage, Title: "$title"');
-
       // עדכון מספר השורה בטקסט לפי הכותרת
       if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
-        debugPrint(
-            'Headings available: ${widget.tab.pdfHeadings!.headingsMap.length}');
         final lineNumber =
             widget.tab.pdfHeadings!.getLineNumberForHeading(title);
-        debugPrint('Line number for "$title": $lineNumber');
 
         if (lineNumber != null) {
           widget.tab.currentTextLineNumber = lineNumber;
-          debugPrint('✅ Updated currentTextLineNumber to: $lineNumber');
           if (mounted) {
             setState(() {});
           }
@@ -1160,11 +1132,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   void _goNextPage() {
-    debugPrint('🔵 _goNextPage called');
-    debugPrint('🔵 PDF controller ready: ${widget.tab.pdfViewerController.isReady}');
     
     if (!widget.tab.pdfViewerController.isReady) {
-      debugPrint('🔵 PDF not ready yet, ignoring');
       return;
     }
     
@@ -1172,23 +1141,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final totalPages = widget.tab.pdfViewerController.pageCount;
     final nextPage = min(currentPage + 1, totalPages);
     
-    debugPrint('🔵 Going to page $nextPage (current: $currentPage, total: $totalPages)');
     widget.tab.pdfViewerController.goToPage(pageNumber: nextPage);
   }
 
   void _goPreviousPage() {
-    debugPrint('🔴 _goPreviousPage called');
-    debugPrint('🔴 PDF controller ready: ${widget.tab.pdfViewerController.isReady}');
     
     if (!widget.tab.pdfViewerController.isReady) {
-      debugPrint('🔴 PDF not ready yet, ignoring');
       return;
     }
     
     final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
     final prevPage = max(currentPage - 1, 1);
     
-    debugPrint('🔴 Going to page $prevPage (current: $currentPage)');
     widget.tab.pdfViewerController.goToPage(pageNumber: prevPage);
   }
 
@@ -1707,7 +1671,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     searchNodes(outline);
-    debugPrint('DEBUG: final bestMatch: ${bestMatch?.title}');
     return bestMatch?.title;
   }
 
