@@ -12,8 +12,8 @@ void main() async {
     await Settings.init(cacheProvider: HiveCache());
     
     // מאפס את המצב המוגן והסיסמה
-    await Settings.setValue('key-protected-mode-enabled', false);
-    await Settings.setValue('key-protected-mode-password-hash', '');
+    await Settings.setValue(SettingsRepository.keyProtectedModeEnabled, false);
+    await Settings.setValue(SettingsRepository.keyProtectedModePasswordHash, '');
     
     // ignore: avoid_print
     print('✓ המצב המוגן אופס בהצלחה!');
