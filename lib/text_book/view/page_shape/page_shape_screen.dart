@@ -24,6 +24,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:collection/collection.dart';
 import 'dart:async';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/core/scaffold_messenger.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
 const double _kCommentaryPaneWidthFactor = 0.17;
@@ -98,8 +99,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   Future<void> _loadConfiguration() async {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) {
+      debugPrint('⚠️ PageShape: State is not TextBookLoaded, cannot load configuration');
       return;
     }
+
+    debugPrint('📖 PageShape: Loading configuration for "${state.book.title}"');
+    debugPrint('📖 PageShape: heCategories = "${state.book.heCategories}"');
 
     final config = PageShapeSettingsManager.loadConfiguration(
       state.book.title,
@@ -111,13 +116,17 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 
     final Map<String, String?> commentators;
     if (config != null) {
+      debugPrint('📖 PageShape: Found saved configuration: $config');
       // יש הגדרה שמורה - צריך להתאים שמות בסיסיים לשמות מלאים
       // (כי הגדרות קטגוריה שומרות רק שמות בסיסיים כמו "רמב"ן")
       commentators = _resolveCommentatorNames(config, state.links);
+      debugPrint('📖 PageShape: Resolved commentators: $commentators');
     } else {
+      debugPrint('📖 PageShape: No saved configuration, loading defaults from JSON');
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
       commentators =
           await DefaultCommentators.getDefaults(state.book, links: state.links);
+      debugPrint('📖 PageShape: Default commentators loaded: $commentators');
     }
 
     if (mounted) {
@@ -128,6 +137,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         _bottomRightCommentator = commentators['bottomRight'];
         _isLoadingConfig = false;
       });
+      debugPrint('📖 PageShape: Configuration applied successfully');
     }
   }
 
@@ -160,6 +170,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   }
 
   /// הסתרת טור
+  /// 
+  /// שימו לב: פעולה זו שומרת את ההגדרה גלובלית כברירת מחדל.
+  /// אם המשתמש רוצה הגדרות פר-ספר, הוא צריך לפתוח את דיאלוג ההגדרות
+  /// ולהפעיל את האופציה "שמירה לספר הנוכחי בלבד".
   void _hideColumn(String column) {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
@@ -168,12 +182,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       _columnVisibility[column] = false;
     });
 
-    // שמירה גלובלית אלא אם יש הגדרות פר-ספר
-    final hasBookSettings =
-        PageShapeSettingsManager.hasBookSpecificSettings(state.book.title);
+    // שמירה גלובלית - תחול על כל הספרים
     PageShapeSettingsManager.saveColumnVisibility(
         state.book.title, _columnVisibility,
-        saveAsGlobal: !hasBookSettings);
+        saveAsGlobal: true);
+    
+    // הודעה למשתמש
+    UiSnack.show('הטור הוסתר בכל הספרים. ניתן לשנות בהגדרות צורת הדף.');
   }
 
   /// בניית widget למצב ריק של טור
