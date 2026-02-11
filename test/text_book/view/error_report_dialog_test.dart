@@ -333,5 +333,4 @@ void main() {
       expect(result.usedLineFallback, isFalse);
     });
   });
-
 }

@@ -135,6 +135,7 @@ void main() async {
   // No-op: removed verbose debug printing
 
   final historyRepository = HistoryRepository();
+  final settingsRepository = SettingsRepository();
 
   runApp(
     RestartWidget(
@@ -143,12 +144,15 @@ void main() async {
           RepositoryProvider<FocusRepository>(
             create: (context) => FocusRepository(),
           ),
+          RepositoryProvider<SettingsRepository>(
+            create: (context) => settingsRepository,
+          ),
         ],
         child: MultiBlocProvider(
           providers: [
             BlocProvider<SettingsBloc>(
               create: (context) => SettingsBloc(
-                repository: SettingsRepository(),
+                repository: settingsRepository,
               )..add(LoadSettings()),
             ),
             BlocProvider<LibraryBloc>(

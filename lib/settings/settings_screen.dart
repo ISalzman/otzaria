@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/settings/tabs/settings_tabs.dart';
+import 'package:otzaria/settings/protected_settings_wrapper.dart';
 
 class MySettingsScreen extends StatefulWidget {
   const MySettingsScreen({super.key});
@@ -12,7 +13,7 @@ class MySettingsScreen extends StatefulWidget {
 class _MySettingsScreenState extends State<MySettingsScreen>
     with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => false; // שינוי ל-false כדי שלא ישמור את המצב
 
   late TabController _tabController;
 
@@ -63,42 +64,44 @@ class _MySettingsScreenState extends State<MySettingsScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.center,
-          tabs: _tabs
-              .map((tab) => SizedBox(
-                    width: 100,
-                    child: Tab(
-                      text: tab.label,
-                      icon: Icon(tab.icon, size: 20),
-                    ),
-                  ))
-              .toList(),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1.0),
-          child: Container(
-            color: Theme.of(context).dividerColor,
-            height: 1.0,
+    return ProtectedSettingsWrapper(
+      child: Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 72,
+          title: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.center,
+            tabs: _tabs
+                .map((tab) => SizedBox(
+                      width: 100,
+                      child: Tab(
+                        text: tab.label,
+                        icon: Icon(tab.icon, size: 20),
+                      ),
+                    ))
+                .toList(),
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1.0),
+            child: Container(
+              color: Theme.of(context).dividerColor,
+              height: 1.0,
+            ),
           ),
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          AppearanceSettingsTab(),
-          ReadingSettingsTab(),
-          LibrarySettingsTab(),
-          CalendarSettingsTab(),
-          GematriaSettingsTab(),
-          BackupSettingsTab(),
-          AdvancedSettingsTab(),
-        ],
+        body: TabBarView(
+          controller: _tabController,
+          children: const [
+            AppearanceSettingsTab(),
+            ReadingSettingsTab(),
+            LibrarySettingsTab(),
+            CalendarSettingsTab(),
+            GematriaSettingsTab(),
+            BackupSettingsTab(),
+            AdvancedSettingsTab(),
+          ],
+        ),
       ),
     );
   }
