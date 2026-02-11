@@ -15,6 +15,8 @@ import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/widgets/confirmation_dialog.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
+import 'package:otzaria/settings/protected_mode_settings.dart';
+import 'package:otzaria/settings/protected_settings_wrapper.dart';
 
 /// טאב הגדרות מתקדמות
 class AdvancedSettingsTab extends StatefulWidget {
@@ -94,6 +96,10 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
 
               // איפוס
               _buildResetSection(context),
+              const SizedBox(height: 16),
+
+              // מצב מוגן
+              const ProtectedModeSettings(),
             ],
           ),
         );
@@ -474,6 +480,16 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
               'פעולה זו תמחק את כל ההגדרות ותחזיר את התוכנה למצב ההתחלתי',
               style: TextStyle(fontSize: 13)),
           onTap: () async {
+            // בדיקה אם במצב מוגן - אם כן, דרוש אימות סיסמה
+            if (shouldProtectSettings(context)) {
+              final verified = await verifyPasswordForAction(context);
+              if (!verified || !context.mounted) {
+                return;
+              }
+            }
+
+            if (!context.mounted) return;
+
             final confirmed = await showConfirmationDialog(
               context: context,
               title: 'איפוס הגדרות?',

@@ -3,6 +3,8 @@ import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/utils/color_utils.dart';
 import 'package:otzaria/utils/shortcut_validator.dart';
 import 'package:otzaria/utils/settings_wrapper.dart';
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
 
 class SettingsRepository {
   static const String keyDarkMode = 'key-dark-mode';
@@ -15,6 +17,7 @@ class SettingsRepository {
   static const String keyCommentatorsFontFamily =
       'key-commentators-font-family';
   static const String keyCommentatorsFontSize = 'key-commentators-font-size';
+  static const String keyLineHeight = 'key-line-height';
   static const String keyShowOtzarHachochma = 'key-show-otzar-hachochma';
   static const String keyShowHebrewBooks = 'key-show-hebrew-books';
   static const String keyShowExternalBooks = 'key-show-external-books';
@@ -48,6 +51,11 @@ class SettingsRepository {
   static const String keyEnableHtmlLinks = 'key-enable-html-links';
   static const String keyPersonalNotesCollapsedByDefault =
       'key-personal-notes-collapsed';
+
+  // Protected Mode Settings
+  static const String keyProtectedModeEnabled = 'key-protected-mode-enabled';
+  static const String keyProtectedModePasswordHash =
+      'key-protected-mode-password-hash';
 
   // Calendar Notification Settings
   static const String keyCalendarNotificationsEnabled =
@@ -115,6 +123,10 @@ class SettingsRepository {
       'commentatorsFontSize': _settings.getValue<double>(
         keyCommentatorsFontSize,
         defaultValue: 22,
+      ),
+      'lineHeight': _settings.getValue<double>(
+        keyLineHeight,
+        defaultValue: 1.5,
       ),
       'showOtzarHachochma': _settings.getValue<bool>(
         keyShowOtzarHachochma,
@@ -220,6 +232,12 @@ class SettingsRepository {
         defaultValue: true,
       ),
 
+      // Protected Mode
+      'protectedModeEnabled': _settings.getValue<bool>(
+        keyProtectedModeEnabled,
+        defaultValue: false,
+      ),
+
       // Calendar Notification Settings
       'calendarNotificationsEnabled': _settings.getValue<bool>(
         keyCalendarNotificationsEnabled,
@@ -311,6 +329,10 @@ class SettingsRepository {
 
   Future<void> updateCommentatorsFontSize(double value) async {
     await _settings.setValue(keyCommentatorsFontSize, value);
+  }
+
+  Future<void> updateLineHeight(double value) async {
+    await _settings.setValue(keyLineHeight, value);
   }
 
   Future<void> updateShowOtzarHachochma(bool value) async {
@@ -419,6 +441,44 @@ class SettingsRepository {
 
   Future<void> updatePersonalNotesCollapsedByDefault(bool value) async {
     await _settings.setValue(keyPersonalNotesCollapsedByDefault, value);
+  }
+
+  // Protected Mode
+  Future<void> updateProtectedModeEnabled(bool value) async {
+    await _settings.setValue(keyProtectedModeEnabled, value);
+  }
+
+  Future<void> updateProtectedModePassword(String password) async {
+    final hash = _hashPassword(password);
+    await _settings.setValue(keyProtectedModePasswordHash, hash);
+  }
+
+  bool verifyProtectedModePassword(String password) {
+    final storedHash = _settings.getValue<String>(
+      keyProtectedModePasswordHash,
+      defaultValue: '',
+    );
+
+    if (storedHash.isEmpty) {
+      return false;
+    }
+
+    final inputHash = _hashPassword(password);
+    return inputHash == storedHash;
+  }
+
+  bool hasProtectedModePassword() {
+    final hash = _settings.getValue<String>(
+      keyProtectedModePasswordHash,
+      defaultValue: '',
+    );
+    return hash.isNotEmpty;
+  }
+
+  String _hashPassword(String password) {
+    final bytes = utf8.encode(password);
+    final hash = sha256.convert(bytes);
+    return hash.toString();
   }
 
   // Calendar Notification Settings
@@ -569,6 +629,7 @@ class SettingsRepository {
     await _settings.setValue(
         keyCommentatorsFontFamily, AppFonts.defaultCommentatorsFont);
     await _settings.setValue(keyCommentatorsFontSize, 22.0);
+    await _settings.setValue(keyLineHeight, 1.5);
     await _settings.setValue(keyShowOtzarHachochma, false);
     await _settings.setValue(keyShowHebrewBooks, false);
     await _settings.setValue(keyShowExternalBooks, false);
@@ -615,6 +676,9 @@ class SettingsRepository {
     await _settings.setValue(keyGoogleCalendarSyncPastDays, 60);
     await _settings.setValue(keyGoogleCalendarSyncFutureDays, 365);
     await _settings.setValue(keyGoogleCalendarLastSync, 0);
+
+    // Protected Mode defaults
+    await _settings.setValue(keyProtectedModeEnabled, false);
 
     // Mark as initialized
     await _settings.setValue('settings_initialized', true);

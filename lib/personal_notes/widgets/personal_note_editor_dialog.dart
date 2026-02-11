@@ -4,6 +4,8 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
 
+import 'package:otzaria/settings/protected_settings_wrapper.dart';
+
 class PersonalNoteEditorDialog extends StatefulWidget {
   final String initialContent;
   final PersonalNoteContentFormat initialContentFormat;
@@ -123,7 +125,12 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog> {
     }
   }
 
-  void _submit() {
+  void _submit() async {
+    // במצב מוגן, נדרוש סיסמה לפני שמירה
+    if (!await verifyPasswordForAction(context) || !mounted) {
+      return;
+    }
+
     final result = _editorController.buildResult();
     if (result.contentPlain.trim().isEmpty) {
       return;
