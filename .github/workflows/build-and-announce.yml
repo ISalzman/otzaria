@@ -553,6 +553,19 @@ jobs:
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
+          
+          # Verify files were created
+          echo "Verifying keystore setup..."
+          ls -la android/keystore/
+          echo "key.properties content (masked):"
+          cat android/key.properties | sed 's/Password=.*/Password=***MASKED***/g'
+          
+          # Verify keystore file exists and is readable
+          if [ ! -f android/keystore/otzaria-keystore.jks ]; then
+            echo "::error::Keystore file was not created!"
+            exit 1
+          fi
+          echo "✓ Keystore file exists and is readable"
       
       - run: sudo apt install ninja-build
       
