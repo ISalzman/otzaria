@@ -22,8 +22,8 @@ class PasswordVerificationDialog extends StatefulWidget {
       _PasswordVerificationDialogState();
 }
 
-class _PasswordVerificationDialogState
-    extends State<PasswordVerificationDialog> with DialogNavigationMixin {
+class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
+    with DialogNavigationMixin {
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _textFieldFocusNode = FocusNode();
   bool _isObscured = true;

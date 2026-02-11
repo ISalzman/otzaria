@@ -380,9 +380,8 @@ void main() {
       );
       expect(textAtResult, equals('טעות'));
 
-      final linesBefore = '\n'
-          .allMatches(allText.substring(0, result.selectionStart))
-          .length;
+      final linesBefore =
+          '\n'.allMatches(allText.substring(0, result.selectionStart)).length;
       expect(linesBefore, equals(2)); // שורה 2 (0-based)
       expect(result.usedLineFallback, isFalse);
     });
