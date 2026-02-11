@@ -90,12 +90,10 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
       });
     } else {
       // המשתמש ביטל - נחזור למסך הקודם בצורה בטוחה
-      // נשתמש ב-SchedulerBinding כדי לוודא שה-context תקף
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-      });
+      // נבדוק אם ה-Navigator יכול לעשות pop
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     }
   }
 
