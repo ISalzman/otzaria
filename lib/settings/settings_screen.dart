@@ -66,43 +66,43 @@ class _MySettingsScreenState extends State<MySettingsScreen>
 
     return ProtectedSettingsWrapper(
       child: Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.center,
-          tabs: _tabs
-              .map((tab) => SizedBox(
-                    width: 100,
-                    child: Tab(
-                      text: tab.label,
-                      icon: Icon(tab.icon, size: 20),
-                    ),
-                  ))
-              .toList(),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1.0),
-          child: Container(
-            color: Theme.of(context).dividerColor,
-            height: 1.0,
+        appBar: AppBar(
+          toolbarHeight: 72,
+          title: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.center,
+            tabs: _tabs
+                .map((tab) => SizedBox(
+                      width: 100,
+                      child: Tab(
+                        text: tab.label,
+                        icon: Icon(tab.icon, size: 20),
+                      ),
+                    ))
+                .toList(),
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1.0),
+            child: Container(
+              color: Theme.of(context).dividerColor,
+              height: 1.0,
+            ),
           ),
         ),
+        body: TabBarView(
+          controller: _tabController,
+          children: const [
+            AppearanceSettingsTab(),
+            ReadingSettingsTab(),
+            LibrarySettingsTab(),
+            CalendarSettingsTab(),
+            GematriaSettingsTab(),
+            BackupSettingsTab(),
+            AdvancedSettingsTab(),
+          ],
+        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          AppearanceSettingsTab(),
-          ReadingSettingsTab(),
-          LibrarySettingsTab(),
-          CalendarSettingsTab(),
-          GematriaSettingsTab(),
-          BackupSettingsTab(),
-          AdvancedSettingsTab(),
-        ],
-      ),
-    ),
     );
   }
 }

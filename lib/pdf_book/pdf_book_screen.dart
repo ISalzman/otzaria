@@ -91,7 +91,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final String query = controller.text.trim();
     if (query.isEmpty) return;
 
-
     // שיטה 1: הוספה והסרה מהירה
     controller.text = '$query '; // הוסף תו זמני
 
@@ -193,30 +192,33 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       vsync: this,
       initialIndex: _currentLeftPaneTabIndex,
     );
-    
+
     // הוספת listener ל-PDF View Focus להחזרה אוטומטית
     _pdfViewFocusNode.addListener(() {
       if (!_pdfViewFocusNode.hasFocus) {
         final currentFocus = FocusManager.instance.primaryFocus;
-        
+
         // אם הפוקוס עבר ל-Root Focus Scope או null (כלומר אין פוקוס ספציפי),
         // והחלונית השמאלית סגורה, החזר את הפוקוס ל-PDF
-        if ((currentFocus != _searchFieldFocusNode && currentFocus != _navigationFieldFocusNode) && 
+        if ((currentFocus != _searchFieldFocusNode &&
+                currentFocus != _navigationFieldFocusNode) &&
             !widget.tab.showLeftPane.value) {
           // שימוש ב-SchedulerBinding למהירות מקסימלית
           SchedulerBinding.instance.addPostFrameCallback((_) {
-            if (mounted && !_pdfViewFocusNode.hasFocus && !widget.tab.showLeftPane.value) {
+            if (mounted &&
+                !_pdfViewFocusNode.hasFocus &&
+                !widget.tab.showLeftPane.value) {
               _pdfViewFocusNode.requestFocus();
             }
           });
         }
       }
     });
-    
+
     // הוספת listeners לשדות טקסט
     _searchFieldFocusNode.addListener(() {});
     _navigationFieldFocusNode.addListener(() {});
-    
+
     if (_currentLeftPaneTabIndex == 1) {
       _searchFieldFocusNode.requestFocus();
     } else {
@@ -229,9 +231,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         setState(() {
           _currentLeftPaneTabIndex = _leftPaneTabController!.index;
         });
-        if (_leftPaneTabController!.index == 1 && widget.tab.showLeftPane.value) {
+        if (_leftPaneTabController!.index == 1 &&
+            widget.tab.showLeftPane.value) {
           _searchFieldFocusNode.requestFocus();
-        } else if (_leftPaneTabController!.index == 0 && widget.tab.showLeftPane.value) {
+        } else if (_leftPaneTabController!.index == 0 &&
+            widget.tab.showLeftPane.value) {
           _navigationFieldFocusNode.requestFocus();
         } else if (!widget.tab.showLeftPane.value) {
           // אם חלונית הצד סגורה, החזר focus ל-PDF
@@ -376,7 +380,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 widget.tab.searchText.isNotEmpty)) {
           widget.tab.showLeftPane.value = true;
         }
-        
+
         // 5. בקשת focus ל-PDF viewer אחרי שהכל מוכן
         if (mounted && !widget.tab.showLeftPane.value) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -492,7 +496,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Future<void> _loadPdfHeadingsAndLinks() async {
     try {
-
       // טעינת headings מה-DB
       final headings =
           await PdfHeadings.loadFromDatabase(widget.tab.book.title);
@@ -583,7 +586,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     return BlocProvider.value(
       value: _bloc,
       child: BlocListener<PdfBookBloc, PdfBookState>(
@@ -618,341 +621,333 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               LogicalKeyboardKey.numpadSubtract): _zoomOut,
         },
         child: Scaffold(
-            appBar: AppBar(
-              centerTitle: false,
-              backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-              shape: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                  width: 0.3,
-                ),
+          appBar: AppBar(
+            centerTitle: false,
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+            shape: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+                width: 0.3,
               ),
-              elevation: 0,
-              scrolledUnderElevation: 0,
-              title: ValueListenableBuilder(
-                valueListenable: widget.tab.currentTitle,
-                builder: (context, value, child) {
-                  String displayTitle = value;
-                  if (value.isNotEmpty &&
-                      !value.contains(widget.tab.book.title)) {
-                    displayTitle = "${widget.tab.book.title}, $value";
+            ),
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            title: ValueListenableBuilder(
+              valueListenable: widget.tab.currentTitle,
+              builder: (context, value, child) {
+                String displayTitle = value;
+                if (value.isNotEmpty &&
+                    !value.contains(widget.tab.book.title)) {
+                  displayTitle = "${widget.tab.book.title}, $value";
+                }
+                return SelectionArea(
+                  child: Text(
+                    displayTitle,
+                    style: const TextStyle(fontSize: 17),
+                    textAlign: TextAlign.end,
+                  ),
+                );
+              },
+            ),
+            leading: IconButton(
+              icon: const Icon(FluentIcons.navigation_24_regular),
+              tooltip: 'חיפוש וניווט',
+              onPressed: () {
+                widget.tab.showLeftPane.value = !widget.tab.showLeftPane.value;
+              },
+            ),
+            actions: _buildPdfActions(context, wideScreen),
+          ),
+          body: Row(
+            children: [
+              _buildLeftPane(),
+              BlocBuilder<PdfBookBloc, PdfBookState>(
+                buildWhen: (prev, curr) {
+                  if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
+                    return prev.sidebarWidth != curr.sidebarWidth ||
+                        prev.showLeftPane != curr.showLeftPane;
                   }
-                  return SelectionArea(
-                    child: Text(
-                      displayTitle,
-                      style: const TextStyle(fontSize: 17),
-                      textAlign: TextAlign.end,
-                    ),
+                  return true;
+                },
+                builder: (context, state) {
+                  if (state is! PdfBookLoaded) return const SizedBox.shrink();
+                  if (!state.showLeftPane) {
+                    return const SizedBox.shrink();
+                  }
+                  return ResizableDragHandle(
+                    isVertical: true,
+                    hitSize: 4,
+                    onDragDelta: (delta) {
+                      final newWidth =
+                          (state.sidebarWidth - delta).clamp(200.0, 600.0);
+                      _bloc.add(pdf_events.UpdateSidebarWidth(newWidth));
+                    },
+                    onDragEnd: () {
+                      final current = _bloc.state;
+                      if (current is PdfBookLoaded) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateSidebarWidth(current.sidebarWidth));
+                      }
+                    },
                   );
                 },
               ),
-              leading: IconButton(
-                icon: const Icon(FluentIcons.navigation_24_regular),
-                tooltip: 'חיפוש וניווט',
-                onPressed: () {
-                  widget.tab.showLeftPane.value =
-                      !widget.tab.showLeftPane.value;
-                },
-              ),
-              actions: _buildPdfActions(context, wideScreen),
-            ),
-            body: Row(
-              children: [
-                _buildLeftPane(),
-                BlocBuilder<PdfBookBloc, PdfBookState>(
-                  buildWhen: (prev, curr) {
-                    if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                      return prev.sidebarWidth != curr.sidebarWidth ||
-                          prev.showLeftPane != curr.showLeftPane;
-                    }
-                    return true;
-                  },
-                  builder: (context, state) {
-                    if (state is! PdfBookLoaded) return const SizedBox.shrink();
-                    if (!state.showLeftPane) {
-                      return const SizedBox.shrink();
-                    }
-                    return ResizableDragHandle(
-                      isVertical: true,
-                      hitSize: 4,
-                      onDragDelta: (delta) {
-                        final newWidth =
-                            (state.sidebarWidth - delta).clamp(200.0, 600.0);
-                        _bloc.add(pdf_events.UpdateSidebarWidth(newWidth));
-                      },
-                      onDragEnd: () {
-                        final current = _bloc.state;
-                        if (current is PdfBookLoaded) {
-                          context
-                              .read<SettingsBloc>()
-                              .add(UpdateSidebarWidth(current.sidebarWidth));
+              Expanded(
+                child: Stack(
+                  children: [
+                    NotificationListener<UserScrollNotification>(
+                      onNotification: (notification) {
+                        if (!(widget.tab.pinLeftPane.value ||
+                            (Settings.getValue<bool>('key-pin-sidebar') ??
+                                false))) {
+                          Future.microtask(() {
+                            widget.tab.showLeftPane.value = false;
+                            // החזרת focus ל-PDF אחרי גלילה
+                            _pdfViewFocusNode.requestFocus();
+                          });
                         }
+                        return false;
                       },
-                    );
-                  },
-                ),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      NotificationListener<UserScrollNotification>(
-                        onNotification: (notification) {
-                          if (!(widget.tab.pinLeftPane.value ||
-                              (Settings.getValue<bool>('key-pin-sidebar') ??
-                                  false))) {
+                      child: Listener(
+                        onPointerSignal: (event) {
+                          if (event is PointerScrollEvent &&
+                              !(widget.tab.pinLeftPane.value ||
+                                  (Settings.getValue<bool>('key-pin-sidebar') ??
+                                      false))) {
+                            widget.tab.showLeftPane.value = false;
+                            // החזרת focus ל-PDF אחרי גלילה
                             Future.microtask(() {
-                              widget.tab.showLeftPane.value = false;
-                              // החזרת focus ל-PDF אחרי גלילה
                               _pdfViewFocusNode.requestFocus();
                             });
                           }
-                          return false;
                         },
-                        child: Listener(
-                          onPointerSignal: (event) {
-                            if (event is PointerScrollEvent &&
-                                !(widget.tab.pinLeftPane.value ||
-                                    (Settings.getValue<bool>(
-                                            'key-pin-sidebar') ??
-                                        false))) {
-                              widget.tab.showLeftPane.value = false;
-                              // החזרת focus ל-PDF אחרי גלילה
-                              Future.microtask(() {
-                                _pdfViewFocusNode.requestFocus();
-                              });
-                            }
-                          },
-                          child: ColorFiltered(
-                            colorFilter: ColorFilter.mode(
-                              Colors.white,
-                              Provider.of<SettingsBloc>(context, listen: true)
-                                      .state
-                                      .isDarkMode
-                                  ? BlendMode.difference
-                                  : BlendMode.dst,
-                            ),
-                            child: Stack(
-                              children: [
-                                _pdfBytesFuture == null
-                                    ? _buildPdfViewerFromFile()
-                                    : FutureBuilder<Uint8List?>(
-                                        future: _pdfBytesFuture,
-                                        builder: (context, snapshot) {
-                                          if (snapshot.connectionState ==
-                                              ConnectionState.waiting) {
-                                            return const Center(
-                                              child:
-                                                  CircularProgressIndicator(),
-                                            );
-                                          }
+                        child: ColorFiltered(
+                          colorFilter: ColorFilter.mode(
+                            Colors.white,
+                            Provider.of<SettingsBloc>(context, listen: true)
+                                    .state
+                                    .isDarkMode
+                                ? BlendMode.difference
+                                : BlendMode.dst,
+                          ),
+                          child: Stack(
+                            children: [
+                              _pdfBytesFuture == null
+                                  ? _buildPdfViewerFromFile()
+                                  : FutureBuilder<Uint8List?>(
+                                      future: _pdfBytesFuture,
+                                      builder: (context, snapshot) {
+                                        if (snapshot.connectionState ==
+                                            ConnectionState.waiting) {
+                                          return const Center(
+                                            child: CircularProgressIndicator(),
+                                          );
+                                        }
 
-                                          if (snapshot.hasData &&
-                                              snapshot.data != null) {
-                                            return _buildPdfViewerFromBytes(
-                                                snapshot.data!);
-                                          }
+                                        if (snapshot.hasData &&
+                                            snapshot.data != null) {
+                                          return _buildPdfViewerFromBytes(
+                                              snapshot.data!);
+                                        }
 
-                                          return _buildPdfViewerFromFile();
-                                        },
-                                      ),
-                                // Loading and error indicators
-                                BlocBuilder<PdfBookBloc, PdfBookState>(
-                                  buildWhen: (prev, curr) {
-                                    if (prev is PdfBookLoaded &&
-                                        curr is PdfBookLoaded) {
-                                      return prev.isLoading != curr.isLoading ||
-                                          prev.loadSucceeded !=
-                                              curr.loadSucceeded;
-                                    }
-                                    return true;
-                                  },
-                                  builder: (context, state) {
-                                    if (state is! PdfBookLoaded) {
-                                      return const Positioned.fill(
-                                        child: ColoredBox(
-                                          color: Color(0xFFFFFFFF),
-                                          child: Center(
-                                              child:
-                                                  CircularProgressIndicator()),
-                                        ),
-                                      );
-                                    }
-                                    if (state.isLoading) {
-                                      return const Positioned.fill(
-                                        child: ColoredBox(
-                                          color: Color(0xFFFFFFFF),
-                                          child: Center(
-                                              child:
-                                                  CircularProgressIndicator()),
-                                        ),
-                                      );
-                                    }
-                                    if (!state.loadSucceeded) {
-                                      return const Positioned.fill(
+                                        return _buildPdfViewerFromFile();
+                                      },
+                                    ),
+                              // Loading and error indicators
+                              BlocBuilder<PdfBookBloc, PdfBookState>(
+                                buildWhen: (prev, curr) {
+                                  if (prev is PdfBookLoaded &&
+                                      curr is PdfBookLoaded) {
+                                    return prev.isLoading != curr.isLoading ||
+                                        prev.loadSucceeded !=
+                                            curr.loadSucceeded;
+                                  }
+                                  return true;
+                                },
+                                builder: (context, state) {
+                                  if (state is! PdfBookLoaded) {
+                                    return const Positioned.fill(
+                                      child: ColoredBox(
+                                        color: Color(0xFFFFFFFF),
                                         child: Center(
-                                            child: Text('Failed to load PDF')),
-                                      );
-                                    }
-                                    return const SizedBox.shrink();
-                                  },
-                                ),
-                              ],
-                            ),
+                                            child: CircularProgressIndicator()),
+                                      ),
+                                    );
+                                  }
+                                  if (state.isLoading) {
+                                    return const Positioned.fill(
+                                      child: ColoredBox(
+                                        color: Color(0xFFFFFFFF),
+                                        child: Center(
+                                            child: CircularProgressIndicator()),
+                                      ),
+                                    );
+                                  }
+                                  if (!state.loadSucceeded) {
+                                    return const Positioned.fill(
+                                      child: Center(
+                                          child: Text('Failed to load PDF')),
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                },
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                      // טאב צף לפתיחת חלונית המפרשים - עם 3 מצבים והדרכה
-                      BlocBuilder<PdfBookBloc, PdfBookState>(
-                        buildWhen: (prev, curr) {
-                          if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                            return prev.showRightPane != curr.showRightPane ||
-                                prev.isRightPaneHovering !=
-                                    curr.isRightPaneHovering;
-                          }
-                          return true;
-                        },
-                        builder: (context, state) {
-                          if (state is! PdfBookLoaded) {
-                            return const SizedBox.shrink();
-                          }
-                          // מציג את הכפתור רק כשהחלונית סגורה
-                          if (state.showRightPane) {
-                            return const SizedBox.shrink();
-                          }
+                    ),
+                    // טאב צף לפתיחת חלונית המפרשים - עם 3 מצבים והדרכה
+                    BlocBuilder<PdfBookBloc, PdfBookState>(
+                      buildWhen: (prev, curr) {
+                        if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
+                          return prev.showRightPane != curr.showRightPane ||
+                              prev.isRightPaneHovering !=
+                                  curr.isRightPaneHovering;
+                        }
+                        return true;
+                      },
+                      builder: (context, state) {
+                        if (state is! PdfBookLoaded) {
+                          return const SizedBox.shrink();
+                        }
+                        // מציג את הכפתור רק כשהחלונית סגורה
+                        if (state.showRightPane) {
+                          return const SizedBox.shrink();
+                        }
 
-                          final isHovering = state.isRightPaneHovering;
+                        final isHovering = state.isRightPaneHovering;
 
-                          return Positioned(
-                            left: 0, // צמוד לקצה
-                            top: MediaQuery.of(context).size.height *
-                                0.10, // למעלה במסך
-                            child: CommentaryPaneTooltip(
-                              child: MouseRegion(
-                                onEnter: (_) => _bloc.add(
-                                    const pdf_events.SetRightPaneHovering(
-                                        true)),
-                                onExit: (_) => _bloc.add(
-                                    const pdf_events.SetRightPaneHovering(
-                                        false)),
-                                child: GestureDetector(
-                                  onTap: () {
-                                    _bloc.add(const pdf_events.ToggleRightPane(
-                                        show: true));
-                                  },
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    curve: Curves.easeOut,
-                                    // מצב 1: סגור - בליטה קטנה, מצב 2: ריחוף - נשלף יותר
-                                    width: isHovering ? 48 : 20,
-                                    height: 80,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest
-                                          .withValues(
-                                              alpha: isHovering ? 0.95 : 0.8),
-                                      borderRadius: const BorderRadius.only(
-                                        topRight: Radius.circular(40),
-                                        bottomRight: Radius.circular(40),
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black
-                                              .withValues(alpha: 0.15),
-                                          blurRadius: isHovering ? 8 : 4,
-                                          offset: const Offset(2, 0),
-                                        ),
-                                      ],
+                        return Positioned(
+                          left: 0, // צמוד לקצה
+                          top: MediaQuery.of(context).size.height *
+                              0.10, // למעלה במסך
+                          child: CommentaryPaneTooltip(
+                            child: MouseRegion(
+                              onEnter: (_) => _bloc.add(
+                                  const pdf_events.SetRightPaneHovering(true)),
+                              onExit: (_) => _bloc.add(
+                                  const pdf_events.SetRightPaneHovering(false)),
+                              child: GestureDetector(
+                                onTap: () {
+                                  _bloc.add(const pdf_events.ToggleRightPane(
+                                      show: true));
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  curve: Curves.easeOut,
+                                  // מצב 1: סגור - בליטה קטנה, מצב 2: ריחוף - נשלף יותר
+                                  width: isHovering ? 48 : 20,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest
+                                        .withValues(
+                                            alpha: isHovering ? 0.95 : 0.8),
+                                    borderRadius: const BorderRadius.only(
+                                      topRight: Radius.circular(40),
+                                      bottomRight: Radius.circular(40),
                                     ),
-                                    child: Center(
-                                      child: AnimatedOpacity(
-                                        duration:
-                                            const Duration(milliseconds: 150),
-                                        opacity: isHovering ? 1.0 : 0.6,
-                                        child: Icon(
-                                          FluentIcons.chevron_right_24_regular,
-                                          size: isHovering ? 24 : 18,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface,
-                                        ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.15),
+                                        blurRadius: isHovering ? 8 : 4,
+                                        offset: const Offset(2, 0),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Center(
+                                    child: AnimatedOpacity(
+                                      duration:
+                                          const Duration(milliseconds: 150),
+                                      opacity: isHovering ? 1.0 : 0.6,
+                                      child: Icon(
+                                        FluentIcons.chevron_right_24_regular,
+                                        size: isHovering ? 24 : 18,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      ),
-                      // סרגל זום
-                      BlocBuilder<PdfBookBloc, PdfBookState>(
-                        buildWhen: (prev, curr) {
-                          if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                            return prev.showZoomBar != curr.showZoomBar;
-                          }
-                          return true;
-                        },
-                        builder: (context, state) {
-                          final showZoomBar =
-                              state is PdfBookLoaded && state.showZoomBar;
-                          if (!showZoomBar ||
-                              !widget.tab.pdfViewerController.isReady) {
-                            return const SizedBox.shrink();
-                          }
-                          return Positioned(
-                            top: 16,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: PdfZoomBar(
-                                currentZoom:
-                                    widget.tab.pdfViewerController.value.zoom,
-                                onZoomIn: _zoomIn,
-                                onZoomOut: _zoomOut,
-                                onResetZoom: _resetZoom,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                // Divider לחלונית ימנית
-                BlocBuilder<PdfBookBloc, PdfBookState>(
-                  buildWhen: (prev, curr) {
-                    if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                      return prev.showRightPane != curr.showRightPane ||
-                          prev.rightPaneWidth != curr.rightPaneWidth;
-                    }
-                    return true;
-                  },
-                  builder: (context, state) {
-                    if (state is! PdfBookLoaded) return const SizedBox.shrink();
-                    if (!state.showRightPane) return const SizedBox.shrink();
-                    return ResizableDragHandle(
-                      isVertical: true,
-                      hitSize: 4,
-                      onDragDelta: (delta) {
-                        final newWidth =
-                            (state.rightPaneWidth + delta).clamp(250.0, 600.0);
-                        _bloc.add(pdf_events.UpdateRightPaneWidth(newWidth));
+                          ),
+                        );
                       },
-                      onDragEnd: () {
-                        final current = _bloc.state;
-                        if (current is PdfBookLoaded) {
-                          context.read<SettingsBloc>().add(
-                              UpdateCommentaryPaneWidth(
-                                  current.rightPaneWidth));
+                    ),
+                    // סרגל זום
+                    BlocBuilder<PdfBookBloc, PdfBookState>(
+                      buildWhen: (prev, curr) {
+                        if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
+                          return prev.showZoomBar != curr.showZoomBar;
                         }
+                        return true;
                       },
-                    );
-                  },
+                      builder: (context, state) {
+                        final showZoomBar =
+                            state is PdfBookLoaded && state.showZoomBar;
+                        if (!showZoomBar ||
+                            !widget.tab.pdfViewerController.isReady) {
+                          return const SizedBox.shrink();
+                        }
+                        return Positioned(
+                          top: 16,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: PdfZoomBar(
+                              currentZoom:
+                                  widget.tab.pdfViewerController.value.zoom,
+                              onZoomIn: _zoomIn,
+                              onZoomOut: _zoomOut,
+                              onResetZoom: _resetZoom,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
-                // חלונית ימנית למפרשים
-                _buildRightPane(),
-              ],
-            ),
+              ),
+              // Divider לחלונית ימנית
+              BlocBuilder<PdfBookBloc, PdfBookState>(
+                buildWhen: (prev, curr) {
+                  if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
+                    return prev.showRightPane != curr.showRightPane ||
+                        prev.rightPaneWidth != curr.rightPaneWidth;
+                  }
+                  return true;
+                },
+                builder: (context, state) {
+                  if (state is! PdfBookLoaded) return const SizedBox.shrink();
+                  if (!state.showRightPane) return const SizedBox.shrink();
+                  return ResizableDragHandle(
+                    isVertical: true,
+                    hitSize: 4,
+                    onDragDelta: (delta) {
+                      final newWidth =
+                          (state.rightPaneWidth + delta).clamp(250.0, 600.0);
+                      _bloc.add(pdf_events.UpdateRightPaneWidth(newWidth));
+                    },
+                    onDragEnd: () {
+                      final current = _bloc.state;
+                      if (current is PdfBookLoaded) {
+                        context.read<SettingsBloc>().add(
+                            UpdateCommentaryPaneWidth(current.rightPaneWidth));
+                      }
+                    },
+                  );
+                },
+              ),
+              // חלונית ימנית למפרשים
+              _buildRightPane(),
+            ],
+          ),
         ),
       );
     });
@@ -1132,27 +1127,25 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   void _goNextPage() {
-    
     if (!widget.tab.pdfViewerController.isReady) {
       return;
     }
-    
+
     final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
     final totalPages = widget.tab.pdfViewerController.pageCount;
     final nextPage = min(currentPage + 1, totalPages);
-    
+
     widget.tab.pdfViewerController.goToPage(pageNumber: nextPage);
   }
 
   void _goPreviousPage() {
-    
     if (!widget.tab.pdfViewerController.isReady) {
       return;
     }
-    
+
     final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
     final prevPage = max(currentPage - 1, 1);
-    
+
     widget.tab.pdfViewerController.goToPage(pageNumber: prevPage);
   }
 
@@ -1195,7 +1188,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         );
       },
     );
-    
+
     // החזרת פוקוס ל-PDF אחרי סגירת הדיאלוג
     if (mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1204,7 +1197,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         }
       });
     }
-    
+
     return result ?? false;
   }
 
@@ -1634,7 +1627,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         UiSnack.show('שגיאה בהוספת הסימניה');
       }
     }
-    
+
     // החזרת פוקוס ל-PDF אחרי הוספת סימניה
     if (mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1812,7 +1805,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       bytes: await file.readAsBytes(),
       filename: fileName,
     );
-    
+
     // החזרת פוקוס ל-PDF אחרי סגירת דיאלוג ההדפסה
     if (mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
