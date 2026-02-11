@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
@@ -161,12 +162,23 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'אין אפשרות להיכנס להגדרות ללא סיסמה',
+                  'נדרשת סיסמה כדי לגשת להגדרות',
                   textDirection: TextDirection.rtl,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
+                ),
+                const SizedBox(height: 32),
+                FilledButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _dialogShown = false;
+                    });
+                    _showPasswordDialog();
+                  },
+                  icon: const Icon(FluentIcons.key_24_regular),
+                  label: const Text('הזן סיסמה'),
                 ),
               ],
             ),
