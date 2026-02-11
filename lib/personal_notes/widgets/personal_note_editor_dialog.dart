@@ -131,6 +131,8 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog> {
       return;
     }
 
+    if (!mounted) return;
+
     final result = _editorController.buildResult();
     if (result.contentPlain.trim().isEmpty) {
       return;

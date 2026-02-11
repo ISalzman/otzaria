@@ -63,12 +63,14 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
   }
 
   Future<void> _showPasswordDialog() async {
+    if (!mounted) return;
+
     final repository = context.read<SettingsRepository>();
 
     final verified = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => PopScope(
+      builder: (dialogContext) => PopScope(
         canPop: false,
         child: PasswordVerificationDialog(
           title: 'הזן סיסמה',
@@ -80,17 +82,20 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
       ),
     );
 
+    if (!mounted) return;
+
     if (verified == true) {
-      if (mounted) {
-        setState(() {
-          _isVerified = true;
-        });
-      }
+      setState(() {
+        _isVerified = true;
+      });
     } else {
-      // המשתמש ביטל - נחזור למסך הקודם
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
+      // המשתמש ביטל - נחזור למסך הקודם בצורה בטוחה
+      // נשתמש ב-SchedulerBinding כדי לוודא שה-context תקף
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      });
     }
   }
 
@@ -134,11 +139,42 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
     }
 
     if (!_isVerified) {
-      return const Scaffold(
-        body: Center(
-          child: Text(
-            'ממתין לאימות...',
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'הגדרות',
             textDirection: TextDirection.rtl,
+          ),
+          automaticallyImplyLeading: true,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'הנך במצב מוגן',
+                  textDirection: TextDirection.rtl,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'אין אפשרות להיכנס להגדרות ללא סיסמה',
+                  textDirection: TextDirection.rtl,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
           ),
         ),
       );

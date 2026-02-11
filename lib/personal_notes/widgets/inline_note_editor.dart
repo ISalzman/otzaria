@@ -53,6 +53,9 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
     if (!await verifyPasswordForAction(context)) {
       return;
     }
+
+    if (!mounted) return;
+
     final result = _controller.buildResult();
     if (result.contentPlain.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

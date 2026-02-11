@@ -213,6 +213,8 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
       return;
     }
 
+    if (!mounted) return;
+
     context.read<TextBookBloc>().add(SaveEditedSection(
           index: widget.sectionIndex,
           sectionId: widget.sectionId,
