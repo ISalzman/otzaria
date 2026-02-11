@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -45,8 +46,6 @@ import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
-import 'package:otzaria/utils/shortcut_helper.dart';
-import 'package:otzaria/utils/shortcut_validator.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 
 class PdfBookScreen extends StatefulWidget {
@@ -75,6 +74,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   int _currentLeftPaneTabIndex = 0;
   final FocusNode _searchFieldFocusNode = FocusNode();
   final FocusNode _navigationFieldFocusNode = FocusNode();
+  final FocusNode _pdfViewFocusNode = FocusNode();
   late final StreamSubscription<SettingsState> _settingsSub;
 
   Future<Uint8List?>? _pdfBytesFuture;
@@ -199,6 +199,30 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       vsync: this,
       initialIndex: _currentLeftPaneTabIndex,
     );
+    
+    // הוספת listener ל-PDF View Focus להחזרה אוטומטית
+    _pdfViewFocusNode.addListener(() {
+      if (!_pdfViewFocusNode.hasFocus) {
+        final currentFocus = FocusManager.instance.primaryFocus;
+        
+        // אם הפוקוס עבר ל-Root Focus Scope או null (כלומר אין פוקוס ספציפי),
+        // והחלונית השמאלית סגורה, החזר את הפוקוס ל-PDF
+        if ((currentFocus?.debugLabel == 'Root Focus Scope' || currentFocus == null) && 
+            !widget.tab.showLeftPane.value) {
+          // שימוש ב-SchedulerBinding למהירות מקסימלית
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_pdfViewFocusNode.hasFocus && !widget.tab.showLeftPane.value) {
+              _pdfViewFocusNode.requestFocus();
+            }
+          });
+        }
+      }
+    });
+    
+    // הוספת listeners לשדות טקסט
+    _searchFieldFocusNode.addListener(() {});
+    _navigationFieldFocusNode.addListener(() {});
+    
     if (_currentLeftPaneTabIndex == 1) {
       _searchFieldFocusNode.requestFocus();
     } else {
@@ -211,10 +235,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         setState(() {
           _currentLeftPaneTabIndex = _leftPaneTabController!.index;
         });
-        if (_leftPaneTabController!.index == 1) {
+        if (_leftPaneTabController!.index == 1 && widget.tab.showLeftPane.value) {
           _searchFieldFocusNode.requestFocus();
-        } else if (_leftPaneTabController!.index == 0) {
+        } else if (_leftPaneTabController!.index == 0 && widget.tab.showLeftPane.value) {
           _navigationFieldFocusNode.requestFocus();
+        } else if (!widget.tab.showLeftPane.value) {
+          // אם חלונית הצד סגורה, החזר focus ל-PDF
+          _pdfViewFocusNode.requestFocus();
         }
       }
     };
@@ -227,6 +254,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         } else if (_leftPaneTabController!.index == 0) {
           _navigationFieldFocusNode.requestFocus();
         }
+      } else {
+        // כשסוגרים את חלונית הצד, החזר focus ל-PDF
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _pdfViewFocusNode.requestFocus();
+          }
+        });
       }
     };
     widget.tab.showLeftPane.addListener(_showLeftPaneListener);
@@ -350,29 +384,78 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 widget.tab.searchText.isNotEmpty)) {
           widget.tab.showLeftPane.value = true;
         }
+        
+        // 5. בקשת focus ל-PDF viewer אחרי שהכל מוכן
+        if (mounted && !widget.tab.showLeftPane.value) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _pdfViewFocusNode.requestFocus();
+            }
+          });
+        }
       },
     );
   }
 
   Widget _buildPdfViewerFromFile() {
-    return PdfViewer.file(
-      widget.tab.book.path,
-      initialPageNumber: widget.tab.pageNumber,
-      passwordProvider: () => passwordDialog(context),
-      controller: widget.tab.pdfViewerController,
-      useProgressiveLoading: false,
-      params: _buildPdfViewerParams(),
+    return KeyboardListener(
+      focusNode: _pdfViewFocusNode,
+      autofocus: true,
+      onKeyEvent: (KeyEvent event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            _goNextPage();
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            _goPreviousPage();
+          }
+        }
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          _pdfViewFocusNode.requestFocus();
+        },
+        child: PdfViewer.file(
+          widget.tab.book.path,
+          initialPageNumber: widget.tab.pageNumber,
+          passwordProvider: () => passwordDialog(context),
+          controller: widget.tab.pdfViewerController,
+          useProgressiveLoading: false,
+          params: _buildPdfViewerParams(),
+        ),
+      ),
     );
   }
 
   Widget _buildPdfViewerFromBytes(Uint8List bytes) {
-    return PdfViewer.data(
-      bytes,
-      sourceName: widget.tab.book.title,
-      controller: widget.tab.pdfViewerController,
-      params: _buildPdfViewerParams(),
+    return KeyboardListener(
+      focusNode: _pdfViewFocusNode,
+      autofocus: true,
+      onKeyEvent: (KeyEvent event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            _goNextPage();
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            _goPreviousPage();
+          }
+        }
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          _pdfViewFocusNode.requestFocus();
+        },
+        child: PdfViewer.data(
+          bytes,
+          sourceName: widget.tab.book.title,
+          controller: widget.tab.pdfViewerController,
+          params: _buildPdfViewerParams(),
+        ),
+      ),
     );
   }
+
+  // KeyEventResult _handlePdfViewKeyPress(FocusNode node, KeyEvent event) - REMOVED, using KeyboardListener instead
 
   /// טעינת הגדרות פר-ספר
   Future<void> _loadPerBookSettings() async {
@@ -401,6 +484,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _leftPaneTabController?.dispose();
     _searchFieldFocusNode.dispose();
     _navigationFieldFocusNode.dispose();
+    _pdfViewFocusNode.dispose();
     _settingsSub.cancel();
     _bloc.close();
     super.dispose();
@@ -527,6 +611,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    
     return BlocProvider.value(
       value: _bloc,
       child: BlocListener<PdfBookBloc, PdfBookState>(
@@ -560,32 +645,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           LogicalKeySet(LogicalKeyboardKey.control,
               LogicalKeyboardKey.numpadSubtract): _zoomOut,
         },
-        child: Focus(
-          autofocus: !Platform.isAndroid,
-          onKeyEvent: (node, event) {
-            debugPrint(
-                'PDF Screen onKeyEvent: logicalKey=${event.logicalKey}, physicalKey=${event.physicalKey}');
-            if (event is KeyDownEvent) {
-              debugPrint(
-                  'PDF Screen KeyDownEvent: logicalKey=${event.logicalKey}, physicalKey=${event.physicalKey}');
-              if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-                  event.logicalKey == LogicalKeyboardKey.pageDown) {
-                debugPrint('Calling _goNextPage()');
-                _goNextPage();
-                return KeyEventResult.handled;
-              }
-              if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
-                  event.logicalKey == LogicalKeyboardKey.pageUp) {
-                debugPrint('Calling _goPreviousPage()');
-                _goPreviousPage();
-                return KeyEventResult.handled;
-              }
-            }
-            _handleGlobalKeyEvent(event);
-            debugPrint('PDF Screen onKeyEvent: returning ignored');
-            return KeyEventResult.ignored;
-          },
-          child: Scaffold(
+        child: Scaffold(
             appBar: AppBar(
               centerTitle: false,
               backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
@@ -669,6 +729,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                   false))) {
                             Future.microtask(() {
                               widget.tab.showLeftPane.value = false;
+                              // החזרת focus ל-PDF אחרי גלילה
+                              _pdfViewFocusNode.requestFocus();
                             });
                           }
                           return false;
@@ -681,6 +743,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                             'key-pin-sidebar') ??
                                         false))) {
                               widget.tab.showLeftPane.value = false;
+                              // החזרת focus ל-PDF אחרי גלילה
+                              Future.microtask(() {
+                                _pdfViewFocusNode.requestFocus();
+                              });
                             }
                           },
                           child: ColorFiltered(
@@ -915,7 +981,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 _buildRightPane(),
               ],
             ),
-          ),
         ),
       );
     });
@@ -1095,13 +1160,36 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   void _goNextPage() {
-    debugPrint('_goNextPage called');
-    _bloc.add(const pdf_events.GoToNextPage());
+    debugPrint('🔵 _goNextPage called');
+    debugPrint('🔵 PDF controller ready: ${widget.tab.pdfViewerController.isReady}');
+    
+    if (!widget.tab.pdfViewerController.isReady) {
+      debugPrint('🔵 PDF not ready yet, ignoring');
+      return;
+    }
+    
+    final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
+    final totalPages = widget.tab.pdfViewerController.pageCount;
+    final nextPage = min(currentPage + 1, totalPages);
+    
+    debugPrint('🔵 Going to page $nextPage (current: $currentPage, total: $totalPages)');
+    widget.tab.pdfViewerController.goToPage(pageNumber: nextPage);
   }
 
   void _goPreviousPage() {
-    debugPrint('_goPreviousPage called');
-    _bloc.add(const pdf_events.GoToPreviousPage());
+    debugPrint('🔴 _goPreviousPage called');
+    debugPrint('🔴 PDF controller ready: ${widget.tab.pdfViewerController.isReady}');
+    
+    if (!widget.tab.pdfViewerController.isReady) {
+      debugPrint('🔴 PDF not ready yet, ignoring');
+      return;
+    }
+    
+    final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
+    final prevPage = max(currentPage - 1, 1);
+    
+    debugPrint('🔴 Going to page $prevPage (current: $currentPage)');
+    widget.tab.pdfViewerController.goToPage(pageNumber: prevPage);
   }
 
   Future<void> navigateToUrl(Uri url) async {
@@ -1143,6 +1231,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         );
       },
     );
+    
+    // החזרת פוקוס ל-PDF אחרי סגירת הדיאלוג
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _pdfViewFocusNode.requestFocus();
+        }
+      });
+    }
+    
     return result ?? false;
   }
 
@@ -1572,6 +1670,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         UiSnack.show('שגיאה בהוספת הסימניה');
       }
     }
+    
+    // החזרת פוקוס ל-PDF אחרי הוספת סימניה
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _pdfViewFocusNode.requestFocus();
+        }
+      });
+    }
   }
 
   /// מוצא את הכותרת המתאימה לעמוד מסוים ב-outline
@@ -1672,6 +1779,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
     );
 
+    // החזרת פוקוס ל-PDF אחרי סגירת הדיאלוג
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _pdfViewFocusNode.requestFocus();
+        }
+      });
+    }
+
     if (!mounted) return;
 
     if (noteContent == null) {
@@ -1733,6 +1849,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       bytes: await file.readAsBytes(),
       filename: fileName,
     );
+    
+    // החזרת פוקוס ל-PDF אחרי סגירת דיאלוג ההדפסה
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _pdfViewFocusNode.requestFocus();
+        }
+      });
+    }
   }
 
   Widget _buildTextButton(
@@ -1808,17 +1933,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
   }
 
-  void _handleGlobalKeyEvent(KeyEvent event) {
-    if (!mounted) return;
-    if (event is! KeyDownEvent) return;
+  // void _handleGlobalKeyEvent(KeyEvent event) {
+  //   if (!mounted) return;
+  //   if (event is! KeyDownEvent) return;
 
-    final togglePdfShortcut =
-        Settings.getValue<String>('key-shortcut-toggle-pdf-view') ??
-            ShortcutValidator
-                .defaultShortcuts['key-shortcut-toggle-pdf-view'] ??
-            'ctrl+shift+p';
-    if (ShortcutHelper.matchesShortcut(event, togglePdfShortcut)) {
-      _handleTextButtonPress(context);
-    }
-  }
+  //   final togglePdfShortcut =
+  //       Settings.getValue<String>('key-shortcut-toggle-pdf-view') ??
+  //           ShortcutValidator
+  //               .defaultShortcuts['key-shortcut-toggle-pdf-view'] ??
+  //           'ctrl+shift+p';
+  //   if (ShortcutHelper.matchesShortcut(event, togglePdfShortcut)) {
+  //     _handleTextButtonPress(context);
+  //   }
+  // }
 }
