@@ -481,10 +481,10 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
               style: TextStyle(fontSize: 13)),
           onTap: () async {
             // בדיקה אם במצב מוגן - אם כן, דרוש אימות סיסמה
-            if (context.mounted && shouldProtectSettings(context)) {
+            if (shouldProtectSettings(context)) {
               final verified = await verifyPasswordForAction(context);
               if (!verified || !context.mounted) {
-                return; // המשתמש ביטל או הסיסמה שגויה
+                return;
               }
             }
 

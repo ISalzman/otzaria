@@ -501,15 +501,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           await PdfHeadings.loadFromDatabase(widget.tab.book.title);
       if (headings != null) {
         widget.tab.pdfHeadings = headings;
-      } else {
-        debugPrint('❌ Failed to load headings from DB');
       }
 
       // טעינת links
       final library = await DataRepository.instance.library;
 
-      debugPrint(
-          '🔍 Searching for TextBook with title: "${widget.tab.book.title}"');
       final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
 
       if (textBook != null) {
@@ -523,22 +519,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               debugPrint(
                   '  - Line ${link.index1}: ${link.heRef} (${link.connectionType})');
             }
-          } else {
-            debugPrint('⚠️ Links list is empty');
           }
-        } else {
-          debugPrint('❌ Found book but it is not a TextBook');
         }
-      } else {
-        debugPrint('❌ TextBook not found in library');
       }
 
       if (mounted) {
         setState(() {});
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ Error loading PDF headings and links: $e');
-      debugPrint('Stack trace: $stackTrace');
+      debugPrint('Error loading PDF headings and links: $e\n$stackTrace');
     }
   }
 
@@ -1888,18 +1877,4 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
     );
   }
-
-  // void _handleGlobalKeyEvent(KeyEvent event) {
-  //   if (!mounted) return;
-  //   if (event is! KeyDownEvent) return;
-
-  //   final togglePdfShortcut =
-  //       Settings.getValue<String>('key-shortcut-toggle-pdf-view') ??
-  //           ShortcutValidator
-  //               .defaultShortcuts['key-shortcut-toggle-pdf-view'] ??
-  //           'ctrl+shift+p';
-  //   if (ShortcutHelper.matchesShortcut(event, togglePdfShortcut)) {
-  //     _handleTextButtonPress(context);
-  //   }
-  // }
 }
