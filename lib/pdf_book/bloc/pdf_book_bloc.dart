@@ -290,22 +290,16 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     GoToNextPage event,
     Emitter<PdfBookState> emit,
   ) {
-    debugPrint('🔵 Bloc: _onGoToNextPage called');
-    debugPrint('🔵 Bloc: pdfController.isReady = ${pdfController.isReady}');
-    debugPrint('🔵 Bloc: state type = ${state.runtimeType}');
     
     if (!pdfController.isReady) {
-      debugPrint('🔵 Bloc: PDF controller not ready, returning');
       return;
     }
     final current = state;
     if (current is! PdfBookLoaded) {
-      debugPrint('🔵 Bloc: State is not PdfBookLoaded, returning');
       return;
     }
 
     final nextPage = min(current.currentPageNumber + 1, current.totalPages);
-    debugPrint('🔵 Bloc: Going to next page: $nextPage (current: ${current.currentPageNumber})');
     pdfController.goToPage(pageNumber: nextPage);
   }
 
@@ -313,22 +307,16 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     GoToPreviousPage event,
     Emitter<PdfBookState> emit,
   ) {
-    debugPrint('🔴 Bloc: _onGoToPreviousPage called');
-    debugPrint('🔴 Bloc: pdfController.isReady = ${pdfController.isReady}');
-    debugPrint('🔴 Bloc: state type = ${state.runtimeType}');
     
     if (!pdfController.isReady) {
-      debugPrint('🔴 Bloc: PDF controller not ready, returning');
       return;
     }
     final current = state;
     if (current is! PdfBookLoaded) {
-      debugPrint('🔴 Bloc: State is not PdfBookLoaded, returning');
       return;
     }
 
     final prevPage = max(current.currentPageNumber - 1, 1);
-    debugPrint('🔴 Bloc: Going to previous page: $prevPage (current: ${current.currentPageNumber})');
     pdfController.goToPage(pageNumber: prevPage);
   }
 
