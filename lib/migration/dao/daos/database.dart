@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' as sqflite_ffi;
 import 'package:path/path.dart' as p;
@@ -169,7 +168,6 @@ class MyDatabase {
       path,
       version: 5, // Incremented version to align book_file/db_meta schema
       onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
       onOpen: _onOpen,
     );
   }
@@ -192,150 +190,6 @@ class MyDatabase {
     final createScripts = _getCreateScripts();
     for (final script in createScripts) {
       await db.execute(script);
-    }
-  }
-
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Handle database upgrades
-    if (oldVersion < 2) {
-      // Migration from version 1 to 2: Add externalId column to book table
-      try {
-        await db.execute('ALTER TABLE book ADD COLUMN externalId TEXT;');
-        debugPrint('✅ Migration v1→v2: Added externalId column to book table');
-      } catch (e) {
-        // Column might already exist, ignore error
-        debugPrint(
-            '⚠️ Migration v1→v2: externalId column might already exist: $e');
-      }
-    }
-
-    if (oldVersion < 3) {
-      // Migration from version 2 to 3: Add lineIndex column to tocEntry table
-      try {
-        await db.execute('ALTER TABLE tocEntry ADD COLUMN lineIndex INTEGER;');
-        debugPrint(
-            '✅ Migration v2→v3: Added lineIndex column to tocEntry table');
-      } catch (e) {
-        // Column might already exist, ignore error
-        debugPrint(
-            '⚠️ Migration v2→v3: lineIndex column might already exist: $e');
-      }
-    }
-
-    if (oldVersion < 4) {
-      // Migration from version 3 to 4: Add book_file table
-      try {
-        await db.execute('''
-          CREATE TABLE IF NOT EXISTS book_file (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bookId INTEGER NOT NULL,
-            kind TEXT NOT NULL,
-            data BLOB NOT NULL,
-            size INTEGER NOT NULL,
-            sha256 TEXT NOT NULL,
-            originalRelPath TEXT,
-            createdAt INTEGER NOT NULL,
-            FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE
-          );
-        ''');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_book_file_book ON book_file(bookId);');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_book_file_kind ON book_file(kind);');
-        await db.execute(
-            'CREATE UNIQUE INDEX IF NOT EXISTS uq_book_file_book_kind ON book_file(bookId, kind);');
-        await db.execute(
-            'CREATE UNIQUE INDEX IF NOT EXISTS uq_book_file_kind_sha ON book_file(kind, sha256);');
-        debugPrint('✅ Migration v3→v4: Added book_file table');
-      } catch (e) {
-        debugPrint(
-            '⚠️ Migration v3→v4: book_file table might already exist: $e');
-      }
-    }
-
-    if (oldVersion < 5) {
-      // Migration from version 4 to 5: Align book_file schema + add db_meta
-      try {
-        await db.execute('''
-          CREATE TABLE IF NOT EXISTS book_file_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bookId INTEGER NOT NULL,
-            kind TEXT NOT NULL,
-            data BLOB NOT NULL,
-            size INTEGER NOT NULL,
-            sha256 TEXT NOT NULL,
-            originalRelPath TEXT,
-            createdAt INTEGER NOT NULL,
-            FOREIGN KEY (bookId) REFERENCES book(id) ON DELETE CASCADE
-          );
-        ''');
-
-        // Try to migrate data from legacy table if exists
-        try {
-          await db.execute('''
-            INSERT INTO book_file_new (bookId, kind, data, size, sha256, originalRelPath, createdAt)
-            SELECT bookId,
-                   'pdf' AS kind,
-                   data AS data,
-                   LENGTH(data) AS size,
-                   '' AS sha256,
-                   NULL AS originalRelPath,
-                   COALESCE(createdAt, 0) AS createdAt
-            FROM book_file;
-          ''');
-        } catch (_) {
-          try {
-            await db.execute('''
-              INSERT INTO book_file_new (bookId, kind, data, size, sha256, originalRelPath, createdAt)
-              SELECT bookId,
-                     'pdf' AS kind,
-                     content AS data,
-                     LENGTH(content) AS size,
-                     '' AS sha256,
-                     NULL AS originalRelPath,
-                     COALESCE(createAt, 0) AS createdAt
-              FROM book_file;
-            ''');
-          } catch (_) {
-            // Ignore if legacy table or columns do not exist
-          }
-        }
-
-        await db.execute('DROP TABLE IF EXISTS book_file;');
-        await db.execute('ALTER TABLE book_file_new RENAME TO book_file;');
-
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_book_file_book ON book_file(bookId);');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_book_file_kind ON book_file(kind);');
-        await db.execute(
-            'CREATE UNIQUE INDEX IF NOT EXISTS uq_book_file_book_kind ON book_file(bookId, kind);');
-        await db.execute(
-            'CREATE UNIQUE INDEX IF NOT EXISTS uq_book_file_kind_sha ON book_file(kind, sha256);');
-
-        await db.execute('''
-          CREATE TABLE IF NOT EXISTS db_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-          );
-        ''');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_db_meta_key ON db_meta(key);');
-
-        debugPrint('✅ Migration v4→v5: Aligned book_file and added db_meta');
-      } catch (e) {
-        debugPrint('⚠️ Migration v4→v5: book_file/db_meta migration issue: $e');
-      }
-    }
-
-    // Ensure all other tables exist (for any missing tables)
-    final createScripts = _getCreateScripts();
-    for (final script in createScripts) {
-      try {
-        await db.execute(script);
-      } catch (e) {
-        // Ignore errors for tables that already exist
-      }
     }
   }
 
