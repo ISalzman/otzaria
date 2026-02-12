@@ -21,6 +21,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateFontFamily>(_onUpdateFontFamily);
     on<UpdateCommentatorsFontFamily>(_onUpdateCommentatorsFontFamily);
     on<UpdateCommentatorsFontSize>(_onUpdateCommentatorsFontSize);
+    on<UpdateLineHeight>(_onUpdateLineHeight);
     on<UpdateShowOtzarHachochma>(_onUpdateShowOtzarHachochma);
     on<UpdateShowHebrewBooks>(_onUpdateShowHebrewBooks);
     on<UpdateShowExternalBooks>(_onUpdateShowExternalBooks);
@@ -49,6 +50,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateEnableHtmlLinks>(_onUpdateEnableHtmlLinks);
     on<UpdatePersonalNotesCollapsedByDefault>(
         _onUpdatePersonalNotesCollapsedByDefault);
+    on<UpdateProtectedModeEnabled>(_onUpdateProtectedModeEnabled);
+    on<UpdateProtectedModePassword>(_onUpdateProtectedModePassword);
   }
 
   Future<void> _onLoadSettings(
@@ -72,6 +75,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       fontFamily: settings['fontFamily'],
       commentatorsFontFamily: settings['commentatorsFontFamily'],
       commentatorsFontSize: settings['commentatorsFontSize'],
+      lineHeight: settings['lineHeight'],
       showOtzarHachochma: settings['showOtzarHachochma'],
       showHebrewBooks: settings['showHebrewBooks'],
       showExternalBooks: settings['showExternalBooks'],
@@ -100,6 +104,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       enableHtmlLinks: settings['enableHtmlLinks'] ?? true,
       personalNotesCollapsedByDefault:
           settings['personalNotesCollapsedByDefault'] ?? true,
+      protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
     ));
   }
 
@@ -143,6 +148,21 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         .updatePersonalNotesCollapsedByDefault(event.collapsedByDefault);
     emit(state.copyWith(
         personalNotesCollapsedByDefault: event.collapsedByDefault));
+  }
+
+  Future<void> _onUpdateProtectedModeEnabled(
+    UpdateProtectedModeEnabled event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateProtectedModeEnabled(event.enabled);
+    emit(state.copyWith(protectedModeEnabled: event.enabled));
+  }
+
+  Future<void> _onUpdateProtectedModePassword(
+    UpdateProtectedModePassword event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateProtectedModePassword(event.password);
   }
 
   Future<void> _onUpdateDarkMode(
@@ -221,6 +241,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateCommentatorsFontSize(event.commentatorsFontSize);
     emit(state.copyWith(commentatorsFontSize: event.commentatorsFontSize));
+  }
+
+  Future<void> _onUpdateLineHeight(
+    UpdateLineHeight event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateLineHeight(event.lineHeight);
+    emit(state.copyWith(lineHeight: event.lineHeight));
   }
 
   Future<void> _onUpdateShowOtzarHachochma(

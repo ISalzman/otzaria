@@ -164,6 +164,31 @@ class ReadingSettingsTab extends StatelessWidget {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // מרווח בין שורות
+              Expanded(
+                child: _FontSizeSlider(
+                  icon: FluentIcons.text_align_distributed_vertical_24_regular,
+                  label: 'מרווח בין שורות',
+                  value: state.lineHeight.clamp(1.0, 3.0),
+                  min: 1.0,
+                  max: 3.0,
+                  divisions: 20,
+                  onChanged: (value) {
+                    context.read<SettingsBloc>().add(UpdateLineHeight(value));
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              // מקום ריק לאיזון
+              const Expanded(child: SizedBox()),
+            ],
+          ),
+        ),
         const Divider(height: 1),
         _TextWidthSlider(state: state),
       ],
@@ -521,6 +546,7 @@ class _FontSizeSlider extends StatefulWidget {
   final double value;
   final double min;
   final double max;
+  final int? divisions;
   final ValueChanged<double> onChanged;
 
   const _FontSizeSlider({
@@ -529,6 +555,7 @@ class _FontSizeSlider extends StatefulWidget {
     required this.value,
     required this.min,
     required this.max,
+    this.divisions,
     required this.onChanged,
   });
 
@@ -567,7 +594,9 @@ class _FontSizeSliderState extends State<_FontSizeSlider> {
                   style: Theme.of(context).textTheme.titleMedium),
             ),
             Text(
-              _currentValue.toStringAsFixed(0),
+              widget.divisions != null
+                  ? _currentValue.toStringAsFixed(1)
+                  : _currentValue.toStringAsFixed(0),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.primary,
                 fontSize: 16,
@@ -580,8 +609,10 @@ class _FontSizeSliderState extends State<_FontSizeSlider> {
           value: _currentValue,
           min: widget.min,
           max: widget.max,
-          divisions: (widget.max - widget.min).toInt(),
-          label: _currentValue.toStringAsFixed(0),
+          divisions: widget.divisions ?? (widget.max - widget.min).toInt(),
+          label: widget.divisions != null
+              ? _currentValue.toStringAsFixed(1)
+              : _currentValue.toStringAsFixed(0),
           onChanged: (value) {
             setState(() => _currentValue = value);
             widget.onChanged(value);

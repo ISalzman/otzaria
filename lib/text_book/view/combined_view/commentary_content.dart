@@ -109,6 +109,7 @@ class _CommentaryContentState extends State<CommentaryContent> {
                     currentSearchIndex: widget.currentSearchIndex,
                     fontSize: settingsState.commentatorsFontSize,
                     fontFamily: settingsState.commentatorsFontFamily,
+                    lineHeight: settingsState.lineHeight,
                   ),
                 );
               },

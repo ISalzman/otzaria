@@ -8,7 +8,7 @@ on:
     branches:
       - main
       - dev
-      - MTDB+dev
+      - migrationDB_V2
 
   # pull_request:
   #   types: [opened, synchronize, reopened]
@@ -424,6 +424,9 @@ jobs:
   build_android:
     if: github.event_name != 'release'
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_HOME: ${{ github.workspace }}/.rustup
+      CARGO_HOME: ${{ github.workspace }}/.cargo
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
@@ -445,6 +448,67 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add cargo to PATH & verify toolchain
+        run: |
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+          rustc -Vv
+          cargo -V
+          rustup show
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/registry
+            ${{ env.CARGO_HOME }}/git
+            ${{ env.RUSTUP_HOME }}
+          key: ${{ runner.os }}-rust-android-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-android-
+
+      - name: Pre-install Android Rust targets (with retry)
+        run: |
+          set -e
+          # פונקציה להתקנת target עם retry
+          install_target_with_retry() {
+            local target=$1
+            local max_attempts=3
+            local attempt=1
+            
+            while [ $attempt -le $max_attempts ]; do
+              echo "Installing $target (attempt $attempt/$max_attempts)..."
+              if rustup target add --toolchain stable "$target"; then
+                echo "✓ Successfully installed $target"
+                return 0
+              fi
+              
+              echo "Failed to install $target, cleaning up..."
+              # ניקוי קבצים זמניים שעלולים לגרום לבעיה
+              rm -rf ~/.rustup/downloads/*.partial || true
+              rm -rf ~/.rustup/tmp/* || true
+              
+              attempt=$((attempt + 1))
+              if [ $attempt -le $max_attempts ]; then
+                echo "Waiting 10 seconds before retry..."
+                sleep 10
+              fi
+            done
+            
+            echo "::error::Failed to install $target after $max_attempts attempts"
+            return 1
+          }
+          
+          # התקנת כל ה-targets הנדרשים
+          install_target_with_retry "armv7-linux-androideabi"
+          install_target_with_retry "aarch64-linux-android"
+          install_target_with_retry "x86_64-linux-android"
+          install_target_with_retry "i686-linux-android"
+          
+          echo "All Android Rust targets installed successfully"
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -478,17 +542,28 @@ jobs:
 
       - name: Setup Android signing
         shell: bash
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore/otzaria-keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -e
-          mkdir -p android/keystore
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/keystore/otzaria-keystore.jks
-          chmod 600 android/keystore/otzaria-keystore.jks
-          cat > android/key.properties << EOF
-          storeFile=keystore/otzaria-keystore.jks
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
+          mkdir -p android/app/keystore
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore/otzaria-keystore.jks
+          chmod 600 android/app/keystore/otzaria-keystore.jks
+          
+          # Verify keystore file exists
+          echo "Verifying keystore setup..."
+          ls -la android/app/keystore/
+          
+          if [ ! -f android/app/keystore/otzaria-keystore.jks ]; then
+            echo "::error::Keystore file was not created!"
+            exit 1
+          fi
+          
+          echo "✓ Keystore file exists at: android/app/keystore/otzaria-keystore.jks"
+          echo "✓ Environment variables set for Gradle signing"
       
       - run: sudo apt install ninja-build
       
@@ -514,6 +589,11 @@ jobs:
           fi
       
       - name: Build Android APK
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore/otzaria-keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           flutter pub get
           flutter build apk
@@ -743,7 +823,7 @@ jobs:
           body: |
             ## שינויים בגרסה זו
             נבנה מcommit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
-            ${{ (github.ref_name == 'migrationToDB' || github.ref_name == 'MTDB+dev') && 'אל תוריד גרסה זו, אם לא קראת את המדריך, פה: https://forum.otzaria.org/topic/28/%D7%A2%D7%93%D7%9B%D7%95%D7%9F-%D7%92%D7%A8%D7%A1%D7%AA-%D7%94db-%D7%99%D7%95%D7%A6%D7%90%D7%AA-%D7%9C%D7%93%D7%A8%D7%9A-%D7%9C%D7%9E%D7%A9%D7%AA%D7%9E%D7%A9%D7%99%D7%9D-%D7%90%D7%9E%D7%99%D7%A6%D7%99%D7%9D-%D7%91%D7%9C%D7%91%D7%93-%D7%94%D7%93%D7%A8%D7%9B%D7%94' || '' }}
+            ${{ github.ref_name == 'migrationDB_V2' && 'גרסה זו משתמשת בקובץ DB, אותו יש להוריד מ: https://github.com/Otzaria/otzaria-library/releases/download/library-db-1/seforim.db.zip' || '' }}
             ענף: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -845,7 +925,7 @@ jobs:
             
             ---
             נבנה מcommit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
-            ${{ (github.head_ref == 'migrationToDB' || github.head_ref == 'MTDB+dev') && 'אל תוריד גרסה זו, אם לא קראת את המדריך, פה: https://forum.otzaria.org/topic/28/%D7%A2%D7%93%D7%9B%D7%95%D7%9F-%D7%92%D7%A8%D7%A1%D7%AA-%D7%94db-%D7%99%D7%95%D7%A6%D7%90%D7%AA-%D7%9C%D7%93%D7%A8%D7%9A-%D7%9C%D7%9E%D7%A9%D7%AA%D7%9E%D7%A9%D7%99%D7%9D-%D7%90%D7%9E%D7%99%D7%A6%D7%99%D7%9D-%D7%91%D7%9C%D7%91%D7%93-%D7%94%D7%93%D7%A8%D7%9B%D7%94' || '' }}
+            ${{ github.head_ref == 'migrationDB_V2' && 'גרסה זו משתמשת בקובץ DB, אותו יש להוריד מ: https://github.com/Otzaria/otzaria-library/releases/download/library-db-1/seforim.db.zip' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

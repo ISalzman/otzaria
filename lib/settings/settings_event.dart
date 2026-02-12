@@ -91,6 +91,15 @@ class UpdateCommentatorsFontSize extends SettingsEvent {
   List<Object?> get props => [commentatorsFontSize];
 }
 
+class UpdateLineHeight extends SettingsEvent {
+  final double lineHeight;
+
+  const UpdateLineHeight(this.lineHeight);
+
+  @override
+  List<Object?> get props => [lineHeight];
+}
+
 class UpdateShowOtzarHachochma extends SettingsEvent {
   final bool showOtzarHachochma;
 
@@ -324,4 +333,22 @@ class UpdatePersonalNotesCollapsedByDefault extends SettingsEvent {
 
   @override
   List<Object?> get props => [collapsedByDefault];
+}
+
+class UpdateProtectedModeEnabled extends SettingsEvent {
+  final bool enabled;
+
+  const UpdateProtectedModeEnabled(this.enabled);
+
+  @override
+  List<Object?> get props => [enabled];
+}
+
+class UpdateProtectedModePassword extends SettingsEvent {
+  final String password;
+
+  const UpdateProtectedModePassword(this.password);
+
+  @override
+  List<Object?> get props => [password];
 }
