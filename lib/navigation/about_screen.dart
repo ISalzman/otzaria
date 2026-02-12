@@ -242,7 +242,7 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Widget _buildEssentialPeopleList() {
-    final essentialPeople = [
+    const essentialPeople = [
       {
         'name': 'דוד אריאל',
         'url': '',
@@ -981,9 +981,6 @@ class _AboutScreenState extends State<AboutScreen> {
                 const SizedBox(height: 16),
                 _buildBookEditorsList(),
                 const SizedBox(height: 8),
-                const SizedBox(height: 16),
-                _buildBookEditorsList(),
-                const SizedBox(height: 32),
               ],
             ),
           ),
