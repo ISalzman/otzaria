@@ -139,6 +139,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           topics: topics,
           fileType: dbBook.fileType,
           categoryPath: categoryPath,
+          externalLibraryId: dbBook.externalLibraryId,
         );
 
         booksByCategory.putIfAbsent(categoryName, () => []);
@@ -696,6 +697,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           link: link,
           categoryPath: categoryPath,
           fileType: normalizedFileType,
+          externalLibraryId: dbBook.externalLibraryId,
         );
       }
     }
@@ -719,7 +721,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
           order: dbBook.order.toInt(),
           topics: topics,
           filePath: dbBook.filePath,
-          categoryPath: categoryPath);
+          categoryPath: categoryPath,
+          externalLibraryId: dbBook.externalLibraryId);
     }
 
     if (dbBook.filePath != null && dbBook.fileType == 'docx') {
@@ -741,7 +744,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
           order: dbBook.order.toInt(),
           topics: topics,
           filePath: dbBook.filePath,
-          categoryPath: categoryPath);
+          categoryPath: categoryPath,
+          externalLibraryId: dbBook.externalLibraryId);
     }
 
     return TextBook(
@@ -760,7 +764,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
             : bookMeta?['pubPlace'],
         order: dbBook.order.toInt(),
         topics: topics,
-        categoryPath: categoryPath);
+        categoryPath: categoryPath,
+        externalLibraryId: dbBook.externalLibraryId);
   }
 
   /// Counts the total number of categories in the tree.
