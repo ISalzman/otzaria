@@ -309,12 +309,37 @@ void main() {
         selectedText: 'טעות',
         preferredLineNumber: 0,
       );
-      final expectedStart = content.first.lastIndexOf('טעות');
 
+      // כשמילה מופיעה כמה פעמים באותה שורה, אי אפשר לדעת איזה מופע
+      // המשתמש בחר (SelectionArea לא חושף offset). לכן:
+      // 1. ההקשר חייב לכלול את כל השורה (שני המופעים)
+      // 2. usedLineFallback == true מסמן שהייתה עמימות
+      // 3. selectionStart/End מצביעים על כל השורה (לא על מופע בודד)
       expect(result.usedLineFallback, isTrue);
-      expect(result.selectionStart, equals(expectedStart));
-      expect(result.selectionEnd, equals(expectedStart + 'טעות'.length));
+      expect(result.selectionStart, equals(0)); // תחילת השורה
+      expect(result.selectionEnd, equals(content.first.length)); // סוף השורה
       expect(result.contextText, contains('אחת טעות שתיים טעות שלוש'));
+    });
+
+    test(
+        'should include full line context with both occurrences when ambiguous',
+        () {
+      final content = [
+        'מילה ראשונה',
+        'הפתיחה עם שלום ואז עוד שלום בסוף',
+        'מילה אחרונה',
+      ];
+
+      final result = ErrorReportHelper.resolveSelectionContext(
+        content: content,
+        selectedText: 'שלום',
+        preferredLineNumber: 1,
+      );
+
+      // ההקשר חייב לכלול את שני המופעים של "שלום" כך שמי שקורא
+      // את הדיווח יוכל להבין איזה מופע מדובר
+      expect(result.usedLineFallback, isTrue);
+      expect(result.contextText, contains('שלום ואז עוד שלום'));
     });
 
     test('should fallback to global search when preferred line is invalid', () {
@@ -332,6 +357,86 @@ void main() {
       expect(result.selectionStart, greaterThan(-1));
       expect(result.usedLineFallback, isFalse);
     });
-  });
 
+    test('should find unique word in correct paragraph across duplicates', () {
+      // מילה מופיעה בפסקה 0 ובפסקה 2, המשתמש בחר בפסקה 2
+      final content = [
+        'שורה עם טעות כאן',
+        'שורה נקייה בלי בעיות',
+        'שורה אחרת עם טעות שונה',
+      ];
+
+      final result = ErrorReportHelper.resolveSelectionContext(
+        content: content,
+        selectedText: 'טעות',
+        preferredLineNumber: 2,
+      );
+
+      // חייב למצוא את המופע בשורה 2, לא בשורה 0
+      final allText = content.join('\n');
+      final textAtResult = allText.substring(
+        result.selectionStart,
+        result.selectionEnd,
+      );
+      expect(textAtResult, equals('טעות'));
+
+      final linesBefore =
+          '\n'.allMatches(allText.substring(0, result.selectionStart)).length;
+      expect(linesBefore, equals(2)); // שורה 2 (0-based)
+      expect(result.usedLineFallback, isFalse);
+    });
+
+    test(
+        'should handle three occurrences in same line by returning full line context',
+        () {
+      final content = [
+        'אמר שלום ואז שלום ושוב שלום',
+      ];
+
+      final result = ErrorReportHelper.resolveSelectionContext(
+        content: content,
+        selectedText: 'שלום',
+        preferredLineNumber: 0,
+      );
+
+      expect(result.usedLineFallback, isTrue);
+      expect(result.contextText, contains('שלום ואז שלום ושוב שלום'));
+    });
+
+    test('should handle empty selected text gracefully', () {
+      final content = [
+        'שורה ראשונה',
+        'שורה שנייה',
+      ];
+
+      final result = ErrorReportHelper.resolveSelectionContext(
+        content: content,
+        selectedText: '',
+        preferredLineNumber: 0,
+      );
+
+      // טקסט ריק — fallback לכל הטקסט
+      expect(result.selectionStart, equals(0));
+    });
+
+    test('should handle text not found in expected line', () {
+      // המילה לא נמצאת בשורה 0 אבל כן נמצאת בשורה 1
+      final content = [
+        'שורה ללא התאמה',
+        'שורה עם מילה מיוחדת',
+      ];
+
+      final result = ErrorReportHelper.resolveSelectionContext(
+        content: content,
+        selectedText: 'מיוחדת',
+        preferredLineNumber: 0,
+      );
+
+      // אמור לחפש מהשורה ואילך (indexOf עם startIndex)
+      // ולמצוא את המילה בשורה 1
+      expect(result.selectionStart, greaterThan(-1));
+      expect(result.contextText, contains('מיוחדת'));
+      expect(result.usedLineFallback, isFalse);
+    });
+  });
 }

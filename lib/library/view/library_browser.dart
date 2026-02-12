@@ -1008,6 +1008,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   /// בניית כפתור סינכרון - משותף לשתי הפונקציות
+  /// TEMPORARILY DISABLED - Sync functionality disabled
+  // ignore: unused_element
   ActionButtonData _buildSyncActionButton() {
     return ActionButtonData(
       widget: BlocProvider.value(
@@ -1114,8 +1116,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         },
       ),
 
-      // סינכרון - מוצג רק אם מצב אופליין לא מופעל
-      if (!settingsState.isOfflineMode) _buildSyncActionButton(),
+      // סינכרון - TEMPORARILY DISABLED
+      // if (!settingsState.isOfflineMode) _buildSyncActionButton(),
 
       // טעינה מחדש
       ActionButtonData(
@@ -1188,8 +1190,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         },
       ),
 
-      // סינכרון - עדיפות גבוהה כדי שלא יכנס לתפריט "..."
-      if (!settingsState.isOfflineMode) _buildSyncActionButton(),
+      // סינכרון - TEMPORARILY DISABLED
+      // if (!settingsState.isOfflineMode) _buildSyncActionButton(),
 
       ActionButtonData(
         widget: IconButton(
