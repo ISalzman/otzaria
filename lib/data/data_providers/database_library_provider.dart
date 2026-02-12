@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -668,6 +669,36 @@ class DatabaseLibraryProvider implements LibraryProvider {
     final categoryPath = getCategoryPath(category);
 
     final topics = _buildTopics(dbBook, categoryPath);
+
+    final normalizedFileType = (dbBook.fileType ?? '').toLowerCase();
+
+    if (normalizedFileType == 'link' || normalizedFileType == 'url') {
+      final link = ExternalCatalogMapper.resolveLink(
+        filePath: dbBook.filePath,
+        externalLibraryId: dbBook.externalLibraryId,
+      );
+
+      if (link != null && link.isNotEmpty) {
+        return ExternalLibraryBook(
+          title: dbBook.title,
+          id: dbBook.id,
+          author: dbBook.authors.isNotEmpty
+              ? dbBook.authors.first.name
+              : bookMeta?['author'],
+          heShortDesc: dbBook.heShortDesc ?? bookMeta?['heShortDesc'],
+          pubDate: dbBook.pubDates.isNotEmpty
+              ? dbBook.pubDates.first.date
+              : bookMeta?['pubDate'],
+          pubPlace: dbBook.pubPlaces.isNotEmpty
+              ? dbBook.pubPlaces.first.name
+              : bookMeta?['pubPlace'],
+          topics: topics,
+          link: link,
+          categoryPath: categoryPath,
+          fileType: normalizedFileType,
+        );
+      }
+    }
 
     if (dbBook.filePath != null && dbBook.fileType == 'pdf') {
       return PdfBook(

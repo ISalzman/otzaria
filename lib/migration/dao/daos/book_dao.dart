@@ -37,7 +37,7 @@ class BookDao {
     final results = await Future.wait([
       // Authors
       db.rawQuery('''
-        SELECT ba.bookId, a.id, a.name
+        SELECT ba.bookId, a.id, a.name, a.generationId
         FROM book_author ba
         JOIN author a ON ba.authorId = a.id
         WHERE ba.bookId IN ($bookIdsStr)
@@ -83,7 +83,11 @@ class BookDao {
     for (final row in authorsData) {
       final bookId = row['bookId'] as int;
       authorsByBook.putIfAbsent(bookId, () => []);
-      authorsByBook[bookId]!.add({'id': row['id'], 'name': row['name']});
+      authorsByBook[bookId]!.add({
+        'id': row['id'],
+        'name': row['name'],
+        'generationId': row['generationId'],
+      });
     }
 
     for (final row in topicsData) {

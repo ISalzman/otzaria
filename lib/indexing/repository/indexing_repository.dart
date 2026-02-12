@@ -101,8 +101,18 @@ class IndexingRepository {
               _tantivyDataProvider.booksDone.add("${book.title}pdfBook");
             }
           }
+        } else if (book is ExternalLibraryBook) {
+          if (!_tantivyDataProvider.booksDone
+              .contains("${book.title}externalBook")) {
+            final idHash = sha1.convert(utf8.encode(book.link)).toString();
+            if (_tantivyDataProvider.booksDone.contains(idHash)) {
+              _tantivyDataProvider.booksDone.add("${book.title}externalBook");
+            } else {
+              await _indexExternalLibraryBook(book);
+              _tantivyDataProvider.booksDone.add("${book.title}externalBook");
+            }
+          }
         }
-
         processedBooks++;
         // Report progress
         onProgress(processedBooks, totalBooks);
@@ -132,11 +142,7 @@ class IndexingRepository {
     final title = book.title;
     final topics = "/${book.topics.replaceAll(', ', '/')}";
 
-    debugPrint('📚 Indexing book: $title\n'
-        '   book.topics: "${book.topics}"\n'
-        '   book.categoryPath: "${book.categoryPath}"\n'
-        '   final facet: "$topics/$title"');
-
+ 
     final texts = text.split('\n');
     List<String> reference = [];
 
@@ -193,6 +199,42 @@ class IndexingRepository {
             filePath: '');
       }
     }
+
+    await index.commit();
+    saveIndexedBooks();
+  }
+
+  /// Indexes an external library book (e.g., Otzar) by indexing its metadata
+  /// so the book becomes discoverable in searches.
+  Future<void> _indexExternalLibraryBook(ExternalLibraryBook book) async {
+    final index = await _tantivyDataProvider.engine;
+
+    final title = book.title;
+    final topics = "/${book.topics.replaceAll(', ', '/')}";
+
+    // Combine available metadata into a single text blob for indexing
+    final parts = <String>[];
+    parts.add(title);
+    if (book.author != null) parts.add(book.author!);
+    if (book.heShortDesc != null) parts.add(book.heShortDesc!);
+    if (book.heDesc != null) parts.add(book.heDesc!);
+    if (book.link.isNotEmpty) parts.add(book.link);
+    if (book.topics.isNotEmpty) parts.add(book.topics);
+
+    var combined = parts.where((p) => p.isNotEmpty).join(' — ');
+    combined = stripHtmlIfNeeded(combined);
+    combined = removeVolwels(combined);
+
+    index.addDocument(
+      id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+      title: title,
+      reference: '',
+      topics: '$topics/$title',
+      text: combined,
+      segment: BigInt.from(0),
+      isPdf: false,
+      filePath: book.link,
+    );
 
     await index.commit();
     saveIndexedBooks();

@@ -76,6 +76,12 @@ class Book {
   /// Last modified timestamp (milliseconds since epoch)
   final int? lastModified;
 
+  /// Number of pages (optional, mostly for PDF)
+  final int? pages;
+
+  /// Volume label/number (optional)
+  final String? volume;
+
   const Book({
     this.id = 0,
     required this.categoryId,
@@ -105,6 +111,8 @@ class Book {
     this.fileType,
     this.fileSize,
     this.lastModified,
+    this.pages,
+    this.volume,
   });
 
   Book copyWith({
@@ -136,6 +144,8 @@ class Book {
     String? fileType,
     int? fileSize,
     int? lastModified,
+    int? pages,
+    String? volume,
   }) {
     return Book(
       id: id ?? this.id,
@@ -168,6 +178,8 @@ class Book {
       fileType: fileType ?? this.fileType,
       fileSize: fileSize ?? this.fileSize,
       lastModified: lastModified ?? this.lastModified,
+      pages: pages ?? this.pages,
+      volume: volume ?? this.volume,
     );
   }
 
@@ -217,6 +229,8 @@ class Book {
       fileType: json['fileType'] as String?,
       fileSize: json['fileSize'] as int?,
       lastModified: json['lastModified'] as int?,
+      pages: json['pages'] as int?,
+      volume: json['volume'] as String?,
     );
   }
 
@@ -250,6 +264,8 @@ class Book {
       'fileType': fileType,
       'fileSize': fileSize,
       'lastModified': lastModified,
+      'pages': pages,
+      'volume': volume,
     };
   }
 
@@ -289,7 +305,9 @@ class Book {
           filePath == other.filePath &&
           fileType == other.fileType &&
           fileSize == other.fileSize &&
-          lastModified == other.lastModified;
+          lastModified == other.lastModified &&
+          pages == other.pages &&
+          volume == other.volume;
 
   @override
   int get hashCode =>
@@ -320,5 +338,7 @@ class Book {
       filePath.hashCode ^
       fileType.hashCode ^
       fileSize.hashCode ^
-      lastModified.hashCode;
+      lastModified.hashCode ^
+      pages.hashCode ^
+      volume.hashCode;
 }
