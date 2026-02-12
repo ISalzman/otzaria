@@ -15,7 +15,6 @@ import '../core/models/topic.dart';
 import '../dao/repository/seforim_repository.dart';
 import '../shared/link_processor.dart';
 import 'hebrew_text_utils.dart' as hebrew_text_utils;
-import 'catalog_importer.dart';
 import 'package:otzaria/utils/docx_to_otzaria.dart';
 
 /// DatabaseGenerator is responsible for generating the Otzaria database from source files.
@@ -99,9 +98,6 @@ class DatabaseGenerator {
 
       // Preload all book contents into RAM
       await processDirectory(libraryPath, null, 0);
-
-      // Import external catalogs
-      await importExternalCatalogs();
 
       // Process links
       await processLinks();
@@ -846,15 +842,6 @@ class DatabaseGenerator {
     return s;
   }
 
-  /// Imports books from external catalogs (Otzar HaChochma, HebrewBooks)
-  Future<void> importExternalCatalogs() async {
-    final importer = CatalogImporter(
-      repository: repository,
-      sourceDirectory: sourceDirectory,
-      onProgress: onProgress,
-    );
-    await importer.importExternalCatalogs();
-  }
 }
 
 /// Structure to store TOC entry data during processing
