@@ -95,7 +95,7 @@ countByCategoryId:
 SELECT COUNT(*) FROM book WHERE categoryId = ?;
 
 countAll:
-SELECT COUNT(*) FROM book;
+SELECT COUNT(*) FROM book WHERE externalLibraryId IS NULL;
 
 getMaxId:
 SELECT MAX(id) FROM book;
