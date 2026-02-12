@@ -152,9 +152,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         .toSet()
         .toList();
 
+    debugPrint('📖 PageShape: Available commentators: $availableCommentators');
+    debugPrint('📖 PageShape: Config to resolve: $config');
+
     return Map.fromEntries(config.entries.map((entry) {
       final resolved =
           _findMatchingCommentator(entry.value, availableCommentators);
+      debugPrint('📖 PageShape: Resolving "${entry.value}" → "$resolved"');
       return MapEntry(entry.key, resolved);
     }));
   }
