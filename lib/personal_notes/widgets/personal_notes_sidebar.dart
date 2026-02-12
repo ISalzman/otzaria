@@ -82,64 +82,80 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocListener(
-      listeners: [
-        BlocListener<TextBookBloc, TextBookState>(
-          listener: (context, state) {
-            if (state is TextBookLoaded) {
-              context
-                  .read<PersonalNotesBloc>()
-                  .add(UpdateVisibleLines(state.visibleIndices));
-            }
-          },
-        ),
-      ],
-      child: BlocBuilder<PersonalNotesBloc, PersonalNotesState>(
-        buildWhen: (previous, current) {
-          if (previous.isCreatingNewNote != current.isCreatingNewNote) {
-            return true;
-          }
-          return current.bookId == widget.bookId;
-        },
-        builder: (context, state) {
-          if (state.isLoading && state.locatedNotes.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    // בודקים אם TextBookBloc זמין בהקשר הנוכחי
+    final hasTextBookBloc =
+        context.findAncestorWidgetOfExactType<BlocProvider<TextBookBloc>>() !=
+            null;
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              NotesSearchHeader(bookId: widget.bookId),
-              const Divider(height: 1),
-              Expanded(
-                child: BlocBuilder<TextBookBloc, TextBookState>(
-                  buildWhen: (previous, current) {
-                    if (previous is TextBookLoaded &&
-                        current is TextBookLoaded) {
-                      return previous.selectedIndex != current.selectedIndex;
-                    }
-                    return true;
-                  },
-                  builder: (context, textBookState) {
-                    final selectedLineNumber = textBookState is TextBookLoaded
-                        ? (textBookState.selectedIndex != null
-                            ? textBookState.selectedIndex! + 1
-                            : null)
-                        : null;
+    final child = BlocBuilder<PersonalNotesBloc, PersonalNotesState>(
+      buildWhen: (previous, current) {
+        if (previous.isCreatingNewNote != current.isCreatingNewNote) {
+          return true;
+        }
+        return current.bookId == widget.bookId;
+      },
+      builder: (context, state) {
+        if (state.isLoading && state.locatedNotes.isEmpty) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-                    return _buildContent(
-                      context,
-                      state,
-                      selectedLineNumber: selectedLineNumber,
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            NotesSearchHeader(bookId: widget.bookId),
+            const Divider(height: 1),
+            Expanded(
+              child: hasTextBookBloc
+                  ? BlocBuilder<TextBookBloc, TextBookState>(
+                      buildWhen: (previous, current) {
+                        if (previous is TextBookLoaded &&
+                            current is TextBookLoaded) {
+                          return previous.selectedIndex !=
+                              current.selectedIndex;
+                        }
+                        return true;
+                      },
+                      builder: (context, textBookState) {
+                        final selectedLineNumber =
+                            textBookState is TextBookLoaded
+                                ? (textBookState.selectedIndex != null
+                                    ? textBookState.selectedIndex! + 1
+                                    : null)
+                                : null;
+
+                        return _buildContent(
+                          context,
+                          state,
+                          selectedLineNumber: selectedLineNumber,
+                        );
+                      },
+                    )
+                  : _buildContent(context, state, selectedLineNumber: null),
+            ),
+          ],
+        );
+      },
     );
+
+    // אם TextBookBloc זמין, נעטוף עם listener
+    if (hasTextBookBloc) {
+      return MultiBlocListener(
+        listeners: [
+          BlocListener<TextBookBloc, TextBookState>(
+            listener: (context, state) {
+              if (state is TextBookLoaded) {
+                context
+                    .read<PersonalNotesBloc>()
+                    .add(UpdateVisibleLines(state.visibleIndices));
+              }
+            },
+          ),
+        ],
+        child: child,
+      );
+    }
+
+    return child;
   }
 
   Widget _buildContent(
