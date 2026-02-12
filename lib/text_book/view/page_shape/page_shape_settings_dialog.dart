@@ -727,6 +727,48 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
         ),
       ),
       actions: [
+        // כפתור איפוס הגדרות מפרשים
+        TextButton.icon(
+          onPressed: () async {
+            final navigator = Navigator.of(context);
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('איפוס הגדרות מפרשים'),
+                content: const Text(
+                  'האם לאפס את הגדרות המפרשים לברירות המחדל?\n\n'
+                  'פעולה זו תמחק את ההגדרות השמורות ותטען את המפרשים המתאימים לפי סוג הספר.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('ביטול'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('אפס'),
+                  ),
+                ],
+              ),
+            );
+
+            if (confirm == true) {
+              // מחיקת הגדרות מפרשים פר-ספר
+              await PageShapeSettingsManager.resetBookCommentatorConfig(
+                  widget.bookTitle);
+
+              // טעינה מחדש של ברירות המחדל
+              if (!mounted) return;
+              navigator.pop(true); // סגירת הדיאלוג עם סימון שהיו שינויים
+            }
+          },
+          icon: const Icon(FluentIcons.arrow_reset_24_regular, size: 18),
+          label: const Text('איפוס מפרשים'),
+          style: TextButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.error,
+          ),
+        ),
+        const Spacer(),
         TextButton(
           onPressed: () => Navigator.of(context).pop(_hasChanges),
           child: const Text('סגור'),
