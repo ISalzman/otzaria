@@ -290,9 +290,13 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     GoToNextPage event,
     Emitter<PdfBookState> emit,
   ) {
-    if (!pdfController.isReady) return;
+    if (!pdfController.isReady) {
+      return;
+    }
     final current = state;
-    if (current is! PdfBookLoaded) return;
+    if (current is! PdfBookLoaded) {
+      return;
+    }
 
     final nextPage = min(current.currentPageNumber + 1, current.totalPages);
     pdfController.goToPage(pageNumber: nextPage);
@@ -302,9 +306,13 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     GoToPreviousPage event,
     Emitter<PdfBookState> emit,
   ) {
-    if (!pdfController.isReady) return;
+    if (!pdfController.isReady) {
+      return;
+    }
     final current = state;
-    if (current is! PdfBookLoaded) return;
+    if (current is! PdfBookLoaded) {
+      return;
+    }
 
     final prevPage = max(current.currentPageNumber - 1, 1);
     pdfController.goToPage(pageNumber: prevPage);

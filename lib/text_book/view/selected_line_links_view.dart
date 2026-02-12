@@ -378,6 +378,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
             searchText: searchText,
             fontSize: settingsState.commentatorsFontSize,
             fontFamily: settingsState.commentatorsFontFamily,
+            lineHeight: settingsState.lineHeight,
           ),
         );
       },

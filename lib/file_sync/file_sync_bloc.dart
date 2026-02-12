@@ -20,12 +20,13 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
     on<UpdateProgress>(_onUpdateProgress);
     on<ResetState>(_onResetState);
 
+    // TEMPORARILY DISABLED - Auto-sync disabled
     // Check for auto-sync setting and offline mode
-    final isAutoSync =
-        Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? false;
-    if (isAutoSync && !_isOffline) {
-      add(const StartSync());
-    }
+    // final isAutoSync =
+    //     Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? false;
+    // if (isAutoSync && !_isOffline) {
+    //   add(const StartSync());
+    // }
   }
 
   Future<void> _onStartSync(

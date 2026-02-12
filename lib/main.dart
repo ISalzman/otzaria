@@ -51,11 +51,8 @@ import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
-import 'package:otzaria/shamor_zachor/providers/shamor_zachor_data_provider.dart';
-import 'package:otzaria/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
-import 'package:otzaria/shamor_zachor/services/shamor_zachor_service_factory.dart';
-import 'package:otzaria/shamor_zachor/services/dynamic_data_loader_service.dart';
-import 'package:otzaria/utils/toc_parser.dart';
+import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
+import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
@@ -69,9 +66,6 @@ AppWindowListener? _appWindowListener;
 
 /// Getter for accessing the window listener from other parts of the app
 AppWindowListener? get appWindowListener => _appWindowListener;
-
-// Global reference to the dynamic data loader service for Shamor Zachor
-DynamicDataLoaderService? _shamorZachorDataLoader;
 
 /// Application entry point that initializes necessary components and launches the app.
 ///
@@ -141,6 +135,7 @@ void main() async {
   // No-op: removed verbose debug printing
 
   final historyRepository = HistoryRepository();
+  final settingsRepository = SettingsRepository();
 
   runApp(
     RestartWidget(
@@ -149,12 +144,15 @@ void main() async {
           RepositoryProvider<FocusRepository>(
             create: (context) => FocusRepository(),
           ),
+          RepositoryProvider<SettingsRepository>(
+            create: (context) => settingsRepository,
+          ),
         ],
         child: MultiBlocProvider(
           providers: [
             BlocProvider<SettingsBloc>(
               create: (context) => SettingsBloc(
-                repository: SettingsRepository(),
+                repository: settingsRepository,
               )..add(LoadSettings()),
             ),
             BlocProvider<LibraryBloc>(
@@ -204,17 +202,14 @@ void main() async {
             ),
             ChangeNotifierProvider<ShamorZachorDataProvider>(
               lazy: true, // Create only when needed
-              create: (context) {
-                // Create provider based on current state of loader
-                final provider = _shamorZachorDataLoader != null
-                    ? ShamorZachorDataProvider.dynamic(_shamorZachorDataLoader!)
-                    : ShamorZachorDataProvider(); // Start with legacy
-
-                return provider;
-              },
+              create: (context) => ShamorZachorDataProvider(),
             ),
             ChangeNotifierProvider<ShamorZachorProgressProvider>(
-              create: (context) => ShamorZachorProgressProvider(),
+              lazy: true, // Create only when needed
+              create: (context) {
+                final dataProvider = context.read<ShamorZachorDataProvider>();
+                return ShamorZachorProgressProvider(dataProvider: dataProvider);
+              },
             ),
           ],
           child: const App(),
@@ -293,19 +288,6 @@ Future<void> initialize() async {
     debugPrint('Pdfrx cache directory set to: ${cacheDir.path}');
   } catch (e) {
     debugPrint('Failed to set Pdfrx cache directory: $e');
-  }
-
-  // Initialize Shamor Zachor dynamic data loader
-  try {
-    final libraryBasePath = await AppPaths.getLibraryPath();
-
-    _shamorZachorDataLoader = await ShamorZachorServiceFactory.getDynamicLoader(
-      libraryBasePath: libraryBasePath,
-      // Use the shared TOC parser utility so SZ and navigator share logic
-      getTocFunction: TocParser.parseFlatFromFile,
-    );
-  } catch (e) {
-    // Continue without Shamor Zachor functionality if initialization fails
   }
 
   // Check and perform automatic backup if needed

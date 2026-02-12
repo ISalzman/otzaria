@@ -652,6 +652,26 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     setState(() => _isLoading = true);
 
     try {
+      // המתנה לכך שה-state יהיה TextBookLoaded
+      final bloc = context.read<TextBookBloc>();
+      var state = bloc.state;
+
+      // אם ה-state עדיין לא TextBookLoaded, נחכה לו
+      if (state is! TextBookLoaded) {
+        // נמתין עד שה-state יהיה TextBookLoaded או timeout אחרי 5 שניות
+        try {
+          state = await bloc.stream
+              .firstWhere(
+                (s) => s is TextBookLoaded,
+                orElse: () => state,
+              )
+              .timeout(const Duration(seconds: 5));
+        } catch (e) {
+          // אם יש timeout או שגיאה, נמשיך עם ה-state הנוכחי
+          debugPrint('Timeout waiting for TextBookLoaded: $e');
+        }
+      }
+
       String? categoryPath;
 
       // 1. נסיון לקבל נתיב ממערכת הקבצים/מסד הנתונים
@@ -660,9 +680,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           .findBookCategoryPath(widget.commentatorName);
 
       if (!mounted) return;
-
-      final bloc = context.read<TextBookBloc>();
-      final state = bloc.state;
 
       if (state is TextBookLoaded) {
         // סינון קישורים לפי שם המפרש ולפי סוג הקישור (COMMENTARY/TARGUM)
