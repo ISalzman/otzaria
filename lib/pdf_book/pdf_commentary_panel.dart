@@ -388,14 +388,19 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       onBack: () {
         setState(() {
           _showFilterTab = false;
+          // כפיית rebuild של התצוגה אחרי שינוי מפרשים
+        });
+        // עדכון נוסף אחרי frame אחד כדי לוודא שהתצוגה מתעדכנת
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {});
+          }
         });
       },
       child: PdfCommentatorsSelector(
         tab: widget.tab,
         onChanged: () {
-          setState(() {
-            // עדכון התצוגה כשמשנים מפרשים
-          });
+          // לא צריך setState כאן - זה יקרה ב-onBack
         },
       ),
     );

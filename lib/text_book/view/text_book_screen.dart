@@ -45,9 +45,9 @@ import 'package:otzaria/utils/fullscreen_helper.dart';
 
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/widgets/resizable_drag_handle.dart';
-import 'package:otzaria/shamor_zachor/providers/shamor_zachor_data_provider.dart';
-import 'package:otzaria/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
-import 'package:otzaria/shamor_zachor/models/book_model.dart';
+import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
+import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
+import 'package:otzaria/tools/shamor_zachor/models/book_model.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
@@ -116,16 +116,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         cleanBookName = parts.last.trim();
       }
 
-      // For dynamic provider, use the dedicated method
-      if (dataProvider.useDynamicLoader) {
-        // Try to detect category (similar to add function)
-        // For now, search across all categories
-        final searchResults = dataProvider.searchBooks(cleanBookName);
-        return searchResults.any((result) =>
-            result.bookName == cleanBookName ||
-            result.bookName.contains(cleanBookName) ||
-            cleanBookName.contains(result.bookName));
-      }
+      // Search for the book
 
       // Legacy: Search for the book
       final searchResults = dataProvider.searchBooks(cleanBookName);
@@ -153,94 +144,24 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         return;
       }
 
-      // חיפוש הספר - נחפש גם לפי שם קצר
-      final searchResults = dataProvider.searchBooks(bookTitle);
-
-      // זיהוי קטגוריה לפי נתיב הספר
-      String searchName = bookTitle;
-      String? detectedCategory;
-
-      try {
-        // קבלת נתיב הספר
-        final location = await BookLocator.locateBook(bookTitle);
-        final bookPath = location?.filePath;
-
-        if (bookPath != null) {
-          debugPrint('Book path: $bookPath');
-
-          // זיהוי קטגוריה לפי הנתיב
-          if (bookPath.contains('תלמוד בבלי')) {
-            detectedCategory = 'תלמוד בבלי';
-          } else if (bookPath.contains('תנך') || bookPath.contains('תנ"ך')) {
-            detectedCategory = 'תנ"ך';
-          } else if (bookPath.contains('משנה')) {
-            detectedCategory = 'משנה';
-          } else if (bookPath.contains('הלכה')) {
-            detectedCategory = 'הלכה';
-          } else if (bookPath.contains('ירושלמי')) {
-            detectedCategory = 'תלמוד ירושלמי';
-          } else if (bookPath.contains('רמב"ם') || bookPath.contains('רמבם')) {
-            detectedCategory = 'רמב"ם';
-          }
-
-          debugPrint('Detected category from path: $detectedCategory');
-        }
-      } catch (e) {
-        debugPrint('Error getting book path: $e');
+      // בדיקה אם יש ID לספר
+      if (state.book.id == null) {
+        UiSnack.showError('הספר לא נמצא במסד הנתונים');
+        return;
       }
 
-      // הכנת שם החיפוש
-      searchName = bookTitle;
-      if (bookTitle.contains(' - ')) {
-        final parts = bookTitle.split(' - ');
-        searchName = parts.last.trim();
-        debugPrint('Extracted book name from title: $searchName');
+      final bookId = state.book.id!;
+
+      // חיפוש הספר לפי ID ב-shamor zachor
+      final result = dataProvider.getBookById(bookId);
+
+      if (result == null) {
+        UiSnack.showError('הספר לא נמצא בשמור וזכור');
+        return;
       }
 
-      // חיפוש הספר המתאים לפי הקטגוריה המזוהה
-      BookSearchResult? bookResult;
-
-      if (detectedCategory != null) {
-        // חיפוש בקטגוריה הספציפית שזוהתה מהנתיב
-        try {
-          bookResult = searchResults.firstWhere(
-            (result) =>
-                (result.bookName == searchName ||
-                    result.bookName.contains(searchName)) &&
-                result.topLevelCategoryName == detectedCategory,
-          );
-          debugPrint(
-              'Found in detected category "$detectedCategory": ${bookResult.bookName}');
-        } catch (e) {
-          debugPrint(
-              'Not found in detected category "$detectedCategory", trying general search');
-          bookResult = null;
-        }
-      }
-
-      // אם לא מצאנו בקטגוריה הספציפית, נחפש רגיל
-      if (bookResult == null) {
-        try {
-          bookResult = searchResults.firstWhere(
-            (result) =>
-                result.bookName == bookTitle ||
-                result.bookName == searchName ||
-                result.bookName.contains(searchName) ||
-                bookTitle.contains(result.bookName),
-          );
-          debugPrint(
-              'Found in general search: ${bookResult.bookName} in ${bookResult.topLevelCategoryName}');
-        } catch (e) {
-          throw Exception('ספר לא נמצא');
-        }
-      }
-
-      final categoryName = bookResult.topLevelCategoryName;
-      final bookName = bookResult.bookName;
-      final bookDetails = bookResult.bookDetails;
-
-      debugPrint('Selected book: $bookName in category: $categoryName');
-      debugPrint('Book content type: ${bookDetails.contentType}');
+      final (bookDetails, bookName, topLevelCategoryKey) = result;
+      debugPrint('Book found: $bookName (ID: $bookId)');
 
       // קבלת הפרק הנוכחי
       final currentIndex =
@@ -360,9 +281,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       debugPrint(
           'Target item: ${targetItem.pageNumber}${targetItem.amudKey}, absoluteIndex: ${targetItem.absoluteIndex}');
 
-      // בדיקת מצב העמודות עבור הפרק הספציפי
-      final itemProgress = progressProvider.getProgressForItem(
-          categoryName, bookName, targetItem.absoluteIndex);
+      // בדיקת מצב העמודות עבור הפרק הספציפי - משתמשים ב-ID!
+      final itemProgress = progressProvider.getProgressForItemById(
+          bookId, targetItem.absoluteIndex);
 
       // מציאת העמודה הראשונה שלא מסומנת
       String? columnToMark;
@@ -380,10 +301,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         return;
       }
 
-      // סימון הפרק הספציפי
-      await progressProvider.updateProgress(
-        categoryName,
-        bookName,
+      // סימון הפרק הספציפי - משתמשים ב-ID!
+      await progressProvider.updateProgressById(
+        bookId,
         targetItem.absoluteIndex,
         columnToMark,
         true,
@@ -2010,13 +1930,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     try {
       final dataProvider = context.read<ShamorZachorDataProvider>();
 
-      // Check if provider supports dynamic loading
-      if (!dataProvider.useDynamicLoader) {
-        UiSnack.showError(
-            'הוספת ספרים מותאמת אישית דורשת את הגרסה החדשה של שמור וזכור');
-        return;
-      }
-
       final bookTitle = book.title;
 
       // 1. Get book path from library or database
@@ -2081,52 +1994,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       debugPrint('Adding book to tracking - Path: $bookPath');
 
-      // 2. Detect category and content type from path
-      String categoryName = 'כללי';
-      String contentType = 'פרק'; // Default
-
-      if (bookPath.contains('תלמוד בבלי')) {
-        categoryName = 'תלמוד בבלי';
-        contentType = 'דף';
-      } else if (bookPath.contains('תנך') || bookPath.contains('תנ"ך')) {
-        categoryName = 'תנ"ך';
-        contentType = 'פרק';
-      } else if (bookPath.contains('משנה') && !bookPath.contains('תורה')) {
-        categoryName = 'משנה';
-        contentType = 'משנה';
-      } else if (bookPath.contains('ירושלמי')) {
-        categoryName = 'תלמוד ירושלמי';
-        contentType = 'דף';
-      } else if (bookPath.contains('רמב"ם') || bookPath.contains('רמבם')) {
-        categoryName = 'רמב"ם';
-        contentType = 'הלכה';
-      } else if (bookPath.contains('הלכה')) {
-        categoryName = 'הלכה';
-        contentType = 'הלכה';
-      }
-
-      // 3. Extract clean book name
+      // 2. Use the actual book title as-is (don't modify it)
+      // The title should match exactly what's in the DB
       String cleanBookName = bookTitle;
-      if (bookTitle.contains(' - ')) {
-        final parts = bookTitle.split(' - ');
-        cleanBookName = parts.last.trim();
-      }
 
-      // 4. Show loading indicator
+      // 3. Show loading indicator
       UiSnack.show('מוסיף ספר למעקב...');
 
-      // 5. Add book via provider
+      // 4. Add book via provider (only needs book name)
       await dataProvider.addCustomBook(
         bookName: cleanBookName,
-        categoryName: categoryName,
-        bookPath: bookPath,
-        contentType: contentType,
       );
 
-      // 6. Success message
+      // 5. Success message
       UiSnack.show('הספר "$cleanBookName" נוסף למעקב בהצלחה!');
 
-      // 7. Update UI to reflect the change
+      // 6. Update UI to reflect the change
       setState(() {});
     } catch (e, stackTrace) {
       debugPrint('Error adding book to Shamor Zachor: $e');

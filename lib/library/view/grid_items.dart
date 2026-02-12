@@ -67,33 +67,18 @@ class CategoryGridItem extends StatelessWidget {
                 ),
                 category.shortDescription.isEmpty
                     ? const SizedBox.shrink()
-                    : Tooltip(
-                        richMessage: WidgetSpan(
-                            alignment: PlaceholderAlignment.baseline,
-                            baseline: TextBaseline.alphabetic,
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              constraints: const BoxConstraints(maxWidth: 250),
-                              child: Text(
-                                category.shortDescription,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onPrimary),
-                              ),
-                            )),
-                        child: IconButton(
-                          mouseCursor: SystemMouseCursors.click,
-                          onPressed: () {
-                            _showCategoryInfoDialog(context, category);
-                          },
-                          icon: const Icon(FluentIcons.info_24_regular),
-                          color: Theme.of(context)
-                              .colorScheme
-                              .secondary
-                              .withValues(alpha: 0.6),
-                        ),
+                    : IconButton(
+                        mouseCursor: SystemMouseCursors.basic,
+                        onPressed: null, // מושבת זמנית
+                        icon: const Icon(FluentIcons.info_24_regular),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.3), // אפור
+                        disabledColor: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.3), // אפור
                       )
               ],
             )),
@@ -230,47 +215,31 @@ class BookGridItem extends StatelessWidget {
                               : const SizedBox.shrink(),
                         ),
                       ),
-                      // כפתור מידע
+                      // כפתור מידע - מושבת זמנית
                       SizedBox(
                         width: 32,
                         height: 32,
                         child: (book.heShortDesc == null ||
                                 book.heShortDesc == '')
                             ? const SizedBox.shrink()
-                            : Tooltip(
-                                richMessage: WidgetSpan(
-                                    alignment: PlaceholderAlignment.baseline,
-                                    baseline: TextBaseline.alphabetic,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(10),
-                                      constraints:
-                                          const BoxConstraints(maxWidth: 250),
-                                      child: Text(
-                                        book.heShortDesc!,
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onPrimary),
-                                      ),
-                                    )),
-                                child: IconButton(
-                                  mouseCursor: SystemMouseCursors.click,
-                                  onPressed: () {
-                                    _showBookInfoDialog(context, book);
-                                  },
-                                  icon: const Icon(FluentIcons.info_24_regular),
-                                  iconSize: 18,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 32,
-                                    minHeight: 32,
-                                  ),
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .secondary
-                                      .withValues(alpha: 0.6),
+                            : IconButton(
+                                mouseCursor: SystemMouseCursors.basic,
+                                onPressed: null, // מושבת
+                                icon: const Icon(FluentIcons.info_24_regular),
+                                iconSize: 18,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 32,
+                                  minHeight: 32,
                                 ),
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.3), // אפור
+                                disabledColor: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.3), // אפור
                               ),
                       ),
                       // כפתור תפריט אפשרויות (3 נקודות)
@@ -359,6 +328,7 @@ class MyGridView extends StatelessWidget {
 }
 
 /// הצגת חלון מידע עבור ספר
+// ignore: unused_element
 void _showBookInfoDialog(BuildContext context, Book book) {
   showDialog(
     context: context,
@@ -671,6 +641,7 @@ Future<Map<String, dynamic>> _getBookSourceInfo(Book book) async {
 }
 
 /// הצגת חלון מידע עבור קטגוריה
+// ignore: unused_element
 void _showCategoryInfoDialog(BuildContext context, Category category) {
   showDialog(
     context: context,
