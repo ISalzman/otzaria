@@ -67,6 +67,9 @@ abstract class Book {
   /// Whether this book was added by the user (true) or is part of the library (false).
   final bool isUserBook;
 
+  /// External library ID (e.g., Sefaria ref) for books from external sources
+  final String? externalLibraryId;
+
   Map<String, dynamic> toJson();
 
   factory Book.fromJson(Map<String, dynamic> json) {
@@ -108,7 +111,8 @@ abstract class Book {
       this.fileType,
       this.categoryPath,
       this.extraTitles,
-      this.isUserBook = false});
+      this.isUserBook = false,
+      this.externalLibraryId});
 }
 
 ///a representation of a text book (opposite PDF book).
@@ -136,7 +140,8 @@ class TextBook extends Book {
       super.fileType = 'txt',
       super.categoryPath,
       super.extraTitles,
-      super.isUserBook});
+      super.isUserBook,
+      super.externalLibraryId});
 
   /// Retrieves the table of contents of the book.
   ///
@@ -179,6 +184,7 @@ class TextBook extends Book {
       fileType: json['fileType'],
       heCategories: json['heCategories'],
       isUserBook: json['isUserBook'] ?? false,
+      externalLibraryId: json['externalLibraryId'],
     );
   }
 
@@ -195,6 +201,7 @@ class TextBook extends Book {
       'categoryPath': categoryPath,
       'heCategories': heCategories,
       'isUserBook': isUserBook,
+      'externalLibraryId': externalLibraryId,
     };
   }
 }
@@ -229,7 +236,8 @@ class ExternalLibraryBook extends Book {
       required this.link,
       super.categoryPath,
       super.fileType = 'link',
-      super.isUserBook})
+      super.isUserBook,
+      super.externalLibraryId})
       : super(id: id);
 
   /// Returns the publication date of the book.
@@ -250,6 +258,7 @@ class ExternalLibraryBook extends Book {
       link: json['link'],
       heCategories: json['heCategories'],
       isUserBook: json['isUserBook'] ?? false,
+      externalLibraryId: json['externalLibraryId'],
     );
   }
 
@@ -272,6 +281,7 @@ class ExternalLibraryBook extends Book {
       'fileType': fileType,
       'heCategories': heCategories,
       'isUserBook': isUserBook,
+      'externalLibraryId': externalLibraryId,
     };
   }
 }
@@ -302,6 +312,7 @@ abstract class FileBook extends Book {
     super.fileType,
     super.order = 999,
     super.isUserBook,
+    super.externalLibraryId,
   });
 }
 
@@ -329,7 +340,8 @@ class PdfBook extends FileBook {
       super.categoryPath,
       super.fileType = 'pdf',
       super.order = 999,
-      super.isUserBook});
+      super.isUserBook,
+      super.externalLibraryId});
 
   factory PdfBook.fromJson(Map<String, dynamic> json) {
     return PdfBook(
@@ -339,6 +351,7 @@ class PdfBook extends FileBook {
       filePath: json['filePath'],
       heCategories: json['heCategories'],
       isUserBook: json['isUserBook'] ?? false,
+      externalLibraryId: json['externalLibraryId'],
     );
   }
 
@@ -353,6 +366,7 @@ class PdfBook extends FileBook {
       'fileType': fileType,
       'heCategories': heCategories,
       'isUserBook': isUserBook,
+      'externalLibraryId': externalLibraryId,
     };
   }
 
@@ -383,7 +397,8 @@ class DocxBook extends FileBook {
       super.categoryPath,
       super.fileType = 'docx',
       super.order = 999,
-      super.isUserBook});
+      super.isUserBook,
+      super.externalLibraryId});
 
   factory DocxBook.fromJson(Map<String, dynamic> json) {
     return DocxBook(
@@ -393,6 +408,7 @@ class DocxBook extends FileBook {
       categoryPath: json['categoryPath'],
       heCategories: json['heCategories'],
       isUserBook: json['isUserBook'] ?? false,
+      externalLibraryId: json['externalLibraryId'],
     );
   }
 
@@ -407,6 +423,7 @@ class DocxBook extends FileBook {
       'categoryPath': categoryPath,
       'heCategories': heCategories,
       'isUserBook': isUserBook,
+      'externalLibraryId': externalLibraryId,
     };
   }
 

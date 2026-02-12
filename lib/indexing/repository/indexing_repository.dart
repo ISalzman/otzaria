@@ -63,10 +63,15 @@ class IndexingRepository {
   ) async {
     _tantivyDataProvider.isIndexing.value = true;
     final allBooks = library.getAllBooks();
-    final totalBooks = allBooks.length;
+
+    // Filter out books with externalLibraryId (external library books should not be indexed)
+    final booksToIndex =
+        allBooks.where((book) => book.externalLibraryId == null).toList();
+
+    final totalBooks = booksToIndex.length;
     int processedBooks = 0;
 
-    for (Book book in allBooks) {
+    for (Book book in booksToIndex) {
       // Check if indexing was cancelled
       if (!_tantivyDataProvider.isIndexing.value) {
         return;
