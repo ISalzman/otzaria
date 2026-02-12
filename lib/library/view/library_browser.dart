@@ -528,26 +528,51 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   Future<List<Widget>> _buildCategoryContent(Category category) async {
     List<Widget> items = [];
 
-    category.books.sort((a, b) => a.order.compareTo(b.order));
-    category.subCategories.sort((a, b) => a.order.compareTo(b.order));
+    // סינון ספרים מספריות חיצוניות - לא מציגים אותם בתצוגת הקטגוריות
+    final filteredBooks =
+        category.books.where((book) => book is! ExternalLibraryBook).toList();
+    // סינון קטגוריות ספריות חיצוניות - לא מציגים אותן בתצוגת הקטגוריות
+    final filteredSubCategories = category.subCategories
+        .where((cat) => !cat.isExternalLibrariesCategory)
+        .toList();
+
+    filteredBooks.sort((a, b) => a.order.compareTo(b.order));
+    filteredSubCategories.sort((a, b) => a.order.compareTo(b.order));
 
     if (_depth != 0) {
-      // Add books
+      // Add books (limit to 20 for performance)
       final bookWidgets =
-          category.books.map((book) => _buildBookItem(book)).toList();
+          filteredBooks.map((book) => _buildBookItem(book)).toList();
       items.add(MyGridView(items: bookWidgets));
 
+      // If there are more books, show a 'load more' widget
+      if (filteredBooks.length > 20) {
+        items.add(Center(
+            child: TextButton(
+          onPressed: () => _showAllBooksDialog(filteredBooks),
+          child: Text('הצג עוד ${filteredBooks.length - 20} פריטים'),
+        )));
+      }
+
       // Add subcategories
-      for (Category subCategory in category.subCategories) {
-        subCategory.books.sort((a, b) => a.order.compareTo(b.order));
-        subCategory.subCategories.sort((a, b) => a.order.compareTo(b.order));
+      for (Category subCategory in filteredSubCategories) {
+        // סינון ספרים מספריות חיצוניות גם בתת-קטגוריות
+        final subFilteredBooks = subCategory.books
+            .where((book) => book is! ExternalLibraryBook)
+            .toList();
+        final subFilteredCategories = subCategory.subCategories
+            .where((cat) => !cat.isExternalLibrariesCategory)
+            .toList();
+
+        subFilteredBooks.sort((a, b) => a.order.compareTo(b.order));
+        subFilteredCategories.sort((a, b) => a.order.compareTo(b.order));
 
         items.add(Center(child: HeaderItem(category: subCategory)));
 
-        // בניית כל הפריטים של תת-הקטגוריה מראש
+        // בניית כל הפריטים של תת-הקטגוריה מראש (הגבלה ל-20 פריטים)
         final subCategoryItems = <Widget>[
-          ...subCategory.books.map((book) => _buildBookItem(book)),
-          ...subCategory.subCategories.map(
+          ...subFilteredBooks.map((book) => _buildBookItem(book)),
+          ...subFilteredCategories.map(
             (cat) => CategoryGridItem(
               category: cat,
               onCategoryClickCallback: () => _openCategory(cat),
@@ -555,13 +580,23 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           ),
         ];
 
+        if (subFilteredBooks.length > 20) {
+          subCategoryItems.add(Center(
+              child: TextButton(
+            onPressed: () => _showAllBooksDialog(subFilteredBooks),
+            child: Text('הצג עוד ${subFilteredBooks.length - 20} פריטים'),
+          )));
+        }
+
         items.add(MyGridView(items: subCategoryItems));
       }
     } else {
-      // בניית כל הפריטים מראש
-      final allItems = <Widget>[
-        ...category.books.map((book) => _buildBookItem(book)),
-        ...category.subCategories.map(
+      // בניית כל הפריטים מראש אך עם הגבלה ל-20 פריטים להצגה ראשונית
+      final displayedBooks =
+          filteredBooks.map((book) => _buildBookItem(book));
+      final categoryItems = <Widget>[
+        ...displayedBooks,
+        ...filteredSubCategories.map(
           (cat) => CategoryGridItem(
             category: cat,
             onCategoryClickCallback: () => _openCategory(cat),
@@ -569,7 +604,15 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         ),
       ];
 
-      items.add(MyGridView(items: allItems));
+      items.add(MyGridView(items: categoryItems));
+
+      if (filteredBooks.length > 20) {
+        items.add(Center(
+            child: TextButton(
+          onPressed: () => _showAllBooksDialog(filteredBooks),
+          child: Text('הצג עוד ${filteredBooks.length - 20} פריטים'),
+        )));
+      }
     }
 
     return items;
@@ -658,12 +701,20 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   List<Widget> _buildCategoryTree(Category category, int level) {
     List<Widget> widgets = [];
 
+    // סינון ספרים מספריות חיצוניות - לא מציגים אותם בתצוגת הקטגוריות
+    final filteredBooks =
+        category.books.where((book) => book is! ExternalLibraryBook).toList();
+    // סינון קטגוריות ספריות חיצוניות - לא מציגים אותן בתצוגת הקטגוריות
+    final filteredSubCategories = category.subCategories
+        .where((cat) => !cat.isExternalLibrariesCategory)
+        .toList();
+
     // מיון
-    category.books.sort((a, b) => a.order.compareTo(b.order));
-    category.subCategories.sort((a, b) => a.order.compareTo(b.order));
+    filteredBooks.sort((a, b) => a.order.compareTo(b.order));
+    filteredSubCategories.sort((a, b) => a.order.compareTo(b.order));
 
     // הוספת תת-קטגוריות לפני הספרים
-    for (final subCategory in category.subCategories) {
+    for (final subCategory in filteredSubCategories) {
       final isExpanded = _expandedCategories.contains(subCategory.path);
 
       widgets.add(_buildListCategoryItem(subCategory, level, isExpanded));
@@ -674,9 +725,26 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       }
     }
 
-    // הוספת ספרים בקטגוריה הנוכחית אחרי התיקיות
-    for (final book in category.books) {
-      widgets.add(_buildListBookItem(book, level));
+    // הוספת ספרים בקטגוריה הנוכחית אחרי התיקיות (מוגבל ל-20 פריטים)
+    final int displayLimit = 500;
+    for (int i = 0; i < filteredBooks.length && i < displayLimit; i++) {
+      widgets.add(_buildListBookItem(filteredBooks[i], level));
+    }
+    if (filteredBooks.length > displayLimit) {
+      final remaining = filteredBooks.length - displayLimit;
+      widgets.add(InkWell(
+        onTap: () => _showAllBooksDialog(filteredBooks),
+        child: Container(
+          padding: EdgeInsets.only(
+            right: 16.0 + (level * 24.0),
+            left: 16.0,
+            top: 10.0,
+            bottom: 10.0,
+          ),
+          child: Text('הצג עוד $remaining פריטים',
+              style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+        ),
+      ));
     }
 
     return widgets;
@@ -914,6 +982,33 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       },
     );
     _refocusSearchBar();
+  }
+
+  void _showAllBooksDialog(List<Book> books) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('כל הספרים (${books.length})'),
+          content: SizedBox(
+            width: 600,
+            height: 400,
+            child: ListView.builder(
+              itemCount: books.length,
+              itemBuilder: (context, index) {
+                return _buildListBookItem(books[index], 0);
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('סגור'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   List<String> _getAllTopics(List<Book> books) {

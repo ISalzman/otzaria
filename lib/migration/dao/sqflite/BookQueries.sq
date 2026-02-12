@@ -3,6 +3,12 @@
 selectAll:
 SELECT * FROM book ORDER BY orderIndex, title;
 
+selectAllIgnoreExternalCatalogs:
+SELECT *
+FROM book
+WHERE externalLibraryId IS NULL AND fileType != 'link'
+ORDER BY orderIndex, title;
+
 selectById:
 SELECT * FROM book WHERE id = ?;
 

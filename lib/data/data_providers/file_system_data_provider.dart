@@ -2,12 +2,12 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:csv/csv.dart';
-import 'package:flutter/services.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
@@ -15,6 +15,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/utils/toc_parser.dart';
+import 'package:otzaria/migration/core/models/book.dart' as db_models;
 
 /// A data provider that manages file system operations for the library.
 ///
@@ -195,118 +196,105 @@ class FileSystemData {
   }
 
   /// Retrieves the list of books from Otzar HaChochma
-  static Future<List<ExternalLibraryBook>> getOtzarBooks() {
-    return _getOtzarBooks();
+  static Future<List<ExternalLibraryBook>> getOtzarBooks() async {
+    final books =
+        await _getExternalCatalogBooks(ExternalCatalogType.otzar);
+    return books.whereType<ExternalLibraryBook>().toList();
   }
 
   /// Retrieves the list of books from HebrewBooks
-  static Future<List<Book>> getHebrewBooks() {
-    return _getHebrewBooks();
+  static Future<List<Book>> getHebrewBooks() async {
+    return _getExternalCatalogBooks(ExternalCatalogType.hebrew);
   }
 
-  /// Loads a CSV file from assets and parses it into a table using Isolate.
-  static Future<List<List<dynamic>>> _loadCsvTable(String assetPath,
-      {bool shouldParseNumbers = false}) async {
-    final csvData = await rootBundle.loadString(assetPath);
-    return await Isolate.run(() {
-      // Normalize line endings for cross-platform compatibility
-      final normalizedCsvData =
-          csvData.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-      return CsvToListConverter(
-        fieldDelimiter: ',',
-        textDelimiter: '"',
-        eol: '\n',
-        shouldParseNumbers: shouldParseNumbers,
-      ).convert(normalizedCsvData);
-    });
-  }
-
-  /// Internal implementation for loading Otzar HaChochma books from CSV
-  static Future<List<ExternalLibraryBook>> _getOtzarBooks() async {
+  /// Internal implementation for loading external catalog books from DB
+  static Future<List<Book>> _getExternalCatalogBooks(
+      ExternalCatalogType catalogType) async {
     try {
-      final table = await _loadCsvTable('assets/otzar_books.csv',
-          shouldParseNumbers: false);
-      return table.skip(1).map((row) {
-        return ExternalLibraryBook(
-          title: row[1],
-          id: int.tryParse(row[0]) ?? -1,
-          author: row[2],
-          pubPlace: row[3],
-          pubDate: row[4],
-          topics: row[5],
-          link: row[7],
-        );
-      }).toList();
-    } catch (e) {
-      return [];
-    }
-  }
+      await SqliteDataProvider.instance.initialize();
+      final repository = SqliteDataProvider.instance.repository;
+      if (repository == null) return [];
 
-  /// Internal implementation for loading HebrewBooks from CSV
-  static Future<List<Book>> _getHebrewBooks() async {
-    try {
-      final hebrewBooksPath =
-          Settings.getValue<String>('key-hebrew-books-path');
-
-      final table = await _loadCsvTable('assets/hebrew_books.csv',
-          shouldParseNumbers: true);
-
+      final dbBooks = await repository.getAllExternalContentBooks();
       final books = <Book>[];
-      for (final row in table.skip(1)) {
-        try {
-          if (row[0] == null || row[0].toString().isEmpty) continue;
 
-          // Check if the ID is numeric
-          final bookId = row[0].toString().trim();
-          if (!RegExp(r'^\d+$').hasMatch(bookId)) continue;
-          String? localPath;
+      for (final dbBook in dbBooks) {
+      //  if (!_isExternalCatalogDbBook(dbBook)) continue;
 
-          if (hebrewBooksPath != null) {
-            localPath =
-                '$hebrewBooksPath${Platform.pathSeparator}Hebrewbooks_org_$bookId.pdf';
-            if (!File(localPath).existsSync()) {
-              localPath =
-                  '$hebrewBooksPath${Platform.pathSeparator}$bookId.pdf';
-              if (!File(localPath).existsSync()) {
-                localPath = null;
-              }
-            }
-          }
+        final catalog = ExternalCatalogMapper.catalogFromLinkOrId(
+          link: ExternalCatalogMapper.resolveLink(
+            filePath: dbBook.filePath,
+            externalLibraryId: dbBook.externalLibraryId,
+          ),
+          externalLibraryId: dbBook.externalLibraryId,
+          filePath: dbBook.filePath,
+        );
 
-          if (localPath != null) {
-            // If local file exists, add as PdfBook
-            books.add(PdfBook(
-              title: row[1].toString(),
-              path: localPath,
-              author: row[2].toString(),
-              pubPlace: row[3].toString(),
-              pubDate: row[4].toString(),
-              topics: row[15].toString().replaceAll(';', ', '),
-              heShortDesc: row[13].toString(),
-            ));
-          } else {
-            // If no local file, add as ExternalLibraryBook
-            books.add(ExternalLibraryBook(
-              title: row[1].toString(),
-              id: int.parse(bookId),
-              author: row[2].toString(),
-              pubPlace: row[3].toString(),
-              pubDate: row[4].toString(),
-              topics: row[15].toString().replaceAll(';', ', '),
-              heShortDesc: row[13].toString(),
-              link:
-                  'https://beta.hebrewbooks.org/reader/reader.aspx?sfid=$bookId#p=1&fitMode=fitwidth&hlts=&ocr=',
-            ));
-          }
-        } catch (e) {
-          debugPrint('Error loading book: $e');
+        if (catalog != catalogType) continue;
+
+        final mapped = _mapDbBookToExternalBook(dbBook, catalogType);
+        if (mapped != null) {
+          books.add(mapped);
         }
       }
+
       return books;
     } catch (e) {
-      debugPrint('Error loading hebrewbooks: $e');
+      debugPrint('Error loading external catalogs from DB: $e');
       return [];
     }
+  }
+
+  static bool _isExternalCatalogDbBook(db_models.Book book) {
+    final fileType = (book.fileType ?? '').toLowerCase();
+    return book.isContentExternal &&
+      book.externalLibraryId != null &&
+      (fileType == 'link' || fileType == 'url');
+  }
+
+  static Book? _mapDbBookToExternalBook(
+    db_models.Book dbBook,
+    ExternalCatalogType catalogType,
+  ) {
+    final link = ExternalCatalogMapper.resolveLink(
+      filePath: dbBook.filePath,
+      externalLibraryId: dbBook.externalLibraryId,
+    );
+
+    final author = dbBook.authors.isNotEmpty ? dbBook.authors.first.name : null;
+    final pubPlace =
+        dbBook.pubPlaces.isNotEmpty ? dbBook.pubPlaces.first.name : null;
+    final pubDate =
+        dbBook.pubDates.isNotEmpty ? dbBook.pubDates.first.date : null;
+    final topics = dbBook.topics.map((t) => t.name).join(', ');
+
+    if ((dbBook.fileType ?? '').toLowerCase() == 'pdf' &&
+        dbBook.filePath != null &&
+        dbBook.filePath!.isNotEmpty) {
+      return PdfBook(
+        title: dbBook.title,
+        path: dbBook.filePath!,
+        author: author,
+        pubPlace: pubPlace,
+        pubDate: pubDate,
+        topics: topics,
+        heShortDesc: dbBook.heShortDesc,
+      );
+    }
+
+    if (link == null || link.isEmpty) return null;
+
+    return ExternalLibraryBook(
+      title: dbBook.title,
+      id: dbBook.id,
+      author: author,
+      pubPlace: pubPlace,
+      pubDate: pubDate,
+      topics: topics,
+      heShortDesc: dbBook.heShortDesc,
+      link: link,
+      fileType: 'url',
+    );
   }
 
   /// Retrieves all links associated with a specific book.

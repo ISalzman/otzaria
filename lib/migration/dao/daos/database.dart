@@ -248,14 +248,26 @@ class MyDatabase {
       'CREATE INDEX IF NOT EXISTS idx_category_closure_ancestor ON category_closure(ancestorId);',
       'CREATE INDEX IF NOT EXISTS idx_category_closure_descendant ON category_closure(descendantId);',
 
-      // Authors table
-      '''
-      CREATE TABLE IF NOT EXISTS author (
+        // Generations table
+        '''
+        CREATE TABLE IF NOT EXISTS generation (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE
-      );
-      ''',
-      'CREATE INDEX IF NOT EXISTS idx_author_name ON author(name);',
+        );
+        ''',
+        'CREATE INDEX IF NOT EXISTS idx_generation_name ON generation(name);',
+
+        // Authors table
+        '''
+        CREATE TABLE IF NOT EXISTS author (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          generationId INTEGER,
+          FOREIGN KEY (generationId) REFERENCES generation(id) ON DELETE SET NULL
+        );
+        ''',
+        'CREATE INDEX IF NOT EXISTS idx_author_name ON author(name);',
+        'CREATE INDEX IF NOT EXISTS idx_author_generation ON author(generationId);',
 
       // Table des topics
       '''
@@ -320,6 +332,8 @@ class MyDatabase {
           fileType TEXT DEFAULT 'txt',
           fileSize INTEGER DEFAULT NULL,
           lastModified INTEGER DEFAULT NULL,
+          pages INTEGER DEFAULT NULL,
+          volume TEXT DEFAULT NULL,
           FOREIGN KEY (categoryId) REFERENCES category(id) ON DELETE CASCADE,
           FOREIGN KEY (sourceId) REFERENCES source(id) ON DELETE RESTRICT
       );
