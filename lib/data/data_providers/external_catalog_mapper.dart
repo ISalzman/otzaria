@@ -62,7 +62,7 @@ class ExternalCatalogMapper {
 
     final url = link?.trim();
     if (url == null || url.isEmpty) return null;
-    
+
     // Fallback: first numeric segment in URL
     final fallback = RegExp(r'(\d+)').firstMatch(url);
     if (fallback != null) {
@@ -101,11 +101,5 @@ class ExternalCatalogMapper {
     }
 
     return null;
-  }
-
-  static bool _looksLikeUrl(String? value) {
-    if (value == null) return false;
-    final trimmed = value.trim().toLowerCase();
-    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
   }
 }
