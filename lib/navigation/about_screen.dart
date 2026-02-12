@@ -241,6 +241,26 @@ class _AboutScreenState extends State<AboutScreen> {
     );
   }
 
+  Widget _buildEssentialPeopleList() {
+    const essentialPeople = [
+      {
+        'name': 'דוד אריאל',
+        'url': '',
+      },
+      {
+        'name': 'יעקב מ. פינס',
+        'url': 'https://github.com/ymp112',
+      },
+      {
+        'name': 'רפאל א.',
+        'url': '',
+      },
+      // ניתן להוסיף עוד אנשים כאן
+    ];
+
+    return _buildContributorsList(essentialPeople, FluentIcons.people_24_regular);
+  }
+
   Widget _buildBookEditorsList() {
     // מהדירים שההדירו 10 ספרים ומעלה
     final topEditors = [
@@ -938,6 +958,18 @@ class _AboutScreenState extends State<AboutScreen> {
                 _buildDevelopersList(),
                 const SizedBox(height: 32),
 
+                // אנשים שהתוכנה לא יכולה בלעדיהם
+                const Text(
+                  'אנשים שהתוכנה לא יכולה בלעדיהם',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildEssentialPeopleList(),
+                const SizedBox(height: 32),
+
                 // רשימת מהדירי ספרים
                 const Text(
                   'מהדירי ספרים',
@@ -1058,6 +1090,15 @@ class _AboutScreenState extends State<AboutScreen> {
           ),
           const SizedBox(height: 12),
           _buildDevelopersList(),
+          const SizedBox(height: 24),
+
+          // אנשים שהתוכנה לא יכולה בלעדיהם
+          const Text(
+            'אנשים שהתוכנה לא יכולה בלעדיהם',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          _buildEssentialPeopleList(),
           const SizedBox(height: 24),
 
           // מהדירי ספרים

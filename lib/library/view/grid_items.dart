@@ -24,7 +24,7 @@ class HeaderItem extends StatelessWidget {
       padding: const EdgeInsets.all(16.0),
       child: Text(category.title,
           style: TextStyle(
-            fontSize: 20,
+            fontSize: 50,
             color: Theme.of(context).colorScheme.secondary,
           )),
     );
@@ -61,7 +61,7 @@ class CategoryGridItem extends StatelessWidget {
                     title: Text(
                       category.title,
                       style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.bold),
+                          fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
