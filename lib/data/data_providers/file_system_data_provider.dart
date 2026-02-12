@@ -197,8 +197,7 @@ class FileSystemData {
 
   /// Retrieves the list of books from Otzar HaChochma
   static Future<List<ExternalLibraryBook>> getOtzarBooks() async {
-    final books =
-        await _getExternalCatalogBooks(ExternalCatalogType.otzar);
+    final books = await _getExternalCatalogBooks(ExternalCatalogType.otzar);
     return books.whereType<ExternalLibraryBook>().toList();
   }
 
@@ -219,8 +218,6 @@ class FileSystemData {
       final books = <Book>[];
 
       for (final dbBook in dbBooks) {
-      //  if (!_isExternalCatalogDbBook(dbBook)) continue;
-
         final catalog = ExternalCatalogMapper.catalogFromLinkOrId(
           link: ExternalCatalogMapper.resolveLink(
             filePath: dbBook.filePath,
@@ -243,13 +240,6 @@ class FileSystemData {
       debugPrint('Error loading external catalogs from DB: $e');
       return [];
     }
-  }
-
-  static bool _isExternalCatalogDbBook(db_models.Book book) {
-    final fileType = (book.fileType ?? '').toLowerCase();
-    return book.isContentExternal &&
-      book.externalLibraryId != null &&
-      (fileType == 'link' || fileType == 'url');
   }
 
   static Book? _mapDbBookToExternalBook(
