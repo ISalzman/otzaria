@@ -9,6 +9,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:path/path.dart' as p;
 import '../settings/settings_repository.dart';
 import '../services/data_collection_service.dart';
+import '../data/repository/data_repository.dart';
 import 'dart:io';
 
 class AboutScreen extends StatefulWidget {
@@ -616,8 +617,17 @@ class _AboutScreenState extends State<AboutScreen> {
       libraryVersion = 'לא ידוע';
     }
 
-    // Load book count
-    bookCount = await dataService.getTotalBookCount();
+    // Load book count (excluding external library books)
+    try {
+      final library = await DataRepository.instance.library;
+      final allBooks = library.getAllBooks();
+      // Count only books without externalLibraryId (non-external books)
+      bookCount =
+          allBooks.where((book) => book.externalLibraryId == null).length;
+    } catch (e) {
+      debugPrint('Error counting books: $e');
+      bookCount = 0;
+    }
   }
 
   Future<void> _openLocalHtmlFile(String fileName) async {
