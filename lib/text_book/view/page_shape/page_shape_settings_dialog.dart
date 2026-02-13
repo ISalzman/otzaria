@@ -768,7 +768,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
             foregroundColor: Theme.of(context).colorScheme.error,
           ),
         ),
-        const Spacer(),
+        const SizedBox(width: 12),
         TextButton(
           onPressed: () => Navigator.of(context).pop(_hasChanges),
           child: const Text('סגור'),
