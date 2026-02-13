@@ -51,7 +51,7 @@ class BooksCache {
     }
 
     try {
-      final allBooks = await repository.database.bookDao.getAllBooks();
+      final allBooks = await repository.database.bookDao.getAllLocalBooks();
 
       _books.clear();
       _booksById.clear();
