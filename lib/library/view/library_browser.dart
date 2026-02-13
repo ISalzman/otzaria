@@ -162,202 +162,218 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   Widget build(BuildContext context) {
     super.build(context);
 
-    return BlocBuilder<SettingsBloc, SettingsState>(
-      builder: (context, settingsState) {
-        return BlocBuilder<LibraryBloc, LibraryState>(
-          buildWhen: (previous, current) {
-            // אל תבנה מחדש אם רק previewBook השתנה
-            // נבנה מחדש רק אם שדות אחרים השתנו
-            return previous.isLoading != current.isLoading ||
-                previous.error != current.error ||
-                previous.library != current.library ||
-                previous.currentCategory != current.currentCategory ||
-                previous.searchResults != current.searchResults ||
-                previous.searchQuery != current.searchQuery ||
-                previous.selectedTopics != current.selectedTopics;
-          },
-          builder: (context, state) {
-            if (state.error != null) {
-              return Center(child: Text('Error: ${state.error}'));
-            }
+    return BlocListener<SettingsBloc, SettingsState>(
+      listenWhen: (previous, current) {
+        return previous.showExternalBooks != current.showExternalBooks ||
+            previous.showHebrewBooks != current.showHebrewBooks ||
+            previous.showOtzarHachochma != current.showOtzarHachochma;
+      },
+      listener: (context, settingsState) {
+        final query = context.read<LibraryBloc>().state.searchQuery;
+        if (query != null && query.trim().length >= 3) {
+          _searchWithSettings(context, settingsState);
+        }
+      },
+      child: BlocBuilder<SettingsBloc, SettingsState>(
+        builder: (context, settingsState) {
+          return BlocBuilder<LibraryBloc, LibraryState>(
+            buildWhen: (previous, current) {
+              // אל תבנה מחדש אם רק previewBook השתנה
+              // נבנה מחדש רק אם שדות אחרים השתנו
+              return previous.isLoading != current.isLoading ||
+                  previous.error != current.error ||
+                  previous.library != current.library ||
+                  previous.currentCategory != current.currentCategory ||
+                  previous.searchResults != current.searchResults ||
+                  previous.searchQuery != current.searchQuery ||
+                  previous.selectedTopics != current.selectedTopics;
+            },
+            builder: (context, state) {
+              if (state.error != null) {
+                return Center(child: Text('Error: ${state.error}'));
+              }
 
-            // אם אין ספרייה ולא בטעינה - הצג שגיאה
-            if (state.library == null && !state.isLoading) {
-              return const Center(child: Text('No library data available'));
-            }
+              // אם אין ספרייה ולא בטעינה - הצג שגיאה
+              if (state.library == null && !state.isLoading) {
+                return const Center(child: Text('No library data available'));
+              }
 
-            // גם אם אין ספרייה אבל בטעינה - הצג את המסך עם שכבת טעינה
-            return Stack(
-              children: [
-                // תוכן הספרייה - תמיד מוצג (גם אם הספרייה null)
-                Scaffold(
-                  backgroundColor: Theme.of(context).colorScheme.surface,
-                  appBar: AppBar(
-                    // Keep the AppBar visually consistent when scrolling
+              // גם אם אין ספרייה אבל בטעינה - הצג את המסך עם שכבת טעינה
+              return Stack(
+                children: [
+                  // תוכן הספרייה - תמיד מוצג (גם אם הספרייה null)
+                  Scaffold(
                     backgroundColor: Theme.of(context).colorScheme.surface,
-                    elevation: 0,
-                    shadowColor: Colors.transparent,
-                    surfaceTintColor: Colors.transparent,
-                    title: Row(
-                      children: [
-                        _buildLibraryActions(context, state, settingsState),
-                        const SizedBox(width: 8),
-                        Expanded(child: _buildSearchBar(state)),
-                        DafYomi(
-                          onDafYomiTap: (tractate, daf) {
-                            openDafYomiBook(context, tractate, ' $daf.');
-                          },
-                          onCalendarTap: () {
-                            // Reset to calendar BEFORE navigation using GlobalKey
-                            (moreScreenKey.currentState as dynamic)
-                                ?.resetToCalendar();
-                            // Then navigate
-                            context.read<NavigationBloc>().add(
-                                  const NavigateToScreen(Screen.more),
-                                );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  body: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final screenWidth = constraints.maxWidth;
-                      const minPreviewWidth = 8.0;
-                      // ברירת מחדל: שליש ברשת, שני שליש ברשימה
-                      final previewWidth =
-                          settingsState.libraryViewMode == 'list'
-                              ? (screenWidth * 2 / 3)
-                              : (screenWidth / 3);
-
-                      final maxPreviewWidth = (screenWidth - 350)
-                          .clamp(minPreviewWidth, screenWidth);
-
-                      return Row(
+                    appBar: AppBar(
+                      // Keep the AppBar visually consistent when scrolling
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                      surfaceTintColor: Colors.transparent,
+                      title: Row(
                         children: [
-                          // תוכן הספרייה - עכשיו בצד ימין
-                          Expanded(
-                            child: Column(
-                              children: [
-                                if (context
-                                        .read<FocusRepository>()
-                                        .librarySearchController
-                                        .text
-                                        .length >
-                                    2)
-                                  _buildTopicsSelection(
-                                      context, state, settingsState),
-                                // תוכן הספרייה
-                                Expanded(child: _buildContent(state)),
-                              ],
-                            ),
+                          _buildLibraryActions(context, state, settingsState),
+                          const SizedBox(width: 8),
+                          Expanded(child: _buildSearchBar(state)),
+                          DafYomi(
+                            onDafYomiTap: (tractate, daf) {
+                              openDafYomiBook(context, tractate, ' $daf.');
+                            },
+                            onCalendarTap: () {
+                              // Reset to calendar BEFORE navigation using GlobalKey
+                              (moreScreenKey.currentState as dynamic)
+                                  ?.resetToCalendar();
+                              // Then navigate
+                              context.read<NavigationBloc>().add(
+                                    const NavigateToScreen(Screen.more),
+                                  );
+                            },
                           ),
-                          // פאנל תצוגה מקדימה בצד שמאל עם מסגרת ואפשרות שינוי גודל
-                          if (settingsState.libraryShowPreview)
-                            Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: ResizablePreviewPanel(
-                                key: ValueKey(
-                                    screenWidth), // מפתח שמשתנה עם רוחב המסך
-                                initialWidth: previewWidth,
-                                minWidth: minPreviewWidth,
-                                maxWidth:
-                                    maxPreviewWidth, // השאר לפחות 350px לרשימה (ככל שניתן)
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color:
-                                        Theme.of(context).colorScheme.surface,
-                                    border: Border.all(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outline
-                                          .withValues(alpha: 0.3),
-                                      width: 1.0,
+                        ],
+                      ),
+                    ),
+                    body: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final screenWidth = constraints.maxWidth;
+                        const minPreviewWidth = 8.0;
+                        // ברירת מחדל: שליש ברשת, שני שליש ברשימה
+                        final previewWidth =
+                            settingsState.libraryViewMode == 'list'
+                                ? (screenWidth * 2 / 3)
+                                : (screenWidth / 3);
+
+                        final maxPreviewWidth = (screenWidth - 350)
+                            .clamp(minPreviewWidth, screenWidth);
+
+                        return Row(
+                          children: [
+                            // תוכן הספרייה - עכשיו בצד ימין
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  if (context
+                                          .read<FocusRepository>()
+                                          .librarySearchController
+                                          .text
+                                          .length >
+                                      2)
+                                    _buildTopicsSelection(
+                                        context, state, settingsState),
+                                  // תוכן הספרייה
+                                  Expanded(child: _buildContent(state)),
+                                ],
+                              ),
+                            ),
+                            // פאנל תצוגה מקדימה בצד שמאל עם מסגרת ואפשרות שינוי גודל
+                            if (settingsState.libraryShowPreview)
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: ResizablePreviewPanel(
+                                  key: ValueKey(
+                                      screenWidth), // מפתח שמשתנה עם רוחב המסך
+                                  initialWidth: previewWidth,
+                                  minWidth: minPreviewWidth,
+                                  maxWidth:
+                                      maxPreviewWidth, // השאר לפחות 350px לרשימה (ככל שניתן)
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Theme.of(context).colorScheme.surface,
+                                      border: Border.all(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outline
+                                            .withValues(alpha: 0.3),
+                                        width: 1.0,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8.0),
                                     ),
-                                    borderRadius: BorderRadius.circular(8.0),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(7.0),
-                                    child:
-                                        BlocBuilder<LibraryBloc, LibraryState>(
-                                      buildWhen: (previous, current) {
-                                        // רק אם previewBook השתנה
-                                        return previous.previewBook !=
-                                            current.previewBook;
-                                      },
-                                      builder: (context, previewState) {
-                                        return GestureDetector(
-                                          onDoubleTap: () {
-                                            if (previewState.previewBook !=
-                                                null) {
-                                              _openBookInReader(
-                                                  previewState.previewBook!, 0);
-                                            }
-                                          },
-                                          child: BookPreviewPanel(
-                                            book: previewState.previewBook,
-                                            onOpenInReader: (index) {
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(7.0),
+                                      child: BlocBuilder<LibraryBloc,
+                                          LibraryState>(
+                                        buildWhen: (previous, current) {
+                                          // רק אם previewBook השתנה
+                                          return previous.previewBook !=
+                                              current.previewBook;
+                                        },
+                                        builder: (context, previewState) {
+                                          return GestureDetector(
+                                            onDoubleTap: () {
                                               if (previewState.previewBook !=
                                                   null) {
                                                 _openBookInReader(
                                                     previewState.previewBook!,
-                                                    index);
+                                                    0);
                                               }
                                             },
-                                            onClose: () {
-                                              context.read<SettingsBloc>().add(
-                                                    const UpdateLibraryShowPreview(
-                                                        false),
-                                                  );
-                                            },
-                                          ),
-                                        );
-                                      },
+                                            child: BookPreviewPanel(
+                                              book: previewState.previewBook,
+                                              onOpenInReader: (index) {
+                                                if (previewState.previewBook !=
+                                                    null) {
+                                                  _openBookInReader(
+                                                      previewState.previewBook!,
+                                                      index);
+                                                }
+                                              },
+                                              onClose: () {
+                                                context
+                                                    .read<SettingsBloc>()
+                                                    .add(
+                                                      const UpdateLibraryShowPreview(
+                                                          false),
+                                                    );
+                                              },
+                                            ),
+                                          );
+                                        },
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
                   ),
-                ),
-                // שכבת חסימה בזמן טעינה
-                if (state.isLoading)
-                  Positioned.fill(
-                    child: Container(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surface
-                          .withValues(alpha: 0.3),
-                      child: Center(
-                        child: Container(
-                          width: 200,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Center(
-                            child: _LoadingDotsText(),
+                  // שכבת חסימה בזמן טעינה
+                  if (state.isLoading)
+                    Positioned.fill(
+                      child: Container(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surface
+                            .withValues(alpha: 0.3),
+                        child: Center(
+                          child: Container(
+                            width: 200,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Center(
+                              child: _LoadingDotsText(),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            );
-          },
-        );
-      },
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -592,8 +608,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       }
     } else {
       // בניית כל הפריטים מראש אך עם הגבלה ל-20 פריטים להצגה ראשונית
-      final displayedBooks =
-          filteredBooks.map((book) => _buildBookItem(book));
+      final displayedBooks = filteredBooks.map((book) => _buildBookItem(book));
       final categoryItems = <Widget>[
         ...displayedBooks,
         ...filteredSubCategories.map(
@@ -1032,14 +1047,20 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     context.read<LibraryBloc>().add(
           UpdateSearchQuery(cleanSearchText),
         );
-    context.read<LibraryBloc>().add(
-          SearchBooks(
-            showHebrewBooks: settingsState.showHebrewBooks,
-            showOtzarHachochma: settingsState.showOtzarHachochma,
-          ),
-        );
+    _searchWithSettings(context, settingsState);
     setState(() {});
     _refocusSearchBar();
+  }
+
+  void _searchWithSettings(BuildContext context, SettingsState settingsState) {
+    context.read<LibraryBloc>().add(
+          SearchBooks(
+            showHebrewBooks: settingsState.showExternalBooks &&
+                settingsState.showHebrewBooks,
+            showOtzarHachochma: settingsState.showExternalBooks &&
+                settingsState.showOtzarHachochma,
+          ),
+        );
   }
 
   void _refocusSearchBar({bool selectAll = false}) {
