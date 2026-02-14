@@ -67,6 +67,10 @@ class PdfBookScreen extends StatefulWidget {
 
 class _PdfBookScreenState extends State<PdfBookScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
+  static const int _defaultPdfLineRange = 50;
+  static const String _connectionTypeCommentary = 'COMMENTARY';
+  static const String _connectionTypeTargum = 'TARGUM';
+
   @override
   bool get wantKeepAlive => true;
 
@@ -285,8 +289,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final currentLine = widget.tab.currentTextLineNumber;
     if (currentLine == null) return null;
 
-    int startLine = currentLine;
-    int endLine = startLine;
+    final int startLine = currentLine;
+    int endLine = startLine + _defaultPdfLineRange;
 
     if (widget.tab.pdfHeadings != null) {
       final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
@@ -295,11 +299,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
       if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
         endLine = sortedHeadings[currentIndex + 1].value - 1;
-      } else {
-        endLine = startLine + 50;
       }
-    } else {
-      endLine = startLine + 50;
     }
 
     return (startLine: startLine, endLine: endLine);
@@ -310,11 +310,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (range == null) return const [];
 
     final commentators = widget.tab.links
-        .where((link) =>
-            link.index1 >= range.startLine &&
-            link.index1 <= range.endLine &&
-            (link.connectionType.toUpperCase() == 'COMMENTARY' ||
-                link.connectionType.toUpperCase() == 'TARGUM'))
+        .where((link) {
+          final connectionType = link.connectionType.toUpperCase();
+          return link.index1 >= range.startLine &&
+              link.index1 <= range.endLine &&
+              (connectionType == _connectionTypeCommentary ||
+                  connectionType == _connectionTypeTargum);
+        })
         .map((link) => utils.getTitleFromPath(link.path2))
         .toSet()
         .toList()
@@ -327,15 +329,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final range = _getCurrentPdfLinesRange();
     if (range == null) return const [];
 
-    final links = widget.tab.links
-        .where((link) =>
-            link.index1 >= range.startLine &&
-            link.index1 <= range.endLine &&
-            link.connectionType.toUpperCase() != 'COMMENTARY' &&
-            link.connectionType.toUpperCase() != 'TARGUM' &&
-            link.start == null &&
-            link.end == null)
-        .toList()
+    final links = widget.tab.links.where((link) {
+      final connectionType = link.connectionType.toUpperCase();
+      return link.index1 >= range.startLine &&
+          link.index1 <= range.endLine &&
+          connectionType != _connectionTypeCommentary &&
+          connectionType != _connectionTypeTargum &&
+          link.start == null &&
+          link.end == null;
+    }).toList()
       ..sort((a, b) => a.index1.compareTo(b.index1));
 
     return links;
@@ -363,11 +365,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (allActive) {
       widget.tab.activeCommentators.removeWhere(commentators.contains);
     } else {
-      for (final commentator in commentators) {
-        if (!widget.tab.activeCommentators.contains(commentator)) {
-          widget.tab.activeCommentators.add(commentator);
-        }
-      }
+      final activeSet = widget.tab.activeCommentators.toSet();
+      widget.tab.activeCommentators
+          .addAll(commentators.where((c) => !activeSet.contains(c)));
     }
     _openCommentaryPane();
   }
