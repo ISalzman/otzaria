@@ -99,7 +99,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   Future<void> _loadConfiguration() async {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) {
-      debugPrint('⚠️ PageShape: State is not TextBookLoaded, cannot load configuration');
+      debugPrint(
+          '⚠️ PageShape: State is not TextBookLoaded, cannot load configuration');
       return;
     }
 
@@ -122,7 +123,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       commentators = _resolveCommentatorNames(config, state.links);
       debugPrint('📖 PageShape: Resolved commentators: $commentators');
     } else {
-      debugPrint('📖 PageShape: No saved configuration, loading defaults from JSON');
+      debugPrint(
+          '📖 PageShape: No saved configuration, loading defaults from JSON');
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
       commentators =
           await DefaultCommentators.getDefaults(state.book, links: state.links);
@@ -174,7 +176,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   }
 
   /// הסתרת טור
-  /// 
+  ///
   /// שימו לב: פעולה זו שומרת את ההגדרה גלובלית כברירת מחדל.
   /// אם המשתמש רוצה הגדרות פר-ספר, הוא צריך לפתוח את דיאלוג ההגדרות
   /// ולהפעיל את האופציה "שמירה לספר הנוכחי בלבד".
@@ -190,7 +192,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     PageShapeSettingsManager.saveColumnVisibility(
         state.book.title, _columnVisibility,
         saveAsGlobal: true);
-    
+
     // הודעה למשתמש
     UiSnack.show('הטור הוסתר בכל הספרים. ניתן לשנות בהגדרות צורת הדף.');
   }

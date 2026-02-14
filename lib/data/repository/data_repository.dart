@@ -130,9 +130,8 @@ class DataRepository {
     var allBooks = category?.getAllBooks() ?? (await library).getAllBooks();
 
     // Filter out external library books from the base book list
-    allBooks = allBooks
-        .where((book) => book.externalLibraryId == null)
-        .toList();
+    allBooks =
+        allBooks.where((book) => book.externalLibraryId == null).toList();
 
     if (includeOtzar) {
       allBooks += await otzarBooks;

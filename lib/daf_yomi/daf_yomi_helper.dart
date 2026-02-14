@@ -145,8 +145,8 @@ Future<PdfOutlineNode?> getDafYomiOutline(PdfBook book, String daf) async {
   try {
     final pdfBytes = await SqliteDataProvider.instance.getPdfBytesFromDb(book);
     if (pdfBytes == null || pdfBytes.isEmpty) return null;
-    outlines =
-        await PdfDocument.openData(pdfBytes).then((value) => value.loadOutline());
+    outlines = await PdfDocument.openData(pdfBytes)
+        .then((value) => value.loadOutline());
   } catch (_) {
     return null;
   }

@@ -258,7 +258,8 @@ class _AboutScreenState extends State<AboutScreen> {
       // ניתן להוסיף עוד אנשים כאן
     ];
 
-    return _buildContributorsList(essentialPeople, FluentIcons.people_24_regular);
+    return _buildContributorsList(
+        essentialPeople, FluentIcons.people_24_regular);
   }
 
   Widget _buildBookEditorsList() {

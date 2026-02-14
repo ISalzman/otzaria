@@ -841,7 +841,6 @@ class DatabaseGenerator {
 
     return s;
   }
-
 }
 
 /// Structure to store TOC entry data during processing

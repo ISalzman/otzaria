@@ -142,7 +142,6 @@ class IndexingRepository {
     final title = book.title;
     final topics = "/${book.topics.replaceAll(', ', '/')}";
 
- 
     final texts = text.split('\n');
     List<String> reference = [];
 
