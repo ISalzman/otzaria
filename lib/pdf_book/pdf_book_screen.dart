@@ -6,11 +6,13 @@ import 'package:flutter/scheduler.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/links.dart' as otz_links;
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart' as pdf_events;
@@ -47,6 +49,7 @@ import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
+import 'package:otzaria/utils/text_manipulation.dart' as utils;
 
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
@@ -275,6 +278,161 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return provider.getPdfBytesFromDb(widget.tab.book);
   }
 
+  Text _buildRtlMenuText(String text) =>
+      Text(text, textDirection: TextDirection.rtl);
+
+  ({int startLine, int endLine})? _getCurrentPdfLinesRange() {
+    final currentLine = widget.tab.currentTextLineNumber;
+    if (currentLine == null) return null;
+
+    int startLine = currentLine;
+    int endLine = startLine;
+
+    if (widget.tab.pdfHeadings != null) {
+      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
+      final currentIndex =
+          sortedHeadings.indexWhere((e) => e.value == currentLine);
+
+      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
+        endLine = sortedHeadings[currentIndex + 1].value - 1;
+      } else {
+        endLine = startLine + 50;
+      }
+    } else {
+      endLine = startLine + 50;
+    }
+
+    return (startLine: startLine, endLine: endLine);
+  }
+
+  List<String> _getRelevantCommentators() {
+    final range = _getCurrentPdfLinesRange();
+    if (range == null) return const [];
+
+    final commentators = widget.tab.links
+        .where((link) =>
+            link.index1 >= range.startLine &&
+            link.index1 <= range.endLine &&
+            (link.connectionType.toUpperCase() == 'COMMENTARY' ||
+                link.connectionType.toUpperCase() == 'TARGUM'))
+        .map((link) => utils.getTitleFromPath(link.path2))
+        .toSet()
+        .toList()
+      ..sort();
+
+    return commentators;
+  }
+
+  List<otz_links.Link> _getRelevantLinks() {
+    final range = _getCurrentPdfLinesRange();
+    if (range == null) return const [];
+
+    final links = widget.tab.links
+        .where((link) =>
+            link.index1 >= range.startLine &&
+            link.index1 <= range.endLine &&
+            link.connectionType.toUpperCase() != 'COMMENTARY' &&
+            link.connectionType.toUpperCase() != 'TARGUM' &&
+            link.start == null &&
+            link.end == null)
+        .toList()
+      ..sort((a, b) => a.index1.compareTo(b.index1));
+
+    return links;
+  }
+
+  void _openCommentaryPane() {
+    setState(() {
+      _rightPaneInitialTabIndex = 0;
+    });
+    _bloc.add(const pdf_events.ToggleRightPane(show: true));
+  }
+
+  void _toggleCommentator(String commentator) {
+    if (widget.tab.activeCommentators.contains(commentator)) {
+      widget.tab.activeCommentators.remove(commentator);
+    } else {
+      widget.tab.activeCommentators.add(commentator);
+    }
+    _openCommentaryPane();
+  }
+
+  void _toggleAllCommentators(List<String> commentators) {
+    final allActive =
+        commentators.every(widget.tab.activeCommentators.contains);
+    if (allActive) {
+      widget.tab.activeCommentators.removeWhere(commentators.contains);
+    } else {
+      for (final commentator in commentators) {
+        if (!widget.tab.activeCommentators.contains(commentator)) {
+          widget.tab.activeCommentators.add(commentator);
+        }
+      }
+    }
+    _openCommentaryPane();
+  }
+
+  ctx.ContextMenu _buildPdfContextMenu() {
+    final relevantCommentators = _getRelevantCommentators();
+    final relevantLinks = _getRelevantLinks();
+
+    return ctx.ContextMenu(
+      entries: [
+        ctx.MenuItem(
+          label: _buildRtlMenuText('חיפוש'),
+          icon: const Icon(FluentIcons.search_24_regular),
+          onSelected: (_) => _ensureSearchTabIsActive(),
+        ),
+        ctx.MenuItem.submenu(
+          label: _buildRtlMenuText('מפרשים'),
+          icon: const Icon(FluentIcons.book_24_regular),
+          enabled: relevantCommentators.isNotEmpty,
+          items: [
+            ctx.MenuItem(
+              label: _buildRtlMenuText('הצג את כל המפרשים'),
+              icon: relevantCommentators
+                      .every(widget.tab.activeCommentators.contains)
+                  ? const Icon(FluentIcons.checkmark_24_regular)
+                  : null,
+              onSelected: (_) => _toggleAllCommentators(relevantCommentators),
+            ),
+            if (relevantCommentators.isNotEmpty) const ctx.MenuDivider(),
+            ...relevantCommentators.map(
+              (commentator) => ctx.MenuItem(
+                label: Text(commentator, textDirection: TextDirection.rtl),
+                icon: widget.tab.activeCommentators.contains(commentator)
+                    ? const Icon(FluentIcons.checkmark_24_regular)
+                    : null,
+                onSelected: (_) => _toggleCommentator(commentator),
+              ),
+            ),
+          ],
+        ),
+        ctx.MenuItem.submenu(
+          label: _buildRtlMenuText('קישורים'),
+          icon: const Icon(FluentIcons.link_24_regular),
+          enabled: relevantLinks.isNotEmpty,
+          items: relevantLinks
+              .map(
+                (link) => ctx.MenuItem(
+                  label: Text(link.heRef, textDirection: TextDirection.rtl),
+                  onSelected: (_) {
+                    openBook(
+                      context,
+                      TextBook(title: utils.getTitleFromPath(link.path2)),
+                      link.index2 - 1,
+                      '',
+                      ignoreHistory: false,
+                    );
+                  },
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
+  }
+
   PdfViewerParams _buildPdfViewerParams() {
     return PdfViewerParams(
       onDocumentLoadFinished: (documentRef, succeeded) {
@@ -295,7 +453,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           widget.tab.showLeftPane.value = false;
         }
       },
+      onGeneralTap: (tapContext, _, details) {
+        if (details.type == PdfViewerGeneralTapType.secondaryTap) {
+          return true;
+        }
+        return false;
+      },
       viewerOverlayBuilder: (context, size, handleLinkTap) => [
+        Positioned.fill(
+          child: ctx.ContextMenuRegion(
+            contextMenu: _buildPdfContextMenu(),
+            child: const ColoredBox(color: Colors.transparent),
+          ),
+        ),
         // פס גלילה אנכי עם track מלא
         PdfScrollbar(
           controller: widget.tab.pdfViewerController,
