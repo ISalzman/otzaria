@@ -248,17 +248,17 @@ class MyDatabase {
       'CREATE INDEX IF NOT EXISTS idx_category_closure_ancestor ON category_closure(ancestorId);',
       'CREATE INDEX IF NOT EXISTS idx_category_closure_descendant ON category_closure(descendantId);',
 
-        // Generations table
-        '''
+      // Generations table
+      '''
         CREATE TABLE IF NOT EXISTS generation (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE
         );
         ''',
-        'CREATE INDEX IF NOT EXISTS idx_generation_name ON generation(name);',
+      'CREATE INDEX IF NOT EXISTS idx_generation_name ON generation(name);',
 
-        // Authors table
-        '''
+      // Authors table
+      '''
         CREATE TABLE IF NOT EXISTS author (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
@@ -266,8 +266,8 @@ class MyDatabase {
           FOREIGN KEY (generationId) REFERENCES generation(id) ON DELETE SET NULL
         );
         ''',
-        'CREATE INDEX IF NOT EXISTS idx_author_name ON author(name);',
-        'CREATE INDEX IF NOT EXISTS idx_author_generation ON author(generationId);',
+      'CREATE INDEX IF NOT EXISTS idx_author_name ON author(name);',
+      'CREATE INDEX IF NOT EXISTS idx_author_generation ON author(generationId);',
 
       // Table des topics
       '''
