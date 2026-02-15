@@ -305,42 +305,35 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return (startLine: startLine, endLine: endLine);
   }
 
-  List<String> _getRelevantCommentators() {
+  ({List<String> commentators, List<otz_links.Link> links})
+      _getRelevantContent() {
     final range = _getCurrentPdfLinesRange();
-    if (range == null) return const [];
+    if (range == null) return (commentators: const [], links: const []);
 
-    final commentators = widget.tab.links
-        .where((link) {
-          final connectionType = link.connectionType.toUpperCase();
-          return link.index1 >= range.startLine &&
-              link.index1 <= range.endLine &&
-              (connectionType == _connectionTypeCommentary ||
-                  connectionType == _connectionTypeTargum);
-        })
-        .map((link) => utils.getTitleFromPath(link.path2))
-        .toSet()
-        .toList()
-      ..sort();
+    final commentators = <String>{};
+    final links = <otz_links.Link>[];
 
-    return commentators;
-  }
+    for (final link in widget.tab.links) {
+      if (link.index1 < range.startLine || link.index1 > range.endLine) {
+        continue;
+      }
 
-  List<otz_links.Link> _getRelevantLinks() {
-    final range = _getCurrentPdfLinesRange();
-    if (range == null) return const [];
-
-    final links = widget.tab.links.where((link) {
       final connectionType = link.connectionType.toUpperCase();
-      return link.index1 >= range.startLine &&
-          link.index1 <= range.endLine &&
-          connectionType != _connectionTypeCommentary &&
-          connectionType != _connectionTypeTargum &&
-          link.start == null &&
-          link.end == null;
-    }).toList()
-      ..sort((a, b) => a.index1.compareTo(b.index1));
+      if (connectionType == _connectionTypeCommentary ||
+          connectionType == _connectionTypeTargum) {
+        commentators.add(utils.getTitleFromPath(link.path2));
+        continue;
+      }
 
-    return links;
+      if (link.start == null && link.end == null) {
+        links.add(link);
+      }
+    }
+
+    final sortedCommentators = commentators.toList()..sort();
+    links.sort((a, b) => a.index1.compareTo(b.index1));
+
+    return (commentators: sortedCommentators, links: links);
   }
 
   void _openCommentaryPane() {
@@ -365,16 +358,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (allActive) {
       widget.tab.activeCommentators.removeWhere(commentators.contains);
     } else {
-      final activeSet = widget.tab.activeCommentators.toSet();
-      widget.tab.activeCommentators
-          .addAll(commentators.where((c) => !activeSet.contains(c)));
+      widget.tab.activeCommentators.addAll(commentators);
     }
     _openCommentaryPane();
   }
 
   ctx.ContextMenu _buildPdfContextMenu() {
-    final relevantCommentators = _getRelevantCommentators();
-    final relevantLinks = _getRelevantLinks();
+    final (commentators: relevantCommentators, links: relevantLinks) =
+        _getRelevantContent();
 
     return ctx.ContextMenu(
       entries: [
