@@ -88,8 +88,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
       // נמצא את קובץ ה-ZIP בתיקייה לפני החילוץ
       final directory = Directory(event.path);
-      final zipFiles = directory
-          .listSync()
+      final zipFiles = await directory
+          .list()
           .where((entity) =>
               entity is File && entity.path.toLowerCase().endsWith('.zip'))
           .cast<File>()
