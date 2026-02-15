@@ -1572,7 +1572,7 @@ class CalendarCubit extends Cubit<CalendarState> {
               occurrenceDate.year,
               occurrenceDate.month,
               occurrenceDate.day,
-              12,
+              0,
               0,
             );
           }
