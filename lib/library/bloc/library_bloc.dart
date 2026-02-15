@@ -8,7 +8,6 @@ import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/services/sources_books_service.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/utils/zip_extractor_service.dart';
 
@@ -95,14 +94,6 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       // רענון הספרייה מהמערכת קבצים
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
       final library = await _repository.library;
-      
-      // טעינה מחדש של נתוני SourcesBooks.csv
-      try {
-        await SourcesBooksService().loadSourcesBooks();
-        developer.log('SourcesBooks.csv reloaded successfully', name: 'LibraryBloc');
-      } catch (e) {
-        developer.log('Warning: Could not reload SourcesBooks.csv', name: 'LibraryBloc', error: e);
-      }
       
       try {
         await TantivyDataProvider.instance.reopenIndex();
@@ -199,14 +190,6 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       FileSystemData.instance.libraryPath = event.path;
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
       
-      // טעינה מחדש של נתוני SourcesBooks.csv
-      try {
-        await SourcesBooksService().loadSourcesBooks();
-        developer.log('SourcesBooks.csv reloaded after path change', name: 'LibraryBloc');
-      } catch (e) {
-        developer.log('Warning: Could not reload SourcesBooks.csv', name: 'LibraryBloc', error: e);
-      }
-      
       // פתיחה מחדש של אינדקס החיפוש
       try {
         await TantivyDataProvider.instance.reopenIndex();
@@ -266,14 +249,6 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       
       // רענון הספרייה כדי לטעון את הספרים החדשים
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
-      
-      // טעינה מחדש של נתוני SourcesBooks.csv
-      try {
-        await SourcesBooksService().loadSourcesBooks();
-        developer.log('SourcesBooks.csv reloaded after hebrew books path change', name: 'LibraryBloc');
-      } catch (e) {
-        developer.log('Warning: Could not reload SourcesBooks.csv', name: 'LibraryBloc', error: e);
-      }
       
       final library = await _repository.library;
       

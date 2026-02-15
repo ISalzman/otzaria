@@ -13,197 +13,54 @@ import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/settings/custom_folders/custom_folders_tile.dart';
-import 'package:otzaria/utils/zip_extractor_service.dart';
+import 'package:otzaria/widgets/zip_extraction_progress_dialog.dart';
 
 /// טאב הגדרות ספרייה
 class LibrarySettingsTab extends StatelessWidget {
   const LibrarySettingsTab({super.key});
 
-  Future<void> _showExtractionDialog(
-      BuildContext context, String path, {required bool isLibraryPath}) async {
-    final progressNotifier = ValueNotifier<double>(0.0);
-    final messageNotifier = ValueNotifier<String>('בודק תיקייה...');
-    final isExtractingNotifier = ValueNotifier<bool>(false);
-
-    showDialog(
+  Future<void> _showExtractionDialog(BuildContext context, String path,
+      {required bool isLibraryPath}) async {
+    await ZipExtractionProgressDialog.showAndExtract(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('מעבד תיקייה'),
-        content: ValueListenableBuilder<bool>(
-          valueListenable: isExtractingNotifier,
-          builder: (context, isExtracting, _) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isExtracting) ...[
-                  SizedBox(
-                    width: 250,
-                    child: ValueListenableBuilder<double>(
-                      valueListenable: progressNotifier,
-                      builder: (context, progress, _) {
-                        return LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 8,
-                          borderRadius: BorderRadius.circular(4),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ValueListenableBuilder<String>(
-                    valueListenable: messageNotifier,
-                    builder: (context, message, _) {
-                      return Text(message, textAlign: TextAlign.center);
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  ValueListenableBuilder<double>(
-                    valueListenable: progressNotifier,
-                    builder: (context, progress, _) {
-                      return Text(
-                        '${(progress * 100).toInt()}%',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      );
-                    },
-                  ),
-                ] else ...[
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  ValueListenableBuilder<String>(
-                    valueListenable: messageNotifier,
-                    builder: (context, message, _) {
-                      return Text(message);
-                    },
-                  ),
-                ],
-              ],
-            );
-          },
-        ),
-      ),
-    );
+      path: path,
+      onSuccess: (extractionResult) async {
+        if (!context.mounted) return;
 
-    try {
-      // בדיקה וחילוץ ZIP
-      final extractionResult =
-          await ZipExtractorService.checkAndExtractZipIfNeeded(
-        path,
-        onProgress: (p, m) {
-          progressNotifier.value = p;
-          messageNotifier.value = m;
-          isExtractingNotifier.value = true;
-        },
-        onAskDeleteZip: () async {
-          // סגירת דיאלוג ההתקדמות
-          if (context.mounted) {
-            Navigator.of(context).pop();
-          }
-
-          // שאלת המשתמש
-          final shouldDelete = await showDialog<bool>(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              title: const Text('מחיקת קובץ דחוס'),
-              content: const Text(
-                'האם למחוק את קובץ ה-ZIP המקורי?\n\n'
-                'הקובץ הדחוס אינו נצרך עבור פעילות התוכנה והוא רק תופס מקום.\n'
-                'מומלץ למחוק אותו.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('השאר את הקובץ'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('מחק את הקובץ'),
-                ),
-              ],
-            ),
-          );
-
-          // פתיחה מחדש של דיאלוג ההתקדמות
-          if (context.mounted) {
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (dialogContext) => AlertDialog(
-                title: const Text('משלים...'),
-                content: const Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('משלים חילוץ...'),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          return shouldDelete ?? false;
-        },
-      );
-
-      if (!extractionResult.success) {
-        if (context.mounted) {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(extractionResult.errorMessage ?? 'שגיאה לא ידועה'),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        }
-        return;
-      }
-
-      // עדכון הנתיב
-      if (context.mounted) {
+        // עדכון הנתיב
         if (isLibraryPath) {
           context.read<LibraryBloc>().add(UpdateLibraryPath(path));
         } else {
           context.read<LibraryBloc>().add(UpdateHebrewBooksPath(path));
         }
-      }
 
-      // המתנה קצרה
-      await Future.delayed(const Duration(milliseconds: 500));
+        // המתנה קצרה
+        await Future.delayed(const Duration(milliseconds: 500));
 
-      if (context.mounted) {
-        Navigator.of(context).pop();
-        context.read<NavigationBloc>().add(const CheckLibrary());
+        if (context.mounted) {
+          context.read<NavigationBloc>().add(const CheckLibrary());
 
-        if (extractionResult.successfullyExtracted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'הקובץ "${extractionResult.extractedFileName}" חולץ בהצלחה!'),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-            ),
-          );
+          if (extractionResult.successfullyExtracted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    'הקובץ "${extractionResult.extractedFileName}" חולץ בהצלחה!'),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+              ),
+            );
+          }
         }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.of(context).pop();
+      },
+      onError: (errorMessage) {
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('שגיאה: $e'),
+            content: Text(errorMessage),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
-      }
-    } finally {
-      progressNotifier.dispose();
-      messageNotifier.dispose();
-      isExtractingNotifier.dispose();
-    }
+      },
+    );
   }
 
   @override
@@ -302,7 +159,8 @@ class LibrarySettingsTab extends StatelessWidget {
                             await FilePicker.platform.getDirectoryPath();
                         if (path != null && context.mounted) {
                           // הצגת דיאלוג חילוץ
-                          _showExtractionDialog(context, path, isLibraryPath: true);
+                          _showExtractionDialog(context, path,
+                              isLibraryPath: true);
                         }
                       },
                     ),
@@ -326,7 +184,8 @@ class LibrarySettingsTab extends StatelessWidget {
                               await FilePicker.platform.getDirectoryPath();
                           if (path != null && context.mounted) {
                             // הצגת דיאלוג חילוץ
-                            _showExtractionDialog(context, path, isLibraryPath: false);
+                            _showExtractionDialog(context, path,
+                                isLibraryPath: false);
                           }
                         },
                       ),

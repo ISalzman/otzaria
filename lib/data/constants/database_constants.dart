@@ -12,8 +12,7 @@ class DatabaseConstants {
   /// Gets the full database path based on the library path setting
   static String getDatabasePath() {
     final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
-    final folderName = Settings.getValue<String>('key-library-folder-name') ?? otzariaFolderName;
-    return path.join(libraryPath, folderName, databaseFileName);
+    return getDatabasePathForLibrary(libraryPath);
   }
 
   /// Gets the database path for a specific library path
