@@ -357,8 +357,8 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
 
     // בדיקה אם יש קובץ ZIP בתיקייה
     final directory = Directory(selectedPath);
-    final zipFiles = directory
-        .listSync()
+    final zipFiles = await directory
+        .list()
         .where((entity) =>
             entity is File && entity.path.toLowerCase().endsWith('.zip'))
         .cast<File>()
