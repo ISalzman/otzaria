@@ -60,98 +60,39 @@ class ZipExtractorService {
 
       // חילוץ הקובץ באמצעות archive package
       try {
-        // קריאת קובץ ה-ZIP
+        // בדיקת גודל הקובץ
         final fileSize = await zipFile.length();
         final fileSizeMB = (fileSize / 1024 / 1024).toStringAsFixed(1);
-        
-        onProgress?.call(0.1, 'קורא קובץ דחוס ($fileSizeMB MB)...');
-        final bytes = await zipFile.readAsBytes();
-        _log.info('קובץ ZIP נקרא, גודל: ${bytes.length} bytes');
-        
-        // פענוח הארכיון
-        onProgress?.call(0.15, 'מפענח ארכיון ($fileSizeMB MB)...');
-        await Future.delayed(const Duration(milliseconds: 100)); // תן ל-UI להתעדכן
-        final archive = ZipDecoder().decodeBytes(bytes);
-        _log.info('ארכיון פוענח, ${archive.length} קבצים');
+        _log.info('גודל קובץ ZIP: $fileSize bytes ($fileSizeMB MB)');
 
-        // חילוץ כל הקבצים
-        onProgress?.call(0.2, 'מתכונן לחילוץ ${archive.length} קבצים...');
-        await Future.delayed(const Duration(milliseconds: 100)); // תן ל-UI להתעדכן
-        final totalFiles = archive.length;
-        var extractedFiles = 0;
-        var totalBytes = 0;
-        var processedBytes = 0;
-        
-        // חישוב סך כל הבתים
-        for (final file in archive) {
-          if (file.isFile) {
-            totalBytes += file.size;
-          }
-        }
-        
-        final totalMB = (totalBytes / 1024 / 1024).toStringAsFixed(1);
-        onProgress?.call(0.22, 'מחלץ $totalMB MB...');
-        await Future.delayed(const Duration(milliseconds: 100)); // תן ל-UI להתעדכן
-        
-        for (final file in archive) {
-          final filename = file.name;
-          
-          if (file.isFile) {
-            final data = file.content as List<int>;
-            final outputFile = File(path.join(directoryPath, filename));
-            
-            // יצירת תיקיות אם צריך
-            await outputFile.parent.create(recursive: true);
-            
-            // כתיבת הקובץ עם חיווי התקדמות
-            final fileSize = data.length;
-            if (fileSize > 1024 * 1024) {
-              // קובץ גדול מ-1MB - נכתוב בחלקים
-              final sink = outputFile.openWrite();
-              const chunkSize = 1024 * 1024; // 1MB chunks
-              var written = 0;
-              
-              while (written < fileSize) {
-                final end = (written + chunkSize < fileSize) 
-                    ? written + chunkSize 
-                    : fileSize;
-                sink.add(data.sublist(written, end));
-                final chunkWritten = end - written;
-                written = end;
-                processedBytes += chunkWritten;
-                
-                // עדכון התקדמות
-                final bytesProgress = totalBytes > 0 ? processedBytes / totalBytes : 0.0;
-                final filesProgress = totalFiles > 0 ? extractedFiles / totalFiles : 0.0;
-                final progress = 0.25 + (0.65 * ((bytesProgress + filesProgress) / 2));
-                final mb = (processedBytes / 1024 / 1024).toStringAsFixed(1);
-                final totalMb = (totalBytes / 1024 / 1024).toStringAsFixed(1);
-                onProgress?.call(
-                  progress,
-                  'מחלץ: ${path.basename(filename)}\n$mb MB מתוך $totalMb MB',
-                );
-              }
-              
-              await sink.close();
-            } else {
-              // קובץ קטן - נכתוב בבת אחת
-              await outputFile.writeAsBytes(data);
-              processedBytes += fileSize;
-            }
-          } else {
-            // יצירת תיקייה
-            final dir = Directory(path.join(directoryPath, filename));
-            await dir.create(recursive: true);
-          }
-          
-          extractedFiles++;
-          if (totalFiles > 0) {
-            final progress = 0.25 + (0.65 * extractedFiles / totalFiles);
-            onProgress?.call(
-              progress,
-              'מחלץ קבצים... ($extractedFiles מתוך $totalFiles)',
-            );
-          }
+        onProgress?.call(0.1, 'מתחיל חילוץ ($fileSizeMB MB)...');
+
+        // שימוש ב-extractFileToDisk - פונקציה אופטימלית שמטפלת ב-streaming אוטומטית
+        // זה מונע טעינת כל הקובץ לזיכרון ומתאים לקבצים גדולים
+        _log.info('משתמש ב-extractFileToDisk לחילוץ אופטימלי');
+
+        try {
+          await extractFileToDisk(zipFile.path, directoryPath);
+          _log.info('החילוץ הושלם בהצלחה');
+          onProgress?.call(0.95, 'משלים חילוץ...');
+        } catch (e) {
+          _log.severe('שגיאה בחילוץ עם extractFileToDisk, מנסה שיטה חלופית', e);
+          // אם נכשל, ננסה את השיטה הישנה
+          onProgress?.call(0.1, 'קורא קובץ דחוס ($fileSizeMB MB)...');
+          final bytes = await zipFile.readAsBytes();
+          _log.info('קובץ ZIP נקרא, גודל: ${bytes.length} bytes');
+
+          onProgress?.call(0.15, 'מפענח ארכיון ($fileSizeMB MB)...');
+          await Future.delayed(const Duration(milliseconds: 100));
+          final archive = ZipDecoder().decodeBytes(bytes);
+          _log.info('ארכיון פוענח, ${archive.length} קבצים');
+
+          // חילוץ ידני
+          await _extractArchiveManually(
+            archive,
+            directoryPath,
+            onProgress,
+          );
         }
 
         onProgress?.call(0.95, 'משלים חילוץ...');
@@ -167,13 +108,13 @@ class ZipExtractorService {
       // מחיקת קובץ ה-ZIP המקורי
       try {
         onProgress?.call(0.98, 'משלים...');
-        
+
         // שאלת המשתמש אם למחוק
         bool shouldDelete = true;
         if (onAskDeleteZip != null) {
           shouldDelete = await onAskDeleteZip();
         }
-        
+
         if (shouldDelete) {
           await zipFile.delete();
           _log.info('קובץ ה-ZIP המקורי נמחק');
@@ -186,7 +127,7 @@ class ZipExtractorService {
       }
 
       onProgress?.call(1.0, 'החילוץ הושלם!');
-      
+
       return ZipExtractionResult(
         success: true,
         wasExtracted: true,
@@ -206,6 +147,96 @@ class ZipExtractorService {
   static bool isZipFile(String filePath) {
     final extension = path.extension(filePath).toLowerCase();
     return extension == '.zip';
+  }
+
+  /// חילוץ ידני של ארכיון (fallback)
+  static Future<void> _extractArchiveManually(
+    Archive archive,
+    String directoryPath,
+    Function(double progress, String message)? onProgress,
+  ) async {
+    onProgress?.call(0.2, 'מתכונן לחילוץ ${archive.length} קבצים...');
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    final totalFiles = archive.length;
+    var extractedFiles = 0;
+    var totalBytes = 0;
+    var processedBytes = 0;
+
+    // חישוב סך כל הבתים
+    for (final file in archive) {
+      if (file.isFile) {
+        totalBytes += file.size;
+      }
+    }
+
+    final totalMB = (totalBytes / 1024 / 1024).toStringAsFixed(1);
+    onProgress?.call(0.22, 'מחלץ $totalMB MB...');
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    for (final file in archive) {
+      final filename = file.name;
+
+      if (file.isFile) {
+        final data = file.content as List<int>;
+        final outputFile = File(path.join(directoryPath, filename));
+
+        // יצירת תיקיות אם צריך
+        await outputFile.parent.create(recursive: true);
+
+        // כתיבת הקובץ עם חיווי התקדמות
+        final fileSize = data.length;
+        if (fileSize > 1024 * 1024) {
+          // קובץ גדול מ-1MB - נכתוב בחלקים
+          final sink = outputFile.openWrite();
+          const chunkSize = 1024 * 1024; // 1MB chunks
+          var written = 0;
+
+          while (written < fileSize) {
+            final end = (written + chunkSize < fileSize)
+                ? written + chunkSize
+                : fileSize;
+            sink.add(data.sublist(written, end));
+            final chunkWritten = end - written;
+            written = end;
+            processedBytes += chunkWritten;
+
+            // עדכון התקדמות
+            final bytesProgress =
+                totalBytes > 0 ? processedBytes / totalBytes : 0.0;
+            final filesProgress =
+                totalFiles > 0 ? extractedFiles / totalFiles : 0.0;
+            final progress =
+                0.25 + (0.65 * ((bytesProgress + filesProgress) / 2));
+            final mb = (processedBytes / 1024 / 1024).toStringAsFixed(1);
+            final totalMb = (totalBytes / 1024 / 1024).toStringAsFixed(1);
+            onProgress?.call(
+              progress,
+              'מחלץ: ${path.basename(filename)}\n$mb MB מתוך $totalMb MB',
+            );
+          }
+
+          await sink.close();
+        } else {
+          // קובץ קטן - נכתוב בבת אחת
+          await outputFile.writeAsBytes(data);
+          processedBytes += fileSize;
+        }
+      } else {
+        // יצירת תיקייה
+        final dir = Directory(path.join(directoryPath, filename));
+        await dir.create(recursive: true);
+      }
+
+      extractedFiles++;
+      if (totalFiles > 0) {
+        final progress = 0.25 + (0.65 * extractedFiles / totalFiles);
+        onProgress?.call(
+          progress,
+          'מחלץ קבצים... ($extractedFiles מתוך $totalFiles)',
+        );
+      }
+    }
   }
 }
 
