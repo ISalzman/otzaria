@@ -205,7 +205,7 @@ class ZipExtractorService {
   /// בודק אם קובץ הוא קובץ ZIP
   static bool isZipFile(String filePath) {
     final extension = path.extension(filePath).toLowerCase();
-    return extension == '.zip' || extension == '.rar';
+    return extension == '.zip';
   }
 }
 
