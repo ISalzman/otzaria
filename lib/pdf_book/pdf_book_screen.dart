@@ -380,8 +380,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           items: [
             ctx.MenuItem(
               label: _buildRtlMenuText('הצג את כל המפרשים'),
-              icon: widget.tab.activeCommentators
-                      .containsAll(relevantCommentators)
+              icon: relevantCommentators.isNotEmpty &&
+                      widget.tab.activeCommentators
+                          .containsAll(relevantCommentators)
                   ? const Icon(FluentIcons.checkmark_24_regular)
                   : null,
               onSelected: (_) => _toggleAllCommentators(relevantCommentators),
