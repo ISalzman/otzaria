@@ -25,13 +25,12 @@ class ZipExtractorService {
       }
 
       // מציאת כל קבצי ה-ZIP בתיקייה
-      final zipFiles = directory
-          .listSync()
-          .where((entity) =>
-              entity is File &&
-              entity.path.toLowerCase().endsWith('.zip'))
-          .cast<File>()
-          .toList();
+      final zipFiles = <File>[];
+      await for (final entity in directory.list()) {
+        if (entity is File && entity.path.toLowerCase().endsWith('.zip')) {
+          zipFiles.add(entity);
+        }
+      }
 
       // אם אין קבצי ZIP, אין צורך בחילוץ
       if (zipFiles.isEmpty) {
