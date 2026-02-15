@@ -36,8 +36,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return _instance!;
   }
 
-  String _generateKey(String title, String category, String fileType) {
-    return '$title|$category|$fileType';
+  String _generateKey(String title, int categoryId, String fileType) {
+    return '$title|$categoryId|$fileType';
   }
 
   /// Helper method to build topics string from database book and category path
@@ -120,7 +120,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         final categoryPath = getPath(dbBook.categoryId);
         _categoryPathToId[categoryPath] = dbBook.categoryId;
         _cachedKeys.add(
-            _generateKey(dbBook.title, categoryPath, dbBook.fileType ?? ''));
+            _generateKey(dbBook.title, dbBook.categoryId, dbBook.fileType ?? ''));
 
         final categoryName =
             dbBook.topics.isNotEmpty ? dbBook.topics.first.name : 'ללא קטגוריה';
@@ -140,6 +140,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           topics: topics,
           fileType: dbBook.fileType,
           categoryPath: categoryPath,
+          categoryId: dbBook.categoryId,
           externalLibraryId: dbBook.externalLibraryId,
         );
 
@@ -158,10 +159,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
   }
 
   @override
-  Future<bool> hasBook(String title, String category, String fileType) async {
+  Future<bool> hasBook(String title, int categoryId, String fileType) async {
     // Use cached keys if available
     if (_titlesCached) {
-      return _cachedKeys.contains(_generateKey(title, category, fileType));
+      return _cachedKeys.contains(_generateKey(title, categoryId, fileType));
     }
     // If cache is not ready, we can't easily check without category ID
     // But we can try to find it in DB if we had a way to resolve category path
@@ -228,12 +229,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   @override
   Future<String?> getBookText(
-      String title, String category, String fileType) async {
+      String title, int categoryId, String fileType) async {
     if (_sqliteProvider.repository != null) {
       try {
-        final categoryId = _categoryPathToId[category];
-        if (categoryId == null) return null;
-
         final book = await _sqliteProvider.repository!
             .getBookByTitleCategoryAndFileType(title, categoryId, fileType);
         if (book != null && book.isContentExternal && book.filePath != null) {
@@ -256,9 +254,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   @override
   Future<List<TocEntry>?> getBookToc(
-      String title, String category, String fileType) async {
-    final categoryId = _categoryPathToId[category];
-    if (categoryId == null) return null;
+      String title, int categoryId, String fileType) async {
     return await _sqliteProvider.getBookTocFromDb(title, categoryId, fileType);
   }
 
@@ -630,7 +626,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
       // Cache the book key for provider mapping
       final key = _generateKey(
-          book.title, book.categoryPath ?? '', book.fileType ?? 'txt');
+          book.title, dbCategory.id, book.fileType ?? 'txt');
       _cachedKeys.add(key);
       if (book.categoryPath != null) {
         _categoryPathToId[book.categoryPath!] = dbCategory.id;
@@ -706,6 +702,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           topics: topics,
           link: link,
           categoryPath: categoryPath,
+          categoryId: dbBook.categoryId,
           fileType: normalizedFileType,
           externalLibraryId: dbBook.externalLibraryId,
         );
@@ -732,6 +729,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           topics: topics,
           filePath: dbBook.filePath,
           categoryPath: categoryPath,
+          categoryId: dbBook.categoryId,
           externalLibraryId: dbBook.externalLibraryId);
     }
 
@@ -755,6 +753,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           topics: topics,
           filePath: dbBook.filePath,
           categoryPath: categoryPath,
+          categoryId: dbBook.categoryId,
           externalLibraryId: dbBook.externalLibraryId);
     }
 
@@ -775,6 +774,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         order: dbBook.order.toInt(),
         topics: topics,
         categoryPath: categoryPath,
+        categoryId: dbBook.categoryId,
         externalLibraryId: dbBook.externalLibraryId);
   }
 
@@ -787,15 +787,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   @override
   Future<List<Link>> getAllLinksForBook(
-      String title, String category, String fileType) async {
+      String title, int categoryId, String fileType) async {
     return _dbOperation<List<Link>>(
       (db) async {
-        final categoryId = _categoryPathToId[category];
-        if (categoryId == null) {
-          debugPrint('💾 Category "$category" not found in cache');
-          return [];
-        }
-
         final book = await _sqliteProvider.repository!
             .getBookByTitleCategoryAndFileType(title, categoryId, fileType);
         if (book == null) {

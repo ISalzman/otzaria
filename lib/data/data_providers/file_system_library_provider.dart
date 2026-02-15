@@ -17,6 +17,7 @@ import 'package:otzaria/settings/settings_repository.dart';
 class FileSystemLibraryProvider implements LibraryProvider {
   late String _libraryPath;
   late Future<Map<String, String>> _keyToPath;
+  final Map<int, String> _categoryIdToPath = {}; // Maps hash(categoryPath) -> categoryPath
   bool _isInitialized = false;
 
   /// Singleton instance
@@ -30,7 +31,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
   }
 
   String _generateKey(String title, String category, String fileType) {
-    return '$title|$category|$fileType';
+    return '$title|${category.hashCode}|$fileType';
   }
 
   @override
@@ -182,6 +183,10 @@ class FileSystemLibraryProvider implements LibraryProvider {
     }
 
     if (path.endsWith('.pdf')) {
+      final categoryPathStr = categoryPath.join(', ');
+      final categoryId = categoryPathStr.hashCode;
+      _categoryIdToPath[categoryId] = categoryPathStr;
+      
       return PdfBook(
         title: title,
         path: file.path,
@@ -191,11 +196,16 @@ class FileSystemLibraryProvider implements LibraryProvider {
         pubPlace: metadata[title]?['pubPlace'],
         order: metadata[title]?['order'] ?? 999,
         topics: finalTopics,
-        categoryPath: categoryPath.join(', '),
+        categoryPath: categoryPathStr,
+        categoryId: categoryId,
       );
     }
 
     if (path.endsWith('.txt') || path.endsWith('.docx')) {
+      final categoryPathStr = categoryPath.join(', ');
+      final categoryId = categoryPathStr.hashCode;
+      _categoryIdToPath[categoryId] = categoryPathStr;
+      
       return TextBook(
         title: title,
         author: metadata[title]?['author'],
@@ -205,7 +215,8 @@ class FileSystemLibraryProvider implements LibraryProvider {
         order: metadata[title]?['order'] ?? 999,
         topics: finalTopics,
         extraTitles: metadata[title]?['extraTitles'],
-        categoryPath: categoryPath.join(', '),
+        categoryPath: categoryPathStr,
+        categoryId: categoryId,
       );
     }
 
@@ -213,19 +224,23 @@ class FileSystemLibraryProvider implements LibraryProvider {
   }
 
   @override
-  Future<bool> hasBook(String title, String category, String fileType) async {
+  Future<bool> hasBook(String title, int categoryId, String fileType) async {
     if (!_isInitialized) await initialize();
     final map = await _keyToPath;
-    final key = _generateKey(title, category, fileType);
+    // Try to resolve categoryId back to path
+    final categoryPath = _categoryIdToPath[categoryId] ?? categoryId.toString();
+    final key = _generateKey(title, categoryPath, fileType);
     return map.containsKey(key);
   }
 
   @override
   Future<String?> getBookText(
-      String title, String category, String fileType) async {
+      String title, int categoryId, String fileType) async {
     if (!_isInitialized) await initialize();
 
-    final path = await _getBookPath(title, category, fileType);
+    // Try to resolve categoryId back to path
+    final categoryPath = _categoryIdToPath[categoryId] ?? categoryId.toString();
+    final path = await _getBookPath(title, categoryPath, fileType);
     if (path == null) return null;
 
     final file = File(path);
@@ -247,9 +262,9 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
   @override
   Future<List<TocEntry>?> getBookToc(
-      String title, String category, String fileType) async {
+      String title, int categoryId, String fileType) async {
     if (fileType.toLowerCase() == 'pdf') return null;
-    final text = await getBookText(title, category, fileType);
+    final text = await getBookText(title, categoryId, fileType);
     if (text == null) return null;
     return Isolate.run(() => TocParser.parseEntriesFromContent(text));
   }
@@ -638,6 +653,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
         topics: book.topics,
         extraTitles: book.extraTitles ?? bookMeta?['extraTitles'],
         categoryPath: book.categoryPath,
+        categoryId: book.categoryId,
       );
     } else if (book is PdfBook) {
       return PdfBook(
@@ -651,6 +667,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
         order: book.order,
         topics: book.topics,
         categoryPath: book.categoryPath,
+        categoryId: book.categoryId,
       );
     }
     return book;
@@ -668,7 +685,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
   @override
   Future<List<Link>> getAllLinksForBook(
-      String title, String category, String fileType) async {
+      String title, int categoryId, String fileType) async {
     if (!_isInitialized) await initialize();
 
     try {

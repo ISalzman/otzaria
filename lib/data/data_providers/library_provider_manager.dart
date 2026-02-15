@@ -172,16 +172,18 @@ class LibraryProviderManager {
 
     final provider = getProviderForBook(title, category, fileType);
     if (provider != null) {
-      return await provider.getBookText(title, category, fileType);
+      final categoryId = category.hashCode; // Convert to ID
+      return await provider.getBookText(title, categoryId, fileType);
     }
 
     // Fallback: try each provider
     debugPrint('⚠️ Book "$title" not in cache, searching providers...');
     final key = '$title|$category|$fileType';
+    final categoryId = category.hashCode; // Convert to ID
     for (final p in _providers) {
-      if (await p.hasBook(title, category, fileType)) {
+      if (await p.hasBook(title, categoryId, fileType)) {
         debugPrint('✅ Found "$title" in ${p.displayName}');
-        final text = await p.getBookText(title, category, fileType);
+        final text = await p.getBookText(title, categoryId, fileType);
         if (text != null) {
           // Cache the provider for future use
           _bookToProvider[key] = p;
@@ -198,15 +200,16 @@ class LibraryProviderManager {
   Future<List<TocEntry>?> getBookToc(
       String title, String category, String fileType) async {
     final provider = getProviderForBook(title, category, fileType);
+    final categoryId = category.hashCode; // Convert to ID
     if (provider != null) {
-      return await provider.getBookToc(title, category, fileType);
+      return await provider.getBookToc(title, categoryId, fileType);
     }
 
     // Fallback: try each provider
     final key = '$title|$category|$fileType';
     for (final p in _providers) {
-      if (await p.hasBook(title, category, fileType)) {
-        final toc = await p.getBookToc(title, category, fileType);
+      if (await p.hasBook(title, categoryId, fileType)) {
+        final toc = await p.getBookToc(title, categoryId, fileType);
         if (toc != null && toc.isNotEmpty) {
           // Cache the provider for future use
           _bookToProvider[key] = p;
@@ -221,8 +224,9 @@ class LibraryProviderManager {
   /// Checks if a book exists in any provider
   Future<bool> bookExists(
       String title, String category, String fileType) async {
+    final categoryId = category.hashCode; // Convert to ID
     for (final provider in _providers) {
-      if (await provider.hasBook(title, category, fileType)) {
+      if (await provider.hasBook(title, categoryId, fileType)) {
         return true;
       }
     }
