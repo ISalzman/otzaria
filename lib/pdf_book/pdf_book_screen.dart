@@ -313,10 +313,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final commentators = <String>{};
     final links = <otz_links.Link>[];
 
+    // widget.tab.links ממוין לפי index1, אז אפשר להפסיק מוקדם
     for (final link in widget.tab.links) {
-      if (link.index1 < range.startLine || link.index1 > range.endLine) {
-        continue;
-      }
+      if (link.index1 > range.endLine) break; // חרגנו מהטווח - אפשר להפסיק
+      if (link.index1 < range.startLine) continue; // עדיין לא הגענו לטווח
 
       final connectionType = link.connectionType.toUpperCase();
       if (connectionType == _connectionTypeCommentary ||
