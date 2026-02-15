@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:sqflite/sqflite.dart' as sqflite;
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
@@ -331,9 +332,18 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     final repository = _sqliteProvider.repository!;
 
+    // קריאת ההגדרות של ספרים חיצוניים
+    final showExternalBooks = Settings.getValue<bool>('key-show-external-books') ?? false;
+    final showOtzarHachochma = Settings.getValue<bool>('key-show-otzar-hachochma') ?? false;
+    final showHebrewBooks = Settings.getValue<bool>('key-show-hebrew-books') ?? false;
+
     // OPTIMIZATION 1: Load all books with relations in a single optimized query
     final allDbBooks =
-        await repository.database.bookDao.getAllBooksWithRelations();
+        await repository.database.bookDao.getAllBooksWithRelations(
+          includeExternalBooks: showExternalBooks,
+          includeOtzarHachochma: showOtzarHachochma,
+          includeHebrewBooks: showHebrewBooks,
+        );
     final booksByCategory = <int, List<db_models.Book>>{};
 
     for (final bookData in allDbBooks) {
