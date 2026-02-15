@@ -14,7 +14,7 @@ import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/migration/core/models/category.dart';
-import 'package:otzaria/utils/zip_extractor_service.dart';
+import 'package:otzaria/widgets/zip_extraction_progress_dialog.dart';
 
 /// Widget להוספה וניהול תיקיות מותאמות אישית
 class CustomFoldersTile extends StatefulWidget {
@@ -64,7 +64,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       // בדיקה וחילוץ קובץ ZIP אם קיים - עם דיאלוג
       bool zipExtracted = false;
       String? extractedFileName;
-      
+
       // בדיקה אם יש ZIP
       final zipFiles = dir
           .listSync()
@@ -74,139 +74,29 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
           .toList();
 
       if (zipFiles.isNotEmpty) {
-        // הצגת דיאלוג חילוץ
         if (!mounted) return;
-        final progressNotifier = ValueNotifier<double>(0.0);
-        final messageNotifier = ValueNotifier<String>('מתחיל חילוץ...');
 
-        showDialog(
+        await ZipExtractionProgressDialog.showAndExtract(
           context: context,
-          barrierDismissible: false,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('מחלץ קובץ דחוס'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ValueListenableBuilder<double>(
-                  valueListenable: progressNotifier,
-                  builder: (context, progress, _) {
-                    return LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 8,
-                      borderRadius: BorderRadius.circular(4),
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-                ValueListenableBuilder<String>(
-                  valueListenable: messageNotifier,
-                  builder: (context, message, _) {
-                    return Text(message, textAlign: TextAlign.center);
-                  },
-                ),
-                const SizedBox(height: 8),
-                ValueListenableBuilder<double>(
-                  valueListenable: progressNotifier,
-                  builder: (context, progress, _) {
-                    return Text(
-                      '${(progress * 100).toInt()}%',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-
-        try {
-          final extractionResult =
-              await ZipExtractorService.checkAndExtractZipIfNeeded(
-            path,
-            onProgress: (p, m) {
-              progressNotifier.value = p;
-              messageNotifier.value = m;
-            },
-            onAskDeleteZip: () async {
-              // סגירת דיאלוג ההתקדמות
-              if (mounted) {
-                Navigator.of(context).pop();
-              }
-
-              // שאלת המשתמש
-              final shouldDelete = await showDialog<bool>(
-                context: context,
-                builder: (dialogContext) => AlertDialog(
-                  title: const Text('מחיקת קובץ דחוס'),
-                  content: const Text(
-                    'האם למחוק את קובץ ה-ZIP המקורי?\n\n'
-                    'הקובץ הדחוס אינו נצרך עבור פעילות התוכנה והוא רק תופס מקום.\n'
-                    'מומלץ למחוק אותו.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(false),
-                      child: const Text('השאר את הקובץ'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(true),
-                      child: const Text('מחק את הקובץ'),
-                    ),
-                  ],
-                ),
-              );
-
-              // פתיחה מחדש של דיאלוג ההתקדמות
-              if (mounted) {
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (dialogContext) => AlertDialog(
-                    title: const Text('משלים...'),
-                    content: const Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('משלים חילוץ...'),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              return shouldDelete ?? false;
-            },
-          );
-
-          if (mounted) {
-            Navigator.of(context).pop(); // סגירת הדיאלוג
-          }
-
-          if (!extractionResult.success) {
+          path: path,
+          onSuccess: (extractionResult) {
+            if (extractionResult.successfullyExtracted) {
+              zipExtracted = true;
+              extractedFileName = extractionResult.extractedFileName;
+            }
+          },
+          onError: (errorMessage) {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content:
-                    Text(extractionResult.errorMessage ?? 'שגיאה לא ידועה'),
+                content: Text(errorMessage),
                 backgroundColor: Theme.of(context).colorScheme.error,
               ),
             );
-            return;
-          }
+          },
+        );
 
-          if (extractionResult.successfullyExtracted) {
-            zipExtracted = true;
-            extractedFileName = extractionResult.extractedFileName;
-          }
-        } finally {
-          progressNotifier.dispose();
-          messageNotifier.dispose();
-        }
+        if (!mounted) return;
       }
 
       setState(() {

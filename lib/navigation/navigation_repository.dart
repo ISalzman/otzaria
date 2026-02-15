@@ -4,7 +4,6 @@ import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
-import 'package:otzaria/services/sources_books_service.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 
 class NavigationRepository {
@@ -36,13 +35,6 @@ class NavigationRepository {
       
       // טעינת הספרייה מחדש
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
-      
-      // טעינה מחדש של נתוני SourcesBooks.csv
-      try {
-        await SourcesBooksService().loadSourcesBooks();
-      } catch (e) {
-        // Continue without sources data if it fails
-      }
       
       // פתיחה מחדש של אינדקס החיפוש
       try {

@@ -535,35 +535,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         final settingsBloc = context.read<SettingsBloc>();
         final enablePerBookSettings = settingsBloc.state.enablePerBookSettings;
 
+        // בדיקה אם צריך להתאים לרוחב
+        bool shouldFitToWidth = true;
         if (enablePerBookSettings) {
           final settings =
               await PdfBookPerBookSettings.load(widget.tab.book.title);
-          if (settings?.zoom == null) {
-            // אין זום שמור - נתאים לרוחב עם מרווח קטן
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && controller.isReady) {
-                final matrix = controller.calcMatrixFitWidthForPage(
-                  pageNumber: currentPage,
-                );
-                if (matrix != null) {
-                  // מעבר למטריצה המתאימה לרוחב
-                  controller.goTo(matrix);
-                  // הקטנת הזום ב-2% כדי להשאיר מרווח קטן
-                  Future.delayed(const Duration(milliseconds: 50), () {
-                    if (mounted && controller.isReady) {
-                      final currentZoom = controller.value.zoom;
-                      controller.setZoom(
-                        controller.centerPosition,
-                        currentZoom * 0.98,
-                      );
-                    }
-                  });
-                }
-              }
-            });
-          }
-        } else {
-          // הגדרות פר-ספר מבוטלות - תמיד נתאים לרוחב עם מרווח קטן
+          shouldFitToWidth = settings?.zoom == null;
+        }
+
+        // התאמת רוחב עם מרווח קטן
+        if (shouldFitToWidth) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && controller.isReady) {
               final matrix = controller.calcMatrixFitWidthForPage(
