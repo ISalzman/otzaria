@@ -110,8 +110,9 @@ class FileSystemData {
   Future<bool> isBookInDatabase(String title,
       {String? category, String? fileType}) async {
     if (category != null && fileType != null) {
+      final categoryId = category.hashCode; // Convert to ID
       return await _providerManager.databaseProvider
-          .hasBook(title, category, fileType);
+          .hasBook(title, categoryId, fileType);
     }
     return await _providerManager.databaseProvider.hasBookWithTitle(title);
   }

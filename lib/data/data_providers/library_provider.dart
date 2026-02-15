@@ -32,14 +32,14 @@ abstract class LibraryProvider {
       Map<String, Map<String, dynamic>> metadata);
 
   /// Checks if a specific book exists in this provider
-  Future<bool> hasBook(String title, String category, String fileType);
+  Future<bool> hasBook(String title, int categoryId, String fileType);
 
   /// Gets the text content of a book
-  Future<String?> getBookText(String title, String category, String fileType);
+  Future<String?> getBookText(String title, int categoryId, String fileType);
 
   /// Gets the table of contents for a book
   Future<List<TocEntry>?> getBookToc(
-      String title, String category, String fileType);
+      String title, int categoryId, String fileType);
 
   /// Gets all book titles available in this provider
   Future<Set<String>> getAvailableBookTitles();
@@ -58,7 +58,7 @@ abstract class LibraryProvider {
   /// [title] - The title of the book to get links for
   /// Returns a list of Link objects associated with the book
   Future<List<Link>> getAllLinksForBook(
-      String title, String category, String fileType);
+      String title, int categoryId, String fileType);
 
   /// Gets the content of a specific link
   ///

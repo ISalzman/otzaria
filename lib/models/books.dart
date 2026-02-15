@@ -64,6 +64,9 @@ abstract class Book {
 
   String? categoryPath;
 
+  /// The database category ID (if available)
+  final int? categoryId;
+
   /// Whether this book was added by the user (true) or is part of the library (false).
   final bool isUserBook;
 
@@ -110,6 +113,7 @@ abstract class Book {
       this.filePath,
       this.fileType,
       this.categoryPath,
+      this.categoryId,
       this.extraTitles,
       this.isUserBook = false,
       this.externalLibraryId});
@@ -139,6 +143,7 @@ class TextBook extends Book {
       super.filePath,
       super.fileType = 'txt',
       super.categoryPath,
+      super.categoryId,
       super.extraTitles,
       super.isUserBook,
       super.externalLibraryId});
@@ -159,9 +164,9 @@ class TextBook extends Book {
   Future<List<Link>> get links async {
     final provider = LibraryProviderManager.instance
         .getProviderForBook(title, categoryPath ?? '', fileType ?? 'txt');
-    if (provider != null) {
+    if (provider != null && categoryId != null) {
       return await provider.getAllLinksForBook(
-          title, categoryPath ?? '', fileType ?? 'txt');
+          title, categoryId!, fileType ?? 'txt');
     }
     return [];
   }
@@ -235,6 +240,7 @@ class ExternalLibraryBook extends Book {
       super.heDesc,
       required this.link,
       super.categoryPath,
+      super.categoryId,
       super.fileType = 'link',
       super.isUserBook,
       super.externalLibraryId})
@@ -308,6 +314,7 @@ abstract class FileBook extends Book {
     super.pubDate,
     super.pubPlace,
     super.categoryPath,
+    super.categoryId,
     super.filePath,
     super.fileType,
     super.order = 999,
@@ -338,6 +345,7 @@ class PdfBook extends FileBook {
       super.pubPlace,
       super.filePath,
       super.categoryPath,
+      super.categoryId,
       super.fileType = 'pdf',
       super.order = 999,
       super.isUserBook,
@@ -395,6 +403,7 @@ class DocxBook extends FileBook {
       super.pubPlace,
       super.filePath,
       super.categoryPath,
+      super.categoryId,
       super.fileType = 'docx',
       super.order = 999,
       super.isUserBook,
