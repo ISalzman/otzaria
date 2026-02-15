@@ -53,7 +53,7 @@ class PdfBookTab extends OpenedTab {
   List<Link> links = [];
 
   /// Active commentators to show
-  List<String> activeCommentators = [];
+  Set<String> activeCommentators = <String>{};
 
   /// Current line number in text (based on PDF heading)
   int? currentTextLineNumber;
