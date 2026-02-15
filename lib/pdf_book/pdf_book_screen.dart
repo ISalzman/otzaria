@@ -331,7 +331,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     final sortedCommentators = commentators.toList()..sort();
-    links.sort((a, b) => a.index1.compareTo(b.index1));
+    // links כבר ממוינים מהטעינה, לא צריך למיין שוב
 
     return (commentators: sortedCommentators, links: links);
   }
@@ -669,6 +669,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       if (textBook != null) {
         if (textBook is TextBook) {
           final loadedLinks = await textBook.links;
+          // מיון ה-links פעם אחת לפי index1 לשיפור ביצועים
+          loadedLinks.sort((a, b) => a.index1.compareTo(b.index1));
           widget.tab.links = loadedLinks;
 
           // הצגת דוגמאות של links
