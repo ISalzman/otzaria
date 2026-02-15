@@ -356,7 +356,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final allActive =
         commentators.every(widget.tab.activeCommentators.contains);
     if (allActive) {
-      widget.tab.activeCommentators.removeWhere(commentators.contains);
+      widget.tab.activeCommentators.removeAll(commentators);
     } else {
       widget.tab.activeCommentators.addAll(commentators);
     }
@@ -445,10 +445,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         }
       },
       onGeneralTap: (tapContext, _, details) {
-        if (details.type == PdfViewerGeneralTapType.secondaryTap) {
-          return true;
-        }
-        return false;
+        return details.type == PdfViewerGeneralTapType.secondaryTap;
       },
       viewerOverlayBuilder: (context, size, handleLinkTap) => [
         Positioned.fill(
