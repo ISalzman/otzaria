@@ -353,8 +353,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   void _toggleAllCommentators(List<String> commentators) {
-    final allActive =
-        commentators.every(widget.tab.activeCommentators.contains);
+    final allActive = widget.tab.activeCommentators.containsAll(commentators);
     if (allActive) {
       widget.tab.activeCommentators.removeAll(commentators);
     } else {
@@ -381,8 +380,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           items: [
             ctx.MenuItem(
               label: _buildRtlMenuText('הצג את כל המפרשים'),
-              icon: relevantCommentators
-                      .every(widget.tab.activeCommentators.contains)
+              icon: widget.tab.activeCommentators
+                      .containsAll(relevantCommentators)
                   ? const Icon(FluentIcons.checkmark_24_regular)
                   : null,
               onSelected: (_) => _toggleAllCommentators(relevantCommentators),
