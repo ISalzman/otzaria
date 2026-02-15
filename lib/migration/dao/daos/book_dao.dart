@@ -29,11 +29,34 @@ class BookDao {
 
   /// Gets all books with their relations (authors, topics, pubPlaces, pubDates) in a single optimized query.
   /// This is much faster than calling getAllBooks() and then loading relations separately.
-  Future<List<Map<String, dynamic>>> getAllBooksWithRelations() async {
+  /// 
+  /// Parameters:
+  /// - [includeExternalBooks]: if true, includes all external catalog books. If false, only local books.
+  /// - [includeOtzarHachochma]: if true, includes Otzar Hachochma books (oh:*).
+  /// - [includeHebrewBooks]: if true, includes HebrewBooks books (hb:*).
+  Future<List<Map<String, dynamic>>> getAllBooksWithRelations({
+    bool includeExternalBooks = true,
+    bool includeOtzarHachochma = true,
+    bool includeHebrewBooks = true,
+  }) async {
     final db = await database;
 
+    // Determine which query to use based on parameters
+    String queryKey;
+    if (!includeExternalBooks) {
+      queryKey = 'selectAllIgnoreExternalCatalogs';
+    } else if (includeOtzarHachochma && includeHebrewBooks) {
+      queryKey = 'selectAllWithBothExternalCatalogs';
+    } else if (includeOtzarHachochma) {
+      queryKey = 'selectAllWithOtzarHachochma';
+    } else if (includeHebrewBooks) {
+      queryKey = 'selectAllWithHebrewBooks';
+    } else {
+      queryKey = 'selectAllIgnoreExternalCatalogs';
+    }
+
     // Get all books
-    final books = await db.rawQuery(_queries['selectAll']!);
+    final books = await db.rawQuery(_queries[queryKey]!);
 
     if (books.isEmpty) return [];
 
