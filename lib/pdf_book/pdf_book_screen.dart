@@ -84,6 +84,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   final FocusNode _pdfViewFocusNode = FocusNode();
   late final StreamSubscription<SettingsState> _settingsSub;
 
+  // משתנים לגלילה רציפה
+  Timer? _scrollTimer;
+  LogicalKeyboardKey? _currentScrollKey;
+  int _scrollCount = 0; // מונה לגלילות להאצה הדרגתית
+
   Future<Uint8List?>? _pdfBytesFuture;
 
   // Local UI state that syncs with Bloc
@@ -600,6 +605,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             _goNextPage();
           } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
             _goPreviousPage();
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            // התעלמות מאירועי repeat - אם כבר יש Timer פעיל, לא עושים כלום
+            if (_scrollTimer == null) {
+              _startContinuousScroll(LogicalKeyboardKey.arrowUp);
+            }
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            // התעלמות מאירועי repeat - אם כבר יש Timer פעיל, לא עושים כלום
+            if (_scrollTimer == null) {
+              _startContinuousScroll(LogicalKeyboardKey.arrowDown);
+            }
+          }
+        } else if (event is KeyUpEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+              event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            _stopContinuousScroll();
           }
         }
       },
@@ -630,6 +650,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             _goNextPage();
           } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
             _goPreviousPage();
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            // התעלמות מאירועי repeat - אם כבר יש Timer פעיל, לא עושים כלום
+            if (_scrollTimer == null) {
+              _startContinuousScroll(LogicalKeyboardKey.arrowUp);
+            }
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            // התעלמות מאירועי repeat - אם כבר יש Timer פעיל, לא עושים כלום
+            if (_scrollTimer == null) {
+              _startContinuousScroll(LogicalKeyboardKey.arrowDown);
+            }
+          }
+        } else if (event is KeyUpEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+              event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            _stopContinuousScroll();
           }
         }
       },
@@ -669,6 +704,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   @override
   void dispose() {
+    _stopContinuousScroll(); // עצירת גלילה רציפה
     textSearcher?.removeListener(_onTextSearcherUpdated);
     widget.tab.pdfViewerController.removeListener(_onPdfViewerControllerUpdate);
     // הסרת listeners למניעת דליפות זיכרון
@@ -1335,6 +1371,111 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final prevPage = max(currentPage - 1, 1);
 
     widget.tab.pdfViewerController.goToPage(pageNumber: prevPage);
+  }
+
+  /// התחלת גלילה רציפה
+  void _startContinuousScroll(LogicalKeyboardKey key) {
+    // אם כבר יש גלילה פעילה עם אותו מקש, לא עושים כלום
+    if (_currentScrollKey == key && _scrollTimer != null) {
+      return;
+    }
+
+    // עצירת גלילה קודמת אם יש
+    _stopContinuousScroll();
+
+    _currentScrollKey = key;
+    _scrollCount = 0;
+    
+    // גלילה ראשונה מיידית
+    if (key == LogicalKeyboardKey.arrowUp) {
+      _scrollUp();
+    } else if (key == LogicalKeyboardKey.arrowDown) {
+      _scrollDown();
+    }
+
+    // התחלת גלילה רציפה - תדירות בינונית (כל 30ms)
+    _scrollTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
+      if (!mounted || !widget.tab.pdfViewerController.isReady) {
+        _stopContinuousScroll();
+        return;
+      }
+
+      _scrollCount++;
+
+      if (_currentScrollKey == LogicalKeyboardKey.arrowUp) {
+        _scrollUp();
+      } else if (_currentScrollKey == LogicalKeyboardKey.arrowDown) {
+        _scrollDown();
+      }
+    });
+  }
+
+  /// עצירת גלילה רציפה
+  void _stopContinuousScroll() {
+    _scrollTimer?.cancel();
+    _scrollTimer = null;
+    _currentScrollKey = null;
+    _scrollCount = 0;
+  }
+
+  /// גלילה למעלה בתוך העמוד
+  void _scrollUp() {
+    if (!widget.tab.pdfViewerController.isReady) {
+      return;
+    }
+
+    final currentMatrix = widget.tab.pdfViewerController.value;
+    final currentTranslation = currentMatrix.getTranslation();
+    
+    // כמות גלילה מותאמת ל-30ms
+    double scrollAmount = 50.0; // גלילה חלקה
+    if (_scrollCount > 5) {
+      scrollAmount = 80.0; // מהיר יותר
+    }
+    if (_scrollCount > 15) {
+      scrollAmount = 120.0; // מהירות מקסימלית
+    }
+
+    final newY = currentTranslation.y + scrollAmount;
+    
+    widget.tab.pdfViewerController.goTo(
+      currentMatrix.clone()
+        ..setTranslationRaw(
+          currentTranslation.x,
+          newY,
+          currentTranslation.z,
+        ),
+    );
+  }
+
+  /// גלילה למטה בתוך העמוד
+  void _scrollDown() {
+    if (!widget.tab.pdfViewerController.isReady) {
+      return;
+    }
+
+    final currentMatrix = widget.tab.pdfViewerController.value;
+    final currentTranslation = currentMatrix.getTranslation();
+    
+    // כמות גלילה מותאמת ל-30ms
+    double scrollAmount = 50.0; // גלילה חלקה
+    if (_scrollCount > 5) {
+      scrollAmount = 80.0; // מהיר יותר
+    }
+    if (_scrollCount > 15) {
+      scrollAmount = 120.0; // מהירות מקסימלית
+    }
+
+    final newY = currentTranslation.y - scrollAmount;
+    
+    widget.tab.pdfViewerController.goTo(
+      currentMatrix.clone()
+        ..setTranslationRaw(
+          currentTranslation.x,
+          newY,
+          currentTranslation.z,
+        ),
+    );
   }
 
   Future<void> navigateToUrl(Uri url) async {
