@@ -23,7 +23,6 @@ import 'package:otzaria/settings/settings_state.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:collection/collection.dart';
 import 'dart:async';
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
@@ -678,13 +677,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         }
       }
 
-      String? categoryPath;
-
-      // 1. נסיון לקבל נתיב ממערכת הקבצים/מסד הנתונים
-      // שימוש בפונקציה חדשה שבודקת גם דינמית מול ה-DB אם המטמון רך
-      categoryPath = await FileSystemData.instance
-          .findBookCategoryPath(widget.commentatorName);
-
       if (!mounted) return;
 
       if (state is TextBookLoaded) {
@@ -694,49 +686,9 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           return linkTitle == widget.commentatorName &&
               LinkTypes.isCommentaryOrTargum(link.connectionType);
         }).toList();
-
-        // אם עדיין אין נתיב, ננסה לחלץ מקישורים (Fallback)
-        if (categoryPath == null && _relevantLinks.isNotEmpty) {
-          final firstLinkPath = _relevantLinks.first.path2;
-
-          var normalizedPath = firstLinkPath;
-          if (normalizedPath.startsWith('/') ||
-              normalizedPath.startsWith('\\')) {
-            normalizedPath = normalizedPath.substring(1);
-          }
-
-          final lastSeparatorIndex = normalizedPath.lastIndexOf('/');
-          final directoryPath = lastSeparatorIndex != -1
-              ? normalizedPath.substring(0, lastSeparatorIndex)
-              : (normalizedPath.contains('\\')
-                  ? normalizedPath.substring(
-                      0, normalizedPath.lastIndexOf('\\'))
-                  : '');
-
-          if (directoryPath.isNotEmpty) {
-            categoryPath =
-                directoryPath.replaceAll('/', ', ').replaceAll('\\', ', ');
-          } else {
-            // אם הנתיב הוא רק שם הספר, נסה להמיר אותו לקטגוריה
-            // (אם זה לא עובד בחלק 1, כנראה שגם זה לא יעבוד, אבל ניתן סיכוי)
-            categoryPath =
-                normalizedPath.replaceAll('/', ', ').replaceAll('\\', ', ');
-          }
-        }
-
-        // אם עדיין אין נתיב, ננסה להשתמש בנתיב של הספר הראשי
-        if (categoryPath == null || categoryPath.isEmpty) {
-          // נסיון אחרון: להשתמש בקטגוריה של הספר הראשי
-          final mainBookCategory =
-              state.book.categoryPath ?? state.book.heCategories;
-          if (mainBookCategory != null && mainBookCategory.isNotEmpty) {
-            categoryPath = mainBookCategory;
-          }
-        }
       }
 
-      final book =
-          TextBook(title: widget.commentatorName, categoryPath: categoryPath);
+      final book = TextBook(title: widget.commentatorName);
       final bookContent = await book.text;
 
       if (bookContent.isEmpty) {
