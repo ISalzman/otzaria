@@ -24,6 +24,9 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:collection/collection.dart';
 import 'dart:async';
 import 'package:otzaria/core/scaffold_messenger.dart';
+import 'package:otzaria/data/book_locator.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
 const double _kCommentaryPaneWidthFactor = 0.17;
@@ -663,7 +666,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
       // אם ה-state עדיין לא TextBookLoaded, נחכה לו
       if (state is! TextBookLoaded) {
-        // נמתין עד שה-state יהיה TextBookLoaded או timeout אחרי 5 שניות
         try {
           state = await bloc.stream
               .firstWhere(
@@ -672,8 +674,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               )
               .timeout(const Duration(seconds: 5));
         } catch (e) {
-          // אם יש timeout או שגיאה, נמשיך עם ה-state הנוכחי
-          debugPrint('Timeout waiting for TextBookLoaded: $e');
+          debugPrint('⚠️ CommentaryPane: Timeout waiting for TextBookLoaded');
         }
       }
 
@@ -688,10 +689,103 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         }).toList();
       }
 
-      final book = TextBook(title: widget.commentatorName);
-      final bookContent = await book.text;
+      // מציאת הספר המלא של המפרש עם categoryId
+      TextBook book;
+      final bookLocation = await BookLocator.locateBook(widget.commentatorName);
+
+      if (bookLocation != null &&
+          bookLocation.book != null &&
+          bookLocation.categoryId != null) {
+        // נמצא ספר ב-DB - נשתמש בנתונים שלו
+        final dbBook = bookLocation.book!;
+
+        // נצטרך למצוא את ה-categoryPath מה-DB
+        final repository = SqliteDataProvider.instance.repository;
+        String? categoryPath;
+        if (repository != null) {
+          try {
+            var category = await repository.getCategory(dbBook.categoryId);
+            if (category != null) {
+              // בניית נתיב הקטגוריה
+              final pathParts = <String>[];
+              while (category != null) {
+                pathParts.insert(0, category.title);
+                if (category.parentId != null) {
+                  category = await repository.getCategory(category.parentId!);
+                } else {
+                  break;
+                }
+              }
+              categoryPath = pathParts.join(', ');
+            }
+          } catch (e) {
+            debugPrint('⚠️ CommentaryPane: Error getting category path: $e');
+          }
+        }
+
+        book = TextBook(
+          title: widget.commentatorName,
+          categoryId: bookLocation.categoryId,
+          categoryPath: categoryPath,
+        );
+      } else {
+        // ננסה למצוא את ה-categoryPath מהקישורים הקיימים
+        String? categoryPath;
+        if (_relevantLinks.isNotEmpty) {
+          // נחלץ את ה-categoryPath מהקישור הראשון
+          final firstLinkPath = _relevantLinks.first.path2;
+          var normalizedPath = firstLinkPath;
+          if (normalizedPath.startsWith('/') ||
+              normalizedPath.startsWith('\\')) {
+            normalizedPath = normalizedPath.substring(1);
+          }
+
+          final lastSeparatorIndex = normalizedPath.lastIndexOf('/');
+          if (lastSeparatorIndex != -1) {
+            final directoryPath =
+                normalizedPath.substring(0, lastSeparatorIndex);
+            categoryPath =
+                directoryPath.replaceAll('/', ', ').replaceAll('\\', ', ');
+          }
+        }
+
+        // יצירת ספר עם categoryPath (שיומר ל-categoryId באמצעות hashCode)
+        if (categoryPath != null && categoryPath.isNotEmpty) {
+          final categoryId = categoryPath.hashCode;
+          book = TextBook(
+            title: widget.commentatorName,
+            categoryPath: categoryPath,
+            categoryId: categoryId,
+          );
+        } else {
+          // fallback - ספר ללא categoryId (לא יטען קישורים)
+          debugPrint(
+              '⚠️ CommentaryPane: No categoryId found for "${widget.commentatorName}"');
+          book = TextBook(title: widget.commentatorName);
+        }
+      }
+
+      // טעינת הטקסט ישירות מה-provider המתאים
+      String bookContent;
+      if (bookLocation != null &&
+          bookLocation.book != null &&
+          bookLocation.categoryId != null) {
+        // ספר מה-DB - נשתמש ב-DatabaseLibraryProvider
+        final dbProvider = LibraryProviderManager.instance.databaseProvider;
+        final text = await dbProvider.getBookText(
+          widget.commentatorName,
+          bookLocation.categoryId!,
+          'txt',
+        );
+        bookContent = text ?? '';
+      } else {
+        // ספר ממערכת הקבצים - נשתמש ב-book.text
+        bookContent = await book.text;
+      }
 
       if (bookContent.isEmpty) {
+        debugPrint(
+            '❌ CommentaryPane: Book text is empty for "${widget.commentatorName}"');
         throw Exception('Book text is empty for "${widget.commentatorName}"');
       }
 
@@ -710,6 +804,8 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         _syncWithMainText(state);
       }
     } catch (e) {
+      debugPrint(
+          '❌ CommentaryPane: Error loading "${widget.commentatorName}": $e');
       if (mounted) {
         setState(() {
           _content = null;
