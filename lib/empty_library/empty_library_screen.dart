@@ -355,7 +355,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
 
     if (selectedPath == null || !context.mounted) return;
 
-    // בדיקה אם יש קובץ ZIP בתיקייה
+        // בדיקה אם יש קובץ ZIP בתיקייה
     final directory = Directory(selectedPath);
     final zipFiles = await directory
         .list()
@@ -364,29 +364,14 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
         .cast<File>()
         .toList();
 
+    if (!context.mounted) return;
+
     if (zipFiles.isEmpty) {
       // אין ZIP, פשוט נבדוק את התיקייה
-      if (context.mounted) {
-        BlocProvider.of<EmptyLibraryBloc>(context)
-            .add(PickDirectoryRequested(path: selectedPath));
-      }
-      return;
-    }
-
-    // יש ZIP - נטפל בו דרך ה-BLoC
-    if (zipFiles.length > 1) {
-      // יותר מקובץ אחד
-      if (context.mounted) {
-        UiSnack.showError(
-          'נמצאו ${zipFiles.length} קבצים דחוסים. אנא השאר רק קובץ דחוס אחד בתיקייה.',
-          backgroundColor: Theme.of(context).colorScheme.error,
-        );
-      }
-      return;
-    }
-
-    // קובץ ZIP יחיד - נעביר ל-BLoC לטיפול
-    if (context.mounted) {
+      BlocProvider.of<EmptyLibraryBloc>(context)
+          .add(PickDirectoryRequested(path: selectedPath));
+    } else {
+      // יש ZIP - נעביר ל-BLoC לטיפול (הוא יטפל במקרה של קבצים מרובים)
       BlocProvider.of<EmptyLibraryBloc>(context)
           .add(PickDirectoryWithZipRequested(path: selectedPath));
     }
