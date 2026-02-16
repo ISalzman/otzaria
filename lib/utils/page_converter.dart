@@ -11,7 +11,7 @@ final _pageMapCache = <String, _PageMap>{};
 /// This function uses a cached, anchor-based map with local interpolation for accuracy and performance.
 Future<int?> textToPdfPage(TextBook textBook, int textIndex) async {
   final pdfBook = (await DataRepository.instance.library)
-      .findBookByTitle(textBook.title, PdfBook) as PdfBook?;
+      .findBookByTitleFlexible(textBook.title, PdfBook) as PdfBook?;
   if (pdfBook == null) {
     return null;
   }
@@ -22,14 +22,20 @@ Future<int?> textToPdfPage(TextBook textBook, int textIndex) async {
     return cached.textToPdf(textIndex);
   }
 
-  // It's better to get the outline from a provider/tab if available than to load it every time.
-  // For now, we load it directly as a fallback.
-  final outline =
-      await PdfDocument.openFile(pdfBook.path).then((doc) => doc.loadOutline());
-  final map =
-      _pageMapCache[key] ??= await _buildPageMap(pdfBook, outline, textBook);
+  try {
+    // It's better to get the outline from a provider/tab if available than to load it every time.
+    // For now, we load it directly as a fallback.
+    final outline = await PdfDocument.openFile(pdfBook.path)
+        .then((doc) => doc.loadOutline());
+    final map =
+        _pageMapCache[key] ??= await _buildPageMap(pdfBook, outline, textBook);
 
-  return map.textToPdf(textIndex);
+    return map.textToPdf(textIndex);
+  } catch (e) {
+    // If PDF is password protected or cannot be opened, return null
+    // The PDF will open with password dialog when user clicks the button
+    return null;
+  }
 }
 
 /// Converts a PDF page number to the corresponding text book index.
@@ -38,7 +44,7 @@ Future<int?> textToPdfPage(TextBook textBook, int textIndex) async {
 Future<int?> pdfToTextPage(PdfBook pdfBook, List<PdfOutlineNode> outline,
     int pdfPage, BuildContext ctx) async {
   final textBook = (await DataRepository.instance.library)
-      .findBookByTitle(pdfBook.title, TextBook) as TextBook?;
+      .findBookByTitleFlexible(pdfBook.title, TextBook) as TextBook?;
   if (textBook == null) {
     return null;
   }
