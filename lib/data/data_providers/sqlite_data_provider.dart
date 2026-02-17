@@ -19,7 +19,7 @@ class SqliteDataProvider {
   late SeforimRepository _repository;
   late String _dbPath;
   bool _isInitialized = false;
-  bool _isInitializedInProgress = false;
+  Future<void>? _initializationFuture;
 
   /// Singleton instance
   static SqliteDataProvider? _instance;
@@ -38,13 +38,23 @@ class SqliteDataProvider {
       return;
     }
 
-    if (_isInitializedInProgress) {
-      debugPrint('SQLite database initialization is already in progress.');
-      return;
-    } else {
-      debugPrint('Starting SQLite database initialization.');
+    // If initialization already started, await the same future
+    if (_initializationFuture != null) {
+      debugPrint('SQLite database initialization already in progress; awaiting existing future.');
+      return _initializationFuture!;
     }
-    _isInitializedInProgress = true;
+
+    debugPrint('Starting SQLite database initialization.');
+    _initializationFuture = _initializeInternal();
+
+    try {
+      await _initializationFuture;
+    } finally {
+      _initializationFuture = null;
+    }
+  }
+
+  Future<void> _initializeInternal() async {
     // Use centralized database path
     _dbPath = DatabaseConstants.getDatabasePath();
 
@@ -55,7 +65,6 @@ class SqliteDataProvider {
     if (!await dbFile.exists()) {
       debugPrint('Database file does not exist yet at: $_dbPath');
       // Database will be created when first book is migrated
-      _isInitializedInProgress = false;
       return;
     }
 
@@ -64,10 +73,8 @@ class SqliteDataProvider {
       _repository = SeforimRepository(database);
       await _repository.ensureInitialized();
       _isInitialized = true;
-      _isInitializedInProgress = false;
       debugPrint('SQLite database initialized successfully');
     } catch (e) {
-      _isInitializedInProgress = false;
       debugPrint('Error initializing SQLite database: $e');
       rethrow;
     }

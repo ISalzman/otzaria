@@ -257,6 +257,18 @@ class UpdateLinks extends TextBookEvent {
   List<Object?> get props => [links];
 }
 
+/// Event to update available commentators after background loading
+class UpdateAvailableCommentators extends TextBookEvent {
+  final List<String> availableCommentators;
+  final List<dynamic> commentatorGroups;
+
+  const UpdateAvailableCommentators(
+      this.availableCommentators, this.commentatorGroups);
+
+  @override
+  List<Object?> get props => [availableCommentators, commentatorGroups];
+}
+
 class OpenFullFileEditor extends TextBookEvent {
   const OpenFullFileEditor();
 
