@@ -15,6 +15,7 @@ import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/empty_library/empty_library_screen.dart';
+import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/find_ref/find_ref_dialog.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/library/view/library_browser.dart';
@@ -70,6 +71,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
   Widget? _cachedReadingPage;
   Widget? _cachedMorePage;
   Widget? _cachedSettingsPage;
+
+  // שמירת BLoC של EmptyLibrary כדי שלא יאבד את המצב
+  EmptyLibraryBloc? _emptyLibraryBloc;
 
   // שמירת מצב הספרייה הקודם כדי לזהות שינויים
   bool? _previousLibraryEmptyState;
@@ -178,6 +182,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     // Clean up fullscreen callback
     appWindowListener?.onFullscreenChanged = null;
     _calendarCubit.close();
+    _emptyLibraryBloc?.close();
     pageController.dispose();
     super.dispose();
   }
@@ -395,13 +400,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 state.isLibraryEmpty !=
                     (_cachedLibraryPage is EmptyLibraryScreen) ||
                 _previousLibraryEmptyState != state.isLibraryEmpty) {
-              _cachedLibraryPage = state.isLibraryEmpty
-                  ? EmptyLibraryScreen(
-                      onLibraryLoaded: () {
-                        context.read<NavigationBloc>().refreshLibrary();
-                      },
-                    )
-                  : const LibraryBrowser();
+              if (state.isLibraryEmpty) {
+                // יצירת BLoC פעם אחת אם עדיין לא קיים
+                _emptyLibraryBloc ??= EmptyLibraryBloc();
+                _cachedLibraryPage = EmptyLibraryScreen(
+                  bloc: _emptyLibraryBloc,
+                  onLibraryLoaded: () {
+                    context.read<NavigationBloc>().refreshLibrary();
+                  },
+                );
+              } else {
+                // אם הספרייה כבר לא ריקה, נסגור את ה-BLoC
+                _emptyLibraryBloc?.close();
+                _emptyLibraryBloc = null;
+                _cachedLibraryPage = const LibraryBrowser();
+              }
               _previousLibraryEmptyState = state.isLibraryEmpty;
             }
 

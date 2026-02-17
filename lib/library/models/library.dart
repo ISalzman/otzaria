@@ -161,4 +161,65 @@ class Library extends Category {
       return null;
     }
   }
+
+  /// מחפש ספר לפי כותרת עם חיפוש גמיש יותר.
+  ///
+  /// אם לא נמצא התאמה מדויקת, מנסה למצוא ספר עם כותרת דומה:
+  /// - מסיר רווחים מיותרים
+  /// - מתעלם מהבדלי גרשיים וסימני פיסוק
+  /// - מחפש התאמה חלקית
+  ///
+  /// [title] - כותרת הספר לחיפוש
+  /// [type] - סוג הספר (למשל PdfBook, TextBook)
+  /// מחזיר את הספר הראשון שנמצא או null
+  Book? findBookByTitleFlexible(String title, Type? type) {
+    List<Book> allBooks = getAllBooks();
+
+    // ניסיון ראשון: חיפוש מדויק
+    try {
+      if (type == null) {
+        return allBooks.firstWhere((book) => book.title == title);
+      }
+      return allBooks.firstWhere(
+          (book) => book.title == title && book.runtimeType == type);
+    } catch (e) {
+      // לא נמצא - ממשיכים לחיפוש גמיש
+    }
+
+    // נרמול הכותרת לחיפוש
+    String normalizedTitle = _normalizeTitle(title);
+
+    // חיפוש עם נרמול
+    List<Book> candidates = allBooks.where((book) {
+      if (type != null && book.runtimeType != type) return false;
+      return _normalizeTitle(book.title) == normalizedTitle;
+    }).toList();
+
+    if (candidates.isNotEmpty) {
+      return candidates.first;
+    }
+
+    // חיפוש חלקי - האם הכותרת מכילה או מוכלת
+    candidates = allBooks.where((book) {
+      if (type != null && book.runtimeType != type) return false;
+      String bookNormalized = _normalizeTitle(book.title);
+      return bookNormalized.contains(normalizedTitle) ||
+          normalizedTitle.contains(bookNormalized);
+    }).toList();
+
+    return candidates.isNotEmpty ? candidates.first : null;
+  }
+
+  /// מנרמל כותרת לצורך השוואה
+  String _normalizeTitle(String title) {
+    return title
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ') // רווחים מרובים לרווח אחד
+        .replaceAll('"', '')
+        .replaceAll("'", '')
+        .replaceAll('״', '')
+        .replaceAll('׳', '')
+        .replaceAll('<', '')
+        .replaceAll('>', '');
+  }
 }

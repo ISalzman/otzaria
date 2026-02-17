@@ -6,7 +6,7 @@ class DatabaseConstants {
   /// The name of the main database file
   static const String databaseFileName = 'seforim.db';
 
-  /// The name of the Otzaria folder
+  /// The default name of the Otzaria folder
   static const String otzariaFolderName = 'אוצריא';
 
   /// Gets the full database path based on the library path setting
@@ -16,8 +16,9 @@ class DatabaseConstants {
   }
 
   /// Gets the database path for a specific library path
-  static String getDatabasePathForLibrary(String libraryPath) {
-    return path.join(libraryPath, otzariaFolderName, databaseFileName);
+  static String getDatabasePathForLibrary(String libraryPath, [String? folderName]) {
+    final folder = folderName ?? Settings.getValue<String>('key-library-folder-name') ?? otzariaFolderName;
+    return path.join(libraryPath, folder, databaseFileName);
   }
 
   /// Private constructor to prevent instantiation

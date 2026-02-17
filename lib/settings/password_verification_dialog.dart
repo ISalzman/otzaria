@@ -32,6 +32,7 @@ class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
   @override
   void initState() {
     super.initState();
+    
     // תן פוקוס לשדה הטקסט אחרי שהדיאלוג נפתח
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _textFieldFocusNode.requestFocus();
@@ -115,6 +116,7 @@ class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
                 focusNode: _textFieldFocusNode,
                 obscureText: _isObscured,
                 enabled: !_isVerifying,
+                autofocus: true,
                 decoration: InputDecoration(
                   labelText: 'סיסמה',
                   hintText: 'הזן את הסיסמה',
