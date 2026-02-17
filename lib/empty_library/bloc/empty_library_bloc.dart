@@ -116,6 +116,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       if (!extractionResult.success) {
         emit(EmptyLibraryError(
           errorMessage: extractionResult.errorMessage ?? 'שגיאה בחילוץ',
+          zipFiles: extractionResult.zipFiles,
         ));
         return;
       }
