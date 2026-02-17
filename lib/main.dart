@@ -336,10 +336,10 @@ void createDirectoryIfNotExists(String path) {
 
 initHive() async {
   Hive.defaultDirectory = (await getApplicationSupportDirectory()).path;
-  Hive.box(name: 'tabs');
-  Hive.box(name: 'workspaces');
-  Hive.box(name: 'history');
-  Hive.box(name: 'bookmarks');
+  Hive.box(name: 'tabs', maxSizeMiB: 100);
+  Hive.box(name: 'workspaces', maxSizeMiB: 100);
+  Hive.box(name: 'history', maxSizeMiB: 100);
+  Hive.box(name: 'bookmarks', maxSizeMiB: 100);
 }
 
 Future<void> loadCerts() async {
