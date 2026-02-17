@@ -12,7 +12,11 @@ class HiveCache extends CacheProvider {
   Future<void> init() async {
     if (!kIsWeb) {
       final defaultDirectory = await getApplicationSupportDirectory();
-      _preferences = Hive.box(name: keyName, directory: defaultDirectory.path);
+      _preferences = Hive.box(
+        name: keyName,
+        directory: defaultDirectory.path,
+        maxSizeMiB: 100,
+      );
     }
   }
 
