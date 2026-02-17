@@ -1496,7 +1496,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget _buildPdfButton(BuildContext context, TextBookLoaded state) {
     return FutureBuilder<Book?>(
       future: DataRepository.instance.library.then(
-        (library) => library.findBookByTitle(state.book.title, PdfBook),
+        (library) => library.findBookByTitleFlexible(state.book.title, PdfBook),
       ),
       builder: (context, snapshot) {
         // Show button only if PDF book exists (snapshot.data is not null)
@@ -2028,8 +2028,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final library = await DataRepository.instance.library;
     if (!context.mounted) return;
 
-    final book = library.findBookByTitle(state.book.title, PdfBook);
+    // ניסיון למצוא את ספר ה-PDF עם חיפוש גמיש
+    final book = library.findBookByTitleFlexible(state.book.title, PdfBook);
     if (book == null) {
+      UiSnack.showError('לא נמצא ספר PDF עבור "${state.book.title}"');
       return;
     }
 
@@ -2701,8 +2703,9 @@ void _togglePdfView(
   final library = await DataRepository.instance.library;
   if (!context.mounted) return;
 
-  final book = library.findBookByTitle(state.book.title, PdfBook);
+  final book = library.findBookByTitleFlexible(state.book.title, PdfBook);
   if (book == null) {
+    UiSnack.showError('לא נמצא ספר PDF עבור "${state.book.title}"');
     return;
   }
 

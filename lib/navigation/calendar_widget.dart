@@ -671,26 +671,47 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     final jewishDate = JewishDate();
 
     if (isFromOtherMonth) {
-      // חשב את החודש האחר - קודם מצא את החודש הנכון
-      int targetYear = state.currentJewishDate.getJewishYear();
-      int targetMonth = state.currentJewishDate.getJewishMonth() + monthOffset;
-
-      // טיפול במעבר שנה
-      if (targetMonth < 1) {
-        targetYear--;
-        final tempDate = JewishDate();
-        tempDate.setJewishDate(targetYear, 1, 1);
-        targetMonth = tempDate.isJewishLeapYear() ? 13 : 12;
-      } else if (targetMonth > 12) {
-        final tempDate = JewishDate();
-        tempDate.setJewishDate(targetYear, 1, 1);
-        if (!tempDate.isJewishLeapYear() || targetMonth > 13) {
-          targetYear++;
-          targetMonth = 1;
+      // התחל מהחודש הנוכחי ביום 1
+      jewishDate.setJewishDate(
+        state.currentJewishDate.getJewishYear(),
+        state.currentJewishDate.getJewishMonth(),
+        1,
+      );
+      
+      // השתמש ב-API של JewishDate כדי לעבור לחודש הקודם/הבא
+      // זה מטפל אוטומטית במעברי שנים ושנים מעוברות
+      if (monthOffset < 0) {
+        // חודש קודם
+        for (int i = 0; i < -monthOffset; i++) {
+          jewishDate.back(); // חזור יום אחד אחורה
+          // עכשיו עבור לתחילת החודש הקודם
+          jewishDate.setJewishDate(
+            jewishDate.getJewishYear(),
+            jewishDate.getJewishMonth(),
+            1,
+          );
+        }
+      } else if (monthOffset > 0) {
+        // חודש הבא
+        for (int i = 0; i < monthOffset; i++) {
+          // עבור לסוף החודש הנוכחי
+          final daysInMonth = jewishDate.getDaysInJewishMonth();
+          jewishDate.setJewishDate(
+            jewishDate.getJewishYear(),
+            jewishDate.getJewishMonth(),
+            daysInMonth,
+          );
+          // קדימה יום אחד (לחודש הבא)
+          jewishDate.forward();
         }
       }
-
-      jewishDate.setJewishDate(targetYear, targetMonth, day);
+      
+      // עכשיו קבע את היום הספציפי
+      jewishDate.setJewishDate(
+        jewishDate.getJewishYear(),
+        jewishDate.getJewishMonth(),
+        day,
+      );
     } else {
       jewishDate.setJewishDate(
         state.currentJewishDate.getJewishYear(),
@@ -1964,6 +1985,9 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     // משתנה חדש שבודק אם האירוע מוגדר כ"תמיד"
     bool recurForever = existingEvent?.recurringYears == null;
 
+    // שעת האירוע
+    TimeOfDay? selectedTime = existingEvent?.eventTime;
+
     // קביעת התאריכים המוצגים - לפי האירוע אם עריכה, אחרת לפי התאריך הספציפי או הנבחר
     final displayedGregorianDate = existingEvent != null
         ? existingEvent.baseGregorianDate
@@ -2019,6 +2043,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                               description: descriptionController.text.trim(),
                               recurrenceType: finalRecurrenceType,
                               recurringYears: recurringYears,
+                              eventTime: selectedTime,
                             );
                             cubit.updateEvent(updatedEvent);
                           } else {
@@ -2028,6 +2053,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                               baseGregorianDate: displayedGregorianDate,
                               recurrenceType: finalRecurrenceType,
                               recurringYears: recurringYears,
+                              eventTime: selectedTime,
                             );
                           }
                           Navigator.of(dialogContext).pop();
@@ -2064,6 +2090,56 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                               'תאריך עברי: ${_formatHebrewDay(displayedJewishDate.getJewishDayOfMonth())} ${_getHebrewMonthNameFor(displayedJewishDate)} ${_formatHebrewYear(displayedJewishDate.getJewishYear())}',
                               style:
                                   const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // בורר שעה
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('שעת האירוע (אופציונלי)'),
+                        subtitle: Text(
+                          selectedTime != null
+                              ? 'שעה: ${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
+                              : 'לא נבחרה שעה',
+                          textDirection: TextDirection.rtl,
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (selectedTime != null)
+                              IconButton(
+                                icon:
+                                    const Icon(FluentIcons.dismiss_24_regular),
+                                onPressed: () {
+                                  setState(() {
+                                    selectedTime = null;
+                                  });
+                                },
+                                tooltip: 'נקה שעה',
+                              ),
+                            IconButton(
+                              icon: const Icon(FluentIcons.clock_24_regular),
+                              onPressed: () async {
+                                final time = await showTimePicker(
+                                  context: context,
+                                  initialTime: selectedTime ?? TimeOfDay.now(),
+                                  builder: (context, child) {
+                                    return Directionality(
+                                      textDirection: TextDirection.rtl,
+                                      child: child!,
+                                    );
+                                  },
+                                );
+                                if (time != null) {
+                                  setState(() {
+                                    selectedTime = time;
+                                  });
+                                }
+                              },
+                              tooltip: 'בחר שעה',
                             ),
                           ],
                         ),
@@ -2200,6 +2276,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                         description: descriptionController.text.trim(),
                         recurrenceType: finalRecurrenceType,
                         recurringYears: recurringYears,
+                        eventTime: selectedTime,
                       );
                       cubit.updateEvent(updatedEvent);
                     } else {
@@ -2209,6 +2286,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                         baseGregorianDate: displayedGregorianDate,
                         recurrenceType: finalRecurrenceType,
                         recurringYears: recurringYears,
+                        eventTime: selectedTime,
                       );
                     }
                     Navigator.of(dialogContext).pop();
@@ -2342,13 +2420,78 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                       ),
                       const SizedBox(height: 4),
                     ],
-                    Text(
-                      _formatEventDate(event.baseGregorianDate),
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    Row(
+                      children: [
+                        // תג לסוג האירוע
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: event.eventTime != null
+                                ? Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withAlpha(51)
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .secondary
+                                    .withAlpha(51),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: event.eventTime != null
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .primary
+                                      .withAlpha(128)
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .secondary
+                                      .withAlpha(128),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                event.eventTime != null
+                                    ? FluentIcons.clock_24_filled
+                                    : FluentIcons.calendar_day_24_filled,
+                                size: 10,
+                                color: event.eventTime != null
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.secondary,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                event.eventTime != null
+                                    ? '${event.eventTime!.hour.toString().padLeft(2, '0')}:${event.eventTime!.minute.toString().padLeft(2, '0')}'
+                                    : 'כל היום',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: event.eventTime != null
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.secondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _formatEventDate(event.baseGregorianDate),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     if (event.recurring) ...[
                       const SizedBox(height: 4),

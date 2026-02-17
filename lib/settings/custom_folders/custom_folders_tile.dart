@@ -14,6 +14,7 @@ import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/migration/core/models/category.dart';
+import 'package:otzaria/widgets/zip_extraction_progress_dialog.dart';
 
 /// Widget להוספה וניהול תיקיות מותאמות אישית
 class CustomFoldersTile extends StatefulWidget {
@@ -60,6 +61,44 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
         return;
       }
 
+      // בדיקה וחילוץ קובץ ZIP אם קיים - עם דיאלוג
+      bool zipExtracted = false;
+      String? extractedFileName;
+
+      // בדיקה אם יש ZIP
+      final zipFiles = dir
+          .listSync()
+          .where((entity) =>
+              entity is File && entity.path.toLowerCase().endsWith('.zip'))
+          .cast<File>()
+          .toList();
+
+      if (zipFiles.isNotEmpty) {
+        if (!mounted) return;
+
+        await ZipExtractionProgressDialog.showAndExtract(
+          context: context,
+          path: path,
+          onSuccess: (extractionResult) {
+            if (extractionResult.successfullyExtracted) {
+              zipExtracted = true;
+              extractedFileName = extractionResult.extractedFileName;
+            }
+          },
+          onError: (errorMessage) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(errorMessage),
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+            );
+          },
+        );
+
+        if (!mounted) return;
+      }
+
       setState(() {
         _folders = CustomFoldersManager.addFolder(_folders, path);
         if (_folders.length == 1) {
@@ -77,10 +116,13 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       }
 
       if (!mounted) return;
+      String successMessage =
+          'התיקייה "${path.split(Platform.pathSeparator).last}" נוספה בהצלחה';
+      if (zipExtracted && extractedFileName != null) {
+        successMessage += '\nהקובץ "$extractedFileName" חולץ בהצלחה!';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                'התיקייה "${path.split(Platform.pathSeparator).last}" נוספה בהצלחה')),
+        SnackBar(content: Text(successMessage)),
       );
     }
   }
