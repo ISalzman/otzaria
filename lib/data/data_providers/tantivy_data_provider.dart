@@ -134,6 +134,7 @@ class TantivyDataProvider {
       booksDone = Hive.box(
         name: 'books_indexed',
         directory: indexPath,
+        maxSizeMiB: 100,
       )
           .get('key-books-done', defaultValue: [])
           .map<String>((e) => e.toString())
@@ -222,6 +223,7 @@ class TantivyDataProvider {
     Hive.box(
       name: 'books_indexed',
       directory: await AppPaths.getIndexPath(),
+      maxSizeMiB: 100,
     ).put('key-books-done', booksDone);
   }
 
@@ -303,7 +305,8 @@ class TantivyDataProvider {
     Directory indexDirectory = Directory(indexPath);
     if (closeBooksDoneBox) {
       try {
-        Hive.box(name: 'books_indexed', directory: indexPath).close();
+        Hive.box(name: 'books_indexed', directory: indexPath, maxSizeMiB: 100)
+            .close();
       } catch (e) {
         debugPrint('⚠️ Error closing Hive box: $e');
       }
