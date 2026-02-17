@@ -65,6 +65,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateEditorText>(_onUpdateEditorText);
     on<AutoSaveDraft>(_onAutoSaveDraft);
     on<UpdateLinks>(_onUpdateLinks);
+    on<UpdateAvailableCommentators>(_onUpdateAvailableCommentators);
   }
 
   Future<void> _onLoadContent(
@@ -83,6 +84,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     bool initialShowPageShapeView = false;
 
+    // שמירת מפרשים קיימים כדי לא לאבד אותם ב-preserveState reload
+    List<String> existingAvailableCommentators = const [];
+    List<CommentatorGroup> existingCommentatorGroups = const [];
+
     if (state is TextBookLoaded && event.preserveState) {
       // Preserve current state when reloading
       final currentState = state as TextBookLoaded;
@@ -96,6 +101,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       commentators = currentState.activeCommentators;
       visibleIndices = currentState.visibleIndices;
       initialShowPageShapeView = currentState.showPageShapeView;
+      existingAvailableCommentators = currentState.availableCommentators;
+      existingCommentatorGroups = currentState.commentatorGroups;
     } else if (state is TextBookInitial) {
       // Normal initial load
       final initial = state as TextBookInitial;
@@ -123,7 +130,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     try {
-      // Check if book is from database - if so, load preview first for instant display
+      // ── שלב 1: התחלת טעינות מקבילות ──
+      // מתחילים את טעינת TOC במקביל לטעינת התוכן כדי לחסוך זמן
+      final tocFuture = repository.getTableOfContents(book);
+
+      // טעינת תוכן הספר (עם fallback ל-preview אם ריק)
       final sqliteProvider = SqliteDataProvider.instance;
       String content = await repository.getBookContent(book);
       if (content.isEmpty) {
@@ -145,93 +156,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         }
       }
 
-      // טעינת TOC בלבד - קישורים יטענו אחרי הצגת הספר
-      final tableOfContents = await repository.getTableOfContents(book);
+      // ── שלב 2: המתנה ל-TOC (כבר רץ במקביל, צפוי להיות מוכן) ──
+      final tableOfContents = await tocFuture;
 
-      // טעינת metadata של הספר אם חסר (למשל כשפותחים מחיפוש)
-      if (book.heCategories == null || book.heCategories!.isEmpty) {
-        debugPrint(
-            '📚 TextBookBloc: heCategories חסר עבור "${book.title}", מנסה לטעון...');
-
-        // קודם ננסה לטעון ממסד הנתונים
-        final sqliteProvider = SqliteDataProvider.instance;
-        if (await sqliteProvider.databaseExists() &&
-            sqliteProvider.isInitialized) {
-          try {
-            final repository = sqliteProvider.repository;
-            if (repository != null) {
-              final dbBook = await repository.getBookByTitle(book.title);
-              if (dbBook != null) {
-                // בניית שרשרת הקטגוריות מה-DB
-                final category =
-                    await repository.getCategory(dbBook.categoryId);
-                if (category != null) {
-                  final categoryParts = <String>[];
-                  db.Category? currentCategory = category;
-                  while (currentCategory != null) {
-                    categoryParts.insert(0, currentCategory.title);
-                    if (currentCategory.parentId != null) {
-                      currentCategory = await repository
-                          .getCategory(currentCategory.parentId!);
-                    } else {
-                      break;
-                    }
-                  }
-                  book.heCategories = categoryParts.join(', ');
-                  debugPrint(
-                      '📚 TextBookBloc: נטען heCategories מה-DB: "${book.heCategories}"');
-                }
-              }
-            }
-          } catch (e) {
-            debugPrint('⚠️ TextBookBloc: שגיאה בטעינת heCategories מה-DB: $e');
-          }
-        }
-
-        // אם לא הצלחנו לטעון מה-DB, ננסה מ-metadata
-        if (book.heCategories == null || book.heCategories!.isEmpty) {
-          final metadata = await FileSystemData.instance.metadata;
-          final bookMetadata = metadata[book.title];
-          if (bookMetadata != null) {
-            book.heCategories = bookMetadata['heCategories'];
-            book.author = bookMetadata['author'];
-            book.heEra = bookMetadata['heEra'];
-            debugPrint(
-                '📚 TextBookBloc: נטען heCategories מ-metadata: "${book.heCategories}"');
-          }
-        }
-
-        // אם עדיין אין קטגוריות, נחלץ אותן מהנתיב של הספר
-        if (book.heCategories == null || book.heCategories!.isEmpty) {
-          final titleToPath = await FileSystemData.instance.titleToPath;
-          final bookPath = titleToPath[book.title];
-          if (bookPath != null) {
-            // חילוץ הקטגוריות מהנתיב
-            // למשל: /אוצריא/הלכה/משנה תורה/ספר מדע/משנה תורה, הלכות דעות.txt
-            // → הלכה, משנה תורה, ספר מדע
-            final pathParts = bookPath.split(Platform.pathSeparator);
-            final otzariaIndex = pathParts.indexOf('אוצריא');
-            if (otzariaIndex >= 0 && otzariaIndex < pathParts.length - 2) {
-              // לוקחים את כל התיקיות בין אוצריא לקובץ עצמו
-              final categories =
-                  pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
-              book.heCategories = categories.join(', ');
-              debugPrint(
-                  '📚 TextBookBloc: נטען heCategories מהנתיב: "${book.heCategories}"');
-            }
-          }
-        }
-
-        if (book.heCategories == null || book.heCategories!.isEmpty) {
-          debugPrint(
-              '⚠️ TextBookBloc: לא הצלחנו לטעון heCategories עבור "${book.title}"');
-        }
-      } else {
-        debugPrint(
-            '📚 TextBookBloc: heCategories כבר קיים עבור "${book.title}": "${book.heCategories}"');
-      }
-
-      // Update current title if we're preserving state
+      // ── שלב 3: חישובים מהירים שלא דורשים I/O כבד ──
+      // חישוב כותרת נוכחית (תלוי ב-TOC שכבר מוכן)
       String? currentTitle;
       if (visibleIndices.isNotEmpty) {
         try {
@@ -242,17 +171,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         }
       }
 
-      // טעינת מפרשים רק אם נדרש
-      final List<String> availableCommentators;
-      final Map<String, List<String>> eras;
-      if (event.loadCommentators) {
-        availableCommentators = await repository.getAvailableCommentators(book);
-        eras = await utils.splitByEra(availableCommentators);
-      } else {
-        availableCommentators = [];
-        eras = {};
-      }
-
+      // הגדרות ניקוד (קריאות Settings סינכרוניות + בדיקת נתיב קלה)
       final defaultRemoveNikud =
           Settings.getValue<bool>('key-default-nikud') ?? false;
       final removeNikudFromTanach =
@@ -291,11 +210,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       positionsListener.itemPositions.addListener(_positionListenerCallback!);
 
+      // ── שלב 4: EMIT ראשוני - הצגת הספר מיידית! ──
+      // בטעינה ראשונית: מפרשים ריקים, ייטענו ברקע
+      // ב-preserveState: שימור מפרשים קיימים כדי למנוע הבהוב
       emit(TextBookLoaded(
         book: book,
         content: content.split('\n'),
         links: emptyLinks,
-        availableCommentators: availableCommentators,
+        availableCommentators: existingAvailableCommentators,
         tableOfContents: tableOfContents,
         fontSize: event.fontSize,
         showLeftPane: event.forceCloseLeftPane
@@ -304,9 +226,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         showSplitView: event.showSplitView,
         showPageShapeView: initialShowPageShapeView,
         activeCommentators: commentators,
-        commentatorGroups: event.loadCommentators
-            ? _buildCommentatorGroups(eras, availableCommentators)
-            : [],
+        commentatorGroups: existingCommentatorGroups,
         removeNikud: removeNikud,
         visibleIndices: visibleIndices,
         pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
@@ -330,8 +250,17 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             : null,
       ));
 
+      // ── שלב 5: טעינות ברקע - לא חוסמות את ה-UI ──
       // טעינת קישורים ברקע אחרי הצגת הספר
       _loadLinksInBackground(book, visibleIndices);
+
+      // טעינת מפרשים ברקע (רשימת מפרשים זמינים + חלוקה לתקופות)
+      if (event.loadCommentators) {
+        _loadCommentatorsInBackground(book);
+      }
+
+      // העשרת heCategories ברקע (אם חסר)
+      _enrichHeCategoriesInBackground(book);
     } catch (e) {
       if (state is TextBookInitial) {
         final initial = state as TextBookInitial;
@@ -1005,6 +934,112 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         links: links,
         visibleLinks: visibleLinks,
       ));
+    }
+  }
+
+  /// Handler for updating available commentators after background loading
+  void _onUpdateAvailableCommentators(
+    UpdateAvailableCommentators event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is TextBookLoaded) {
+      final currentState = state as TextBookLoaded;
+      emit(currentState.copyWith(
+        availableCommentators: event.availableCommentators,
+        commentatorGroups: event.commentatorGroups.cast<CommentatorGroup>(),
+      ));
+    }
+  }
+
+  /// Loads available commentators in the background after the book is displayed
+  void _loadCommentatorsInBackground(TextBook book) async {
+    try {
+      final availableCommentators =
+          await repository.getAvailableCommentators(book);
+      final eras = await utils.splitByEra(availableCommentators);
+      final groups = _buildCommentatorGroups(eras, availableCommentators);
+
+      if (isClosed || state is! TextBookLoaded) return;
+
+      final currentState = state as TextBookLoaded;
+      if (currentState.book.title != book.title) return;
+
+      add(UpdateAvailableCommentators(availableCommentators, groups));
+    } catch (e) {
+      debugPrint('⚠️ Failed to load commentators in background: $e');
+      // Silent fail - user already has the book displayed
+    }
+  }
+
+  /// Enriches heCategories metadata in the background after the book is displayed
+  void _enrichHeCategoriesInBackground(TextBook book) async {
+    if (book.heCategories != null && book.heCategories!.isNotEmpty) return;
+
+    try {
+      // ניסיון 1: טעינה ממסד הנתונים
+      final sqliteProvider = SqliteDataProvider.instance;
+      if (await sqliteProvider.databaseExists() &&
+          sqliteProvider.isInitialized) {
+        final dbRepo = sqliteProvider.repository;
+        if (dbRepo != null) {
+          final dbBook = await dbRepo.getBookByTitle(book.title);
+          if (dbBook != null) {
+            final category = await dbRepo.getCategory(dbBook.categoryId);
+            if (category != null) {
+              final categoryParts = <String>[];
+              db.Category? currentCategory = category;
+              while (currentCategory != null) {
+                categoryParts.insert(0, currentCategory.title);
+                if (currentCategory.parentId != null) {
+                  currentCategory =
+                      await dbRepo.getCategory(currentCategory.parentId!);
+                } else {
+                  break;
+                }
+              }
+              book.heCategories = categoryParts.join(', ');
+              debugPrint(
+                  '📚 Background: נטען heCategories מה-DB: "${book.heCategories}"');
+              return;
+            }
+          }
+        }
+      }
+
+      // ניסיון 2: טעינה מ-metadata
+      if (book.heCategories == null || book.heCategories!.isEmpty) {
+        final metadata = await FileSystemData.instance.metadata;
+        final bookMetadata = metadata[book.title];
+        if (bookMetadata != null) {
+          book.heCategories = bookMetadata['heCategories'];
+          book.author ??= bookMetadata['author'];
+          book.heEra ??= bookMetadata['heEra'];
+          if (book.heCategories != null && book.heCategories!.isNotEmpty) {
+            debugPrint(
+                '📚 Background: נטען heCategories מ-metadata: "${book.heCategories}"');
+            return;
+          }
+        }
+      }
+
+      // ניסיון 3: חילוץ מהנתיב
+      if (book.heCategories == null || book.heCategories!.isEmpty) {
+        final titleToPath = await FileSystemData.instance.titleToPath;
+        final bookPath = titleToPath[book.title];
+        if (bookPath != null) {
+          final pathParts = bookPath.split(Platform.pathSeparator);
+          final otzariaIndex = pathParts.indexOf('אוצריא');
+          if (otzariaIndex >= 0 && otzariaIndex < pathParts.length - 2) {
+            final categories =
+                pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
+            book.heCategories = categories.join(', ');
+            debugPrint(
+                '📚 Background: נטען heCategories מהנתיב: "${book.heCategories}"');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Failed to enrich heCategories in background: $e');
     }
   }
 
