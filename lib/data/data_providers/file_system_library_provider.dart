@@ -17,7 +17,8 @@ import 'package:otzaria/settings/settings_repository.dart';
 class FileSystemLibraryProvider implements LibraryProvider {
   late String _libraryPath;
   late Future<Map<String, String>> _keyToPath;
-  final Map<int, String> _categoryIdToPath = {}; // Maps hash(categoryPath) -> categoryPath
+  final Map<int, String> _categoryIdToPath =
+      {}; // Maps hash(categoryPath) -> categoryPath
   bool _isInitialized = false;
 
   /// Singleton instance
@@ -69,24 +70,25 @@ class FileSystemLibraryProvider implements LibraryProvider {
     if (!_isInitialized) await initialize();
 
     final Map<String, List<Book>> booksByCategory = {};
-    final otzariaPath = '$_libraryPath${Platform.pathSeparator}אוצריא';
-    final otzariaDir = Directory(otzariaPath);
-
-    if (!otzariaDir.existsSync()) {
-      debugPrint('📁 Otzaria directory does not exist: $otzariaPath');
-      return booksByCategory;
-    }
 
     // We can populate the key map here as well to ensure it's accurate
     final map = await _keyToPath;
 
-    await _loadBooksRecursively(otzariaDir, metadata, booksByCategory, [], map);
+    // Load books from the built-in personal folder (אוצריא/אישי)
+    // This is NOT a custom folder, but a built-in location for personal books
+    final personalBooksPath = getPersonalBooksPath();
+    final personalBooksDir = Directory(personalBooksPath);
+    if (await personalBooksDir.exists()) {
+      await _loadBooksRecursively(
+          personalBooksDir, metadata, booksByCategory, ['אישי'], map);
+    }
 
     // Load books from custom folders (those NOT marked for DB sync)
+    // The main library is now stored in the database, so we don't scan the אוצריא folder
     await _loadCustomFoldersBooks(metadata, booksByCategory, map);
 
     debugPrint(
-        '📁 FileSystem loaded ${booksByCategory.values.expand((b) => b).length} books');
+        '📁 FileSystem loaded ${booksByCategory.values.expand((b) => b).length} books from personal and custom folders');
     return booksByCategory;
   }
 
@@ -186,7 +188,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
       final categoryPathStr = categoryPath.join(', ');
       final categoryId = categoryPathStr.hashCode;
       _categoryIdToPath[categoryId] = categoryPathStr;
-      
+
       return PdfBook(
         title: title,
         path: file.path,
@@ -205,7 +207,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
       final categoryPathStr = categoryPath.join(', ');
       final categoryId = categoryPathStr.hashCode;
       _categoryIdToPath[categoryId] = categoryPathStr;
-      
+
       return TextBook(
         title: title,
         author: metadata[title]?['author'],
@@ -312,16 +314,18 @@ class FileSystemLibraryProvider implements LibraryProvider {
       keyToPath[key] = path;
     }
 
-    // Load from main library path
-    final otzariaPath = '$_libraryPath${Platform.pathSeparator}אוצריא';
-    if (await Directory(otzariaPath).exists()) {
-      List<String> paths = await _getAllBookPaths(otzariaPath);
-      for (var path in paths) {
-        addPath(path, otzariaPath);
+    // Load from the built-in personal folder (אוצריא/אישי)
+    // This is NOT a custom folder, but a built-in location for personal books
+    final personalBooksPath = getPersonalBooksPath();
+    if (await Directory(personalBooksPath).exists()) {
+      final personalPaths = await _getAllBookPaths(personalBooksPath);
+      for (var path in personalPaths) {
+        addPath(path, personalBooksPath, ['אישי']);
       }
     }
 
-    // Load from custom folders (those NOT marked for DB sync)
+    // Don't load from main library path (אוצריא) - those books are now in the database
+    // Only load from custom folders (those NOT marked for DB sync)
     final customFoldersJson =
         Settings.getValue<String>(SettingsRepository.keyCustomFolders);
     final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
