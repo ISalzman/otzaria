@@ -315,6 +315,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 - Moving to next feature while current code has warnings
 - Not testing on multiple platforms
 - Hardcoding platform-specific paths
+- Creating unnecessary MD files to document changes (CHANGES.md, SUMMARY.md, etc.)
 
 ---
 
