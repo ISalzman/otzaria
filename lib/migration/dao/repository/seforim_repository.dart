@@ -988,7 +988,22 @@ class SeforimRepository {
 
   /// Gets all external content books.
   Future<List<Book>> getAllExternalContentBooks() async {
-    return await _database.bookDao.getExternalContentBooks();
+    // חשוב: מחזירים ספרים חיצוניים יחד עם relations (authors/pubDates/pubPlaces)
+    // כדי שהמידע לא יאבד בהמרה ל-ExternalLibraryBook במסכי הספרייה.
+    final booksWithRelations = await _database.bookDao.getAllBooksWithRelations(
+      includeExternalBooks: true,
+      includeOtzarHachochma: true,
+      includeHebrewBooks: true,
+    );
+
+   final bb = booksWithRelations.where((row) {
+          final raw = row['externalLibraryId'];
+          if (raw is String) return raw.trim().isNotEmpty;
+          return raw != null;
+        })
+        .map((row) => Book.fromJson(row))
+        .toList();
+    return bb;
   }
 
   /// Inserts TOC entries for an external book.
