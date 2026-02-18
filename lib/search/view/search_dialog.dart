@@ -145,58 +145,64 @@ class _SearchDialogState extends State<SearchDialog> {
               ),
             ],
           ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            padding: EdgeInsets.zero,
-            itemCount: recentSearches.length,
-            separatorBuilder: (context, index) => Divider(
-              height: 1,
-              thickness: 1,
-              color:
-                  Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+          child: ScrollConfiguration(
+            behavior:
+                ScrollConfiguration.of(context).copyWith(scrollbars: false),
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: recentSearches.length,
+              separatorBuilder: (context, index) => Divider(
+                height: 1,
+                thickness: 1,
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.2),
+              ),
+              itemBuilder: (context, index) {
+                final bookmark = recentSearches[index];
+                final query = bookmark.book.title; // הטקסט הפשוט של החיפוש
+                final displayText =
+                    bookmark.ref; // הטקסט המעוצב (עם קידומות וסיומות)
+
+                return ListTile(
+                  dense: true,
+                  leading: const Icon(FluentIcons.search_24_regular, size: 18),
+                  title: Text(
+                    displayText,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  onTap: () {
+                    // שחזור הטקסט הפשוט (ללא קידומות וסיומות)
+                    _searchTab.queryController.text = query;
+
+                    // שחזור האפשרויות הנוספות
+                    if (bookmark.searchOptions != null) {
+                      _searchTab.searchOptions.clear();
+                      _searchTab.searchOptions.addAll(bookmark.searchOptions!);
+                    }
+                    if (bookmark.alternativeWords != null) {
+                      _searchTab.alternativeWords.clear();
+                      _searchTab.alternativeWords
+                          .addAll(bookmark.alternativeWords!);
+                    }
+                    if (bookmark.spacingValues != null) {
+                      _searchTab.spacingValues.clear();
+                      _searchTab.spacingValues.addAll(bookmark.spacingValues!);
+                    }
+
+                    // עדכון התצוגה
+                    setState(() {
+                      _showHistoryDropdown = false;
+                    });
+
+                    _searchTab.searchFieldFocusNode.requestFocus();
+                  },
+                );
+              },
             ),
-            itemBuilder: (context, index) {
-              final bookmark = recentSearches[index];
-              final query = bookmark.book.title; // הטקסט הפשוט של החיפוש
-              final displayText =
-                  bookmark.ref; // הטקסט המעוצב (עם קידומות וסיומות)
-
-              return ListTile(
-                dense: true,
-                leading: const Icon(FluentIcons.search_24_regular, size: 18),
-                title: Text(
-                  displayText,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontSize: 14),
-                ),
-                onTap: () {
-                  // שחזור הטקסט הפשוט (ללא קידומות וסיומות)
-                  _searchTab.queryController.text = query;
-
-                  // שחזור האפשרויות הנוספות
-                  if (bookmark.searchOptions != null) {
-                    _searchTab.searchOptions.clear();
-                    _searchTab.searchOptions.addAll(bookmark.searchOptions!);
-                  }
-                  if (bookmark.alternativeWords != null) {
-                    _searchTab.alternativeWords.clear();
-                    _searchTab.alternativeWords
-                        .addAll(bookmark.alternativeWords!);
-                  }
-                  if (bookmark.spacingValues != null) {
-                    _searchTab.spacingValues.clear();
-                    _searchTab.spacingValues.addAll(bookmark.spacingValues!);
-                  }
-
-                  // עדכון התצוגה
-                  setState(() {
-                    _showHistoryDropdown = false;
-                  });
-
-                  _searchTab.searchFieldFocusNode.requestFocus();
-                },
-              );
-            },
           ),
         );
       },
