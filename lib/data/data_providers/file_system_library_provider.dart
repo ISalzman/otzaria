@@ -305,16 +305,8 @@ class FileSystemLibraryProvider implements LibraryProvider {
       keyToPath[key] = path;
     }
 
-    // Load from main library path
-    final otzariaPath = '$_libraryPath${Platform.pathSeparator}אוצריא';
-    if (await Directory(otzariaPath).exists()) {
-      List<String> paths = await _getAllBookPaths(otzariaPath);
-      for (var path in paths) {
-        addPath(path, otzariaPath);
-      }
-    }
-
-    // Load from custom folders (those NOT marked for DB sync)
+    // Don't load from main library path (אוצריא) - those books are now in the database
+    // Only load from custom folders (those NOT marked for DB sync)
     final customFoldersJson =
         Settings.getValue<String>(SettingsRepository.keyCustomFolders);
     final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
