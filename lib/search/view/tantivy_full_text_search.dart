@@ -310,9 +310,11 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                               ),
                                               const SizedBox(width: 8),
                                               Flexible(
-                                                child: Scrollbar(
-                                                  thumbVisibility: true,
-                                                  thickness: 2.0,
+                                                child: ScrollConfiguration(
+                                                  behavior: ScrollConfiguration
+                                                          .of(context)
+                                                      .copyWith(
+                                                          scrollbars: false),
                                                   child: SingleChildScrollView(
                                                     scrollDirection:
                                                         Axis.horizontal,

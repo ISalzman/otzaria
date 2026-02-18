@@ -488,16 +488,21 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
                 ? _buildFormattedText(displayText, context)
                 : SizedBox(
                     width: double.infinity,
-                    child: Scrollbar(
-                      controller: _scrollController,
-                      thumbVisibility: true,
-                      trackVisibility: true,
-                      thickness: 3.0,
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        scrollDirection: Axis.horizontal,
-                        child: _buildFormattedText(displayText, context),
-                      ),
+                    child: LayoutBuilder(
+                      builder: (context, _) {
+                        // וידוא שה-ScrollController מחובר לפני הצגת Scrollbar
+                        return Scrollbar(
+                          controller: _scrollController,
+                          thumbVisibility: true,
+                          trackVisibility: true,
+                          thickness: 3.0,
+                          child: SingleChildScrollView(
+                            controller: _scrollController,
+                            scrollDirection: Axis.horizontal,
+                            child: _buildFormattedText(displayText, context),
+                          ),
+                        );
+                      },
                     ),
                   );
           },
