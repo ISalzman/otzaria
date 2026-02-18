@@ -289,19 +289,23 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                           left: 16.0,
                                         ),
                                         child: Row(
-                                          mainAxisSize: MainAxisSize.min,
                                           children: [
                                             // הודעה רק בחיפוש מתקדם
                                             if (searchState
                                                 .isAdvancedSearchEnabled) ...[
-                                              Text(
-                                                'מוצגות תוצאות של חיפוש: ',
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurface
-                                                      .withValues(alpha: 0.7),
+                                              Flexible(
+                                                fit: FlexFit.loose,
+                                                child: Text(
+                                                  'מוצגות תוצאות של חיפוש: ',
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurface
+                                                        .withValues(alpha: 0.7),
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                               ),
                                               const SizedBox(width: 8),

@@ -677,7 +677,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         state.currentJewishDate.getJewishMonth(),
         1,
       );
-      
+
       // השתמש ב-API של JewishDate כדי לעבור לחודש הקודם/הבא
       // זה מטפל אוטומטית במעברי שנים ושנים מעוברות
       if (monthOffset < 0) {
@@ -705,7 +705,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           jewishDate.forward();
         }
       }
-      
+
       // עכשיו קבע את היום הספציפי
       jewishDate.setJewishDate(
         jewishDate.getJewishYear(),
@@ -1231,7 +1231,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
             : (isSpecialTime ? scheme.onTertiaryContainer : scheme.onSurface);
 
         return Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(8),
@@ -1239,7 +1239,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1248,9 +1248,10 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                     child: Text(
                       timeName,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 10,
                         fontWeight: FontWeight.w500,
                         color: titleColor,
+                        height: 1.2,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -1260,12 +1261,12 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                     tooltip: '',
                     padding: EdgeInsets.zero,
                     child: SizedBox.square(
-                      dimension: 18,
+                      dimension: 14,
                       child: Center(
                         child: Icon(
                           FluentIcons.more_vertical_24_regular,
                           color: titleColor,
-                          size: 16,
+                          size: 12,
                         ),
                       ),
                     ),
@@ -1313,13 +1314,13 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                   ),
                 ],
               ),
-              const SizedBox(height: 2),
               Text(
                 timeLabel,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 12,
                   fontWeight: FontWeight.bold,
                   color: timeColor,
+                  height: 1.0,
                 ),
               ),
             ],
