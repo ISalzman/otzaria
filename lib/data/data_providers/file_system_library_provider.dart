@@ -74,12 +74,21 @@ class FileSystemLibraryProvider implements LibraryProvider {
     // We can populate the key map here as well to ensure it's accurate
     final map = await _keyToPath;
 
-    // Load books ONLY from custom folders (those NOT marked for DB sync)
+    // Load books from the built-in personal folder (אוצריא/אישי)
+    // This is NOT a custom folder, but a built-in location for personal books
+    final personalBooksPath = getPersonalBooksPath();
+    final personalBooksDir = Directory(personalBooksPath);
+    if (await personalBooksDir.exists()) {
+      await _loadBooksRecursively(
+          personalBooksDir, metadata, booksByCategory, ['אישי'], map);
+    }
+
+    // Load books from custom folders (those NOT marked for DB sync)
     // The main library is now stored in the database, so we don't scan the אוצריא folder
     await _loadCustomFoldersBooks(metadata, booksByCategory, map);
 
     debugPrint(
-        '📁 FileSystem loaded ${booksByCategory.values.expand((b) => b).length} books from custom folders');
+        '📁 FileSystem loaded ${booksByCategory.values.expand((b) => b).length} books from personal and custom folders');
     return booksByCategory;
   }
 
@@ -303,6 +312,16 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
       final key = _generateKey(title, category, fileType);
       keyToPath[key] = path;
+    }
+
+    // Load from the built-in personal folder (אוצריא/אישי)
+    // This is NOT a custom folder, but a built-in location for personal books
+    final personalBooksPath = getPersonalBooksPath();
+    if (await Directory(personalBooksPath).exists()) {
+      final personalPaths = await _getAllBookPaths(personalBooksPath);
+      for (var path in personalPaths) {
+        addPath(path, personalBooksPath, ['אישי']);
+      }
     }
 
     // Don't load from main library path (אוצריא) - those books are now in the database
