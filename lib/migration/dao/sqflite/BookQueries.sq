@@ -12,19 +12,18 @@ ORDER BY orderIndex, title;
 selectAllWithOtzarHachochma:
 SELECT *
 FROM book
-WHERE (externalLibraryId IS NULL OR externalLibraryId LIKE 'oh:%') AND fileType != 'link'
+WHERE (externalLibraryId IS NULL OR externalLibraryId LIKE 'oh:%') 
 ORDER BY orderIndex, title;
 
 selectAllWithHebrewBooks:
 SELECT *
 FROM book
-WHERE (externalLibraryId IS NULL OR externalLibraryId LIKE 'hb:%') AND fileType != 'link'
+WHERE (externalLibraryId IS NULL OR externalLibraryId LIKE 'hb:%')
 ORDER BY orderIndex, title;
 
 selectAllWithBothExternalCatalogs:
 SELECT *
 FROM book
-WHERE (externalLibraryId IS NULL OR externalLibraryId LIKE 'oh:%' OR externalLibraryId LIKE 'hb:%') AND fileType != 'link'
 ORDER BY orderIndex, title;
 
 selectById:
