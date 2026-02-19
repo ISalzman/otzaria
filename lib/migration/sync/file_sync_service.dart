@@ -526,29 +526,9 @@ class FileSyncService {
           libraryRoot: path.join(libraryPath, 'אוצריא'));
       // Load metadata
 
-      // Scan אוצריא folder for TXT files only
-      final otzariaPath = path.join(libraryPath, 'אוצריא');
-      final otzariaDir = Directory(otzariaPath);
-
-      if (await otzariaDir.exists()) {
-        _log.info('Scanning אוצריא folder: $otzariaPath');
-        _reportProgress(0.1, 'סורק תיקיית אוצריא...');
-
-        // Use the new internal method
-        final otzariaResult = await _scanAndImportPath(
-          rootPath: otzariaPath,
-          categoryPrefix: [],
-          deleteOriginals: true, // Keep existing behavior
-          generator: generator,
-        );
-
-        addedBooks += otzariaResult.addedBooks;
-        updatedBooks += otzariaResult.updatedBooks;
-        addedCategories += otzariaResult.addedCategories;
-        deletedFiles += otzariaResult.deletedFiles;
-        skippedFiles += otzariaResult.skippedFiles;
-        errors.addAll(otzariaResult.errors);
-      }
+      // Skip scanning אוצריא folder - it only contains the DB file now
+      // All books are already in the database
+      _log.info('Skipping אוצריא folder scan - books are in database');
 
       // Scan custom folders that are marked for DB sync
       _reportProgress(0.4, 'סורק תיקיות מותאמות אישית...');
