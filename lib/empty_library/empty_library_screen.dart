@@ -45,7 +45,6 @@ class _EmptyLibraryView extends StatefulWidget {
 }
 
 class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -331,7 +330,11 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
                       .add(DownloadLibraryRequested());
                 },
           icon: const Icon(FluentIcons.arrow_download_24_regular),
-          label: const Text('עוד לא הורדת את קובץ הספרייה? הורד אותה כעת'),
+          label: const Text(
+            'עוד לא הורדת את קובץ הספרייה? לחץ כאן כדי להוריד אותה כעת',
+            textAlign: TextAlign.center,
+            textDirection: TextDirection.rtl,
+          ),
         ),
         if (state.isLoading && state is EmptyLibraryLoading) ...[
           const SizedBox(height: 24),
@@ -355,7 +358,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
 
     if (selectedPath == null || !context.mounted) return;
 
-        // בדיקה אם יש קובץ ZIP בתיקייה
+    // בדיקה אם יש קובץ ZIP בתיקייה
     final directory = Directory(selectedPath);
     final zipFiles = await directory
         .list()
