@@ -32,6 +32,8 @@ void openBook(BuildContext context, Book book, int index, String searchQuery,
 
   // אם ignoreHistory=true או האינדקס שהועבר הוא מחושב ממעבר בין תצוגות, השתמש בו תמיד
   // רק אם האינדקס הוא 0 (ברירת מחדל) ולא ignoreHistory, השתמש בהיסטוריה
+  debugPrint(
+      'DEBUG: ignoreHistory=$ignoreHistory, index=$index, lastOpened?.index=${lastOpened?.index}');
   final int initialIndex =
       (ignoreHistory || index != 0) ? index : (lastOpened?.index ?? 0);
   final List<String>? initialCommentators = lastOpened?.commentatorsToShow;

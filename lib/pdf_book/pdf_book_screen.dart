@@ -35,7 +35,6 @@ import 'package:otzaria/utils/ref_helper.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:uuid/uuid.dart'; // הוספת הייבוא של UUID
 import 'pdf_search_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'pdf_outlines_screen.dart';
@@ -100,7 +99,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       Duration(milliseconds: 100); // המתנה של 100ms אחרי סיום גלילה
 
   Future<String?>? _pdfPathFuture;
-  String? _tempFilePath;
 
   // Local UI state that syncs with Bloc
   int _rightPaneInitialTabIndex = 0;
@@ -175,6 +173,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   @override
   void initState() {
     super.initState();
+    debugPrint(
+        '🎬 PdfBookScreen.initState: book=${widget.tab.book.title}, pageNumber=${widget.tab.pageNumber}');
+    _initialPageNumber = widget.tab.pageNumber; // שמירת מספר העמוד ההתחלתי
     pdfController = PdfViewerController();
     widget.tab.pdfViewerController = pdfController;
 
@@ -292,27 +293,84 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _loadPerBookSettings();
   }
 
+  // Cache של קבצים זמניים - מפתח: title של הספר, ערך: נתיב הקובץ
+  static final Map<String, String> _pdfFileCache = {};
+  // Lock למניעת כתיבה מרובה של אותו קובץ
+  static final Map<String, Future<String?>> _loadingFiles = {};
+
   Future<String?> _loadPdfFileFromDb() async {
     try {
-      final provider = SqliteDataProvider.instance;
-      final bytes = await provider.getPdfBytesFromDb(widget.tab.book);
+      debugPrint(
+          '📚 _loadPdfFileFromDb: Starting to load ${widget.tab.book.title}');
 
-      if (bytes == null) return null;
+      // בדיקה אם הקובץ כבר קיים ב-cache
+      if (_pdfFileCache.containsKey(widget.tab.book.title)) {
+        final cachedPath = _pdfFileCache[widget.tab.book.title]!;
+        final cachedFile = File(cachedPath);
+        if (await cachedFile.exists()) {
+          debugPrint('✅ Using cached file: $cachedPath');
+          return cachedPath;
+        } else {
+          // הקובץ נמחק, נסיר מה-cache
+          _pdfFileCache.remove(widget.tab.book.title);
+        }
+      }
 
-      final tempDir = await getTemporaryDirectory();
-      // שימוש ב-UUID ליצירת שם קובץ מובטח וייחודי
-      final fileName =
-          'pdf_${widget.tab.book.title.hashCode}_${const Uuid().v4()}.pdf';
-      final file = File('${tempDir.path}/$fileName');
+      // בדיקה אם כבר יש טעינה בתהליך של אותו ספר
+      if (_loadingFiles.containsKey(widget.tab.book.title)) {
+        debugPrint(
+            '⏳ Waiting for another tab to finish loading ${widget.tab.book.title}');
+        return await _loadingFiles[widget.tab.book.title];
+      }
 
-      await file.writeAsBytes(bytes);
+      // יצירת Future לטעינה
+      final loadingFuture = _performFileLoad();
+      _loadingFiles[widget.tab.book.title] = loadingFuture;
 
-      _tempFilePath = file.path;
-      return file.path;
+      try {
+        final result = await loadingFuture;
+        return result;
+      } finally {
+        // ניקוי ה-loading future אחרי סיום
+        _loadingFiles.remove(widget.tab.book.title);
+      }
     } catch (e, stackTrace) {
-      debugPrint('Error loading PDF to file: $e\n$stackTrace');
+      debugPrint('❌ Error loading PDF to file: $e\n$stackTrace');
       return null;
     }
+  }
+
+  Future<String?> _performFileLoad() async {
+    final provider = SqliteDataProvider.instance;
+    final bytes = await provider.getPdfBytesFromDb(widget.tab.book);
+
+    if (bytes == null) {
+      debugPrint('❌ _loadPdfFileFromDb: No bytes received from DB');
+      return null;
+    }
+
+    debugPrint('✅ _loadPdfFileFromDb: Received ${bytes.length} bytes');
+    final tempDir = await getTemporaryDirectory();
+    debugPrint('📁 _loadPdfFileFromDb: Temp dir: ${tempDir.path}');
+
+    // שימוש בשם קובץ קבוע לפי hash של הכותרת (ללא UUID)
+    final fileName = 'pdf_${widget.tab.book.title.hashCode}.pdf';
+    final file = File('${tempDir.path}/$fileName');
+
+    // אם הקובץ כבר קיים, נשתמש בו
+    if (await file.exists()) {
+      debugPrint('✅ File already exists, reusing: ${file.path}');
+      _pdfFileCache[widget.tab.book.title] = file.path;
+      return file.path;
+    }
+
+    debugPrint(
+        '📝 _loadPdfFileFromDb: Writing ${bytes.length} bytes to file: ${file.path}');
+    await file.writeAsBytes(bytes, flush: true);
+    debugPrint('✅ _loadPdfFileFromDb: File written successfully');
+
+    _pdfFileCache[widget.tab.book.title] = file.path;
+    return file.path;
   }
 
   // ... (שאר הקוד בקובץ ממשיך בדיוק כפי שהיה - פונקציות העזר והבנייה)
@@ -544,9 +602,30 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           totalPages: document.pages.length,
         ));
 
-        if (widget.tab.pageNumber > 1 && controller.isReady) {
-          debugPrint('📖 Jumping to page ${widget.tab.pageNumber}');
-          controller.goToPage(pageNumber: widget.tab.pageNumber);
+        // קפיצה לעמוד הנכון - עם המתנה קצרה כדי לוודא שה-controller מוכן
+        debugPrint('📄 Current pageNumber: ${widget.tab.pageNumber}');
+        if (widget.tab.pageNumber > 1) {
+          debugPrint('📖 Scheduling jump to page ${widget.tab.pageNumber}');
+          _isJumping = true; // מסמן שאנחנו בתהליך קפיצה
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            // המתנה קצרה נוספת לוודא שהכל מוכן
+            await Future.delayed(const Duration(milliseconds: 100));
+            if (mounted && controller.isReady) {
+              debugPrint('📖 Jumping to page ${widget.tab.pageNumber}');
+              await controller.goToPage(pageNumber: widget.tab.pageNumber);
+              // המתנה נוספת לוודא שהקפיצה הסתיימה
+              await Future.delayed(const Duration(milliseconds: 200));
+              _isJumping = false; // מאפס את ה-flag
+              _initialPageNumber = null; // מאפס גם את זה
+              debugPrint('✅ Jump completed, resuming pageNumber tracking');
+            } else {
+              _isJumping = false;
+              debugPrint(
+                  '❌ Cannot jump: mounted=$mounted, isReady=${controller.isReady}');
+            }
+          });
+        } else {
+          debugPrint('⚠️ pageNumber is ${widget.tab.pageNumber}, not jumping');
         }
 
         final currentPage = widget.tab.pdfViewerController.isReady
@@ -688,20 +767,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _settingsSub.cancel();
     _bloc.close();
 
-    // הניקוי האסינכרוני שלנו
-    if (_tempFilePath != null) {
-      final String pathToDelete = _tempFilePath!;
-      () async {
-        try {
-          final file = File(pathToDelete);
-          if (await file.exists()) {
-            await file.delete();
-          }
-        } catch (e) {
-          debugPrint('Error deleting temp PDF: $e');
-        }
-      }();
-    }
+    // לא מוחקים את הקובץ הזמני - הוא משותף בין tabs
+    // הקבצים יימחקו אוטומטית כשהמערכת תנקה את temp directory
 
     super.dispose();
   }
@@ -749,13 +816,33 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   int _lastComputedForPage = -1;
+  int? _initialPageNumber; // שמירת מספר העמוד ההתחלתי
+  bool _isJumping = false; // flag לציון שאנחנו בתהליך קפיצה
+
   void _onPdfViewerControllerUpdate() async {
     if (!widget.tab.pdfViewerController.isReady) return;
 
     widget.tab.savedZoom = widget.tab.pdfViewerController.value.zoom;
 
     final newPage = widget.tab.pdfViewerController.pageNumber ?? 1;
+
+    // אם אנחנו בתהליך קפיצה, לא נעדכן את pageNumber
+    if (_isJumping) {
+      debugPrint('⏸️ Skipping pageNumber update: jumping in progress');
+      return;
+    }
+
+    // אם זו הפעם הראשונה וה-pageNumber המקורי גדול מ-1, לא נעדכן
+    // (כי אנחנו עדיין ממתינים לקפיצה לעמוד הנכון)
+    if (_initialPageNumber != null && _initialPageNumber! > 1 && newPage == 1) {
+      debugPrint(
+          '⏸️ Skipping pageNumber update: waiting for jump to $_initialPageNumber');
+      return; // לא נאפס כדי להמשיך לחסום
+    }
+
     if (newPage == widget.tab.pageNumber) return;
+    debugPrint(
+        '📝 Updating pageNumber from ${widget.tab.pageNumber} to $newPage');
     widget.tab.pageNumber = newPage;
     final token = _lastComputedForPage = newPage;
 
@@ -931,14 +1018,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                               FutureBuilder<String?>(
                                 future: _pdfPathFuture,
                                 builder: (context, snapshot) {
+                                  debugPrint(
+                                      '🔍 FutureBuilder state: ${snapshot.connectionState}, hasData: ${snapshot.hasData}, hasError: ${snapshot.hasError}');
+
                                   if (snapshot.connectionState ==
                                       ConnectionState.waiting) {
+                                    debugPrint(
+                                        '⏳ FutureBuilder: Waiting for PDF file...');
                                     return const Center(
                                       child: CircularProgressIndicator(),
                                     );
                                   }
 
                                   if (snapshot.hasError) {
+                                    debugPrint(
+                                        '❌ FutureBuilder: Error - ${snapshot.error}');
                                     return Center(
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
@@ -964,6 +1058,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
                                   if (!snapshot.hasData ||
                                       snapshot.data == null) {
+                                    debugPrint(
+                                        '❌ FutureBuilder: No data received');
                                     return const Center(
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
@@ -988,6 +1084,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                     );
                                   }
 
+                                  debugPrint(
+                                      '✅ FutureBuilder: Building PDF viewer with file: ${snapshot.data}');
                                   return _buildPdfViewerFromFile(
                                       snapshot.data!);
                                 },

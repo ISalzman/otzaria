@@ -78,6 +78,8 @@ class PdfBookTab extends OpenedTab {
     this.pdfSearchCurrentMatchIndex,
     bool isPinned = false,
   }) : super(book.title, isPinned: isPinned) {
+    debugPrint(
+        '🔧 PdfBookTab created: book=${book.title}, pageNumber=$pageNumber');
     showLeftPane = ValueNotifier<bool>(openLeftPane);
     searchController.text = searchText;
     pinLeftPane.value = Settings.getValue<bool>('key-pin-sidebar') ?? false;
