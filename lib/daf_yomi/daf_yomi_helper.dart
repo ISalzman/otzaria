@@ -122,26 +122,20 @@ void _openDafYomiBookInCategory(BuildContext context, String tractate,
 }
 
 Future<void> _openBook(BuildContext context, Book book, String daf) async {
-  debugPrint('🔍 _openBook: Searching for daf "$daf" in book ${book.title}');
   final index = await findReference(book, 'דף ${daf.trim()}') ?? 0;
-  debugPrint('📍 _openBook: Found index/pageNumber: $index for daf "$daf"');
   if (!context.mounted) return;
   openBook(context, book, index, '', ignoreHistory: true);
 }
 
 Future<int?> findReference(Book book, String ref) async {
-  debugPrint('🔎 findReference: Looking for "$ref" in ${book.runtimeType}');
   if (book is TextBook) {
     final tocEntry = await _findDafInToc(book, ref);
-    debugPrint('📖 findReference: TextBook result: ${tocEntry?.index}');
     return tocEntry?.index;
   } else if (book is PdfBook) {
     final outline = await getDafYomiOutline(book, ref);
     final pageNum = outline?.dest?.pageNumber;
-    debugPrint('📄 findReference: PdfBook result: $pageNum');
     return pageNum;
   }
-  debugPrint('⚠️ findReference: Unknown book type');
   return null;
 }
 
@@ -158,18 +152,12 @@ Future<TocEntry?> _findDafInToc(TextBook book, String daf) async {
 Future<PdfOutlineNode?> getDafYomiOutline(PdfBook book, String daf) async {
   List<PdfOutlineNode> outlines = const [];
   try {
-    debugPrint('📚 getDafYomiOutline: Loading outline for ${book.title}');
-
     // בדיקה אם ה-outline כבר ב-cache
     if (_outlineCache.containsKey(book.title)) {
       outlines = _outlineCache[book.title]!;
-      debugPrint(
-          '✅ getDafYomiOutline: Using cached outline with ${outlines.length} entries');
     } else if (_loadingOutlines.containsKey(book.title)) {
       // אם כבר בתהליך טעינה, נחכה לתוצאה
-      debugPrint('⏳ getDafYomiOutline: Waiting for existing load operation...');
       outlines = await _loadingOutlines[book.title]!;
-      debugPrint('✅ getDafYomiOutline: Got outline from waiting');
     } else {
       // יצירת Future לטעינה ושמירה ב-map
       final loadFuture = _loadOutlineFromFile(book);
@@ -179,8 +167,6 @@ Future<PdfOutlineNode?> getDafYomiOutline(PdfBook book, String daf) async {
         outlines = await loadFuture;
         // שמירה ב-cache
         _outlineCache[book.title] = outlines;
-        debugPrint(
-            '✅ getDafYomiOutline: Loaded and cached ${outlines.length} outline entries');
       } finally {
         // ניקוי ה-loading map
         _loadingOutlines.remove(book.title);
@@ -192,7 +178,6 @@ Future<PdfOutlineNode?> getDafYomiOutline(PdfBook book, String daf) async {
     return null;
   }
 
-  debugPrint('🔍 getDafYomiOutline: Searching for "$daf" in outline');
   final result = await findEntryInTree(
     Future.value(outlines),
     daf,
@@ -200,22 +185,12 @@ Future<PdfOutlineNode?> getDafYomiOutline(PdfBook book, String daf) async {
     (entry) => Future.value(entry.children),
   );
 
-  if (result != null) {
-    debugPrint(
-        '✅ getDafYomiOutline: Found "$daf" at page ${result.dest?.pageNumber}');
-  } else {
-    debugPrint('❌ getDafYomiOutline: Could not find "$daf" in outline');
-  }
-
   return result;
 }
 
 Future<List<PdfOutlineNode>> _loadOutlineFromFile(PdfBook book) async {
-  debugPrint('📁 _loadOutlineFromFile: Creating temp file for outline loading');
-
   final pdfBytes = await SqliteDataProvider.instance.getPdfBytesFromDb(book);
   if (pdfBytes == null || pdfBytes.isEmpty) {
-    debugPrint('❌ _loadOutlineFromFile: No PDF bytes');
     return const [];
   }
 
@@ -226,18 +201,12 @@ Future<List<PdfOutlineNode>> _loadOutlineFromFile(PdfBook book) async {
 
   // כתיבת הקובץ רק אם הוא לא קיים
   if (!await file.exists()) {
-    debugPrint('📝 _loadOutlineFromFile: Writing temp file ${file.path}');
     await file.writeAsBytes(pdfBytes, flush: true);
-  } else {
-    debugPrint('✅ _loadOutlineFromFile: Using existing temp file ${file.path}');
   }
 
   // טעינת ה-outline מהקובץ (הרבה יותר יעיל!)
-  debugPrint('📖 _loadOutlineFromFile: Loading outline from file...');
   final document = await PdfDocument.openFile(file.path);
   final outlines = await document.loadOutline();
-  debugPrint(
-      '✅ _loadOutlineFromFile: Loaded ${outlines.length} outline entries');
 
   return outlines;
 }

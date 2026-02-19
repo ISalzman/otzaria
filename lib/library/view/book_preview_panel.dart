@@ -108,7 +108,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     if (widget.book == null) return;
 
     if (widget.book is TextBook) {
-      debugPrint('📖 Preview: Creating TextBook tab for ${widget.book!.title}');
       setState(() {
         _currentTextTab = TextBookTab(
           book: widget.book as TextBook,
@@ -119,13 +118,11 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
         );
       });
     } else if (widget.book is PdfBook) {
-      debugPrint('📄 Preview: Creating PdfBook tab for ${widget.book!.title}');
       setState(() {
         _pdfController = PdfViewerController();
         _cachedPdfPath = null;
         _pdfPathFuture = _loadPreviewPdfFile(widget.book as PdfBook);
       });
-      debugPrint('📄 Preview: Started loading PDF bytes from DB');
     }
   }
 
@@ -208,31 +205,24 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
 
     // תצוגת ספר PDF
     if (widget.book is PdfBook) {
-      debugPrint('📄 Preview: Building PDF view for ${widget.book!.title}');
-
       // אם יש נתיב שמור, השתמש בו ישירות
       if (_cachedPdfPath != null && _pdfController != null) {
-        debugPrint('✅ Preview: Using cached PDF file path');
         return _buildPdfViewer(_cachedPdfPath!);
       }
 
       // אחרת, טען מה-Future
       if (_pdfController == null || _pdfPathFuture == null) {
-        debugPrint('⏳ Preview: Waiting for PDF controller or future');
         return const Center(child: CircularProgressIndicator());
       }
 
-      debugPrint('🔄 Preview: Building FutureBuilder for PDF');
       return FutureBuilder<String?>(
         future: _pdfPathFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            debugPrint('⏳ Preview: Still waiting for PDF file');
             return const Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError) {
-            debugPrint('❌ Preview: Error loading PDF: ${snapshot.error}');
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -256,7 +246,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
           }
 
           if (!snapshot.hasData || snapshot.data == null) {
-            debugPrint('❌ Preview: No PDF file received');
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -471,7 +460,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
             pageAnchor: PdfPageAnchor.top,
             margin: 4,
             onViewerReady: (document, controller) {
-              debugPrint('✅ Preview: PDF viewer ready');
+              // PDF viewer ready
             },
             viewerOverlayBuilder: (context, size, handleLinkTap) => [
               PdfScrollbar(
