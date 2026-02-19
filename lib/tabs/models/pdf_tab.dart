@@ -141,6 +141,9 @@ class PdfBookTab extends OpenedTab {
         ? (pdfViewerController.pageNumber ?? pageNumber)
         : pageNumber;
 
+    debugPrint(
+        '💾 PdfBookTab.toJson: book=${book.title}, pageNumber=$pageNumber, controller.pageNumber=${pdfViewerController.pageNumber}, saving=$currentPage');
+
     return {
       'path': book.path,
       'book': book.toJson(),

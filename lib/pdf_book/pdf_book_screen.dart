@@ -828,7 +828,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     // אם אנחנו בתהליך קפיצה, לא נעדכן את pageNumber
     if (_isJumping) {
-      debugPrint('⏸️ Skipping pageNumber update: jumping in progress');
+      debugPrint(
+          '⏸️ Skipping pageNumber update: jumping in progress (newPage=$newPage)');
       return;
     }
 
@@ -836,7 +837,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // (כי אנחנו עדיין ממתינים לקפיצה לעמוד הנכון)
     if (_initialPageNumber != null && _initialPageNumber! > 1 && newPage == 1) {
       debugPrint(
-          '⏸️ Skipping pageNumber update: waiting for jump to $_initialPageNumber');
+          '⏸️ Skipping pageNumber update: waiting for jump to $_initialPageNumber (newPage=$newPage)');
       return; // לא נאפס כדי להמשיך לחסום
     }
 
