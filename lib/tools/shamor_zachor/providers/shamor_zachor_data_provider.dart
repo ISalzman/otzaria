@@ -206,9 +206,6 @@ class ShamorZachorDataProvider with ChangeNotifier {
     // Create a default Part based on book metadata
     // Use actual totalLines, but ensure minimum of 1
     int endPage = dbBook.totalLines > 0 ? dbBook.totalLines : 1;
-    if (dbBook.totalLines == 0) {
-      _logger.fine('Book ${dbBook.title} has no content (totalLines=0)');
-    }
 
     parts.add(BookPart(
       name: "ראשי",
@@ -220,9 +217,6 @@ class ShamorZachorDataProvider with ChangeNotifier {
     // This is the top-level category from the DB (e.g., "תלמוד בבלי", "תנ"ך")
     final categoryPathString =
         categoryPath.isNotEmpty ? categoryPath.first : '';
-
-    _logger.fine(
-        'Converting book "${dbBook.title}" with categoryPath: $categoryPath -> using: "$categoryPathString"');
 
     return BookDetails(
       contentType: dbBook.fileType == 'pdf'
@@ -554,7 +548,6 @@ class ShamorZachorDataProvider with ChangeNotifier {
   /// Clear TOC cache to free memory
   void clearTocCache() {
     _tocCache.clear();
-    _logger.fine('Cleared TOC cache');
   }
 
   /// Load tracked books list from SharedPreferences
@@ -570,7 +563,6 @@ class ShamorZachorDataProvider with ChangeNotifier {
 
       final List<dynamic> decoded = jsonDecode(jsonString);
       _trackedBookIds = decoded.map((e) => e as int).toSet();
-      _logger.fine('Loaded ${_trackedBookIds.length} tracked books');
     } catch (e) {
       _logger.warning('Failed to load tracked books list', e);
       _trackedBookIds = {};
@@ -583,7 +575,6 @@ class ShamorZachorDataProvider with ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final jsonString = jsonEncode(_trackedBookIds.toList());
       await prefs.setString(_trackedBooksKey, jsonString);
-      _logger.fine('Saved ${_trackedBookIds.length} tracked books');
     } catch (e) {
       _logger.warning('Failed to save tracked books list', e);
     }
