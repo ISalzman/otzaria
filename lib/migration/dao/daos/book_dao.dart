@@ -231,6 +231,8 @@ class BookDao {
     String? fileType,
     int? fileSize,
     int? lastModified,
+    int? pages,
+    String? volume,
   }) async {
     final db = await database;
     return await db.rawInsert(_queries['insert']!, [
@@ -257,6 +259,8 @@ class BookDao {
       fileType,
       fileSize,
       lastModified,
+      pages,
+      volume,
     ]);
   }
 
@@ -285,6 +289,8 @@ class BookDao {
     String? fileType,
     int? fileSize,
     int? lastModified,
+    int? pages,
+    String? volume,
   }) async {
     final db = await database;
     return await db.rawInsert(_queries['insertWithId']!, [
@@ -312,6 +318,8 @@ class BookDao {
       fileType,
       fileSize,
       lastModified,
+      pages,
+      volume,
     ]);
   }
 

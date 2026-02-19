@@ -13,7 +13,7 @@ enum ConnectionType {
   /// The string is compared in a case-insensitive manner.
   /// Returns [ConnectionType.other] if the value is not recognized.
   static ConnectionType fromString(String value) {
-    switch (value.toLowerCase()) {
+    switch (value.trim().toUpperCase()) {
       case 'COMMENTARY':
         return ConnectionType.commentary;
       case 'TARGUM':

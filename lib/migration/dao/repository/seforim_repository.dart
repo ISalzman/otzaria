@@ -762,6 +762,8 @@ class SeforimRepository {
         fileType: book.fileType,
         fileSize: book.fileSize,
         lastModified: book.lastModified,
+        pages: book.pages,
+        volume: book.volume,
       );
 
       // Process authors

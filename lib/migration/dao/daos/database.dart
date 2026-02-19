@@ -9,6 +9,7 @@ import 'book_dao.dart';
 import 'book_has_links_dao.dart';
 import 'category_dao.dart';
 import 'connection_type_dao.dart';
+import 'generation_dao.dart';
 import 'line_dao.dart';
 import 'link_dao.dart';
 import 'pub_date_dao.dart';
@@ -40,6 +41,7 @@ class MyDatabase {
   BookHasLinksDao? _bookHasLinksDao;
   CategoryDao? _categoryDao;
   ConnectionTypeDao? _connectionTypeDao;
+  GenerationDao? _generationDao;
   LineDao? _lineDao;
   LinkDao? _linkDao;
   PubDateDao? _pubDateDao;
@@ -77,6 +79,11 @@ class MyDatabase {
   ConnectionTypeDao get connectionTypeDao {
     _ensureDaosInitialized();
     return _connectionTypeDao!;
+  }
+
+  GenerationDao get generationDao {
+    _ensureDaosInitialized();
+    return _generationDao!;
   }
 
   LineDao get lineDao {
@@ -209,6 +216,7 @@ class MyDatabase {
     _bookHasLinksDao = BookHasLinksDao(this);
     _categoryDao = CategoryDao(this);
     _connectionTypeDao = ConnectionTypeDao(this);
+    _generationDao = GenerationDao(this);
     _lineDao = LineDao(this);
     _linkDao = LinkDao(this);
     _pubDateDao = PubDateDao(this);
@@ -252,10 +260,18 @@ class MyDatabase {
       '''
         CREATE TABLE IF NOT EXISTS generation (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL UNIQUE
+          name TEXT NOT NULL UNIQUE,
+          startYear INTEGER,
+          endYear INTEGER,
+          parentGenerationId INTEGER,
+          FOREIGN KEY (parentGenerationId) REFERENCES generation(id),
+          CHECK (startYear IS NULL OR endYear IS NULL OR startYear <= endYear)
         );
         ''',
       'CREATE INDEX IF NOT EXISTS idx_generation_name ON generation(name);',
+      'CREATE INDEX IF NOT EXISTS idx_generation_start_year ON generation(startYear);',
+      'CREATE INDEX IF NOT EXISTS idx_generation_end_year ON generation(endYear);',
+      'CREATE INDEX IF NOT EXISTS idx_generation_parent ON generation(parentGenerationId);',
 
       // Authors table
       '''

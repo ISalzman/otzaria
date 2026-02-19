@@ -19,6 +19,7 @@ class QueryLoader {
       'CategoryQueries.sq',
       'ConnectionTypeQueries.sq',
       'Database.sq',
+      'GenerationQueries.sq',
       'LineQueries.sq',
       'LineTocQueries.sq',
       'LinkQueries.sq',
