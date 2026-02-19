@@ -961,7 +961,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
                 // אנשים שהתוכנה לא יכולה בלעדיהם
                 const Text(
-                  'אנשים שהתוכנה לא יכולה בלעדיהם',
+                  'התוכנה נעזרה רבות ב:',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -1095,7 +1095,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
           // אנשים שהתוכנה לא יכולה בלעדיהם
           const Text(
-            'אנשים שהתוכנה לא יכולה בלעדיהם',
+            'התוכנה נעזרה רבות ב:',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
