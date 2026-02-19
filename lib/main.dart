@@ -60,6 +60,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/services/notification_service.dart';
 import 'package:logging/logging.dart';
 import 'package:otzaria/widgets/restart_widget.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
@@ -78,14 +79,14 @@ void main() async {
   // write errors to file, but filter out accessibility noise on Windows
   FlutterError.onError = (FlutterErrorDetails details) {
     final errorString = details.toString();
-    
+
     // Skip accessibility tree errors on Windows - they're harmless noise
-    if (Platform.isWindows && 
+    if (Platform.isWindows &&
         (errorString.contains('Failed to update ui::AXTree') ||
-         errorString.contains('accessibility_bridge.cc'))) {
+            errorString.contains('accessibility_bridge.cc'))) {
       return; // Silently ignore these errors
     }
-    
+
     // Log all other errors normally
     if (kDebugMode) {
       FlutterError.dumpErrorToConsole(details);
@@ -97,14 +98,14 @@ void main() async {
 
   PlatformDispatcher.instance.onError = (error, stack) {
     final errorString = error.toString();
-    
+
     // Skip accessibility tree errors on Windows
-    if (Platform.isWindows && 
+    if (Platform.isWindows &&
         (errorString.contains('Failed to update ui::AXTree') ||
-         errorString.contains('accessibility_bridge.cc'))) {
+            errorString.contains('accessibility_bridge.cc'))) {
       return true; // Silently ignore these errors
     }
-    
+
     // Log all other errors normally
     if (kDebugMode) {
       FlutterError.dumpErrorToConsole(FlutterErrorDetails(
@@ -118,7 +119,7 @@ void main() async {
     return true;
   };
 
-  WidgetsFlutterBinding.ensureInitialized();
+  SentryWidgetsFlutterBinding.ensureInitialized();
 
   // pdfrx warning suppression: this only hides the debug-time warning message.
   // It does not change the actual asset bundling (see pdfrx remove_wasm_modules).
@@ -157,82 +158,101 @@ void main() async {
   final historyRepository = HistoryRepository();
   final settingsRepository = SettingsRepository();
 
-  runApp(
-    RestartWidget(
-      child: MultiRepositoryProvider(
-        providers: [
-          RepositoryProvider<FocusRepository>(
-            create: (context) => FocusRepository(),
-          ),
-          RepositoryProvider<SettingsRepository>(
-            create: (context) => settingsRepository,
-          ),
-        ],
-        child: MultiBlocProvider(
-          providers: [
-            BlocProvider<SettingsBloc>(
-              create: (context) => SettingsBloc(
-                repository: settingsRepository,
-              )..add(LoadSettings()),
-            ),
-            BlocProvider<LibraryBloc>(
-              create: (context) => LibraryBloc()..add(LoadLibrary()),
-            ),
-            BlocProvider<IndexingBloc>(
-              create: (context) => IndexingBloc.create(),
-            ),
-            BlocProvider<HistoryBloc>(
-                create: (context) => HistoryBloc(historyRepository)),
-            BlocProvider<TabsBloc>(
-              create: (context) => TabsBloc(
-                repository: TabsRepository(),
-              )..add(LoadTabs()),
-            ),
-            BlocProvider<NavigationBloc>(
-              create: (context) => NavigationBloc(
-                repository: NavigationRepository(),
-                tabsRepository: TabsRepository(),
-              )..add(const CheckLibrary()),
-            ),
-            BlocProvider<FindRefBloc>(
-                create: (context) => FindRefBloc(
-                    findRefRepository: FindRefRepository(
-                        dataRepository: DataRepository.instance))),
-            BlocProvider<PersonalNotesBloc>(
-              create: (context) => PersonalNotesBloc(),
-            ),
-            BlocProvider<BookmarkBloc>(
-              create: (context) => BookmarkBloc(BookmarkRepository()),
-            ),
-            BlocProvider<WorkspaceBloc>(
-              create: (context) {
-                final tabsBloc = context.read<TabsBloc>();
-                return WorkspaceBloc(
-                  repository: WorkspaceRepository(),
-                  onWorkspaceTabsChanged:
-                      (List<OpenedTab> tabs, int activeIndex) {
-                    // This callback coordinates workspace switching with TabsBloc
-                    tabsBloc.add(ReplaceAllTabs(
-                      tabs,
-                      activeIndex,
-                    ));
+  await SentryFlutter.init(
+    (options) {
+      options.dsn =
+          'https://79d3003f822fa62bce0c928656308121@o4510914530902016.ingest.us.sentry.io/4510914532868096';
+      // Adds request headers and IP for users, for more info visit:
+      // https://docs.sentry.io/platforms/dart/guides/flutter/data-management/data-collected/
+      options.sendDefaultPii = true;
+      // Set tracesSampleRate to 1.0 to capture 100% of transactions for tracing.
+      // We recommend adjusting this value in production.
+      options.tracesSampleRate = 1.0;
+      // The sampling rate for profiling is relative to tracesSampleRate
+      // Setting to 1.0 will profile 100% of sampled transactions:
+      options.profilesSampleRate = 1.0;
+    },
+    appRunner: () => runApp(
+      SentryWidget(
+        child: RestartWidget(
+          child: MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<FocusRepository>(
+                create: (context) => FocusRepository(),
+              ),
+              RepositoryProvider<SettingsRepository>(
+                create: (context) => settingsRepository,
+              ),
+            ],
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider<SettingsBloc>(
+                  create: (context) => SettingsBloc(
+                    repository: settingsRepository,
+                  )..add(LoadSettings()),
+                ),
+                BlocProvider<LibraryBloc>(
+                  create: (context) => LibraryBloc()..add(LoadLibrary()),
+                ),
+                BlocProvider<IndexingBloc>(
+                  create: (context) => IndexingBloc.create(),
+                ),
+                BlocProvider<HistoryBloc>(
+                    create: (context) => HistoryBloc(historyRepository)),
+                BlocProvider<TabsBloc>(
+                  create: (context) => TabsBloc(
+                    repository: TabsRepository(),
+                  )..add(LoadTabs()),
+                ),
+                BlocProvider<NavigationBloc>(
+                  create: (context) => NavigationBloc(
+                    repository: NavigationRepository(),
+                    tabsRepository: TabsRepository(),
+                  )..add(const CheckLibrary()),
+                ),
+                BlocProvider<FindRefBloc>(
+                    create: (context) => FindRefBloc(
+                        findRefRepository: FindRefRepository(
+                            dataRepository: DataRepository.instance))),
+                BlocProvider<PersonalNotesBloc>(
+                  create: (context) => PersonalNotesBloc(),
+                ),
+                BlocProvider<BookmarkBloc>(
+                  create: (context) => BookmarkBloc(BookmarkRepository()),
+                ),
+                BlocProvider<WorkspaceBloc>(
+                  create: (context) {
+                    final tabsBloc = context.read<TabsBloc>();
+                    return WorkspaceBloc(
+                      repository: WorkspaceRepository(),
+                      onWorkspaceTabsChanged:
+                          (List<OpenedTab> tabs, int activeIndex) {
+                        // This callback coordinates workspace switching with TabsBloc
+                        tabsBloc.add(ReplaceAllTabs(
+                          tabs,
+                          activeIndex,
+                        ));
+                      },
+                    )..add(LoadWorkspaces());
                   },
-                )..add(LoadWorkspaces());
-              },
+                ),
+                ChangeNotifierProvider<ShamorZachorDataProvider>(
+                  lazy: true, // Create only when needed
+                  create: (context) => ShamorZachorDataProvider(),
+                ),
+                ChangeNotifierProvider<ShamorZachorProgressProvider>(
+                  lazy: true, // Create only when needed
+                  create: (context) {
+                    final dataProvider =
+                        context.read<ShamorZachorDataProvider>();
+                    return ShamorZachorProgressProvider(
+                        dataProvider: dataProvider);
+                  },
+                ),
+              ],
+              child: const App(),
             ),
-            ChangeNotifierProvider<ShamorZachorDataProvider>(
-              lazy: true, // Create only when needed
-              create: (context) => ShamorZachorDataProvider(),
-            ),
-            ChangeNotifierProvider<ShamorZachorProgressProvider>(
-              lazy: true, // Create only when needed
-              create: (context) {
-                final dataProvider = context.read<ShamorZachorDataProvider>();
-                return ShamorZachorProgressProvider(dataProvider: dataProvider);
-              },
-            ),
-          ],
-          child: const App(),
+          ),
         ),
       ),
     ),
