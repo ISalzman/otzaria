@@ -89,3 +89,5 @@ pubspec.lock
 macos/Podfile.lock
 macos/Flutter/GeneratedPluginRegistrant.swift
 isolate.pdf
+
+sentry.properties
