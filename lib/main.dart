@@ -71,12 +71,59 @@ AppWindowListener? get appWindowListener => _appWindowListener;
 /// Application entry point that initializes necessary components and launches the app.
 ///
 /// This function performs the following initialization steps:
-/// 1. Initializes Sentry for error tracking
-/// 2. Ensures Flutter bindings are initialized
-/// 3. Calls [initialize] to set up required services and configurations
-/// 4. Launches the main application widget
+/// 1. Sets up custom error handlers
+/// 2. Initializes Sentry for error tracking
+/// 3. Ensures Flutter bindings are initialized
+/// 4. Calls [initialize] to set up required services and configurations
+/// 5. Launches the main application widget
 void main() async {
-  // Initialize Sentry first to capture all errors including initialization
+  hierarchicalLoggingEnabled = true;
+
+  // Set up custom error handlers before Sentry initialization
+  // Sentry will automatically wrap these handlers
+  FlutterError.onError = (FlutterErrorDetails details) {
+    final errorString = details.toString();
+
+    // Skip accessibility tree errors on Windows - they're harmless noise
+    if (Platform.isWindows &&
+        (errorString.contains('Failed to update ui::AXTree') ||
+            errorString.contains('accessibility_bridge.cc'))) {
+      return; // Silently ignore these errors
+    }
+
+    // Log all other errors normally
+    if (kDebugMode) {
+      FlutterError.dumpErrorToConsole(details);
+    } else {
+      File('errors.txt')
+          .writeAsStringSync(details.toString(), mode: FileMode.append);
+    }
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    final errorString = error.toString();
+
+    // Skip accessibility tree errors on Windows
+    if (Platform.isWindows &&
+        (errorString.contains('Failed to update ui::AXTree') ||
+            errorString.contains('accessibility_bridge.cc'))) {
+      return true; // Silently ignore these errors
+    }
+
+    // Log all other errors normally
+    if (kDebugMode) {
+      FlutterError.dumpErrorToConsole(FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+      ));
+    } else {
+      File('errors.txt')
+          .writeAsStringSync(error.toString(), mode: FileMode.append);
+    }
+    return true;
+  };
+
+  // Initialize Sentry - it will wrap the error handlers above
   await SentryFlutter.init(
     (options) {
       // Use environment variable for DSN, with fallback to default
@@ -85,57 +132,23 @@ void main() async {
         defaultValue:
             'https://79d3003f822fa62bce0c928656308121@o4510914530902016.ingest.us.sentry.io/4510914532868096',
       );
-      // Note: sendDefaultPii collects IP addresses and request headers.
-      // Ensure this complies with your privacy policy and GDPR/CCPA requirements.
-      options.sendDefaultPii = true;
+      // Privacy: Do not collect IP addresses and request headers
+      options.sendDefaultPii = false;
       // Use lower sampling rates in production to reduce overhead
       options.tracesSampleRate = kDebugMode ? 1.0 : 0.1;
+
+      // Filter out Windows accessibility errors from being sent to Sentry
+      options.beforeSend = (event, hint) {
+        final exception = event.throwable?.toString() ?? '';
+        if (Platform.isWindows &&
+            (exception.contains('Failed to update ui::AXTree') ||
+                exception.contains('accessibility_bridge.cc'))) {
+          return null; // Don't send to Sentry
+        }
+        return event;
+      };
     },
     appRunner: () async {
-      hierarchicalLoggingEnabled = true;
-      // write errors to file, but filter out accessibility noise on Windows
-      FlutterError.onError = (FlutterErrorDetails details) {
-        final errorString = details.toString();
-
-        // Skip accessibility tree errors on Windows - they're harmless noise
-        if (Platform.isWindows &&
-            (errorString.contains('Failed to update ui::AXTree') ||
-                errorString.contains('accessibility_bridge.cc'))) {
-          return; // Silently ignore these errors
-        }
-
-        // Log all other errors normally
-        if (kDebugMode) {
-          FlutterError.dumpErrorToConsole(details);
-        } else {
-          File('errors.txt')
-              .writeAsStringSync(details.toString(), mode: FileMode.append);
-        }
-      };
-
-      PlatformDispatcher.instance.onError = (error, stack) {
-        final errorString = error.toString();
-
-        // Skip accessibility tree errors on Windows
-        if (Platform.isWindows &&
-            (errorString.contains('Failed to update ui::AXTree') ||
-                errorString.contains('accessibility_bridge.cc'))) {
-          return true; // Silently ignore these errors
-        }
-
-        // Log all other errors normally
-        if (kDebugMode) {
-          FlutterError.dumpErrorToConsole(FlutterErrorDetails(
-            exception: error,
-            stack: stack,
-          ));
-        } else {
-          File('errors.txt')
-              .writeAsStringSync(error.toString(), mode: FileMode.append);
-        }
-        return true;
-      };
-
       SentryWidgetsFlutterBinding.ensureInitialized();
 
       // pdfrx warning suppression: this only hides the debug-time warning message.
