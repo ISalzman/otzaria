@@ -246,6 +246,7 @@ class Book {
       'pubDates': pubDates.map((e) => e.toJson()).toList(),
       'heShortDesc': heShortDesc,
       'notesContent': notesContent,
+      'orderIndex': order,
       'order': order,
       'totalLines': totalLines,
       'isBaseBook': isBaseBook,
