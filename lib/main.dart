@@ -75,8 +75,18 @@ AppWindowListener? get appWindowListener => _appWindowListener;
 /// 3. Launches the main application widget
 void main() async {
   hierarchicalLoggingEnabled = true;
-  // write errors to file
+  // write errors to file, but filter out accessibility noise on Windows
   FlutterError.onError = (FlutterErrorDetails details) {
+    final errorString = details.toString();
+    
+    // Skip accessibility tree errors on Windows - they're harmless noise
+    if (Platform.isWindows && 
+        (errorString.contains('Failed to update ui::AXTree') ||
+         errorString.contains('accessibility_bridge.cc'))) {
+      return; // Silently ignore these errors
+    }
+    
+    // Log all other errors normally
     if (kDebugMode) {
       FlutterError.dumpErrorToConsole(details);
     } else {
@@ -86,6 +96,16 @@ void main() async {
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
+    final errorString = error.toString();
+    
+    // Skip accessibility tree errors on Windows
+    if (Platform.isWindows && 
+        (errorString.contains('Failed to update ui::AXTree') ||
+         errorString.contains('accessibility_bridge.cc'))) {
+      return true; // Silently ignore these errors
+    }
+    
+    // Log all other errors normally
     if (kDebugMode) {
       FlutterError.dumpErrorToConsole(FlutterErrorDetails(
         exception: error,
