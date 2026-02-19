@@ -137,12 +137,15 @@ class PdfBookTab extends OpenedTab {
   @override
   Map<String, dynamic> toJson() {
     // שמירת מספר העמוד הנוכחי - אם ה-controller מוכן, נשתמש בו, אחרת נשתמש ב-pageNumber השמור
-    final currentPage = pdfViewerController.isReady
-        ? (pdfViewerController.pageNumber ?? pageNumber)
-        : pageNumber;
-
-    debugPrint(
-        '💾 PdfBookTab.toJson: book=${book.title}, pageNumber=$pageNumber, controller.pageNumber=${pdfViewerController.pageNumber}, saving=$currentPage');
+    int currentPage = pageNumber;
+    try {
+      if (pdfViewerController.isReady) {
+        currentPage = pdfViewerController.pageNumber ?? pageNumber;
+      }
+    } catch (e) {
+      // אם יש שגיאה בגישה ל-controller, נשתמש ב-pageNumber השמור
+      currentPage = pageNumber;
+    }
 
     return {
       'path': book.path,

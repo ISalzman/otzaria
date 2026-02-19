@@ -34,18 +34,14 @@ class SqliteDataProvider {
   /// Initializes the database connection
   Future<void> initialize() async {
     if (_isInitialized) {
-      debugPrint('SQLite database is already initialized.');
       return;
     }
 
     // If initialization already started, await the same future
     if (_initializationFuture != null) {
-      debugPrint(
-          'SQLite database initialization already in progress; awaiting existing future.');
       return _initializationFuture!;
     }
 
-    debugPrint('Starting SQLite database initialization.');
     _initializationFuture = _initializeInternal();
 
     try {
@@ -59,12 +55,9 @@ class SqliteDataProvider {
     // Use centralized database path
     _dbPath = DatabaseConstants.getDatabasePath();
 
-    debugPrint('Initializing SQLite database at: $_dbPath');
-
     // Check if database file exists
     final dbFile = File(_dbPath);
     if (!await dbFile.exists()) {
-      debugPrint('Database file does not exist yet at: $_dbPath');
       // Database will be created when first book is migrated
       return;
     }
@@ -74,7 +67,6 @@ class SqliteDataProvider {
       _repository = SeforimRepository(database);
       await _repository.ensureInitialized();
       _isInitialized = true;
-      debugPrint('SQLite database initialized successfully');
     } catch (e) {
       debugPrint('Error initializing SQLite database: $e');
       rethrow;
@@ -101,7 +93,6 @@ class SqliteDataProvider {
       final book = await _repository.getBookByTitle(title);
       return book != null;
     } catch (e) {
-      debugPrint('Error checking if book exists in database: $e');
       return false;
     }
   }
@@ -121,13 +112,9 @@ class SqliteDataProvider {
       final startLine = (currentLine - 10).clamp(0, book.totalLines - 1);
       final endLine = (currentLine + 10).clamp(0, book.totalLines - 1);
 
-      debugPrint(
-          '⚡ Quick preview: lines $startLine-$endLine of ${book.totalLines}');
-
       final lines = await _repository.getLines(book.id, startLine, endLine);
       return migrationLinesToText(lines);
     } catch (e) {
-      debugPrint('Error getting book quick preview: $e');
       return null;
     }
   }
@@ -154,7 +141,6 @@ class SqliteDataProvider {
       final lines = await _repository.getLines(book.id, 0, book.totalLines - 1);
       return migrationLinesToText(lines);
     } catch (e) {
-      debugPrint('Error getting book text from database: $e');
       return null;
     }
   }
@@ -202,7 +188,6 @@ class SqliteDataProvider {
 
       return rootEntries;
     } catch (e) {
-      debugPrint('Error getting book TOC from database: $e');
       return null;
     }
   }
@@ -228,7 +213,6 @@ class SqliteDataProvider {
       final source = await _repository.getSourceById(book.sourceId);
       return source?.name;
     } catch (e) {
-      debugPrint('Error getting book source name from database: $e');
       return null;
     }
   }
@@ -236,52 +220,34 @@ class SqliteDataProvider {
   /// Retrieves PDF bytes from the database (book_file) for a given PDF book.
   /// Returns null if not found or DB not initialized.
   Future<Uint8List?> getPdfBytesFromDb(PdfBook book) async {
-    debugPrint('🔍 getPdfBytesFromDb: Searching for book: ${book.title}');
-
     if (!_isInitialized) {
-      debugPrint('⚠️ DB not initialized, initializing...');
       await initialize();
     }
     if (!_isInitialized) {
-      debugPrint('❌ DB not initialized after initialize()');
       return null;
     }
-
-    debugPrint('✅ DB is initialized');
 
     try {
       migration.Book? dbBook;
       final filePath = book.filePath ?? book.path;
-      debugPrint('📁 File path: $filePath');
 
       if (filePath.isNotEmpty) {
-        debugPrint('🔍 Searching by file path...');
         dbBook =
             await _repository.getExternalBookByFilePathAndType(filePath, 'pdf');
-        debugPrint(
-            '📚 Result from file path search: ${dbBook?.title ?? "null"}');
       }
 
-      if (dbBook == null) {
-        debugPrint('🔍 Searching by title: ${book.title}...');
-        dbBook = await _repository.getBookByTitleAndFileType(book.title, 'pdf');
-        debugPrint('📚 Result from title search: ${dbBook?.title ?? "null"}');
-      }
+      dbBook ??= await _repository.getBookByTitleAndFileType(book.title, 'pdf');
 
       if (dbBook == null) {
-        debugPrint('❌ PDF not found in DB: ${book.title}');
         return null;
       }
 
-      debugPrint('📖 Found book in DB, ID: ${dbBook.id}, getting content...');
       final bytes = await _repository.getBookFileContent(dbBook.id);
 
       if (bytes == null) {
-        debugPrint('❌ No file content for: ${book.title}');
         return null;
       }
 
-      debugPrint('✅ Got ${bytes.length} bytes for: ${book.title}');
       return bytes;
     } catch (e, stackTrace) {
       debugPrint('❌ Error loading PDF from DB: ${book.title} - $e');
@@ -314,7 +280,6 @@ class SqliteDataProvider {
     }
 
     await dbFile.copy(destinationPath);
-    debugPrint('Database exported to: $destinationPath');
   }
 
   /// Imports a database from a specified path
@@ -332,7 +297,6 @@ class SqliteDataProvider {
 
     // Copy the file
     await sourceFile.copy(_dbPath);
-    debugPrint('Database imported from: $sourcePath');
 
     // Reinitialize
     await initialize();
@@ -356,7 +320,6 @@ class SqliteDataProvider {
         'links': linkCount,
       };
     } catch (e) {
-      debugPrint('Error getting database stats: $e');
       return {'books': 0, 'lines': 0, 'links': 0};
     }
   }
@@ -395,8 +358,6 @@ class SqliteDataProvider {
         (results['issues'] as List).add('Cannot query database: $e');
         return results;
       }
-
-      debugPrint('✅ Database health check passed');
     } catch (e) {
       results['healthy'] = false;
       (results['issues'] as List).add('Health check failed: $e');
@@ -415,10 +376,8 @@ class SqliteDataProvider {
     }
 
     try {
-      debugPrint('🔧 Optimizing database...');
       final db = await _repository.database.database;
       await db.execute('VACUUM');
-      debugPrint('✅ Database optimized');
     } catch (e) {
       debugPrint('❌ Error optimizing database: $e');
       rethrow;
