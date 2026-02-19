@@ -83,8 +83,8 @@ dependencies:
   pdf: ^3.11.3
   kosher_dart: ^2.0.18
   gematria: ^1.0.0
-  csv: ^6.0.0
-  archive: ^4.0.7
+  csv: ^7.1.0
+  archive: ^4.0.9
   filter_list: 1.0.3
   package_info_plus: ^9.0.0
   crypto: ^3.0.7
