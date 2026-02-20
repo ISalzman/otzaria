@@ -22,7 +22,8 @@ class SettingsCard extends StatelessWidget {
       children: [
         // כותרת ותת-כותרת מעל הכרטיס
         Padding(
-          padding: const EdgeInsets.only(right: 16, left: 16, top: 24, bottom: 12),
+          padding:
+              const EdgeInsets.only(right: 16, left: 16, top: 24, bottom: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -65,18 +66,12 @@ class SettingsCard extends StatelessWidget {
 
   /// הוספת קו מפריד בין כל שני פריטים
   List<Widget> _buildChildrenWithDividers() {
-    if (children.isEmpty) {
-      return [];
-    }
-    return List.generate(children.length * 2 - 1, (i) {
-      if (i.isEven) {
-        return children[i ~/ 2];
-      }
-      return const Divider(
-        height: 1,
-        indent: 16,
-        endIndent: 16,
-      );
-    });
+    return [
+      for (int i = 0; i < children.length; i++) ...[
+        children[i],
+        if (i < children.length - 1)
+          const Divider(height: 1, indent: 16, endIndent: 16),
+      ],
+    ];
   }
 }
