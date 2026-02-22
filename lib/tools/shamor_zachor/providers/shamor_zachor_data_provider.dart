@@ -53,9 +53,11 @@ class ShamorZachorDataProvider with ChangeNotifier {
   /// This method is idempotent - it will only load data once.
   /// Subsequent calls will be ignored if data is already loaded or loading.
   Future<void> ensureLoaded() async {
-    if (!_isLoading && !hasData && _error == null) {
-      await loadAllData();
+    if (_isLoading || hasData || _error == null) {
+      return;
     }
+    _isLoading = true; // Set loading state immediately
+    await loadAllData();
   }
 
   Future<void> loadAllData() async {
