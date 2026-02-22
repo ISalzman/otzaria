@@ -114,6 +114,9 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     if (_isLoading || hasData || _error != null) {
       return;
     }
+    _isLoading =
+        true; // Set loading state immediately to prevent race conditions
+    notifyListeners(); // Notify listeners that loading has started
     await _loadInitialProgress();
   }
 
