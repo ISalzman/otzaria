@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
@@ -71,10 +72,18 @@ class IndexingRepository {
 
     final totalBooks = booksToIndex.length;
     int processedBooks = 0;
+    int actuallyIndexed = 0;
+    int skipped = 0;
+    int errors = 0;
+
+    debugPrint('📚 התחלת אינדוקס: $totalBooks ספרים');
+    debugPrint(
+        '📊 ספרים שכבר מאונדקסים: ${_tantivyDataProvider.booksDone.length}');
 
     for (Book book in booksToIndex) {
       // Check if indexing was cancelled
       if (!_tantivyDataProvider.isIndexing.value) {
+        debugPrint('⚠️ אינדוקס בוטל על ידי המשתמש');
         return;
       }
 
@@ -85,11 +94,18 @@ class IndexingRepository {
               .contains("${book.title}textBook")) {
             if (_tantivyDataProvider.booksDone.contains(
                 sha1.convert(utf8.encode((await book.text))).toString())) {
+              debugPrint('⏭️ דילוג על ספר קיים (hash): ${book.title}');
               _tantivyDataProvider.booksDone.add("${book.title}textBook");
+              skipped++;
             } else {
+              debugPrint('📖 מאנדקס ספר טקסט: ${book.title}');
               await _indexTextBook(book);
               _tantivyDataProvider.booksDone.add("${book.title}textBook");
+              actuallyIndexed++;
             }
+          } else {
+            debugPrint('⏭️ דילוג על ספר טקסט שכבר מאונדקס: ${book.title}');
+            skipped++;
           }
         } else if (book is PdfBook) {
           if (!_tantivyDataProvider.booksDone
@@ -110,37 +126,67 @@ class IndexingRepository {
                 }
               }
             } catch (e) {
-              debugPrint('⚠️ Could not compute hash for ${book.title}: $e');
+              debugPrint('⚠️ לא ניתן לחשב hash עבור ${book.title}: $e');
             }
 
             if (fileHash != null &&
                 _tantivyDataProvider.booksDone.contains(fileHash)) {
+              debugPrint('⏭️ דילוג על PDF קיים (hash): ${book.title}');
               _tantivyDataProvider.booksDone.add("${book.title}pdfBook");
+              skipped++;
             } else {
+              debugPrint('📄 מאנדקס PDF: ${book.title}');
               await _indexPdfBook(book);
               _tantivyDataProvider.booksDone.add("${book.title}pdfBook");
+              actuallyIndexed++;
             }
+          } else {
+            debugPrint('⏭️ דילוג על PDF שכבר מאונדקס: ${book.title}');
+            skipped++;
           }
         } else if (book is ExternalLibraryBook) {
           if (!_tantivyDataProvider.booksDone
               .contains("${book.title}externalBook")) {
             final idHash = sha1.convert(utf8.encode(book.link)).toString();
             if (_tantivyDataProvider.booksDone.contains(idHash)) {
+              debugPrint('⏭️ דילוג על ספר חיצוני קיים (hash): ${book.title}');
               _tantivyDataProvider.booksDone.add("${book.title}externalBook");
+              skipped++;
             } else {
+              debugPrint('🔗 מאנדקס ספר חיצוני: ${book.title}');
               await _indexExternalLibraryBook(book);
               _tantivyDataProvider.booksDone.add("${book.title}externalBook");
+              actuallyIndexed++;
             }
+          } else {
+            debugPrint('⏭️ דילוג על ספר חיצוני שכבר מאונדקס: ${book.title}');
+            skipped++;
           }
         }
         processedBooks++;
+
+        // Commit every 25 books to save progress (optimized for 8GB RAM)
+        if (processedBooks % 25 == 0) {
+          debugPrint('💾 שומר אינדקס (commit)...');
+          final index = await _tantivyDataProvider.engine;
+          await index.commit();
+          saveIndexedBooks();
+        }
+
+        // Report progress every 50 books
+        if (processedBooks % 50 == 0) {
+          debugPrint(
+              '📈 התקדמות: $processedBooks/$totalBooks (מאונדקסים: $actuallyIndexed, דולגו: $skipped, שגיאות: $errors)');
+        }
+
         // Report progress
         onProgress(processedBooks, totalBooks);
       } catch (e) {
         // Use async error handling to prevent event loop blocking
         await Future.microtask(() {
-          debugPrint('Error adding ${book.title} to index: $e');
+          debugPrint('❌ שגיאה באינדוקס של ${book.title}: $e');
         });
+        errors++;
         processedBooks++;
         // Still report progress even after error
         onProgress(processedBooks, totalBooks);
@@ -151,6 +197,19 @@ class IndexingRepository {
       await Future.delayed(Duration.zero);
     }
 
+    debugPrint('✅ אינדוקס הושלם!');
+    debugPrint('   📊 סה"כ: $totalBooks ספרים');
+    debugPrint('   ✅ מאונדקסים: $actuallyIndexed');
+    debugPrint('   ⏭️ דולגו: $skipped');
+    debugPrint('   ❌ שגיאות: $errors');
+
+    // Final commit to ensure everything is saved
+    debugPrint('💾 שומר אינדקס סופי (final commit)...');
+    final index = await _tantivyDataProvider.engine;
+    await index.commit();
+    saveIndexedBooks();
+    debugPrint('✅ אינדקס נשמר בהצלחה!');
+
     // Reset indexing flag after completion
     _tantivyDataProvider.isIndexing.value = false;
   }
@@ -158,69 +217,109 @@ class IndexingRepository {
   /// Indexes a text-based book by processing its content and adding it to the search index.
   Future<void> _indexTextBook(TextBook book) async {
     final index = await _tantivyDataProvider.engine;
-    var text = await book.text;
-    final title = book.title;
-    final topics = "/${book.topics.replaceAll(', ', '/')}";
 
-    final texts = text.split('\n');
-    List<String> reference = [];
+    try {
+      // Try to get text directly from DB if we have categoryId
+      String? text;
+      if (book.categoryId != null) {
+        debugPrint(
+            '   🔍 מנסה לקרוא מ-DB: ${book.title} (categoryId: ${book.categoryId})');
+        text = await SqliteDataProvider.instance.getBookTextFromDb(
+          book.title,
+          book.categoryId,
+          book.fileType ?? 'txt',
+        );
+      }
 
-    // Index each line separately
-    for (int i = 0; i < texts.length; i++) {
-      if (!_tantivyDataProvider.isIndexing.value) {
+      // Fallback to regular method
+      if (text == null || text.isEmpty) {
+        debugPrint('   🔍 מנסה לקרוא דרך LibraryProvider: ${book.title}');
+        final bookText = await book.text;
+        text = bookText;
+      }
+
+      if (text.isEmpty) {
+        debugPrint(
+            '⚠️ ספר ריק: ${book.title} (categoryId: ${book.categoryId}) - מדלג');
         return;
       }
 
-      // Yield control periodically to prevent blocking
-      if (i % 100 == 0) {
-        await Future.delayed(Duration.zero);
+      final title = book.title;
+      final topics = "/${book.topics.replaceAll(', ', '/')}";
+
+      final texts = text.split('\n');
+
+      if (texts.length <= 1) {
+        debugPrint(
+            '⚠️ ספר עם שורה אחת בלבד: ${book.title} (${texts.length} שורות) - מדלג');
+        return;
       }
 
-      String line = texts[i];
-      // get the reference from the headers
-      if (line.startsWith('<h')) {
-        if (reference.isNotEmpty &&
-            reference.any(
-                (element) => element.substring(0, 4) == line.substring(0, 4))) {
-          reference.removeRange(
-              reference.indexWhere(
-                  (element) => element.substring(0, 4) == line.substring(0, 4)),
-              reference.length);
+      List<String> reference = [];
+
+      debugPrint('   📝 מאנדקס ${texts.length} שורות מ-$title');
+
+      // Index each line separately
+      for (int i = 0; i < texts.length; i++) {
+        if (!_tantivyDataProvider.isIndexing.value) {
+          return;
         }
-        reference.add(line);
 
-        // Index the header also into the main search index so in-book search
-        // can find headings that are displayed and highlighted.
-        var headerLine = stripHtmlIfNeeded(line);
-        headerLine = removeVolwels(headerLine);
-        index.addDocument(
-            id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
-            title: title,
-            reference: stripHtmlIfNeeded(reference.join(', ')),
-            topics: '$topics/$title',
-            text: headerLine,
-            segment: BigInt.from(i),
-            isPdf: false,
-            filePath: '');
-      } else {
-        line = stripHtmlIfNeeded(line);
-        line = removeVolwels(line);
+        // Yield control periodically to prevent blocking
+        if (i % 100 == 0) {
+          await Future.delayed(Duration.zero);
+        }
 
-        // Add to search index
-        index.addDocument(
-            id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
-            title: title,
-            reference: stripHtmlIfNeeded(reference.join(', ')),
-            topics: '$topics/$title',
-            text: line,
-            segment: BigInt.from(i),
-            isPdf: false,
-            filePath: '');
+        String line = texts[i];
+        // get the reference from the headers
+        if (line.startsWith('<h')) {
+          if (reference.isNotEmpty &&
+              reference.any((element) =>
+                  element.substring(0, 4) == line.substring(0, 4))) {
+            reference.removeRange(
+                reference.indexWhere((element) =>
+                    element.substring(0, 4) == line.substring(0, 4)),
+                reference.length);
+          }
+          reference.add(line);
+
+          // Index the header also into the main search index so in-book search
+          // can find headings that are displayed and highlighted.
+          var headerLine = stripHtmlIfNeeded(line);
+          headerLine = removeVolwels(headerLine);
+          index.addDocument(
+              id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+              title: title,
+              reference: stripHtmlIfNeeded(reference.join(', ')),
+              topics: '$topics/$title',
+              text: headerLine,
+              segment: BigInt.from(i),
+              isPdf: false,
+              filePath: '');
+        } else {
+          line = stripHtmlIfNeeded(line);
+          line = removeVolwels(line);
+
+          // Add to search index
+          index.addDocument(
+              id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+              title: title,
+              reference: stripHtmlIfNeeded(reference.join(', ')),
+              topics: '$topics/$title',
+              text: line,
+              segment: BigInt.from(i),
+              isPdf: false,
+              filePath: '');
+        }
       }
-    }
 
-    await index.commit();
-    saveIndexedBooks();
+      // Don't commit after every book - too slow!
+      // We'll commit periodically in indexAllBooks instead
+      debugPrint('   ✅ סיים אינדוקס של $title (${texts.length} שורות)');
+    } catch (e) {
+      debugPrint('❌ שגיאה באינדוקס של ${book.title}: $e');
+      rethrow;
+    }
   }
 
   /// Indexes an external library book (e.g., Otzar) by indexing its metadata
@@ -255,8 +354,8 @@ class IndexingRepository {
       filePath: book.link,
     );
 
-    await index.commit();
-    saveIndexedBooks();
+    // Don't commit after every book - too slow!
+    debugPrint('   ✅ סיים אינדוקס של ספר חיצוני: $title');
   }
 
   /// Indexes a PDF book by extracting and processing text from each page.
@@ -272,7 +371,12 @@ class IndexingRepository {
           await SqliteDataProvider.instance.getPdfBytesFromDb(book);
       if (pdfBytes != null && pdfBytes.isNotEmpty) {
         debugPrint('📚 Loading PDF from database for: ${book.title}');
-        document = await PdfDocument.openData(pdfBytes);
+        // Add timeout for PDF opening (30 seconds)
+        document = await PdfDocument.openData(pdfBytes)
+            .timeout(Duration(seconds: 30), onTimeout: () {
+          debugPrint('⏱️ טיימאאוט בפתיחת PDF מ-DB: ${book.title}');
+          throw TimeoutException('PDF open timeout');
+        });
       }
     } catch (e) {
       debugPrint('⚠️ Failed to load PDF from database: $e');
@@ -283,7 +387,17 @@ class IndexingRepository {
       final file = File(book.path);
       if (await file.exists()) {
         debugPrint('📚 Loading PDF from file: ${book.path}');
-        document = await PdfDocument.openFile(book.path);
+        try {
+          // Add timeout for PDF opening from file (30 seconds)
+          document = await PdfDocument.openFile(book.path)
+              .timeout(Duration(seconds: 30), onTimeout: () {
+            debugPrint('⏱️ טיימאאוט בפתיחת PDF מקובץ: ${book.title}');
+            throw TimeoutException('PDF open timeout');
+          });
+        } catch (e) {
+          debugPrint('❌ שגיאה בפתיחת PDF: ${book.path} - $e');
+          return;
+        }
       } else {
         debugPrint('❌ PDF not found in database or file system: ${book.path}');
         return;
@@ -295,8 +409,7 @@ class IndexingRepository {
     final title = book.title;
     final topics = "/${book.topics.replaceAll(', ', '/')}";
 
-    debugPrint(
-        '📚 PDF outline items: ${outline.length}, pages: ${pages.length}');
+    debugPrint('📚 PDF מכיל ${pages.length} עמודים, ${outline.length} סימניות');
 
     // Process each page
     var addedAnyInBook = false;
@@ -305,48 +418,71 @@ class IndexingRepository {
         return;
       }
 
-      final pageText = await pages[i].loadText();
-      final rawLines = pageText?.fullText.split('\n') ?? const <String>[];
+      // Report progress every 10 pages
+      if (i % 10 == 0 && i > 0) {
+        debugPrint('   📄 מעבד עמוד $i/${pages.length} של $title');
+      }
 
-      final bookmark = await refFromPageNumber(i + 1, outline, title);
-      final ref = bookmark.isNotEmpty
-          ? '$title, $bookmark, עמוד ${i + 1}'
-          : '$title, עמוד ${i + 1}';
+      try {
+        // Add timeout for page text loading (10 seconds per page)
+        final pageText = await pages[i].loadText().timeout(
+          Duration(seconds: 10),
+          onTimeout: () {
+            debugPrint('⏱️ טיימאאוט בעמוד ${i + 1} של $title');
+            return null;
+          },
+        );
 
-      var addedAny = false;
-      for (int j = 0; j < rawLines.length; j++) {
-        if (!_tantivyDataProvider.isIndexing.value) {
-          return;
-        }
-
-        // Yield control periodically to prevent blocking
-        if (j % 50 == 0) {
-          await Future.delayed(Duration.zero);
-        }
-
-        final normalized = _normalizePdfTextForIndexing(rawLines[j]);
-        if (_isProbablyGarbagePdfText(normalized)) {
+        if (pageText == null) {
+          // Skip this page if timeout occurred
           continue;
         }
 
-        index.addDocument(
-          id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
-          title: title,
-          reference: ref,
-          topics: '$topics/$title',
-          text: normalized,
-          segment: BigInt.from(i),
-          isPdf: true,
-          filePath: book.path,
-        );
-        addedAny = true;
-        addedAnyInBook = true;
-      }
+        final rawLines = pageText.fullText.split('\n');
 
-      if (!addedAny && kDebugMode) {
-        debugPrint(
-          '⚠️ PDF page ${i + 1}: skipped (no usable extracted text) file: ${book.path}',
-        );
+        final bookmark = await refFromPageNumber(i + 1, outline, title);
+        final ref = bookmark.isNotEmpty
+            ? '$title, $bookmark, עמוד ${i + 1}'
+            : '$title, עמוד ${i + 1}';
+
+        var addedAny = false;
+        for (int j = 0; j < rawLines.length; j++) {
+          if (!_tantivyDataProvider.isIndexing.value) {
+            return;
+          }
+
+          // Yield control periodically to prevent blocking
+          if (j % 50 == 0) {
+            await Future.delayed(Duration.zero);
+          }
+
+          final normalized = _normalizePdfTextForIndexing(rawLines[j]);
+          if (_isProbablyGarbagePdfText(normalized)) {
+            continue;
+          }
+
+          index.addDocument(
+            id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+            title: title,
+            reference: ref,
+            topics: '$topics/$title',
+            text: normalized,
+            segment: BigInt.from(i),
+            isPdf: true,
+            filePath: book.path,
+          );
+          addedAny = true;
+          addedAnyInBook = true;
+        }
+
+        if (!addedAny && kDebugMode) {
+          debugPrint(
+            '⚠️ עמוד ${i + 1}: דולג (אין טקסט שמיש)',
+          );
+        }
+      } catch (e) {
+        debugPrint('❌ שגיאה בעמוד ${i + 1} של $title: $e');
+        // Continue to next page
       }
     }
 
@@ -420,8 +556,8 @@ class IndexingRepository {
       }
     }
 
-    await index.commit();
-    saveIndexedBooks();
+    // Don't commit after every book - too slow!
+    debugPrint('   ✅ סיים אינדוקס PDF: ${book.title}');
   }
 
   /// Cancels the ongoing indexing process.
