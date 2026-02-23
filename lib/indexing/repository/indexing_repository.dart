@@ -8,6 +8,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/utils/ref_helper.dart';
@@ -361,84 +362,179 @@ class IndexingRepository {
   /// Indexes a PDF book by extracting and processing text from each page.
   Future<void> _indexPdfBook(PdfBook book) async {
     final index = await _tantivyDataProvider.engine;
+    final startTime = DateTime.now();
 
     debugPrint('📚 PDF indexing started: "${book.title}" (${book.path})');
 
-    // Try to load PDF from database first, then fall back to file
+    // Try to load PDF from file first (much faster!), then fall back to database
     PdfDocument? document;
-    try {
-      final pdfBytes =
-          await SqliteDataProvider.instance.getPdfBytesFromDb(book);
-      if (pdfBytes != null && pdfBytes.isNotEmpty) {
-        debugPrint('📚 Loading PDF from database for: ${book.title}');
-        // Add timeout for PDF opening (30 seconds)
-        document = await PdfDocument.openData(pdfBytes)
-            .timeout(Duration(seconds: 30), onTimeout: () {
-          debugPrint('⏱️ טיימאאוט בפתיחת PDF מ-DB: ${book.title}');
-          throw TimeoutException('PDF open timeout');
+    final file = File(book.path);
+
+    if (await file.exists()) {
+      final fileSize = await file.length();
+      debugPrint('   📁 מנסה לטעון מקובץ: ${book.path}');
+      debugPrint(
+          '   📊 גודל קובץ: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
+
+      try {
+        final openStartTime = DateTime.now();
+        debugPrint('   ⏳ פותח PDF מקובץ...');
+
+        document = await PdfDocument.openFile(book.path)
+            .timeout(Duration(seconds: 60), onTimeout: () {
+          final elapsed = DateTime.now().difference(openStartTime).inSeconds;
+          debugPrint(
+              '   ⏱️ טיימאאוט בפתיחת PDF מקובץ אחרי $elapsed שניות: ${book.title}');
+          throw TimeoutException(
+              'PDF open timeout from file after $elapsed seconds');
         });
+
+        final openElapsed = DateTime.now().difference(openStartTime).inSeconds;
+        debugPrint('   ✅ PDF נפתח בהצלחה מקובץ (לקח $openElapsed שניות)');
+      } catch (e, stackTrace) {
+        debugPrint('   ❌ שגיאה בפתיחת PDF מקובץ: $e');
+        debugPrint(
+            '   Stack trace: ${stackTrace.toString().split('\n').take(3).join('\n')}');
+        // Will try database below
       }
-    } catch (e) {
-      debugPrint('⚠️ Failed to load PDF from database: $e');
+    } else {
+      debugPrint('   ⚠️ קובץ PDF לא קיים: ${book.path}');
     }
 
-    // Fallback to file if database load failed
+    // Fallback to database if file load failed
     if (document == null) {
-      final file = File(book.path);
-      if (await file.exists()) {
-        debugPrint('📚 Loading PDF from file: ${book.path}');
-        try {
-          // Add timeout for PDF opening from file (30 seconds)
-          document = await PdfDocument.openFile(book.path)
-              .timeout(Duration(seconds: 30), onTimeout: () {
-            debugPrint('⏱️ טיימאאוט בפתיחת PDF מקובץ: ${book.title}');
-            throw TimeoutException('PDF open timeout');
+      Uint8List? pdfBytes;
+
+      try {
+        debugPrint('   🔍 מנסה לטעון PDF מ-DB: ${book.title}');
+        pdfBytes = await SqliteDataProvider.instance.getPdfBytesFromDb(book);
+
+        if (pdfBytes != null && pdfBytes.isNotEmpty) {
+          debugPrint(
+              '   ✅ נטען מ-DB: ${(pdfBytes.length / 1024 / 1024).toStringAsFixed(2)} MB');
+
+          // Save to temporary file (like pdf_book_screen does)
+          debugPrint('   💾 שומר לקובץ זמני...');
+          final tempDir = await getTemporaryDirectory();
+          final fileName = 'pdf_index_${book.title.hashCode}.pdf';
+          final tempFile = File('${tempDir.path}/$fileName');
+
+          await tempFile.writeAsBytes(pdfBytes, flush: true);
+          debugPrint('   ✅ נשמר לקובץ זמני: ${tempFile.path}');
+
+          // Now open from the temporary file
+          debugPrint('   ⏳ פותח PDF מקובץ זמני...');
+          final openStartTime = DateTime.now();
+
+          document = await PdfDocument.openFile(tempFile.path)
+              .timeout(Duration(seconds: 60), onTimeout: () {
+            final elapsed = DateTime.now().difference(openStartTime).inSeconds;
+            debugPrint(
+                '   ⏱️ טיימאאוט בפתיחת PDF מקובץ זמני אחרי $elapsed שניות: ${book.title}');
+            throw TimeoutException(
+                'PDF open timeout from temp file after $elapsed seconds');
           });
-        } catch (e) {
-          debugPrint('❌ שגיאה בפתיחת PDF: ${book.path} - $e');
-          return;
+
+          final openElapsed =
+              DateTime.now().difference(openStartTime).inSeconds;
+          debugPrint(
+              '   ✅ PDF נפתח בהצלחה מקובץ זמני (לקח $openElapsed שניות)');
+        } else {
+          debugPrint('   ⚠️ PDF לא נמצא ב-DB או ריק');
         }
-      } else {
-        debugPrint('❌ PDF not found in database or file system: ${book.path}');
-        return;
+      } catch (e, stackTrace) {
+        debugPrint('   ❌ שגיאה בטעינה מ-DB: $e');
+        debugPrint(
+            '   Stack trace: ${stackTrace.toString().split('\n').take(3).join('\n')}');
       }
+    }
+
+    if (document == null) {
+      debugPrint('   ❌ לא ניתן לפתוח את ה-PDF: ${book.title}');
+      return;
     }
 
     final pages = document.pages;
-    final outline = await document.loadOutline();
+    debugPrint('   ✅ PDF נפתח בהצלחה, מכיל ${pages.length} עמודים');
+    debugPrint('   ⏳ טוען outline (סימניות)...');
+
+    final outlineStartTime = DateTime.now();
+    final outline = await document.loadOutline().timeout(
+      Duration(seconds: 15),
+      onTimeout: () {
+        final elapsed = DateTime.now().difference(outlineStartTime).inSeconds;
+        debugPrint('   ⏱️ טיימאאוט בטעינת outline אחרי $elapsed שניות');
+        return <PdfOutlineNode>[];
+      },
+    );
+
+    final outlineElapsed =
+        DateTime.now().difference(outlineStartTime).inSeconds;
+    debugPrint(
+        '   ✅ outline נטען (${outline.length} סימניות, לקח $outlineElapsed שניות)');
+
     final title = book.title;
     final topics = "/${book.topics.replaceAll(', ', '/')}";
 
-    debugPrint('📚 PDF מכיל ${pages.length} עמודים, ${outline.length} סימניות');
-
     // Process each page
     var addedAnyInBook = false;
+    int totalLinesIndexed = 0;
+    int pagesWithTimeout = 0;
+    int pagesWithErrors = 0;
+
+    debugPrint('   ⏳ מתחיל לעבד ${pages.length} עמודים...');
+
     for (int i = 0; i < pages.length; i++) {
       if (!_tantivyDataProvider.isIndexing.value) {
+        debugPrint('   ⚠️ אינדוקס בוטל על ידי המשתמש בעמוד ${i + 1}');
         return;
       }
 
-      // Report progress every 10 pages
-      if (i % 10 == 0 && i > 0) {
-        debugPrint('   📄 מעבד עמוד $i/${pages.length} של $title');
+      // Report progress every 10 pages, and always for first page
+      if (i % 10 == 0 || i == 0) {
+        debugPrint(
+            '   📄 מעבד עמוד ${i + 1}/${pages.length} של $title (מאונדקסו: $totalLinesIndexed שורות)');
       }
 
       try {
-        // Add timeout for page text loading (10 seconds per page)
+        debugPrint('      🔄 טוען טקסט מעמוד ${i + 1}...');
+        final pageStartTime = DateTime.now();
+
+        // Add timeout for page text loading (5 seconds per page - reduced for faster detection)
         final pageText = await pages[i].loadText().timeout(
-          Duration(seconds: 10),
+          Duration(seconds: 5),
           onTimeout: () {
-            debugPrint('⏱️ טיימאאוט בעמוד ${i + 1} של $title');
+            final elapsed = DateTime.now().difference(pageStartTime).inSeconds;
+            debugPrint(
+                '      ⏱️ טיימאאוט בעמוד ${i + 1}/${pages.length} אחרי $elapsed שניות');
+            pagesWithTimeout++;
             return null;
           },
         );
 
         if (pageText == null) {
+          debugPrint('      ⏭️ דילוג על עמוד ${i + 1} (טיימאאוט)');
           // Skip this page if timeout occurred
           continue;
         }
 
+        final pageElapsed =
+            DateTime.now().difference(pageStartTime).inMilliseconds;
         final rawLines = pageText.fullText.split('\n');
+
+        debugPrint(
+            '      ✅ עמוד ${i + 1} נטען (${rawLines.length} שורות, ${pageElapsed}ms)');
+
+        // Log slow pages
+        if (pageElapsed > 1000) {
+          debugPrint('      ⚠️ עמוד ${i + 1} איטי: לקח ${pageElapsed}ms');
+        }
+
+        // Log slow pages
+        if (pageElapsed > 2000) {
+          debugPrint(
+              '   ⚠️ עמוד ${i + 1} לקח $pageElapsed ms לטעינה (${rawLines.length} שורות)');
+        }
 
         final bookmark = await refFromPageNumber(i + 1, outline, title);
         final ref = bookmark.isNotEmpty
@@ -473,23 +569,43 @@ class IndexingRepository {
           );
           addedAny = true;
           addedAnyInBook = true;
+          totalLinesIndexed++;
         }
 
         if (!addedAny && kDebugMode) {
           debugPrint(
-            '⚠️ עמוד ${i + 1}: דולג (אין טקסט שמיש)',
+            '   ⚠️ עמוד ${i + 1}: דולג (אין טקסט שמיש)',
           );
         }
-      } catch (e) {
-        debugPrint('❌ שגיאה בעמוד ${i + 1} של $title: $e');
+      } catch (e, stackTrace) {
+        pagesWithErrors++;
+        debugPrint('   ❌ שגיאה בעמוד ${i + 1}/${pages.length} של $title: $e');
+        debugPrint(
+            '   Stack trace: ${stackTrace.toString().split('\n').take(2).join('\n')}');
         // Continue to next page
       }
+    }
+
+    final totalElapsed = DateTime.now().difference(startTime).inSeconds;
+
+    // Print summary
+    debugPrint('   ✅ סיים עיבוד PDF: $title');
+    debugPrint('   📊 סטטיסטיקה:');
+    debugPrint('      • סה"כ עמודים: ${pages.length}');
+    debugPrint('      • שורות מאונדקסות: $totalLinesIndexed');
+    debugPrint('      • עמודים עם טיימאאוט: $pagesWithTimeout');
+    debugPrint('      • עמודים עם שגיאות: $pagesWithErrors');
+    debugPrint('      • זמן כולל: $totalElapsed שניות');
+
+    if (!addedAnyInBook) {
+      debugPrint('   ⚠️ אזהרה: לא נמצא טקסט שמיש בכל ה-PDF!');
     }
 
     // Fallback: some PDFs have no usable text layer, but ship alongside a
     // plain-text OCR dump. If the PDF extraction produced nothing usable,
     // try indexing a sidecar .txt so the book is still searchable.
     if (!addedAnyInBook) {
+      debugPrint('   🔍 מחפש קובץ טקסט נלווה (sidecar)...');
       final candidates = <String>{
         '${book.path}.txt',
         p.setExtension(book.path, '.txt'),
@@ -500,14 +616,18 @@ class IndexingRepository {
         final f = File(candidate);
         if (await f.exists()) {
           sidecar = f;
+          debugPrint('   ✅ נמצא קובץ sidecar: $candidate');
           break;
         }
       }
 
       if (sidecar != null) {
+        debugPrint('   ⏳ מאנדקס מקובץ sidecar...');
         final ocrText = await sidecar.readAsString();
         final pagesText =
             ocrText.contains('\f') ? ocrText.split('\f') : <String>[ocrText];
+
+        int sidecarLinesIndexed = 0;
 
         for (int pageIndex = 0; pageIndex < pagesText.length; pageIndex++) {
           if (!_tantivyDataProvider.isIndexing.value) {
@@ -545,19 +665,19 @@ class IndexingRepository {
               filePath: book.path,
             );
             addedAnyInBook = true;
-          }
-        }
+            sidecarLinesIndexed++;
+          } // סגירת הלולאה הפנימית (for j)
+        } // סגירת הלולאה החיצונית (for pageIndex)
 
-        if (kDebugMode) {
-          debugPrint(
-            'ℹ️ Indexed PDF from sidecar text: ${sidecar.path} (pdf: ${book.path})',
-          );
-        }
+        debugPrint(
+            '   ✅ אונדקסו $sidecarLinesIndexed שורות מקובץ sidecar: ${sidecar.path}');
+      } else {
+        debugPrint('   ⚠️ לא נמצא קובץ sidecar');
       }
     }
 
     // Don't commit after every book - too slow!
-    debugPrint('   ✅ סיים אינדוקס PDF: ${book.title}');
+    // Summary already printed above
   }
 
   /// Cancels the ongoing indexing process.
