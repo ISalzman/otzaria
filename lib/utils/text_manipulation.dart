@@ -210,14 +210,14 @@ const String _defaultCategory = 'מפרשים נוספים';
 
 int countMatches(String text, String searchQuery) {
   if (searchQuery.isEmpty) return 0;
-  
+
   // ניקוי תווים מיוחדים מהשאילתה
   final cleanedQuery = searchQuery
       .replaceAll(RegExp(r'[!?":*\(\)\[\]\{\}\^\$\|\\+.~`]'), '')
       .trim();
-  
+
   if (cleanedQuery.isEmpty) return 0;
-  
+
   // אותו רג'קס כמו ב-highLight
   final RegExp regex = RegExp(
     RegExp.escape(cleanedQuery),

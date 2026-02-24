@@ -39,33 +39,16 @@ class AppPaths {
     return libraryPath;
   }
 
-  /// Helper method to get the base directory path
-  /// If library path points to a .db file, returns its parent directory
-  /// Otherwise returns the library path itself
-  static Future<String> _getBasePath() async {
-    final libraryPath = await getLibraryPath();
-    
-    // אם הנתיב הוא קובץ DB, נשתמש בתיקייה שמכילה אותו
-    if (libraryPath.toLowerCase().endsWith('.db')) {
-      return p.dirname(libraryPath);
-    }
-    
-    // אחרת, נשתמש בנתיב כרגיל
-    return libraryPath;
-  }
-
   /// Gets the search index path (library_path/index)
-  /// If library path points to a .db file, uses its parent directory
   static Future<String> getIndexPath() async {
-    final basePath = await _getBasePath();
-    return p.join(basePath, 'index');
+    final libraryPath = await getLibraryPath();
+    return p.join(libraryPath, 'index');
   }
 
   /// Gets the manifest file path (library_path/files_manifest.json)
-  /// If library path points to a .db file, uses its parent directory
   static Future<String> getManifestPath() async {
-    final basePath = await _getBasePath();
-    return p.join(basePath, 'files_manifest.json');
+    final libraryPath = await getLibraryPath();
+    return p.join(libraryPath, 'files_manifest.json');
   }
 
   /// Resolves the notes database path - for cross-platform compatibility
@@ -89,17 +72,9 @@ class AppPaths {
   /// Note: Does NOT create the library path itself - only index directories
   /// The library path should be created by the user or during library download
   static Future<void> createNecessaryDirectories() async {
-    // רק ניצור את תיקיות האינדקס, לא את תיקיית הספרייה עצמה
-    // תיקיית הספרייה תיווצר רק כשמורידים ספרייה או כשהמשתמש בוחר תיקייה קיימת
     final libraryPath = await getLibraryPath();
-    
-    // בדיקה אם הנתיב הוא קובץ או תיקייה
-    final isDbFile = libraryPath.toLowerCase().endsWith('.db');
-    final checkPath = isDbFile ? p.dirname(libraryPath) : libraryPath;
-    final checkDir = Directory(checkPath);
+    final checkDir = Directory(libraryPath);
 
-    // אם התיקייה לא קיימת, לא ניצור אותה
-    // רק נוודא שתיקיות האינדקס קיימות אם התיקייה קיימת
     if (await checkDir.exists()) {
       final dirs = [
         await getIndexPath(),
