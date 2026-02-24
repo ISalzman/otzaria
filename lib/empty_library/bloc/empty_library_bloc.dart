@@ -28,11 +28,11 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         allowedExtensions: ['db', 'zip'],
         dialogTitle: 'בחר קובץ מסד נתונים (seforim.db) או קובץ ZIP',
       );
-      
+
       if (result == null || result.files.isEmpty) {
         return;
       }
-      
+
       selectedFile = result.files.first.path;
       if (selectedFile == null) {
         return;
@@ -66,11 +66,19 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         return;
       }
 
-      // שמירת הגדרות - נשמור את נתיב הקובץ ישירות
-      await Settings.setValue(SettingsRepository.keyLibraryPath, dbFilePath);
-      await Settings.setValue(SettingsRepository.keyLibraryFolderName, '');
+      // המרת נתיב קובץ ה-DB לתיקיית השורש ושמירה בהגדרות
+      final saved = await _saveLibraryPathFromDbFile(dbFilePath);
+      if (!saved) {
+        emit(EmptyLibraryError(
+          errorMessage:
+              'קובץ ה-DB צריך להיות בתוך תת-תיקייה (לדוגמה: אוצריא/seforim.db)',
+          selectedPath: dbFilePath,
+        ));
+        return;
+      }
 
-      emit(EmptyLibraryDirectorySelected(selectedPath: dbFilePath));
+      final rootPath = path.dirname(path.dirname(dbFilePath));
+      emit(EmptyLibraryDirectorySelected(selectedPath: rootPath));
     } catch (e) {
       emit(EmptyLibraryError(
         errorMessage: 'שגיאה: $e',
@@ -136,24 +144,35 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           .list(recursive: true)
           .where((entity) =>
               entity is File &&
-              entity.path.toLowerCase().endsWith(DatabaseConstants.databaseFileName))
+              entity.path
+                  .toLowerCase()
+                  .endsWith(DatabaseConstants.databaseFileName))
           .cast<File>()
           .toList();
 
       if (dbFiles.isEmpty) {
         emit(EmptyLibraryError(
-          errorMessage: 'לא נמצא קובץ ${DatabaseConstants.databaseFileName} בקובץ ה-ZIP',
+          errorMessage:
+              'לא נמצא קובץ ${DatabaseConstants.databaseFileName} בקובץ ה-ZIP',
           selectedPath: extractedDirectory,
         ));
         return;
       }
 
-      // שמירת הגדרות - נשמור את נתיב קובץ ה-DB
+      // המרת נתיב קובץ ה-DB לתיקיית השורש ושמירה בהגדרות
       final dbPath = dbFiles.first.path;
-      await Settings.setValue(SettingsRepository.keyLibraryPath, dbPath);
-      await Settings.setValue(SettingsRepository.keyLibraryFolderName, '');
+      final saved = await _saveLibraryPathFromDbFile(dbPath);
+      if (!saved) {
+        emit(EmptyLibraryError(
+          errorMessage:
+              'מבנה תיקיות לא תקין - קובץ ה-DB צריך להיות בתוך תת-תיקייה',
+          selectedPath: extractedDirectory,
+        ));
+        return;
+      }
 
-      emit(EmptyLibraryDirectorySelected(selectedPath: dbPath));
+      final rootPath = path.dirname(path.dirname(dbPath));
+      emit(EmptyLibraryDirectorySelected(selectedPath: rootPath));
     } catch (e) {
       emit(EmptyLibraryError(
         errorMessage: 'שגיאה: $e',
@@ -282,5 +301,24 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         errorMessage: 'שגיאה: $e',
       ));
     }
+  }
+
+  /// המרת נתיב קובץ DB לתיקיית שורש ושמירה בהגדרות.
+  /// מצפה למבנה: Root/תיקייה/seforim.db
+  /// מחזירה true אם הצליח, false אם המבנה לא תקין.
+  Future<bool> _saveLibraryPathFromDbFile(String dbFilePath) async {
+    final parentDir = path.dirname(dbFilePath);
+    final rootPath = path.dirname(parentDir);
+    final folderName = path.basename(parentDir);
+
+    // וידוא שהקובץ באמת בתוך תת-תיקייה (לא בשורש דיסק)
+    if (rootPath == parentDir || folderName.isEmpty) {
+      return false;
+    }
+
+    await Settings.setValue(SettingsRepository.keyLibraryPath, rootPath);
+    await Settings.setValue(
+        SettingsRepository.keyLibraryFolderName, folderName);
+    return true;
   }
 }

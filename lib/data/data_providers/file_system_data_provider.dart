@@ -172,32 +172,17 @@ class FileSystemData {
   /// to create a full [Library] object containing all categories and books.
   /// Uses LibraryProviderManager for unified catalog building.
   Future<Library> getLibrary() async {
-    // בדיקה שהנתיב קיים (יכול להיות קובץ DB או תיקייה)
-    final libraryFile = File(libraryPath);
     final libraryDir = Directory(libraryPath);
-    
-    // אם זה קובץ DB, נשתמש בו ישירות
-    if (libraryFile.existsSync() && libraryPath.toLowerCase().endsWith('.db')) {
-      metadata = _getMetadata();
-      final metadataResult = await metadata;
 
-      // Use the unified catalog builder from LibraryProviderManager
-      final library = await _providerManager.buildLibraryCatalog(
-        metadataResult,
-        libraryPath,
-      );
-
-      return library;
-    }
-    
-    // אם זה תיקייה, נחפש את קובץ ה-DB בתוכה
     if (!libraryDir.existsSync()) {
       debugPrint('Library path does not exist: $libraryPath');
       return Library(categories: []);
     }
 
-    // קבלת שם התיקייה מההגדרות (אם לא קיים, השתמש ב-"אוצריא")
-    final folderName = Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ?? DatabaseConstants.otzariaFolderName;
+    // קבלת שם התיקייה מההגדרות
+    final folderName =
+        Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
+            DatabaseConstants.otzariaFolderName;
 
     // בדיקה שתיקיית הספרים קיימת
     final otzariaPath = path.join(libraryPath, folderName);
