@@ -15,6 +15,7 @@ import 'package:otzaria/utils/ref_helper.dart';
 
 class IndexingRepository {
   final TantivyDataProvider _tantivyDataProvider;
+  int _docIdSequence = 0;
 
   IndexingRepository(this._tantivyDataProvider);
 
@@ -27,6 +28,12 @@ class IndexingRepository {
       RegExp(r'[\u05D0-\u05EAa-zA-Z0-9]');
   static final RegExp _pdfNonLettersNonSpace =
       RegExp(r'[^\s\u05D0-\u05EAa-zA-Z0-9]');
+
+  BigInt _nextDocumentId() {
+    _docIdSequence++;
+    return (BigInt.from(DateTime.now().microsecondsSinceEpoch) << 20) +
+        BigInt.from(_docIdSequence);
+  }
 
   static String _normalizePdfTextForIndexing(String input) {
     var text = stripHtmlIfNeeded(input);
@@ -93,15 +100,18 @@ class IndexingRepository {
         if (book is TextBook) {
           if (!_tantivyDataProvider.booksDone
               .contains("${book.title}textBook")) {
-            if (_tantivyDataProvider.booksDone.contains(
-                sha1.convert(utf8.encode((await book.text))).toString())) {
+            final bookText = await book.text;
+            final textHash = sha1.convert(utf8.encode(bookText)).toString();
+
+            if (_tantivyDataProvider.booksDone.contains(textHash)) {
               debugPrint('⏭️ דילוג על ספר קיים (hash): ${book.title}');
               _tantivyDataProvider.booksDone.add("${book.title}textBook");
               skipped++;
             } else {
               debugPrint('📖 מאנדקס ספר טקסט: ${book.title}');
-              await _indexTextBook(book);
+              await _indexTextBook(book, preloadedText: bookText);
               _tantivyDataProvider.booksDone.add("${book.title}textBook");
+              _tantivyDataProvider.booksDone.add(textHash);
               actuallyIndexed++;
             }
           } else {
@@ -139,6 +149,9 @@ class IndexingRepository {
               debugPrint('📄 מאנדקס PDF: ${book.title}');
               await _indexPdfBook(book);
               _tantivyDataProvider.booksDone.add("${book.title}pdfBook");
+              if (fileHash != null) {
+                _tantivyDataProvider.booksDone.add(fileHash);
+              }
               actuallyIndexed++;
             }
           } else {
@@ -157,6 +170,7 @@ class IndexingRepository {
               debugPrint('🔗 מאנדקס ספר חיצוני: ${book.title}');
               await _indexExternalLibraryBook(book);
               _tantivyDataProvider.booksDone.add("${book.title}externalBook");
+              _tantivyDataProvider.booksDone.add(idHash);
               actuallyIndexed++;
             }
           } else {
@@ -216,13 +230,13 @@ class IndexingRepository {
   }
 
   /// Indexes a text-based book by processing its content and adding it to the search index.
-  Future<void> _indexTextBook(TextBook book) async {
+  Future<void> _indexTextBook(TextBook book, {String? preloadedText}) async {
     final index = await _tantivyDataProvider.engine;
 
     try {
       // Try to get text directly from DB if we have categoryId
-      String? text;
-      if (book.categoryId != null) {
+      String? text = preloadedText;
+      if ((text == null || text.isEmpty) && book.categoryId != null) {
         debugPrint(
             '   🔍 מנסה לקרוא מ-DB: ${book.title} (categoryId: ${book.categoryId})');
         text = await SqliteDataProvider.instance.getBookTextFromDb(
@@ -252,8 +266,7 @@ class IndexingRepository {
 
       if (texts.length <= 1) {
         debugPrint(
-            '⚠️ ספר עם שורה אחת בלבד: ${book.title} (${texts.length} שורות) - מדלג');
-        return;
+            'ℹ️ ספר קצר: ${book.title} (${texts.length} שורות) - מאנדקס כרגיל');
       }
 
       List<String> reference = [];
@@ -289,7 +302,7 @@ class IndexingRepository {
           var headerLine = stripHtmlIfNeeded(line);
           headerLine = removeVolwels(headerLine);
           index.addDocument(
-              id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+              id: _nextDocumentId(),
               title: title,
               reference: stripHtmlIfNeeded(reference.join(', ')),
               topics: '$topics/$title',
@@ -303,7 +316,7 @@ class IndexingRepository {
 
           // Add to search index
           index.addDocument(
-              id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+              id: _nextDocumentId(),
               title: title,
               reference: stripHtmlIfNeeded(reference.join(', ')),
               topics: '$topics/$title',
@@ -345,7 +358,7 @@ class IndexingRepository {
     combined = removeVolwels(combined);
 
     index.addDocument(
-      id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+      id: _nextDocumentId(),
       title: title,
       reference: '',
       topics: '$topics/$title',
@@ -419,7 +432,8 @@ class IndexingRepository {
             // Save to temporary file (like pdf_book_screen does)
             debugPrint('   💾 שומר לקובץ זמני...');
             final tempDir = await getTemporaryDirectory();
-            final fileName = 'pdf_index_${book.title.hashCode}.pdf';
+            final fileName =
+                'pdf_index_${book.id ?? book.title.hashCode}_${_nextDocumentId()}.pdf';
             final tempFile = File('${tempDir.path}/$fileName');
             tempFileCreatedByUs = tempFile;
 
@@ -564,7 +578,7 @@ class IndexingRepository {
             }
 
             index.addDocument(
-              id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+              id: _nextDocumentId(),
               title: title,
               reference: ref,
               topics: '$topics/$title',
@@ -661,7 +675,7 @@ class IndexingRepository {
               }
 
               index.addDocument(
-                id: BigInt.from(DateTime.now().microsecondsSinceEpoch),
+                id: _nextDocumentId(),
                 title: title,
                 reference: ref,
                 topics: '$topics/$title',
