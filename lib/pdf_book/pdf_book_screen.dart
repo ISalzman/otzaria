@@ -88,12 +88,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Timer? _scrollTimer;
   LogicalKeyboardKey? _currentScrollKey;
 
-  // Throttling לגלילה - מניעת עומס בגלילה מהירה
-  Timer? _scrollThrottleTimer;
-  double _pendingScrollDeltaY = 0.0;
-  static const Duration _scrollThrottleDuration =
-      Duration(milliseconds: 100); // המתנה של 100ms אחרי סיום גלילה
-
   Future<String?>? _pdfPathFuture;
 
   // Local UI state that syncs with Bloc
@@ -497,13 +491,22 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       onGeneralTap: (tapContext, _, details) {
         return details.type == PdfViewerGeneralTapType.secondaryTap;
       },
+      onKey: (params, key, isRealKeyPress) {
+        if (key == LogicalKeyboardKey.arrowLeft) {
+          if (isRealKeyPress) {
+            _goNextPage();
+          }
+          return true;
+        }
+        if (key == LogicalKeyboardKey.arrowRight) {
+          if (isRealKeyPress) {
+            _goPreviousPage();
+          }
+          return true;
+        }
+        return null;
+      },
       viewerOverlayBuilder: (context, size, handleLinkTap) => [
-        Positioned.fill(
-          child: ctx.ContextMenuRegion(
-            contextMenu: _buildPdfContextMenu(),
-            child: const ColoredBox(color: Colors.transparent),
-          ),
-        ),
         // פס גלילה אנכי עם track מלא
         PdfScrollbar(
           controller: widget.tab.pdfViewerController,
@@ -648,8 +651,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       focusNode: _pdfViewFocusNode,
       autofocus: false,
       onKeyEvent: (FocusNode node, KeyEvent event) {
-        // טיפול בלחיצה ראשונית או בלחיצה ממושכת (Repeat)
-        if (event is KeyDownEvent || event is KeyRepeatEvent) {
+        if (event is KeyDownEvent) {
           if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
             _goNextPage();
             return KeyEventResult.handled;
@@ -657,6 +659,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             _goPreviousPage();
             return KeyEventResult.handled;
           } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            _startContinuousScroll(LogicalKeyboardKey.arrowUp);
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            _startContinuousScroll(LogicalKeyboardKey.arrowDown);
+            return KeyEventResult.handled;
+          }
+        } else if (event is KeyRepeatEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
             _startContinuousScroll(LogicalKeyboardKey.arrowUp);
             return KeyEventResult.handled;
           } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
@@ -677,11 +687,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onTap: () {
           _pdfViewFocusNode.requestFocus();
         },
-        child: PdfViewer.file(
-          filePath,
-          controller: widget.tab.pdfViewerController,
-          passwordProvider: () => passwordDialog(context),
-          params: _buildPdfViewerParams(),
+        child: ctx.ContextMenuRegion(
+          contextMenu: _buildPdfContextMenu(),
+          child: PdfViewer.file(
+            filePath,
+            controller: widget.tab.pdfViewerController,
+            passwordProvider: () => passwordDialog(context),
+            params: _buildPdfViewerParams(),
+          ),
         ),
       ),
     );
@@ -705,7 +718,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   @override
   void dispose() {
     _stopContinuousScroll();
-    _scrollThrottleTimer?.cancel();
     textSearcher?.removeListener(_onTextSearcherUpdated);
     widget.tab.pdfViewerController.removeListener(_onPdfViewerControllerUpdate);
     _leftPaneTabController?.removeListener(_leftPaneTabControllerListener);
@@ -931,36 +943,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         }
                         return false;
                       },
-                      child: GestureDetector(
-                        onPanUpdate: (details) {
-                          // טיפול בגלילה במסך מגע
-                          _handleThrottledScroll(-details.delta.dy);
-
-                          if (!(widget.tab.pinLeftPane.value ||
-                              (Settings.getValue<bool>('key-pin-sidebar') ??
-                                  false))) {
+                      child: Listener(
+                        onPointerSignal: (event) {
+                          if (event is PointerScrollEvent &&
+                              !(widget.tab.pinLeftPane.value ||
+                                  (Settings.getValue<bool>('key-pin-sidebar') ??
+                                      false))) {
                             widget.tab.showLeftPane.value = false;
                             Future.microtask(() {
                               _pdfViewFocusNode.requestFocus();
                             });
                           }
                         },
-                        child: Listener(
-                          onPointerSignal: (event) {
-                            if (event is PointerScrollEvent) {
-                              _handleThrottledScroll(event.scrollDelta.dy);
-
-                              if (!(widget.tab.pinLeftPane.value ||
-                                  (Settings.getValue<bool>('key-pin-sidebar') ??
-                                      false))) {
-                                widget.tab.showLeftPane.value = false;
-                                Future.microtask(() {
-                                  _pdfViewFocusNode.requestFocus();
-                                });
-                              }
-                            }
-                          },
-                          child: ColorFiltered(
+                        child: ColorFiltered(
                           colorFilter: ColorFilter.mode(
                             Colors.white,
                             Provider.of<SettingsBloc>(context, listen: true)
@@ -1077,7 +1072,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                           ),
                         ),
                       ),
-                    ),
                     ),
                     BlocBuilder<PdfBookBloc, PdfBookState>(
                       buildWhen: (prev, curr) {
@@ -1410,7 +1404,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final nextPage = min(currentPage + 1, totalPages);
 
     widget.tab.pdfViewerController.goToPage(pageNumber: nextPage);
-    
+
     // משיכת פוקוס חזרה לאחר שינוי עמוד
     if (!_pdfViewFocusNode.hasFocus) {
       _pdfViewFocusNode.requestFocus();
@@ -1426,39 +1420,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final prevPage = max(currentPage - 1, 1);
 
     widget.tab.pdfViewerController.goToPage(pageNumber: prevPage);
-    
+
     // משיכת פוקוס חזרה לאחר שינוי עמוד
     if (!_pdfViewFocusNode.hasFocus) {
       _pdfViewFocusNode.requestFocus();
     }
-  }
-
-  void _handleThrottledScroll(double deltaY) {
-    if (!widget.tab.pdfViewerController.isReady) return;
-
-    _pendingScrollDeltaY += deltaY;
-
-    _scrollThrottleTimer?.cancel();
-
-    _scrollThrottleTimer = Timer(_scrollThrottleDuration, () {
-      if (!mounted || !widget.tab.pdfViewerController.isReady) return;
-
-      final currentMatrix = widget.tab.pdfViewerController.value;
-      final currentTranslation = currentMatrix.getTranslation();
-
-      final newY = currentTranslation.y - _pendingScrollDeltaY;
-
-      widget.tab.pdfViewerController.goTo(
-        currentMatrix.clone()
-          ..setTranslationRaw(
-            currentTranslation.x,
-            newY,
-            currentTranslation.z,
-          ),
-      );
-
-      _pendingScrollDeltaY = 0.0;
-    });
   }
 
   void _startContinuousScroll(LogicalKeyboardKey key) {
@@ -1490,7 +1456,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
       if (_currentScrollKey == LogicalKeyboardKey.arrowUp && isUpPressed) {
         _scrollUpSimple();
-      } else if (_currentScrollKey == LogicalKeyboardKey.arrowDown && isDownPressed) {
+      } else if (_currentScrollKey == LogicalKeyboardKey.arrowDown &&
+          isDownPressed) {
         _scrollDownSimple();
       } else {
         _stopContinuousScroll();
