@@ -15,9 +15,9 @@ import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
-import 'package:otzaria/widgets/confirmation_dialog.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/widgets/shortcut_dropdown_tile.dart';
-import 'package:otzaria/settings/protected_mode_settings.dart';
+import 'package:otzaria/settings/protected_settings_screen.dart';
 import 'package:otzaria/settings/protected_settings_wrapper.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -103,11 +103,50 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
               const SizedBox(height: 16),
 
               // מצב מוגן
-              const ProtectedModeSettings(),
+              _buildProtectedModeNavigation(context),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildProtectedModeNavigation(BuildContext context) {
+    return SettingsCard(
+      title: 'אבטחה',
+      children: [
+        ListTile(
+          leading: const Icon(FluentIcons.shield_keyhole_24_regular),
+          title: const Text('מצב מוגן', style: TextStyle(fontSize: 16)),
+          subtitle:
+              const Text('נעילת הגדרות ועוד', style: TextStyle(fontSize: 13)),
+          trailing: const Icon(
+              FluentIcons.chevron_left_24_regular), // RTL: חץ שמאלה = קדימה
+          onTap: () {
+            Navigator.of(context).push(
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    const ProtectedSettingsScreen(),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                  const begin = Offset(-1.0, 0.0); // RTL: slide from left
+                  const end = Offset.zero;
+                  const curve = Curves.easeInOut;
+
+                  var tween = Tween(begin: begin, end: end)
+                      .chain(CurveTween(curve: curve));
+                  var offsetAnimation = animation.drive(tween);
+
+                  return SlideTransition(
+                    position: offsetAnimation,
+                    child: child,
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -121,27 +160,29 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
               const Text('איפוס קיצורי מקשים', style: TextStyle(fontSize: 16)),
           subtitle: const Text('החזר את כל קיצורי המקשים לברירת מחדל',
               style: TextStyle(fontSize: 13)),
-          onTap: () async {
-            final confirmed = await showConfirmationDialog(
-              context: context,
-              title: 'איפוס קיצורי מקשים?',
-              content:
-                  'כל קיצורי המקשים המותאמים אישית יאופסו לברירת המחדל. האם להמשיך?',
-              isDangerous: true,
-              barrierDismissible: false,
-            );
-
-            if (confirmed == true && context.mounted) {
-              context.read<SettingsBloc>().add(ResetShortcuts());
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('קיצורי המקשים אופסו בהצלחה',
-                      textDirection: TextDirection.rtl),
-                  duration: Duration(seconds: 2),
-                ),
+          hoverColor: Colors.transparent,
+          trailing: NeutralActionButton(
+            text: 'איפוס',
+            onPressed: () async {
+              final confirmed = await showWarningDialog(
+                context: context,
+                title: 'איפוס קיצורי מקשים?',
+                content: 'כל קיצורי המקשים המותאמים אישית יאופסו לברירת המחדל.',
+                subtitle: 'פעולה זו אינה הפיכה',
               );
-            }
-          },
+
+              if (confirmed == true && context.mounted) {
+                context.read<SettingsBloc>().add(ResetShortcuts());
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('קיצורי המקשים אופסו בהצלחה',
+                        textDirection: TextDirection.rtl),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+          ),
         ),
         const Divider(height: 1),
         ExpansionTile(
@@ -314,53 +355,50 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
                           ? 'האינדקס מעודכן'
                           : 'האינדקס לא מעודכן',
                   style: const TextStyle(fontSize: 13)),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(FluentIcons.delete_24_regular),
-                    tooltip: 'איפוס אינדקס',
-                    onPressed: () async {
-                      final result = await showConfirmationDialog(
-                        context: context,
-                        title: 'איפוס אינדקס',
-                        content:
-                            'האם למחוק את אינדקס החיפוש? תצטרך לבנות אותו מחדש כדי להשתמש בחיפוש.',
-                      );
-                      if (!context.mounted) return;
-                      if (result == true) {
-                        context.read<IndexingBloc>().add(ClearIndex());
-                      }
-                    },
-                  ),
-                  if (indexingState is IndexingInProgress)
-                    const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+              hoverColor: Colors.transparent,
+              trailing: indexingState is IndexingInProgress
+                  ? NeutralActionButton(
+                      text: 'עצור',
+                      onPressed: () async {
+                        final result = await showWarningDialog(
+                          context: context,
+                          title: 'עצירת עדכון',
+                          content: 'האם לעצור את תהליך עדכון האינדקס?',
+                        );
+                        if (!context.mounted) return;
+                        if (result == true) {
+                          context.read<IndexingBloc>().add(CancelIndexing());
+                        }
+                      },
                     )
-                  else
-                    const Icon(FluentIcons.chevron_left_24_regular),
-                ],
-              ),
-              onTap: () async {
-                if (indexingState is IndexingInProgress) {
-                  final result = await showConfirmationDialog(
-                    context: context,
-                    title: 'עצירת עדכון',
-                    content: 'האם לעצור את תהליך עדכון האינדקס?',
-                  );
-                  if (!context.mounted) return;
-                  if (result == true) {
-                    context.read<IndexingBloc>().add(CancelIndexing());
-                  }
-                } else {
-                  final library = context.read<LibraryBloc>().state.library;
-                  if (library != null) {
-                    context.read<IndexingBloc>().add(StartIndexing(library));
-                  }
-                }
-              },
+                  : indexingState is IndexingComplete
+                      ? NeutralActionButton(
+                          text: 'איפוס',
+                          onPressed: () async {
+                            final result = await showWarningDialog(
+                              context: context,
+                              title: 'איפוס אינדקס',
+                              content:
+                                  'האם למחוק את אינדקס החיפוש? תצטרך לבנות אותו מחדש כדי להשתמש בחיפוש.',
+                            );
+                            if (!context.mounted) return;
+                            if (result == true) {
+                              context.read<IndexingBloc>().add(ClearIndex());
+                            }
+                          },
+                        )
+                      : RecommendedActionButton(
+                          text: 'עדכן',
+                          onPressed: () {
+                            final library =
+                                context.read<LibraryBloc>().state.library;
+                            if (library != null) {
+                              context
+                                  .read<IndexingBloc>()
+                                  .add(StartIndexing(library));
+                            }
+                          },
+                        ),
             );
           },
         ),
@@ -476,99 +514,133 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
     return SettingsCard(
       title: 'איפוס',
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // איפוס הגדרות
-              Row(
-                children: [
-                  const Icon(FluentIcons.arrow_reset_24_regular),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('איפוס הגדרות',
-                            style: TextStyle(fontSize: 16)),
-                        const SizedBox(height: 4),
-                        Text(
-                          'פעולה זו תמחק את כל ההגדרות ותחזיר את התוכנה למצב ההתחלתי',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  FilledButton.tonal(
-                    onPressed: () async {
-                      // בדיקה אם במצב מוגן - אם כן, דרוש אימות סיסמה
-                      if (shouldProtectSettings(context)) {
-                        final verified = await verifyPasswordForAction(context);
-                        if (!verified || !context.mounted) {
-                          return;
-                        }
-                      }
-
-                      if (!context.mounted) return;
-
-                      final confirmed = await showConfirmationDialog(
-                        context: context,
-                        title: 'איפוס הגדרות?',
-                        content:
-                            'כל ההגדרות האישיות שלך ימחקו. פעולה זו אינה הפיכה. האם להמשיך?',
-                        isDangerous: true,
-                      );
-
-                      if (confirmed == true && context.mounted) {
-                        Settings.clearCache();
-                        await showDialog<void>(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (context) => AlertDialog(
-                            title: const Text('ההגדרות אופסו'),
-                            content: const Text(
-                                'יש לסגור ולהפעיל מחדש את התוכנה כדי שהשינויים יכנסו לתוקף.'),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  if (Platform.isAndroid || Platform.isIOS) {
-                                    SystemNavigator.pop();
-                                  } else {
-                                    windowManager.close();
-                                  }
-                                },
-                                child: const Text('סגור את התוכנה'),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                    },
-                    child: const Text('איפוס'),
-                  ),
-                ],
-              ),
-            ],
+        ListTile(
+          leading: const Icon(FluentIcons.arrow_reset_24_regular),
+          title: const Text('איפוס הגדרות', style: TextStyle(fontSize: 16)),
+          subtitle: const Text(
+              'פעולה זו תמחק את כל ההגדרות ותחזיר את התוכנה למצב ההתחלתי',
+              style: TextStyle(fontSize: 13)),
+          hoverColor: Colors.transparent,
+          trailing: NeutralActionButton(
+            text: 'אפשרויות איפוס',
+            onPressed: () => _showResetOptionsDialog(context),
           ),
         ),
+        const Divider(height: 1),
         ListTile(
           leading: const Icon(FluentIcons.delete_24_regular),
           title: const Text('הסרת התוכנה', style: TextStyle(fontSize: 16)),
           subtitle: const Text(
               'מחיקת כל ההגדרות ותיקיית ההתקנה. ניתן לבחור האם למחוק גם את הספרייה',
               style: TextStyle(fontSize: 13)),
-          onTap: () => _uninstallApp(context),
+          hoverColor: Colors.transparent,
+          trailing: NeutralActionButton(
+            text: 'הסרה',
+            onPressed: () => _uninstallApp(context),
+          ),
         ),
       ],
     );
+  }
+
+  /// הצגת דיאלוג בחירת אפשרויות איפוס
+  Future<void> _showResetOptionsDialog(BuildContext context) async {
+    // בדיקה אם במצב מוגן - אם כן, דרוש אימות סיסמה
+    if (shouldProtectSettings(context)) {
+      final verified = await verifyPasswordForAction(context);
+      if (!verified || !context.mounted) {
+        return;
+      }
+    }
+
+    if (!context.mounted) return;
+
+    // הצגת דיאלוג בחירה
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            title: const Text('בחר מה ברצונך לאפס'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: const Text('כל ההגדרות'),
+                  subtitle: const Text('איפוס מלא של כל ההגדרות'),
+                  leading: Icon(
+                    FluentIcons.settings_24_regular,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  onTap: () => Navigator.of(context).pop(true),
+                ),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                ),
+                child: const Text('ביטול'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true && context.mounted) {
+      // המשך לאישור סופי
+      await _resetSettings(context);
+    }
+  }
+
+  /// איפוס הגדרות
+  Future<void> _resetSettings(BuildContext context) async {
+    // בדיקה אם במצב מוגן - אם כן, דרוש אימות סיסמה
+    if (shouldProtectSettings(context)) {
+      final verified = await verifyPasswordForAction(context);
+      if (!verified || !context.mounted) {
+        return;
+      }
+    }
+
+    if (!context.mounted) return;
+
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: 'איפוס הגדרות?',
+      content: 'כל ההגדרות האישיות שלך ימחקו.',
+      subtitle: 'פעולה זו אינה הפיכה',
+    );
+
+    if (confirmed == true && context.mounted) {
+      Settings.clearCache();
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('ההגדרות אופסו'),
+          content: const Text(
+              'יש לסגור ולהפעיל מחדש את התוכנה כדי שהשינויים יכנסו לתוקף.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                if (Platform.isAndroid || Platform.isIOS) {
+                  SystemNavigator.pop();
+                } else {
+                  windowManager.close();
+                }
+              },
+              child: const Text('סגור את התוכנה'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   /// הסרת התוכנה - מחיקת הגדרות ותיקיית התקנה
@@ -584,12 +656,11 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
     if (!context.mounted) return;
 
     // אישור ראשוני
-    final confirmed = await showConfirmationDialog(
+    final confirmed = await showWarningDialog(
       context: context,
       title: 'הסרת התוכנה?',
-      content:
-          'פעולה זו תמחק את כל ההגדרות ואת תיקיית ההתקנה של התוכנה. פעולה זו אינה הפיכה!\n\nהאם להמשיך?',
-      isDangerous: true,
+      content: 'פעולה זו תמחק את כל ההגדרות ואת תיקיית ההתקנה של התוכנה.',
+      subtitle: 'פעולה זו אינה הפיכה!',
     );
 
     if (confirmed != true || !context.mounted) return;

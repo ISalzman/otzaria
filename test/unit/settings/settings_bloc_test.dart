@@ -5,6 +5,7 @@ import 'package:mockito/mockito.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/settings/settings_enums.dart';
 import '../../unit/mocks/mock_settings_repository.mocks.dart';
 
 void main() {
@@ -46,10 +47,8 @@ void main() {
         'useFastSearch': false,
         'replaceHolyNames': false,
         'autoUpdateIndex': false,
-        'defaultRemoveNikud': true,
-        'removeNikudFromTanach': true,
-        'defaultSidebarOpen': true,
-        'pinSidebar': true,
+        'nikudDisplayMode': NikudDisplayMode.hideAll,
+        'sidebarMode': SidebarMode.pinned,
         'sidebarWidth': 300.0,
         'facetFilteringWidth': 235.0,
         'commentaryPaneWidth': 400.0,
@@ -95,11 +94,9 @@ void main() {
             useFastSearch: mockSettings['useFastSearch'] as bool,
             replaceHolyNames: mockSettings['replaceHolyNames'] as bool,
             autoUpdateIndex: mockSettings['autoUpdateIndex'] as bool,
-            defaultRemoveNikud: mockSettings['defaultRemoveNikud'] as bool,
-            removeNikudFromTanach:
-                mockSettings['removeNikudFromTanach'] as bool,
-            defaultSidebarOpen: mockSettings['defaultSidebarOpen'] as bool,
-            pinSidebar: mockSettings['pinSidebar'] as bool,
+            nikudDisplayMode:
+                mockSettings['nikudDisplayMode'] as NikudDisplayMode,
+            sidebarMode: mockSettings['sidebarMode'] as SidebarMode,
             sidebarWidth: mockSettings['sidebarWidth'] as double,
             facetFilteringWidth: mockSettings['facetFilteringWidth'] as double,
             commentaryPaneWidth: mockSettings['commentaryPaneWidth'] as double,
@@ -204,13 +201,46 @@ void main() {
       );
     });
 
+    group('UpdateNikudDisplayMode', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'emits updated state when UpdateNikudDisplayMode is added',
+        build: () => settingsBloc,
+        act: (bloc) => bloc
+            .add(const UpdateNikudDisplayMode(NikudDisplayMode.showTanachOnly)),
+        expect: () => [
+          settingsBloc.state
+              .copyWith(nikudDisplayMode: NikudDisplayMode.showTanachOnly),
+        ],
+        verify: (_) {
+          verify(mockRepository
+                  .updateNikudDisplayMode(NikudDisplayMode.showTanachOnly))
+              .called(1);
+        },
+      );
+    });
+
+    group('UpdateSidebarMode', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'emits updated state when UpdateSidebarMode is added',
+        build: () => settingsBloc,
+        act: (bloc) => bloc.add(const UpdateSidebarMode(SidebarMode.open)),
+        expect: () => [
+          settingsBloc.state.copyWith(sidebarMode: SidebarMode.open),
+        ],
+        verify: (_) {
+          verify(mockRepository.updateSidebarMode(SidebarMode.open)).called(1);
+        },
+      );
+    });
+
     group('UpdateDefaultRemoveNikud', () {
       blocTest<SettingsBloc, SettingsState>(
         'emits updated state when UpdateDefaultRemoveNikud is added',
         build: () => settingsBloc,
         act: (bloc) => bloc.add(const UpdateDefaultRemoveNikud(true)),
         expect: () => [
-          settingsBloc.state.copyWith(defaultRemoveNikud: true),
+          settingsBloc.state
+              .copyWith(nikudDisplayMode: NikudDisplayMode.hideAll),
         ],
         verify: (_) {
           verify(mockRepository.updateDefaultRemoveNikud(true)).called(1);
@@ -223,9 +253,7 @@ void main() {
         'emits updated state when UpdateRemoveNikudFromTanach is added',
         build: () => settingsBloc,
         act: (bloc) => bloc.add(const UpdateRemoveNikudFromTanach(true)),
-        expect: () => [
-          settingsBloc.state.copyWith(removeNikudFromTanach: true),
-        ],
+        expect: () => [],
         verify: (_) {
           verify(mockRepository.updateRemoveNikudFromTanach(true)).called(1);
         },
@@ -238,7 +266,7 @@ void main() {
         build: () => settingsBloc,
         act: (bloc) => bloc.add(const UpdateDefaultSidebarOpen(true)),
         expect: () => [
-          settingsBloc.state.copyWith(defaultSidebarOpen: true),
+          settingsBloc.state.copyWith(sidebarMode: SidebarMode.open),
         ],
         verify: (_) {
           verify(mockRepository.updateDefaultSidebarOpen(true)).called(1);
@@ -252,7 +280,7 @@ void main() {
         build: () => settingsBloc,
         act: (bloc) => bloc.add(const UpdatePinSidebar(true)),
         expect: () => [
-          settingsBloc.state.copyWith(pinSidebar: true),
+          settingsBloc.state.copyWith(sidebarMode: SidebarMode.pinned),
         ],
         verify: (_) {
           verify(mockRepository.updatePinSidebar(true)).called(1);

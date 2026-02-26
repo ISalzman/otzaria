@@ -6,6 +6,7 @@ import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/settings/settings_card.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 
 /// טאב הגדרות עיצוב
 class AppearanceSettingsTab extends StatelessWidget {
@@ -115,18 +116,34 @@ class AppearanceSettingsTab extends StatelessWidget {
 
               // הסתרת שמות קודש
               SettingsCard(
-                title: 'שמות קודש',
+                title: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                    children: [
+                      TextSpan(
+                        text: 'שבח מגדל עוז ',
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary),
+                      ),
+                      TextSpan(
+                        text: 'שם הגדול',
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error),
+                      ),
+                    ],
+                  ),
+                ),
                 children: [
-                  SwitchListTile(
-                    secondary: const Icon(FluentIcons.eye_off_24_regular),
-                    title: const Text('הסתרת שמות הקודש',
-                        style: TextStyle(fontSize: 16)),
-                    subtitle: Text(
-                        state.replaceHolyNames
-                            ? 'השמות הקדושים יוחלפו מפאת קדושתם'
-                            : 'השמות הקדושים יוצגו ככתיבתם',
-                        style: const TextStyle(fontSize: 13)),
-                    value: state.replaceHolyNames,
+                  SegmentedSettingsTile<bool>(
+                    icon: FluentIcons.shield_keyhole_24_regular,
+                    title: 'בישראל גדול שמו',
+                    subtitle: '',
+                    options: const [
+                      SegmentOption(value: false, label: 'זה שמי לעלם'),
+                      SegmentOption(value: true, label: 'לא כשאני נכתב'),
+                    ],
+                    currentValue: state.replaceHolyNames,
                     onChanged: (value) {
                       context
                           .read<SettingsBloc>()

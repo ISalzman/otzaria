@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:equatable/equatable.dart';
+import 'package:otzaria/settings/settings_enums.dart';
 
 class SettingsState extends Equatable {
   final bool isDarkMode;
@@ -20,10 +21,8 @@ class SettingsState extends Equatable {
   final bool useFastSearch;
   final bool replaceHolyNames;
   final bool autoUpdateIndex;
-  final bool defaultRemoveNikud;
-  final bool removeNikudFromTanach;
-  final bool defaultSidebarOpen;
-  final bool pinSidebar;
+  final NikudDisplayMode nikudDisplayMode;
+  final SidebarMode sidebarMode;
   final double sidebarWidth;
   final double facetFilteringWidth;
   final double commentaryPaneWidth;
@@ -58,10 +57,8 @@ class SettingsState extends Equatable {
     required this.useFastSearch,
     required this.replaceHolyNames,
     required this.autoUpdateIndex,
-    required this.defaultRemoveNikud,
-    required this.removeNikudFromTanach,
-    required this.defaultSidebarOpen,
-    required this.pinSidebar,
+    required this.nikudDisplayMode,
+    required this.sidebarMode,
     required this.sidebarWidth,
     required this.facetFilteringWidth,
     required this.commentaryPaneWidth,
@@ -99,10 +96,8 @@ class SettingsState extends Equatable {
       useFastSearch: true,
       replaceHolyNames: true,
       autoUpdateIndex: true,
-      defaultRemoveNikud: false,
-      removeNikudFromTanach: false,
-      defaultSidebarOpen: false,
-      pinSidebar: false,
+      nikudDisplayMode: NikudDisplayMode.showAll,
+      sidebarMode: SidebarMode.hidden,
       sidebarWidth: 300,
       facetFilteringWidth: 235,
       commentaryPaneWidth: 400,
@@ -139,10 +134,8 @@ class SettingsState extends Equatable {
     bool? useFastSearch,
     bool? replaceHolyNames,
     bool? autoUpdateIndex,
-    bool? defaultRemoveNikud,
-    bool? removeNikudFromTanach,
-    bool? defaultSidebarOpen,
-    bool? pinSidebar,
+    NikudDisplayMode? nikudDisplayMode,
+    SidebarMode? sidebarMode,
     double? sidebarWidth,
     double? facetFilteringWidth,
     double? commentaryPaneWidth,
@@ -178,11 +171,8 @@ class SettingsState extends Equatable {
       useFastSearch: useFastSearch ?? this.useFastSearch,
       replaceHolyNames: replaceHolyNames ?? this.replaceHolyNames,
       autoUpdateIndex: autoUpdateIndex ?? this.autoUpdateIndex,
-      defaultRemoveNikud: defaultRemoveNikud ?? this.defaultRemoveNikud,
-      removeNikudFromTanach:
-          removeNikudFromTanach ?? this.removeNikudFromTanach,
-      defaultSidebarOpen: defaultSidebarOpen ?? this.defaultSidebarOpen,
-      pinSidebar: pinSidebar ?? this.pinSidebar,
+      nikudDisplayMode: nikudDisplayMode ?? this.nikudDisplayMode,
+      sidebarMode: sidebarMode ?? this.sidebarMode,
       sidebarWidth: sidebarWidth ?? this.sidebarWidth,
       facetFilteringWidth: facetFilteringWidth ?? this.facetFilteringWidth,
       commentaryPaneWidth: commentaryPaneWidth ?? this.commentaryPaneWidth,
@@ -222,10 +212,8 @@ class SettingsState extends Equatable {
         useFastSearch,
         replaceHolyNames,
         autoUpdateIndex,
-        defaultRemoveNikud,
-        removeNikudFromTanach,
-        defaultSidebarOpen,
-        pinSidebar,
+        nikudDisplayMode,
+        sidebarMode,
         sidebarWidth,
         facetFilteringWidth,
         commentaryPaneWidth,
@@ -242,4 +230,11 @@ class SettingsState extends Equatable {
         personalNotesCollapsedByDefault,
         protectedModeEnabled,
       ];
+
+  // Getters לתאימות לאחור
+  bool get defaultRemoveNikud => nikudDisplayMode != NikudDisplayMode.showAll;
+  bool get removeNikudFromTanach =>
+      nikudDisplayMode == NikudDisplayMode.hideAll;
+  bool get defaultSidebarOpen => sidebarMode != SidebarMode.hidden;
+  bool get pinSidebar => sidebarMode == SidebarMode.pinned;
 }

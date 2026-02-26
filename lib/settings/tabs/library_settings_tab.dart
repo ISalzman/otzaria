@@ -14,6 +14,7 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/settings/custom_folders/custom_folders_tile.dart';
 import 'package:otzaria/widgets/zip_extraction_progress_dialog.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/settings/settings_card.dart';
 
 /// טאב הגדרות ספרייה
@@ -151,17 +152,7 @@ class LibrarySettingsTab extends StatelessWidget {
                             'לא קיים',
                         style: const TextStyle(fontSize: 13),
                       ),
-                      trailing:
-                          const Icon(FluentIcons.chevron_right_24_regular),
-                      onTap: () async {
-                        String? path =
-                            await FilePicker.platform.getDirectoryPath();
-                        if (path != null && context.mounted) {
-                          // הצגת דיאלוג חילוץ
-                          _showExtractionDialog(context, path,
-                              isLibraryPath: true);
-                        }
-                      },
+                      trailing: _buildLibraryPathButton(context),
                     ),
                     const Divider(height: 1),
                     Tooltip(
@@ -176,17 +167,7 @@ class LibrarySettingsTab extends StatelessWidget {
                               'לא קיים',
                           style: const TextStyle(fontSize: 13),
                         ),
-                        trailing:
-                            const Icon(FluentIcons.chevron_right_24_regular),
-                        onTap: () async {
-                          String? path =
-                              await FilePicker.platform.getDirectoryPath();
-                          if (path != null && context.mounted) {
-                            // הצגת דיאלוג חילוץ
-                            _showExtractionDialog(context, path,
-                                isLibraryPath: false);
-                          }
-                        },
+                        trailing: _buildHebrewBooksPathButton(context),
                       ),
                     ),
                   ],
@@ -206,6 +187,37 @@ class LibrarySettingsTab extends StatelessWidget {
             ],
           ),
         );
+      },
+    );
+  }
+
+  Widget _buildLibraryPathButton(BuildContext context) {
+    final hasPath =
+        Settings.getValue<String>(SettingsRepository.keyLibraryPath) != null;
+    return NeutralActionButton(
+      text: hasPath ? 'שנה מיקום' : 'בחר מיקום',
+      icon: FluentIcons.folder_24_regular,
+      onPressed: () async {
+        String? path = await FilePicker.platform.getDirectoryPath();
+        if (path != null && context.mounted) {
+          _showExtractionDialog(context, path, isLibraryPath: true);
+        }
+      },
+    );
+  }
+
+  Widget _buildHebrewBooksPathButton(BuildContext context) {
+    final hasPath =
+        Settings.getValue<String>(SettingsRepository.keyHebrewBooksPath) !=
+            null;
+    return RecommendedActionButton(
+      text: hasPath ? 'שנה מיקום' : 'בחר מיקום',
+      icon: FluentIcons.folder_24_regular,
+      onPressed: () async {
+        String? path = await FilePicker.platform.getDirectoryPath();
+        if (path != null && context.mounted) {
+          _showExtractionDialog(context, path, isLibraryPath: false);
+        }
       },
     );
   }

@@ -15,6 +15,7 @@ class MySettingsScreen extends StatefulWidget {
 
 class _MySettingsScreenState extends State<MySettingsScreen> {
   int _selectedIndex = 0;
+  double? _lastWidth;
 
   // ── הגדרת רשימת הטאבים ────────────────────────────────────────────────────
   late final List<
@@ -69,6 +70,20 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final isMobile = constraints.maxWidth < 600;
+
+            // שמירת הרוחב הקודם כדי למנוע ניווט אוטומטי בשינוי גודל
+            if (_lastWidth != null && ((_lastWidth! < 600) != isMobile)) {
+              // שינוי ממובייל לדסקטופ או להיפך - לא מנווטים
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _lastWidth = constraints.maxWidth;
+                  });
+                }
+              });
+            } else {
+              _lastWidth = constraints.maxWidth;
+            }
 
             // ── מצב מובייל ────────────────────────────────────────────────
             if (isMobile) {
