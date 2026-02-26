@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria/settings/settings_enums.dart';
 
 abstract class SettingsEvent extends Equatable {
   const SettingsEvent();
@@ -161,6 +162,24 @@ class UpdateAutoUpdateIndex extends SettingsEvent {
 
   @override
   List<Object?> get props => [autoUpdateIndex];
+}
+
+class UpdateNikudDisplayMode extends SettingsEvent {
+  final NikudDisplayMode nikudDisplayMode;
+
+  const UpdateNikudDisplayMode(this.nikudDisplayMode);
+
+  @override
+  List<Object?> get props => [nikudDisplayMode];
+}
+
+class UpdateSidebarMode extends SettingsEvent {
+  final SidebarMode sidebarMode;
+
+  const UpdateSidebarMode(this.sidebarMode);
+
+  @override
+  List<Object?> get props => [sidebarMode];
 }
 
 class UpdateDefaultRemoveNikud extends SettingsEvent {

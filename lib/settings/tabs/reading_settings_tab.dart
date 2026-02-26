@@ -6,8 +6,10 @@ import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/settings/settings_enums.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/settings/settings_card.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 
 /// טאב הגדרות תצוגת ספרים
 /// ניתן להשתמש בו גם כתוכן בתוך דיאלוג וגם כטאב במסך הגדרות
@@ -164,6 +166,26 @@ class ReadingSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'הסרת ניקוד וטעמים',
       children: [
+        SegmentedSettingsTile<NikudDisplayMode>(
+          icon: FluentIcons.text_font_info_24_regular,
+          title: 'הצגת הניקוד',
+          subtitle: state.nikudDisplayMode == NikudDisplayMode.showAll
+              ? 'הניקוד יוצג בכל הספרים'
+              : state.nikudDisplayMode == NikudDisplayMode.showTanachOnly
+                  ? 'הניקוד יוצג רק בספרי התנ"ך'
+                  : 'הניקוד לא יוצג בשום ספר',
+          options: const [
+            SegmentOption(value: NikudDisplayMode.showAll, label: 'הצג תמיד'),
+            SegmentOption(
+                value: NikudDisplayMode.showTanachOnly, label: 'הצג בתנ"ך'),
+            SegmentOption(value: NikudDisplayMode.hideAll, label: 'אל תציג'),
+          ],
+          currentValue: state.nikudDisplayMode,
+          onChanged: (value) {
+            context.read<SettingsBloc>().add(UpdateNikudDisplayMode(value));
+          },
+        ),
+        const Divider(height: 1),
         SwitchListTile(
           title: const Text('הצגת טעמי המקרא', style: TextStyle(fontSize: 16)),
           subtitle: Text(
@@ -174,38 +196,6 @@ class ReadingSettingsTab extends StatelessWidget {
             context.read<SettingsBloc>().add(UpdateShowTeamim(value));
           },
         ),
-        const Divider(height: 1),
-        SwitchListTile(
-          title: const Text('הסרת ניקוד כברירת מחדל',
-              style: TextStyle(fontSize: 16)),
-          subtitle: Text(
-              state.defaultRemoveNikud
-                  ? 'הניקוד יוסר כברירת מחדל'
-                  : 'הניקוד יוצג כברירת מחדל',
-              style: const TextStyle(fontSize: 13)),
-          value: state.defaultRemoveNikud,
-          onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdateDefaultRemoveNikud(value));
-          },
-        ),
-        if (state.defaultRemoveNikud)
-          Padding(
-            padding: const EdgeInsets.only(right: 32.0),
-            child: CheckboxListTile(
-              title: const Text('הסרת ניקוד מספרי התנ"ך',
-                  style: TextStyle(fontSize: 16)),
-              subtitle: const Text('גם ספרי התנ"ך יוצגו ללא ניקוד',
-                  style: TextStyle(fontSize: 13)),
-              value: state.removeNikudFromTanach,
-              onChanged: (value) {
-                if (value != null) {
-                  context
-                      .read<SettingsBloc>()
-                      .add(UpdateRemoveNikudFromTanach(value));
-                }
-              },
-            ),
-          ),
       ],
     );
   }
@@ -235,19 +225,22 @@ class ReadingSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'התנהגות סרגל צד',
       children: [
-        SwitchListTile(
-          title: const Text('הצמדת סרגל צד', style: TextStyle(fontSize: 16)),
-          subtitle: Text(
-              state.pinSidebar ? 'סרגל הצד יוצמד תמיד' : 'סרגל הצד יפעל כרגיל',
-              style: const TextStyle(fontSize: 13)),
-          value: state.pinSidebar,
+        SegmentedSettingsTile<SidebarMode>(
+          icon: FluentIcons.panel_left_24_regular,
+          title: 'הצגת חלונית ניווט',
+          subtitle: state.sidebarMode == SidebarMode.pinned
+              ? 'החלונית תוצג תמיד'
+              : state.sidebarMode == SidebarMode.open
+                  ? 'החלונית תוצג בפתיחת ספר ותיסגר בגלילה'
+                  : 'החלונית לא תוצג אוטומטית',
+          options: const [
+            SegmentOption(value: SidebarMode.pinned, label: 'הצמדה'),
+            SegmentOption(value: SidebarMode.open, label: 'בפתיחת ספר'),
+            SegmentOption(value: SidebarMode.hidden, label: 'סגור תמיד'),
+          ],
+          currentValue: state.sidebarMode,
           onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdatePinSidebar(value));
-            if (value) {
-              context
-                  .read<SettingsBloc>()
-                  .add(const UpdateDefaultSidebarOpen(true));
-            }
+            context.read<SettingsBloc>().add(UpdateSidebarMode(value));
           },
         ),
         const Divider(height: 1),
@@ -265,24 +258,6 @@ class ReadingSettingsTab extends StatelessWidget {
                 .read<SettingsBloc>()
                 .add(UpdatePersonalNotesCollapsedByDefault(value));
           },
-        ),
-        const Divider(height: 1),
-        SwitchListTile(
-          title: const Text('פתיחת סרגל צד כברירת מחדל',
-              style: TextStyle(fontSize: 16)),
-          subtitle: Text(
-              state.defaultSidebarOpen
-                  ? 'סרגל הצד יפתח אוטומטית'
-                  : 'סרגל הצד ישאר סגור',
-              style: const TextStyle(fontSize: 13)),
-          value: state.defaultSidebarOpen,
-          onChanged: state.pinSidebar
-              ? null
-              : (value) {
-                  context
-                      .read<SettingsBloc>()
-                      .add(UpdateDefaultSidebarOpen(value));
-                },
         ),
         const Divider(height: 1),
         StatefulBuilder(

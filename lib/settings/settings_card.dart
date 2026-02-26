@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// כרטיס הגדרות מעוצב בסגנון Material 3 / Google Account
 class SettingsCard extends StatelessWidget {
-  final String title;
+  final dynamic title; // יכול להיות String או Widget
   final String? subtitle;
   final List<Widget> children;
 
@@ -27,13 +27,22 @@ class SettingsCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
+              title is String
+                  ? Text(
+                      title as String,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    )
+                  : DefaultTextStyle(
+                      style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ) ??
+                          const TextStyle(),
+                      child: title as Widget,
+                    ),
               if (subtitle != null) ...[
                 const SizedBox(height: 4),
                 Text(
@@ -51,13 +60,13 @@ class SettingsCard extends StatelessWidget {
           elevation: 0,
           margin: EdgeInsets.zero,
           color: theme.colorScheme.surface,
+          clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
-            side: BorderSide(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+            side: BorderSide.none,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Column(
-            children: _buildChildrenWithDividers(),
+            children: _buildChildrenWithDividers(context),
           ),
         ),
       ],
@@ -65,12 +74,18 @@ class SettingsCard extends StatelessWidget {
   }
 
   /// הוספת קו מפריד בין כל שני פריטים
-  List<Widget> _buildChildrenWithDividers() {
+  List<Widget> _buildChildrenWithDividers(BuildContext context) {
     return [
       for (int i = 0; i < children.length; i++) ...[
         children[i],
         if (i < children.length - 1)
-          const Divider(height: 1, indent: 16, endIndent: 16),
+          Divider(
+            height: 1,
+            thickness: 1.5,
+            indent: 0,
+            endIndent: 0,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          ),
       ],
     ];
   }

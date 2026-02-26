@@ -3,6 +3,7 @@ import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/utils/color_utils.dart';
 import 'package:otzaria/utils/shortcut_validator.dart';
 import 'package:otzaria/utils/settings_wrapper.dart';
+import 'package:otzaria/settings/settings_enums.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
@@ -25,6 +26,9 @@ class SettingsRepository {
   static const String keyUseFastSearch = 'key-use-fast-search';
   static const String keyReplaceHolyNames = 'key-replace-holy-names';
   static const String keyAutoUpdateIndex = 'key-auto-index-update';
+  static const String keyNikudDisplayMode = 'key-nikud-display-mode';
+  static const String keySidebarMode = 'key-sidebar-mode';
+  // Keys ישנים - לתאימות לאחור
   static const String keyDefaultNikud = 'key-default-nikud';
   static const String keyRemoveNikudFromTanach = 'key-remove-nikud-tanach';
   static const String keyDefaultSidebarOpen = 'key-default-sidebar-open';
@@ -157,21 +161,17 @@ class SettingsRepository {
         keyAutoUpdateIndex,
         defaultValue: true,
       ),
-      'defaultRemoveNikud': _settings.getValue<bool>(
-        keyDefaultNikud,
-        defaultValue: false,
+      'nikudDisplayMode': _parseNikudDisplayMode(
+        _settings.getValue<String>(
+          keyNikudDisplayMode,
+          defaultValue: 'showAll',
+        ),
       ),
-      'removeNikudFromTanach': _settings.getValue<bool>(
-        keyRemoveNikudFromTanach,
-        defaultValue: false,
-      ),
-      'defaultSidebarOpen': _settings.getValue<bool>(
-        keyDefaultSidebarOpen,
-        defaultValue: false,
-      ),
-      'pinSidebar': _settings.getValue<bool>(
-        keyPinSidebar,
-        defaultValue: false,
+      'sidebarMode': _parseSidebarMode(
+        _settings.getValue<String>(
+          keySidebarMode,
+          defaultValue: 'hidden',
+        ),
       ),
       'sidebarWidth':
           _settings.getValue<double>(keySidebarWidth, defaultValue: 300),
@@ -362,6 +362,63 @@ class SettingsRepository {
 
   Future<void> updateAutoUpdateIndex(bool value) async {
     await _settings.setValue(keyAutoUpdateIndex, value);
+  }
+
+  NikudDisplayMode _parseNikudDisplayMode(String value) {
+    switch (value) {
+      case 'showAll':
+        return NikudDisplayMode.showAll;
+      case 'showTanachOnly':
+        return NikudDisplayMode.showTanachOnly;
+      case 'hideAll':
+        return NikudDisplayMode.hideAll;
+      default:
+        return NikudDisplayMode.showAll;
+    }
+  }
+
+  String _nikudDisplayModeToString(NikudDisplayMode mode) {
+    switch (mode) {
+      case NikudDisplayMode.showAll:
+        return 'showAll';
+      case NikudDisplayMode.showTanachOnly:
+        return 'showTanachOnly';
+      case NikudDisplayMode.hideAll:
+        return 'hideAll';
+    }
+  }
+
+  SidebarMode _parseSidebarMode(String value) {
+    switch (value) {
+      case 'hidden':
+        return SidebarMode.hidden;
+      case 'open':
+        return SidebarMode.open;
+      case 'pinned':
+        return SidebarMode.pinned;
+      default:
+        return SidebarMode.hidden;
+    }
+  }
+
+  String _sidebarModeToString(SidebarMode mode) {
+    switch (mode) {
+      case SidebarMode.hidden:
+        return 'hidden';
+      case SidebarMode.open:
+        return 'open';
+      case SidebarMode.pinned:
+        return 'pinned';
+    }
+  }
+
+  Future<void> updateNikudDisplayMode(NikudDisplayMode value) async {
+    await _settings.setValue(
+        keyNikudDisplayMode, _nikudDisplayModeToString(value));
+  }
+
+  Future<void> updateSidebarMode(SidebarMode value) async {
+    await _settings.setValue(keySidebarMode, _sidebarModeToString(value));
   }
 
   Future<void> updateDefaultRemoveNikud(bool value) async {
@@ -638,10 +695,8 @@ class SettingsRepository {
     await _settings.setValue(keyUseFastSearch, true);
     await _settings.setValue(keyReplaceHolyNames, true);
     await _settings.setValue(keyAutoUpdateIndex, true);
-    await _settings.setValue(keyDefaultNikud, false);
-    await _settings.setValue(keyRemoveNikudFromTanach, false);
-    await _settings.setValue(keyDefaultSidebarOpen, false);
-    await _settings.setValue(keyPinSidebar, false);
+    await _settings.setValue(keyNikudDisplayMode, 'showAll');
+    await _settings.setValue(keySidebarMode, 'hidden');
     await _settings.setValue(keySidebarWidth, 300.0);
     await _settings.setValue(keyFacetFilteringWidth, 235.0);
     await _settings.setValue(keyCommentaryPaneWidth, 400.0);

@@ -3,6 +3,7 @@ import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/settings/settings_enums.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
@@ -29,6 +30,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateUseFastSearch>(_onUpdateUseFastSearch);
     on<UpdateReplaceHolyNames>(_onUpdateReplaceHolyNames);
     on<UpdateAutoUpdateIndex>(_onUpdateAutoUpdateIndex);
+    on<UpdateNikudDisplayMode>(_onUpdateNikudDisplayMode);
+    on<UpdateSidebarMode>(_onUpdateSidebarMode);
     on<UpdateDefaultRemoveNikud>(_onUpdateDefaultRemoveNikud);
     on<UpdateRemoveNikudFromTanach>(_onUpdateRemoveNikudFromTanach);
     on<UpdateDefaultSidebarOpen>(_onUpdateDefaultSidebarOpen);
@@ -83,10 +86,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       useFastSearch: settings['useFastSearch'],
       replaceHolyNames: settings['replaceHolyNames'],
       autoUpdateIndex: settings['autoUpdateIndex'],
-      defaultRemoveNikud: settings['defaultRemoveNikud'],
-      removeNikudFromTanach: settings['removeNikudFromTanach'],
-      defaultSidebarOpen: settings['defaultSidebarOpen'],
-      pinSidebar: settings['pinSidebar'],
+      nikudDisplayMode: settings['nikudDisplayMode'],
+      sidebarMode: settings['sidebarMode'],
       sidebarWidth: settings['sidebarWidth'],
       facetFilteringWidth: settings['facetFilteringWidth'],
       commentaryPaneWidth: settings['commentaryPaneWidth'],
@@ -307,12 +308,36 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     emit(state.copyWith(autoUpdateIndex: event.autoUpdateIndex));
   }
 
+  Future<void> _onUpdateNikudDisplayMode(
+    UpdateNikudDisplayMode event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateNikudDisplayMode(event.nikudDisplayMode);
+    emit(state.copyWith(nikudDisplayMode: event.nikudDisplayMode));
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
+  }
+
+  Future<void> _onUpdateSidebarMode(
+    UpdateSidebarMode event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateSidebarMode(event.sidebarMode);
+    emit(state.copyWith(sidebarMode: event.sidebarMode));
+  }
+
   Future<void> _onUpdateDefaultRemoveNikud(
     UpdateDefaultRemoveNikud event,
     Emitter<SettingsState> emit,
   ) async {
     await _repository.updateDefaultRemoveNikud(event.defaultRemoveNikud);
-    emit(state.copyWith(defaultRemoveNikud: event.defaultRemoveNikud));
+    // המרה לפורמט החדש
+    final newMode = event.defaultRemoveNikud
+        ? NikudDisplayMode.hideAll
+        : NikudDisplayMode.showAll;
+    await _repository.updateNikudDisplayMode(newMode);
+    emit(state.copyWith(nikudDisplayMode: newMode));
 
     // ניקוי קבצי per_book_settings מיותרים
     _cleanupRedundantPerBookSettings();
@@ -323,7 +348,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     await _repository.updateRemoveNikudFromTanach(event.removeNikudFromTanach);
-    emit(state.copyWith(removeNikudFromTanach: event.removeNikudFromTanach));
+    // לא משנים את ה-state החדש - זה רק לתאימות לאחור
   }
 
   Future<void> _onUpdateDefaultSidebarOpen(
@@ -331,7 +356,11 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     await _repository.updateDefaultSidebarOpen(event.defaultSidebarOpen);
-    emit(state.copyWith(defaultSidebarOpen: event.defaultSidebarOpen));
+    // המרה לפורמט החדש
+    final newMode =
+        event.defaultSidebarOpen ? SidebarMode.open : SidebarMode.hidden;
+    await _repository.updateSidebarMode(newMode);
+    emit(state.copyWith(sidebarMode: newMode));
   }
 
   Future<void> _onUpdatePinSidebar(
@@ -339,7 +368,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     await _repository.updatePinSidebar(event.pinSidebar);
-    emit(state.copyWith(pinSidebar: event.pinSidebar));
+    // המרה לפורמט החדש
+    final newMode = event.pinSidebar ? SidebarMode.pinned : SidebarMode.open;
+    await _repository.updateSidebarMode(newMode);
+    emit(state.copyWith(sidebarMode: newMode));
   }
 
   Future<void> _onUpdateSidebarWidth(
@@ -448,9 +480,13 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     // הרצה אסינכרונית ללא המתנה כדי לא לחסום את ה-UI
     // בטסטים, זה עלול להיכשל בגלל חוסר פלאגין, אז נתפוס שגיאות
     try {
+      // המרה זמנית לפורמט הישן לצורך ניקוי
+      final defaultRemoveNikud =
+          state.nikudDisplayMode != NikudDisplayMode.showAll;
+
       PerBookSettings.cleanupRedundantSettings(
         defaultFontSize: state.fontSize,
-        defaultRemoveNikud: state.defaultRemoveNikud,
+        defaultRemoveNikud: defaultRemoveNikud,
         defaultShowSplitView: false, // ערך ברירת מחדל
       );
     } catch (e) {

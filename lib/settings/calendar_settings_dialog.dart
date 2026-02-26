@@ -74,29 +74,49 @@ class _CalendarSettingsDialogState extends State<_CalendarSettingsDialog> {
                     'סוג לוח:',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                  RadioGroup<CalendarType>(
-                    groupValue: state.calendarType,
-                    onChanged: (value) {
-                      if (value != null) {
-                        widget.calendarCubit.changeCalendarType(value);
-                      }
-                    },
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        RadioListTile<CalendarType>(
-                          title: Text('לוח עברי'),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: SegmentedButton<CalendarType>(
+                      style: ButtonStyle(
+                        shape: WidgetStateProperty.all(
+                          RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        backgroundColor:
+                            WidgetStateProperty.resolveWith<Color?>(
+                          (states) {
+                            if (states.contains(WidgetState.selected)) {
+                              return Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.2);
+                            }
+                            return Theme.of(context).cardColor;
+                          },
+                        ),
+                      ),
+                      segments: const [
+                        ButtonSegment<CalendarType>(
                           value: CalendarType.hebrew,
+                          label:
+                              Text('לוח עברי', style: TextStyle(fontSize: 14)),
                         ),
-                        RadioListTile<CalendarType>(
-                          title: Text('לוח לועזי'),
-                          value: CalendarType.gregorian,
-                        ),
-                        RadioListTile<CalendarType>(
-                          title: Text('לוח משולב'),
+                        ButtonSegment<CalendarType>(
                           value: CalendarType.combined,
+                          label:
+                              Text('לוח משולב', style: TextStyle(fontSize: 14)),
+                        ),
+                        ButtonSegment<CalendarType>(
+                          value: CalendarType.gregorian,
+                          label:
+                              Text('לוח לועזי', style: TextStyle(fontSize: 14)),
                         ),
                       ],
+                      selected: {state.calendarType},
+                      onSelectionChanged: (newSelection) {
+                        widget.calendarCubit
+                            .changeCalendarType(newSelection.first);
+                      },
                     ),
                   ),
                   const SizedBox(height: 24),
