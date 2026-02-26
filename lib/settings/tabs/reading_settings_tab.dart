@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/constants/fonts.dart';
-import 'package:otzaria/settings/settings_bloc.dart';
-import 'package:otzaria/settings/settings_event.dart';
-import 'package:otzaria/settings/settings_state.dart';
-import 'package:otzaria/settings/settings_enums.dart';
+import 'package:otzaria/settings/bloc/settings_bloc.dart';
+import 'package:otzaria/settings/bloc/settings_event.dart';
+import 'package:otzaria/settings/bloc/settings_state.dart';
 import 'package:otzaria/settings/per_book_settings.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
@@ -30,17 +28,13 @@ class ReadingSettingsTab extends StatelessWidget {
             children: [
               _buildFontSection(context, settingsState),
               const SizedBox(height: 16),
+              _buildHolyNamesSection(context, settingsState),
+              const SizedBox(height: 16),
               _buildNikudSection(context, settingsState),
-              const SizedBox(height: 16),
-              _buildTabsSection(context, settingsState),
-              const SizedBox(height: 16),
-              _buildSidebarSection(context, settingsState),
               const SizedBox(height: 16),
               _buildCopySection(context, settingsState),
               const SizedBox(height: 16),
               _buildPerBookSection(context, settingsState),
-              const SizedBox(height: 16),
-              _buildEditorSection(context),
             ],
           ),
         );
@@ -164,28 +158,8 @@ class ReadingSettingsTab extends StatelessWidget {
 
   Widget _buildNikudSection(BuildContext context, SettingsState state) {
     return SettingsCard(
-      title: 'הסרת ניקוד וטעמים',
+      title: 'טעמים ונקודות',
       children: [
-        SegmentedSettingsTile<NikudDisplayMode>(
-          icon: FluentIcons.text_font_info_24_regular,
-          title: 'הצגת הניקוד',
-          subtitle: state.nikudDisplayMode == NikudDisplayMode.showAll
-              ? 'הניקוד יוצג בכל הספרים'
-              : state.nikudDisplayMode == NikudDisplayMode.showTanachOnly
-                  ? 'הניקוד יוצג רק בספרי התנ"ך'
-                  : 'הניקוד לא יוצג בשום ספר',
-          options: const [
-            SegmentOption(value: NikudDisplayMode.showAll, label: 'הצג תמיד'),
-            SegmentOption(
-                value: NikudDisplayMode.showTanachOnly, label: 'הצג בתנ"ך'),
-            SegmentOption(value: NikudDisplayMode.hideAll, label: 'אל תציג'),
-          ],
-          currentValue: state.nikudDisplayMode,
-          onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdateNikudDisplayMode(value));
-          },
-        ),
-        const Divider(height: 1),
         SwitchListTile(
           title: const Text('הצגת טעמי המקרא', style: TextStyle(fontSize: 16)),
           subtitle: Text(
@@ -196,95 +170,71 @@ class ReadingSettingsTab extends StatelessWidget {
             context.read<SettingsBloc>().add(UpdateShowTeamim(value));
           },
         ),
-      ],
-    );
-  }
-
-  Widget _buildTabsSection(BuildContext context, SettingsState state) {
-    return SettingsCard(
-      title: 'הגדרות טאבים',
-      children: [
-        SwitchListTile(
-          title:
-              const Text('יישור טאבים לימין', style: TextStyle(fontSize: 16)),
-          subtitle: Text(
-              state.alignTabsToRight
-                  ? 'הטאבים יוצגו בצד ימין'
-                  : 'הטאבים יוצגו במרכז',
-              style: const TextStyle(fontSize: 13)),
-          value: state.alignTabsToRight,
-          onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdateAlignTabsToRight(value));
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSidebarSection(BuildContext context, SettingsState state) {
-    return SettingsCard(
-      title: 'התנהגות סרגל צד',
-      children: [
-        SegmentedSettingsTile<SidebarMode>(
-          icon: FluentIcons.panel_left_24_regular,
-          title: 'הצגת חלונית ניווט',
-          subtitle: state.sidebarMode == SidebarMode.pinned
-              ? 'החלונית תוצג תמיד'
-              : state.sidebarMode == SidebarMode.open
-                  ? 'החלונית תוצג בפתיחת ספר ותיסגר בגלילה'
-                  : 'החלונית לא תוצג אוטומטית',
-          options: const [
-            SegmentOption(value: SidebarMode.pinned, label: 'הצמדה'),
-            SegmentOption(value: SidebarMode.open, label: 'בפתיחת ספר'),
-            SegmentOption(value: SidebarMode.hidden, label: 'סגור תמיד'),
-          ],
-          currentValue: state.sidebarMode,
-          onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdateSidebarMode(value));
-          },
-        ),
         const Divider(height: 1),
         SwitchListTile(
-          title: const Text('הערות אישיות מקופלות כברירת מחדל',
+          title: const Text('הסרת ניקוד כברירת מחדל',
               style: TextStyle(fontSize: 16)),
           subtitle: Text(
-              state.personalNotesCollapsedByDefault
-                  ? 'רשימות ההערות ייפתחו במצב סגור'
-                  : 'רשימות ההערות ייפתחו במצב פתוח',
+              state.defaultRemoveNikud
+                  ? 'הניקוד יוסר כברירת מחדל'
+                  : 'הניקוד יוצג כברירת מחדל',
               style: const TextStyle(fontSize: 13)),
-          value: state.personalNotesCollapsedByDefault,
+          value: state.defaultRemoveNikud,
           onChanged: (value) {
-            context
-                .read<SettingsBloc>()
-                .add(UpdatePersonalNotesCollapsedByDefault(value));
+            context.read<SettingsBloc>().add(UpdateDefaultRemoveNikud(value));
           },
         ),
-        const Divider(height: 1),
-        StatefulBuilder(
-          builder: (context, setState) {
-            final splitedView =
-                Settings.getValue<bool>('key-splited-view') ?? false;
-            return SwitchListTile(
-              title: const Text('ברירת המחדל להצגת המפרשים',
+        if (state.defaultRemoveNikud)
+          Padding(
+            padding: const EdgeInsets.only(right: 32.0),
+            child: CheckboxListTile(
+              title: const Text('הסרת ניקוד מספרי התנ"ך',
                   style: TextStyle(fontSize: 16)),
-              subtitle: Text(
-                  splitedView
-                      ? 'המפרשים יוצגו לצד הטקסט'
-                      : 'המפרשים יוצגו מתחת הטקסט',
-                  style: const TextStyle(fontSize: 13)),
-              value: splitedView,
+              subtitle: const Text('גם ספרי התנ"ך יוצגו ללא ניקוד',
+                  style: TextStyle(fontSize: 13)),
+              value: state.removeNikudFromTanach,
               onChanged: (value) {
-                setState(() {
-                  Settings.setValue<bool>('key-splited-view', value);
-                  final settingsBloc = context.read<SettingsBloc>();
-                  PerBookSettings.cleanupRedundantSettings(
-                    defaultFontSize: settingsBloc.state.fontSize,
-                    defaultRemoveNikud: settingsBloc.state.defaultRemoveNikud,
-                    defaultShowSplitView: value,
-                  );
-                });
+                if (value != null) {
+                  context
+                      .read<SettingsBloc>()
+                      .add(UpdateRemoveNikudFromTanach(value));
+                }
               },
-            );
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHolyNamesSection(BuildContext context, SettingsState state) {
+    return SettingsCard(
+      title: RichText(
+        text: TextSpan(
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          children: [
+            TextSpan(
+              text: 'שבח מגדל עוז ',
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
+            TextSpan(
+              text: 'שם הגדול',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+        ),
+      ),
+      children: [
+        SegmentedSettingsTile<bool>(
+          icon: FluentIcons.shield_keyhole_24_regular,
+          title: 'בישראל גדול שמו',
+          subtitle: '',
+          options: const [
+            SegmentOption(value: false, label: 'זה שמי לעלם'),
+            SegmentOption(value: true, label: 'לא כשאני נכתב'),
+          ],
+          currentValue: state.replaceHolyNames,
+          onChanged: (value) {
+            context.read<SettingsBloc>().add(UpdateReplaceHolyNames(value));
           },
         ),
       ],
@@ -398,11 +348,11 @@ class ReadingSettingsTab extends StatelessWidget {
 
   Widget _buildPerBookSection(BuildContext context, SettingsState state) {
     return SettingsCard(
-      title: 'הגדרות פר-ספר',
+      title: 'הגדרות לפי ספר',
       children: [
         SwitchListTile(
-          title:
-              const Text('שמירת התאמות פר-ספר', style: TextStyle(fontSize: 16)),
+          title: const Text('שמירת התאמות לכל ספר בנפרד',
+              style: TextStyle(fontSize: 16)),
           subtitle: Text(
               state.enablePerBookSettings
                   ? 'שינויים בסרגל הלחצנים יישמרו לכל ספר בנפרד'
@@ -433,22 +383,13 @@ class ReadingSettingsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildEditorSection(BuildContext context) {
-    return SettingsCard(
-      title: 'הגדרות עורך טקסטים',
-      children: [
-        _EditorSettings(),
-      ],
-    );
-  }
-
   Future<void> _resetPerBookSettings(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('אישור מחיקה'),
         content: const Text(
-            'האם אתה בטוח שברצונך למחוק את כל ההגדרות הפר-ספריות?\nפעולה זו אינה ניתנת לביטול.'),
+            'האם אתה בטוח שברצונך למחוק את כל ההגדרות לפי ספר?\nפעולה זו אינה ניתנת לביטול.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -675,120 +616,6 @@ class _TextWidthSliderState extends State<_TextWidthSlider> {
               context.read<SettingsBloc>().add(UpdateTextMaxWidth(newMaxWidth));
             },
           ),
-        ),
-      ],
-    );
-  }
-}
-
-// Widget עזר להגדרות עורך
-class _EditorSettings extends StatefulWidget {
-  @override
-  State<_EditorSettings> createState() => _EditorSettingsState();
-}
-
-class _EditorSettingsState extends State<_EditorSettings> {
-  late double previewDebounce;
-  late double cleanupDays;
-  late double draftsQuota;
-
-  @override
-  void initState() {
-    super.initState();
-    previewDebounce =
-        Settings.getValue<double>('key-editor-preview-debounce') ?? 150.0;
-    cleanupDays =
-        Settings.getValue<double>('key-editor-draft-cleanup-days') ?? 30.0;
-    draftsQuota = Settings.getValue<double>('key-editor-drafts-quota') ?? 100.0;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildSlider(
-            icon: FluentIcons.timer_24_regular,
-            label: 'זמן עיכוב במילישניות',
-            value: previewDebounce,
-            min: 50,
-            max: 300,
-            divisions: 5,
-            onChanged: (value) {
-              setState(() => previewDebounce = value);
-              Settings.setValue<double>('key-editor-preview-debounce', value);
-            },
-          ),
-          const Divider(),
-          _buildSlider(
-            icon: FluentIcons.delete_dismiss_24_regular,
-            label: 'ניקוי טיוטות ישנות (ימים)',
-            value: cleanupDays,
-            min: 7,
-            max: 90,
-            divisions: 12,
-            onChanged: (value) {
-              setState(() => cleanupDays = value);
-              Settings.setValue<double>('key-editor-draft-cleanup-days', value);
-            },
-          ),
-          const Divider(),
-          _buildSlider(
-            icon: FluentIcons.database_24_regular,
-            label: 'מכסת טיוטות (MB)',
-            value: draftsQuota,
-            min: 50,
-            max: 100,
-            divisions: 5,
-            onChanged: (value) {
-              setState(() => draftsQuota = value);
-              Settings.setValue<double>('key-editor-drafts-quota', value);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSlider({
-    required IconData icon,
-    required String label,
-    required double value,
-    required double min,
-    required double max,
-    required int divisions,
-    required ValueChanged<double> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon),
-            const SizedBox(width: 12),
-            Expanded(
-              child:
-                  Text(label, style: Theme.of(context).textTheme.titleMedium),
-            ),
-            Text(
-              '${value.toInt()}',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        Slider(
-          value: value,
-          min: min,
-          max: max,
-          divisions: divisions,
-          label: value.toInt().toString(),
-          onChanged: onChanged,
         ),
       ],
     );

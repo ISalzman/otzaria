@@ -50,7 +50,7 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
         children: [
           // הגדרות חיפוש
           SettingsCard(
-            title: 'הגדרות חיפוש',
+            title: 'חיפוש גימטריה',
             children: [
               ListTile(
                 leading: const Icon(FluentIcons.number_row_24_regular),

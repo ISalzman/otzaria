@@ -3,7 +3,7 @@ import 'package:otzaria/widgets/mixins/dialog_navigation_mixin.dart';
 
 /// דיאלוג עם פעולה אחת (כפתור אישור בלבד)
 class SingleActionDialog extends StatefulWidget {
-  final dynamic title; // יכול להיות String או Widget
+  final dynamic title;
   final String content;
   final String confirmText;
 
@@ -23,19 +23,18 @@ class _SingleActionDialogState extends State<SingleActionDialog>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
     return buildKeyboardNavigator(
       onConfirm: () => Navigator.of(context).pop(true),
       onCancel: () => Navigator.of(context).pop(false),
       child: AlertDialog(
-        title: Text(widget.title),
+        title: widget.title is String ? Text(widget.title) : widget.title,
         content: Text(widget.content),
         actions: [
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
               backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
+              foregroundColor: colorScheme.secondaryContainer,
             ),
             child: Text(widget.confirmText),
           ),
@@ -47,7 +46,7 @@ class _SingleActionDialogState extends State<SingleActionDialog>
 
 /// דיאלוג עם שתי פעולות (ביטול ואישור)
 class TwoActionsDialog extends StatefulWidget {
-  final dynamic title; // יכול להיות String או Widget
+  final dynamic title;
   final String content;
   final String cancelText;
   final String confirmText;
@@ -69,27 +68,28 @@ class _TwoActionsDialogState extends State<TwoActionsDialog>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
     return buildKeyboardNavigator(
       onConfirm: () => Navigator.of(context).pop(true),
       onCancel: () => Navigator.of(context).pop(false),
       child: AlertDialog(
-        title: Text(widget.title),
+        title: widget.title is String ? Text(widget.title) : widget.title,
         content: Text(widget.content),
         actions: [
+          // כפתור ביטול — בהיר, טקסט כצבע primary ("כמו כפתור כהה")
           FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(false),
             style: FilledButton.styleFrom(
-              backgroundColor: colorScheme.surfaceContainerHighest,
-              foregroundColor: colorScheme.onSurface,
+              backgroundColor: colorScheme.secondaryContainer,
+              foregroundColor: colorScheme.primary,
             ),
             child: Text(widget.cancelText),
           ),
+          // כפתור אישור — כהה, טקסט כצבע secondaryContainer ("כמו כפתור בהיר")
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
               backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
+              foregroundColor: colorScheme.secondaryContainer,
             ),
             child: Text(widget.confirmText),
           ),
@@ -99,9 +99,9 @@ class _TwoActionsDialogState extends State<TwoActionsDialog>
   }
 }
 
-/// דיאלוג אזהרה (המשתמש צריך לבטל באופן אידיאלי)
+/// דיאלוג אזהרה — כפתור ביטול כהה (הפעולה הבטוחה), אישור אדום
 class WarningDialog extends StatefulWidget {
-  final dynamic title; // יכול להיות String או Widget
+  final dynamic title;
   final String content;
   final String? subtitle;
   final String cancelText;
@@ -125,12 +125,11 @@ class _WarningDialogState extends State<WarningDialog>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
     return buildKeyboardNavigator(
       onConfirm: () => Navigator.of(context).pop(true),
       onCancel: () => Navigator.of(context).pop(false),
       child: AlertDialog(
-        title: Text(widget.title),
+        title: widget.title is String ? Text(widget.title) : widget.title,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,30 +137,25 @@ class _WarningDialogState extends State<WarningDialog>
             Text(widget.content),
             if (widget.subtitle != null) ...[
               const SizedBox(height: 8),
-              Text(
-                widget.subtitle!,
-                style: TextStyle(
-                  color: colorScheme.error,
-                  fontSize: 13,
-                ),
-              ),
+              Text(widget.subtitle!,
+                  style: TextStyle(color: colorScheme.error, fontSize: 13)),
             ],
           ],
         ),
         actions: [
+          // ביטול — כהה (primary), "הפעולה הבטוחה"
           FilledButton(
             onPressed: () => Navigator.of(context).pop(false),
             style: FilledButton.styleFrom(
               backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
+              foregroundColor: colorScheme.secondaryContainer,
             ),
             child: Text(widget.cancelText),
           ),
+          // אישור — שקוף אדום (מסוכן)
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: colorScheme.error,
-            ),
+            style: TextButton.styleFrom(foregroundColor: colorScheme.error),
             child: Text(widget.confirmText),
           ),
         ],
@@ -170,7 +164,8 @@ class _WarningDialogState extends State<WarningDialog>
   }
 }
 
-/// כפתור פעולה מומלצת (Primary)
+/// כפתור פעולה מומלצת (Primary — כהה)
+/// רקע: primary | טקסט: secondaryContainer ("כמו כפתור בהיר")
 class RecommendedActionButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
@@ -187,50 +182,38 @@ class RecommendedActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final bg = cs.primary;
+    final fg = cs.secondaryContainer;
 
     if (isLoading) {
       return FilledButton(
         onPressed: null,
-        style: FilledButton.styleFrom(
-          backgroundColor: colorScheme.primary,
-          foregroundColor: colorScheme.onPrimary,
-        ),
+        style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
         child: SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: colorScheme.onPrimary,
-          ),
-        ),
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: fg)),
       );
     }
-
     if (icon != null) {
       return FilledButton.icon(
         onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: colorScheme.primary,
-          foregroundColor: colorScheme.onPrimary,
-        ),
+        style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
         icon: Icon(icon),
         label: Text(text),
       );
     }
-
     return FilledButton(
       onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
-      ),
+      style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
       child: Text(text),
     );
   }
 }
 
-/// כפתור פעולה ניטרלית/לא מומלצת (Tonal)
+/// כפתור פעולה ניטרלית (Tonal — בהיר)
+/// רקע: secondaryContainer | טקסט: primary ("כמו כפתור כהה")
 class NeutralActionButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
@@ -247,65 +230,48 @@ class NeutralActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final bg = cs.secondaryContainer;
+    final fg = cs.primary;
 
     if (isLoading) {
       return FilledButton.tonal(
         onPressed: null,
-        style: FilledButton.styleFrom(
-          backgroundColor: colorScheme.secondaryContainer,
-          foregroundColor: colorScheme.onSecondaryContainer,
-        ),
+        style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
         child: SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: colorScheme.onSecondaryContainer,
-          ),
-        ),
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: fg)),
       );
     }
-
     if (icon != null) {
       return FilledButton.tonalIcon(
         onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: colorScheme.secondaryContainer,
-          foregroundColor: colorScheme.onSecondaryContainer,
-        ),
+        style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
         icon: Icon(icon),
         label: Text(text),
       );
     }
-
     return FilledButton.tonal(
       onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        backgroundColor: colorScheme.secondaryContainer,
-        foregroundColor: colorScheme.onSecondaryContainer,
-      ),
+      style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
       child: Text(text),
     );
   }
 }
 
-/// פונקציות עזר להצגת הדיאלוגים
+/// פונקציות עזר
 Future<bool?> showSingleActionDialog({
   required BuildContext context,
   required String title,
   required String content,
   String confirmText = 'אישור',
-}) {
-  return showDialog<bool>(
-    context: context,
-    builder: (context) => SingleActionDialog(
-      title: title,
-      content: content,
-      confirmText: confirmText,
-    ),
-  );
-}
+}) =>
+    showDialog<bool>(
+      context: context,
+      builder: (_) => SingleActionDialog(
+          title: title, content: content, confirmText: confirmText),
+    );
 
 Future<bool?> showTwoActionsDialog({
   required BuildContext context,
@@ -313,17 +279,15 @@ Future<bool?> showTwoActionsDialog({
   required String content,
   String cancelText = 'ביטול',
   String confirmText = 'אישור',
-}) {
-  return showDialog<bool>(
-    context: context,
-    builder: (context) => TwoActionsDialog(
-      title: title,
-      content: content,
-      cancelText: cancelText,
-      confirmText: confirmText,
-    ),
-  );
-}
+}) =>
+    showDialog<bool>(
+      context: context,
+      builder: (_) => TwoActionsDialog(
+          title: title,
+          content: content,
+          cancelText: cancelText,
+          confirmText: confirmText),
+    );
 
 Future<bool?> showWarningDialog({
   required BuildContext context,
@@ -332,23 +296,20 @@ Future<bool?> showWarningDialog({
   String? subtitle,
   String cancelText = 'ביטול',
   String confirmText = 'המשך',
-}) {
-  return showDialog<bool>(
-    context: context,
-    builder: (context) => WarningDialog(
-      title: title,
-      content: content,
-      subtitle: subtitle,
-      cancelText: cancelText,
-      confirmText: confirmText,
-    ),
-  );
-}
+}) =>
+    showDialog<bool>(
+      context: context,
+      builder: (_) => WarningDialog(
+          title: title,
+          content: content,
+          subtitle: subtitle,
+          cancelText: cancelText,
+          confirmText: confirmText),
+    );
 
 /// Widget להגדרה עם SegmentedButton
-/// משמש להגדרות עם 2-4 אפשרויות בודדות
 class SegmentedSettingsTile<T> extends StatelessWidget {
-  final dynamic title; // יכול להיות String או Widget
+  final dynamic title;
   final String? subtitle;
   final IconData? icon;
   final List<SegmentOption<T>> options;
@@ -384,40 +345,29 @@ class SegmentedSettingsTile<T> extends StatelessWidget {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           backgroundColor: WidgetStateProperty.resolveWith<Color?>(
-            (states) {
-              if (states.contains(WidgetState.selected)) {
-                return primaryColor.withValues(alpha: 0.2);
-              }
-              return cardColor;
-            },
+            (states) => states.contains(WidgetState.selected)
+                ? primaryColor.withValues(alpha: 0.2)
+                : cardColor,
           ),
         ),
         segments: options
-            .map((option) => ButtonSegment<T>(
-                  value: option.value,
-                  label:
-                      Text(option.label, style: const TextStyle(fontSize: 14)),
-                  icon: option.icon != null ? Icon(option.icon) : null,
+            .map((o) => ButtonSegment<T>(
+                  value: o.value,
+                  label: Text(o.label, style: const TextStyle(fontSize: 14)),
+                  icon: o.icon != null ? Icon(o.icon) : null,
                 ))
             .toList(),
         selected: {currentValue},
-        onSelectionChanged: (newSelection) {
-          onChanged(newSelection.first);
-        },
+        onSelectionChanged: (s) => onChanged(s.first),
       ),
     );
   }
 }
 
-/// אפשרות ב-SegmentedButton
 class SegmentOption<T> {
   final T value;
   final String label;
   final IconData? icon;
 
-  const SegmentOption({
-    required this.value,
-    required this.label,
-    this.icon,
-  });
+  const SegmentOption({required this.value, required this.label, this.icon});
 }
