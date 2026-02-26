@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/navigation/calendar_cubit.dart';
 import 'package:otzaria/settings/tabs/settings_tabs.dart';
-import 'package:otzaria/settings/protected_settings_wrapper.dart';
+import 'package:otzaria/settings/safer_mode/protected_settings_wrapper.dart';
 
 /// רוחב מקסימלי לתוכן ההגדרות — מרכוז על מסכים רחבים
 const double kSettingsContentMaxWidth = 860.0;
@@ -15,19 +17,19 @@ class MySettingsScreen extends StatefulWidget {
 
 class _MySettingsScreenState extends State<MySettingsScreen> {
   int _selectedIndex = 0;
-  double? _lastWidth;
+  bool _showMobileMenu = true; // true = show menu, false = show content
 
   // ── הגדרת רשימת הטאבים ────────────────────────────────────────────────────
   late final List<
           ({String label, IconData icon, Widget Function() pageBuilder})>
       _tabsData = [
     (
-      label: 'עיצוב',
+      label: 'מראה',
       icon: FluentIcons.paint_brush_24_regular,
-      pageBuilder: () => const AppearanceSettingsTab(),
+      pageBuilder: () => const DesignSettingsTab(),
     ),
     (
-      label: 'תצוגת הספרים',
+      label: 'כתב',
       icon: FluentIcons.book_24_regular,
       pageBuilder: () => const ReadingSettingsTab(),
     ),
@@ -37,24 +39,29 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       pageBuilder: () => const LibrarySettingsTab(),
     ),
     (
-      label: 'לוח שנה',
-      icon: FluentIcons.calendar_24_regular,
-      pageBuilder: () => const CalendarSettingsTab(),
+      label: 'כלים',
+      icon: FluentIcons.wrench_24_regular,
+      // תיקון באג: מעבירים את CalendarCubit מה-context הנוכחי לטאב כלים.
+      // בלי זה, שינויים בהגדרות לוח שנה לא נשמרים כשההגדרות נפתחות
+      // כ-route חדש שה-context שלו לא מכיל את CalendarCubit.
+      pageBuilder: () => ToolsSettingsTab(
+            calendarCubit: context.read<CalendarCubit>(),
+          ),
     ),
     (
-      label: 'גימטריות',
-      icon: FluentIcons.calculator_24_regular,
-      pageBuilder: () => const GematriaSettingsTab(),
+      label: 'קיצורים',
+      icon: FluentIcons.keyboard_24_regular,
+      pageBuilder: () => const ShortcutsSettingsTab(),
     ),
     (
-      label: 'גיבוי',
-      icon: FluentIcons.arrow_sync_24_regular,
-      pageBuilder: () => const BackupSettingsTab(),
-    ),
-    (
-      label: 'מתקדם',
+      label: 'אוצריא',
       icon: FluentIcons.settings_24_regular,
       pageBuilder: () => const AdvancedSettingsTab(),
+    ),
+    (
+      label: 'חכמי לב',
+      icon: FluentIcons.people_team_24_regular,
+      pageBuilder: () => const AboutDevTab(),
     ),
   ];
 
@@ -71,67 +78,69 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
           builder: (context, constraints) {
             final isMobile = constraints.maxWidth < 600;
 
-            // שמירת הרוחב הקודם כדי למנוע ניווט אוטומטי בשינוי גודל
-            if (_lastWidth != null && ((_lastWidth! < 600) != isMobile)) {
-              // שינוי ממובייל לדסקטופ או להיפך - לא מנווטים
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    _lastWidth = constraints.maxWidth;
-                  });
-                }
-              });
-            } else {
-              _lastWidth = constraints.maxWidth;
-            }
-
             // ── מצב מובייל ────────────────────────────────────────────────
             if (isMobile) {
-              return Scaffold(
-                backgroundColor: bgColor,
-                appBar: AppBar(
+              // במובייל: אם _showMobileMenu = true, הצג רשימת טאבים
+              // אחרת, הצג את התוכן של הטאב הנבחר
+              if (_showMobileMenu) {
+                return Scaffold(
                   backgroundColor: bgColor,
-                  elevation: 0,
-                  title: const Text('הגדרות'),
-                ),
-                body: ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _tabsData.length,
-                  itemBuilder: (context, index) {
-                    return Card(
-                      color: colorScheme.surface,
-                      elevation: 0,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color:
-                              colorScheme.outlineVariant.withValues(alpha: 0.4),
-                        ),
-                      ),
-                      child: ListTile(
-                        leading: Icon(_tabsData[index].icon,
-                            color: colorScheme.primary),
-                        title: Text(_tabsData[index].label),
-                        trailing: const Icon(Icons.chevron_left),
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => Scaffold(
-                              backgroundColor: bgColor,
-                              appBar: AppBar(
-                                backgroundColor: bgColor,
-                                elevation: 0,
-                                title: Text(_tabsData[index].label),
-                              ),
-                              body: _tabsData[index].pageBuilder(),
-                            ),
+                  appBar: AppBar(
+                    backgroundColor: bgColor,
+                    elevation: 0,
+                    title: const Text('הגדרות'),
+                  ),
+                  body: ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _tabsData.length,
+                    itemBuilder: (context, index) {
+                      return Card(
+                        color: colorScheme.surface,
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: colorScheme.outlineVariant
+                                .withValues(alpha: 0.4),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              );
+                        child: ListTile(
+                          leading: Icon(_tabsData[index].icon,
+                              color: colorScheme.primary),
+                          title: Text(_tabsData[index].label),
+                          trailing: const Icon(Icons.chevron_left),
+                          onTap: () {
+                            setState(() {
+                              _selectedIndex = index;
+                              _showMobileMenu = false;
+                            });
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                );
+              } else {
+                // הצגת תוכן הטאב הנבחר
+                return Scaffold(
+                  backgroundColor: bgColor,
+                  appBar: AppBar(
+                    backgroundColor: bgColor,
+                    elevation: 0,
+                    title: Text(_tabsData[_selectedIndex].label),
+                    leading: IconButton(
+                      icon: const Icon(Icons.arrow_forward),
+                      onPressed: () {
+                        setState(() {
+                          _showMobileMenu = true;
+                        });
+                      },
+                    ),
+                  ),
+                  body: _tabsData[_selectedIndex].pageBuilder(),
+                );
+              }
             }
 
             // ── מצב דסקטופ: sidebar + תוכן ──────────────────────────────
