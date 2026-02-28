@@ -23,7 +23,7 @@ import 'package:otzaria/tabs/reading_screen.dart';
 import 'package:otzaria/settings/settings_screen.dart';
 import 'package:otzaria/navigation/more_screen.dart';
 import 'package:otzaria/navigation/about_dialog.dart';
-import 'package:otzaria/widgets/keyboard_shortcuts.dart';
+import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
 import 'dart:async';
 import 'package:otzaria/update/my_updat_widget.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
