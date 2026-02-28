@@ -2,7 +2,7 @@
 export 'design_settings_tab.dart';
 export 'reading_settings_tab.dart';
 export 'library_settings_tab.dart';
-export 'calendar_settings_tab.dart';
+export 'package:otzaria/tools/calendar/calendar_settings_tab.dart';
 export 'gematria_settings_tab.dart';
 export 'editor_settings_tab.dart';
 export 'tools_settings_tab.dart';

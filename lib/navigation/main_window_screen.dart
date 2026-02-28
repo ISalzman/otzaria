@@ -29,7 +29,7 @@ import 'package:otzaria/update/my_updat_widget.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/navigation/calendar_cubit.dart';
+import 'package:otzaria/tools/calendar/calendar_cubit.dart';
 import 'package:otzaria/widgets/ad_popup_dialog.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/main.dart' show appWindowListener;
