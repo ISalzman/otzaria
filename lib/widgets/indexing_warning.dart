@@ -8,22 +8,23 @@ class IndexingWarning extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(8.0),
       margin: const EdgeInsets.only(bottom: 8.0),
       decoration: BoxDecoration(
-        color: Colors.yellow.shade100,
+        color: colorScheme.errorContainer,
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         children: [
-          Icon(FluentIcons.warning_24_regular, color: Colors.orange[700]),
+          Icon(FluentIcons.warning_24_regular, color: colorScheme.error),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text(
               'אינדקס החיפוש בתהליך עדכון. יתכן שחלק מהספרים לא יוצגו בתוצאות החיפוש.',
               textAlign: TextAlign.right,
-              style: TextStyle(color: Colors.black87),
+              style: TextStyle(color: colorScheme.onErrorContainer),
             ),
           ),
           if (onDismiss != null)

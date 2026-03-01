@@ -16,7 +16,7 @@ class ThinDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 1,
-      color: color ?? Colors.grey.shade300,
+      color: color ?? Theme.of(context).colorScheme.outlineVariant,
       margin: EdgeInsets.symmetric(horizontal: margin),
     );
   }

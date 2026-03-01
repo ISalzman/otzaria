@@ -34,7 +34,7 @@ class _SingleActionDialogState extends State<SingleActionDialog>
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
               backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.secondaryContainer,
+              foregroundColor: colorScheme.onPrimary,
             ),
             child: Text(widget.confirmText),
           ),
@@ -75,21 +75,21 @@ class _TwoActionsDialogState extends State<TwoActionsDialog>
         title: widget.title is String ? Text(widget.title) : widget.title,
         content: Text(widget.content),
         actions: [
-          // כפתור ביטול — בהיר, טקסט כצבע primary ("כמו כפתור כהה")
+          // כפתור ביטול — tonal
           FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(false),
             style: FilledButton.styleFrom(
               backgroundColor: colorScheme.secondaryContainer,
-              foregroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onSecondaryContainer,
             ),
             child: Text(widget.cancelText),
           ),
-          // כפתור אישור — כהה, טקסט כצבע secondaryContainer ("כמו כפתור בהיר")
+          // כפתור אישור — primary
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
               backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.secondaryContainer,
+              foregroundColor: colorScheme.onPrimary,
             ),
             child: Text(widget.confirmText),
           ),

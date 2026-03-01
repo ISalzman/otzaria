@@ -77,9 +77,9 @@ class _AddPersonalBookDialogState extends State<AddPersonalBookDialog> {
       if (mounted) {
         Navigator.of(context).pop(true); // Return true to indicate success
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('הספר האישי נוסף בהצלחה!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Text('הספר האישי נוסף בהצלחה!'),
+            backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
       }
@@ -88,7 +88,7 @@ class _AddPersonalBookDialogState extends State<AddPersonalBookDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('שגיאה בהוספת ספר: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -145,11 +145,13 @@ class _AddPersonalBookDialogState extends State<AddPersonalBookDialog> {
                 ),
               ),
               if (_selectedFilePath == null)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8.0),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
                   child: Text(
                     'נא לבחור קובץ',
-                    style: TextStyle(color: Colors.red, fontSize: 12),
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 12),
                     textAlign: TextAlign.right,
                   ),
                 ),
