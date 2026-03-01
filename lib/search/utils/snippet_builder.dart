@@ -33,9 +33,10 @@ class SnippetBuilder {
     // 1. קבלת הטקסט הנקי מה-HTML
     var plainText =
         html_parser.parse(fullHtml).documentElement?.text.trim() ?? '';
-    
+
     // ניקוי תווים מיוחדים מהטקסט המקורי כדי שיתאים לשאילתה המנוקה
-    plainText = plainText.replaceAll(RegExp(r'[!?":*\(\)\[\]\{\}\^\$\|\\+.~`]'), '');
+    plainText =
+        plainText.replaceAll(RegExp(r'[!?":*\(\)\[\]\{\}\^\$\|\\+.~`]'), '');
 
     // 2. חילוץ מילות החיפוש כולל מילים חילופיות
     final originalWords = query

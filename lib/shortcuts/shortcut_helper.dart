@@ -32,8 +32,7 @@ class ShortcutHelper {
     if (requiresAlt != HardwareKeyboard.instance.isAltPressed) return false;
 
     // מציאת המקש הראשי (לא modifier)
-    final mainKey =
-        parts.where((p) => !_modifiers.contains(p)).firstOrNull;
+    final mainKey = parts.where((p) => !_modifiers.contains(p)).firstOrNull;
     if (mainKey == null) return false;
 
     // אות יחידה (a–z)
