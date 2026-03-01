@@ -179,11 +179,11 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                               children: [
                                 _buildFullscreenCaptionButton(
                                     context, settingsState),
-                                const SizedBox(
+                                SizedBox(
                                   width: _kWindowCaptionButtonsWidth,
                                   height: 50,
                                   child: WindowCaption(
-                                    brightness: Brightness.light,
+                                    brightness: Theme.of(context).brightness,
                                     backgroundColor: Colors.transparent,
                                   ),
                                 ),
@@ -464,7 +464,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   Widget _buildFullscreenCaptionButton(
       BuildContext context, SettingsState settingsState) {
     return _CaptionActionButton(
-      brightness: Brightness.light,
+      brightness: Theme.of(context).brightness,
       tooltip: settingsState.isFullscreen ? 'צא ממסך מלא' : 'מסך מלא',
       icon: settingsState.isFullscreen
           ? FluentIcons.full_screen_minimize_24_regular
