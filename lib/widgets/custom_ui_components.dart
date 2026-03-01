@@ -148,7 +148,7 @@ class _WarningDialogState extends State<WarningDialog>
             onPressed: () => Navigator.of(context).pop(false),
             style: FilledButton.styleFrom(
               backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.secondaryContainer,
+              foregroundColor: colorScheme.onPrimary,
             ),
             child: Text(widget.cancelText),
           ),
@@ -164,8 +164,8 @@ class _WarningDialogState extends State<WarningDialog>
   }
 }
 
-/// כפתור פעולה מומלצת (Primary — כהה)
-/// רקע: primary | טקסט: secondaryContainer ("כמו כפתור בהיר")
+/// כפתור פעולה מומלצת (Primary)
+/// רקע: primary | טקסט: onPrimary
 class RecommendedActionButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
@@ -184,7 +184,7 @@ class RecommendedActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bg = cs.primary;
-    final fg = cs.secondaryContainer;
+    final fg = cs.onPrimary;
 
     if (isLoading) {
       return FilledButton(
@@ -212,8 +212,8 @@ class RecommendedActionButton extends StatelessWidget {
   }
 }
 
-/// כפתור פעולה ניטרלית (Tonal — בהיר)
-/// רקע: secondaryContainer | טקסט: primary ("כמו כפתור כהה")
+/// כפתור פעולה ניטרלית (Tonal)
+/// רקע: secondaryContainer | טקסט: onSecondaryContainer
 class NeutralActionButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
@@ -232,7 +232,7 @@ class NeutralActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bg = cs.secondaryContainer;
-    final fg = cs.primary;
+    final fg = cs.onSecondaryContainer;
 
     if (isLoading) {
       return FilledButton.tonal(
