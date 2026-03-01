@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/constants/fonts.dart';
 import 'package:otzaria/utils/color_utils.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
-import 'package:otzaria/utils/settings_wrapper.dart';
+import 'package:otzaria/settings/engine/settings_wrapper.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
