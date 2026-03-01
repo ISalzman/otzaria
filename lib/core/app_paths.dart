@@ -45,6 +45,17 @@ class AppPaths {
     return p.join(libraryPath, 'index');
   }
 
+  /// Gets a dedicated path for indexing metadata/state files (Hive, etc.)
+  /// Kept separate from Tantivy index files to avoid I/O contention.
+  static Future<String> getIndexStatePath() async {
+    final support = await getApplicationSupportDirectory();
+    final stateDir = Directory(p.join(support.path, 'index_state'));
+    if (!await stateDir.exists()) {
+      await stateDir.create(recursive: true);
+    }
+    return stateDir.path;
+  }
+
   /// Gets the manifest file path (library_path/files_manifest.json)
   static Future<String> getManifestPath() async {
     final libraryPath = await getLibraryPath();
