@@ -20,7 +20,7 @@ import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
 import 'package:otzaria/find_ref/find_ref_bloc.dart';
 import 'package:otzaria/find_ref/find_ref_repository.dart';
-import 'package:otzaria/focus/focus_repository.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/history_repository.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
