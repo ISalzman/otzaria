@@ -328,37 +328,66 @@ class SegmentedSettingsTile<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    final cardColor = Theme.of(context).cardColor;
-
-    return ListTile(
-      leading: icon != null ? Icon(icon) : null,
-      title: title is String
-          ? Text(title as String, style: const TextStyle(fontSize: 16))
-          : title as Widget,
-      subtitle: subtitle != null
-          ? Text(subtitle!, style: const TextStyle(fontSize: 13))
-          : null,
-      trailing: SegmentedButton<T>(
-        style: ButtonStyle(
-          shape: WidgetStateProperty.all(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          backgroundColor: WidgetStateProperty.resolveWith<Color?>(
-            (states) => states.contains(WidgetState.selected)
-                ? primaryColor.withValues(alpha: 0.2)
-                : cardColor,
-          ),
+    final colorScheme = Theme.of(context).colorScheme;
+    final segmentedButton = SegmentedButton<T>(
+      style: ButtonStyle(
+        shape: WidgetStateProperty.all(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
-        segments: options
-            .map((o) => ButtonSegment<T>(
-                  value: o.value,
-                  label: Text(o.label, style: const TextStyle(fontSize: 14)),
-                  icon: o.icon != null ? Icon(o.icon) : null,
-                ))
-            .toList(),
-        selected: {currentValue},
-        onSelectionChanged: (s) => onChanged(s.first),
+        backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+          (states) => states.contains(WidgetState.selected)
+              ? colorScheme.primary.withValues(alpha: 0.2)
+              : Theme.of(context).cardColor,
+        ),
+      ),
+      segments: options
+          .map((o) => ButtonSegment<T>(
+                value: o.value,
+                label: Text(o.label, style: const TextStyle(fontSize: 14)),
+                icon: o.icon != null ? Icon(o.icon) : null,
+              ))
+          .toList(),
+      selected: {currentValue},
+      onSelectionChanged: (s) => onChanged(s.first),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (icon != null) ...[
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 12, top: 2),
+                  child: Icon(icon),
+                ),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    title is String
+                        ? Text(title as String,
+                            style: const TextStyle(fontSize: 16))
+                        : title as Widget,
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 4),
+                      Text(subtitle!, style: const TextStyle(fontSize: 13)),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: segmentedButton,
+          ),
+        ],
       ),
     );
   }
