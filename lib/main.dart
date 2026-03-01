@@ -58,7 +58,7 @@ import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:otzaria/services/notification_service.dart';
+import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:logging/logging.dart';
 import 'package:otzaria/widgets/restart_widget.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
