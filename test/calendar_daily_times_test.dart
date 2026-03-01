@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/tools/calendar/calendar_cubit.dart';
-import 'package:otzaria/services/notification_service.dart';
-import 'package:otzaria/settings/bloc/settings_repository.dart';
+import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
+import 'package:otzaria/tools/calendar/services/notification_service.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 
 // Mock SettingsRepository

@@ -3,13 +3,13 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/settings/bloc/settings_bloc.dart';
-import 'package:otzaria/settings/bloc/settings_state.dart';
-import 'package:otzaria/settings/bloc/settings_repository.dart';
-import 'package:otzaria/settings/gematria_settings_dialog.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/settings/panels/gematria_settings_panel.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/core/scaffold_messenger.dart';
-import 'gematria_search.dart';
+import 'package:otzaria/tools/gematria/gematria_search.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
