@@ -98,8 +98,7 @@ class AboutDevTab extends StatelessWidget {
               title: 'הצטרף לפיתוח',
               subtitle: 'מפתחים מוזמנים לתרום לקהילה התורנית',
               buttonLabel: 'הצטרף עכשיו',
-              onTap: () =>
-                  _openUrl('https://github.com/Sivan22/otzaria'),
+              onTap: () => _openUrl('https://github.com/Sivan22/otzaria'),
             ),
           ],
         ),
@@ -220,8 +219,7 @@ class AboutDevTab extends StatelessWidget {
     );
   }
 
-  Widget _editorCategory(
-      String label, List<Map<String, String>> editors) {
+  Widget _editorCategory(String label, List<Map<String, String>> editors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -391,8 +389,7 @@ class _SectionCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding:
-              const EdgeInsets.only(right: 4, left: 4, bottom: 8, top: 4),
+          padding: const EdgeInsets.only(right: 4, left: 4, bottom: 8, top: 4),
           child: Text(
             title,
             style: theme.textTheme.titleSmall?.copyWith(

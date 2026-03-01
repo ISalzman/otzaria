@@ -129,42 +129,46 @@ class _TocViewerState extends State<TocViewer>
   Widget _buildFilteredList(List<TocEntry> entries, BuildContext context) {
     List<TocEntry> matchingEntries = [];
     Set<int> matchingIndices = {}; // לשמור את כל האינדקסים שנמצאו
-    
+
     // הסרת ניקוד מטקסט החיפוש
     final searchQuery = utils.removeVolwels(searchController.text.trim());
 
     // שלב 1: מצא את כל הכותרות שמתאימות לחיפוש
-    void findMatchingEntries(List<TocEntry> entries, {int depth = 0, bool isFirstEntry = true}) {
+    void findMatchingEntries(List<TocEntry> entries,
+        {int depth = 0, bool isFirstEntry = true}) {
       for (int i = 0; i < entries.length; i++) {
         final TocEntry entry = entries[i];
-        
+
         // דלג רק על הכותרת הראשונה ברמה 0 או 1 (שם הספר עצמו)
-        final bool isBookTitle = (depth == 0 && i == 0) || (entry.level <= 1 && i == 0 && isFirstEntry);
-        
+        final bool isBookTitle = (depth == 0 && i == 0) ||
+            (entry.level <= 1 && i == 0 && isFirstEntry);
+
         if (!isBookTitle) {
           // הסרת ניקוד מהכותרת והשוואה
           final entryText = utils.removeVolwels(entry.text);
-          
+
           if (entryText.contains(searchQuery)) {
             matchingIndices.add(entry.index);
           }
         }
-        
+
         // תמיד חפש בילדים
         if (entry.children.isNotEmpty) {
-          findMatchingEntries(entry.children, depth: depth + 1, isFirstEntry: false);
+          findMatchingEntries(entry.children,
+              depth: depth + 1, isFirstEntry: false);
         }
       }
     }
 
     // שלב 2: אסוף את כל ההורים של הכותרות שנמצאו
-    void collectEntriesWithParents(List<TocEntry> entries, List<TocEntry> parentChain) {
+    void collectEntriesWithParents(
+        List<TocEntry> entries, List<TocEntry> parentChain) {
       for (final entry in entries) {
         final currentChain = [...parentChain, entry];
-        
+
         // אם הכותרת הזו או אחד מהילדים שלה נמצאו בחיפוש
         bool hasMatchInSubtree = matchingIndices.contains(entry.index);
-        
+
         // בדוק אם יש התאמה בילדים
         bool hasMatchingChild = false;
         void checkChildren(List<TocEntry> children) {
@@ -176,8 +180,9 @@ class _TocViewerState extends State<TocViewer>
             checkChildren(child.children);
           }
         }
+
         checkChildren(entry.children);
-        
+
         // אם יש התאמה בכותרת הזו או בילדים שלה, הוסף את כל השרשרת
         if (hasMatchInSubtree || hasMatchingChild) {
           // הוסף את כל ההורים שעוד לא נוספו
@@ -187,7 +192,7 @@ class _TocViewerState extends State<TocViewer>
             }
           }
         }
-        
+
         // המשך לילדים
         if (entry.children.isNotEmpty) {
           collectEntriesWithParents(entry.children, currentChain);
@@ -196,10 +201,10 @@ class _TocViewerState extends State<TocViewer>
     }
 
     findMatchingEntries(entries);
-    
+
     if (matchingIndices.isNotEmpty) {
       collectEntriesWithParents(entries, []);
-      
+
       // מיין לפי אינדקס כדי לשמור על הסדר המקורי
       matchingEntries.sort((a, b) => a.index.compareTo(b.index));
     }
