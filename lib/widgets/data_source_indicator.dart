@@ -14,6 +14,7 @@ class DataSourceIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final isDb = source == 'DB';
     final isPersonal = source == 'א';
 
@@ -23,19 +24,19 @@ class DataSourceIndicator extends StatelessWidget {
     String tooltip;
 
     if (isPersonal) {
-      backgroundColor = Colors.purple.withValues(alpha: 0.2);
-      borderColor = Colors.purple;
-      textColor = Colors.purple.shade700;
+      backgroundColor = colorScheme.tertiaryContainer;
+      borderColor = colorScheme.tertiary;
+      textColor = colorScheme.onTertiaryContainer;
       tooltip = 'ספר אישי - לא יועבר למסד נתונים';
     } else if (isDb) {
-      backgroundColor = Colors.green.withValues(alpha: 0.2);
-      borderColor = Colors.green;
-      textColor = Colors.green.shade700;
+      backgroundColor = colorScheme.primaryContainer;
+      borderColor = colorScheme.primary;
+      textColor = colorScheme.onPrimaryContainer;
       tooltip = 'ספר זה נשמר במסד הנתונים';
     } else {
-      backgroundColor = Colors.blue.withValues(alpha: 0.2);
-      borderColor = Colors.blue;
-      textColor = Colors.blue.shade700;
+      backgroundColor = colorScheme.secondaryContainer;
+      borderColor = colorScheme.secondary;
+      textColor = colorScheme.onSecondaryContainer;
       tooltip = 'ספר זה נשמר כקובץ';
     }
 
