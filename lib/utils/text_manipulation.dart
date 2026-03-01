@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
 import 'package:otzaria/data/book_locator.dart';
-import 'package:otzaria/settings/bloc/settings_repository.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 
 String stripHtmlIfNeeded(String text) {
