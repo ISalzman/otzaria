@@ -9,7 +9,7 @@ import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/panels/gematria_settings_panel.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/core/scaffold_messenger.dart';
-import 'gematria_search.dart';
+import 'package:otzaria/tools/gematria/gematria_search.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
