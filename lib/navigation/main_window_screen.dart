@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
-import 'package:otzaria/focus/focus_repository.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';

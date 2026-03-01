@@ -10,7 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
-import 'package:otzaria/focus/focus_repository.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart'
     hide UpdateFontSize;
