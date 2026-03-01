@@ -130,18 +130,38 @@ class TantivyDataProvider {
 
   Future<void> _loadBooksDone() async {
     try {
-      String indexPath = await AppPaths.getIndexPath();
-      booksDone = Hive.box(
-        name: 'books_indexed',
-        directory: indexPath,
-        maxSizeMiB: 100,
-      )
-          .get('key-books-done', defaultValue: [])
-          .map<String>((e) => e.toString())
-          .toList();
+      final statePath = await AppPaths.getIndexStatePath();
+      booksDone = _readBooksDoneFromBox(statePath);
+
+      // Backward compatibility: migrate legacy data that was stored
+      // inside the Tantivy index directory.
+      if (booksDone.isEmpty) {
+        final legacyPath = await AppPaths.getIndexPath();
+        if (legacyPath != statePath) {
+          final legacyBooks = _readBooksDoneFromBox(legacyPath);
+          if (legacyBooks.isNotEmpty) {
+            booksDone = legacyBooks;
+            await saveBooksDoneToDisk();
+          }
+        }
+      }
     } catch (e) {
       booksDone = [];
     }
+  }
+
+  List<String> _readBooksDoneFromBox(String directory) {
+    final dynamic value = Hive.box(
+      name: 'books_indexed',
+      directory: directory,
+      maxSizeMiB: 100,
+    ).get('key-books-done', defaultValue: []);
+
+    if (value is List) {
+      return value.map<String>((e) => e.toString()).toList();
+    }
+
+    return [];
   }
 
   Future<void> _handleSchemaError() async {
@@ -220,9 +240,10 @@ class TantivyDataProvider {
 
   /// Persists the list of indexed books to disk using Hive storage.
   Future<void> saveBooksDoneToDisk() async {
+    final statePath = await AppPaths.getIndexStatePath();
     Hive.box(
       name: 'books_indexed',
-      directory: await AppPaths.getIndexPath(),
+      directory: statePath,
       maxSizeMiB: 100,
     ).put('key-books-done', booksDone);
   }
@@ -305,7 +326,8 @@ class TantivyDataProvider {
     Directory indexDirectory = Directory(indexPath);
     if (closeBooksDoneBox) {
       try {
-        Hive.box(name: 'books_indexed', directory: indexPath, maxSizeMiB: 100)
+        final statePath = await AppPaths.getIndexStatePath();
+        Hive.box(name: 'books_indexed', directory: statePath, maxSizeMiB: 100)
             .close();
       } catch (e) {
         debugPrint('⚠️ Error closing Hive box: $e');
