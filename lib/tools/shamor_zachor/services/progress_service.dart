@@ -24,6 +24,13 @@ class ProgressService {
 
   SharedPreferences? _prefs;
 
+  // Legacy -> current category names used by old Shamor Zachor data.
+  static const Map<String, String> _legacyCategoryAliases = {
+    'תנך': 'תנ"ך',
+    'ש"ס': 'תלמוד בבלי',
+    'ירושלמי': 'תלמוד ירושלמי',
+  };
+
   /// Get SharedPreferences instance with error handling
   Future<SharedPreferences> _getPrefs() async {
     if (_prefs != null) return _prefs!;
@@ -633,6 +640,39 @@ class ProgressService {
     }
   }
 
+  List<String> _categoryCandidates(String categoryName) {
+    final trimmed = categoryName.trim();
+    final candidates = <String>{trimmed};
+
+    final normalized = _legacyCategoryAliases[trimmed];
+    if (normalized != null) {
+      candidates.add(normalized);
+    }
+
+    for (final alias in _legacyCategoryAliases.entries) {
+      if (alias.value == trimmed) {
+        candidates.add(alias.key);
+      }
+    }
+
+    return candidates.toList();
+  }
+
+  Future<int?> _findBookIdWithCategoryAliases(
+    Future<int?> Function(String categoryName, String bookName)
+        findBookIdByName,
+    String categoryName,
+    String bookName,
+  ) async {
+    for (final candidateCategory in _categoryCandidates(categoryName)) {
+      final bookId = await findBookIdByName(candidateCategory, bookName);
+      if (bookId != null) {
+        return bookId;
+      }
+    }
+    return null;
+  }
+
   /// Migrate old progress data (category+name based) to new format (ID based)
   /// This is a one-time migration that runs automatically on first load
   Future<bool> migrateOldProgressToNewFormat({
@@ -681,7 +721,11 @@ class ProgressService {
 
           try {
             // Find book ID in database
-            final bookId = await findBookIdByName(categoryName, bookName);
+            final bookId = await _findBookIdWithCategoryAliases(
+              findBookIdByName,
+              categoryName,
+              bookName,
+            );
 
             if (bookId == null) {
               _logger.warning(
@@ -722,7 +766,11 @@ class ProgressService {
           final completionDate = bookEntry.value;
 
           try {
-            final bookId = await findBookIdByName(categoryName, bookName);
+            final bookId = await _findBookIdWithCategoryAliases(
+              findBookIdByName,
+              categoryName,
+              bookName,
+            );
 
             if (bookId == null) {
               continue; // Already logged in progress migration
