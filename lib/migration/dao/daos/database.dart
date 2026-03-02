@@ -179,7 +179,11 @@ class MyDatabase {
         // WAL allows multiple readers and a single writer simultaneously without blocking,
         // preventing "database locked" errors during startup when multiple components
         // (library catalog, SeforimRepository, BooksCache, BackgroundSync) access the DB.
-        await db.execute('PRAGMA journal_mode=WAL');
+        if (Platform.isAndroid || Platform.isIOS) {
+          await db.rawQuery('PRAGMA journal_mode=WAL');
+        } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          await db.execute('PRAGMA journal_mode=WAL');
+        }
       },
       onCreate: _onCreate,
       onOpen: _onOpen,
