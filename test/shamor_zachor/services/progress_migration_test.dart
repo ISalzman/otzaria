@@ -89,6 +89,47 @@ void main() {
       expect(newProgress[3]!['1']!.review3, isTrue);
     });
 
+    test('Migration should resolve legacy category aliases', () async {
+      // Arrange: Old format uses legacy category names
+      final oldProgress = {
+        'תנך': {
+          'בראשית': {
+            '1': PageProgress(learn: true),
+          }
+        },
+        'ש"ס': {
+          'ברכות': {
+            '1': PageProgress(learn: true, review1: true),
+          }
+        },
+      };
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+          'sz:progress_data', _encodeOldProgress(oldProgress));
+
+      Future<int?> findBookId(String category, String book) async {
+        final bookIds = {
+          'תנ"ך/בראשית': 31,
+          'תלמוד בבלי/ברכות': 32,
+        };
+        return bookIds['$category/$book'];
+      }
+
+      // Act
+      final result = await progressService.migrateOldProgressToNewFormat(
+        findBookIdByName: findBookId,
+      );
+
+      // Assert
+      expect(result, isTrue);
+      final newProgress = await progressService.loadProgressDataById();
+      expect(newProgress.length, equals(2));
+      expect(newProgress[31], isNotNull);
+      expect(newProgress[32], isNotNull);
+      expect(newProgress[32]!['1']!.review1, isTrue);
+    });
+
     test('Migration should not run twice', () async {
       // Arrange: Create old format data
       final oldProgress = {
