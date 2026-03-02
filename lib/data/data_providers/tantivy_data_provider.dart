@@ -135,17 +135,54 @@ class TantivyDataProvider {
 
       // Backward compatibility: migrate legacy data that was stored
       // inside the Tantivy index directory.
+      // Hive caches open boxes by name only (ignoring directory), so we must
+      // close the current box before opening the legacy one at a different path.
       if (booksDone.isEmpty) {
         final legacyPath = await AppPaths.getIndexPath();
         if (legacyPath != statePath) {
+          Hive.box(name: 'books_indexed', directory: statePath, maxSizeMiB: 100)
+              .close();
           final legacyBooks = _readBooksDoneFromBox(legacyPath);
           if (legacyBooks.isNotEmpty) {
             booksDone = legacyBooks;
+            Hive.box(
+                    name: 'books_indexed',
+                    directory: legacyPath,
+                    maxSizeMiB: 100)
+                .close();
             await saveBooksDoneToDisk();
+
+            // Verify the migration succeeded by reading back from the new path.
+            final verified = _readBooksDoneFromBox(statePath);
+            if (verified.length == legacyBooks.length) {
+              // Close the statePath box first so the cache is clear,
+              // otherwise _deleteLegacyHiveFiles would get the cached
+              // statePath box and delete the WRONG files.
+              Hive.box(
+                      name: 'books_indexed',
+                      directory: statePath,
+                      maxSizeMiB: 100)
+                  .close();
+              _deleteLegacyHiveFiles(legacyPath);
+              // Re-open the box at statePath for ongoing use.
+              _readBooksDoneFromBox(statePath);
+            } else {
+              debugPrint('⚠️ Migration verification failed, '
+                  'keeping legacy files.');
+            }
+          } else {
+            // Re-open the box at the new state path for future use.
+            Hive.box(
+                    name: 'books_indexed',
+                    directory: legacyPath,
+                    maxSizeMiB: 100)
+                .close();
+            _readBooksDoneFromBox(statePath);
           }
         }
       }
     } catch (e) {
+      debugPrint('⚠️ Error loading books done: $e');
       booksDone = [];
     }
   }
@@ -162,6 +199,24 @@ class TantivyDataProvider {
     }
 
     return [];
+  }
+
+  /// Deletes the legacy Hive/Isar `books_indexed` files from [directory].
+  /// Must be called only after the box has been closed.
+  void _deleteLegacyHiveFiles(String directory) {
+    try {
+      // Re-open the legacy box just to call deleteFromDisk(), which lets
+      // Isar cleanly remove exactly the files it owns.
+      Hive.box(name: 'books_indexed', directory: directory, maxSizeMiB: 100)
+          .deleteFromDisk();
+      // deleteFromDisk() may leave the lock file behind — clean it up.
+      final lockFile = File('$directory/books_indexed.isar-lck');
+      if (lockFile.existsSync()) {
+        lockFile.deleteSync();
+      }
+    } catch (e) {
+      debugPrint('⚠️ Could not delete legacy Hive files: $e');
+    }
   }
 
   Future<void> _handleSchemaError() async {
