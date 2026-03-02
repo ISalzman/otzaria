@@ -195,11 +195,10 @@ class FileSystemData {
 
     // OPTIMIZATION: Load metadata and initialize providers in parallel
     metadata = _getMetadata();
-    final results = await Future.wait([
+    final (metadataResult, _) = await (
       metadata,
       _providerManager.initialize(),
-    ]);
-    final metadataResult = results[0] as Map<String, Map<String, dynamic>>;
+    ).wait;
     debugPrint(
         '⏱️ Metadata + providers init: ${DateTime.now().difference(tTotal).inMilliseconds}ms');
 
