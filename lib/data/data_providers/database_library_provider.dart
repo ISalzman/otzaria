@@ -342,28 +342,17 @@ class DatabaseLibraryProvider implements LibraryProvider {
     // from locking the DB between them (which caused 17s delays).
     final tQuery = DateTime.now();
 
-    String bookCondition;
-    if (!showExternalBooks) {
-      bookCondition = "externalLibraryId IS NULL AND fileType != 'link'";
-    } else if (showOtzarHachochma && showHebrewBooks) {
-      bookCondition = '1=1';
-    } else if (showOtzarHachochma) {
-      bookCondition =
-          "(externalLibraryId IS NULL OR externalLibraryId LIKE 'oh:%')";
-    } else if (showHebrewBooks) {
-      bookCondition =
-          "(externalLibraryId IS NULL OR externalLibraryId LIKE 'hb:%')";
-    } else {
-      bookCondition = "externalLibraryId IS NULL AND fileType != 'link'";
-    }
-
     late final List<Map<String, dynamic>> allDbBooks;
     late final List<Map<String, dynamic>> allCatRows;
 
     final db = await repository.database.database;
     await db.transaction((txn) async {
-      allDbBooks = await repository.database.bookDao
-          .getAllBooksMinimalInTxn(txn, condition: bookCondition);
+      allDbBooks = await repository.database.bookDao.getAllBooksMinimalInTxn(
+        txn,
+        includeExternalBooks: showExternalBooks,
+        includeOtzarHachochma: showOtzarHachochma,
+        includeHebrewBooks: showHebrewBooks,
+      );
       allCatRows =
           await repository.database.categoryDao.getAllCategoryRowsInTxn(txn);
     });
@@ -373,7 +362,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     final booksByCategory = <int, List<Map<String, dynamic>>>{};
     for (final bookData in allDbBooks) {
-      final catId = bookData['categoryId'] as int;
+      // Use null-safe cast: corrupt data (null categoryId) should not crash the
+      // entire library load. Books with no category are silently skipped.
+      final catId = bookData['categoryId'] as int?;
+      if (catId == null) continue;
       booksByCategory.putIfAbsent(catId, () => []);
       booksByCategory[catId]!.add(bookData);
     }
@@ -696,14 +688,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
     Map<String, Map<String, dynamic>> metadata,
   ) {
     final title = bookMap['title'] as String;
-    final id = bookMap['id'] as int;
+    final id = bookMap['id'] as int? ?? 0;
     final filePath = bookMap['filePath'] as String?;
     final fileType = bookMap['fileType'] as String?;
     final externalLibraryId = bookMap['externalLibraryId'] as String?;
     final heShortDesc = bookMap['heShortDesc'] as String?;
     final orderDouble = (bookMap['orderIndex'] as num?)?.toDouble() ?? 999.0;
     final order = orderDouble.toInt();
-    final categoryId = bookMap['categoryId'] as int;
+    final categoryId = bookMap['categoryId'] as int? ?? 0;
 
     final bookMeta = metadata[title];
 
