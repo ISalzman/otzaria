@@ -1266,101 +1266,120 @@ class _CalendarWidgetState extends State<CalendarWidget> {
             ? scheme.onErrorContainer
             : (isSpecialTime ? scheme.onTertiaryContainer : scheme.onSurface);
 
-        return Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(8),
-            border: border,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
+        return LayoutBuilder(
+          builder: (context, itemConstraints) {
+            // ברירת מחדל נשארת כמו לפני תיקון המסכים הצרים (לשמירת המראה).
+            // מצב קומפקטי מופעל רק כאשר התא עצמו קטן מדי כדי למנוע overflow.
+            final isCompactLayout = itemConstraints.maxHeight < 44 ||
+                itemConstraints.maxWidth < 110;
+            final titleFontSize = isCompactLayout ? 10.0 : 12.0;
+            final timeFontSize = isCompactLayout ? 12.0 : 14.0;
+            final itemPadding = isCompactLayout ? 4.0 : 8.0;
+            final menuButtonSize = isCompactLayout ? 14.0 : 18.0;
+            final menuIconSize = isCompactLayout ? 12.0 : 16.0;
+
+            return Container(
+              padding: EdgeInsets.all(itemPadding),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(8),
+                border: border,
+              ),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: isCompactLayout
+                    ? MainAxisAlignment.spaceBetween
+                    : MainAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: Text(
-                      timeName,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        color: titleColor,
-                        height: 1.2,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  PopupMenuButton<_ZmanMenuAction>(
-                    tooltip: '',
-                    padding: EdgeInsets.zero,
-                    child: SizedBox.square(
-                      dimension: 14,
-                      child: Center(
-                        child: Icon(
-                          FluentIcons.more_vertical_24_regular,
-                          color: titleColor,
-                          size: 12,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          timeName,
+                          style: TextStyle(
+                            fontSize: titleFontSize,
+                            fontWeight: FontWeight.w500,
+                            color: titleColor,
+                            height: isCompactLayout ? 1.2 : null,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                    itemBuilder: (context) {
-                      return [
-                        PopupMenuItem<_ZmanMenuAction>(
-                          value: _ZmanMenuAction.toggle,
-                          child: Text(
-                            hasAlert
-                                ? 'מופעלת התראה לזמן זה'
-                                : 'הפעל התראה לזמן זה',
+                      PopupMenuButton<_ZmanMenuAction>(
+                        tooltip: '',
+                        padding: EdgeInsets.zero,
+                        child: SizedBox.square(
+                          dimension: menuButtonSize,
+                          child: Center(
+                            child: Icon(
+                              FluentIcons.more_vertical_24_regular,
+                              color: titleColor,
+                              size: menuIconSize,
+                            ),
                           ),
                         ),
-                      ];
-                    },
-                    onSelected: (_) async {
-                      final cubit = context.read<CalendarCubit>();
+                        itemBuilder: (context) {
+                          return [
+                            PopupMenuItem<_ZmanMenuAction>(
+                              value: _ZmanMenuAction.toggle,
+                              child: Text(
+                                hasAlert
+                                    ? 'מופעלת התראה לזמן זה'
+                                    : 'הפעל התראה לזמן זה',
+                              ),
+                            ),
+                          ];
+                        },
+                        onSelected: (_) async {
+                          final cubit = context.read<CalendarCubit>();
 
-                      if (timeLabel == '--:--') {
-                        UiSnack.showError('לא ניתן להפעיל התראה לזמן לא זמין');
-                        return;
-                      }
+                          if (timeLabel == '--:--') {
+                            UiSnack.showError(
+                                'לא ניתן להפעיל התראה לזמן לא זמין');
+                            return;
+                          }
 
-                      final initial = existingAlert?.minutesBefore ?? 60;
-                      final result = await _showZmanAlertDialog(
-                        context,
-                        zmanName: timeName,
-                        timeLabel: timeLabel,
-                        initialMinutesBefore: initial,
-                        isEnabled: hasAlert,
-                      );
-                      if (result == null) return;
+                          final initial = existingAlert?.minutesBefore ?? 60;
+                          final result = await _showZmanAlertDialog(
+                            context,
+                            zmanName: timeName,
+                            timeLabel: timeLabel,
+                            initialMinutesBefore: initial,
+                            isEnabled: hasAlert,
+                          );
+                          if (result == null) return;
 
-                      if (result.cancelAlert) {
-                        await cubit.cancelZmanAlertPreference(timeId: timeId);
-                        return;
-                      }
+                          if (result.cancelAlert) {
+                            await cubit.cancelZmanAlertPreference(
+                                timeId: timeId);
+                            return;
+                          }
 
-                      await cubit.setZmanAlertPreference(
-                        timeId: timeId,
-                        displayName: timeName,
-                        minutesBefore: result.minutesBefore,
-                      );
-                    },
+                          await cubit.setZmanAlertPreference(
+                            timeId: timeId,
+                            displayName: timeName,
+                            minutesBefore: result.minutesBefore,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  if (!isCompactLayout) const SizedBox(height: 2),
+                  Text(
+                    timeLabel,
+                    style: TextStyle(
+                      fontSize: timeFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: timeColor,
+                      height: isCompactLayout ? 1.0 : null,
+                    ),
                   ),
                 ],
               ),
-              Text(
-                timeLabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: timeColor,
-                  height: 1.0,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
