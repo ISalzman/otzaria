@@ -174,6 +174,13 @@ class MyDatabase {
     return await openDatabase(
       path,
       version: 5, // Incremented version to align book_file/db_meta schema
+      onConfigure: (db) async {
+        // Enable WAL (Write-Ahead Logging) mode for concurrent read/write access.
+        // WAL allows multiple readers and a single writer simultaneously without blocking,
+        // preventing "database locked" errors during startup when multiple components
+        // (library catalog, SeforimRepository, BooksCache, BackgroundSync) access the DB.
+        await db.execute('PRAGMA journal_mode=WAL');
+      },
       onCreate: _onCreate,
       onOpen: _onOpen,
     );

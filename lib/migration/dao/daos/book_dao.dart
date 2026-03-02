@@ -19,6 +19,25 @@ class BookDao {
     return result.map((row) => Book.fromJson(row)).toList();
   }
 
+  /// Gets minimal book data within an existing transaction (or standalone database).
+  /// Used by [DatabaseLibraryProvider] to load books and categories atomically
+  /// in a single transaction, preventing "database locked" errors.
+  ///
+  /// [txn] must be a [Transaction] or [Database] (both implement [DatabaseExecutor]).
+  /// [condition] is a raw SQL WHERE clause (caller is responsible for safety).
+  Future<List<Map<String, dynamic>>> getAllBooksMinimalInTxn(
+    DatabaseExecutor txn, {
+    required String condition,
+  }) async {
+    return txn.rawQuery('''
+      SELECT id, title, categoryId, orderIndex, fileType, filePath,
+             externalLibraryId, heShortDesc
+      FROM book
+      WHERE $condition
+      ORDER BY orderIndex, title
+    ''');
+  }
+
   /// Gets all local books (excluding external catalog books).
   Future<List<Book>> getAllLocalBooks() async {
     final db = await database;

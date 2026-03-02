@@ -97,6 +97,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
 
       // רענון הספרייה מהמערכת קבצים
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
+      DataRepository.instance.invalidateExternalBooksCache();
       final library = await _repository.library;
 
       try {
@@ -199,6 +200,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
           SettingsRepository.keyLibraryPath, event.path);
       FileSystemData.instance.libraryPath = event.path;
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
+      DataRepository.instance.invalidateExternalBooksCache();
 
       // פתיחה מחדש של אינדקס החיפוש
       try {
@@ -260,6 +262,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
 
       // רענון הספרייה כדי לטעון את הספרים החדשים
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
+      DataRepository.instance.invalidateExternalBooksCache();
 
       final library = await _repository.library;
 

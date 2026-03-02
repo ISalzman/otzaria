@@ -26,6 +26,17 @@ class CategoryDao {
     return categories;
   }
 
+  /// Gets all category rows within an existing transaction (or standalone database).
+  /// Used by [DatabaseLibraryProvider] to load books and categories atomically
+  /// in a single transaction, preventing "database locked" errors.
+  ///
+  /// [txn] must be a [Transaction] or [Database] (both implement [DatabaseExecutor]).
+  Future<List<Map<String, dynamic>>> getAllCategoryRowsInTxn(
+    DatabaseExecutor txn,
+  ) async {
+    return txn.rawQuery('SELECT * FROM category ORDER BY orderIndex, title');
+  }
+
   Future<Category?> getCategoryById(int id) async {
     final db = await database;
     final result = await db.rawQuery(_queries['selectById']!, [id]);

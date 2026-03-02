@@ -336,26 +336,53 @@ class DatabaseLibraryProvider implements LibraryProvider {
     final showHebrewBooks =
         Settings.getValue<bool>('key-show-hebrew-books') ?? false;
 
-    // OPTIMIZATION 1: Load all books with relations in a single optimized query
-    final allDbBooks =
-        await repository.database.bookDao.getAllBooksWithRelations(
-      includeExternalBooks: showExternalBooks,
-      includeOtzarHachochma: showOtzarHachochma,
-      includeHebrewBooks: showHebrewBooks,
-    );
-    final booksByCategory = <int, List<db_models.Book>>{};
+    // OPTIMIZATION: Load minimal book data (8 columns, no JOINs) instead of
+    // full book data with relations (25+ columns + 4 junction table queries).
+    // Both queries run inside a single transaction to prevent BackgroundSync
+    // from locking the DB between them (which caused 17s delays).
+    final tQuery = DateTime.now();
 
-    for (final bookData in allDbBooks) {
-      final book = db_models.Book.fromJson(bookData);
-      booksByCategory.putIfAbsent(book.categoryId, () => []);
-      booksByCategory[book.categoryId]!.add(book);
+    String bookCondition;
+    if (!showExternalBooks) {
+      bookCondition = "externalLibraryId IS NULL AND fileType != 'link'";
+    } else if (showOtzarHachochma && showHebrewBooks) {
+      bookCondition = '1=1';
+    } else if (showOtzarHachochma) {
+      bookCondition =
+          "(externalLibraryId IS NULL OR externalLibraryId LIKE 'oh:%')";
+    } else if (showHebrewBooks) {
+      bookCondition =
+          "(externalLibraryId IS NULL OR externalLibraryId LIKE 'hb:%')";
+    } else {
+      bookCondition = "externalLibraryId IS NULL AND fileType != 'link'";
     }
 
-    debugPrint('💾 Loaded ${allDbBooks.length} books');
+    late final List<Map<String, dynamic>> allDbBooks;
+    late final List<Map<String, dynamic>> allCatRows;
 
-    // OPTIMIZATION 2: Load all categories at once and build a parent-child map
-    final allCategories =
-        await repository.database.categoryDao.getAllCategories();
+    final db = await repository.database.database;
+    await db.transaction((txn) async {
+      allDbBooks = await repository.database.bookDao
+          .getAllBooksMinimalInTxn(txn, condition: bookCondition);
+      allCatRows =
+          await repository.database.categoryDao.getAllCategoryRowsInTxn(txn);
+    });
+
+    debugPrint(
+        '⏱️ Transaction (books+categories): ${DateTime.now().difference(tQuery).inMilliseconds}ms (${allDbBooks.length} books, ${allCatRows.length} categories)');
+
+    final booksByCategory = <int, List<Map<String, dynamic>>>{};
+    for (final bookData in allDbBooks) {
+      final catId = bookData['categoryId'] as int;
+      booksByCategory.putIfAbsent(catId, () => []);
+      booksByCategory[catId]!.add(bookData);
+    }
+
+    // Parse category rows into model objects (filtering debug-only categories)
+    final allCategories = allCatRows
+        .map((row) => db_models.Category.fromJson(row))
+        .where((cat) => cat.title != 'אודות התוכנה')
+        .toList();
 
     final categoriesByParent = <int?, List<db_models.Category>>{};
     for (final cat in allCategories) {
@@ -373,9 +400,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     debugPrint('💾 Found ${rootCategories.length} root categories');
 
+    final tTree = DateTime.now();
     int totalCategories = 0;
     for (final rootCategory in rootCategories) {
-      debugPrint('💾 Building category: ${rootCategory.title}');
       final catalogCategory = _buildCatalogCategoryRecursiveOptimized(
         rootCategory,
         booksByCategory,
@@ -385,8 +412,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
       );
       library.subCategories.add(catalogCategory);
       totalCategories += _countCategories(catalogCategory);
-      debugPrint('💾 Finished category: ${rootCategory.title}');
     }
+    debugPrint(
+        '⏱️ Category tree build: ${DateTime.now().difference(tTree).inMilliseconds}ms');
 
     // NOTE: Sorting is now done during build (like Kotlin), no need for post-sort
     // _sortLibraryRecursive(library); // Removed - sorting happens in _buildCatalogCategoryRecursiveOptimized
@@ -604,7 +632,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
   /// - Subcategories are sorted by orderIndex
   Category _buildCatalogCategoryRecursiveOptimized(
     db_models.Category dbCategory,
-    Map<int, List<db_models.Book>> booksByCategory,
+    Map<int, List<Map<String, dynamic>>> booksByCategory,
     Map<int?, List<db_models.Category>> categoriesByParent,
     Category parent,
     Map<String, Map<String, dynamic>> metadata,
@@ -622,9 +650,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     // Get books for this category and sort by order (like Kotlin: sortedBy { it.order })
     final dbBooks = (booksByCategory[dbCategory.id] ?? [])
-      ..sort((a, b) => a.order.compareTo(b.order));
+      ..sort((a, b) {
+        final orderA = (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
+        final orderB = (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
+        return orderA.compareTo(orderB);
+      });
     for (final dbBook in dbBooks) {
-      final book = _convertDbBookToBook(dbBook, category, metadata);
+      final book = _convertMinimalBookMapToBook(dbBook, category, metadata);
       category.books.add(book);
 
       // Cache the book key for provider mapping
@@ -654,20 +686,32 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return category;
   }
 
-  /// Converts a database book model to the app's Book model.
-  Book _convertDbBookToBook(
-    db_models.Book dbBook,
+  /// Converts a minimal book map (from getAllBooksMinimal) to the app's Book model.
+  /// Uses only the 8 columns available: id, title, categoryId, orderIndex,
+  /// fileType, filePath, externalLibraryId, heShortDesc.
+  /// Falls back to metadata for author/pubDate/pubPlace/topics.
+  Book _convertMinimalBookMapToBook(
+    Map<String, dynamic> bookMap,
     Category category,
     Map<String, Map<String, dynamic>> metadata,
   ) {
-    final bookMeta = metadata[dbBook.title];
+    final title = bookMap['title'] as String;
+    final id = bookMap['id'] as int;
+    final filePath = bookMap['filePath'] as String?;
+    final fileType = bookMap['fileType'] as String?;
+    final externalLibraryId = bookMap['externalLibraryId'] as String?;
+    final heShortDesc = bookMap['heShortDesc'] as String?;
+    final orderDouble = (bookMap['orderIndex'] as num?)?.toDouble() ?? 999.0;
+    final order = orderDouble.toInt();
+    final categoryId = bookMap['categoryId'] as int;
+
+    final bookMeta = metadata[title];
 
     // Build category path from the Category object
     String getCategoryPath(Category? cat) {
       final List<String> path = [];
-      final Set<Category> visited = {}; // Prevent infinite loops
+      final Set<Category> visited = {};
       while (cat != null && !visited.contains(cat)) {
-        // Stop at Library level (self-referencing parent)
         if (cat.title == 'ספריית אוצריא') break;
         visited.add(cat);
         path.insert(0, cat.title);
@@ -678,107 +722,96 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     final categoryPath = getCategoryPath(category);
 
-    final topics = _buildTopics(dbBook, categoryPath);
+    // Use metadata for topics (no junction table data available)
+    String topics = '';
+    if (categoryPath.isNotEmpty) {
+      topics = categoryPath.split('/').where((p) => p.isNotEmpty).join(', ');
+    }
 
-    final normalizedFileType = (dbBook.fileType ?? '').toLowerCase();
+    // Use metadata for author/pubDate/pubPlace
+    final author = bookMeta?['author'] as String?;
+    final pubDate = bookMeta?['pubDate'] as String?;
+    final pubPlace = bookMeta?['pubPlace'] as String?;
+    final metaHeShortDesc = heShortDesc ?? bookMeta?['heShortDesc'] as String?;
+
+    final normalizedFileType = (fileType ?? '').toLowerCase();
 
     if (normalizedFileType == 'link' || normalizedFileType == 'url') {
       final link = ExternalCatalogMapper.resolveLink(
-        filePath: dbBook.filePath,
-        externalLibraryId: dbBook.externalLibraryId,
+        filePath: filePath,
+        externalLibraryId: externalLibraryId,
       );
 
       if (link != null && link.isNotEmpty) {
         return ExternalLibraryBook(
-          title: dbBook.title,
-          id: dbBook.id,
-          author: dbBook.authors.isNotEmpty
-              ? dbBook.authors.first.name
-              : bookMeta?['author'],
-          heShortDesc: dbBook.heShortDesc ?? bookMeta?['heShortDesc'],
-          pubDate: dbBook.pubDates.isNotEmpty
-              ? dbBook.pubDates.first.date
-              : bookMeta?['pubDate'],
-          pubPlace: dbBook.pubPlaces.isNotEmpty
-              ? dbBook.pubPlaces.first.name
-              : bookMeta?['pubPlace'],
+          title: title,
+          id: id,
+          author: author,
+          heShortDesc: metaHeShortDesc,
+          pubDate: pubDate,
+          pubPlace: pubPlace,
           topics: topics,
           link: link,
           categoryPath: categoryPath,
-          categoryId: dbBook.categoryId,
+          categoryId: categoryId,
           fileType: normalizedFileType,
-          externalLibraryId: dbBook.externalLibraryId,
+          externalLibraryId: externalLibraryId,
         );
       }
     }
 
-    if (dbBook.filePath != null && dbBook.fileType == 'pdf') {
+    if (filePath != null && fileType == 'pdf') {
       return PdfBook(
-          id: dbBook.id,
-          title: dbBook.title,
-          category: category,
-          path: dbBook.filePath!,
-          author: dbBook.authors.isNotEmpty
-              ? dbBook.authors.first.name
-              : bookMeta?['author'],
-          heShortDesc: dbBook.heShortDesc ?? bookMeta?['heShortDesc'],
-          pubDate: dbBook.pubDates.isNotEmpty
-              ? dbBook.pubDates.first.date
-              : bookMeta?['pubDate'],
-          pubPlace: dbBook.pubPlaces.isNotEmpty
-              ? dbBook.pubPlaces.first.name
-              : bookMeta?['pubPlace'],
-          order: dbBook.order.toInt(),
-          topics: topics,
-          filePath: dbBook.filePath,
-          categoryPath: categoryPath,
-          categoryId: dbBook.categoryId,
-          externalLibraryId: dbBook.externalLibraryId);
+        id: id,
+        title: title,
+        category: category,
+        path: filePath,
+        author: author,
+        heShortDesc: metaHeShortDesc,
+        pubDate: pubDate,
+        pubPlace: pubPlace,
+        order: order,
+        topics: topics,
+        filePath: filePath,
+        categoryPath: categoryPath,
+        categoryId: categoryId,
+        externalLibraryId: externalLibraryId,
+      );
     }
 
-    if (dbBook.filePath != null && dbBook.fileType == 'docx') {
+    if (filePath != null && fileType == 'docx') {
       return DocxBook(
-          id: dbBook.id,
-          title: dbBook.title,
-          category: category,
-          path: dbBook.filePath!,
-          author: dbBook.authors.isNotEmpty
-              ? dbBook.authors.first.name
-              : bookMeta?['author'],
-          heShortDesc: dbBook.heShortDesc ?? bookMeta?['heShortDesc'],
-          pubDate: dbBook.pubDates.isNotEmpty
-              ? dbBook.pubDates.first.date
-              : bookMeta?['pubDate'],
-          pubPlace: dbBook.pubPlaces.isNotEmpty
-              ? dbBook.pubPlaces.first.name
-              : bookMeta?['pubPlace'],
-          order: dbBook.order.toInt(),
-          topics: topics,
-          filePath: dbBook.filePath,
-          categoryPath: categoryPath,
-          categoryId: dbBook.categoryId,
-          externalLibraryId: dbBook.externalLibraryId);
+        id: id,
+        title: title,
+        category: category,
+        path: filePath,
+        author: author,
+        heShortDesc: metaHeShortDesc,
+        pubDate: pubDate,
+        pubPlace: pubPlace,
+        order: order,
+        topics: topics,
+        filePath: filePath,
+        categoryPath: categoryPath,
+        categoryId: categoryId,
+        externalLibraryId: externalLibraryId,
+      );
     }
 
     return TextBook(
-        id: dbBook.id,
-        title: dbBook.title,
-        category: category,
-        author: dbBook.authors.isNotEmpty
-            ? dbBook.authors.first.name
-            : bookMeta?['author'],
-        heShortDesc: dbBook.heShortDesc ?? bookMeta?['heShortDesc'],
-        pubDate: dbBook.pubDates.isNotEmpty
-            ? dbBook.pubDates.first.date
-            : bookMeta?['pubDate'],
-        pubPlace: dbBook.pubPlaces.isNotEmpty
-            ? dbBook.pubPlaces.first.name
-            : bookMeta?['pubPlace'],
-        order: dbBook.order.toInt(),
-        topics: topics,
-        categoryPath: categoryPath,
-        categoryId: dbBook.categoryId,
-        externalLibraryId: dbBook.externalLibraryId);
+      id: id,
+      title: title,
+      category: category,
+      author: author,
+      heShortDesc: metaHeShortDesc,
+      pubDate: pubDate,
+      pubPlace: pubPlace,
+      order: order,
+      topics: topics,
+      categoryPath: categoryPath,
+      categoryId: categoryId,
+      externalLibraryId: externalLibraryId,
+    );
   }
 
   /// Counts the total number of categories in the tree.

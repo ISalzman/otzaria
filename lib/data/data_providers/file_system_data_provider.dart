@@ -172,6 +172,7 @@ class FileSystemData {
   /// to create a full [Library] object containing all categories and books.
   /// Uses LibraryProviderManager for unified catalog building.
   Future<Library> getLibrary() async {
+    final tTotal = DateTime.now();
     final libraryDir = Directory(libraryPath);
 
     if (!libraryDir.existsSync()) {
@@ -192,14 +193,23 @@ class FileSystemData {
       return Library(categories: []);
     }
 
+    // OPTIMIZATION: Load metadata and initialize providers in parallel
     metadata = _getMetadata();
-    final metadataResult = await metadata;
+    final results = await Future.wait([
+      metadata,
+      _providerManager.initialize(),
+    ]);
+    final metadataResult = results[0] as Map<String, Map<String, dynamic>>;
+    debugPrint(
+        '⏱️ Metadata + providers init: ${DateTime.now().difference(tTotal).inMilliseconds}ms');
 
     // Use the unified catalog builder from LibraryProviderManager
     final library = await _providerManager.buildLibraryCatalog(
       metadataResult,
       otzariaPath,
     );
+    debugPrint(
+        '⏱️ Total getLibrary: ${DateTime.now().difference(tTotal).inMilliseconds}ms');
     return library;
   }
 

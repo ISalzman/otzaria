@@ -37,6 +37,7 @@ class NavigationRepository {
 
       // טעינת הספרייה מחדש
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
+      DataRepository.instance.invalidateExternalBooksCache();
 
       // פתיחה מחדש של אינדקס החיפוש
       try {
