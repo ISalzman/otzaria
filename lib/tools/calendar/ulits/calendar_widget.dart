@@ -31,13 +31,28 @@ class _CalendarWidgetState extends State<CalendarWidget> {
   Timer? _keyRepeatTimer;
   LogicalKeyboardKey? _currentPressedKey;
 
+  void _stopKeyRepeat() {
+    _keyRepeatTimer?.cancel();
+    _keyRepeatTimer = null;
+    _currentPressedKey = null;
+  }
+
+  void _handleFocusChange() {
+    // אם הפוקוס עבר לווידג'ט אחר, ייתכן שלא נקבל KeyUp.
+    // עוצרים כאן את החזרה האוטומטית כדי למנוע "ריצה אינסופית".
+    if (!_keyboardFocusNode.hasFocus) {
+      _stopKeyRepeat();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _keyboardFocusNode = FocusNode(
-      skipTraversal: false,
+      skipTraversal: true,
       canRequestFocus: true,
     );
+    _keyboardFocusNode.addListener(_handleFocusChange);
 
     // בקש פוקוס אוטומטי כשהווידג'ט נטען
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -47,25 +62,44 @@ class _CalendarWidgetState extends State<CalendarWidget> {
 
   @override
   void dispose() {
-    _keyRepeatTimer?.cancel();
+    _keyboardFocusNode.removeListener(_handleFocusChange);
+    _stopKeyRepeat();
     _keyboardFocusNode.dispose();
     super.dispose();
   }
 
+  bool _isNavigationKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.arrowRight ||
+        key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowDown;
+  }
+
   /// מטפל באירועי מקלדת ומנווט בלוח השנה
-  void _handleCalendarKeyEvent(KeyEvent event) {
+  KeyEventResult _handleCalendarKeyEvent(FocusNode node, KeyEvent event) {
+    final key = event.logicalKey;
+    if (!_isNavigationKey(key)) {
+      return KeyEventResult.ignored;
+    }
+
     final cubit = context.read<CalendarCubit>();
+
+    if (event is KeyRepeatEvent) {
+      // התעלם מאירועי חזרה אוטומטיים של המערכת
+      // אנחנו מטפלים בזה בעצמנו
+      return KeyEventResult.handled;
+    }
 
     if (event is KeyDownEvent) {
       // בדוק אם זה אירוע חדש או חזרה
-      final isNewPress = _currentPressedKey != event.logicalKey;
+      final isNewPress = _currentPressedKey != key;
 
       if (isNewPress) {
         // לחיצה ראשונה - בצע פעולה מיד
-        _executeNavigationAction(event.logicalKey, cubit);
+        _executeNavigationAction(key, cubit);
 
         // שמור את המקש הנוכחי
-        _currentPressedKey = event.logicalKey;
+        _currentPressedKey = key;
 
         // התחל טיימר ללחיצה ארוכה (חזרה אוטומטית) אחרי השהייה
         _keyRepeatTimer?.cancel();
@@ -73,9 +107,15 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           // אחרי השהייה ראשונית, התחל חזרה מהירה
           _keyRepeatTimer =
               Timer.periodic(const Duration(milliseconds: 80), (timer) {
-            if (_currentPressedKey != null && mounted) {
-              _executeNavigationAction(_currentPressedKey!, cubit);
+            final pressedKey = _currentPressedKey;
+            if (pressedKey != null &&
+                mounted &&
+                HardwareKeyboard.instance.logicalKeysPressed.contains(
+                  pressedKey,
+                )) {
+              _executeNavigationAction(pressedKey, cubit);
             } else {
+              _stopKeyRepeat();
               timer.cancel();
             }
           });
@@ -83,16 +123,12 @@ class _CalendarWidgetState extends State<CalendarWidget> {
       }
     } else if (event is KeyUpEvent) {
       // כשמשחררים את המקש, עצור את החזרה האוטומטית
-      if (event.logicalKey == _currentPressedKey) {
-        _keyRepeatTimer?.cancel();
-        _keyRepeatTimer = null;
-        _currentPressedKey = null;
+      if (key == _currentPressedKey) {
+        _stopKeyRepeat();
       }
-    } else if (event is KeyRepeatEvent) {
-      // התעלם מאירועי חזרה אוטומטיים של המערכת
-      // אנחנו מטפלים בזה בעצמנו
-      return;
     }
+
+    return KeyEventResult.handled;
   }
 
   /// מבצע את פעולת הניווט בהתאם למקש
@@ -161,7 +197,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     // BlocBuilder מאזין לשינויים ב-Cubit ובונה מחדש את הממשק בכל פעם שהמצב משתנה
     return BlocBuilder<CalendarCubit, CalendarState>(
       builder: (context, state) {
-        return KeyboardListener(
+        return Focus(
           focusNode: _keyboardFocusNode,
           autofocus: true,
           onKeyEvent: _handleCalendarKeyEvent,

@@ -21,7 +21,9 @@ class CategoryDao {
 
     // Filter out special categories (except in debug mode)
     if (!kDebugMode) {
-      return categories.where((cat) => cat.title != 'אודות התוכנה').toList();
+      return categories
+          .where((cat) => cat.title != 'ספרים מספריות חיצוניות')
+          .toList();
     }
     return categories;
   }
@@ -51,7 +53,9 @@ class CategoryDao {
 
     // Filter out special categories (except in debug mode)
     if (!kDebugMode) {
-      return categories.where((cat) => cat.title != 'אודות התוכנה').toList();
+      return categories
+          .where((cat) => cat.title != 'ספרים מספריות חיצוניות')
+          .toList();
     }
     return categories;
   }

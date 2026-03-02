@@ -481,8 +481,7 @@ class FileSystemData {
       String path) async {
     return Isolate.run(() async {
       List<String> paths = [];
-      final files = await Directory(path).list(recursive: true).toList();
-      for (var file in files) {
+      await for (final file in Directory(path).list(recursive: true)) {
         if (file is File && !file.path.toLowerCase().endsWith('.pdf')) {
           paths.add(file.path);
         }
