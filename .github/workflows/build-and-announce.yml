@@ -36,13 +36,18 @@ jobs:
       - name: Create Google Calendar Credentials
         shell: pwsh
         run: |
+          $clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}'
+          $clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}'
+          if ([string]::IsNullOrWhiteSpace($clientId) -or [string]::IsNullOrWhiteSpace($clientSecret)) {
+            throw "Google Calendar secrets are missing. Please set GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET."
+          }
           $credentialsContent = @"
           class GoogleCalendarCredentials {
-            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
-            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+            static const String clientId = '$clientId';
+            static const String clientSecret = '$clientSecret';
           }
           "@
-          $credentialsContent | Out-File -FilePath "lib/services/google_calendar_credentials.dart" -Encoding UTF8
+          $credentialsContent | Out-File -FilePath "lib/tools/calendar/services/google_calendar_credentials.dart" -Encoding UTF8
           Write-Host "Google Calendar credentials file created"
 
       # - name: Install Rust (stable)
@@ -246,10 +251,16 @@ jobs:
       - name: Create Google Calendar Credentials
         shell: bash
         run: |
-          cat > lib/services/google_calendar_credentials.dart << 'EOF'
+          CLIENT_ID='${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}'
+          CLIENT_SECRET='${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}'
+          if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
+            echo "::error::Google Calendar secrets are missing. Please set GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET."
+            exit 1
+          fi
+          cat > lib/tools/calendar/services/google_calendar_credentials.dart << EOF
           class GoogleCalendarCredentials {
-            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
-            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+            static const String clientId = '$CLIENT_ID';
+            static const String clientSecret = '$CLIENT_SECRET';
           }
           EOF
           echo "Google Calendar credentials file created"
@@ -531,10 +542,16 @@ jobs:
       - name: Create Google Calendar Credentials
         shell: bash
         run: |
-          cat > lib/services/google_calendar_credentials.dart << 'EOF'
+          CLIENT_ID='${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}'
+          CLIENT_SECRET='${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}'
+          if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
+            echo "::error::Google Calendar secrets are missing. Please set GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET."
+            exit 1
+          fi
+          cat > lib/tools/calendar/services/google_calendar_credentials.dart << EOF
           class GoogleCalendarCredentials {
-            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
-            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+            static const String clientId = '$CLIENT_ID';
+            static const String clientSecret = '$CLIENT_SECRET';
           }
           EOF
           echo "Google Calendar credentials file created"
@@ -636,10 +653,16 @@ jobs:
       - name: Create Google Calendar Credentials
         shell: bash
         run: |
-          cat > lib/services/google_calendar_credentials.dart << 'EOF'
+          CLIENT_ID='${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}'
+          CLIENT_SECRET='${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}'
+          if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
+            echo "::error::Google Calendar secrets are missing. Please set GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET."
+            exit 1
+          fi
+          cat > lib/tools/calendar/services/google_calendar_credentials.dart << EOF
           class GoogleCalendarCredentials {
-            static const String clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}';
-            static const String clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}';
+            static const String clientId = '$CLIENT_ID';
+            static const String clientSecret = '$CLIENT_SECRET';
           }
           EOF
           echo "Google Calendar credentials file created"
