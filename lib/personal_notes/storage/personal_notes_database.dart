@@ -48,6 +48,9 @@ class PersonalNotesDatabase {
     return await openDatabase(
       dbPath,
       version: _databaseVersion,
+      onConfigure: (db) async {
+        await db.execute('PRAGMA journal_mode=WAL');
+      },
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );

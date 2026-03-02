@@ -26,13 +26,24 @@ class DataRepository {
 
   late Future<Library> library;
 
-  late Future<List<Book>> hebrewBooks;
-  late Future<List<ExternalLibraryBook>> otzarBooks;
+  // Lazy-loaded: only fetched when user actually searches for external books.
+  // Previously these ran getAllBooksWithRelations() eagerly at startup,
+  // competing with library loading for DB I/O.
+  Future<List<Book>>? _hebrewBooksFuture;
+  Future<List<ExternalLibraryBook>>? _otzarBooksFuture;
+  Future<List<Book>> get hebrewBooks => _hebrewBooksFuture ??= getHebrewBooks();
+  Future<List<ExternalLibraryBook>> get otzarBooks =>
+      _otzarBooksFuture ??= getOtzarBooks();
+
+  /// Invalidates cached external books so they are re-fetched on next access.
+  /// Call this when the library is refreshed.
+  void invalidateExternalBooksCache() {
+    _hebrewBooksFuture = null;
+    _otzarBooksFuture = null;
+  }
 
   DataRepository() {
     library = _getLibrary();
-    hebrewBooks = getHebrewBooks();
-    otzarBooks = getOtzarBooks();
   }
 
   /// Retrieves the complete library metadata including all available books

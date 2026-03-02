@@ -37,6 +37,7 @@ import 'package:otzaria/navigation/custom_title_bar.dart';
 import 'package:otzaria/migration/sync/background_sync_initializer.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
+import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_state.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
@@ -100,16 +101,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
     // Setup fullscreen sync with window manager
     _setupFullscreenSync();
 
-    // Start background file sync after app is loaded
-    // This runs in the background without blocking the UI
-    _initializeBackgroundSync();
+    // NOTE: Background sync is now triggered by LibraryBloc listener
+    // (see MultiBlocListener) to avoid DB lock contention during library loading.
   }
 
-  /// Initialize background file sync
-  /// This scans אוצריא and links folders for new files and adds them to the DB
+  /// Initialize background file sync AFTER library is loaded.
+  /// This avoids DB lock contention that caused 17s delays.
   void _initializeBackgroundSync() {
     BackgroundSyncInitializer.initializeAfterDelay(
-      delaySeconds: 5, // Wait 5 seconds after app startup
+      delaySeconds: 2, // Small delay to let UI settle after library load
       onComplete: (result) {
         if (!mounted) return;
         if (result.addedBooks > 0 ||
@@ -368,6 +368,17 @@ class MainWindowScreenState extends State<MainWindowScreen>
                     SetCurrentWorkspaceName(workspace.name),
                   );
             }
+          },
+        ),
+        BlocListener<LibraryBloc, LibraryState>(
+          listenWhen: (previous, current) =>
+              previous.isLoading &&
+              !current.isLoading &&
+              current.library != null,
+          listener: (context, state) {
+            // Library finished loading - now safe to start background sync
+            // without DB lock contention
+            _initializeBackgroundSync();
           },
         ),
         BlocListener<SettingsBloc, SettingsState>(
