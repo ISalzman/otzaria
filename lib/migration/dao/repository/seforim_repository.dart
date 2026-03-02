@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:logging/logging.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -2342,6 +2343,14 @@ class SeforimRepository {
   /// @param sql The SQL query to execute
   Future<void> _executeRawQuery(String sql) async {
     final db = await _database.database;
+    final normalizedSql = sql.trim().toUpperCase();
+    final isJournalModePragma = normalizedSql.startsWith('PRAGMA JOURNAL_MODE');
+
+    if (isJournalModePragma && (Platform.isAndroid || Platform.isIOS)) {
+      await db.rawQuery(sql);
+      return;
+    }
+
     await db.execute(sql);
   }
 

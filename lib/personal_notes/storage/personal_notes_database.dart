@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:sqflite/sqflite.dart';
 
 import 'package:otzaria/core/app_paths.dart';
@@ -49,7 +51,11 @@ class PersonalNotesDatabase {
       dbPath,
       version: _databaseVersion,
       onConfigure: (db) async {
-        await db.execute('PRAGMA journal_mode=WAL');
+        if (Platform.isAndroid || Platform.isIOS) {
+          await db.rawQuery('PRAGMA journal_mode=WAL');
+        } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          await db.execute('PRAGMA journal_mode=WAL');
+        }
       },
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
