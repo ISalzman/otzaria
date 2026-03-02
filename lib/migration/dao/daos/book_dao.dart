@@ -24,11 +24,27 @@ class BookDao {
   /// in a single transaction, preventing "database locked" errors.
   ///
   /// [txn] must be a [Transaction] or [Database] (both implement [DatabaseExecutor]).
-  /// [condition] is a raw SQL WHERE clause (caller is responsible for safety).
   Future<List<Map<String, dynamic>>> getAllBooksMinimalInTxn(
     DatabaseExecutor txn, {
-    required String condition,
+    bool includeExternalBooks = false,
+    bool includeOtzarHachochma = false,
+    bool includeHebrewBooks = false,
   }) async {
+    final String condition;
+    if (!includeExternalBooks) {
+      condition = "externalLibraryId IS NULL AND fileType != 'link'";
+    } else if (includeOtzarHachochma && includeHebrewBooks) {
+      condition = '1=1';
+    } else if (includeOtzarHachochma) {
+      condition =
+          "(externalLibraryId IS NULL OR externalLibraryId LIKE 'oh:%')";
+    } else if (includeHebrewBooks) {
+      condition =
+          "(externalLibraryId IS NULL OR externalLibraryId LIKE 'hb:%')";
+    } else {
+      condition = "externalLibraryId IS NULL AND fileType != 'link'";
+    }
+
     return txn.rawQuery('''
       SELECT id, title, categoryId, orderIndex, fileType, filePath,
              externalLibraryId, heShortDesc
