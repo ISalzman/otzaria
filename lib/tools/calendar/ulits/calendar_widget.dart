@@ -341,83 +341,165 @@ class _CalendarWidgetState extends State<CalendarWidget> {
       );
     }
 
-    return Column(
+    final todayAndJumpButtons = Wrap(
+      spacing: 8,
+      runSpacing: 8,
       children: [
-        // שורה עליונה עם כפתורים וכותרת
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Wrap(
-              children: [
-                ElevatedButton(
-                  onPressed: () => context.read<CalendarCubit>().jumpToToday(),
-                  child: const Text('היום'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () => _showJumpToDateDialog(context),
-                  child: const Text('עבור לתאריך'),
-                ),
-              ],
-            ),
-            Expanded(
-              child: Text(
-                _getCurrentMonthYearText(state),
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                // כפתורים עם סמלים בלבד
-                buildViewButton(CalendarView.month,
-                    FluentIcons.calendar_month_24_regular, 'חודש'),
-                buildViewButton(CalendarView.week,
-                    FluentIcons.calendar_week_numbers_24_regular, 'שבוע'),
-                buildViewButton(CalendarView.day,
-                    FluentIcons.calendar_day_24_regular, 'יום'),
-
-                // קו הפרדה קטן
-                Container(
-                  height: 24,
-                  width: 1,
-                  color: Theme.of(context).dividerColor,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                ),
-
-                // כפתור הדפסה
-                Tooltip(
-                  message: 'הדפס לוח שנה',
-                  child: IconButton(
-                    onPressed: () => _printCalendar(context, state),
-                    icon: const Icon(FluentIcons.print_24_regular),
-                  ),
-                ),
-
-                // קו הפרדה קטן
-                Container(
-                  height: 24,
-                  width: 1,
-                  color: Theme.of(context).dividerColor,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                ),
-
-                // מעבר בין תקופות
-                IconButton(
-                  onPressed: () => context.read<CalendarCubit>().previous(),
-                  icon: const Icon(FluentIcons.chevron_left_24_regular),
-                ),
-                IconButton(
-                  onPressed: () => context.read<CalendarCubit>().next(),
-                  icon: const Icon(FluentIcons.chevron_right_24_regular),
-                ),
-              ],
-            ),
-          ],
+        ElevatedButton(
+          onPressed: () => context.read<CalendarCubit>().jumpToToday(),
+          child: const Text('היום'),
+        ),
+        ElevatedButton(
+          onPressed: () => _showJumpToDateDialog(context),
+          child: const Text('עבור לתאריך'),
         ),
       ],
+    );
+
+    final viewButtonsRow = Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 4,
+      children: [
+        buildViewButton(
+          CalendarView.month,
+          FluentIcons.calendar_month_24_regular,
+          'חודש',
+        ),
+        buildViewButton(
+          CalendarView.week,
+          FluentIcons.calendar_week_numbers_24_regular,
+          'שבוע',
+        ),
+        buildViewButton(
+          CalendarView.day,
+          FluentIcons.calendar_day_24_regular,
+          'יום',
+        ),
+      ],
+    );
+
+    final printButton = Tooltip(
+      message: 'הדפס לוח שנה',
+      child: IconButton(
+        onPressed: () => _printCalendar(context, state),
+        icon: const Icon(FluentIcons.print_24_regular),
+      ),
+    );
+
+    final periodNavigationButtons = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          onPressed: () => context.read<CalendarCubit>().previous(),
+          icon: const Icon(FluentIcons.chevron_left_24_regular),
+        ),
+        IconButton(
+          onPressed: () => context.read<CalendarCubit>().next(),
+          icon: const Icon(FluentIcons.chevron_right_24_regular),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrowHeader = constraints.maxWidth < 720;
+
+        if (!isNarrowHeader) {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              todayAndJumpButtons,
+              Expanded(
+                child: Text(
+                  _getCurrentMonthYearText(state),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  viewButtonsRow,
+                  Container(
+                    height: 24,
+                    width: 1,
+                    color: Theme.of(context).dividerColor,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                  ),
+                  printButton,
+                  Container(
+                    height: 24,
+                    width: 1,
+                    color: Theme.of(context).dividerColor,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                  ),
+                  periodNavigationButtons,
+                ],
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          textDirection: TextDirection.rtl,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () =>
+                          context.read<CalendarCubit>().jumpToToday(),
+                      child: const Text('היום'),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: () => _showJumpToDateDialog(context),
+                      child: const Text('עבור לתאריך'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Center(
+                  child: Text(
+                    _getCurrentMonthYearText(state),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    periodNavigationButtons,
+                    const SizedBox(height: 6),
+                    viewButtonsRow,
+                    const SizedBox(height: 6),
+                    printButton,
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
