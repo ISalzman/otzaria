@@ -138,7 +138,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
     final dirName = dir.path.split(Platform.pathSeparator).last;
 
     // Skip special directories (except in debug mode)
-    if (!kDebugMode && dirName == 'אודות התוכנה') return;
+    if (!kDebugMode && dirName == 'ספרים מספריות חיצוניות') return;
 
     await for (FileSystemEntity entity in dir.list()) {
       try {
@@ -349,8 +349,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
   static Future<List<String>> _getAllBookPaths(String path) async {
     return Isolate.run(() async {
       final results = <String>[];
-      final entities = await Directory(path).list(recursive: true).toList();
-      for (final entity in entities) {
+      await for (final entity in Directory(path).list(recursive: true)) {
         if (entity is! File) continue;
         final lower = entity.path.toLowerCase();
         if (lower.endsWith('.txt') ||

@@ -139,159 +139,171 @@ void main() async {
     return true;
   };
 
-  // Initialize Sentry - it will wrap the error handlers above
-  await SentryFlutter.init(
-    (options) {
-      // Use environment variable for DSN, with fallback to default
-      options.dsn = const String.fromEnvironment(
-        'SENTRY_DSN',
-        defaultValue:
-            'https://79d3003f822fa62bce0c928656308121@o4510914530902016.ingest.us.sentry.io/4510914532868096',
-      );
-      // Privacy: Do not collect IP addresses and request headers
-      options.sendDefaultPii = false;
-      // Use lower sampling rates in production to reduce overhead
-      options.tracesSampleRate = kDebugMode ? 1.0 : 0.1;
+  // Start Sentry in parallel to avoid blocking app startup.
+  unawaited(_initializeSentry());
 
-      // Filter out Windows accessibility errors from being sent to Sentry
-      options.beforeSend = (event, hint) {
-        final exception = event.throwable?.toString() ?? '';
-        if (Platform.isWindows &&
-            (exception.contains('Failed to update ui::AXTree') ||
-                exception.contains('accessibility_bridge.cc'))) {
-          return null; // Don't send to Sentry
-        }
-        // Filter HardwareKeyboard assertion - handled by clearState() on window focus
-        if (exception
-                .contains('!_pressedKeys.containsKey(event.physicalKey)') ||
-            exception.contains(
-                'A KeyDownEvent is dispatched, but the state shows that the physical key is already pressed')) {
-          return null; // Don't send to Sentry
-        }
-        return event;
-      };
-    },
-    appRunner: () async {
-      SentryWidgetsFlutterBinding.ensureInitialized();
+  await _runAppBootstrap();
+}
 
-      // Check for single instance - skip on Apple platforms (macOS/iOS) due to sandbox restrictions
-      if (!Platform.isMacOS && !Platform.isIOS) {
-        FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
-        bool isFirstInstance = await flutterSingleInstance.isFirstInstance();
-        if (!isFirstInstance) {
-          // If not the first instance, exit the app
-          exit(0);
-        }
-      }
+Future<void> _initializeSentry() async {
+  try {
+    await SentryFlutter.init(
+      (options) {
+        // Use environment variable for DSN, with fallback to default
+        options.dsn = const String.fromEnvironment(
+          'SENTRY_DSN',
+          defaultValue:
+              'https://79d3003f822fa62bce0c928656308121@o4510914530902016.ingest.us.sentry.io/4510914532868096',
+        );
+        // Privacy: Do not collect IP addresses and request headers
+        options.sendDefaultPii = false;
+        // Use lower sampling rates in production to reduce overhead
+        options.tracesSampleRate = kDebugMode ? 1.0 : 0.1;
 
-      // Initialize bloc observer for debugging
-      Bloc.observer = AppBlocObserver();
+        // Filter out Windows accessibility errors from being sent to Sentry
+        options.beforeSend = (event, hint) {
+          final exception = event.throwable?.toString() ?? '';
+          if (Platform.isWindows &&
+              (exception.contains('Failed to update ui::AXTree') ||
+                  exception.contains('accessibility_bridge.cc'))) {
+            return null; // Don't send to Sentry
+          }
+          // Filter HardwareKeyboard assertion - handled by clearState() on window focus
+          if (exception
+                  .contains('!_pressedKeys.containsKey(event.physicalKey)') ||
+              exception.contains(
+                  'A KeyDownEvent is dispatched, but the state shows that the physical key is already pressed')) {
+            return null; // Don't send to Sentry
+          }
+          return event;
+        };
+      },
+    );
+  } catch (error, stackTrace) {
+    if (kDebugMode) {
+      debugPrint('Sentry initialization failed: $error\n$stackTrace');
+    }
+  }
+}
 
-      // Configure logging level for debug mode
-      if (kDebugMode) {
-        Logger.root.level = Level.ALL;
-        // Silence verbose logs from flutter_widget_from_html
-        Logger('fwfh').level = Level.INFO;
-        Logger.root.onRecord.listen((record) {
-          debugPrint(
-              '${record.level.name}: ${record.loggerName}: ${record.message}');
-        });
-      }
+Future<void> _runAppBootstrap() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-      // Remove legacy debug log setup
+  // Check for single instance - skip on Apple platforms (macOS/iOS) due to sandbox restrictions
+  if (!Platform.isMacOS && !Platform.isIOS) {
+    FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
+    bool isFirstInstance = await flutterSingleInstance.isFirstInstance();
+    if (!isFirstInstance) {
+      // If not the first instance, exit the app
+      exit(0);
+    }
+  }
 
-      await initialize();
+  // Initialize bloc observer for debugging
+  Bloc.observer = AppBlocObserver();
 
-      // No-op: removed verbose debug printing
+  // Configure logging level for debug mode
+  if (kDebugMode) {
+    Logger.root.level = Level.ALL;
+    // Silence verbose logs from flutter_widget_from_html
+    Logger('fwfh').level = Level.INFO;
+    Logger.root.onRecord.listen((record) {
+      debugPrint(
+          '${record.level.name}: ${record.loggerName}: ${record.message}');
+    });
+  }
 
-      final historyRepository = HistoryRepository();
-      final settingsRepository = SettingsRepository();
+  // Remove legacy debug log setup
 
-      runApp(
-        SentryWidget(
-          child: RestartWidget(
-            child: MultiRepositoryProvider(
-              providers: [
-                RepositoryProvider<FocusRepository>(
-                  create: (context) => FocusRepository(),
-                ),
-                RepositoryProvider<SettingsRepository>(
-                  create: (context) => settingsRepository,
-                ),
-              ],
-              child: MultiBlocProvider(
-                providers: [
-                  BlocProvider<SettingsBloc>(
-                    create: (context) => SettingsBloc(
-                      repository: settingsRepository,
-                    )..add(LoadSettings()),
-                  ),
-                  BlocProvider<LibraryBloc>(
-                    create: (context) => LibraryBloc()..add(LoadLibrary()),
-                  ),
-                  BlocProvider<IndexingBloc>(
-                    create: (context) => IndexingBloc.create(),
-                  ),
-                  BlocProvider<HistoryBloc>(
-                      create: (context) => HistoryBloc(historyRepository)),
-                  BlocProvider<TabsBloc>(
-                    create: (context) => TabsBloc(
-                      repository: TabsRepository(),
-                    )..add(LoadTabs()),
-                  ),
-                  BlocProvider<NavigationBloc>(
-                    create: (context) => NavigationBloc(
-                      repository: NavigationRepository(),
-                      tabsRepository: TabsRepository(),
-                    )..add(const CheckLibrary()),
-                  ),
-                  BlocProvider<FindRefBloc>(
-                      create: (context) => FindRefBloc(
-                          findRefRepository: FindRefRepository(
-                              dataRepository: DataRepository.instance))),
-                  BlocProvider<PersonalNotesBloc>(
-                    create: (context) => PersonalNotesBloc(),
-                  ),
-                  BlocProvider<BookmarkBloc>(
-                    create: (context) => BookmarkBloc(BookmarkRepository()),
-                  ),
-                  BlocProvider<WorkspaceBloc>(
-                    create: (context) {
-                      final tabsBloc = context.read<TabsBloc>();
-                      return WorkspaceBloc(
-                        repository: WorkspaceRepository(),
-                        onWorkspaceTabsChanged:
-                            (List<OpenedTab> tabs, int activeIndex) {
-                          // This callback coordinates workspace switching with TabsBloc
-                          tabsBloc.add(ReplaceAllTabs(
-                            tabs,
-                            activeIndex,
-                          ));
-                        },
-                      )..add(LoadWorkspaces());
-                    },
-                  ),
-                  ChangeNotifierProvider<ShamorZachorDataProvider>(
-                    lazy: true, // Create only when needed
-                    create: (context) => ShamorZachorDataProvider(),
-                  ),
-                  ChangeNotifierProvider<ShamorZachorProgressProvider>(
-                    lazy: true, // Create only when needed
-                    create: (context) {
-                      final dataProvider =
-                          context.read<ShamorZachorDataProvider>();
-                      return ShamorZachorProgressProvider(
-                          dataProvider: dataProvider);
-                    },
-                  ),
-                ],
-                child: const App(),
-              ),
+  await initialize();
+
+  // No-op: removed verbose debug printing
+
+  final historyRepository = HistoryRepository();
+  final settingsRepository = SettingsRepository();
+
+  runApp(
+    SentryWidget(
+      child: RestartWidget(
+        child: MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<FocusRepository>(
+              create: (context) => FocusRepository(),
             ),
+            RepositoryProvider<SettingsRepository>(
+              create: (context) => settingsRepository,
+            ),
+          ],
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider<SettingsBloc>(
+                create: (context) => SettingsBloc(
+                  repository: settingsRepository,
+                )..add(LoadSettings()),
+              ),
+              BlocProvider<LibraryBloc>(
+                create: (context) => LibraryBloc()..add(LoadLibrary()),
+              ),
+              BlocProvider<IndexingBloc>(
+                create: (context) => IndexingBloc.create(),
+              ),
+              BlocProvider<HistoryBloc>(
+                  create: (context) => HistoryBloc(historyRepository)),
+              BlocProvider<TabsBloc>(
+                create: (context) => TabsBloc(
+                  repository: TabsRepository(),
+                )..add(LoadTabs()),
+              ),
+              BlocProvider<NavigationBloc>(
+                create: (context) => NavigationBloc(
+                  repository: NavigationRepository(),
+                  tabsRepository: TabsRepository(),
+                )..add(const CheckLibrary()),
+              ),
+              BlocProvider<FindRefBloc>(
+                  create: (context) => FindRefBloc(
+                      findRefRepository: FindRefRepository(
+                          dataRepository: DataRepository.instance))),
+              BlocProvider<PersonalNotesBloc>(
+                create: (context) => PersonalNotesBloc(),
+              ),
+              BlocProvider<BookmarkBloc>(
+                create: (context) => BookmarkBloc(BookmarkRepository()),
+              ),
+              BlocProvider<WorkspaceBloc>(
+                create: (context) {
+                  final tabsBloc = context.read<TabsBloc>();
+                  return WorkspaceBloc(
+                    repository: WorkspaceRepository(),
+                    onWorkspaceTabsChanged:
+                        (List<OpenedTab> tabs, int activeIndex) {
+                      // This callback coordinates workspace switching with TabsBloc
+                      tabsBloc.add(ReplaceAllTabs(
+                        tabs,
+                        activeIndex,
+                      ));
+                    },
+                  )..add(LoadWorkspaces());
+                },
+              ),
+              ChangeNotifierProvider<ShamorZachorDataProvider>(
+                lazy: true, // Create only when needed
+                create: (context) => ShamorZachorDataProvider(),
+              ),
+              ChangeNotifierProvider<ShamorZachorProgressProvider>(
+                lazy: true, // Create only when needed
+                create: (context) {
+                  final dataProvider = context.read<ShamorZachorDataProvider>();
+                  return ShamorZachorProgressProvider(
+                      dataProvider: dataProvider);
+                },
+              ),
+            ],
+            child: const App(),
           ),
         ),
-      );
-    },
+      ),
+    ),
   );
 }
 
