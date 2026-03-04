@@ -755,8 +755,9 @@ String _getTopicSync(String title, Map<String, String> titleToPath) {
   // Fallback לפי נתיב
   final path = titleToPath[title];
   if (path != null) {
+    final normalizedPath = path.replaceAll('\\', ', ').replaceAll('/', ', ');
     for (var category in _eraCategories) {
-      if (path.contains(category)) return category;
+      if (normalizedPath.contains(category)) return category;
     }
   }
 

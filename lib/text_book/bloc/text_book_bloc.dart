@@ -1034,14 +1034,28 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         final titleToPath = await FileSystemData.instance.titleToPath;
         final bookPath = titleToPath[book.title];
         if (bookPath != null) {
-          final pathParts = bookPath.split(Platform.pathSeparator);
-          final otzariaIndex = pathParts.indexOf('אוצריא');
-          if (otzariaIndex >= 0 && otzariaIndex < pathParts.length - 2) {
-            final categories =
-                pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
-            book.heCategories = categories.join(', ');
-            debugPrint(
-                '📚 Background: נטען heCategories מהנתיב: "${book.heCategories}"');
+          // titleToPath יכול להכיל נתיב קובץ (FS) או נתיב קטגוריה מה-DB.
+          if (bookPath.contains(Platform.pathSeparator)) {
+            final pathParts = bookPath.split(Platform.pathSeparator);
+            final otzariaIndex = pathParts.indexOf('אוצריא');
+            if (otzariaIndex >= 0 && otzariaIndex < pathParts.length - 2) {
+              final categories =
+                  pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
+              book.heCategories = categories.join(', ');
+              debugPrint(
+                  '📚 Background: נטען heCategories מהנתיב: "${book.heCategories}"');
+            }
+          } else {
+            final normalizedCategories = bookPath
+                .split(',')
+                .map((part) => part.trim())
+                .where((part) => part.isNotEmpty)
+                .join(', ');
+            if (normalizedCategories.isNotEmpty) {
+              book.heCategories = normalizedCategories;
+              debugPrint(
+                  '📚 Background: נטען heCategories מנתיב קטגוריה: "${book.heCategories}"');
+            }
           }
         }
       }

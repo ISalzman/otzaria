@@ -752,17 +752,27 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
       final library = await DataRepository.instance.library;
 
-      final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
+      TextBook? textBook;
+      for (final candidate in library.getAllBooks()) {
+        if (candidate is! TextBook) continue;
+        if (candidate.title != widget.tab.book.title) continue;
+        if (widget.tab.book.categoryId != null &&
+            candidate.categoryId != widget.tab.book.categoryId) {
+          continue;
+        }
+        textBook = candidate;
+        break;
+      }
+      textBook ??=
+          library.findBookByTitle(widget.tab.book.title, TextBook) as TextBook?;
 
       if (textBook != null) {
-        if (textBook is TextBook) {
-          final loadedLinks = await textBook.links;
-          loadedLinks.sort((a, b) => a.index1.compareTo(b.index1));
-          widget.tab.links = loadedLinks;
+        final loadedLinks = await textBook.links;
+        loadedLinks.sort((a, b) => a.index1.compareTo(b.index1));
+        widget.tab.links = loadedLinks;
 
-          if (widget.tab.links.isNotEmpty) {
-            // Links loaded successfully
-          }
+        if (widget.tab.links.isNotEmpty) {
+          // Links loaded successfully
         }
       }
 

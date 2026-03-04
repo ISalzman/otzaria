@@ -208,9 +208,12 @@ class BookGridItem extends StatelessWidget {
                         child: Center(
                           child: book is TextBook
                               ? DataSourceIndicatorAsync(
-                                  sourceFuture: FileSystemData.instance
-                                      .getBookDataSource(book.title,
-                                          book.categoryPath, book.fileType),
+                                  sourceFuture:
+                                      FileSystemData.instance.getBookDataSource(
+                                    book.title,
+                                    categoryId: book.categoryId,
+                                    fileType: book.fileType,
+                                  ),
                                   size: 18.0,
                                 )
                               : const SizedBox.shrink(),

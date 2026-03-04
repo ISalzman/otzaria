@@ -153,8 +153,11 @@ class TextBook extends Book {
   /// Returns a [Future] that resolves to a [List] of [TocEntry] objects representing
   /// the table of contents of the book.
   Future<List<TocEntry>> get tableOfContents async {
-    final toc = await LibraryProviderManager.instance
-        .getBookToc(title, categoryPath ?? '', fileType ?? 'txt');
+    final toc = await LibraryProviderManager.instance.getBookToc(
+      title,
+      categoryId: categoryId,
+      fileType: fileType ?? 'txt',
+    );
     return toc ?? [];
   }
 
@@ -162,8 +165,11 @@ class TextBook extends Book {
   ///
   /// Returns a [Future] that resolves to a [List] of [Link] objects.
   Future<List<Link>> get links async {
-    final provider = LibraryProviderManager.instance
-        .getProviderForBook(title, categoryPath ?? '', fileType ?? 'txt');
+    final provider = LibraryProviderManager.instance.getProviderForBook(
+      title,
+      categoryId: categoryId,
+      fileType: fileType ?? 'txt',
+    );
     if (provider != null && categoryId != null) {
       return await provider.getAllLinksForBook(
           title, categoryId!, fileType ?? 'txt');
@@ -173,8 +179,11 @@ class TextBook extends Book {
 
   /// The text data of the book.
   Future<String> get text async {
-    final bookText = await LibraryProviderManager.instance
-        .getBookText(title, categoryPath ?? '', fileType ?? 'txt');
+    final bookText = await LibraryProviderManager.instance.getBookText(
+      title,
+      categoryId: categoryId,
+      fileType: fileType ?? 'txt',
+    );
     return bookText ?? '';
   }
 

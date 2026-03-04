@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
+import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
@@ -64,26 +65,43 @@ class FileSystemData {
 
   Future<Map<String, String>> _getTitleToPath() async {
     await _providerManager.initialize();
-    final Map<String, String> result = {};
-
-    // Get paths from FileSystemProvider
     final keyToPath = await _providerManager.fileSystemProvider.keyToPath;
-    for (var entry in keyToPath.entries) {
-      final parts = entry.key.split('|');
-      if (parts.isNotEmpty) {
-        result[parts[0]] = entry.value;
-      }
-    }
-
-    // Get paths from DatabaseProvider
     final dbKeys =
         await _providerManager.databaseProvider.getDatabaseOnlyBookTitles();
-    for (var key in dbKeys) {
-      final parts = key.split('|');
-      if (parts.length >= 2) {
-        // parts[0] is title, parts[1] is category path
-        result[parts[0]] = parts[1];
-      }
+    return buildTitleToPathMap(
+      fileSystemKeyToPath: keyToPath,
+      databaseKeys: dbKeys,
+      resolveDatabaseCategoryPath: (key) {
+        return _providerManager.databaseProvider.findCategoryPathForBook(
+          key.title,
+          categoryId: key.categoryId,
+          fileType: key.fileType,
+        );
+      },
+    );
+  }
+
+  @visibleForTesting
+  static Future<Map<String, String>> buildTitleToPathMap({
+    required Map<String, String> fileSystemKeyToPath,
+    required Iterable<String> databaseKeys,
+    required Future<String?> Function(BookCompositeKey key)
+        resolveDatabaseCategoryPath,
+  }) async {
+    final result = <String, String>{};
+
+    for (final entry in fileSystemKeyToPath.entries) {
+      final key = BookCompositeKey.tryParse(entry.key);
+      if (key == null) continue;
+      result[key.title] = entry.value;
+    }
+
+    for (final rawKey in databaseKeys) {
+      final key = BookCompositeKey.tryParse(rawKey);
+      if (key == null) continue;
+      final categoryPath = await resolveDatabaseCategoryPath(key);
+      if (categoryPath == null || categoryPath.isEmpty) continue;
+      result[key.title] = categoryPath;
     }
 
     return result;
@@ -91,7 +109,7 @@ class FileSystemData {
 
   /// Finds the category path for a book by its title.
   /// Checks in-memory cache first, then queries valid providers.
-  Future<String?> findBookCategoryPath(String title) async {
+  Future<String?> findBookCategoryPath(String title, {int? categoryId}) async {
     await _providerManager.initialize();
 
     // 1. Check cached FileSystemData map
@@ -101,8 +119,8 @@ class FileSystemData {
     if (path != null && path.isNotEmpty) return path;
 
     // 2. Ask DatabaseProvider explicitly
-    final dbPath =
-        await _providerManager.databaseProvider.findCategoryPathForBook(title);
+    final dbPath = await _providerManager.databaseProvider
+        .findCategoryPathForBook(title, categoryId: categoryId);
     if (dbPath != null) return dbPath;
 
     return null;
@@ -110,9 +128,8 @@ class FileSystemData {
 
   /// Checks if a book is stored in the database
   Future<bool> isBookInDatabase(String title,
-      {String? category, String? fileType}) async {
-    if (category != null && fileType != null) {
-      final categoryId = category.hashCode; // Convert to ID
+      {int? categoryId, String? fileType}) async {
+    if (categoryId != null && fileType != null) {
       return await _providerManager.databaseProvider
           .hasBook(title, categoryId, fileType);
     }
@@ -121,10 +138,16 @@ class FileSystemData {
 
   /// Gets the data source for a book (DB, File, or Personal)
   /// Returns: 'DB' for database, 'ק' for file, 'א' for personal
-  Future<String> getBookDataSource(String title,
-      [String? category, String? fileType = 'txt']) async {
+  Future<String> getBookDataSource(
+    String title, {
+    int? categoryId,
+    String? fileType = 'txt',
+  }) async {
     return await _providerManager.getBookDataSource(
-        title, category ?? '', fileType ?? 'txt');
+      title,
+      categoryId: categoryId,
+      fileType: fileType ?? 'txt',
+    );
   }
 
   /// Clears the book-in-database cache
@@ -404,9 +427,12 @@ class FileSystemData {
   ///
   /// Uses LibraryProviderManager to get text from the appropriate provider.
   Future<String> getBookText(String title,
-      {String? category, String? fileType}) async {
+      {int? categoryId, String? fileType}) async {
     final text = await _providerManager.getBookText(
-        title, category ?? '', fileType ?? 'txt');
+      title,
+      categoryId: categoryId,
+      fileType: fileType ?? 'txt',
+    );
     if (text != null) {
       return text;
     }
@@ -415,7 +441,7 @@ class FileSystemData {
     debugPrint(
         '⚠️ Provider manager failed, falling back to direct file access for "$title"');
     final path =
-        await _getBookPath(title, category: category, fileType: fileType);
+        await _getBookPath(title, categoryId: categoryId, fileType: fileType);
     if (path.startsWith('error:')) {
       throw Exception('Book not found: $title');
     }
@@ -494,9 +520,12 @@ class FileSystemData {
   ///
   /// Uses LibraryProviderManager to get TOC from the appropriate provider.
   Future<List<TocEntry>> getBookToc(String title,
-      {String? category, String? fileType}) async {
+      {int? categoryId, String? fileType}) async {
     final toc = await _providerManager.getBookToc(
-        title, category ?? '', fileType ?? 'txt');
+      title,
+      categoryId: categoryId,
+      fileType: fileType ?? 'txt',
+    );
     if (toc != null && toc.isNotEmpty) {
       return toc;
     }
@@ -505,7 +534,7 @@ class FileSystemData {
     debugPrint(
         '⚠️ Provider manager failed, falling back to text parsing for "$title"');
     return _parseToc(
-        getBookText(title, category: category, fileType: fileType));
+        getBookText(title, categoryId: categoryId, fileType: fileType));
   }
 
   /// Efficiently reads a specific line from a file.
@@ -620,19 +649,36 @@ class FileSystemData {
 
   /// Retrieves the file system path for a book with the given title.
   Future<String> _getBookPath(String title,
-      {String? category, String? fileType}) async {
+      {int? categoryId, String? fileType}) async {
     await _providerManager.initialize();
     final keyToPath = await _providerManager.fileSystemProvider.keyToPath;
 
-    if (category != null && fileType != null) {
-      final key = '$title|$category|$fileType';
-      if (keyToPath.containsKey(key)) return keyToPath[key]!;
+    if (categoryId != null && fileType != null) {
+      final key = BookCompositeKey.create(
+        title: title,
+        categoryId: categoryId,
+        fileType: fileType,
+      ).toStorageKey();
+      final resolvedPath = keyToPath[key];
+      if (resolvedPath != null) return resolvedPath;
+    }
+
+    if (categoryId != null) {
+      for (final entry in keyToPath.entries) {
+        final parsed = BookCompositeKey.tryParse(entry.key);
+        if (parsed == null) continue;
+        if (parsed.title == title && parsed.categoryId == categoryId) {
+          return entry.value;
+        }
+      }
     }
 
     // Fallback: fuzzy search by title
-    for (final key in keyToPath.keys) {
-      if (key.startsWith('$title|')) {
-        return keyToPath[key]!;
+    for (final entry in keyToPath.entries) {
+      final parsed = BookCompositeKey.tryParse(entry.key);
+      if (parsed == null) continue;
+      if (parsed.title == title) {
+        return entry.value;
       }
     }
 

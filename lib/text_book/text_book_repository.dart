@@ -23,11 +23,14 @@ class TextBookRepository {
     // Primary path: go through the provider manager (handles file system + DB).
     // This can fail early in app startup because some providers require catalog caching.
     final title = book.title;
-    final category = book.categoryPath ?? '';
+    final categoryId = book.categoryId;
     final fileType = book.fileType ?? 'txt';
 
-    final providerText = await LibraryProviderManager.instance
-        .getBookText(title, category, fileType);
+    final providerText = await LibraryProviderManager.instance.getBookText(
+      title,
+      categoryId: categoryId,
+      fileType: fileType,
+    );
     if (providerText != null && providerText.isNotEmpty) {
       return providerText;
     }
@@ -129,11 +132,14 @@ class TextBookRepository {
 
   Future<List<TocEntry>> getTableOfContents(TextBook book) async {
     final title = book.title;
-    final category = book.categoryPath ?? '';
+    final categoryId = book.categoryId;
     final fileType = book.fileType ?? 'txt';
 
-    final providerToc = await LibraryProviderManager.instance
-        .getBookToc(title, category, fileType);
+    final providerToc = await LibraryProviderManager.instance.getBookToc(
+      title,
+      categoryId: categoryId,
+      fileType: fileType,
+    );
     if (providerToc != null && providerToc.isNotEmpty) {
       return providerToc;
     }

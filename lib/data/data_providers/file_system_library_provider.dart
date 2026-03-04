@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart'
+    show debugPrint, kDebugMode, visibleForTesting;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -31,8 +33,12 @@ class FileSystemLibraryProvider implements LibraryProvider {
     return _instance!;
   }
 
-  String _generateKey(String title, String category, String fileType) {
-    return '$title|${category.hashCode}|$fileType';
+  String _generateKey(String title, int categoryId, String fileType) {
+    return BookCompositeKey.create(
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+    ).toStorageKey();
   }
 
   @override
@@ -157,9 +163,14 @@ class FileSystemLibraryProvider implements LibraryProvider {
             booksByCategory[categoryName]!.add(book);
 
             // Add to key map
-            final key = _generateKey(
-                book.title, book.categoryPath ?? '', book.fileType ?? '');
-            keyToPath[key] = entity.path;
+            if (book.categoryId != null) {
+              final key = _generateKey(
+                book.title,
+                book.categoryId!,
+                book.fileType ?? '',
+              );
+              keyToPath[key] = entity.path;
+            }
           }
         }
       } catch (e) {
@@ -229,9 +240,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
   Future<bool> hasBook(String title, int categoryId, String fileType) async {
     if (!_isInitialized) await initialize();
     final map = await _keyToPath;
-    // Try to resolve categoryId back to path
-    final categoryPath = _categoryIdToPath[categoryId] ?? categoryId.toString();
-    final key = _generateKey(title, categoryPath, fileType);
+    final key = _generateKey(title, categoryId, fileType);
     return map.containsKey(key);
   }
 
@@ -240,9 +249,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
       String title, int categoryId, String fileType) async {
     if (!_isInitialized) await initialize();
 
-    // Try to resolve categoryId back to path
-    final categoryPath = _categoryIdToPath[categoryId] ?? categoryId.toString();
-    final path = await _getBookPath(title, categoryPath, fileType);
+    final path = await _getBookPath(title, categoryId, fileType);
     if (path == null) return null;
 
     final file = File(path);
@@ -279,14 +286,15 @@ class FileSystemLibraryProvider implements LibraryProvider {
   }
 
   Future<String?> _getBookPath(
-      String title, String category, String fileType) async {
+      String title, int categoryId, String fileType) async {
     final map = await _keyToPath;
-    final key = _generateKey(title, category, fileType);
+    final key = _generateKey(title, categoryId, fileType);
     return map[key];
   }
 
   Future<Map<String, String>> _buildKeyToPath() async {
     Map<String, String> keyToPath = {};
+    _categoryIdToPath.clear();
 
     // Helper to add path
     void addPath(String path, String rootPath,
@@ -309,8 +317,10 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
       final categoryParts = [...prefix, ...parts];
       final category = categoryParts.join(', ');
+      final categoryId = category.hashCode;
+      _categoryIdToPath[categoryId] = category;
 
-      final key = _generateKey(title, category, fileType);
+      final key = _generateKey(title, categoryId, fileType);
       keyToPath[key] = path;
     }
 
@@ -367,12 +377,34 @@ class FileSystemLibraryProvider implements LibraryProvider {
     _keyToPath = _buildKeyToPath();
   }
 
+  @visibleForTesting
+  void seedKeyToPathForTesting({
+    required Map<String, String> keyToPath,
+    Map<int, String>? categoryIdToPath,
+    String? libraryPath,
+  }) {
+    _keyToPath = Future.value(keyToPath);
+    _categoryIdToPath
+      ..clear()
+      ..addAll(categoryIdToPath ?? const {});
+    if (libraryPath != null) {
+      _libraryPath = libraryPath;
+    }
+    _isInitialized = true;
+  }
+
+  @visibleForTesting
+  void resetForTesting() {
+    _categoryIdToPath.clear();
+    _isInitialized = false;
+  }
+
   /// Checks if a book is in the personal folder or a custom folder
   Future<bool> isPersonalBook(String title,
       {String? category, String? fileType}) async {
     String? bookPath;
     if (category != null && fileType != null) {
-      bookPath = await _getBookPath(title, category, fileType);
+      bookPath = await _getBookPath(title, category.hashCode, fileType);
     } else {
       // Fuzzy search
       final map = await _keyToPath;

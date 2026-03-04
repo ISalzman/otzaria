@@ -117,10 +117,21 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
       // Load links
       final library = await DataRepository.instance.library;
-      final textBook = library.findBookByTitle(book.title, TextBook);
+      TextBook? textBook;
+      for (final candidate in library.getAllBooks()) {
+        if (candidate is! TextBook) continue;
+        if (candidate.title != book.title) continue;
+        if (book.categoryId != null &&
+            candidate.categoryId != book.categoryId) {
+          continue;
+        }
+        textBook = candidate;
+        break;
+      }
+      textBook ??= library.findBookByTitle(book.title, TextBook) as TextBook?;
       List<Link> links = [];
 
-      if (textBook != null && textBook is TextBook) {
+      if (textBook != null) {
         links = await textBook.links;
         debugPrint('✅ Loaded ${links.length} links');
       }

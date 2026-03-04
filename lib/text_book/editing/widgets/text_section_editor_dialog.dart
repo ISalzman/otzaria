@@ -29,6 +29,7 @@ import 'package:otzaria/settings/safer_mode/protected_settings_wrapper.dart';
 class TextSectionEditorDialog extends StatefulWidget {
   final String bookId;
   final String? category;
+  final int? categoryId;
   final String? fileType;
   final int sectionIndex;
   final String sectionId;
@@ -41,6 +42,7 @@ class TextSectionEditorDialog extends StatefulWidget {
     super.key,
     required this.bookId,
     this.category,
+    this.categoryId,
     this.fileType,
     required this.sectionIndex,
     required this.sectionId,
@@ -233,7 +235,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
           final dataProvider = FileSystemData.instance;
           await dataProvider.getBookText(
             widget.bookId,
-            category: widget.category,
+            categoryId: widget.categoryId,
             fileType: widget.fileType,
           );
 
