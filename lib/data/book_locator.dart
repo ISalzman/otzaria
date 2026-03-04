@@ -155,6 +155,8 @@ class BookLocator {
             .split('/')
             .where((part) => part.isNotEmpty)
             .join(', ');
+        // hashCode חייב להתאים לאופן שבו FileSystemLibraryProvider
+        // יוצר categoryId (ראה _createBookFromFile ו-_buildKeyToPath).
         final categoryId = categoryPath.hashCode;
 
         for (final entry in keyToPath.entries) {

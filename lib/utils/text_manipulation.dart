@@ -179,6 +179,25 @@ String highLight(
   return result;
 }
 
+/// מנרמל נתיב קטגוריה לפורמט אחיד מופרד בפסיקים.
+///
+/// ממיר נתיבי קבצים (\\ ו /) לפסיקים, מסיר סיומות קבצים
+/// ומחזיר מחרוזת נקייה בפורמט "a, b, c".
+String normalizeCategoryPath(String rawPath) {
+  if (rawPath.isEmpty) return rawPath;
+  final normalized = rawPath
+      .replaceAll('\\', ', ')
+      .replaceAll('/', ', ')
+      .replaceAll('.txt', '')
+      .replaceAll('.docx', '')
+      .replaceAll('.pdf', '');
+  return normalized
+      .split(',')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty && part != '.')
+      .join(', ');
+}
+
 String getTitleFromPath(String path) {
   path = path
       .replaceAll('/', Platform.pathSeparator)
@@ -755,7 +774,7 @@ String _getTopicSync(String title, Map<String, String> titleToPath) {
   // Fallback לפי נתיב
   final path = titleToPath[title];
   if (path != null) {
-    final normalizedPath = path.replaceAll('\\', ', ').replaceAll('/', ', ');
+    final normalizedPath = normalizeCategoryPath(path);
     for (var category in _eraCategories) {
       if (normalizedPath.contains(category)) return category;
     }
