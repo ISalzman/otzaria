@@ -100,20 +100,10 @@ class IndexingRepository {
         if (book is TextBook) {
           if (!_tantivyDataProvider.booksDone
               .contains("${book.title}textBook")) {
-            final bookText = await book.text;
-            final textHash = sha1.convert(utf8.encode(bookText)).toString();
-
-            if (_tantivyDataProvider.booksDone.contains(textHash)) {
-              debugPrint('⏭️ דילוג על ספר קיים (hash): ${book.title}');
-              _tantivyDataProvider.booksDone.add("${book.title}textBook");
-              skipped++;
-            } else {
-              debugPrint('📖 מאנדקס ספר טקסט: ${book.title}');
-              await _indexTextBook(book, preloadedText: bookText);
-              _tantivyDataProvider.booksDone.add("${book.title}textBook");
-              _tantivyDataProvider.booksDone.add(textHash);
-              actuallyIndexed++;
-            }
+            debugPrint('📖 מאנדקס ספר טקסט: ${book.title}');
+            await _indexTextBook(book);
+            _tantivyDataProvider.booksDone.add("${book.title}textBook");
+            actuallyIndexed++;
           } else {
             debugPrint('⏭️ דילוג על ספר טקסט שכבר מאונדקס: ${book.title}');
             skipped++;
@@ -121,39 +111,10 @@ class IndexingRepository {
         } else if (book is PdfBook) {
           if (!_tantivyDataProvider.booksDone
               .contains("${book.title}pdfBook")) {
-            // Try to get file hash for deduplication
-            String? fileHash;
-            try {
-              // Try to load from database first
-              final pdfBytes =
-                  await SqliteDataProvider.instance.getPdfBytesFromDb(book);
-              if (pdfBytes != null && pdfBytes.isNotEmpty) {
-                fileHash = sha1.convert(pdfBytes).toString();
-              } else {
-                // Fallback to file if exists
-                final file = File(book.path);
-                if (await file.exists()) {
-                  fileHash = sha1.convert(await file.readAsBytes()).toString();
-                }
-              }
-            } catch (e) {
-              debugPrint('⚠️ לא ניתן לחשב hash עבור ${book.title}: $e');
-            }
-
-            if (fileHash != null &&
-                _tantivyDataProvider.booksDone.contains(fileHash)) {
-              debugPrint('⏭️ דילוג על PDF קיים (hash): ${book.title}');
-              _tantivyDataProvider.booksDone.add("${book.title}pdfBook");
-              skipped++;
-            } else {
-              debugPrint('📄 מאנדקס PDF: ${book.title}');
-              await _indexPdfBook(book);
-              _tantivyDataProvider.booksDone.add("${book.title}pdfBook");
-              if (fileHash != null) {
-                _tantivyDataProvider.booksDone.add(fileHash);
-              }
-              actuallyIndexed++;
-            }
+            debugPrint('📄 מאנדקס PDF: ${book.title}');
+            await _indexPdfBook(book);
+            _tantivyDataProvider.booksDone.add("${book.title}pdfBook");
+            actuallyIndexed++;
           } else {
             debugPrint('⏭️ דילוג על PDF שכבר מאונדקס: ${book.title}');
             skipped++;

@@ -83,20 +83,7 @@ class AppPaths {
   /// Note: Does NOT create the library path itself - only index directories
   /// The library path should be created by the user or during library download
   static Future<void> createNecessaryDirectories() async {
-    final libraryPath = await getLibraryPath();
-    final checkDir = Directory(libraryPath);
-
-    if (await checkDir.exists()) {
-      final dirs = [
-        await getIndexPath(),
-      ];
-
-      for (final dirPath in dirs) {
-        final directory = Directory(dirPath);
-        if (!await directory.exists()) {
-          await directory.create(recursive: true);
-        }
-      }
-    }
+    // Index directory is created by TantivyDataProvider._initEngine().
+    // No other directories need pre-creation at startup.
   }
 }
