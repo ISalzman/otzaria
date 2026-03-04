@@ -44,9 +44,29 @@ class TantivyDataProvider {
   late List<String> booksDone = [];
 
   TantivyDataProvider._internal() {
-    // Initialize engines
-    engine = _initEngine();
-    _loadBooksDone();
+    // Initialize sequentially: check index existence BEFORE the engine
+    // recreates the directory, then load booksDone.
+    engine = _initAll();
+  }
+
+  Future<SearchEngine> _initAll() async {
+    // Check if the index directory existed BEFORE the engine creates it.
+    final indexPath = await AppPaths.getIndexPath();
+    final indexExistedBefore = Directory(indexPath).existsSync();
+
+    // Load persisted booksDone from disk.
+    await _loadBooksDone();
+
+    // If the index was manually deleted, clear booksDone so every book
+    // is re-indexed from scratch.
+    if (!indexExistedBefore && booksDone.isNotEmpty) {
+      debugPrint('⚠️ תיקיית האינדקס נמחקה – מנקה רשימת ספרים מאונדקסים');
+      booksDone.clear();
+      await saveBooksDoneToDisk();
+    }
+
+    // Now initialise the search engine (creates the directory if needed).
+    return _initEngine();
   }
 
   Future<SearchEngine> _initEngine() async {
@@ -94,6 +114,12 @@ class TantivyDataProvider {
         debugPrint('⚠️ Failed to create sentinel file: $e');
       }
 
+      // Ensure the index directory exists before opening the engine.
+      final indexDir = Directory(indexPath);
+      if (!indexDir.existsSync()) {
+        indexDir.createSync(recursive: true);
+      }
+
       // Try to open engine
       // If this CRASHES the process, the sentinel remains for next run.
       // If it throws an Exception, we catch it below.
@@ -139,7 +165,10 @@ class TantivyDataProvider {
       // close the current box before opening the legacy one at a different path.
       if (booksDone.isEmpty) {
         final legacyPath = await AppPaths.getIndexPath();
-        if (legacyPath != statePath) {
+        // Only attempt migration if the legacy directory already exists.
+        // Opening a Hive box on a non-existent path would CREATE the directory,
+        // which would later confuse SearchEngine (non-Tantivy files inside).
+        if (legacyPath != statePath && Directory(legacyPath).existsSync()) {
           Hive.box(name: 'books_indexed', directory: statePath, maxSizeMiB: 100)
               .close();
           final legacyBooks = _readBooksDoneFromBox(legacyPath);
