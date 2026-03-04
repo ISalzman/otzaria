@@ -262,6 +262,8 @@ class LibraryProviderManager {
     int? categoryId,
     String? fileType,
   }) async {
+    if (!_isInitialized) await initialize();
+
     final provider = getProviderForBook(
       title,
       categoryId: categoryId,
@@ -334,6 +336,7 @@ class LibraryProviderManager {
     int? categoryId,
     String? fileType,
   }) async {
+    if (!_isInitialized) await initialize();
     final mappedKey = _resolveBookKey(
       title,
       categoryId: categoryId,
@@ -374,6 +377,8 @@ class LibraryProviderManager {
     int? categoryId,
     String? fileType,
   }) async {
+    if (!_isInitialized) await initialize();
+
     final mapped = _resolveBookKey(
       title,
       categoryId: categoryId,
@@ -531,6 +536,10 @@ class LibraryProviderManager {
   /// Recursively maps all books in a category to their provider.
   /// PdfBooks are always mapped to FileSystemLibraryProvider since they're file-based.
   /// TextBooks are mapped based on whether they exist in the database or file system.
+  ///
+  /// **שים לב:** פונקציה זו קוראת ל-`getAvailableBookTitles()` שמבצעת שאילתה ל-DB.
+  /// היא נקראת פעם אחת בלבד מ-`_updateBookToProviderMapping` בזמן בניית הקטלוג.
+  /// אין לקרוא לה ממקומות נוספים כדי לא ליצור שאילתות מיותרות.
   Future<void> _mapBooksRecursive(Category category) async {
     final dbRawKeys = await databaseProvider.getAvailableBookTitles();
     final dbKeys = dbRawKeys

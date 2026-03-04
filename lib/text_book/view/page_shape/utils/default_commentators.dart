@@ -5,6 +5,8 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text_manipulation.dart'
+    show normalizeCategoryPath;
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 
 /// מחלקה לניהול ברירות מחדל של מפרשים לפי סוג הספר
@@ -27,7 +29,7 @@ class DefaultCommentators {
     if (bookPath.isEmpty) {
       bookPath = book.category?.path ?? book.categoryPath ?? '';
     }
-    bookPath = _normalizePathForMatching(bookPath);
+    bookPath = normalizeCategoryPath(bookPath);
 
     // קבלת שמות המפרשים מה-JSON
     final defaults = _getDefaultsFromConfig(config, book.title, bookPath);
@@ -38,23 +40,6 @@ class DefaultCommentators {
     }
 
     return defaults;
-  }
-
-  static String _normalizePathForMatching(String rawPath) {
-    if (rawPath.isEmpty) return rawPath;
-
-    final normalized = rawPath
-        .replaceAll('\\', ', ')
-        .replaceAll('/', ', ')
-        .replaceAll('.txt', '')
-        .replaceAll('.docx', '')
-        .replaceAll('.pdf', '');
-
-    return normalized
-        .split(',')
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty && part != '.')
-        .join(', ');
   }
 
   /// מחפש את השמות המלאים של המפרשים מתוך רשימת הקישורים
