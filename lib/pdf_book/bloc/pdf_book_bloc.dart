@@ -117,10 +117,13 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
       // Load links
       final library = await DataRepository.instance.library;
-      final textBook = library.findBookByTitle(book.title, TextBook);
+      final textBook = library.findTextBookByTitleAndCategory(
+        book.title,
+        categoryId: book.categoryId,
+      );
       List<Link> links = [];
 
-      if (textBook != null && textBook is TextBook) {
+      if (textBook != null) {
         links = await textBook.links;
         debugPrint('✅ Loaded ${links.length} links');
       }
@@ -227,6 +230,9 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       tab.links = event.links;
       return;
     }
+
+    tab.pdfHeadings = event.headings;
+    tab.links = event.links;
 
     emit(current.copyWith(
       pdfHeadings: event.headings,

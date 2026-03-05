@@ -77,9 +77,9 @@ class DataRepository {
   ///
   /// Returns a [Future] that completes with the book's text content as a [String]
   Future<String> getBookText(String title,
-      {String? category, String? fileType}) async {
+      {int? categoryId, String? fileType}) async {
     return _fileSystemData.getBookText(title,
-        category: category, fileType: fileType);
+        categoryId: categoryId, fileType: fileType);
   }
 
   /// Retrieves the table of contents for a specific book
@@ -90,9 +90,9 @@ class DataRepository {
   /// Returns a [Future] that completes with a list of [TocEntry] objects
   /// representing the book's table of contents structure
   Future<List<TocEntry>> getBookToc(String title,
-      {String? category, String? fileType}) async {
+      {int? categoryId, String? fileType}) async {
     return _fileSystemData.getBookToc(title,
-        category: category, fileType: fileType);
+        categoryId: categoryId, fileType: fileType);
   }
 
   /// Searches for references by relevance to a given reference string

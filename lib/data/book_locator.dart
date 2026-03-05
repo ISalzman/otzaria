@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:otzaria/data/data_providers/book_composite_key.dart';
+import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/migration/core/models/book.dart' as migration_book;
 
 /// מתווך מרכזי לאיתור ספרים במערכת
@@ -146,17 +147,23 @@ class BookLocator {
     Category? category,
   ) async {
     try {
-      final keyToPath =
-          await FileSystemData.instance.fileSystemProvider.keyToPath;
+      final keyToPath = await FileSystemLibraryProvider.instance.keyToPath;
       String? filePath;
 
       if (category != null) {
-        // Try to find exact match with category
-        // Note: We don't have fileType here, so we might need to iterate
-        final categoryPath = category.path.replaceAll('/', ', ');
-        for (final key in keyToPath.keys) {
-          if (key.startsWith('$bookTitle|$categoryPath|')) {
-            filePath = keyToPath[key];
+        final categoryPath = category.path
+            .split('/')
+            .where((part) => part.isNotEmpty)
+            .join(', ');
+        // hashCode חייב להתאים לאופן שבו FileSystemLibraryProvider
+        // יוצר categoryId (ראה _createBookFromFile ו-_buildKeyToPath).
+        final categoryId = categoryPath.hashCode;
+
+        for (final entry in keyToPath.entries) {
+          final key = BookCompositeKey.tryParse(entry.key);
+          if (key == null) continue;
+          if (key.title == bookTitle && key.categoryId == categoryId) {
+            filePath = entry.value;
             break;
           }
         }
@@ -164,9 +171,11 @@ class BookLocator {
 
       // If not found or no category, try fuzzy match by title
       if (filePath == null) {
-        for (final key in keyToPath.keys) {
-          if (key.startsWith('$bookTitle|')) {
-            filePath = keyToPath[key];
+        for (final entry in keyToPath.entries) {
+          final key = BookCompositeKey.tryParse(entry.key);
+          if (key == null) continue;
+          if (key.title == bookTitle) {
+            filePath = entry.value;
             break;
           }
         }
@@ -174,16 +183,6 @@ class BookLocator {
 
       if (filePath == null) {
         return null;
-      }
-
-      // אם יש קטגוריה, נוודא שהקובץ נמצא בתיקייה הנכונה
-      if (category != null) {
-        final expectedPath = _buildExpectedPath(category);
-        if (!filePath.contains(expectedPath)) {
-          debugPrint(
-              '⚠️ File "$bookTitle" found but not in expected category: $expectedPath');
-          return null;
-        }
       }
 
       // בדיקה שהקובץ קיים
@@ -202,12 +201,6 @@ class BookLocator {
       debugPrint('❌ Error searching in file system: $e');
       return null;
     }
-  }
-
-  /// בניית נתיב צפוי לפי קטגוריה
-  static String _buildExpectedPath(Category category) {
-    final pathParts = category.path.split('/');
-    return pathParts.join(Platform.pathSeparator);
   }
 
   /// מחיקת ספר (מ-DB או מהקובץ)

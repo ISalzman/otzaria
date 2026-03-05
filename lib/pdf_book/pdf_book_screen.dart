@@ -12,7 +12,6 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart' as otz_links;
-import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart' as pdf_events;
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
@@ -252,9 +251,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       }
     };
     widget.tab.showLeftPane.addListener(_showLeftPaneListener);
-
-    // טעינת headings וlinks
-    _loadPdfHeadingsAndLinks();
 
     // טעינת הגדרות פר-ספר
     _loadPerBookSettings();
@@ -739,38 +735,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _bloc.add(const pdf_events.ResetPerBookSettings());
     if (mounted) {
       UiSnack.show('ההגדרות הפר-ספריות אופסו בהצלחה');
-    }
-  }
-
-  Future<void> _loadPdfHeadingsAndLinks() async {
-    try {
-      final headings =
-          await PdfHeadings.loadFromDatabase(widget.tab.book.title);
-      if (headings != null) {
-        widget.tab.pdfHeadings = headings;
-      }
-
-      final library = await DataRepository.instance.library;
-
-      final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
-
-      if (textBook != null) {
-        if (textBook is TextBook) {
-          final loadedLinks = await textBook.links;
-          loadedLinks.sort((a, b) => a.index1.compareTo(b.index1));
-          widget.tab.links = loadedLinks;
-
-          if (widget.tab.links.isNotEmpty) {
-            // Links loaded successfully
-          }
-        }
-      }
-
-      if (mounted) {
-        setState(() {});
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Error loading PDF headings and links: $e\n$stackTrace');
     }
   }
 
