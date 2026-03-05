@@ -2791,7 +2791,7 @@ void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
     final dataProvider = FileSystemData.instance;
     freshContent = await dataProvider.getBookText(
       state.book.title,
-      category: state.book.categoryPath,
+      categoryId: state.book.categoryId,
       fileType: state.book.fileType,
     );
   } catch (e) {
@@ -2810,6 +2810,7 @@ void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
       child: TextSectionEditorDialog(
         bookId: state.book.title,
         category: state.book.categoryPath,
+        categoryId: state.book.categoryId,
         fileType: state.book.fileType,
         sectionIndex: state.editorIndex!,
         sectionId: state.editorSectionId!,

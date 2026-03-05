@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'dart:isolate';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
@@ -22,8 +23,9 @@ import 'package:pdfrx/pdfrx.dart';
 /// Library provider that loads books from the SQLite database.
 class DatabaseLibraryProvider implements LibraryProvider {
   final SqliteDataProvider _sqliteProvider = SqliteDataProvider.instance;
-  final Set<String> _cachedKeys = {}; // Only DB books (composite key)
-  final Map<String, int> _categoryPathToId = {};
+  final Set<BookCompositeKey> _cachedKeys = {};
+  final Map<int, String> _categoryIdToPath = {};
+  final Map<int, db_models.Category> _categoriesById = {};
   bool _titlesCached = false;
 
   /// Singleton instance
@@ -36,15 +38,15 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return _instance!;
   }
 
-  String _generateKey(String title, int categoryId, String fileType) {
-    return '$title|$categoryId|$fileType';
-  }
-
   /// Helper method to build topics string from database book and category path
   String _buildTopics(db_models.Book dbBook, String categoryPath) {
     String topics = dbBook.topics.map((t) => t.name).join(', ');
     if (topics.isEmpty && categoryPath.isNotEmpty) {
-      topics = categoryPath.split('/').where((p) => p.isNotEmpty).join(', ');
+      topics = categoryPath
+          .split(',')
+          .map((p) => p.trim())
+          .where((p) => p.isNotEmpty)
+          .join(', ');
     }
     return topics;
   }
@@ -85,7 +87,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       final categories = await _sqliteProvider.repository!.getAllCategories();
       debugPrint('💾 Database found ${dbBooks.length} books');
 
-      // Build category paths
+      // Build category paths and caches
       final Map<int, db_models.Category> categoryMap = {
         for (var c in categories) c.id: c
       };
@@ -114,13 +116,19 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
       // Cache titles for quick lookup
       _cachedKeys.clear();
-      _categoryPathToId.clear();
+      _categoryIdToPath.clear();
+      _categoriesById
+        ..clear()
+        ..addAll(categoryMap);
 
       for (final dbBook in dbBooks) {
         final categoryPath = getPath(dbBook.categoryId);
-        _categoryPathToId[categoryPath] = dbBook.categoryId;
-        _cachedKeys.add(_generateKey(
-            dbBook.title, dbBook.categoryId, dbBook.fileType ?? ''));
+        _categoryIdToPath[dbBook.categoryId] = categoryPath;
+        _cachedKeys.add(BookCompositeKey.create(
+          title: dbBook.title,
+          categoryId: dbBook.categoryId,
+          fileType: dbBook.fileType,
+        ));
 
         final categoryName =
             dbBook.topics.isNotEmpty ? dbBook.topics.first.name : 'ללא קטגוריה';
@@ -160,69 +168,149 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   @override
   Future<bool> hasBook(String title, int categoryId, String fileType) async {
-    // Use cached keys if available
-    if (_titlesCached) {
-      return _cachedKeys.contains(_generateKey(title, categoryId, fileType));
+    final key = BookCompositeKey.create(
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+    );
+    if (_cachedKeys.contains(key)) {
+      return true;
     }
-    // If cache is not ready, we can't easily check without category ID
-    // But we can try to find it in DB if we had a way to resolve category path
-    return false;
+
+    final repository = _sqliteProvider.repository;
+    if (repository == null) {
+      return false;
+    }
+
+    final book = await repository.getBookByTitleCategoryAndFileType(
+      title,
+      categoryId,
+      key.fileType,
+    );
+    return book != null;
   }
 
   /// Finds the category path for a given book title.
   /// Returns null if the book is not found in the database.
-  Future<String?> findCategoryPathForBook(String title) async {
-    // If cache is ready, check keys first
+  Future<String?> findCategoryPathForBook(
+    String title, {
+    int? categoryId,
+    String? fileType,
+  }) async {
+    final normalizedFileType = BookCompositeKey.normalizeFileType(fileType);
+
     if (_titlesCached) {
-      for (final key in _cachedKeys) {
-        if (key.startsWith('$title|')) {
-          final parts = key.split('|');
-          if (parts.length >= 2) {
-            return parts[1];
+      BookCompositeKey? matchedKey;
+
+      if (categoryId != null) {
+        final exact = BookCompositeKey.create(
+          title: title,
+          categoryId: categoryId,
+          fileType: normalizedFileType,
+        );
+        if (_cachedKeys.contains(exact)) {
+          matchedKey = exact;
+        }
+      }
+
+      if (matchedKey == null) {
+        for (final key in _cachedKeys) {
+          if (!key.matchesTitle(title)) continue;
+          if (fileType != null && key.fileType != normalizedFileType) {
+            continue;
+          }
+          matchedKey = key;
+          break;
+        }
+      }
+
+      if (matchedKey != null) {
+        final path = await _getPathForCategoryId(matchedKey.categoryId);
+        return path.isEmpty ? null : path;
+      }
+    }
+
+    final repository = _sqliteProvider.repository;
+    if (repository == null) {
+      return null;
+    }
+
+    try {
+      db_models.Book? book;
+
+      if (categoryId != null) {
+        if (fileType != null) {
+          book = await repository.getBookByTitleCategoryAndFileType(
+            title,
+            categoryId,
+            normalizedFileType,
+          );
+        } else {
+          final booksInCategory =
+              await repository.getBooksByCategory(categoryId);
+          for (final candidate in booksInCategory) {
+            if (candidate.title != title) continue;
+            book = candidate;
+            break;
           }
         }
+      } else {
+        book = await repository.getBookByTitle(title);
       }
-    }
 
-    // If not in cache or cache not ready, query the DB directly
-    if (_sqliteProvider.repository != null) {
-      try {
-        final book = await _sqliteProvider.repository!.getBookByTitle(title);
-        if (book != null) {
-          // Need to reconstruct path from category ID
-          // This might be expensive without cache but necessary
-          return await _getPathForCategoryId(book.categoryId);
-        }
-      } catch (e) {
-        // Ignored
-      }
+      if (book == null) return null;
+      final path = await _getPathForCategoryId(book.categoryId);
+      return path.isEmpty ? null : path;
+    } catch (_) {
+      return null;
     }
-
-    return null;
   }
 
   /// Helper to get full path for a category ID from DB
   Future<String> _getPathForCategoryId(int categoryId) async {
-    // Check cache first
-    if (_categoryPathToId.isNotEmpty) {
-      for (final entry in _categoryPathToId.entries) {
-        if (entry.value == categoryId) return entry.key;
+    final cachedPath = _categoryIdToPath[categoryId];
+    if (cachedPath != null) return cachedPath;
+
+    final repository = _sqliteProvider.repository;
+    if (repository == null) return '';
+
+    if (_categoriesById.isEmpty) {
+      final categories = await repository.getAllCategories();
+      for (final category in categories) {
+        _categoriesById[category.id] = category;
       }
     }
 
-    // Fallback: Query DB for category hierarchy (simplified)
-    // This part assumes we can just return a placeholder or need to query recursively
-    // Given the architecture, it is safer to rely on the cache getting built.
-    // But if we must:
-    return ''; // Placeholder as implementing full recursion here is complex
+    final pathParts = <String>[];
+    final visited = <int>{};
+    int? currentId = categoryId;
+
+    while (currentId != null && visited.add(currentId)) {
+      var category = _categoriesById[currentId];
+      category ??= await repository.getCategory(currentId);
+      if (category == null) {
+        break;
+      }
+      _categoriesById[category.id] = category;
+      pathParts.insert(0, category.title);
+      currentId = category.parentId;
+    }
+
+    final categoryPath = pathParts.join(', ');
+    if (categoryPath.isNotEmpty) {
+      _categoryIdToPath[categoryId] = categoryPath;
+    }
+    return categoryPath;
   }
 
   /// Checks if any book with the given title exists in the database.
   Future<bool> hasBookWithTitle(String title) async {
-    if (!_titlesCached) await initialize();
+    if (!_titlesCached) {
+      await getDatabaseOnlyBookTitles();
+    }
 
     for (final key in _cachedKeys) {
-      if (key.startsWith('$title|')) return true;
+      if (key.matchesTitle(title)) return true;
     }
     return false;
   }
@@ -267,19 +355,69 @@ class DatabaseLibraryProvider implements LibraryProvider {
   /// Gets book titles that are ONLY in the database
   Future<Set<String>> getDatabaseOnlyBookTitles() async {
     if (_titlesCached) {
-      // We return titles only, derived from keys
-      return _cachedKeys;
+      return _cachedKeys.map((key) => key.toStorageKey()).toSet();
     }
-    // ... fallback implementation ...
-    return {};
+
+    final repository = _sqliteProvider.repository;
+    if (repository == null) {
+      return {};
+    }
+
+    try {
+      final books = await repository.getAllBooks();
+      final categories = await repository.getAllCategories();
+
+      _cachedKeys.clear();
+      _categoriesById
+        ..clear()
+        ..addEntries(
+            categories.map((category) => MapEntry(category.id, category)));
+
+      for (final book in books) {
+        _cachedKeys.add(BookCompositeKey.create(
+          title: book.title,
+          categoryId: book.categoryId,
+          fileType: book.fileType,
+        ));
+
+        if (!_categoryIdToPath.containsKey(book.categoryId)) {
+          final categoryPath = await _getPathForCategoryId(book.categoryId);
+          if (categoryPath.isNotEmpty) {
+            _categoryIdToPath[book.categoryId] = categoryPath;
+          }
+        }
+      }
+
+      _titlesCached = true;
+      return _cachedKeys.map((key) => key.toStorageKey()).toSet();
+    } catch (e) {
+      debugPrint('⚠️ Error building DB key cache: $e');
+      return {};
+    }
   }
 
   /// Clears the cached titles (call when database changes)
   void clearCache() {
     _cachedKeys.clear();
-    _categoryPathToId.clear();
+    _categoryIdToPath.clear();
+    _categoriesById.clear();
     _titlesCached = false;
     debugPrint('💾 Database cache cleared');
+  }
+
+  @visibleForTesting
+  void seedCacheForTesting({
+    required Iterable<BookCompositeKey> keys,
+    Map<int, String>? categoryIdToPath,
+    bool titlesCached = true,
+  }) {
+    _cachedKeys
+      ..clear()
+      ..addAll(keys);
+    _categoryIdToPath
+      ..clear()
+      ..addAll(categoryIdToPath ?? const {});
+    _titlesCached = titlesCached;
   }
 
   /// Gets database statistics
@@ -324,7 +462,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
     // CRITICAL: Clear cache before rebuilding to ensure fresh data
     _titlesCached = false;
     _cachedKeys.clear();
-    _categoryPathToId.clear();
+    _categoryIdToPath.clear();
+    _categoriesById.clear();
 
     final repository = _sqliteProvider.repository!;
 
@@ -375,6 +514,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
         .map((row) => db_models.Category.fromJson(row))
         .where((cat) => cat.title != 'אודות התוכנה')
         .toList();
+    _categoriesById
+      ..clear()
+      ..addEntries(allCategories.map((cat) => MapEntry(cat.id, cat)));
 
     final categoriesByParent = <int?, List<db_models.Category>>{};
     for (final cat in allCategories) {
@@ -652,11 +794,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
       category.books.add(book);
 
       // Cache the book key for provider mapping
-      final key =
-          _generateKey(book.title, dbCategory.id, book.fileType ?? 'txt');
+      final key = BookCompositeKey.create(
+        title: book.title,
+        categoryId: dbCategory.id,
+        fileType: book.fileType,
+      );
       _cachedKeys.add(key);
-      if (book.categoryPath != null) {
-        _categoryPathToId[book.categoryPath!] = dbCategory.id;
+      if (book.categoryPath != null && book.categoryPath!.isNotEmpty) {
+        _categoryIdToPath[dbCategory.id] = book.categoryPath!;
       }
     }
 
@@ -717,7 +862,11 @@ class DatabaseLibraryProvider implements LibraryProvider {
     // Use metadata for topics (no junction table data available)
     String topics = '';
     if (categoryPath.isNotEmpty) {
-      topics = categoryPath.split('/').where((p) => p.isNotEmpty).join(', ');
+      topics = categoryPath
+          .split(',')
+          .map((p) => p.trim())
+          .where((p) => p.isNotEmpty)
+          .join(', ');
     }
 
     // Use metadata for author/pubDate/pubPlace

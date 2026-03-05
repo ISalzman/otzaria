@@ -143,6 +143,27 @@ class Library extends Category {
     parent = this;
   }
 
+  /// מחפש TextBook לפי כותרת ו-categoryId.
+  ///
+  /// מחפש התאמה מדויקת לפי categoryId (אם סופק), עם fallback לפי שם בלבד.
+  /// שימושי כשצריך למצוא TextBook שמתאים לספר PDF עם אותו שם.
+  TextBook? findTextBookByTitleAndCategory(
+    String title, {
+    int? categoryId,
+  }) {
+    TextBook? result;
+    for (final candidate in getAllBooks()) {
+      if (candidate is! TextBook) continue;
+      if (candidate.title != title) continue;
+      if (categoryId != null && candidate.categoryId != categoryId) {
+        continue;
+      }
+      result = candidate;
+      break;
+    }
+    return result ?? findBookByTitle(title, TextBook) as TextBook?;
+  }
+
   /// Finds a book by its title in the library.
   ///
   /// Searches through all books in the library and its subcategories
