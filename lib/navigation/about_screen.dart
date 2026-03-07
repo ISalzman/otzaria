@@ -308,9 +308,9 @@ class _AboutScreenState extends State<AboutScreen> {
         'url':
             'https://forum.otzaria.org/user/%D7%93%D7%90%D7%A0%D7%A6%D7%99%D7%92',
       },
-      // {
-      //   'name': 'י. אשכנזי', // כרגע לא רוצה
-      // },
+      {
+        'name': 'י. א.', // ישי אשכנזי
+      },
       {
         'name': '333',
         'url': 'https://forum.otzaria.org/user/333',
