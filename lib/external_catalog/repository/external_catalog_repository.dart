@@ -13,6 +13,7 @@ import 'package:zstandard/zstandard.dart';
 class ExternalCatalogRepository {
   static const String releaseApiUrl =
       'https://api.github.com/repos/Otzaria/otzar-HB_catalog/releases/latest';
+  static const String _versionMetaKey = 'version';
 
   static final ExternalCatalogRepository instance = ExternalCatalogRepository();
 
@@ -49,9 +50,73 @@ class ExternalCatalogRepository {
     );
   }
 
+  /// מחזיר את גרסת מסד הקטלוגים המקומי, אם קיימת.
+  Future<int?> getCurrentDatabaseVersion() async {
+    if (!await databaseExists()) {
+      return null;
+    }
+
+    sqflite.Database? db;
+    try {
+      db = await sqflite.openDatabase(
+        databasePath,
+        readOnly: true,
+        singleInstance: false,
+      );
+
+      final result = await db.rawQuery(
+        'SELECT value FROM db_meta WHERE key = ? LIMIT 1',
+        [_versionMetaKey],
+      );
+      if (result.isEmpty) {
+        return null;
+      }
+
+      final rawValue = result.first['value']?.toString();
+      return parseVersionText(rawValue);
+    } catch (e) {
+      debugPrint('Error reading external catalog DB version: $e');
+      return null;
+    } finally {
+      await db?.close();
+    }
+  }
+
+  /// מחזיר את גרסת הקטלוג העדכנית ביותר שפורסמה ב-GitHub.
+  Future<int> fetchLatestDatabaseVersion() async {
+    final release = await _fetchLatestReleaseInfo();
+    return _fetchReleaseVersion(release);
+  }
+
+  /// מעדכן את מסד הקטלוגים רק אם קיימת גרסה חדשה יותר.
+  ///
+  /// מחזיר `true` אם בוצע עדכון בפועל.
+  Future<bool> updateDatabaseIfNeeded() async {
+    if (!await databaseExists()) {
+      return false;
+    }
+
+    final currentVersion = await getCurrentDatabaseVersion();
+    final release = await _fetchLatestReleaseInfo();
+    final latestVersion = await _fetchReleaseVersion(release);
+
+    if (currentVersion != null && latestVersion <= currentVersion) {
+      return false;
+    }
+
+    await _downloadReleaseDatabase(release.databaseAsset);
+    return true;
+  }
+
   /// מוריד את מסד הקטלוגים מהרליס האחרון ומחלץ אותו ליד `seforim.db`.
   Future<void> downloadLatestDatabase() async {
-    final asset = await _fetchLatestDatabaseAsset();
+    final release = await _fetchLatestReleaseInfo();
+    await _downloadReleaseDatabase(release.databaseAsset);
+  }
+
+  Future<void> _downloadReleaseDatabase(
+    ExternalCatalogReleaseAsset asset,
+  ) async {
     final dbDir = Directory(path.dirname(databasePath));
     if (!await dbDir.exists()) {
       await dbDir.create(recursive: true);
@@ -101,7 +166,7 @@ class ExternalCatalogRepository {
     }
   }
 
-  Future<ExternalCatalogReleaseAsset> _fetchLatestDatabaseAsset() async {
+  Future<ExternalCatalogReleaseInfo> _fetchLatestReleaseInfo() async {
     final response = await _httpClient.get(
       Uri.parse(releaseApiUrl),
       headers: const {
@@ -120,12 +185,16 @@ class ExternalCatalogRepository {
       throw Exception('מבנה תשובת GitHub של קטלוג הספרים אינו תקין');
     }
 
-    final asset = parseLatestDatabaseAsset(decoded);
-    if (asset == null) {
+    final databaseAsset = parseLatestDatabaseAsset(decoded);
+    if (databaseAsset == null) {
       throw Exception('לא נמצא קובץ DB של הקטלוגים ברליס האחרון');
     }
 
-    return asset;
+    return ExternalCatalogReleaseInfo(
+      tagName: decoded['tag_name']?.toString() ?? '',
+      databaseAsset: databaseAsset,
+      versionAsset: parseLatestVersionAsset(decoded),
+    );
   }
 
   Future<Uint8List> _downloadAssetBytes(String downloadUrl) async {
@@ -134,6 +203,34 @@ class ExternalCatalogRepository {
       throw Exception('שגיאה בהורדת DB הקטלוגים: ${response.statusCode}');
     }
     return response.bodyBytes;
+  }
+
+  Future<String> _downloadTextAsset(String downloadUrl) async {
+    final response = await _httpClient.get(Uri.parse(downloadUrl));
+    if (response.statusCode != 200) {
+      throw Exception(
+          'שגיאה בהורדת קובץ הגרסה של הקטלוגים: ${response.statusCode}');
+    }
+    return utf8.decode(response.bodyBytes);
+  }
+
+  Future<int> _fetchReleaseVersion(ExternalCatalogReleaseInfo release) async {
+    final versionAsset = release.versionAsset;
+    if (versionAsset == null) {
+      throw Exception(
+        'לא נמצא ${DatabaseConstants.externalCatalogVersionFileName} ברליס ${release.tagName}',
+      );
+    }
+
+    final versionText = await _downloadTextAsset(versionAsset.downloadUrl);
+    final version = parseVersionText(versionText);
+    if (version == null) {
+      throw Exception(
+        'לא ניתן לקרוא את גרסת הקטלוג מתוך ${versionAsset.fileName}',
+      );
+    }
+
+    return version;
   }
 
   @visibleForTesting
@@ -176,6 +273,48 @@ class ExternalCatalogRepository {
     }
 
     return fallbackDb;
+  }
+
+  @visibleForTesting
+  static ExternalCatalogReleaseAsset? parseLatestVersionAsset(
+    Map<String, dynamic> releaseJson,
+  ) {
+    final assets = releaseJson['assets'];
+    if (assets is! List) {
+      return null;
+    }
+
+    for (final asset in assets) {
+      if (asset is! Map<String, dynamic>) {
+        continue;
+      }
+
+      final name = asset['name']?.toString() ?? '';
+      final downloadUrl = asset['browser_download_url']?.toString() ?? '';
+      if (name == DatabaseConstants.externalCatalogVersionFileName &&
+          downloadUrl.isNotEmpty) {
+        return ExternalCatalogReleaseAsset(
+          fileName: name,
+          downloadUrl: downloadUrl,
+          isCompressed: false,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  @visibleForTesting
+  static int? parseVersionText(String? rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+
+    final match = RegExp(r'(\d+)').firstMatch(rawValue.trim());
+    if (match == null) {
+      return null;
+    }
+    return int.tryParse(match.group(1)!);
   }
 
   ExternalLibraryBook _mapOtzarBook(Map<String, Object?> row) {
@@ -279,4 +418,16 @@ class ExternalCatalogReleaseAsset {
   final String fileName;
   final String downloadUrl;
   final bool isCompressed;
+}
+
+class ExternalCatalogReleaseInfo {
+  const ExternalCatalogReleaseInfo({
+    required this.tagName,
+    required this.databaseAsset,
+    required this.versionAsset,
+  });
+
+  final String tagName;
+  final ExternalCatalogReleaseAsset databaseAsset;
+  final ExternalCatalogReleaseAsset? versionAsset;
 }

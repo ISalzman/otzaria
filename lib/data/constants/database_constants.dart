@@ -13,6 +13,9 @@ class DatabaseConstants {
   static const String externalCatalogArchiveFileName =
       'otzar-HB_catalog.db.zst';
 
+  /// The name of the external catalogs version file in GitHub releases
+  static const String externalCatalogVersionFileName = 'version.txt';
+
   /// The default name of the Otzaria folder
   static const String otzariaFolderName = 'אוצריא';
 

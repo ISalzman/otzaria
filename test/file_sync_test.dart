@@ -1,7 +1,20 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/file_sync/file_sync_repository.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:path/path.dart' as path;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
+
   group('DiffReleaseAsset', () {
     test('parses DIFF asset names from GitHub release assets', () {
       final asset = DiffReleaseAsset.tryParse(
@@ -161,4 +174,141 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
       );
     });
   });
+
+  group('FileSyncRepository external catalog sync', () {
+    late Directory tempDir;
+
+    setUp(() async {
+      tempDir =
+          await Directory.systemTemp.createTemp('otzaria-file-sync-test-');
+      final libraryDir = Directory(
+        path.join(tempDir.path, DatabaseConstants.otzariaFolderName),
+      );
+      await libraryDir.create(recursive: true);
+
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryPath,
+        tempDir.path,
+      );
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryFolderName,
+        DatabaseConstants.otzariaFolderName,
+      );
+
+      final db = await openDatabase(
+        DatabaseConstants.getDatabasePath(),
+        version: 1,
+        onCreate: (db, version) async {
+          await db.execute('''
+            CREATE TABLE db_meta (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL
+            )
+          ''');
+        },
+      );
+      await db.insert('db_meta', {
+        'key': 'content_version_int',
+        'value': '3',
+      });
+      await db.close();
+    });
+
+    tearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('syncFiles מפעיל גם את עדכון הקטלוג כשהוא זמין', () async {
+      var catalogSyncCalled = false;
+      final repository = FileSyncRepository(
+        githubOwner: 'Otzaria',
+        repositoryName: 'SeforimLibrary',
+        httpClient: MockClient((request) async => http.Response('[]', 200)),
+        syncExternalCatalogIfPresent: () async {
+          catalogSyncCalled = true;
+          return true;
+        },
+      );
+
+      expect(await repository.syncFiles(), 0);
+      expect(catalogSyncCalled, isTrue);
+      expect(repository.catalogUpdatedInLastSync, isTrue);
+    });
+  });
+}
+
+class _MemoryCacheProvider extends CacheProvider {
+  final Map<String, Object?> _values = {};
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  bool containsKey(String key) => _values.containsKey(key);
+
+  @override
+  Set getKeys() => _values.keys.toSet();
+
+  @override
+  bool? getBool(String key, {bool? defaultValue}) =>
+      _values[key] as bool? ?? defaultValue;
+
+  @override
+  double? getDouble(String key, {double? defaultValue}) =>
+      _values[key] as double? ?? defaultValue;
+
+  @override
+  int? getInt(String key, {int? defaultValue}) =>
+      _values[key] as int? ?? defaultValue;
+
+  @override
+  String? getString(String key, {String? defaultValue}) =>
+      _values[key] as String? ?? defaultValue;
+
+  @override
+  T? getValue<T>(String key, {T? defaultValue}) {
+    final value = _values[key];
+    if (value is T) {
+      return value;
+    }
+    return defaultValue;
+  }
+
+  @override
+  Future<void> remove(String key) async {
+    _values.remove(key);
+  }
+
+  @override
+  Future<void> removeAll() async {
+    _values.clear();
+  }
+
+  @override
+  Future<void> setBool(String key, bool? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setDouble(String key, double? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setInt(String key, int? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setObject<T>(String key, T? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setString(String key, String? value) async {
+    _values[key] = value;
+  }
 }

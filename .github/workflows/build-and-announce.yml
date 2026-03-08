@@ -133,15 +133,15 @@ jobs:
             echo "is_version=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Download library DB for full installer (version tags only)
+      - name: Download library DBs for full installer (version tags only)
         if: steps.check_version.outputs.is_version == 'true'
         shell: pwsh
         run: |
-          Write-Host "Downloading library DB for full installer from Otzaria/SeforimLibrary..."
+          Write-Host "Downloading bundled databases for full installer..."
           $ErrorActionPreference = "Stop"
           
           try {
-            # קבלת מידע על ה-release האחרון דרך GitHub API
+            # הורדת מסד הספרייה הראשי
             $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Otzaria/SeforimLibrary/releases/latest"
             $dbAsset = $latestRelease.assets | Where-Object { $_.name -eq "seforim.db.zst" }
             
@@ -163,6 +163,22 @@ jobs:
             $ProgressPreference = 'SilentlyContinue'
             Invoke-WebRequest -Uri $dbAsset.browser_download_url -OutFile "installer\library_db\seforim.db.zst" -UseBasicParsing
             Write-Host "Compressed library DB downloaded successfully"
+
+            # הורדת מסד הקטלוגים החיצוני
+            Write-Host "Downloading external catalog DB for full installer from Otzaria/otzar-HB_catalog..."
+            $catalogRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Otzaria/otzar-HB_catalog/releases/latest"
+            $catalogAsset = $catalogRelease.assets | Where-Object { $_.name -eq "otzar-HB_catalog.db.zst" }
+
+            if (-not $catalogAsset) {
+              Write-Host "::error::Could not find otzar-HB_catalog.db.zst in latest release"
+              exit 1
+            }
+
+            Write-Host "Catalog version: $($catalogRelease.tag_name)"
+            Write-Host "Downloading from: $($catalogAsset.browser_download_url)"
+            Write-Host "Size: $([math]::Round($catalogAsset.size / 1MB, 2)) MB"
+            Invoke-WebRequest -Uri $catalogAsset.browser_download_url -OutFile "installer\library_db\otzar-HB_catalog.db.zst" -UseBasicParsing
+            Write-Host "Compressed external catalog DB downloaded successfully"
 
             # הורדת zstd.exe כדי שה-installer יוכל לחלץ את ה-DB בזמן ההתקנה
             $zstdRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/facebook/zstd/releases/latest"
@@ -874,7 +890,8 @@ jobs:
           body: |
             ## שינויים בגרסה זו
             נבנה מcommit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
-            קובץ מסד הנתונים להורדה ידנית: https://github.com/Otzaria/SeforimLibrary/releases/latest (asset: seforim.db.zst)
+            קובץ מסד הספרייה להורדה ידנית: https://github.com/Otzaria/SeforimLibrary/releases/latest (asset: seforim.db.zst)
+            קובץ מסד הקטלוגים להורדה ידנית: https://github.com/Otzaria/otzar-HB_catalog/releases/latest (asset: otzar-HB_catalog.db.zst)
             ענף: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -976,7 +993,8 @@ jobs:
             
             ---
             נבנה מcommit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
-            קובץ מסד הנתונים להורדה ידנית: https://github.com/Otzaria/SeforimLibrary/releases/latest (asset: seforim.db.zst)
+            קובץ מסד הספרייה להורדה ידנית: https://github.com/Otzaria/SeforimLibrary/releases/latest (asset: seforim.db.zst)
+            קובץ מסד הקטלוגים להורדה ידנית: https://github.com/Otzaria/otzar-HB_catalog/releases/latest (asset: otzar-HB_catalog.db.zst)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
