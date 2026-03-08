@@ -133,44 +133,64 @@ jobs:
             echo "is_version=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Download library ZIP for full installer (version tags only)
+      - name: Download library DB for full installer (version tags only)
         if: steps.check_version.outputs.is_version == 'true'
         shell: pwsh
         run: |
-          Write-Host "Downloading library ZIP for full installer from Y-PLONI/otzaria-library..."
+          Write-Host "Downloading library DB for full installer from Otzaria/SeforimLibrary..."
           $ErrorActionPreference = "Stop"
           
           try {
             # קבלת מידע על ה-release האחרון דרך GitHub API
-            $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Y-PLONI/otzaria-library/releases/latest"
-            $zipAsset = $latestRelease.assets | Where-Object { $_.name -eq "otzaria_latest.zip" }
+            $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Otzaria/SeforimLibrary/releases/latest"
+            $dbAsset = $latestRelease.assets | Where-Object { $_.name -eq "seforim.db.zst" }
             
-            if (-not $zipAsset) {
-              Write-Host "::error::Could not find otzaria_latest.zip in latest release"
+            if (-not $dbAsset) {
+              Write-Host "::error::Could not find seforim.db.zst in latest release"
               exit 1
             }
             
             Write-Host "Library version: $($latestRelease.tag_name)"
-            Write-Host "Downloading from: $($zipAsset.browser_download_url)"
-            Write-Host "Size: $([math]::Round($zipAsset.size / 1MB, 2)) MB"
+            Write-Host "Downloading from: $($dbAsset.browser_download_url)"
+            Write-Host "Size: $([math]::Round($dbAsset.size / 1MB, 2)) MB"
             
-            # הורדת הקובץ עם תמיכה בקבצים גדולים
-            $ProgressPreference = 'SilentlyContinue'  # מאיץ את ההורדה
-            Invoke-WebRequest -Uri $zipAsset.browser_download_url -OutFile "otzaria_latest.zip" -UseBasicParsing
-            Write-Host "Library ZIP downloaded successfully"
-            
-            # חילוץ הקבצים לתיקיית installer\library_files
-            Write-Host "Extracting library files to installer\library_files..."
-            if (Test-Path "installer\library_files") {
-              Remove-Item -Path "installer\library_files" -Recurse -Force
+            if (Test-Path "installer\library_db") {
+              Remove-Item -Path "installer\library_db" -Recurse -Force
             }
-            New-Item -ItemType Directory -Path "installer\library_files" -Force | Out-Null
-            Expand-Archive -Path "otzaria_latest.zip" -DestinationPath "installer\library_files" -Force
-            Write-Host "Library files extracted successfully"
-            
-            # מחיקת קובץ ה-ZIP לפינוי מקום
-            Remove-Item -Path "otzaria_latest.zip" -Force
-            Write-Host "Cleaned up ZIP file"
+            New-Item -ItemType Directory -Path "installer\library_db" -Force | Out-Null
+
+            # הורדת ה-DB הדחוס שה-installer יחלץ בזמן ההתקנה
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -Uri $dbAsset.browser_download_url -OutFile "installer\library_db\seforim.db.zst" -UseBasicParsing
+            Write-Host "Compressed library DB downloaded successfully"
+
+            # הורדת zstd.exe כדי שה-installer יוכל לחלץ את ה-DB בזמן ההתקנה
+            $zstdRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/facebook/zstd/releases/latest"
+            $zstdAsset = $zstdRelease.assets | Where-Object { $_.name -like "zstd-*-win64.zip" } | Select-Object -First 1
+
+            if (-not $zstdAsset) {
+              Write-Host "::error::Could not find win64 zstd asset in latest release"
+              exit 1
+            }
+
+            Write-Host "Downloading zstd from: $($zstdAsset.browser_download_url)"
+            Invoke-WebRequest -Uri $zstdAsset.browser_download_url -OutFile "installer\zstd-win64.zip" -UseBasicParsing
+
+            if (Test-Path "installer\zstd_tmp") {
+              Remove-Item -Path "installer\zstd_tmp" -Recurse -Force
+            }
+            Expand-Archive -Path "installer\zstd-win64.zip" -DestinationPath "installer\zstd_tmp" -Force
+
+            $zstdExe = Get-ChildItem -Path "installer\zstd_tmp" -Filter "zstd.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+            if (-not $zstdExe) {
+              Write-Host "::error::zstd.exe was not found inside downloaded archive"
+              exit 1
+            }
+
+            Copy-Item -Path $zstdExe -Destination "installer\zstd.exe" -Force
+            Remove-Item -Path "installer\zstd-win64.zip" -Force
+            Remove-Item -Path "installer\zstd_tmp" -Recurse -Force
+            Write-Host "zstd.exe prepared successfully"
           }
           catch {
             Write-Host "::error::Failed to download library: $_"
@@ -200,12 +220,21 @@ jobs:
             Write-Host "Building FULL installer with library and VC++ Redistributable (version tag detected)..."
             & "$env:ISCC" installer\otzaria_full.iss
             
-            # ניקוי קבצי הספרייה המחולצים לאחר בניית ה-FULL installer
-            Write-Host "Cleaning up extracted library files to free disk space..."
-            if (Test-Path "installer\library_files") {
-              Remove-Item -Path "installer\library_files" -Recurse -Force
-              Write-Host "Library files cleaned up successfully"
+            # ניקוי קבצי הספרייה והחולץ לאחר בניית ה-FULL installer
+            Write-Host "Cleaning up bundled DB assets to free disk space..."
+            if (Test-Path "installer\library_db") {
+              Remove-Item -Path "installer\library_db" -Recurse -Force
             }
+            if (Test-Path "installer\zstd.exe") {
+              Remove-Item -Path "installer\zstd.exe" -Force
+            }
+            if (Test-Path "installer\zstd_tmp") {
+              Remove-Item -Path "installer\zstd_tmp" -Recurse -Force
+            }
+            if (Test-Path "installer\zstd-win64.zip") {
+              Remove-Item -Path "installer\zstd-win64.zip" -Force
+            }
+            Write-Host "Bundled DB assets cleaned up successfully"
             
             Write-Host "Building REGULAR installer (without VC++ Redistributable)..."
             & "$env:ISCC" installer\otzaria.iss
@@ -845,7 +874,7 @@ jobs:
           body: |
             ## שינויים בגרסה זו
             נבנה מcommit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
-            ${{ github.ref_name == 'migrationDB_V2' && 'גרסה זו משתמשת בקובץ DB, אותו יש להוריד מ: https://github.com/Otzaria/otzaria-library/releases/download/library-db-1/seforim.db.zip' || '' }}
+            קובץ מסד הנתונים להורדה ידנית: https://github.com/Otzaria/SeforimLibrary/releases/latest (asset: seforim.db.zst)
             ענף: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -947,7 +976,7 @@ jobs:
             
             ---
             נבנה מcommit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
-            ${{ github.head_ref == 'migrationDB_V2' && 'גרסה זו משתמשת בקובץ DB, אותו יש להוריד מ: https://github.com/Otzaria/otzaria-library/releases/download/library-db-1/seforim.db.zip' || '' }}
+            קובץ מסד הנתונים להורדה ידנית: https://github.com/Otzaria/SeforimLibrary/releases/latest (asset: seforim.db.zst)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -111,9 +111,10 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('מחיקת קובץ דחוס'),
         content: const Text(
-          'האם למחוק את קובץ ה-ZIP המקורי?\n\n'
+          'האם למחוק את הקובץ הדחוס המקורי?\n\n'
           'הקובץ הדחוס אינו נצרך עבור פעילות התוכנה והוא רק תופס מקום.\n'
           'מומלץ למחוק אותו.',
+          textDirection: TextDirection.rtl,
         ),
         actions: [
           TextButton(
@@ -186,10 +187,10 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             FluentIcons.arrow_download_24_regular,
             size: 64,
-            color: Colors.blue,
+            color: Theme.of(context).colorScheme.primary,
           ),
           const SizedBox(height: 24),
           const Text(
@@ -234,10 +235,10 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             FluentIcons.folder_zip_24_regular,
             size: 64,
-            color: Colors.orange,
+            color: Theme.of(context).colorScheme.primary,
           ),
           const SizedBox(height: 24),
           const Text(
@@ -280,10 +281,10 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(
+        Icon(
           FluentIcons.library_24_regular,
           size: 64,
-          color: Colors.grey,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         const SizedBox(height: 24),
         const Text(
@@ -293,9 +294,12 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           textDirection: TextDirection.rtl,
         ),
         const SizedBox(height: 16),
-        const Text(
-          'יש לבחור קובץ מסד נתונים (seforim.db) או קובץ ZIP דחוס',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
+        Text(
+          'יש לבחור קובץ מסד נתונים (seforim.db) או קובץ דחוס בפורמט ZIP/ZST',
+          style: TextStyle(
+            fontSize: 16,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           textDirection: TextDirection.rtl,
           textAlign: TextAlign.center,
         ),
@@ -350,8 +354,8 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
   Future<void> _pickFile(BuildContext context) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['db', 'zip'],
-      dialogTitle: 'בחר קובץ מסד נתונים (seforim.db) או קובץ ZIP',
+      allowedExtensions: ['db', 'zip', 'zst'],
+      dialogTitle: 'בחר קובץ מסד נתונים (seforim.db) או קובץ דחוס',
     );
 
     if (result == null || result.files.isEmpty || !context.mounted) return;
