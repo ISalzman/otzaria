@@ -35,7 +35,7 @@ WizardStyle=modern
 DisableDirPage=no
 
 [InstallDelete]
-; מחיקת ספרייה ישנה לפני חילוץ הZIP החדש
+; מחיקת ספרייה ישנה לפני פריסת מסד הנתונים החדש
 Type: filesandordirs; Name: "{app}\אוצריא"
 Type: filesandordirs; Name: "{app}\links"
 
@@ -94,11 +94,39 @@ begin
   end;
 end;
 
-// הפונקציה הזו כבר לא נחוצה - הקבצים מועתקים ישירות על ידי Inno Setup
-// procedure CurStepChanged(CurStep: TSetupStep);
-// begin
-//   // Library files are now copied directly by Inno Setup [Files] section
-// end;
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ArchivePath, DatabasePath, ZstdPath, Params: String;
+  ResultCode: Integer;
+begin
+  if CurStep <> ssPostInstall then
+    exit;
+
+  ArchivePath := ExpandConstant('{app}\אוצריא\seforim.db.zst');
+  DatabasePath := ExpandConstant('{app}\אוצריא\seforim.db');
+  ZstdPath := ExpandConstant('{app}\zstd.exe');
+
+  if not FileExists(ArchivePath) then
+    exit;
+
+  if not FileExists(ZstdPath) then
+  begin
+    MsgBox('קובץ החילוץ zstd.exe לא נמצא. ההתקנה לא יכולה לחלץ את מסד הנתונים.', mbCriticalError, MB_OK);
+    Abort;
+  end;
+
+  Log('Extracting bundled database from ' + ArchivePath);
+  Params := '-d -f -T0 --long=31 "' + ArchivePath + '" -o "' + DatabasePath + '"';
+
+  if (not Exec(ZstdPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  begin
+    MsgBox('חילוץ מסד הנתונים נכשל. קוד יציאה: ' + IntToStr(ResultCode), mbCriticalError, MB_OK);
+    Abort;
+  end;
+
+  DeleteFile(ArchivePath);
+  DeleteFile(ZstdPath);
+end;
 
 [Run]
 Filename: "{tmp}\VisualCppRedist_AIO_x86_x64.exe"; Parameters: "/ai /gm2"; StatusMsg: "מתקין Visual C++ Redistributable..."; Flags: waituntilterminated; Check: VCRedistNeedsInstall
@@ -120,8 +148,9 @@ Source: "..\build\windows\x64\runner\Release\*"; \
     Excludes: "*.msix,*.msixbundle,*.appx,*.appxbundle,*.appinstaller,*.dll"; \
     DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Copy extracted library files directly (no ZIP extraction needed!)
-Source: "library_files\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Copy compressed DB and extraction tool for post-install extraction
+Source: "library_db\seforim.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion
+Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 Source: "uninstall_msix.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "VisualCppRedist_AIO_x86_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
