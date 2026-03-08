@@ -94,26 +94,20 @@ begin
   end;
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
+procedure ExtractBundledDatabase(const ArchiveName, DatabaseName: String);
 var
   ArchivePath, DatabasePath, ZstdPath, Params: String;
   ResultCode: Integer;
 begin
-  if CurStep <> ssPostInstall then
-    exit;
-
-  ArchivePath := ExpandConstant('{app}\אוצריא\seforim.db.zst');
-  DatabasePath := ExpandConstant('{app}\אוצריא\seforim.db');
-  ZstdPath := ExpandConstant('{app}\zstd.exe');
-
+  ArchivePath := ExpandConstant('{app}\אוצריא\' + ArchiveName);
   if not FileExists(ArchivePath) then
-    exit;
-
-  if not FileExists(ZstdPath) then
   begin
-    MsgBox('קובץ החילוץ zstd.exe לא נמצא. ההתקנה לא יכולה לחלץ את מסד הנתונים.', mbCriticalError, MB_OK);
-    Abort;
+    Log('Bundled database archive not found, skipping: ' + ArchivePath);
+    exit;
   end;
+
+  DatabasePath := ExpandConstant('{app}\אוצריא\' + DatabaseName);
+  ZstdPath := ExpandConstant('{app}\zstd.exe');
 
   Log('Extracting bundled database from ' + ArchivePath);
   Params := '-d -f -T0 --long=31 "' + ArchivePath + '" -o "' + DatabasePath + '"';
@@ -125,6 +119,25 @@ begin
   end;
 
   DeleteFile(ArchivePath);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ZstdPath: String;
+begin
+  if CurStep <> ssPostInstall then
+    exit;
+
+  ZstdPath := ExpandConstant('{app}\zstd.exe');
+
+  if not FileExists(ZstdPath) then
+  begin
+    MsgBox('קובץ החילוץ zstd.exe לא נמצא. ההתקנה לא יכולה לחלץ את מסד הנתונים.', mbCriticalError, MB_OK);
+    Abort;
+  end;
+
+  ExtractBundledDatabase('seforim.db.zst', 'seforim.db');
+  ExtractBundledDatabase('otzar-HB_catalog.db.zst', 'otzar-HB_catalog.db');
   DeleteFile(ZstdPath);
 end;
 
@@ -150,6 +163,7 @@ Source: "..\build\windows\x64\runner\Release\*"; \
 
 ; Copy compressed DB and extraction tool for post-install extraction
 Source: "library_db\seforim.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion
+Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion
 Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 Source: "uninstall_msix.ps1"; DestDir: "{app}"; Flags: ignoreversion

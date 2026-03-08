@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/migration/dao/daos/database.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
@@ -15,9 +17,11 @@ class FileSyncRepository {
   bool isSyncing = false;
   int _currentProgress = 0;
   int _totalFiles = 0;
+  bool _catalogUpdatedInLastSync = false;
   final http.Client _httpClient;
   final Zstandard _zstandard;
   final Future<Uint8List> Function(Uint8List compressedBytes)? _decompressDiff;
+  final Future<bool> Function()? _syncExternalCatalogIfPresent;
 
   FileSyncRepository({
     required this.githubOwner,
@@ -25,12 +29,15 @@ class FileSyncRepository {
     http.Client? httpClient,
     Zstandard? zstandard,
     Future<Uint8List> Function(Uint8List compressedBytes)? decompressDiff,
+    Future<bool> Function()? syncExternalCatalogIfPresent,
   })  : _httpClient = httpClient ?? http.Client(),
         _zstandard = zstandard ?? Zstandard(),
-        _decompressDiff = decompressDiff;
+        _decompressDiff = decompressDiff,
+        _syncExternalCatalogIfPresent = syncExternalCatalogIfPresent;
 
   int get currentProgress => _currentProgress;
   int get totalFiles => _totalFiles;
+  bool get catalogUpdatedInLastSync => _catalogUpdatedInLastSync;
 
   Future<List<String>> checkForUpdates({int? targetVersion}) async {
     final currentVersion = await getCurrentLibraryVersion();
@@ -51,6 +58,7 @@ class FileSyncRepository {
     isSyncing = true;
     _currentProgress = 0;
     _totalFiles = 0;
+    _catalogUpdatedInLastSync = false;
 
     try {
       final currentVersion = await getCurrentLibraryVersion();
@@ -76,22 +84,35 @@ class FileSyncRepository {
           'No library DIFF updates found for version $currentVersion',
           name: 'FileSyncRepository',
         );
-        return 0;
+      } else {
+        for (final asset in chain) {
+          if (!isSyncing) {
+            break;
+          }
+
+          developer.log(
+            'Applying library DIFF ${asset.assetName}',
+            name: 'FileSyncRepository',
+          );
+
+          final sql = await _downloadAndExtractDiff(asset);
+          await _applyDiffSql(sql);
+          _currentProgress++;
+        }
       }
 
-      for (final asset in chain) {
-        if (!isSyncing) {
-          break;
+      if (isSyncing) {
+        try {
+          _catalogUpdatedInLastSync =
+              await (_syncExternalCatalogIfPresent?.call() ??
+                  _syncExternalCatalogIfPresentDefault());
+        } catch (e) {
+          developer.log(
+            'Error during external catalog sync',
+            name: 'FileSyncRepository',
+            error: e,
+          );
         }
-
-        developer.log(
-          'Applying library DIFF ${asset.assetName}',
-          name: 'FileSyncRepository',
-        );
-
-        final sql = await _downloadAndExtractDiff(asset);
-        await _applyDiffSql(sql);
-        _currentProgress++;
       }
 
       return _currentProgress;
@@ -302,6 +323,19 @@ class FileSyncRepository {
       DatabaseConstants.getDatabasePath(),
       singleInstance: false,
     );
+  }
+
+  Future<bool> _syncExternalCatalogIfPresentDefault() async {
+    final repository = ExternalCatalogRepository.instance;
+    if (!await repository.databaseExists()) {
+      return false;
+    }
+
+    final updated = await repository.updateDatabaseIfNeeded();
+    if (updated) {
+      DataRepository.instance.invalidateExternalBooksCache();
+    }
+    return updated;
   }
 
   @visibleForTesting
