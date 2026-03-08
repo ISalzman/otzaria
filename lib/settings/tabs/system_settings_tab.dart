@@ -198,6 +198,27 @@ class _AdvancedSettingsTabState extends State<AdvancedSettingsTab> {
         if (!(Platform.isAndroid || Platform.isIOS) &&
             !state.isOfflineMode) ...[
           SwitchListTile(
+            secondary: const Icon(FluentIcons.arrow_sync_24_regular),
+            title: const Text(
+              'סינכרון הספרייה באופן אוטומטי',
+              style: TextStyle(fontSize: 16),
+              textDirection: TextDirection.rtl,
+            ),
+            subtitle: Text(
+              (Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true)
+                  ? 'מסד הנתונים של הספרייה יתעדכן אוטומטית דרך GitHub Releases'
+                  : 'סינכרון הספרייה האוטומטי כבוי',
+              style: const TextStyle(fontSize: 13),
+              textDirection: TextDirection.rtl,
+            ),
+            value:
+                Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true,
+            onChanged: (value) {
+              Settings.setValue<bool>(SettingsRepository.keyAutoSync, value);
+              setState(() {});
+            },
+          ),
+          SwitchListTile(
             secondary: const Icon(FluentIcons.bug_24_regular),
             title: const Text('עדכון לגרסאות מפתחים',
                 style: TextStyle(fontSize: 16)),
