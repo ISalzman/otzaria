@@ -6,6 +6,13 @@ class DatabaseConstants {
   /// The name of the main database file
   static const String databaseFileName = 'seforim.db';
 
+  /// The name of the external catalogs database file
+  static const String externalCatalogDatabaseFileName = 'otzar-HB_catalog.db';
+
+  /// The name of the compressed external catalogs database file
+  static const String externalCatalogArchiveFileName =
+      'otzar-HB_catalog.db.zst';
+
   /// The default name of the Otzaria folder
   static const String otzariaFolderName = 'אוצריא';
 
@@ -15,6 +22,27 @@ class DatabaseConstants {
     final folderName = Settings.getValue<String>('key-library-folder-name') ??
         otzariaFolderName;
     return _buildDbPath(libraryPath, folderName);
+  }
+
+  /// Gets the directory that contains the main database file.
+  static String getDatabaseDirectoryPath() {
+    return path.dirname(getDatabasePath());
+  }
+
+  /// Gets the full path for the external catalogs database.
+  static String getExternalCatalogDatabasePath() {
+    return path.join(
+      getDatabaseDirectoryPath(),
+      externalCatalogDatabaseFileName,
+    );
+  }
+
+  /// Gets the full path for the compressed external catalogs archive.
+  static String getExternalCatalogArchivePath() {
+    return path.join(
+      getDatabaseDirectoryPath(),
+      externalCatalogArchiveFileName,
+    );
   }
 
   /// Gets the database path for a specific file path

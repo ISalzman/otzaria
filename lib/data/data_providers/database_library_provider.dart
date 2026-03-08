@@ -322,7 +322,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       try {
         final book = await _sqliteProvider.repository!
             .getBookByTitleCategoryAndFileType(title, categoryId, fileType);
-        if (book != null && book.isContentExternal && book.filePath != null) {
+        if (book != null && book.isFileBacked && book.filePath != null) {
           final file = File(book.filePath!);
           if (await file.exists()) {
             return await file.readAsString();

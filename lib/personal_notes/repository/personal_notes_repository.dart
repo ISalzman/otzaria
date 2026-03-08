@@ -99,7 +99,7 @@ class PersonalNotesRepository {
       if (location != null) {
         if (location.source == BookSource.database && location.book != null) {
           final dbBook = location.book!;
-          if (dbBook.isContentExternal && dbBook.filePath != null) {
+          if (dbBook.isFileBacked && dbBook.filePath != null) {
             final file = File(dbBook.filePath!);
             if (await file.exists()) {
               return await file.readAsString();

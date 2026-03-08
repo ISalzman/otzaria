@@ -115,6 +115,17 @@ class Book {
     this.volume,
   });
 
+  /// מחזיר האם תוכן הספר נטען מקובץ חיצוני במערכת הקבצים.
+  bool get isFileBacked {
+    final normalizedPath = filePath?.trim();
+    if (normalizedPath == null || normalizedPath.isEmpty) {
+      return false;
+    }
+
+    final normalizedType = (fileType ?? 'txt').toLowerCase();
+    return normalizedType != 'link' && normalizedType != 'url';
+  }
+
   Book copyWith({
     int? id,
     int? categoryId,

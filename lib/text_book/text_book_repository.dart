@@ -45,7 +45,7 @@ class TextBookRepository {
       book.fileType ??= dbBook.fileType;
       book.filePath ??= dbBook.filePath;
 
-      if (dbBook.isContentExternal && dbBook.filePath != null) {
+      if (dbBook.isFileBacked && dbBook.filePath != null) {
         final file = File(dbBook.filePath!);
         if (await file.exists()) {
           final ext = (dbBook.fileType ?? '').toLowerCase();
@@ -153,7 +153,7 @@ class TextBookRepository {
       book.fileType ??= dbBook.fileType;
       book.filePath ??= dbBook.filePath;
 
-      if (dbBook.isContentExternal && dbBook.filePath != null) {
+      if (dbBook.isFileBacked && dbBook.filePath != null) {
         final file = File(dbBook.filePath!);
         if (await file.exists()) {
           final ext = (dbBook.fileType ?? '').toLowerCase();

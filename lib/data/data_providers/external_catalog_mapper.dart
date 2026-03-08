@@ -97,7 +97,7 @@ class ExternalCatalogMapper {
     if (lower.startsWith('hb:')) {
       final id = trimmed.substring(3).trim();
       if (id.isEmpty) return null;
-      return 'https://hebrewbooks.org/=$id';
+      return 'https://hebrewbooks.org/$id';
     }
 
     return null;

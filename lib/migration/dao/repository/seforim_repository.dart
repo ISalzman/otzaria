@@ -756,8 +756,6 @@ class SeforimRepository {
         hasAltStructures: book.hasAltStructures,
         hasTeamim: book.hasTeamim,
         hasNekudot: book.hasNekudot,
-        isContentExternal: book.isContentExternal,
-        externalLibraryId: book.externalLibraryId,
         isPersonal: book.isPersonal,
         filePath: book.filePath,
         fileType: book.fileType,
@@ -812,8 +810,6 @@ class SeforimRepository {
       //     hasAltStructures: book.hasAltStructures,
       //     hasTeamim: book.hasTeamim,
       //     hasNekudot: book.hasNekudot,
-      //     isContentExternal: book.isContentExternal,
-      //     externalLibraryId: book.externalLibraryId,
       //     isPersonal: book.isPersonal,
       //     filePath: book.filePath,
       //     fileType: book.fileType,
@@ -911,7 +907,7 @@ class SeforimRepository {
   // --- External Content Books ---
 
   /// Inserts an external content book (content stored externally, metadata in DB).
-  /// External content books have isContentExternal=1 and store file path, type, size, and last modified.
+  /// External content books store file path, type, size, and last modified.
   /// Also creates TOC entries for the book if it's a text file.
   ///
   /// @param categoryId The category ID for the book
@@ -922,7 +918,6 @@ class SeforimRepository {
   /// @param lastModified The last modified timestamp (milliseconds since epoch)
   /// @param heShortDesc Optional short description
   /// @param orderIndex Optional order index (defaults to 999)
-  /// @param externalLibraryId Optional external library ID (e.g., Sefaria ref)
   /// @param isPersonal Whether this is a personal/user-added book
   /// @param tocEntries Optional list of TOC entries to create
   /// @return The ID of the inserted book
@@ -935,7 +930,6 @@ class SeforimRepository {
     required int lastModified,
     String? heShortDesc,
     double orderIndex = 999,
-    String? externalLibraryId,
     bool isPersonal = false,
     List<TocEntry>? tocEntries,
   }) async {
@@ -948,7 +942,6 @@ class SeforimRepository {
       title: title,
       heShortDesc: heShortDesc,
       orderIndex: orderIndex,
-      externalLibraryId: externalLibraryId,
       isPersonal: isPersonal,
       filePath: filePath,
       fileType: fileType,
@@ -981,33 +974,6 @@ class SeforimRepository {
   Future<Book?> getExternalBookByFilePathAndType(
       String filePath, String fileType) async {
     return await _database.bookDao.getBookByFilePathAndType(filePath, fileType);
-  }
-
-  /// Gets a book by its external library ID.
-  Future<Book?> getBookByExternalLibraryId(String externalLibraryId) async {
-    return await _database.bookDao
-        .getBookByExternalLibraryId(externalLibraryId);
-  }
-
-  /// Gets all external content books.
-  Future<List<Book>> getAllExternalContentBooks() async {
-    // חשוב: מחזירים ספרים חיצוניים יחד עם relations (authors/pubDates/pubPlaces)
-    // כדי שהמידע לא יאבד בהמרה ל-ExternalLibraryBook במסכי הספרייה.
-    final booksWithRelations = await _database.bookDao.getAllBooksWithRelations(
-      includeExternalBooks: true,
-      includeOtzarHachochma: true,
-      includeHebrewBooks: true,
-    );
-
-    final bb = booksWithRelations
-        .where((row) {
-          final raw = row['externalLibraryId'];
-          if (raw is String) return raw.trim().isNotEmpty;
-          return raw != null;
-        })
-        .map((row) => Book.fromJson(row))
-        .toList();
-    return bb;
   }
 
   /// Inserts TOC entries for an external book.
