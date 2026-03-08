@@ -64,18 +64,19 @@ class _SyncIconButtonState extends State<SyncIconButton>
         }
       },
       builder: (context, state) {
+        final colorScheme = Theme.of(context).colorScheme;
         Color iconColor;
         IconData iconData;
 
         switch (state.status) {
           case FileSyncStatus.error:
             _controller.reset();
-            iconColor = Colors.red;
+            iconColor = colorScheme.error;
             iconData = FluentIcons.arrow_sync_24_regular;
           case FileSyncStatus.completed:
             _controller.reset();
             iconColor = state.hasNewSync
-                ? Colors.green
+                ? colorScheme.primary
                 : widget.color ?? Theme.of(context).iconTheme.color!;
             iconData = FluentIcons.checkmark_circle_24_regular;
           case FileSyncStatus.syncing:
