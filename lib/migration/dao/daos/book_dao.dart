@@ -30,24 +30,14 @@ class BookDao {
     bool includeOtzarHachochma = false,
     bool includeHebrewBooks = false,
   }) async {
-    final String condition;
-    if (!includeExternalBooks) {
-      condition = "externalLibraryId IS NULL AND fileType != 'link'";
-    } else if (includeOtzarHachochma && includeHebrewBooks) {
-      condition = '1=1';
-    } else if (includeOtzarHachochma) {
-      condition =
-          "(externalLibraryId IS NULL OR externalLibraryId LIKE 'oh:%')";
-    } else if (includeHebrewBooks) {
-      condition =
-          "(externalLibraryId IS NULL OR externalLibraryId LIKE 'hb:%')";
-    } else {
-      condition = "externalLibraryId IS NULL AND fileType != 'link'";
-    }
+    final String condition =
+        includeExternalBooks || includeOtzarHachochma || includeHebrewBooks
+            ? '1=1'
+            : "COALESCE(fileType, '') != 'link'";
 
     return txn.rawQuery('''
       SELECT id, title, categoryId, orderIndex, fileType, filePath,
-             externalLibraryId, heShortDesc
+             heShortDesc
       FROM book
       WHERE $condition
       ORDER BY orderIndex, title
@@ -259,8 +249,6 @@ class BookDao {
     bool hasAltStructures = false,
     bool hasTeamim = false,
     bool hasNekudot = false,
-    bool isContentExternal = false,
-    String? externalLibraryId,
     bool isPersonal = false,
     String? filePath,
     String? fileType,
@@ -287,8 +275,6 @@ class BookDao {
       hasAltStructures ? 1 : 0,
       hasTeamim ? 1 : 0,
       hasNekudot ? 1 : 0,
-      isContentExternal ? 1 : 0,
-      externalLibraryId,
       isPersonal ? 1 : 0,
       filePath,
       fileType,
@@ -317,8 +303,6 @@ class BookDao {
     bool hasAltStructures = false,
     bool hasTeamim = false,
     bool hasNekudot = false,
-    bool isContentExternal = false,
-    String? externalLibraryId,
     bool isPersonal = false,
     String? filePath,
     String? fileType,
@@ -346,8 +330,6 @@ class BookDao {
       hasAltStructures ? 1 : 0,
       hasTeamim ? 1 : 0,
       hasNekudot ? 1 : 0,
-      isContentExternal ? 1 : 0,
-      externalLibraryId,
       isPersonal ? 1 : 0,
       filePath,
       fileType,
@@ -369,14 +351,13 @@ class BookDao {
   }
 
   /// Inserts an external content book (content stored externally, metadata in DB).
-  /// External content books have isContentExternal=1 and store file path, type, size, and last modified.
+  /// External content books store file path, type, size, and last modified.
   Future<int> insertExternalContentBook({
     required int categoryId,
     required int sourceId,
     required String title,
     String? heShortDesc,
     required double orderIndex,
-    String? externalLibraryId,
     bool isPersonal = false,
     required String filePath,
     required String fileType,
@@ -390,7 +371,6 @@ class BookDao {
       title,
       heShortDesc,
       orderIndex,
-      externalLibraryId,
       isPersonal ? 1 : 0,
       filePath,
       fileType,
@@ -435,15 +415,6 @@ class BookDao {
     final db = await database;
     final result = await db
         .rawQuery(_queries['selectByFilePathAndType']!, [filePath, fileType]);
-    if (result.isEmpty) return null;
-    return Book.fromJson(result.first);
-  }
-
-  /// Gets a book by its external library ID.
-  Future<Book?> getBookByExternalLibraryId(String externalLibraryId) async {
-    final db = await database;
-    final result = await db
-        .rawQuery(_queries['selectByExternalLibraryId']!, [externalLibraryId]);
     if (result.isEmpty) return null;
     return Book.fromJson(result.first);
   }

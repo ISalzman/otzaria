@@ -19,6 +19,7 @@ import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
+import 'package:otzaria/external_catalog/view/external_catalog_settings_helper.dart';
 
 /// טאב הגדרות ספרייה
 class LibrarySettingsTab extends StatefulWidget {
@@ -96,16 +97,11 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                             : 'יוצגו רק ספרים מספריית אוצריא',
                         style: const TextStyle(fontSize: 13)),
                     value: state.showExternalBooks,
-                    onChanged: (value) {
-                      context
-                          .read<SettingsBloc>()
-                          .add(UpdateShowExternalBooks(value));
-                      context
-                          .read<SettingsBloc>()
-                          .add(UpdateShowHebrewBooks(value));
-                      context
-                          .read<SettingsBloc>()
-                          .add(UpdateShowOtzarHachochma(value));
+                    onChanged: (value) async {
+                      await ExternalCatalogSettingsHelper.updateExternalBooks(
+                        context,
+                        value,
+                      );
                     },
                   ),
                   if (state.showExternalBooks) ...[
@@ -116,11 +112,13 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                         title: const Text('הצג ספרים מאוצר החכמה',
                             style: TextStyle(fontSize: 16)),
                         value: state.showOtzarHachochma,
-                        onChanged: (value) {
+                        onChanged: (value) async {
                           if (value != null) {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateShowOtzarHachochma(value));
+                            await ExternalCatalogSettingsHelper
+                                .updateOtzarBooks(
+                              context,
+                              value,
+                            );
                           }
                         },
                       ),
@@ -131,11 +129,13 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                         title: const Text('הצג ספרים מהיברובוקס',
                             style: TextStyle(fontSize: 16)),
                         value: state.showHebrewBooks,
-                        onChanged: (value) {
+                        onChanged: (value) async {
                           if (value != null) {
-                            context
-                                .read<SettingsBloc>()
-                                .add(UpdateShowHebrewBooks(value));
+                            await ExternalCatalogSettingsHelper
+                                .updateHebrewBooks(
+                              context,
+                              value,
+                            );
                           }
                         },
                       ),

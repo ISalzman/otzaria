@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/external_catalog/view/external_catalog_settings_helper.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
@@ -49,36 +50,37 @@ void showLibrarySettingsDialog(BuildContext context) {
                   ? 'יוצגו גם ספרים מאתרים חיצוניים'
                   : 'יוצגו רק ספרים מספריית אוצריא',
               value: currentSettingsState.showExternalBooks,
-              onChanged: (value) {
-                context
-                    .read<SettingsBloc>()
-                    .add(UpdateShowExternalBooks(value));
-                context.read<SettingsBloc>().add(UpdateShowHebrewBooks(value));
-                context
-                    .read<SettingsBloc>()
-                    .add(UpdateShowOtzarHachochma(value));
+              onChanged: (value) async {
+                await ExternalCatalogSettingsHelper.updateExternalBooks(
+                  context,
+                  value,
+                );
               },
               dependentItems: currentSettingsState.showExternalBooks
                   ? [
                       CheckboxSettingsItem(
                         title: 'הצג ספרים מאוצר החכמה',
                         value: currentSettingsState.showOtzarHachochma,
-                        onChanged: (bool? value) {
+                        onChanged: (bool? value) async {
                           if (value != null) {
-                            context.read<SettingsBloc>().add(
-                                  UpdateShowOtzarHachochma(value),
-                                );
+                            await ExternalCatalogSettingsHelper
+                                .updateOtzarBooks(
+                              context,
+                              value,
+                            );
                           }
                         },
                       ),
                       CheckboxSettingsItem(
                         title: 'הצג ספרים מהיברובוקס',
                         value: currentSettingsState.showHebrewBooks,
-                        onChanged: (bool? value) {
+                        onChanged: (bool? value) async {
                           if (value != null) {
-                            context.read<SettingsBloc>().add(
-                                  UpdateShowHebrewBooks(value),
-                                );
+                            await ExternalCatalogSettingsHelper
+                                .updateHebrewBooks(
+                              context,
+                              value,
+                            );
                           }
                         },
                       ),

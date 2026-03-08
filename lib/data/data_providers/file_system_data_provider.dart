@@ -7,8 +7,6 @@ import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
@@ -16,8 +14,8 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/utils/toc_parser.dart';
-import 'package:otzaria/migration/core/models/book.dart' as db_models;
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:path/path.dart' as path;
 
 /// A data provider that manages file system operations for the library.
@@ -237,94 +235,12 @@ class FileSystemData {
 
   /// Retrieves the list of books from Otzar HaChochma
   static Future<List<ExternalLibraryBook>> getOtzarBooks() async {
-    final books = await _getExternalCatalogBooks(ExternalCatalogType.otzar);
-    return books.whereType<ExternalLibraryBook>().toList();
+    return ExternalCatalogRepository.instance.getOtzarBooks();
   }
 
   /// Retrieves the list of books from HebrewBooks
   static Future<List<Book>> getHebrewBooks() async {
-    return _getExternalCatalogBooks(ExternalCatalogType.hebrew);
-  }
-
-  /// Internal implementation for loading external catalog books from DB
-  static Future<List<Book>> _getExternalCatalogBooks(
-      ExternalCatalogType catalogType) async {
-    try {
-      await SqliteDataProvider.instance.initialize();
-      final repository = SqliteDataProvider.instance.repository;
-      if (repository == null) return [];
-
-      final dbBooks = await repository.getAllExternalContentBooks();
-      final books = <Book>[];
-
-      for (final dbBook in dbBooks) {
-        final catalog = ExternalCatalogMapper.catalogFromLinkOrId(
-          link: ExternalCatalogMapper.resolveLink(
-            filePath: dbBook.filePath,
-            externalLibraryId: dbBook.externalLibraryId,
-          ),
-          externalLibraryId: dbBook.externalLibraryId,
-          filePath: dbBook.filePath,
-        );
-
-        if (catalog != catalogType) continue;
-
-        final mapped = _mapDbBookToExternalBook(dbBook, catalogType);
-        if (mapped != null) {
-          books.add(mapped);
-        }
-      }
-
-      return books;
-    } catch (e) {
-      debugPrint('Error loading external catalogs from DB: $e');
-      return [];
-    }
-  }
-
-  static Book? _mapDbBookToExternalBook(
-    db_models.Book dbBook,
-    ExternalCatalogType catalogType,
-  ) {
-    final link = ExternalCatalogMapper.resolveLink(
-      filePath: dbBook.filePath,
-      externalLibraryId: dbBook.externalLibraryId,
-    );
-
-    final author = dbBook.authors.isNotEmpty ? dbBook.authors.first.name : null;
-    final pubPlace =
-        dbBook.pubPlaces.isNotEmpty ? dbBook.pubPlaces.first.name : null;
-    final pubDate =
-        dbBook.pubDates.isNotEmpty ? dbBook.pubDates.first.date : null;
-    final topics = dbBook.topics.map((t) => t.name).join(', ');
-
-    if ((dbBook.fileType ?? '').toLowerCase() == 'pdf' &&
-        dbBook.filePath != null &&
-        dbBook.filePath!.isNotEmpty) {
-      return PdfBook(
-        title: dbBook.title,
-        path: dbBook.filePath!,
-        author: author,
-        pubPlace: pubPlace,
-        pubDate: pubDate,
-        topics: topics,
-        heShortDesc: dbBook.heShortDesc,
-      );
-    }
-
-    if (link == null || link.isEmpty) return null;
-
-    return ExternalLibraryBook(
-      title: dbBook.title,
-      id: dbBook.id,
-      author: author,
-      pubPlace: pubPlace,
-      pubDate: pubDate,
-      topics: topics,
-      heShortDesc: dbBook.heShortDesc,
-      link: link,
-      fileType: 'url',
-    );
+    return ExternalCatalogRepository.instance.getHebrewBooks();
   }
 
   /// Retrieves all links associated with a specific book.
