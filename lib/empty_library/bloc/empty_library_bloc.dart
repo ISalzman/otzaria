@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:bloc/bloc.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
@@ -11,11 +13,25 @@ import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
 
 class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
-  EmptyLibraryBloc() : super(EmptyLibraryInitial()) {
+  EmptyLibraryBloc({
+    http.Client? httpClient,
+    Future<void> Function(String archivePath, String outputPath)?
+        extractCompressedDatabase,
+    String? installationDirectoryPath,
+  })  : _httpClient = httpClient ?? http.Client(),
+        _extractCompressedDatabase =
+            extractCompressedDatabase ?? _extractZstWithSystemProcess,
+        _installationDirectoryPath = installationDirectoryPath,
+        super(EmptyLibraryInitial()) {
     on<PickDatabaseFileRequested>(_onPickDatabaseFileRequested);
     on<DownloadLibraryRequested>(_onDownloadLibraryRequested);
     on<DeleteZipAnswered>(_onDeleteZipAnswered);
   }
+
+  final http.Client _httpClient;
+  final Future<void> Function(String archivePath, String outputPath)
+      _extractCompressedDatabase;
+  final String? _installationDirectoryPath;
 
   Future<void> _onPickDatabaseFileRequested(
       PickDatabaseFileRequested event, Emitter<EmptyLibraryState> emit) async {
@@ -25,8 +41,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       // FilePicker.getFilePath לא קיים, נשתמש בפתיחת תיקייה ובחירת קובץ
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['db', 'zip'],
-        dialogTitle: 'בחר קובץ מסד נתונים (seforim.db) או קובץ ZIP',
+        allowedExtensions: ['db', 'zip', 'zst'],
+        dialogTitle: 'בחר קובץ מסד נתונים (seforim.db) או קובץ דחוס',
       );
 
       if (result == null || result.files.isEmpty) {
@@ -44,11 +60,13 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     // בדיקה אם הקובץ הוא ZIP
     if (selectedFile.toLowerCase().endsWith('.zip')) {
       await _handleZipFile(selectedFile, emit);
+    } else if (selectedFile.toLowerCase().endsWith('.zst')) {
+      await _handleZstFile(selectedFile, emit);
     } else if (selectedFile.toLowerCase().endsWith('.db')) {
       await _handleDatabaseFile(selectedFile, emit);
     } else {
       emit(EmptyLibraryError(
-        errorMessage: 'סוג קובץ לא תומך. בחר קובץ .db או .zip',
+        errorMessage: 'סוג קובץ לא תומך. בחר קובץ .db, .zip או .zst',
         selectedPath: selectedFile,
       ));
     }
@@ -83,6 +101,40 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       emit(EmptyLibraryError(
         errorMessage: 'שגיאה: $e',
         selectedPath: dbFilePath,
+      ));
+    }
+  }
+
+  Future<void> _handleZstFile(
+      String zstFilePath, Emitter<EmptyLibraryState> emit) async {
+    try {
+      final outputPath = path.join(
+        path.dirname(zstFilePath),
+        DatabaseConstants.databaseFileName,
+      );
+
+      emit(EmptyLibraryExtracting(
+        selectedPath: zstFilePath,
+        progress: 0.0,
+        message: 'מחלץ קובץ DB דחוס...',
+      ));
+
+      await _extractCompressedDatabase(zstFilePath, outputPath);
+
+      emit(EmptyLibraryExtracting(
+        selectedPath: zstFilePath,
+        progress: 1.0,
+        message: 'החילוץ הושלם',
+      ));
+
+      emit(EmptyLibraryAskingDeleteZip(
+        zipPath: zstFilePath,
+        extractedPath: path.dirname(zstFilePath),
+      ));
+    } catch (e) {
+      emit(EmptyLibraryError(
+        errorMessage: 'שגיאה בחילוץ קובץ דחוס: $e',
+        selectedPath: zstFilePath,
       ));
     }
   }
@@ -153,7 +205,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       if (dbFiles.isEmpty) {
         emit(EmptyLibraryError(
           errorMessage:
-              'לא נמצא קובץ ${DatabaseConstants.databaseFileName} בקובץ ה-ZIP',
+              'לא נמצא קובץ ${DatabaseConstants.databaseFileName} בקובץ הדחוס',
           selectedPath: extractedDirectory,
         ));
         return;
@@ -182,21 +234,22 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   Future<void> _onDownloadLibraryRequested(
       DownloadLibraryRequested event, Emitter<EmptyLibraryState> emit) async {
-    const url =
-        'https://github.com/Otzaria/otzaria-library/releases/download/library-db-1/seforim.db.zip';
-
     try {
+      final latestAsset = await _fetchLatestDatabaseAsset();
+
       // קבלת תיקיית ההתקנה
-      final executablePath = Platform.resolvedExecutable;
-      final installDir = path.dirname(executablePath);
-      final otzariaDir = Directory(path.join(installDir, 'אוצריא'));
+      final installDir = _installationDirectoryPath ??
+          path.dirname(Platform.resolvedExecutable);
+      final otzariaDir = Directory(
+        path.join(installDir, DatabaseConstants.otzariaFolderName),
+      );
 
       // יצירת תיקיית אוצריא אם לא קיימת
       if (!await otzariaDir.exists()) {
         await otzariaDir.create(recursive: true);
       }
 
-      final zipPath = path.join(otzariaDir.path, 'seforim.zip');
+      final archivePath = path.join(otzariaDir.path, latestAsset.assetName);
 
       // הורדת הקובץ
       emit(const EmptyLibraryDownloading(
@@ -204,8 +257,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         message: 'מתחבר לשרת...',
       ));
 
-      final request = http.Request('GET', Uri.parse(url));
-      final response = await request.send();
+      final request = http.Request('GET', Uri.parse(latestAsset.downloadUrl));
+      final response = await _httpClient.send(request);
 
       if (response.statusCode != 200) {
         emit(EmptyLibraryError(
@@ -216,7 +269,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
       final contentLength = response.contentLength ?? 0;
       var downloadedBytes = 0;
-      final file = File(zipPath);
+      final file = File(archivePath);
       final sink = file.openWrite();
 
       try {
@@ -238,45 +291,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         await sink.close();
       }
 
-      // חילוץ הקובץ
-      emit(const EmptyLibraryExtracting(
-        selectedPath: '',
-        progress: 0.0,
-        message: 'מתחיל חילוץ...',
-      ));
-
-      final extractResult =
-          await ZipExtractorService.checkAndExtractZipIfNeeded(
-        otzariaDir.path,
-        onProgress: (p, m) {
-          emit(EmptyLibraryExtracting(
-            selectedPath: otzariaDir.path,
-            progress: p,
-            message: m,
-          ));
-        },
-        onAskDeleteZip: () async => false,
-      );
-
-      if (!extractResult.success) {
-        emit(EmptyLibraryError(
-          errorMessage: extractResult.errorMessage ?? 'שגיאה בחילוץ',
-          zipFiles: extractResult.zipFiles,
-        ));
-        return;
-      }
-
-      // אם החילוץ הצליח, נשאל את המשתמש אם למחוק את ה-ZIP
-      if (extractResult.successfullyExtracted) {
-        emit(EmptyLibraryAskingDeleteZip(
-          zipPath: zipPath,
-          extractedPath: otzariaDir.path,
-        ));
-        return;
-      }
-
-      // אם לא היה חילוץ, נמשיך ישירות לבדיקת הקובץ
-      await _checkAndSaveExtractedDatabase(otzariaDir.path, emit);
+      await _handleZstFile(archivePath, emit);
     } catch (e) {
       emit(EmptyLibraryError(
         errorMessage: 'שגיאה בהורדה: $e',
@@ -321,4 +336,92 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         SettingsRepository.keyLibraryFolderName, folderName);
     return true;
   }
+
+  Future<DatabaseReleaseAsset> _fetchLatestDatabaseAsset() async {
+    final response = await _httpClient.get(
+      Uri.parse(
+        'https://api.github.com/repos/Otzaria/SeforimLibrary/releases/latest',
+      ),
+      headers: const {
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('שגיאה בקבלת הרליס האחרון: ${response.statusCode}');
+    }
+
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('מבנה תשובת GitHub אינו תקין');
+    }
+
+    final asset = parseLatestDatabaseAsset(decoded);
+    if (asset == null) {
+      throw Exception('לא נמצא קובץ seforim.db.zst ברליס האחרון');
+    }
+
+    return asset;
+  }
+
+  @visibleForTesting
+
+  /// מחלץ מתוך JSON של רליס את קובץ ה-DB הדחוס של הספרייה.
+  static DatabaseReleaseAsset? parseLatestDatabaseAsset(
+      Map<String, dynamic> releaseJson) {
+    final assets = releaseJson['assets'];
+    if (assets is! List) {
+      return null;
+    }
+
+    for (final asset in assets) {
+      if (asset is! Map<String, dynamic>) {
+        continue;
+      }
+
+      final name = asset['name']?.toString() ?? '';
+      final downloadUrl = asset['browser_download_url']?.toString() ?? '';
+      if (name == 'seforim.db.zst' && downloadUrl.isNotEmpty) {
+        return DatabaseReleaseAsset(
+          assetName: name,
+          downloadUrl: downloadUrl,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  static Future<void> _extractZstWithSystemProcess(
+    String archivePath,
+    String outputPath,
+  ) async {
+    final outputFile = File(outputPath);
+    if (await outputFile.exists()) {
+      await outputFile.delete();
+    }
+
+    final result = await Process.run(
+      'zstd',
+      ['-d', '-f', '-T0', '--long=31', archivePath, '-o', outputPath],
+    );
+
+    if (result.exitCode != 0) {
+      final stderr = (result.stderr as String?)?.trim();
+      final stdout = (result.stdout as String?)?.trim();
+      throw Exception(stderr?.isNotEmpty == true ? stderr : stdout);
+    }
+  }
+}
+
+/// מייצג asset של DB דחוס מתוך GitHub Release.
+class DatabaseReleaseAsset {
+  const DatabaseReleaseAsset({
+    required this.assetName,
+    required this.downloadUrl,
+  });
+
+  final String assetName;
+  final String downloadUrl;
 }
