@@ -43,6 +43,11 @@ class AboutDevTab extends StatelessWidget {
       'url':
           'https://forum.otzaria.org/user/%D7%94%D7%90%D7%93%D7%9D-%D7%94%D7%97%D7%95%D7%A9%D7%91',
     },
+    {
+      'name': 'י. ח. מ.',
+      'url':
+          'https://forum.otzaria.org/user/%D7%99%D7%95%D7%9D-%D7%97%D%93%D7%A9-%D7%9E%D7%AA%D7%97%D7%99%D7%9C',
+    },    
     {'name': 'ס. כב.', 'url': 'https://mitmachim.top/user/sivan22'},
     {
       'name': 'י. צ.',
@@ -53,7 +58,29 @@ class AboutDevTab extends StatelessWidget {
       'name': 'קטנטן',
       'url': 'https://forum.otzaria.org/user/%D7%A7%D7%98%D7%A0%D7%98%D7%9F',
     },
+    {
+      'name': 'ד.',
+      'url':
+          'https://forum.otzaria.org/user/%D7%93%D7%90%D7%A0%D7%A6%D7%99%D7%92',
+    },
+    {
+      'name': 'י. א.',
+    },
     {'name': '333', 'url': 'https://forum.otzaria.org/user/333'},
+    {
+      'name': "ט. ג.",
+      'url':
+          'https://forum.otzaria.org/user/%D7%98%D7%9B%D7%A0%D7%95%D7%9C%D7%95%D7%92%D7%99-%D7%92%D7%95-%D7%A0%D7%99%D7%95%D7%A8',
+    },
+    {
+      'name': 'ה. ה.',
+      'url':
+          'https://forum.otzaria.org/user/%D7%94%D7%91%D7%9C-%D7%94%D7%91%D7%9C%D7%99%D7%9D',
+    },
+    {
+      'name': 'י. א. ח.',
+      'url': 'https://otzaria.org/forum/user/u88',
+    },
   ];
 
   static const _regularEditors = <Map<String, String>>[
@@ -61,8 +88,10 @@ class AboutDevTab extends StatelessWidget {
       'name': 'מויטיו',
       'url': 'https://mitmachim.top/user/%D7%9E%D7%95%D7%99%D7%98%D7%99%D7%95',
     },
-    {'name': 'ד. מ. א.', 'url': ''},
-    {'name': 'א. צ. מ.', 'url': ''},
+    {'name': 'ד. מ. א.', 'url': 'https://forum.otzaria.org/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1'},
+    {'name': 'א. צ. מ.', 'url': 'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99'},
+    {'name': 'ש. א.', 'url': 'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99'},
+    {'name': 'י. ד.', 'url': 'https://forum.otzaria.org/user/%D7%99%D7%90%D7%99%D7%A8-%D7%93%D7%A0%D7%99%D7%90%D7%9C'},
     {'name': 'ש. נ.', 'url': ''},
   ];
 
