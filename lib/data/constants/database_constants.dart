@@ -13,6 +13,9 @@ class DatabaseConstants {
   static const String externalCatalogArchiveFileName =
       'otzar-HB_catalog.db.zst';
 
+  /// The bundled PDF directory name for Talmud Bavli.
+  static const String talmudBavliFolderName = 'תלמוד בבלי';
+
   /// The name of the external catalogs version file in GitHub releases
   static const String externalCatalogVersionFileName = 'version.txt';
 
@@ -46,6 +49,41 @@ class DatabaseConstants {
       getDatabaseDirectoryPath(),
       externalCatalogArchiveFileName,
     );
+  }
+
+  /// Gets the full path for the bundled Talmud Bavli PDF directory.
+  static String getTalmudBavliDirectoryPath([
+    String? libraryPath,
+    String? folderName,
+  ]) {
+    final basePath =
+        libraryPath ?? Settings.getValue<String>('key-library-path') ?? '.';
+    final folder = folderName ??
+        Settings.getValue<String>('key-library-folder-name') ??
+        otzariaFolderName;
+    return path.join(basePath, folder, talmudBavliFolderName);
+  }
+
+  /// Returns whether [filePath] points to a file inside the bundled
+  /// Talmud Bavli directory.
+  static bool isTalmudBavliFilePath(
+    String? filePath, {
+    String? libraryPath,
+    String? folderName,
+    String? talmudBavliDirectoryPath,
+  }) {
+    if (filePath == null || filePath.isEmpty) {
+      return false;
+    }
+
+    final bundledDir = path.normalize(
+      talmudBavliDirectoryPath ??
+          getTalmudBavliDirectoryPath(libraryPath, folderName),
+    );
+    final normalizedFilePath = path.normalize(filePath);
+
+    return normalizedFilePath == bundledDir ||
+        path.isWithin(bundledDir, normalizedFilePath);
   }
 
   /// Gets the database path for a specific file path
