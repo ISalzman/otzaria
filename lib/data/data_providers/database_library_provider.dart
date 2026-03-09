@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -27,6 +28,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
   final Map<int, String> _categoryIdToPath = {};
   final Map<int, db_models.Category> _categoriesById = {};
   bool _titlesCached = false;
+  String? _bundledTalmudBavliPathCache;
+  bool? _bundledTalmudBavliExistsCache;
 
   /// Singleton instance
   static DatabaseLibraryProvider? _instance;
@@ -36,6 +39,35 @@ class DatabaseLibraryProvider implements LibraryProvider {
   static DatabaseLibraryProvider get instance {
     _instance ??= DatabaseLibraryProvider._();
     return _instance!;
+  }
+
+  Future<bool> _bundledTalmudBavliDirectoryExists() async {
+    final bundledPath = DatabaseConstants.getTalmudBavliDirectoryPath();
+    if (_bundledTalmudBavliPathCache == bundledPath &&
+        _bundledTalmudBavliExistsCache != null) {
+      return _bundledTalmudBavliExistsCache!;
+    }
+
+    final exists = await Directory(bundledPath).exists();
+    _bundledTalmudBavliPathCache = bundledPath;
+    _bundledTalmudBavliExistsCache = exists;
+    return exists;
+  }
+
+  @visibleForTesting
+  static bool shouldIncludeBookByPath(
+    String? filePath, {
+    required bool hasTalmudBavliDirectory,
+    String? talmudBavliDirectoryPath,
+  }) {
+    if (hasTalmudBavliDirectory) {
+      return true;
+    }
+
+    return !DatabaseConstants.isTalmudBavliFilePath(
+      filePath,
+      talmudBavliDirectoryPath: talmudBavliDirectoryPath,
+    );
   }
 
   /// Helper method to build topics string from database book and category path
@@ -83,6 +115,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
 
     try {
+      final hasTalmudBavliDirectory =
+          await _bundledTalmudBavliDirectoryExists();
       final dbBooks = await _sqliteProvider.repository!.getAllBooks();
       final categories = await _sqliteProvider.repository!.getAllCategories();
       debugPrint('💾 Database found ${dbBooks.length} books');
@@ -122,6 +156,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
         ..addAll(categoryMap);
 
       for (final dbBook in dbBooks) {
+        if (!shouldIncludeBookByPath(
+          dbBook.filePath,
+          hasTalmudBavliDirectory: hasTalmudBavliDirectory,
+          talmudBavliDirectoryPath: _bundledTalmudBavliPathCache,
+        )) {
+          continue;
+        }
+
         final categoryPath = getPath(dbBook.categoryId);
         _categoryIdToPath[dbBook.categoryId] = categoryPath;
         _cachedKeys.add(BookCompositeKey.create(
@@ -364,6 +406,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
 
     try {
+      final hasTalmudBavliDirectory =
+          await _bundledTalmudBavliDirectoryExists();
       final books = await repository.getAllBooks();
       final categories = await repository.getAllCategories();
 
@@ -374,6 +418,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
             categories.map((category) => MapEntry(category.id, category)));
 
       for (final book in books) {
+        if (!shouldIncludeBookByPath(
+          book.filePath,
+          hasTalmudBavliDirectory: hasTalmudBavliDirectory,
+          talmudBavliDirectoryPath: _bundledTalmudBavliPathCache,
+        )) {
+          continue;
+        }
+
         _cachedKeys.add(BookCompositeKey.create(
           title: book.title,
           categoryId: book.categoryId,
@@ -402,6 +454,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
     _categoryIdToPath.clear();
     _categoriesById.clear();
     _titlesCached = false;
+    _bundledTalmudBavliPathCache = null;
+    _bundledTalmudBavliExistsCache = null;
     debugPrint('💾 Database cache cleared');
   }
 
@@ -474,6 +528,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         Settings.getValue<bool>('key-show-otzar-hachochma') ?? false;
     final showHebrewBooks =
         Settings.getValue<bool>('key-show-hebrew-books') ?? false;
+    final hasTalmudBavliDirectory = await _bundledTalmudBavliDirectoryExists();
 
     // OPTIMIZATION: Load minimal book data (8 columns, no JOINs) instead of
     // full book data with relations (25+ columns + 4 junction table queries).
@@ -501,6 +556,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     final booksByCategory = <int, List<Map<String, dynamic>>>{};
     for (final bookData in allDbBooks) {
+      if (!shouldIncludeBookByPath(
+        bookData['filePath'] as String?,
+        hasTalmudBavliDirectory: hasTalmudBavliDirectory,
+        talmudBavliDirectoryPath: _bundledTalmudBavliPathCache,
+      )) {
+        continue;
+      }
+
       // Use null-safe cast: corrupt data (null categoryId) should not crash the
       // entire library load. Books with no category are silently skipped.
       final catId = bookData['categoryId'] as int?;
