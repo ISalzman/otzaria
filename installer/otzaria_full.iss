@@ -121,6 +121,53 @@ begin
   DeleteFile(ArchivePath);
 end;
 
+procedure ExtractBundledTarArchive(const ArchiveName, TargetDirName: String);
+var
+  ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, PowerShellPath, Params: String;
+  ResultCode: Integer;
+begin
+  ArchivePath := ExpandConstant('{app}\אוצריא\' + ArchiveName);
+  if not FileExists(ArchivePath) then
+  begin
+    Log('Bundled archive not found, skipping: ' + ArchivePath);
+    exit;
+  end;
+
+  ParentDir := ExpandConstant('{app}\אוצריא');
+  TarPath := ParentDir + '\' + ChangeFileExt(ArchiveName, '');
+  TargetDir := ExpandConstant('{app}\אוצריא\' + TargetDirName);
+  ZstdPath := ExpandConstant('{app}\zstd.exe');
+  PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+
+  if DirExists(TargetDir) then
+  begin
+    DelTree(TargetDir, True, True, True);
+  end;
+  ForceDirectories(TargetDir);
+
+  Log('Extracting bundled tar archive from ' + ArchivePath);
+  Params := '-d -f -T0 --long=31 "' + ArchivePath + '" -o "' + TarPath + '"';
+
+  if (not Exec(ZstdPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  begin
+    MsgBox('חילוץ ארכיון ה-PDF נכשל. קוד יציאה: ' + IntToStr(ResultCode), mbCriticalError, MB_OK);
+    Abort;
+  end;
+
+  Params :=
+    '-NoProfile -ExecutionPolicy Bypass -Command "tar -xf ''' + TarPath + ''' -C ''' +
+    ParentDir + '''"';
+  if (not Exec(PowerShellPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
+     (ResultCode <> 0) then
+  begin
+    MsgBox('פתיחת ארכיון ה-PDF נכשלה. קוד יציאה: ' + IntToStr(ResultCode), mbCriticalError, MB_OK);
+    Abort;
+  end;
+
+  DeleteFile(TarPath);
+  DeleteFile(ArchivePath);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ZstdPath: String;
@@ -132,12 +179,13 @@ begin
 
   if not FileExists(ZstdPath) then
   begin
-    MsgBox('קובץ החילוץ zstd.exe לא נמצא. ההתקנה לא יכולה לחלץ את מסד הנתונים.', mbCriticalError, MB_OK);
+    MsgBox('קובץ החילוץ zstd.exe לא נמצא. ההתקנה לא יכולה לחלץ את קבצי הספרייה המצורפים.', mbCriticalError, MB_OK);
     Abort;
   end;
 
   ExtractBundledDatabase('seforim.db.zst', 'seforim.db');
   ExtractBundledDatabase('otzar-HB_catalog.db.zst', 'otzar-HB_catalog.db');
+  ExtractBundledTarArchive('talmud_bavli_latest.tar.zst', 'תלמוד בבלי');
   DeleteFile(ZstdPath);
 end;
 
@@ -161,9 +209,10 @@ Source: "..\build\windows\x64\runner\Release\*"; \
     Excludes: "*.msix,*.msixbundle,*.appx,*.appxbundle,*.appinstaller,*.dll"; \
     DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Copy compressed DB and extraction tool for post-install extraction
+; Copy compressed library assets and extraction tool for post-install extraction
 Source: "library_db\seforim.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion
 Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion
+Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion
 Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 Source: "uninstall_msix.ps1"; DestDir: "{app}"; Flags: ignoreversion

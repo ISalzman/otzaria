@@ -131,11 +131,11 @@ jobs:
             echo "is_version=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Download library DBs for full installer (version tags only)
+      - name: Download library assets for full installer (version tags only)
         if: steps.check_version.outputs.is_version == 'true'
         shell: pwsh
         run: |
-          Write-Host "Downloading bundled databases for full installer..."
+          Write-Host "Downloading bundled library assets for full installer..."
           $ErrorActionPreference = "Stop"
           
           try {
@@ -177,6 +177,13 @@ jobs:
             Write-Host "Size: $([math]::Round($catalogAsset.size / 1MB, 2)) MB"
             Invoke-WebRequest -Uri $catalogAsset.browser_download_url -OutFile "installer\library_db\otzar-HB_catalog.db.zst" -UseBasicParsing
             Write-Host "Compressed external catalog DB downloaded successfully"
+
+            # הורדת ארכיון ה-PDFים של תלמוד בבלי
+            $talmudArchiveUrl = "https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst"
+            Write-Host "Downloading bundled Talmud Bavli PDFs for full installer..."
+            Write-Host "Downloading from: $talmudArchiveUrl"
+            Invoke-WebRequest -Uri $talmudArchiveUrl -OutFile "installer\library_db\talmud_bavli_latest.tar.zst" -UseBasicParsing
+            Write-Host "Compressed Talmud Bavli PDFs downloaded successfully"
 
             # הורדת zstd.exe כדי שה-installer יוכל לחלץ את ה-DB בזמן ההתקנה
             $zstdRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/facebook/zstd/releases/latest"
@@ -890,6 +897,7 @@ jobs:
             נבנה מcommit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
             קובץ מסד הספרייה להורדה ידנית: https://github.com/Otzaria/SeforimLibrary/releases/latest (asset: seforim.db.zst)
             קובץ מסד הקטלוגים להורדה ידנית: https://github.com/Otzaria/otzar-HB_catalog/releases/latest (asset: otzar-HB_catalog.db.zst)
+            קובץ PDF של תלמוד בבלי להורדה ידנית: https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst
             ענף: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
