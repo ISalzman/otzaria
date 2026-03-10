@@ -187,7 +187,7 @@ Future<void> _initializeSentry() async {
 }
 
 Future<void> _runAppBootstrap() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  SentryWidgetsFlutterBinding.ensureInitialized();
 
   // Check for single instance - skip on Apple platforms (macOS/iOS) due to sandbox restrictions
   if (!Platform.isMacOS && !Platform.isIOS) {
