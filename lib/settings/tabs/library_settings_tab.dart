@@ -142,20 +142,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
       title: 'חיפוש ואינדקס',
       children: [
         SwitchSettingsTile(
-          leading: const Icon(FluentIcons.search_24_regular),
-          title: const Text('חיפוש מהיר באמצעות אינדקס',
-              style: kSettingsTitleStyle),
-          subtitle: Text(
-              state.useFastSearch
-                  ? 'חיפוש מהיר יותר, נדרש ליצור אינדקס'
-                  : 'חיפוש איטי יותר, לא נדרש אינדקס',
-              style: kSettingsSubtitleStyle),
-          value: state.useFastSearch,
-          onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdateUseFastSearch(value));
-          },
-        ),
-        SwitchSettingsTile(
           leading: const Icon(FluentIcons.arrow_clockwise_24_regular),
           title: const Text('עדכון אינדקס אוטומטי', style: kSettingsTitleStyle),
           subtitle: Text(
