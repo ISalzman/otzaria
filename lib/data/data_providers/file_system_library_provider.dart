@@ -14,11 +14,13 @@ import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 
 /// Library provider that loads books from the file system.
 class FileSystemLibraryProvider implements LibraryProvider {
   late String _libraryPath;
-  late Future<Map<String, String>> _keyToPath;
+  Future<Map<String, String>>? _keyToPath;
   final Map<int, String> _categoryIdToPath =
       {}; // Maps hash(categoryPath) -> categoryPath
   bool _isInitialized = false;
@@ -61,14 +63,13 @@ class FileSystemLibraryProvider implements LibraryProvider {
     if (_isInitialized) return;
 
     _libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
-    _keyToPath = _buildKeyToPath();
     _isInitialized = true;
     debugPrint('📁 FileSystemLibraryProvider initialized');
   }
 
   String get libraryPath => _libraryPath;
 
-  Future<Map<String, String>> get keyToPath => _keyToPath;
+  Future<Map<String, String>> get keyToPath => _keyToPath ??= _buildKeyToPath();
 
   @override
   Future<Map<String, List<Book>>> loadBooks(
@@ -78,7 +79,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
     final Map<String, List<Book>> booksByCategory = {};
 
     // We can populate the key map here as well to ensure it's accurate
-    final map = await _keyToPath;
+    final map = await keyToPath;
 
     // NOTE: The main library folder (אוצריא) is now stored in the database
     // and loaded by DatabaseLibraryProvider. We do NOT scan it here to avoid duplicates.
@@ -91,6 +92,8 @@ class FileSystemLibraryProvider implements LibraryProvider {
       await _loadBooksRecursively(
           personalBooksDir, metadata, booksByCategory, ['אישי'], map);
     }
+
+    await _loadBundledTalmudBavliBooks(metadata, booksByCategory, map);
 
     // Load books from custom folders (those NOT marked for DB sync)
     await _loadCustomFoldersBooks(metadata, booksByCategory, map);
@@ -132,6 +135,58 @@ class FileSystemLibraryProvider implements LibraryProvider {
         keyToPath,
       );
     }
+  }
+
+  Future<void> _loadBundledTalmudBavliBooks(
+    Map<String, Map<String, dynamic>> metadata,
+    Map<String, List<Book>> booksByCategory,
+    Map<String, String> keyToPath,
+  ) async {
+    final bundledDir = await _resolveBundledTalmudBavliDirectory();
+    if (bundledDir == null) return;
+
+    await for (final entity in bundledDir.list()) {
+      if (entity is! File) continue;
+
+      final lowerPath = entity.path.toLowerCase();
+      if (!lowerPath.endsWith('.pdf')) continue;
+
+      final book = _createBookFromFile(
+        entity,
+        metadata,
+        [DatabaseConstants.talmudBavliFolderName],
+      );
+      if (book == null || book.categoryId == null) continue;
+
+      booksByCategory
+          .putIfAbsent(DatabaseConstants.talmudBavliFolderName, () => [])
+          .add(book);
+
+      final key = _generateKey(
+        book.title,
+        book.categoryId!,
+        book.fileType ?? 'pdf',
+      );
+      keyToPath[key] = entity.path;
+    }
+  }
+
+  Future<Directory?> _resolveBundledTalmudBavliDirectory() async {
+    final folderName =
+        Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
+            DatabaseConstants.otzariaFolderName;
+
+    for (final candidatePath in DatabaseConstants.getTalmudBavliDirectoryPaths(
+      _libraryPath,
+      folderName,
+    )) {
+      final directory = Directory(candidatePath);
+      if (await directory.exists()) {
+        return directory;
+      }
+    }
+
+    return null;
   }
 
   Future<void> _loadBooksRecursively(
@@ -239,7 +294,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
   @override
   Future<bool> hasBook(String title, int categoryId, String fileType) async {
     if (!_isInitialized) await initialize();
-    final map = await _keyToPath;
+    final map = await keyToPath;
     final key = _generateKey(title, categoryId, fileType);
     return map.containsKey(key);
   }
@@ -281,13 +336,13 @@ class FileSystemLibraryProvider implements LibraryProvider {
   @override
   Future<Set<String>> getAvailableBookTitles() async {
     if (!_isInitialized) await initialize();
-    final map = await _keyToPath;
+    final map = await keyToPath;
     return map.keys.toSet();
   }
 
   Future<String?> _getBookPath(
       String title, int categoryId, String fileType) async {
-    final map = await _keyToPath;
+    final map = await keyToPath;
     final key = _generateKey(title, categoryId, fileType);
     return map[key];
   }
@@ -337,6 +392,20 @@ class FileSystemLibraryProvider implements LibraryProvider {
       }
     }
 
+    final bundledTalmudDir = await _resolveBundledTalmudBavliDirectory();
+    if (bundledTalmudDir != null) {
+      await for (final entity in bundledTalmudDir.list()) {
+        if (entity is! File) continue;
+        final lower = entity.path.toLowerCase();
+        if (!lower.endsWith('.pdf')) continue;
+        addPath(
+          entity.path,
+          bundledTalmudDir.path,
+          [DatabaseConstants.talmudBavliFolderName],
+        );
+      }
+    }
+
     // Load from custom folders (those NOT marked for DB sync)
     final customFoldersJson =
         Settings.getValue<String>(SettingsRepository.keyCustomFolders);
@@ -374,7 +443,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
   /// Refreshes the title to path mapping
   void refresh() {
-    _keyToPath = _buildKeyToPath();
+    _keyToPath = null;
   }
 
   @visibleForTesting
@@ -397,6 +466,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
   void resetForTesting() {
     _categoryIdToPath.clear();
     _isInitialized = false;
+    _keyToPath = null;
   }
 
   /// Checks if a book is in the personal folder or a custom folder
@@ -407,7 +477,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
       bookPath = await _getBookPath(title, category.hashCode, fileType);
     } else {
       // Fuzzy search
-      final map = await _keyToPath;
+      final map = await keyToPath;
       for (final key in map.keys) {
         if (key.startsWith('$title|')) {
           bookPath = map[key];
@@ -474,7 +544,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
   /// Saves text content to a book file
   Future<void> saveBookText(String title, String content) async {
-    final map = await _keyToPath;
+    final map = await keyToPath;
     String? path;
     for (final key in map.keys) {
       if (key.startsWith('$title|')) {
@@ -759,7 +829,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
       final title = getTitleFromPath(link.path2);
 
       // Find path for title (fuzzy match since we don't have category/fileType)
-      final map = await _keyToPath;
+      final map = await keyToPath;
       String? path;
       for (final key in map.keys) {
         if (key.startsWith('$title|')) {

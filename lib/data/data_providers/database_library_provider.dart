@@ -42,16 +42,129 @@ class DatabaseLibraryProvider implements LibraryProvider {
   }
 
   Future<bool> _bundledTalmudBavliDirectoryExists() async {
-    final bundledPath = DatabaseConstants.getTalmudBavliDirectoryPath();
-    if (_bundledTalmudBavliPathCache == bundledPath &&
-        _bundledTalmudBavliExistsCache != null) {
+    final candidatePaths = DatabaseConstants.getTalmudBavliDirectoryPaths();
+    if (_bundledTalmudBavliExistsCache != null &&
+        _bundledTalmudBavliPathCache != null &&
+        candidatePaths.contains(_bundledTalmudBavliPathCache)) {
       return _bundledTalmudBavliExistsCache!;
     }
 
-    final exists = await Directory(bundledPath).exists();
-    _bundledTalmudBavliPathCache = bundledPath;
-    _bundledTalmudBavliExistsCache = exists;
-    return exists;
+    for (final candidatePath in candidatePaths) {
+      final exists = await Directory(candidatePath).exists();
+      if (exists) {
+        _bundledTalmudBavliPathCache = candidatePath;
+        _bundledTalmudBavliExistsCache = true;
+        return true;
+      }
+    }
+
+    _bundledTalmudBavliPathCache = candidatePaths.first;
+    _bundledTalmudBavliExistsCache = false;
+    return false;
+  }
+
+  Future<void> _addBundledTalmudBavliPdfBooksToCategory(
+    Category category,
+    Map<String, Map<String, dynamic>> metadata,
+  ) async {
+    final bundledPath = _bundledTalmudBavliPathCache;
+    if (bundledPath == null || !await _bundledTalmudBavliDirectoryExists()) {
+      return;
+    }
+
+    final bundledDir = Directory(bundledPath);
+
+    // Build a map: title → sub-category that contains a TextBook with that title.
+    // This lets us place each PDF next to its matching text book.
+    final Map<String, Category> titleToSubCategory = {};
+    for (final sub in category.getAllCategories()) {
+      for (final book in sub.books) {
+        if (book is TextBook) {
+          titleToSubCategory[book.title] = sub;
+        }
+      }
+    }
+
+    // Collect all existing PDF titles across the entire tree to avoid duplicates.
+    final existingPdfTitles = <String>{};
+    for (final book in category.getAllBooks()) {
+      if (book is PdfBook) existingPdfTitles.add(book.title);
+    }
+
+    final modifiedCategories = <Category>{};
+    Category? orphanCategory;
+
+    await for (final entity in bundledDir.list()) {
+      if (entity is! File) continue;
+      if (!entity.path.toLowerCase().endsWith('.pdf')) continue;
+
+      final title = getTitleFromPath(entity.path);
+      if (existingPdfTitles.contains(title)) continue;
+
+      // Place PDF in the sub-category of its matching TextBook.
+      // Orphans (no matching TextBook) go into a dedicated sub-category
+      // appended after "סדר טהרות" so they don't float to the top.
+      if (orphanCategory == null && !titleToSubCategory.containsKey(title)) {
+        // Place right after "סדר טהרות" (order 30 in DB) → use 31.
+        final tohorotOrder = category.subCategories
+            .where((c) => c.title == 'סדר טהרות')
+            .firstOrNull
+            ?.order;
+        final orphanOrder = tohorotOrder != null ? tohorotOrder + 1 : 31;
+        orphanCategory = Category(
+          title: 'מסכתות נוספות',
+          description: '',
+          shortDescription: '',
+          subCategories: [],
+          books: [],
+          parent: category,
+          order: orphanOrder,
+        );
+        category.subCategories.add(orphanCategory);
+        category.subCategories.sort((a, b) => a.order.compareTo(b.order));
+      }
+      final targetCategory =
+          titleToSubCategory[title] ?? orphanCategory ?? category;
+      final targetCategoryId =
+          titleToSubCategory.containsKey(title)
+              ? targetCategory.title.hashCode
+              : DatabaseConstants.talmudBavliFolderName.hashCode;
+
+      final bookMeta = metadata[title];
+      final matchingTextBook = targetCategory.books
+          .where((b) => b is TextBook && b.title == title)
+          .firstOrNull;
+      final pdfBook = PdfBook(
+        title: title,
+        category: targetCategory,
+        path: entity.path,
+        filePath: entity.path,
+        author: bookMeta?['author'] as String?,
+        heShortDesc: bookMeta?['heShortDesc'] as String?,
+        pubDate: bookMeta?['pubDate'] as String?,
+        pubPlace: bookMeta?['pubPlace'] as String?,
+        order: matchingTextBook?.order ?? bookMeta?['order'] as int? ?? 999,
+        topics: DatabaseConstants.talmudBavliFolderName,
+        categoryPath: DatabaseConstants.talmudBavliFolderName,
+        categoryId: targetCategoryId,
+      );
+
+      targetCategory.books.add(pdfBook);
+      existingPdfTitles.add(title);
+      modifiedCategories.add(targetCategory);
+      _cachedKeys.add(BookCompositeKey.create(
+        title: title,
+        categoryId: targetCategoryId,
+        fileType: 'pdf',
+      ));
+      _categoryIdToPath[targetCategoryId] =
+          DatabaseConstants.talmudBavliFolderName;
+    }
+
+    // Re-sort only the categories that were modified.
+    for (final cat in modifiedCategories) {
+      cat.books.sort((a, b) => a.order.compareTo(b.order));
+    }
   }
 
   @visibleForTesting
@@ -612,6 +725,16 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
     debugPrint(
         '⏱️ Category tree build: ${DateTime.now().difference(tTree).inMilliseconds}ms');
+
+    final talmudBavliCategory = library.subCategories.where((category) {
+      return category.title == DatabaseConstants.talmudBavliFolderName;
+    }).firstOrNull;
+    if (talmudBavliCategory != null) {
+      await _addBundledTalmudBavliPdfBooksToCategory(
+        talmudBavliCategory,
+        metadata,
+      );
+    }
 
     // NOTE: Sorting is now done during build (like Kotlin), no need for post-sort
     // _sortLibraryRecursive(library); // Removed - sorting happens in _buildCatalogCategoryRecursiveOptimized
