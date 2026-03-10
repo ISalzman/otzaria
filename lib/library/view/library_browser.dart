@@ -47,6 +47,45 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   int _depth = 0;
   final Set<String> _expandedCategories = {}; // קטגוריות שנפתחו בתצוגת רשימה
 
+  // Canonical display order for top-level categories (overrides DB orderIndex).
+  // Titles use ASCII double-quote; Hebrew gershayim (\u05F4 ״) is normalised
+  // to ASCII " before lookup, so both DB titles and placeholder titles match.
+  static const List<String> _orderedTopCategories = [
+    'תנ"ך',
+    'מדרש',
+    'משנה',
+    'תלמוד בבלי',
+    'תלמוד ירושלמי',
+    'תוספתא',
+    'הלכה',
+    'שו"ת',
+    'קבלה',
+    'סדר התפילה',
+    'מחשבת ישראל',
+    'חסידות',
+    'ספרי מוסר',
+    'מילונים וספרי יעץ',
+    'לימוד יומי',
+    'ספרות עזר',
+    'בית שני',
+  ];
+
+  /// Returns a sort key for a top-level category.
+  /// Categories listed in [_orderedTopCategories] get their index (0-based);
+  /// all others are appended after with their DB order as a tie-breaker.
+  int _getTopCategoryOrder(Category cat) {
+    final normalized =
+        cat.title.replaceAll('\u05F4', '"').replaceAll('\u05F3', "'");
+    final idx = _orderedTopCategories.indexOf(normalized);
+    return idx >= 0 ? idx : _orderedTopCategories.length + cat.order;
+  }
+
+  /// Normalises a DB orderIndex for display sorting.
+  /// Negative values (e.g. -5 used for מפרשים) are remapped to the end
+  /// (1000 + abs(value)) so they appear after the primary content.
+  static int _normalizeOrder(int order) =>
+      order >= 0 ? order : 1000 + order.abs();
+
   // Database generation button visibility
   bool?
       _showDbGenerationButton; // null = לא נבדק עדיין, true = הצג, false = אל תציג
@@ -508,7 +547,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         .toList();
 
     filteredBooks.sort((a, b) => a.order.compareTo(b.order));
-    filteredSubCategories.sort((a, b) => a.order.compareTo(b.order));
+    if (category is Library) {
+      filteredSubCategories.sort(
+          (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)));
+    } else {
+      filteredSubCategories.sort((a, b) =>
+          _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)));
+    }
 
     if (_depth != 0) {
       // Add books (limit to 20 for performance)
@@ -684,7 +729,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
     // מיון
     filteredBooks.sort((a, b) => a.order.compareTo(b.order));
-    filteredSubCategories.sort((a, b) => a.order.compareTo(b.order));
+    if (category is Library) {
+      filteredSubCategories.sort(
+          (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)));
+    } else {
+      filteredSubCategories.sort((a, b) =>
+          _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)));
+    }
 
     // הוספת תת-קטגוריות לפני הספרים
     for (final subCategory in filteredSubCategories) {
