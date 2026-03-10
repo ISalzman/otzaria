@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/theme/fonts.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 
 /// Widget for displaying side-by-side diff of original vs edited content
 class DiffViewer extends StatelessWidget {
