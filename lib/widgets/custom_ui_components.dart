@@ -5,15 +5,13 @@ import 'package:otzaria/theme/app_theme.dart';
 
 // ── קבועי סגנון גלובליים ─────────────────────────────────────────────────────
 /// סגנון כותרת בשורת הגדרה — alias ל-[AppTextStyles.settingTitle]
-/// @deprecated השתמש ב-AppTextStyles.settingTitle ישירות
 const kSettingsTitleStyle = AppTextStyles.settingTitle;
 
 /// סגנון תת-כותרת בשורת הגדרה — alias ל-[AppTextStyles.settingSubtitle]
-/// @deprecated השתמש ב-AppTextStyles.settingSubtitle ישירות
 const kSettingsSubtitleStyle = AppTextStyles.settingSubtitle;
 
 /// רווח אנכי סטנדרטי בין כרטיסי הגדרות
-const kSettingsCardSpacing = SizedBox(height: 16);
+const kSettingsCardSpacing = SizedBox(height: AppTokens.spaceMD);
 
 // ── דיאלוגים ─────────────────────────────────────────────────────────────────
 
@@ -38,7 +36,7 @@ class _SingleActionDialogState extends State<SingleActionDialog>
     with DialogNavigationMixin {
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     return buildKeyboardNavigator(
       onConfirm: () => Navigator.of(context).pop(true),
       onCancel: () => Navigator.of(context).pop(false),
@@ -49,9 +47,7 @@ class _SingleActionDialogState extends State<SingleActionDialog>
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
-            ),
+                backgroundColor: cs.primary, foregroundColor: cs.onPrimary),
             child: Text(widget.confirmText),
           ),
         ],
@@ -83,7 +79,7 @@ class _TwoActionsDialogState extends State<TwoActionsDialog>
     with DialogNavigationMixin {
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     return buildKeyboardNavigator(
       onConfirm: () => Navigator.of(context).pop(true),
       onCancel: () => Navigator.of(context).pop(false),
@@ -95,18 +91,15 @@ class _TwoActionsDialogState extends State<TwoActionsDialog>
           FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(false),
             style: FilledButton.styleFrom(
-              backgroundColor: colorScheme.secondaryContainer,
-              foregroundColor: colorScheme.onSecondaryContainer,
-            ),
+                backgroundColor: cs.secondaryContainer,
+                foregroundColor: cs.onSecondaryContainer),
             child: Text(widget.cancelText),
           ),
           // כפתור אישור — primary
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
-            ),
+                backgroundColor: cs.primary, foregroundColor: cs.onPrimary),
             child: Text(widget.confirmText),
           ),
         ],
@@ -140,7 +133,7 @@ class _WarningDialogState extends State<WarningDialog>
     with DialogNavigationMixin {
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     return buildKeyboardNavigator(
       onConfirm: () => Navigator.of(context).pop(true),
       onCancel: () => Navigator.of(context).pop(false),
@@ -154,7 +147,7 @@ class _WarningDialogState extends State<WarningDialog>
             if (widget.subtitle != null) ...[
               const SizedBox(height: 8),
               Text(widget.subtitle!,
-                  style: TextStyle(color: colorScheme.error, fontSize: 13)),
+                  style: TextStyle(color: cs.error, fontSize: 13)),
             ],
           ],
         ),
@@ -163,15 +156,13 @@ class _WarningDialogState extends State<WarningDialog>
           FilledButton(
             onPressed: () => Navigator.of(context).pop(false),
             style: FilledButton.styleFrom(
-              backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
-            ),
+                backgroundColor: cs.primary, foregroundColor: cs.onPrimary),
             child: Text(widget.cancelText),
           ),
           // אישור — שקוף אדום (מסוכן)
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: colorScheme.error),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: Text(widget.confirmText),
           ),
         ],
@@ -200,32 +191,26 @@ class RecommendedActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final bg = cs.primary;
-    final fg = cs.onPrimary;
-
+    final style = FilledButton.styleFrom(
+        backgroundColor: cs.primary, foregroundColor: cs.onPrimary);
     if (isLoading) {
       return FilledButton(
-        onPressed: null,
-        style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
-        child: SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2, color: fg)),
-      );
+          onPressed: null,
+          style: style,
+          child: SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: cs.onPrimary)));
     }
     if (icon != null) {
       return FilledButton.icon(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
-        icon: Icon(icon),
-        label: Text(text),
-      );
+          onPressed: onPressed,
+          style: style,
+          icon: Icon(icon),
+          label: Text(text));
     }
-    return FilledButton(
-      onPressed: onPressed,
-      style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
-      child: Text(text),
-    );
+    return FilledButton(onPressed: onPressed, style: style, child: Text(text));
   }
 }
 
@@ -247,32 +232,28 @@ class NeutralActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final bg = cs.secondaryContainer;
-    final fg = cs.onSecondaryContainer;
-
+    final style = FilledButton.styleFrom(
+        backgroundColor: cs.secondaryContainer,
+        foregroundColor: cs.onSecondaryContainer);
     if (isLoading) {
       return FilledButton.tonal(
-        onPressed: null,
-        style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
-        child: SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2, color: fg)),
-      );
+          onPressed: null,
+          style: style,
+          child: SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: cs.onSecondaryContainer)));
     }
     if (icon != null) {
       return FilledButton.tonalIcon(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
-        icon: Icon(icon),
-        label: Text(text),
-      );
+          onPressed: onPressed,
+          style: style,
+          icon: Icon(icon),
+          label: Text(text));
     }
     return FilledButton.tonal(
-      onPressed: onPressed,
-      style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
-      child: Text(text),
-    );
+        onPressed: onPressed, style: style, child: Text(text));
   }
 }
 
@@ -326,11 +307,26 @@ Future<bool?> showWarningDialog({
 
 // ── SegmentedSettingsTile ─────────────────────────────────────────────────────
 
-/// Widget להגדרה עם SegmentedButton.
-/// - מציג ✓ על האפשרות הנבחרת
-/// - הגבולות החיצוניים של הווידג'ט קבועים (SizedBox עם רוחב מחושב מראש)
-/// - הגבולות הפנימיים בין הקטעים יכולים לנוע בעת בחירה
-/// - תומך בפריסה אדפטיבית (צר/רחב) וניווט מקלדת
+// Widget להגדרה עם [SegmentedButton] — בהתאם לספציפיקציית M3:
+// https://m3.material.io/components/segmented-buttons/overview
+//
+// - ✓ מסמן את האפשרות הנבחרת
+// - גבולות חיצוניים קבועים (מונע קפיצת פריסה בעת בחירה)
+// - פריסה אדפטיבית: כותרת מעל ב-narrow (כולל אייקון), ListTile ב-wide
+// - ניווט מקלדת: חצים ← → לבחירה, Enter/Space לאישור
+//
+// **שימוש:**
+// ```dart
+// SegmentedSettingsTile<int>(
+//   title: 'שיטת גימטריה',
+//   options: [
+//     SegmentOption(value: 0, label: 'רגיל'),
+//     SegmentOption(value: 1, label: 'קטנה'),
+//   ],
+//   currentValue: 0,
+//   onChanged: (v) => setState(() => _method = v),
+// )
+// ```
 class SegmentedSettingsTile<T> extends StatefulWidget {
   final dynamic title;
   final String? subtitle;
@@ -363,7 +359,7 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
     super.initState();
     _focusedIndex =
         widget.options.indexWhere((o) => o.value == widget.currentValue);
-    if (_focusedIndex == -1) _focusedIndex = 0;
+    if (_focusedIndex < 0) _focusedIndex = 0;
   }
 
   @override
@@ -374,172 +370,144 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // חישוב רוחב פעם אחת — מועבר ל-_buildSegmentedButton
+    final cs = Theme.of(context).colorScheme;
     final hasIcons = widget.options.any((o) => o.icon != null);
-    final maxLabelLen = widget.options
+    final maxLen = widget.options
         .map((o) => o.label.length)
         .reduce((a, b) => a > b ? a : b);
+    final btnWidth = (hasIcons ? 80.0 : 60.0) + maxLen * 8.0;
+    final totalW =
+        (btnWidth * widget.options.length + 24.0).clamp(180.0, 400.0);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // הערכת רוחב הכפתור הבסיסי + 24px לסמן ✓ על הפריט הנבחר
-        final buttonWidth = (hasIcons ? 80.0 : 60.0) + (maxLabelLen * 8.0);
-        // +24 לסמן ✓ (נמצא רק על קטע אחד בו-זמנית, מסגרת חיצונית גדולה מספיק)
-        final totalWidth =
-            (buttonWidth * widget.options.length + 24.0).clamp(180.0, 400.0);
-        final hasHorizontalSpace = constraints.maxWidth > (totalWidth + 200);
+    return LayoutBuilder(builder: (ctx, constraints) {
+      final isNarrow = constraints.maxWidth < totalW + 200;
+      final button = _buildButton(cs, hasIcons, totalW);
 
-        if (!hasHorizontalSpace) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    if (widget.icon != null) ...[
-                      Icon(widget.icon, size: 24),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          widget.title is String
-                              ? Text(widget.title as String,
-                                  style: kSettingsTitleStyle)
-                              : widget.title as Widget,
-                          if (widget.subtitle != null) ...[
-                            const SizedBox(height: 4),
-                            Text(widget.subtitle!,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: colorScheme.onSurfaceVariant)),
-                          ],
-                        ],
-                      ),
-                    ),
+      if (isNarrow) {
+        // ── פריסה צרה: כותרת + תת-כותרת מעל הכפתור, אייקון בשורה עם הכותרת
+        return Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppTokens.spaceMD, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // תיקון באג 5: Row עם אייקון (אם קיים) + כותרת + תת-כותרת
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.icon != null) ...[
+                    Icon(widget.icon, size: 24),
+                    const SizedBox(width: 12),
                   ],
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _buildSegmentedButton(
-                      colorScheme, isDark, hasIcons, maxLabelLen, totalWidth),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListTile(
-          leading: widget.icon != null ? Icon(widget.icon) : null,
-          title: widget.title is String
-              ? Text(widget.title as String, style: kSettingsTitleStyle)
-              : widget.title as Widget,
-          subtitle: widget.subtitle != null
-              ? Text(widget.subtitle!, style: kSettingsSubtitleStyle)
-              : null,
-          trailing: _buildSegmentedButton(
-              colorScheme, isDark, hasIcons, maxLabelLen, totalWidth),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _titleOnlyWidget(ctx),
+                        if (widget.subtitle != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.subtitle!,
+                            style: kSettingsSubtitleStyle.copyWith(
+                                color:
+                                    Theme.of(ctx).colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Align(alignment: Alignment.centerRight, child: button),
+            ],
+          ),
         );
-      },
-    );
+      }
+
+      // ── פריסה רחבה: ListTile רגיל — title בלבד, subtitle דרך ListTile
+      // תיקון באג 1: _titleOnlyWidget מחזיר רק את הכותרת,
+      // ה-subtitle מועבר ל-ListTile בנפרד — מונע הצגה כפולה.
+      return ListTile(
+        leading: widget.icon != null ? Icon(widget.icon) : null,
+        title: _titleOnlyWidget(ctx),
+        subtitle: widget.subtitle != null
+            ? Text(widget.subtitle!, style: kSettingsSubtitleStyle)
+            : null,
+        trailing: button,
+      );
+    });
   }
 
-  /// בונה את SegmentedButton עם:
-  /// - ✓ על האפשרות הנבחרת (showSelectedIcon: true)
-  /// - SizedBox קבוע — מגבולות חיצוניים לא זזים בעת בחירה
-  /// - הגבולות הפנימיים בין הקטעים עשויים לנוע מעט
-  Widget _buildSegmentedButton(
-    ColorScheme colorScheme,
-    bool isDark,
-    bool hasIcons,
-    int maxLabelLen,
-    double totalWidth,
-  ) {
+  /// מחזיר **רק** את הכותרת (title) — ללא תת-כותרת.
+  /// נדרש כדי למנוע כפילות ב-ListTile שמציג subtitle בעצמו.
+  Widget _titleOnlyWidget(BuildContext context) {
+    if (widget.title is! String) return widget.title as Widget;
+    return Text(widget.title as String, style: kSettingsTitleStyle);
+  }
+
+  // M3 SegmentedButton: secondaryContainer = selected, surface = unselected
+  // Tokens: https://m3.material.io/components/segmented-buttons/specs
+  // AppTokens.radiusSM חייב להיות שווה ל-8. אם לא — הפינות ישתנו ויזואלית.
+  Widget _buildButton(ColorScheme cs, bool hasIcons, double totalW) {
     return Focus(
       focusNode: _focusNode,
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
-        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-          setState(() {
-            _focusedIndex = (_focusedIndex + 1) % widget.options.length;
-          });
+      onKeyEvent: (_, ev) {
+        if (ev is! KeyDownEvent) return KeyEventResult.ignored;
+        if (ev.logicalKey == LogicalKeyboardKey.arrowRight) {
+          setState(() =>
+              _focusedIndex = (_focusedIndex + 1) % widget.options.length);
           return KeyEventResult.handled;
         }
-        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-          setState(() {
-            _focusedIndex = (_focusedIndex - 1 + widget.options.length) %
-                widget.options.length;
-          });
+        if (ev.logicalKey == LogicalKeyboardKey.arrowLeft) {
+          setState(() => _focusedIndex =
+              (_focusedIndex - 1 + widget.options.length) %
+                  widget.options.length);
           return KeyEventResult.handled;
         }
-        if (event.logicalKey == LogicalKeyboardKey.enter ||
-            event.logicalKey == LogicalKeyboardKey.space) {
+        if (ev.logicalKey == LogicalKeyboardKey.enter ||
+            ev.logicalKey == LogicalKeyboardKey.space) {
           widget.onChanged(widget.options[_focusedIndex].value);
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
       },
-      // SizedBox קבוע — מגבולות חיצוניים לא זזים בעת בחירה
       child: SizedBox(
-        width: totalWidth,
+        width: totalW,
         child: SegmentedButton<T>(
-          // showSelectedIcon: true — מציג ✓ על האפשרות הנבחרת
-          // הגבולות החיצוניים קבועים; הפנימיים עשויים לנוע מעט
           showSelectedIcon: true,
           selectedIcon: const Icon(Icons.check, size: 16),
           style: ButtonStyle(
             minimumSize: WidgetStateProperty.all(const Size(0, 40)),
             maximumSize:
                 WidgetStateProperty.all(const Size(double.infinity, 40)),
-            shape: WidgetStateProperty.all(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            backgroundColor: WidgetStateProperty.resolveWith<Color?>(
-              (states) {
-                if (states.contains(WidgetState.selected)) {
-                  return isDark
-                      ? colorScheme.primaryContainer
-                      : colorScheme.primary.withValues(alpha: 0.2);
-                }
-                return colorScheme.surface;
-              },
-            ),
-            foregroundColor: WidgetStateProperty.resolveWith<Color?>(
-              (states) {
-                if (states.contains(WidgetState.selected)) {
-                  return isDark
-                      ? colorScheme.onPrimaryContainer
-                      : colorScheme.primary;
-                }
-                return colorScheme.onSurface;
-              },
-            ),
-            side: WidgetStateProperty.resolveWith<BorderSide?>(
-              (states) {
-                if (states.contains(WidgetState.selected) && isDark) {
-                  return BorderSide(color: colorScheme.primary, width: 2);
-                }
-                return null;
-              },
-            ),
+            shape: WidgetStateProperty.all(RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTokens.radiusSM))),
+            // M3 selected: secondaryContainer/onSecondaryContainer
+            backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+              if (states.contains(WidgetState.selected)) {
+                return cs.secondaryContainer;
+              }
+              return cs.surface;
+            }),
+            foregroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+              if (states.contains(WidgetState.selected)) {
+                return cs.onSecondaryContainer;
+              }
+              return cs.onSurfaceVariant;
+            }),
           ),
           segments: widget.options
               .map((o) => ButtonSegment<T>(
                     value: o.value,
                     label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(o.label, style: kSettingsTitleStyle),
-                    ),
+                        fit: BoxFit.scaleDown,
+                        child: Text(o.label, style: kSettingsTitleStyle)),
                     icon: hasIcons
                         ? (o.icon != null
                             ? Icon(o.icon, size: 18)
-                            : const SizedBox(width: 18, height: 18))
+                            : const SizedBox(width: 18))
                         : null,
                   ))
               .toList(),
@@ -551,6 +519,7 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
   }
 }
 
+/// אפשרות יחידה ב-[SegmentedSettingsTile]
 class SegmentOption<T> {
   final T value;
   final String label;
@@ -561,8 +530,11 @@ class SegmentOption<T> {
 
 // ── CustomSwitch ───────────────────────────────────────────────────────────────
 
-/// Material 3 Switch מותאם אישית
-/// תיקון מצב כהה: צבעי track ו-thumb מוגדרים בצורה ברורה גם בריחוף
+// [Switch] תואם M3 עם thumb/track/overlay מוגדרים לפי:
+// https://m3.material.io/components/switch/specs
+//
+// תיקון hover במצב כהה: ברירת המחדל של Flutter משתמשת ב-primary חזק מדי.
+// הפתרון: overlayColor מינימלי שמכסה רק hovered — 8% שקיפות דינמי לפי מצב המתג.
 class CustomSwitch extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
@@ -579,61 +551,41 @@ class CustomSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
 
     return Switch(
       value: value,
       onChanged: onChanged,
       autofocus: autofocus,
       focusNode: focusNode,
-      thumbColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.disabled)) {
-          return colorScheme.onSurface.withValues(alpha: 0.38);
+      // M3 thumb tokens: onPrimary (on), outline (off), onSurface·38 (disabled)
+      thumbColor: WidgetStateProperty.resolveWith((s) {
+        if (s.contains(WidgetState.disabled)) {
+          return cs.onSurface.withValues(alpha: 0.38);
         }
-        if (states.contains(WidgetState.selected)) {
-          return colorScheme.onPrimary;
-        }
-        if (states.contains(WidgetState.hovered)) {
-          return colorScheme.onSurfaceVariant;
-        }
-        return colorScheme.outline;
+        if (s.contains(WidgetState.selected)) return cs.onPrimary;
+        if (s.contains(WidgetState.hovered)) return cs.onSurfaceVariant;
+        return cs.outline;
       }),
-      trackColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.disabled)) {
-          return colorScheme.surfaceContainerHighest.withValues(alpha: 0.12);
+      // M3 track tokens: primary (on), surfaceContainerHighest (off)
+      trackColor: WidgetStateProperty.resolveWith((s) {
+        if (s.contains(WidgetState.disabled)) {
+          return cs.surfaceContainerHighest.withValues(alpha: 0.12);
         }
-        if (states.contains(WidgetState.selected)) {
-          return colorScheme.primary;
-        }
-        return colorScheme.surfaceContainerHighest;
+        if (s.contains(WidgetState.selected)) return cs.primary;
+        return cs.surfaceContainerHighest;
       }),
-      trackOutlineColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) {
-          return Colors.transparent;
-        }
-        return colorScheme.outline;
+      trackOutlineColor: WidgetStateProperty.resolveWith((s) {
+        if (s.contains(WidgetState.selected)) return Colors.transparent;
+        return cs.outline;
       }),
-      overlayColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) {
-          if (states.contains(WidgetState.hovered)) {
-            return isDark
-                ? Colors.white.withValues(alpha: 0.1)
-                : colorScheme.primary.withValues(alpha: 0.1);
-          }
-          if (states.contains(WidgetState.focused) ||
-              states.contains(WidgetState.pressed)) {
-            return isDark
-                ? Colors.white.withValues(alpha: 0.15)
-                : colorScheme.primary.withValues(alpha: 0.12);
-          }
+      // עובד אוטומטית ב-light וב-dark כי מתבסס על ColorScheme.
+      // null = Flutter מסתדר לבד בשאר המצבים (focus, pressed).
+      overlayColor: WidgetStateProperty.resolveWith((s) {
+        if (s.contains(WidgetState.hovered)) {
+          return (value ? cs.primary : cs.onSurface).withValues(alpha: 0.12);
         }
-        if (states.contains(WidgetState.hovered) ||
-            states.contains(WidgetState.focused) ||
-            states.contains(WidgetState.pressed)) {
-          return colorScheme.onSurface.withValues(alpha: 0.12);
-        }
-        return Colors.transparent;
+        return null;
       }),
     );
   }
@@ -641,8 +593,7 @@ class CustomSwitch extends StatelessWidget {
 
 // ── SwitchSettingsTile ────────────────────────────────────────────────────────
 
-/// SwitchSettingsTile — ListTile + CustomSwitch
-/// עיצוב M3 עקבי, תיקון ריחוף במצב כהה
+/// [ListTile] עם [CustomSwitch] — עקבי עם כל שורות on/off בהגדרות.
 class SwitchSettingsTile extends StatelessWidget {
   final Widget? leading;
   final Widget title;
