@@ -118,16 +118,16 @@ class DesignSettingsTab extends StatelessWidget {
 
               // הגדרות טאבים
               SettingsCard(
-                title: 'הגדרות טאבים',
+                title: 'כרטיסיות הספרים',
                 children: [
                   SwitchSettingsTile(
                     leading: const Icon(FluentIcons.tab_24_regular),
-                    title: const Text('יישור טאבים לימין',
+                    title: const Text('הצגת כרטיסיות בימין',
                         style: kSettingsTitleStyle),
                     subtitle: Text(
                         state.alignTabsToRight
-                            ? 'הטאבים יוצגו בצד ימין'
-                            : 'הטאבים יוצגו במרכז',
+                            ? 'הכרטיסיות יהיו בצד ימין'
+                            : 'הכרטיסיות יהיו במרכז החלון',
                         style: kSettingsSubtitleStyle),
                     value: state.alignTabsToRight,
                     onChanged: (value) {
@@ -143,22 +143,22 @@ class DesignSettingsTab extends StatelessWidget {
 
               // התנהגות סרגל צד
               SettingsCard(
-                title: 'התנהגות סרגל צד',
+                title: 'חלוניות עזר',
                 children: [
                   SegmentedSettingsTile<_SidebarMode>(
-                    title: 'הצגת חלונית ניווט בכותרות ופרקים',
+                    title: 'חלונית ניווט בין כותרות',
                     subtitle: state.pinSidebar
-                        ? 'החלונית תוצג תמיד'
+                        ? 'החלונית תוצג באופן קבוע'
                         : state.defaultSidebarOpen
-                            ? 'החלונית תוצג בפתיחת ספר ותיסגר בגלילה'
-                            : 'החלונית לא תוצג אוטומטית',
+                            ? 'החלונית תוצג בפתיחת ספר ותיסגר בעת גלילה'
+                            : 'החלונית לא תוצג אוטומטית עם פתיחת הספר',
                     icon: FluentIcons.panel_left_24_regular,
                     options: const [
-                      SegmentOption(value: _SidebarMode.pinned, label: 'הצמדה'),
+                      SegmentOption(value: _SidebarMode.pinned, label: 'הצגה'),
                       SegmentOption(
-                          value: _SidebarMode.openOnBook, label: 'בפתיחת ספר'),
-                      SegmentOption(
-                          value: _SidebarMode.closed, label: 'סגור תמיד'),
+                          value: _SidebarMode.openOnBook,
+                          label: 'הסתרה אוטומטית'),
+                      SegmentOption(value: _SidebarMode.closed, label: 'הסתרה'),
                     ],
                     currentValue: state.pinSidebar
                         ? _SidebarMode.pinned
