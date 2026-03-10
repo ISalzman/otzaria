@@ -32,7 +32,7 @@ class FileSystemData {
   /// Future that resolves to metadata for all books and categories
   late Future<Map<String, Map<String, dynamic>>> metadata;
 
-  late Future<Map<String, String>> titleToPath;
+  Future<Map<String, String>>? _titleToPath;
 
   /// Library provider manager for coordinating multiple data sources
   final LibraryProviderManager _providerManager =
@@ -43,10 +43,11 @@ class FileSystemData {
   FileSystemData() {
     libraryPath =
         Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
-    titleToPath = _getTitleToPath();
     metadata = _getMetadata();
     _initializeProviders();
   }
+
+  Future<Map<String, String>> get titleToPath => _titleToPath ??= _getTitleToPath();
 
   /// Singleton instance of [FileSystemData]
   static FileSystemData instance = FileSystemData();
@@ -151,6 +152,7 @@ class FileSystemData {
   /// Clears the book-in-database cache
   void clearBookCache() {
     _providerManager.clearCaches();
+    _titleToPath = null;
     debugPrint('Book cache cleared');
   }
 

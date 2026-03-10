@@ -61,7 +61,28 @@ class DatabaseConstants {
     final folder = folderName ??
         Settings.getValue<String>('key-library-folder-name') ??
         otzariaFolderName;
-    return path.join(basePath, folder, talmudBavliFolderName);
+    final databaseDirectory = path.dirname(_buildDbPath(basePath, folder));
+    return path.join(databaseDirectory, talmudBavliFolderName);
+  }
+
+  /// Gets candidate paths for the bundled Talmud Bavli PDF directory.
+  ///
+  /// The preferred location is next to the active DB. A fallback at the
+  /// library root is also supported for manual extractions.
+  static List<String> getTalmudBavliDirectoryPaths([
+    String? libraryPath,
+    String? folderName,
+  ]) {
+    final basePath =
+        libraryPath ?? Settings.getValue<String>('key-library-path') ?? '.';
+    final primary = getTalmudBavliDirectoryPath(libraryPath, folderName);
+    final fallback = path.join(basePath, talmudBavliFolderName);
+
+    if (path.normalize(primary) == path.normalize(fallback)) {
+      return [primary];
+    }
+
+    return [primary, fallback];
   }
 
   /// Returns whether [filePath] points to a file inside the bundled
@@ -76,14 +97,22 @@ class DatabaseConstants {
       return false;
     }
 
-    final bundledDir = path.normalize(
-      talmudBavliDirectoryPath ??
-          getTalmudBavliDirectoryPath(libraryPath, folderName),
-    );
     final normalizedFilePath = path.normalize(filePath);
 
-    return normalizedFilePath == bundledDir ||
-        path.isWithin(bundledDir, normalizedFilePath);
+    final candidateDirs = (talmudBavliDirectoryPath != null &&
+            talmudBavliDirectoryPath.isNotEmpty)
+        ? [talmudBavliDirectoryPath]
+        : getTalmudBavliDirectoryPaths(libraryPath, folderName);
+
+    for (final candidateDir in candidateDirs) {
+      final bundledDir = path.normalize(candidateDir);
+      if (normalizedFilePath == bundledDir ||
+          path.isWithin(bundledDir, normalizedFilePath)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /// Gets the database path for a specific file path

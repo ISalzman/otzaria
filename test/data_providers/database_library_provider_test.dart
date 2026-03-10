@@ -73,6 +73,30 @@ void main() {
         isTrue,
       );
     });
+
+    test('getTalmudBavliDirectoryPath מחזיר נתיב ליד ה-DB גם בלי תיקיית אוצריא', () {
+      expect(
+        DatabaseConstants.getTalmudBavliDirectoryPath('/library-root', ''),
+        path.join('/library-root', DatabaseConstants.talmudBavliFolderName),
+      );
+    });
+
+    test('isTalmudBavliFilePath מזהה גם חילוץ ידני בשורש הספרייה', () {
+      final filePath = path.join(
+        '/library-root',
+        DatabaseConstants.talmudBavliFolderName,
+        'ברכות.pdf',
+      );
+
+      expect(
+        DatabaseConstants.isTalmudBavliFilePath(
+          filePath,
+          libraryPath: '/library-root',
+          folderName: DatabaseConstants.otzariaFolderName,
+        ),
+        isTrue,
+      );
+    });
   });
 }
 
