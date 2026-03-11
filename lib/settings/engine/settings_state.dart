@@ -113,7 +113,7 @@ class SettingsState extends Equatable {
       libraryViewMode: 'grid',
       libraryShowPreview: true,
       shortcuts: {},
-      enablePerBookSettings: true,
+      enablePerBookSettings: false,
       isOfflineMode: false,
       alignTabsToRight: false,
       enableHtmlLinks: true,

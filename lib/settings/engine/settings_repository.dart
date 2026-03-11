@@ -222,7 +222,7 @@ class SettingsRepository {
       'shortcuts': await getShortcuts(),
       'enablePerBookSettings': _settings.getValue<bool>(
         keyEnablePerBookSettings,
-        defaultValue: true,
+        defaultValue: false,
       ),
       'isOfflineMode': _settings.getValue<bool>(
         keyOfflineMode,
@@ -675,7 +675,7 @@ class SettingsRepository {
     await _settings.setValue(keyIsFullscreen, false);
     await _settings.setValue(keyLibraryViewMode, 'grid');
     await _settings.setValue(keyLibraryShowPreview, true);
-    await _settings.setValue(keyEnablePerBookSettings, true);
+    await _settings.setValue(keyEnablePerBookSettings, false);
     await _settings.setValue(keySoftwareAndBookUpdatesEnabled, true);
     await _settings.setValue(keyErrorReportSenderEmail, '');
     await _settings.setValue(keyQueueErrorReportsWhenOffline, true);
