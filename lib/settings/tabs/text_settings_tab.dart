@@ -286,29 +286,27 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'כתרי אותיות',
       children: [
-        SegmentedSettingsTile<bool>(
-          icon: FluentIcons.shield_keyhole_24_regular,
+        SwitchSettingsTile(
+          leading: const Icon(FluentIcons.shield_keyhole_24_regular),
           title: RichText(
             text: TextSpan(
-              style: TextStyle(
-                fontSize: 16,
+              style: kSettingsTitleStyle.copyWith(
                 color: Theme.of(context).colorScheme.onSurface,
               ),
-              children: [
-                const TextSpan(
-                  text: 'הצגת שמו הגדול',
-                ),
+              children: const [
+                TextSpan(text: 'הצגת שם הקודש'),
               ],
             ),
           ),
-          subtitle: 'זֶה־שְּׁמִ֣י לְעֹלָ֔ם וְזֶ֥ה זִכְרִ֖י לְדֹ֥ר דֹּֽר',
-          options: const [
-            SegmentOption(value: false, label: 'בכתיבתו'),
-            SegmentOption(value: true, label: 'שלא בכתיבתו'),
-          ],
-          currentValue: state.replaceHolyNames,
+          subtitle: Text(
+            !state.replaceHolyNames
+                ? 'השם הקדוש יוצג'
+                : 'השם הקדוש לא יוצג מפני קדושתו',
+            style: kSettingsSubtitleStyle,
+          ),
+          value: !state.replaceHolyNames,
           onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdateReplaceHolyNames(value));
+            context.read<SettingsBloc>().add(UpdateReplaceHolyNames(!value));
           },
         ),
         SegmentedSettingsTile<String>(

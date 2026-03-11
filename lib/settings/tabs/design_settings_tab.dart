@@ -191,7 +191,7 @@ class DesignSettingsTab extends StatelessWidget {
                     },
                   ),
                   SwitchSettingsTile(
-                    title: const Text('הערות אישיות מקופלות כברירת מחדל',
+                    title: const Text('הסתרת הערות אישיות',
                         style: kSettingsTitleStyle),
                     subtitle: Text(
                         state.personalNotesCollapsedByDefault
@@ -210,12 +210,12 @@ class DesignSettingsTab extends StatelessWidget {
                       final splitedView =
                           Settings.getValue<bool>('key-splited-view') ?? false;
                       return SwitchSettingsTile(
-                        title: const Text('ברירת המחדל להצגת המפרשים',
+                        title: const Text('הצגת המפרשים בחלונית בצד',
                             style: kSettingsTitleStyle),
                         subtitle: Text(
                             splitedView
-                                ? 'המפרשים יוצגו לצד הטקסט'
-                                : 'המפרשים יוצגו מתחת הטקסט',
+                                ? 'המפרשים יוצגו בחלונית מפוצלת'
+                                : 'המפרשים יוצגו בתוך הטקסט',
                             style: kSettingsSubtitleStyle),
                         value: splitedView,
                         onChanged: (value) {
