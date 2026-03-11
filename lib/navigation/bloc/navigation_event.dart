@@ -25,11 +25,4 @@ class OpenNewSearchTab extends NavigationEvent {
   const OpenNewSearchTab();
 }
 
-class UpdateLibraryStatus extends NavigationEvent {
-  final bool isEmpty;
 
-  const UpdateLibraryStatus(this.isEmpty);
-
-  @override
-  List<Object?> get props => [isEmpty];
-}

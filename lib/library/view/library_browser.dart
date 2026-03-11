@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -22,8 +21,7 @@ import 'package:otzaria/library/view/book_preview_panel.dart';
 import 'package:otzaria/library/view/resizable_preview_panel.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/utils/open_book.dart';
-import 'package:otzaria/core/app_paths.dart';
-import 'package:otzaria/data/constants/database_constants.dart';
+
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -84,9 +82,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   static int _normalizeOrder(int order) =>
       order >= 0 ? order : 1000 + order.abs();
 
-  // Database generation button visibility
-  bool?
-      _showDbGenerationButton; // null = לא נבדק עדיין, true = הצג, false = אל תציג
   // FileSyncBloc יווצר פעם אחת בלבד
   late final FileSyncBloc _fileSyncBloc;
 
@@ -95,8 +90,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     super.initState();
     context.read<LibraryBloc>().add(LoadLibrary());
 
-    // בדיקה אסינכרונית אם להציג כפתור יצירת DB (ברקע, לא חוסם)
-    _checkDbGenerationButtonVisibility();
     // יצירת FileSyncBloc פעם אחת בלבד
     _fileSyncBloc = FileSyncBloc(
       repository: FileSyncRepository(
@@ -106,43 +99,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
-  /// בדיקה אסינכרונית אם להציג כפתור יצירת DB
-  /// הבדיקה מתבצעת ברקע ולא חוסמת את עליית התוכנה
-  ///
-  /// לוגיקה:
-  /// - במצב דיבאגר (debug/profile): הכפתור תמיד מוצג
-  /// - במצב פרודקשן (release): הכפתור מוצג רק אם קובץ DB לא קיים
-  /// - עד לסיום הבדיקה: הכפתור לא מוצג (_showDbGenerationButton = null)
-  Future<void> _checkDbGenerationButtonVisibility() async {
-    // במצב דיבאגר - תמיד הצג את הכפתור חיווי אם חסר
-    // const bool.fromEnvironment('dart.vm.product') מחזיר false בדיבאגר, true בפרודקשן
-    if (const bool.fromEnvironment('dart.vm.product') == false) {
-      // בדוק אם DB קיים גם בדיבאג כדי לדעת אם להבהב או לא
-    }
-
-    try {
-      // בדיקה אם קובץ DB קיים
-      final libraryPath = await AppPaths.getLibraryPath();
-      final dbPath = DatabaseConstants.getDatabasePathForLibrary(libraryPath);
-      final dbFile = File(dbPath);
-      final dbExists = await dbFile.exists();
-
-      if (mounted) {
-        setState(() {
-          // הצג חיווי מהבהב ר אם DB לא קיים
-          _showDbGenerationButton = !dbExists;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error checking DB file existence: $e');
-      // במקרה של שגיאה - נניח שה-DB קיים כדי לא לבלבל
-      if (mounted) {
-        setState(() {
-          _showDbGenerationButton = false;
-        });
-      }
-    }
-  }
 
   @override
   void dispose() {
@@ -1097,22 +1053,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     LibraryState state,
     SettingsState settingsState,
   ) {
-    final actions = <ActionButtonData>[];
-
-    // DB exists indicator goes into the overflow menu.
-    if (!(Platform.isAndroid || Platform.isIOS) &&
-        _showDbGenerationButton == false) {
-      actions.add(
-        ActionButtonData(
-          widget: const SizedBox.shrink(),
-          icon: FluentIcons.database_arrow_right_24_regular,
-          tooltip: 'מסד נתונים כבר קיים',
-          onPressed: null,
-        ),
-      );
-    }
-
-    return actions;
+    return <ActionButtonData>[];
   }
 
   /// בניית כפתור סינכרון - משותף לשתי הפונקציות
@@ -1400,91 +1341,6 @@ class _LoadingDotsTextState extends State<_LoadingDotsText>
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Widget של כפתור יצירת מסד נתונים עם אנימציית הבהוב אדום עדין
-/// מהבהב 5 פעמים ואז נעצר
-class _BlinkingDatabaseButton extends StatefulWidget {
-  final VoidCallback onPressed;
-
-  const _BlinkingDatabaseButton({required this.onPressed});
-
-  @override
-  State<_BlinkingDatabaseButton> createState() =>
-      _BlinkingDatabaseButtonState();
-}
-
-class _BlinkingDatabaseButtonState extends State<_BlinkingDatabaseButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Color?> _colorAnimation;
-  int _blinkCount = 0;
-  static const int maxBlinks = 5;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-
-    _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _blinkCount++;
-        if (_blinkCount < maxBlinks) {
-          _controller.reverse();
-        }
-      } else if (status == AnimationStatus.dismissed) {
-        if (_blinkCount < maxBlinks) {
-          _controller.forward();
-        }
-      }
-    });
-
-    // התחל את האנימציה
-    _controller.forward();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // יצירת אנימציית צבע עדינה מהרקע הרגיל לאדום עדין
-    _colorAnimation = ColorTween(
-      begin: Theme.of(context).colorScheme.surfaceContainerHighest,
-      end: Colors.red.withValues(alpha: 0.3), // אדום עדין מאוד
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _colorAnimation,
-      builder: (context, child) {
-        return IconButton(
-          icon: const Icon(FluentIcons.database_arrow_right_24_regular),
-          tooltip: 'יצירת מסד נתונים - לחץ כאן!',
-          onPressed: widget.onPressed,
-          style: IconButton.styleFrom(
-            foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
-            backgroundColor: _colorAnimation.value,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
           ),
         );
       },
