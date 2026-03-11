@@ -72,12 +72,12 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       pageBuilder: () => const ShortcutsSettingsTab(),
     ),
     (
-      label: 'אוצריא',
+      label: 'מערכת',
       icon: FluentIcons.settings_24_regular,
       pageBuilder: () => const SystemSettingsTab(),
     ),
     (
-      label: 'חכמי לב',
+      label: 'אודות',
       icon: FluentIcons.people_team_24_regular,
       pageBuilder: () => const AboutDevTab(),
     ),
