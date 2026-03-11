@@ -22,7 +22,6 @@ class SettingsRepository {
   static const String keyShowHebrewBooks = 'key-show-hebrew-books';
   static const String keyShowExternalBooks = 'key-show-external-books';
   static const String keyShowTeamim = 'key-show-teamim';
-  static const String keyUseFastSearch = 'key-use-fast-search';
   static const String keyReplaceHolyNames = 'key-replace-holy-names';
   static const String keyAutoUpdateIndex = 'key-auto-index-update';
   static const String keyDefaultNikud = 'key-default-nikud';
@@ -143,10 +142,6 @@ class SettingsRepository {
       ),
       'showTeamim': _settings.getValue<bool>(
         keyShowTeamim,
-        defaultValue: true,
-      ),
-      'useFastSearch': _settings.getValue<bool>(
-        keyUseFastSearch,
         defaultValue: true,
       ),
       'replaceHolyNames': _settings.getValue<bool>(
@@ -350,10 +345,6 @@ class SettingsRepository {
 
   Future<void> updateShowTeamim(bool value) async {
     await _settings.setValue(keyShowTeamim, value);
-  }
-
-  Future<void> updateUseFastSearch(bool value) async {
-    await _settings.setValue(keyUseFastSearch, value);
   }
 
   Future<void> updateReplaceHolyNames(bool value) async {
@@ -635,7 +626,6 @@ class SettingsRepository {
     await _settings.setValue(keyShowHebrewBooks, false);
     await _settings.setValue(keyShowExternalBooks, false);
     await _settings.setValue(keyShowTeamim, true);
-    await _settings.setValue(keyUseFastSearch, true);
     await _settings.setValue(keyReplaceHolyNames, true);
     await _settings.setValue(keyAutoUpdateIndex, true);
     await _settings.setValue(keyDefaultNikud, false);

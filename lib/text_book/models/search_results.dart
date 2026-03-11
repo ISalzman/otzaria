@@ -11,13 +11,3 @@ class TextSearchResult {
     required this.address,
   });
 }
-
-class BookTextSearchResult extends TextSearchResult {
-  final String path;
-  BookTextSearchResult(
-      {required this.path,
-      required super.snippet,
-      required super.index,
-      required super.query,
-      required super.address});
-}
