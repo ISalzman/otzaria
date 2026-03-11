@@ -1161,26 +1161,12 @@ $textWithBreaks
                               )
                             : textWidget;
 
-                        // Invisible newline to preserve line breaks when copying
-                        // from SelectionArea across multiple widgets.
-                        final textWithNewline = Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            constrainedText,
-                            const Text(
-                              '\n',
-                              style: TextStyle(fontSize: 0, height: 0),
-                            ),
-                          ],
-                        );
-
                         if (notesForLine.isEmpty) {
                           return Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(width: 16),
-                              Expanded(child: textWithNewline),
+                              Expanded(child: constrainedText),
                             ],
                           );
                         }
@@ -1229,7 +1215,7 @@ $textWithBreaks
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             indicator,
-                            Expanded(child: textWithNewline),
+                            Expanded(child: constrainedText),
                           ],
                         );
                       },
