@@ -74,11 +74,7 @@ class IndexingRepository {
     _tantivyDataProvider.isIndexing.value = true;
     final allBooks = library.getAllBooks();
 
-    // Filter out books with externalLibraryId (external library books should not be indexed)
-    final booksToIndex =
-        allBooks.where((book) => book.externalLibraryId == null).toList();
-
-    final totalBooks = booksToIndex.length;
+    final totalBooks = allBooks.length;
     int processedBooks = 0;
     int actuallyIndexed = 0;
     int skipped = 0;
@@ -88,7 +84,7 @@ class IndexingRepository {
     debugPrint(
         '📊 ספרים שכבר מאונדקסים: ${_tantivyDataProvider.booksDone.length}');
 
-    for (Book book in booksToIndex) {
+    for (Book book in allBooks) {
       // Check if indexing was cancelled
       if (!_tantivyDataProvider.isIndexing.value) {
         debugPrint('⚠️ אינדוקס בוטל על ידי המשתמש');

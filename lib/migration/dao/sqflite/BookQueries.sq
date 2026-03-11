@@ -9,22 +9,7 @@ FROM book
 WHERE COALESCE(fileType, '') != 'link'
 ORDER BY orderIndex, title;
 
-selectAllWithOtzarHachochma:
-SELECT *
-FROM book
-WHERE COALESCE(fileType, '') != 'link'
-ORDER BY orderIndex, title;
 
-selectAllWithHebrewBooks:
-SELECT *
-FROM book
-WHERE COALESCE(fileType, '') != 'link'
-ORDER BY orderIndex, title;
-
-selectAllWithBothExternalCatalogs:
-SELECT *
-FROM book
-ORDER BY orderIndex, title;
 
 selectById:
 SELECT * FROM book WHERE id = ?;

@@ -76,34 +76,7 @@ class Category {
     return booksAndCategories;
   }
 
-  /// בודק אם הקטגוריה מכילה רק ספרים מספריות חיצוניות (ExternalLibraryBook).
-  ///
-  /// קטגוריה נחשבת "קטגוריית ספריות חיצוניות" אם:
-  /// - כל הספרים שלה הם מסוג ExternalLibraryBook
-  /// - כל תת-הקטגוריות שלה גם הן קטגוריות ספריות חיצוניות
-  /// - יש לה לפחות ספר אחד או תת-קטגוריה אחת (לא ריקה)
-  bool get isExternalLibrariesCategory {
-    // קטגוריה ריקה לא נחשבת קטגוריית ספריות חיצוניות
-    if (books.isEmpty && subCategories.isEmpty) {
-      return false;
-    }
 
-    // בדיקה שכל הספרים בקטגוריה הם ExternalLibraryBook
-    for (final book in books) {
-      if (book is! ExternalLibraryBook) {
-        return false;
-      }
-    }
-
-    // בדיקה רקורסיבית של כל תת-הקטגוריות
-    for (final subCategory in subCategories) {
-      if (!subCategory.isExternalLibrariesCategory) {
-        return false;
-      }
-    }
-
-    return true;
-  }
 
   /// Initialize a new [Category] instance.
   ///

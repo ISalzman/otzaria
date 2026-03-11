@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:logging/logging.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+
 
 import '../../core/models/author.dart';
 import '../../core/models/book.dart';
@@ -2179,20 +2179,9 @@ class SeforimRepository {
   Future<List<Book>> getAllBooks() async {
     _logger.fine('Getting all books with optimized query');
 
-    // קריאת ההגדרות של ספרים חיצוניים
-    final showExternalBooks =
-        Settings.getValue<bool>('key-show-external-books') ?? false;
-    final showOtzarHachochma =
-        Settings.getValue<bool>('key-show-otzar-hachochma') ?? false;
-    final showHebrewBooks =
-        Settings.getValue<bool>('key-show-hebrew-books') ?? false;
-
     // Use the optimized query that loads all relations in a single batch
-    final booksWithRelations = await _database.bookDao.getAllBooksWithRelations(
-      includeExternalBooks: showExternalBooks,
-      includeOtzarHachochma: showOtzarHachochma,
-      includeHebrewBooks: showHebrewBooks,
-    );
+    // External catalog books (fileType='link') are excluded since they are in a separate DB
+    final booksWithRelations = await _database.bookDao.getAllBooksWithRelations();
     _logger.fine('Found ${booksWithRelations.length} books');
 
     // Convert to Book objects

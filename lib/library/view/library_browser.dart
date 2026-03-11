@@ -536,13 +536,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   Future<List<Widget>> _buildCategoryContent(Category category) async {
     List<Widget> items = [];
 
-    // סינון ספרים מספריות חיצוניות - לא מציגים אותם בתצוגת הקטגוריות
-    final filteredBooks =
-        category.books.where((book) => book is! ExternalLibraryBook).toList();
-    // סינון קטגוריות ספריות חיצוניות - לא מציגים אותן בתצוגת הקטגוריות
-    final filteredSubCategories = category.subCategories
-        .where((cat) => !cat.isExternalLibrariesCategory)
-        .toList();
+    final filteredBooks = category.books.toList();
+    final filteredSubCategories = category.subCategories.toList();
 
     filteredBooks.sort((a, b) => a.order.compareTo(b.order));
     if (category is Library) {
@@ -570,13 +565,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
       // Add subcategories
       for (Category subCategory in filteredSubCategories) {
-        // סינון ספרים מספריות חיצוניות גם בתת-קטגוריות
-        final subFilteredBooks = subCategory.books
-            .where((book) => book is! ExternalLibraryBook)
-            .toList();
-        final subFilteredCategories = subCategory.subCategories
-            .where((cat) => !cat.isExternalLibrariesCategory)
-            .toList();
+        final subFilteredBooks = subCategory.books.toList();
+        final subFilteredCategories = subCategory.subCategories.toList();
 
         subFilteredBooks.sort((a, b) => a.order.compareTo(b.order));
         subFilteredCategories.sort((a, b) => a.order.compareTo(b.order));
@@ -717,13 +707,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   List<Widget> _buildCategoryTree(Category category, int level) {
     List<Widget> widgets = [];
 
-    // סינון ספרים מספריות חיצוניות - לא מציגים אותם בתצוגת הקטגוריות
-    final filteredBooks =
-        category.books.where((book) => book is! ExternalLibraryBook).toList();
-    // סינון קטגוריות ספריות חיצוניות - לא מציגים אותן בתצוגת הקטגוריות
-    final filteredSubCategories = category.subCategories
-        .where((cat) => !cat.isExternalLibrariesCategory)
-        .toList();
+    final filteredBooks = category.books.toList();
+    final filteredSubCategories = category.subCategories.toList();
 
     // מיון
     filteredBooks.sort((a, b) => a.order.compareTo(b.order));
