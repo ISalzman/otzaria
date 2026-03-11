@@ -184,8 +184,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             ),
             subtitle: Text(
               (Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true)
-                  ? 'מסד הנתונים של הספרייה יתעדכן אוטומטית דרך GitHub Releases'
-                  : 'סינכרון הספרייה האוטומטי כבוי',
+                  ? 'מסד הנתונים של הספרייה יתעדכן אוטומטית'
+                  : 'סינכרון הספרייה מושבת',
               style: const TextStyle(fontSize: 13),
               textDirection: TextDirection.rtl,
             ),

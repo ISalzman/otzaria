@@ -47,7 +47,7 @@ class AboutDevTab extends StatelessWidget {
       'name': 'י. ח. מ.',
       'url':
           'https://forum.otzaria.org/user/%D7%99%D7%95%D7%9D-%D7%97%D%93%D7%A9-%D7%9E%D7%AA%D7%97%D7%99%D7%9C',
-    },    
+    },
     {'name': 'ס. כב.', 'url': 'https://mitmachim.top/user/sivan22'},
     {
       'name': 'י. צ.',
@@ -88,10 +88,26 @@ class AboutDevTab extends StatelessWidget {
       'name': 'מויטיו',
       'url': 'https://mitmachim.top/user/%D7%9E%D7%95%D7%99%D7%98%D7%99%D7%95',
     },
-    {'name': 'ד. מ. א.', 'url': 'https://forum.otzaria.org/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1'},
-    {'name': 'א. צ. מ.', 'url': 'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99'},
-    {'name': 'ש. א.', 'url': 'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99'},
-    {'name': 'י. ד.', 'url': 'https://forum.otzaria.org/user/%D7%99%D7%90%D7%99%D7%A8-%D7%93%D7%A0%D7%99%D7%90%D7%9C'},
+    {
+      'name': 'ד. מ. א.',
+      'url':
+          'https://forum.otzaria.org/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1'
+    },
+    {
+      'name': 'א. צ. מ.',
+      'url':
+          'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99'
+    },
+    {
+      'name': 'ש. א.',
+      'url':
+          'https://forum.otzaria.org/user/%D7%90%D7%99%D7%A9-%D7%A6%D7%93%D7%99%D7%A7-%D7%9E%D7%99%D7%93%D7%99'
+    },
+    {
+      'name': 'י. ד.',
+      'url':
+          'https://forum.otzaria.org/user/%D7%99%D7%90%D7%99%D7%A8-%D7%93%D7%A0%D7%99%D7%90%D7%9C'
+    },
     {'name': 'ש. נ.', 'url': ''},
   ];
 
@@ -119,7 +135,7 @@ class AboutDevTab extends StatelessWidget {
               title: 'הצטרף לצוות העריכה',
               subtitle: 'עזור לנו להוסיף ספרים חדשים לספריית אוצריא',
               buttonLabel: 'הצטרף לעריכה',
-              onTap: () => _openUrl('https://forum.otzaria.org'),
+              onTap: () => _openUrl('https://www.otzaria.org/library'),
             ),
             const Divider(height: 1),
             _ActionTile(
@@ -127,7 +143,7 @@ class AboutDevTab extends StatelessWidget {
               title: 'הצטרף לפיתוח',
               subtitle: 'מפתחים מוזמנים לתרום לקהילה התורנית',
               buttonLabel: 'הצטרף עכשיו',
-              onTap: () => _openUrl('https://github.com/Sivan22/otzaria'),
+              onTap: () => _openUrl('https://github.com/otzaria/otzaria'),
             ),
           ],
         ),
@@ -238,7 +254,7 @@ class AboutDevTab extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () => _openUrl('https://nedar.im/ejco'),
+              onPressed: () => _openUrl('https://nedar.im/ezOd'),
               icon: const Icon(FluentIcons.payment_24_regular, size: 18),
               label: const Text('נדרים+'),
             ),
