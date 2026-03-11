@@ -286,29 +286,6 @@ class TextSettingsTab extends StatelessWidget {
     return SettingsCard(
       title: 'כתרי אותיות',
       children: [
-        SwitchSettingsTile(
-          leading: const Icon(FluentIcons.shield_keyhole_24_regular),
-          title: RichText(
-            text: TextSpan(
-              style: kSettingsTitleStyle.copyWith(
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-              children: const [
-                TextSpan(text: 'הצגת שם הקודש'),
-              ],
-            ),
-          ),
-          subtitle: Text(
-            !state.replaceHolyNames
-                ? 'השם הקדוש יוצג'
-                : 'השם הקדוש לא יוצג מפני קדושתו',
-            style: kSettingsSubtitleStyle,
-          ),
-          value: !state.replaceHolyNames,
-          onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdateReplaceHolyNames(!value));
-          },
-        ),
         SegmentedSettingsTile<String>(
           icon: FluentIcons.text_font_info_24_regular,
           title: 'הצגת הניקוד',
@@ -343,6 +320,29 @@ class TextSettingsTab extends StatelessWidget {
                     .add(const UpdateRemoveNikudFromTanach(true));
                 break;
             }
+          },
+        ),
+        SwitchSettingsTile(
+          leading: const Icon(FluentIcons.shield_keyhole_24_regular),
+          title: RichText(
+            text: TextSpan(
+              style: kSettingsTitleStyle.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              children: const [
+                TextSpan(text: 'הצגת שם הקודש'),
+              ],
+            ),
+          ),
+          subtitle: Text(
+            !state.replaceHolyNames
+                ? 'השם הקדוש יוצג'
+                : 'השם הקדוש לא יוצג מפני קדושתו',
+            style: kSettingsSubtitleStyle,
+          ),
+          value: !state.replaceHolyNames,
+          onChanged: (value) {
+            context.read<SettingsBloc>().add(UpdateReplaceHolyNames(!value));
           },
         ),
         SwitchSettingsTile(
