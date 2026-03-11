@@ -1,4 +1,4 @@
-import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,11 +10,8 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/settings/settings_exports.dart' hide UpdateFontSize;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:uuid/uuid.dart'; // הוספת הייבוא של UUID
 import 'package:otzaria/widgets/password_dialog.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 
 /// פאנל תצוגה מקדימה של ספר בספרייה
 /// מציג את תוכן הספר בלי כרטיסיות, בדומה לחלון העיון
@@ -38,8 +35,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
   TextBookTab? _currentTextTab;
   PdfViewerController? _pdfController;
   double _fontSize = 18.0; // ברירת מחדל לגודל פונט
-  Future<String?>? _pdfPathFuture;
-  String? _cachedPdfPath; // שמירת נתיב הקובץ כדי למנוע טעינה מחדש
 
   @override
   void didUpdateWidget(BookPreviewPanel oldWidget) {
@@ -72,35 +67,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     _currentTextTab?.dispose();
     _currentTextTab = null;
     _pdfController = null;
-
-    // ניקוי הקובץ הזמני בשיטת שגר-ושכח אסינכרונית לחלוטין
-    if (_cachedPdfPath != null) {
-      final String pathToDelete = _cachedPdfPath!;
-      () async {
-        try {
-          final file = File(pathToDelete);
-          if (await file.exists()) {
-            await file.delete();
-          }
-        } catch (e) {
-          debugPrint('Error deleting preview PDF: $e');
-        }
-      }();
-    }
-    _cachedPdfPath = null;
-  }
-
-  Future<String?> _loadPreviewPdfFile(PdfBook book) async {
-    final bytes = await SqliteDataProvider.instance.getPdfBytesFromDb(book);
-    if (bytes == null) return null;
-
-    final tempDir = await getTemporaryDirectory();
-    // שימוש ב-UUID ליצירת שם קובץ מובטח וייחודי
-    final fileName = 'preview_${book.title.hashCode}_${const Uuid().v4()}.pdf';
-    final file = File('${tempDir.path}/$fileName');
-
-    await file.writeAsBytes(bytes);
-    return file.path;
   }
 
   void _createNewTab() {
@@ -119,8 +85,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     } else if (widget.book is PdfBook) {
       setState(() {
         _pdfController = PdfViewerController();
-        _cachedPdfPath = null;
-        _pdfPathFuture = _loadPreviewPdfFile(widget.book as PdfBook);
       });
     }
   }
@@ -203,88 +167,8 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     }
 
     // תצוגת ספר PDF
-    if (widget.book is PdfBook) {
-      // אם יש נתיב שמור, השתמש בו ישירות
-      if (_cachedPdfPath != null && _pdfController != null) {
-        return _buildPdfViewer(_cachedPdfPath!);
-      }
-
-      // אחרת, טען מה-Future
-      if (_pdfController == null || _pdfPathFuture == null) {
-        return const Center(child: CircularProgressIndicator());
-      }
-
-      return FutureBuilder<String?>(
-        future: _pdfPathFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    FluentIcons.error_circle_24_regular,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'שגיאה בטעינת הספר',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (!snapshot.hasData || snapshot.data == null) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    FluentIcons.document_error_24_regular,
-                    size: 64,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .secondary
-                        .withValues(alpha: 0.3),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'לא ניתן לטעון את הספר',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          // שמירת הנתיב ב-cache
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _cachedPdfPath == null) {
-              setState(() {
-                _cachedPdfPath = snapshot.data;
-              });
-            }
-          });
-
-          return _buildPdfViewer(snapshot.data!);
-        },
-      );
+    if (widget.book is PdfBook && _pdfController != null) {
+      return _buildPdfViewer((widget.book as PdfBook).path);
     }
 
     // תצוגת ספר טקסט

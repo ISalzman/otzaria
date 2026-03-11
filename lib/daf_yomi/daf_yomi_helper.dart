@@ -1,14 +1,12 @@
-import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:path_provider/path_provider.dart';
 
 // Cache של outlines - מפתח: title של הספר, ערך: outline
 final Map<String, List<PdfOutlineNode>> _outlineCache = {};
@@ -189,25 +187,8 @@ Future<PdfOutlineNode?> getDafYomiOutline(PdfBook book, String daf) async {
 }
 
 Future<List<PdfOutlineNode>> _loadOutlineFromFile(PdfBook book) async {
-  final pdfBytes = await SqliteDataProvider.instance.getPdfBytesFromDb(book);
-  if (pdfBytes == null || pdfBytes.isEmpty) {
-    return const [];
-  }
-
-  // יצירת קובץ זמני - משתמש באותו שם כמו pdf_book_screen
-  final tempDir = await getTemporaryDirectory();
-  final fileName = 'pdf_${book.title.hashCode}.pdf'; // אותו שם!
-  final file = File('${tempDir.path}/$fileName');
-
-  // כתיבת הקובץ רק אם הוא לא קיים
-  if (!await file.exists()) {
-    await file.writeAsBytes(pdfBytes, flush: true);
-  }
-
-  // טעינת ה-outline מהקובץ (הרבה יותר יעיל!)
-  final document = await PdfDocument.openFile(file.path);
+  final document = await PdfDocument.openFile(book.path);
   final outlines = await document.loadOutline();
-
   return outlines;
 }
 

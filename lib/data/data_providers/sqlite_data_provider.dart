@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/migration/core/models/book.dart' as migration;
@@ -225,44 +224,7 @@ class SqliteDataProvider {
     }
   }
 
-  /// Retrieves PDF bytes from the database (book_file) for a given PDF book.
-  /// Returns null if not found or DB not initialized.
-  Future<Uint8List?> getPdfBytesFromDb(PdfBook book) async {
-    if (!_isInitialized) {
-      await initialize();
-    }
-    if (!_isInitialized) {
-      return null;
-    }
 
-    try {
-      migration.Book? dbBook;
-      final filePath = book.filePath ?? book.path;
-
-      if (filePath.isNotEmpty) {
-        dbBook =
-            await _repository.getExternalBookByFilePathAndType(filePath, 'pdf');
-      }
-
-      dbBook ??= await _repository.getBookByTitleAndFileType(book.title, 'pdf');
-
-      if (dbBook == null) {
-        return null;
-      }
-
-      final bytes = await _repository.getBookFileContent(dbBook.id);
-
-      if (bytes == null) {
-        return null;
-      }
-
-      return bytes;
-    } catch (e, stackTrace) {
-      debugPrint('❌ Error loading PDF from DB: ${book.title} - $e');
-      debugPrint('Stack trace: $stackTrace');
-      return null;
-    }
-  }
 
   /// Gets the repository instance (for advanced operations)
   SeforimRepository? get repository => _isInitialized ? _repository : null;

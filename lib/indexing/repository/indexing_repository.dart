@@ -1,14 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/utils/ref_helper.dart';
@@ -115,27 +112,7 @@ class IndexingRepository {
             debugPrint('⏭️ דילוג על PDF שכבר מאונדקס: ${book.title}');
             skipped++;
           }
-        } else if (book is ExternalLibraryBook) {
-          if (!_tantivyDataProvider.booksDone
-              .contains("${book.title}externalBook")) {
-            final idHash = sha1.convert(utf8.encode(book.link)).toString();
-            if (_tantivyDataProvider.booksDone.contains(idHash)) {
-              debugPrint('⏭️ דילוג על ספר חיצוני קיים (hash): ${book.title}');
-              _tantivyDataProvider.booksDone.add("${book.title}externalBook");
-              skipped++;
-            } else {
-              debugPrint('🔗 מאנדקס ספר חיצוני: ${book.title}');
-              await _indexExternalLibraryBook(book);
-              _tantivyDataProvider.booksDone.add("${book.title}externalBook");
-              _tantivyDataProvider.booksDone.add(idHash);
-              actuallyIndexed++;
-            }
-          } else {
-            debugPrint('⏭️ דילוג על ספר חיצוני שכבר מאונדקס: ${book.title}');
-            skipped++;
-          }
         }
-        processedBooks++;
 
         // Commit every 25 books to save progress (optimized for 8GB RAM)
         if (processedBooks % 25 == 0) {
@@ -293,41 +270,6 @@ class IndexingRepository {
     }
   }
 
-  /// Indexes an external library book (e.g., Otzar) by indexing its metadata
-  /// so the book becomes discoverable in searches.
-  Future<void> _indexExternalLibraryBook(ExternalLibraryBook book) async {
-    final index = await _tantivyDataProvider.engine;
-
-    final title = book.title;
-    final topics = "/${book.topics.replaceAll(', ', '/')}";
-
-    // Combine available metadata into a single text blob for indexing
-    final parts = <String>[];
-    parts.add(title);
-    if (book.author != null) parts.add(book.author!);
-    if (book.heShortDesc != null) parts.add(book.heShortDesc!);
-    if (book.heDesc != null) parts.add(book.heDesc!);
-    if (book.link.isNotEmpty) parts.add(book.link);
-    if (book.topics.isNotEmpty) parts.add(book.topics);
-
-    var combined = parts.where((p) => p.isNotEmpty).join(' — ');
-    combined = stripHtmlIfNeeded(combined);
-    combined = removeVolwels(combined);
-
-    index.addDocument(
-      id: _nextDocumentId(),
-      title: title,
-      reference: '',
-      topics: '$topics/$title',
-      text: combined,
-      segment: BigInt.from(0),
-      isPdf: false,
-      filePath: book.link,
-    );
-
-    // Don't commit after every book - too slow!
-    debugPrint('   ✅ סיים אינדוקס של ספר חיצוני: $title');
-  }
 
   /// Indexes a PDF book by extracting and processing text from each page.
   Future<void> _indexPdfBook(PdfBook book) async {
@@ -336,9 +278,8 @@ class IndexingRepository {
 
     debugPrint('📚 PDF indexing started: "${book.title}" (${book.path})');
 
-    // Try to load PDF from file first (much faster!), then fall back to database
+    // Load PDF from file
     PdfDocument? document;
-    File? tempFileCreatedByUs;
     try {
       final file = File(book.path);
 
@@ -374,59 +315,9 @@ class IndexingRepository {
         debugPrint('   ⚠️ קובץ PDF לא קיים: ${book.path}');
       }
 
-      // Fallback to database if file load failed
+      // Fallback: file doesn't exist
       if (document == null) {
-        Uint8List? pdfBytes;
-
-        try {
-          debugPrint('   🔍 מנסה לטעון PDF מ-DB: ${book.title}');
-          pdfBytes = await SqliteDataProvider.instance.getPdfBytesFromDb(book);
-
-          if (pdfBytes != null && pdfBytes.isNotEmpty) {
-            debugPrint(
-                '   ✅ נטען מ-DB: ${(pdfBytes.length / 1024 / 1024).toStringAsFixed(2)} MB');
-
-            // Save to temporary file (like pdf_book_screen does)
-            debugPrint('   💾 שומר לקובץ זמני...');
-            final tempDir = await getTemporaryDirectory();
-            final fileName =
-                'pdf_index_${book.id ?? book.title.hashCode}_${_nextDocumentId()}.pdf';
-            final tempFile = File('${tempDir.path}/$fileName');
-            tempFileCreatedByUs = tempFile;
-
-            await tempFile.writeAsBytes(pdfBytes, flush: true);
-            debugPrint('   ✅ נשמר לקובץ זמני: ${tempFile.path}');
-
-            // Now open from the temporary file
-            debugPrint('   ⏳ פותח PDF מקובץ זמני...');
-            final openStartTime = DateTime.now();
-
-            document = await PdfDocument.openFile(tempFile.path)
-                .timeout(Duration(seconds: 60), onTimeout: () {
-              final elapsed =
-                  DateTime.now().difference(openStartTime).inSeconds;
-              debugPrint(
-                  '   ⏱️ טיימאאוט בפתיחת PDF מקובץ זמני אחרי $elapsed שניות: ${book.title}');
-              throw TimeoutException(
-                  'PDF open timeout from temp file after $elapsed seconds');
-            });
-
-            final openElapsed =
-                DateTime.now().difference(openStartTime).inSeconds;
-            debugPrint(
-                '   ✅ PDF נפתח בהצלחה מקובץ זמני (לקח $openElapsed שניות)');
-          } else {
-            debugPrint('   ⚠️ PDF לא נמצא ב-DB או ריק');
-          }
-        } catch (e, stackTrace) {
-          debugPrint('   ❌ שגיאה בטעינה מ-DB: $e');
-          debugPrint(
-              '   Stack trace: ${stackTrace.toString().split('\n').take(3).join('\n')}');
-        }
-      }
-
-      if (document == null) {
-        debugPrint('   ❌ לא ניתן לפתוח את ה-PDF: ${book.title}');
+        debugPrint('   ❌ לא ניתן לפתוח את ה-PDF: ${book.title} (${book.path})');
         return;
       }
 
@@ -657,14 +548,6 @@ class IndexingRepository {
       // Summary already printed above
     } finally {
       document?.dispose();
-
-      if (tempFileCreatedByUs != null && await tempFileCreatedByUs.exists()) {
-        try {
-          await tempFileCreatedByUs.delete();
-        } catch (_) {
-          // Ignore error
-        }
-      }
     }
   }
 
