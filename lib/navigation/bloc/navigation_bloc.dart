@@ -16,7 +16,6 @@ class NavigationBloc extends Bloc<NavigationEvent, NavigationState> {
         super(NavigationState.initial(tabsRepository.loadTabs().isNotEmpty)) {
     on<NavigateToScreen>(_onNavigateToScreen);
     on<CheckLibrary>(_onCheckLibrary);
-    on<UpdateLibraryStatus>(_onUpdateLibraryStatus);
   }
 
   void _onNavigateToScreen(
@@ -34,12 +33,7 @@ class NavigationBloc extends Bloc<NavigationEvent, NavigationState> {
     emit(state.copyWith(isLibraryEmpty: isEmpty));
   }
 
-  void _onUpdateLibraryStatus(
-    UpdateLibraryStatus event,
-    Emitter<NavigationState> emit,
-  ) {
-    emit(state.copyWith(isLibraryEmpty: event.isEmpty));
-  }
+
 
   Future<void> refreshLibrary() async {
     await _repository.refreshLibrary();
