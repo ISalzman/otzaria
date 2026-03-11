@@ -25,21 +25,13 @@ class BookDao {
   ///
   /// [txn] must be a [Transaction] or [Database] (both implement [DatabaseExecutor]).
   Future<List<Map<String, dynamic>>> getAllBooksMinimalInTxn(
-    DatabaseExecutor txn, {
-    bool includeExternalBooks = false,
-    bool includeOtzarHachochma = false,
-    bool includeHebrewBooks = false,
-  }) async {
-    final String condition =
-        includeExternalBooks || includeOtzarHachochma || includeHebrewBooks
-            ? '1=1'
-            : "COALESCE(fileType, '') != 'link'";
-
+    DatabaseExecutor txn,
+  ) async {
     return txn.rawQuery('''
       SELECT id, title, categoryId, orderIndex, fileType, filePath,
              heShortDesc
       FROM book
-      WHERE $condition
+      WHERE COALESCE(fileType, '') != 'link'
       ORDER BY orderIndex, title
     ''');
   }
@@ -54,34 +46,11 @@ class BookDao {
 
   /// Gets all books with their relations (authors, topics, pubPlaces, pubDates) in a single optimized query.
   /// This is much faster than calling getAllBooks() and then loading relations separately.
-  ///
-  /// Parameters:
-  /// - [includeExternalBooks]: if true, includes all external catalog books. If false, only local books.
-  /// - [includeOtzarHachochma]: if true, includes Otzar Hachochma books (oh:*).
-  /// - [includeHebrewBooks]: if true, includes HebrewBooks books (hb:*).
-  Future<List<Map<String, dynamic>>> getAllBooksWithRelations({
-    bool includeExternalBooks = true,
-    bool includeOtzarHachochma = true,
-    bool includeHebrewBooks = true,
-  }) async {
+  Future<List<Map<String, dynamic>>> getAllBooksWithRelations() async {
     final db = await database;
 
-    // Determine which query to use based on parameters
-    String queryKey;
-    if (!includeExternalBooks) {
-      queryKey = 'selectAllIgnoreExternalCatalogs';
-    } else if (includeOtzarHachochma && includeHebrewBooks) {
-      queryKey = 'selectAllWithBothExternalCatalogs';
-    } else if (includeOtzarHachochma) {
-      queryKey = 'selectAllWithOtzarHachochma';
-    } else if (includeHebrewBooks) {
-      queryKey = 'selectAllWithHebrewBooks';
-    } else {
-      queryKey = 'selectAllIgnoreExternalCatalogs';
-    }
-
-    // Get all books
-    final books = await db.rawQuery(_queries[queryKey]!);
+    // Always exclude external catalog books (fileType='link') - they are in a separate DB
+    final books = await db.rawQuery(_queries['selectAllIgnoreExternalCatalogs']!);
 
     if (books.isEmpty) return [];
 

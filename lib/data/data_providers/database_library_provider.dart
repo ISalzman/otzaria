@@ -2,12 +2,11 @@ import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:sqflite/sqflite.dart' as sqflite;
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
+
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -634,13 +633,6 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     final repository = _sqliteProvider.repository!;
 
-    // קריאת ההגדרות של ספרים חיצוניים
-    final showExternalBooks =
-        Settings.getValue<bool>('key-show-external-books') ?? false;
-    final showOtzarHachochma =
-        Settings.getValue<bool>('key-show-otzar-hachochma') ?? false;
-    final showHebrewBooks =
-        Settings.getValue<bool>('key-show-hebrew-books') ?? false;
     final hasTalmudBavliDirectory = await _bundledTalmudBavliDirectoryExists();
 
     // OPTIMIZATION: Load minimal book data (8 columns, no JOINs) instead of
@@ -656,9 +648,6 @@ class DatabaseLibraryProvider implements LibraryProvider {
     await db.transaction((txn) async {
       allDbBooks = await repository.database.bookDao.getAllBooksMinimalInTxn(
         txn,
-        includeExternalBooks: showExternalBooks,
-        includeOtzarHachochma: showOtzarHachochma,
-        includeHebrewBooks: showHebrewBooks,
       );
       allCatRows =
           await repository.database.categoryDao.getAllCategoryRowsInTxn(txn);
@@ -977,6 +966,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       });
     for (final dbBook in dbBooks) {
       final book = _convertMinimalBookMapToBook(dbBook, category, metadata);
+      if (book == null) continue;
       category.books.add(book);
 
       // Cache the book key for provider mapping
@@ -1013,7 +1003,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
   /// Uses only the 8 columns available: id, title, categoryId, orderIndex,
   /// fileType, filePath, externalLibraryId, heShortDesc.
   /// Falls back to metadata for author/pubDate/pubPlace/topics.
-  Book _convertMinimalBookMapToBook(
+  Book? _convertMinimalBookMapToBook(
     Map<String, dynamic> bookMap,
     Category category,
     Map<String, Map<String, dynamic>> metadata,
@@ -1063,28 +1053,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     final normalizedFileType = (fileType ?? '').toLowerCase();
 
+    // External catalog books (fileType='link') are no longer stored in seforim.db.
+    // They are served from a separate database via ExternalCatalogRepository.
     if (normalizedFileType == 'link' || normalizedFileType == 'url') {
-      final link = ExternalCatalogMapper.resolveLink(
-        filePath: filePath,
-        externalLibraryId: externalLibraryId,
-      );
-
-      if (link != null && link.isNotEmpty) {
-        return ExternalLibraryBook(
-          title: title,
-          id: id,
-          author: author,
-          heShortDesc: metaHeShortDesc,
-          pubDate: pubDate,
-          pubPlace: pubPlace,
-          topics: topics,
-          link: link,
-          categoryPath: categoryPath,
-          categoryId: categoryId,
-          fileType: normalizedFileType,
-          externalLibraryId: externalLibraryId,
-        );
-      }
+      return null;
     }
 
     if (filePath != null && fileType == 'pdf') {

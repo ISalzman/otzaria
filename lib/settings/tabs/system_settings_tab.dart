@@ -76,10 +76,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     int? count;
     try {
       final library = await DataRepository.instance.library;
-      count = library
-          .getAllBooks()
-          .where((b) => b.externalLibraryId == null)
-          .length;
+      count = library.getAllBooks().length;
     } catch (_) {
       count = 0;
     }

@@ -140,10 +140,6 @@ class DataRepository {
     final queryWords = query.toLowerCase().split(RegExp(r'\s+'));
     var allBooks = category?.getAllBooks() ?? (await library).getAllBooks();
 
-    // Filter out external library books from the base book list
-    allBooks =
-        allBooks.where((book) => book.externalLibraryId == null).toList();
-
     if (includeOtzar) {
       allBooks += await otzarBooks;
     }
