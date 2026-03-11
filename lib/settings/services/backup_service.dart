@@ -127,7 +127,6 @@ class BackupService {
       SettingsRepository.keyShowHebrewBooks,
       SettingsRepository.keyShowExternalBooks,
       SettingsRepository.keyShowTeamim,
-      SettingsRepository.keyUseFastSearch,
       SettingsRepository.keyReplaceHolyNames,
       SettingsRepository.keyAutoUpdateIndex,
       SettingsRepository.keyDefaultNikud,

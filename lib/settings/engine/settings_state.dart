@@ -17,7 +17,6 @@ class SettingsState extends Equatable {
   final bool showHebrewBooks;
   final bool showExternalBooks;
   final bool showTeamim;
-  final bool useFastSearch;
   final bool replaceHolyNames;
   final bool autoUpdateIndex;
   final bool defaultRemoveNikud;
@@ -55,7 +54,6 @@ class SettingsState extends Equatable {
     required this.showHebrewBooks,
     required this.showExternalBooks,
     required this.showTeamim,
-    required this.useFastSearch,
     required this.replaceHolyNames,
     required this.autoUpdateIndex,
     required this.defaultRemoveNikud,
@@ -96,7 +94,6 @@ class SettingsState extends Equatable {
       showHebrewBooks: false,
       showExternalBooks: false,
       showTeamim: true,
-      useFastSearch: true,
       replaceHolyNames: true,
       autoUpdateIndex: true,
       defaultRemoveNikud: false,
@@ -136,7 +133,6 @@ class SettingsState extends Equatable {
     bool? showHebrewBooks,
     bool? showExternalBooks,
     bool? showTeamim,
-    bool? useFastSearch,
     bool? replaceHolyNames,
     bool? autoUpdateIndex,
     bool? defaultRemoveNikud,
@@ -175,7 +171,6 @@ class SettingsState extends Equatable {
       showHebrewBooks: showHebrewBooks ?? this.showHebrewBooks,
       showExternalBooks: showExternalBooks ?? this.showExternalBooks,
       showTeamim: showTeamim ?? this.showTeamim,
-      useFastSearch: useFastSearch ?? this.useFastSearch,
       replaceHolyNames: replaceHolyNames ?? this.replaceHolyNames,
       autoUpdateIndex: autoUpdateIndex ?? this.autoUpdateIndex,
       defaultRemoveNikud: defaultRemoveNikud ?? this.defaultRemoveNikud,
@@ -219,7 +214,6 @@ class SettingsState extends Equatable {
         showHebrewBooks,
         showExternalBooks,
         showTeamim,
-        useFastSearch,
         replaceHolyNames,
         autoUpdateIndex,
         defaultRemoveNikud,

@@ -136,15 +136,6 @@ class UpdateShowTeamim extends SettingsEvent {
   List<Object?> get props => [showTeamim];
 }
 
-class UpdateUseFastSearch extends SettingsEvent {
-  final bool useFastSearch;
-
-  const UpdateUseFastSearch(this.useFastSearch);
-
-  @override
-  List<Object?> get props => [useFastSearch];
-}
-
 class UpdateReplaceHolyNames extends SettingsEvent {
   final bool replaceHolyNames;
 

@@ -137,15 +137,10 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
     // חיפוש חדש
     if (ShortcutHelper.matchesShortcut(event, newSearchShortcut)) {
-      final useFastSearch = context.read<SettingsBloc>().state.useFastSearch;
-      if (!useFastSearch) {
-        _openLegacySearchTab(context);
-      } else {
-        showDialog(
-          context: context,
-          builder: (context) => const SearchDialog(existingTab: null),
-        );
-      }
+      showDialog(
+        context: context,
+        builder: (context) => const SearchDialog(existingTab: null),
+      );
       return KeyEventResult.handled;
     }
 
@@ -236,33 +231,5 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
         );
       },
     );
-  }
-
-  void _openLegacySearchTab(BuildContext context) {
-    final tabsBloc = context.read<TabsBloc>();
-    final navigationBloc = context.read<NavigationBloc>();
-
-    final tabsState = tabsBloc.state;
-    final hasSearchTab = tabsState.tabs.any(
-      (tab) => tab.runtimeType == SearchingTab,
-    );
-
-    if (!hasSearchTab) {
-      tabsBloc.add(AddTab(SearchingTab("חיפוש", "")));
-    } else {
-      final currentScreen = navigationBloc.state.currentScreen;
-      final isAlreadySearchTab = currentScreen == Screen.search &&
-          tabsState.tabs[tabsState.currentTabIndex].runtimeType == SearchingTab;
-      if (!isAlreadySearchTab) {
-        final searchTabIndex = tabsState.tabs.indexWhere(
-          (tab) => tab.runtimeType == SearchingTab,
-        );
-        if (searchTabIndex != -1) {
-          tabsBloc.add(SetCurrentTab(searchTabIndex));
-        }
-      }
-    }
-
-    navigationBloc.add(const NavigateToScreen(Screen.search));
   }
 }

@@ -26,7 +26,6 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateShowHebrewBooks>(_onUpdateShowHebrewBooks);
     on<UpdateShowExternalBooks>(_onUpdateShowExternalBooks);
     on<UpdateShowTeamim>(_onUpdateShowTeamim);
-    on<UpdateUseFastSearch>(_onUpdateUseFastSearch);
     on<UpdateReplaceHolyNames>(_onUpdateReplaceHolyNames);
     on<UpdateAutoUpdateIndex>(_onUpdateAutoUpdateIndex);
     on<UpdateDefaultRemoveNikud>(_onUpdateDefaultRemoveNikud);
@@ -80,7 +79,6 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       showHebrewBooks: settings['showHebrewBooks'],
       showExternalBooks: settings['showExternalBooks'],
       showTeamim: settings['showTeamim'],
-      useFastSearch: settings['useFastSearch'],
       replaceHolyNames: settings['replaceHolyNames'],
       autoUpdateIndex: settings['autoUpdateIndex'],
       defaultRemoveNikud: settings['defaultRemoveNikud'],
@@ -281,14 +279,6 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateShowTeamim(event.showTeamim);
     emit(state.copyWith(showTeamim: event.showTeamim));
-  }
-
-  Future<void> _onUpdateUseFastSearch(
-    UpdateUseFastSearch event,
-    Emitter<SettingsState> emit,
-  ) async {
-    await _repository.updateUseFastSearch(event.useFastSearch);
-    emit(state.copyWith(useFastSearch: event.useFastSearch));
   }
 
   Future<void> _onUpdateReplaceHolyNames(

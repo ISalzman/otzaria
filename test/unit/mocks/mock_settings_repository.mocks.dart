@@ -172,16 +172,6 @@ class MockSettingsRepository extends _i1.Mock
       ) as _i3.Future<void>);
 
   @override
-  _i3.Future<void> updateUseFastSearch(bool? value) => (super.noSuchMethod(
-        Invocation.method(
-          #updateUseFastSearch,
-          [value],
-        ),
-        returnValue: _i3.Future<void>.value(),
-        returnValueForMissingStub: _i3.Future<void>.value(),
-      ) as _i3.Future<void>);
-
-  @override
   _i3.Future<void> updateReplaceHolyNames(bool? value) => (super.noSuchMethod(
         Invocation.method(
           #updateReplaceHolyNames,

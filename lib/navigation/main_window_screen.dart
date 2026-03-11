@@ -22,9 +22,6 @@ import 'package:otzaria/navigation/about_dialog.dart';
 import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
 import 'dart:async';
 import 'package:otzaria/update/my_updat_widget.dart';
-import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
-import 'package:otzaria/tabs/bloc/tabs_event.dart';
-import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
 import 'package:otzaria/widgets/ad_popup_dialog.dart';
 import 'package:window_manager/window_manager.dart';
@@ -631,12 +628,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   void _handleSearchTabOpen(BuildContext context) {
-    final useFastSearch = context.read<SettingsBloc>().state.useFastSearch;
-    if (!useFastSearch) {
-      _openLegacySearchTab(context);
-      return;
-    }
-
     final navigationBloc = context.read<NavigationBloc>();
 
     showDialog(
@@ -650,34 +641,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
         _syncPageWithState();
       }
     });
-  }
-
-  void _openLegacySearchTab(BuildContext context) {
-    final tabsBloc = context.read<TabsBloc>();
-    final navigationBloc = context.read<NavigationBloc>();
-
-    final tabsState = tabsBloc.state;
-    final hasSearchTab = tabsState.tabs.any(
-      (tab) => tab.runtimeType == SearchingTab,
-    );
-
-    if (!hasSearchTab) {
-      tabsBloc.add(AddTab(SearchingTab("חיפוש", "")));
-    } else {
-      final currentScreen = navigationBloc.state.currentScreen;
-      final isAlreadySearchTab = currentScreen == Screen.search &&
-          tabsState.tabs[tabsState.currentTabIndex].runtimeType == SearchingTab;
-      if (!isAlreadySearchTab) {
-        final searchTabIndex = tabsState.tabs.indexWhere(
-          (tab) => tab.runtimeType == SearchingTab,
-        );
-        if (searchTabIndex != -1) {
-          tabsBloc.add(SetCurrentTab(searchTabIndex));
-        }
-      }
-    }
-
-    navigationBloc.add(const NavigateToScreen(Screen.search));
   }
 
   void _handleFindRefOpen(BuildContext context) {

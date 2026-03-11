@@ -60,10 +60,6 @@ void main() {
               defaultValue: true))
           .thenReturn(true);
       when(mockSettingsWrapper.getValue<bool>(
-              SettingsRepository.keyUseFastSearch,
-              defaultValue: true))
-          .thenReturn(true);
-      when(mockSettingsWrapper.getValue<bool>(
               SettingsRepository.keyReplaceHolyNames,
               defaultValue: true))
           .thenReturn(true);
@@ -102,7 +98,6 @@ void main() {
       expect(settings['showHebrewBooks'], false);
       expect(settings['showExternalBooks'], false);
       expect(settings['showTeamim'], true);
-      expect(settings['useFastSearch'], true);
       expect(settings['replaceHolyNames'], true);
       expect(settings['autoUpdateIndex'], true);
       expect(settings['defaultRemoveNikud'], false);
@@ -155,10 +150,6 @@ void main() {
               defaultValue: true))
           .thenReturn(false);
       when(mockSettingsWrapper.getValue<bool>(
-              SettingsRepository.keyUseFastSearch,
-              defaultValue: true))
-          .thenReturn(false);
-      when(mockSettingsWrapper.getValue<bool>(
               SettingsRepository.keyReplaceHolyNames,
               defaultValue: true))
           .thenReturn(false);
@@ -197,7 +188,6 @@ void main() {
       expect(settings['showHebrewBooks'], true);
       expect(settings['showExternalBooks'], true);
       expect(settings['showTeamim'], false);
-      expect(settings['useFastSearch'], false);
       expect(settings['replaceHolyNames'], false);
       expect(settings['autoUpdateIndex'], false);
       expect(settings['defaultRemoveNikud'], true);
@@ -311,10 +301,6 @@ void main() {
               defaultValue: true))
           .thenReturn(true);
       when(mockSettingsWrapper.getValue<bool>(
-              SettingsRepository.keyUseFastSearch,
-              defaultValue: true))
-          .thenReturn(true);
-      when(mockSettingsWrapper.getValue<bool>(
               SettingsRepository.keyReplaceHolyNames,
               defaultValue: true))
           .thenReturn(true);
@@ -362,9 +348,6 @@ void main() {
           .called(1);
       verify(mockSettingsWrapper.setValue(
               SettingsRepository.keyShowTeamim, true))
-          .called(1);
-      verify(mockSettingsWrapper.setValue(
-              SettingsRepository.keyUseFastSearch, true))
           .called(1);
       verify(mockSettingsWrapper.setValue(
               SettingsRepository.keyReplaceHolyNames, true))
@@ -433,10 +416,6 @@ void main() {
               defaultValue: false))
           .thenReturn(false);
       when(mockSettingsWrapper.getValue<bool>(SettingsRepository.keyShowTeamim,
-              defaultValue: true))
-          .thenReturn(true);
-      when(mockSettingsWrapper.getValue<bool>(
-              SettingsRepository.keyUseFastSearch,
               defaultValue: true))
           .thenReturn(true);
       when(mockSettingsWrapper.getValue<bool>(
