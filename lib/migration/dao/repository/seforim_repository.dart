@@ -1539,6 +1539,7 @@ class SeforimRepository {
       LEFT JOIN author a ON ba.authorId = a.id
       LEFT JOIN generation g ON a.generationId = g.id
       WHERE b.title = ?
+        AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
       LIMIT 1
     ''', [bookTitle]);
 
@@ -2058,7 +2059,8 @@ class SeforimRepository {
     final result = await db.rawQuery('''
       SELECT b.* FROM book b
       JOIN book_has_links bhl ON b.id = bhl.bookId
-      WHERE bhl.hasSourceLinks = 1 OR bhl.hasTargetLinks = 1
+      WHERE (bhl.hasSourceLinks = 1 OR bhl.hasTargetLinks = 1)
+        AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
       ORDER BY b.orderIndex, b.title
     ''');
 
@@ -2087,6 +2089,7 @@ class SeforimRepository {
       SELECT b.* FROM book b
       JOIN book_has_links bhl ON b.id = bhl.bookId
       WHERE bhl.hasSourceLinks = 1
+        AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
       ORDER BY b.orderIndex, b.title
     ''');
 
@@ -2115,6 +2118,7 @@ class SeforimRepository {
       SELECT b.* FROM book b
       JOIN book_has_links bhl ON b.id = bhl.bookId
       WHERE bhl.hasTargetLinks = 1
+        AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
       ORDER BY b.orderIndex, b.title
     ''');
 
@@ -2595,6 +2599,7 @@ extension BookAcronymRepository on SeforimRepository {
         SELECT b.id, b.title, b.categoryId, b.filePath, b.fileType
         FROM book b
         WHERE LOWER(b.title) LIKE ?
+          AND COALESCE(b.fileType, '') NOT IN ('link', 'url')
         ORDER BY 
           CASE WHEN LOWER(b.title) = ? THEN 0
                WHEN LOWER(b.title) LIKE ? THEN 1

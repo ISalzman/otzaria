@@ -84,7 +84,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   LogicalKeyboardKey? _currentScrollKey;
 
 
-
   // Local UI state that syncs with Bloc
   int _rightPaneInitialTabIndex = 0;
 
@@ -859,46 +858,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                           ),
                           child: Stack(
                             children: [
-                              FutureBuilder<bool>(
-                                future: File(widget.tab.book.path).exists(),
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState ==
-                                      ConnectionState.waiting) {
-                                    return const Center(
-                                      child: CircularProgressIndicator(),
-                                    );
-                                  }
-
-                                  if (snapshot.hasData && snapshot.data == true) {
-                                    return _buildPdfViewerFromFile(
-                                        widget.tab.book.path);
-                                  }
-
-                                  return Center(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          FluentIcons
-                                              .document_error_24_regular,
-                                          size: 64,
-                                          color: Theme.of(context).colorScheme.error,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          'לא ניתן לטעון את הספר:\n${widget.tab.book.path}',
-                                          textAlign: TextAlign.center,
-                                          textDirection: TextDirection.rtl,
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            color: Theme.of(context).colorScheme.error,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
+                              _buildPdfViewerFromFile(
+                                  widget.tab.book.path),
                               BlocBuilder<PdfBookBloc, PdfBookState>(
                                 buildWhen: (prev, curr) {
                                   if (prev is PdfBookLoaded &&

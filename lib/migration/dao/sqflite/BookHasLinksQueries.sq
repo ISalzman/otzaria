@@ -11,21 +11,24 @@ selectBooksWithSourceLinks:
 SELECT b.*
 FROM book b
 JOIN book_has_links bhl ON b.id = bhl.bookId
-WHERE bhl.hasSourceLinks = 1;
+WHERE bhl.hasSourceLinks = 1
+  AND COALESCE(b.fileType, '') NOT IN ('link', 'url');
 
 -- Get all books that have target links
 selectBooksWithTargetLinks:
 SELECT b.*
 FROM book b
 JOIN book_has_links bhl ON b.id = bhl.bookId
-WHERE bhl.hasTargetLinks = 1;
+WHERE bhl.hasTargetLinks = 1
+  AND COALESCE(b.fileType, '') NOT IN ('link', 'url');
 
 -- Get all books that have any links (source or target)
 selectBooksWithAnyLinks:
 SELECT b.*
 FROM book b
 JOIN book_has_links bhl ON b.id = bhl.bookId
-WHERE bhl.hasSourceLinks = 1 OR bhl.hasTargetLinks = 1;
+WHERE (bhl.hasSourceLinks = 1 OR bhl.hasTargetLinks = 1)
+  AND COALESCE(b.fileType, '') NOT IN ('link', 'url');
 
 -- Count books with source links
 countBooksWithSourceLinks:
