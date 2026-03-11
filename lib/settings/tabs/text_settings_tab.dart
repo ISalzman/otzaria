@@ -389,8 +389,7 @@ class TextSettingsTab extends StatelessWidget {
                           children: [
                             const Icon(FluentIcons.copy_24_regular),
                             const SizedBox(width: 8),
-                            Text('העתקה עם כותרות',
-                                style: Theme.of(context).textTheme.titleMedium),
+                            Text('העתקה עם כותרות', style: kSettingsTitleStyle),
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -434,8 +433,7 @@ class TextSettingsTab extends StatelessWidget {
                           children: [
                             const Icon(FluentIcons.text_align_right_24_regular),
                             const SizedBox(width: 8),
-                            Text('עיצוב העתקה',
-                                style: Theme.of(context).textTheme.titleMedium),
+                            Text('עיצוב העתקה', style: kSettingsTitleStyle),
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -492,8 +490,7 @@ class TextSettingsTab extends StatelessWidget {
                         children: [
                           const Icon(FluentIcons.copy_24_regular),
                           const SizedBox(width: 8),
-                          Text('העתקה עם כותרות',
-                              style: Theme.of(context).textTheme.titleMedium),
+                          Text('העתקה עם כותרות', style: kSettingsTitleStyle),
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<String>(
@@ -533,8 +530,7 @@ class TextSettingsTab extends StatelessWidget {
                         children: [
                           const Icon(FluentIcons.text_align_right_24_regular),
                           const SizedBox(width: 8),
-                          Text('עיצוב העתקה',
-                              style: Theme.of(context).textTheme.titleMedium),
+                          Text('עיצוב העתקה', style: kSettingsTitleStyle),
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<String>(
@@ -651,7 +647,7 @@ class TextSettingsTab extends StatelessWidget {
       await PerBookSettings.deleteAllSettings();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('כל ההגדרות הפר-ספריות נמחקו בהצלחה')),
+          const SnackBar(content: Text('כל ההגדרות המיוחדות נמחקו בהצלחה')),
         );
       }
     }
@@ -709,8 +705,7 @@ class _FontSizeSliderState extends State<_FontSizeSlider> {
             Icon(widget.icon),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(widget.label,
-                  style: Theme.of(context).textTheme.titleMedium),
+              child: Text(widget.label, style: kSettingsTitleStyle),
             ),
             Text(
               widget.divisions != null
@@ -764,7 +759,7 @@ class _FontDropdown extends StatelessWidget {
         const SizedBox(width: 8),
         SizedBox(
           width: 100,
-          child: Text(label, style: Theme.of(context).textTheme.titleMedium),
+          child: Text(label, style: kSettingsTitleStyle),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -828,7 +823,7 @@ class _TextWidthSliderState extends State<_TextWidthSlider> {
             currentLevel == 0
                 ? 'הטקסט ימלא את כל הרוחב הזמין'
                 : 'הטקסט יהיה צר יותר ומרוכז במסך',
-            style: const TextStyle(fontSize: 13),
+            style: kSettingsSubtitleStyle,
           ),
           trailing: Text(
             getLevelDescription(currentLevel),

@@ -51,10 +51,14 @@ class LibrarySettingsPanel extends StatelessWidget {
                 ),
                 SwitchSettingsTile(
                   leading: const Icon(FluentIcons.eye_24_regular),
-                  title: const Text('הצג תצוגה מקדימה'),
-                  subtitle: Text(state.libraryShowPreview
-                      ? 'תצוגה מקדימה מוצגת'
-                      : 'תצוגה מקדימה מוסתרת'),
+                  title: const Text('הצג תצוגה מקדימה',
+                      style: kSettingsTitleStyle),
+                  subtitle: Text(
+                    state.libraryShowPreview
+                        ? 'תצוגה מקדימה מוצגת'
+                        : 'תצוגה מקדימה מוסתרת',
+                    style: kSettingsSubtitleStyle,
+                  ),
                   value: state.libraryShowPreview,
                   onChanged: (value) {
                     context
@@ -76,10 +80,14 @@ class LibrarySettingsPanel extends StatelessWidget {
 
                 SwitchSettingsTile(
                   leading: const Icon(FluentIcons.globe_24_regular),
-                  title: const Text('הצגת ספרים מאתרים חיצוניים'),
-                  subtitle: Text(state.showExternalBooks
-                      ? 'יוצגו גם ספרים מאתרים חיצוניים'
-                      : 'יוצגו רק ספרים מספריית אוצריא'),
+                  title: const Text('הצגת ספרים מאתרים חיצוניים',
+                      style: kSettingsTitleStyle),
+                  subtitle: Text(
+                    state.showExternalBooks
+                        ? 'יוצגו גם ספרים מאתרים חיצוניים'
+                        : 'יוצגו רק ספרים מספריית אוצריא',
+                    style: kSettingsSubtitleStyle,
+                  ),
                   value: state.showExternalBooks,
                   onChanged: (value) async {
                     await ExternalCatalogSettingsHelper.updateExternalBooks(
@@ -89,35 +97,33 @@ class LibrarySettingsPanel extends StatelessWidget {
                   },
                 ),
                 if (state.showExternalBooks) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(right: 32.0),
-                    child: CheckboxListTile(
-                      title: const Text('הצג ספרים מאוצר החכמה'),
-                      value: state.showOtzarHachochma,
-                      onChanged: (value) async {
-                        if (value != null) {
-                          await ExternalCatalogSettingsHelper.updateOtzarBooks(
-                            context,
-                            value,
-                          );
-                        }
-                      },
-                    ),
+                  SwitchSettingsTile(
+                    leading: const Icon(FluentIcons.library_24_regular),
+                    title: const Text('הצג ספרים מאוצר החכמה',
+                        style: kSettingsTitleStyle),
+                    subtitle: const Text('ספרים מאתר אוצר החכמה',
+                        style: kSettingsSubtitleStyle),
+                    value: state.showOtzarHachochma,
+                    onChanged: (value) async {
+                      await ExternalCatalogSettingsHelper.updateOtzarBooks(
+                        context,
+                        value,
+                      );
+                    },
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 32.0),
-                    child: CheckboxListTile(
-                      title: const Text('הצג ספרים מהיברובוקס'),
-                      value: state.showHebrewBooks,
-                      onChanged: (value) async {
-                        if (value != null) {
-                          await ExternalCatalogSettingsHelper.updateHebrewBooks(
-                            context,
-                            value,
-                          );
-                        }
-                      },
-                    ),
+                  SwitchSettingsTile(
+                    leading: const Icon(FluentIcons.book_open_24_regular),
+                    title: const Text('הצג ספרים מהיברובוקס',
+                        style: kSettingsTitleStyle),
+                    subtitle: const Text('ספרים מאתר HebrewBooks',
+                        style: kSettingsSubtitleStyle),
+                    value: state.showHebrewBooks,
+                    onChanged: (value) async {
+                      await ExternalCatalogSettingsHelper.updateHebrewBooks(
+                        context,
+                        value,
+                      );
+                    },
                   ),
                 ],
               ],

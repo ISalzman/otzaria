@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/settings/settings_card.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 
 /// טאב הגדרות עורך הספרים
 class EditorSettingsTab extends StatefulWidget {
@@ -28,7 +29,6 @@ class _EditorSettingsTabState extends State<EditorSettingsTab> {
 
   @override
   Widget build(BuildContext context) {
-    // [תיקון] הסרת SingleChildScrollView — ToolsSettingsTab גולל את הכל
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Column(
@@ -40,6 +40,7 @@ class _EditorSettingsTabState extends State<EditorSettingsTab> {
               _buildSlider(
                 icon: FluentIcons.timer_24_regular,
                 label: 'זמן עיכוב במילישניות',
+                subtitle: 'זמן ההמתנה לפני עדכון התצוגה המקדימה',
                 value: previewDebounce,
                 min: 50,
                 max: 300,
@@ -52,7 +53,8 @@ class _EditorSettingsTabState extends State<EditorSettingsTab> {
               ),
               _buildSlider(
                 icon: FluentIcons.delete_dismiss_24_regular,
-                label: 'ניקוי טיוטות ישנות (ימים)',
+                label: 'ניקוי טיוטות ישנות',
+                subtitle: 'מספר הימים לשמירת טיוטות לפני מחיקה אוטומטית',
                 value: cleanupDays,
                 min: 7,
                 max: 90,
@@ -65,7 +67,8 @@ class _EditorSettingsTabState extends State<EditorSettingsTab> {
               ),
               _buildSlider(
                 icon: FluentIcons.database_24_regular,
-                label: 'מכסת טיוטות (MB)',
+                label: 'מכסת טיוטות',
+                subtitle: 'גודל מקסימלי לאחסון טיוטות (MB)',
                 value: draftsQuota,
                 min: 50,
                 max: 100,
@@ -85,6 +88,7 @@ class _EditorSettingsTabState extends State<EditorSettingsTab> {
   Widget _buildSlider({
     required IconData icon,
     required String label,
+    required String subtitle,
     required double value,
     required double min,
     required double max,
@@ -101,8 +105,14 @@ class _EditorSettingsTabState extends State<EditorSettingsTab> {
               Icon(icon),
               const SizedBox(width: 12),
               Expanded(
-                child:
-                    Text(label, style: Theme.of(context).textTheme.titleMedium),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: kSettingsTitleStyle),
+                    const SizedBox(height: 4),
+                    Text(subtitle, style: kSettingsSubtitleStyle),
+                  ],
+                ),
               ),
               Text(
                 '${value.toInt()}',
