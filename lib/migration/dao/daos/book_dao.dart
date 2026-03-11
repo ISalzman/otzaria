@@ -31,7 +31,7 @@ class BookDao {
       SELECT id, title, categoryId, orderIndex, fileType, filePath,
              heShortDesc
       FROM book
-      WHERE COALESCE(fileType, '') != 'link'
+      WHERE COALESCE(fileType, '') NOT IN ('link', 'url')
       ORDER BY orderIndex, title
     ''');
   }
@@ -453,7 +453,8 @@ class BookDao {
     final db = await database;
     final result = await db.rawQuery('''
       SELECT * FROM book
-      WHERE title LIKE ? OR heShortDesc LIKE ?
+      WHERE (title LIKE ? OR heShortDesc LIKE ?)
+        AND COALESCE(fileType, '') NOT IN ('link', 'url')
       ORDER BY orderIndex, title
     ''', ['%$query%', '%$query%']);
     return result.map((row) => Book.fromJson(row)).toList();

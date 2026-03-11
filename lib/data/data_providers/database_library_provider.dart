@@ -1000,8 +1000,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
   }
 
   /// Converts a minimal book map (from getAllBooksMinimal) to the app's Book model.
-  /// Uses only the 8 columns available: id, title, categoryId, orderIndex,
-  /// fileType, filePath, externalLibraryId, heShortDesc.
+  /// Uses only the columns available: id, title, categoryId, orderIndex,
+  /// fileType, filePath, heShortDesc.
   /// Falls back to metadata for author/pubDate/pubPlace/topics.
   Book? _convertMinimalBookMapToBook(
     Map<String, dynamic> bookMap,
@@ -1012,7 +1012,6 @@ class DatabaseLibraryProvider implements LibraryProvider {
     final id = bookMap['id'] as int? ?? 0;
     final filePath = bookMap['filePath'] as String?;
     final fileType = bookMap['fileType'] as String?;
-    final externalLibraryId = bookMap['externalLibraryId'] as String?;
     final heShortDesc = bookMap['heShortDesc'] as String?;
     final orderDouble = (bookMap['orderIndex'] as num?)?.toDouble() ?? 999.0;
     final order = orderDouble.toInt();
@@ -1073,7 +1072,6 @@ class DatabaseLibraryProvider implements LibraryProvider {
         topics: topics,
         categoryPath: categoryPath,
         categoryId: categoryId,
-        externalLibraryId: externalLibraryId,
       );
     }
 
@@ -1091,7 +1089,6 @@ class DatabaseLibraryProvider implements LibraryProvider {
         topics: topics,
         categoryPath: categoryPath,
         categoryId: categoryId,
-        externalLibraryId: externalLibraryId,
       );
     }
 
@@ -1107,7 +1104,6 @@ class DatabaseLibraryProvider implements LibraryProvider {
       topics: topics,
       categoryPath: categoryPath,
       categoryId: categoryId,
-      externalLibraryId: externalLibraryId,
     );
   }
 

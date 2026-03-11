@@ -640,13 +640,11 @@ class _AboutScreenState extends State<AboutScreen> {
       libraryVersion = 'לא ידוע';
     }
 
-    // Load book count (excluding external library books)
+    // Load book count
     try {
       final library = await DataRepository.instance.library;
       final allBooks = library.getAllBooks();
-      // Count only books without externalLibraryId (non-external books)
-      bookCount =
-          allBooks.where((book) => book.externalLibraryId == null).length;
+      bookCount = allBooks.length;
     } catch (e) {
       debugPrint('Error counting books: $e');
       bookCount = 0;

@@ -113,7 +113,7 @@ class IndexingRepository {
             skipped++;
           }
         }
-
+        processedBooks++;
         // Commit every 25 books to save progress (optimized for 8GB RAM)
         if (processedBooks % 25 == 0) {
           debugPrint('💾 שומר אינדקס (commit)...');
