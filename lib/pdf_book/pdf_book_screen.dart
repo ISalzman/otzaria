@@ -9,7 +9,6 @@ import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart' as otz_links;
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
@@ -30,7 +29,6 @@ import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:provider/provider.dart';
-import 'package:path_provider/path_provider.dart';
 import 'pdf_search_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'pdf_outlines_screen.dart';
@@ -85,7 +83,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Timer? _scrollTimer;
   LogicalKeyboardKey? _currentScrollKey;
 
-  Future<String?>? _pdfPathFuture;
+
 
   // Local UI state that syncs with Bloc
   int _rightPaneInitialTabIndex = 0;
@@ -178,8 +176,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
     );
 
-    // טעינת PDF bytes מה-DB ושמירה לקובץ זמני
-    _pdfPathFuture = _loadPdfFileFromDb();
+    // PDF is always a file on the file system — use book.path directly
 
     // הגדרת ערכים התחלתיים מ-Settings
     final settingsBloc = context.read<SettingsBloc>();
@@ -254,72 +251,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _loadPerBookSettings();
   }
 
-  // Cache של קבצים זמניים - מפתח: title של הספר, ערך: נתיב הקובץ
-  static final Map<String, String> _pdfFileCache = {};
-  // Lock למניעת כתיבה מרובה של אותו קובץ
-  static final Map<String, Future<String?>> _loadingFiles = {};
-
-  Future<String?> _loadPdfFileFromDb() async {
-    try {
-      // בדיקה אם הקובץ כבר קיים ב-cache
-      if (_pdfFileCache.containsKey(widget.tab.book.title)) {
-        final cachedPath = _pdfFileCache[widget.tab.book.title]!;
-        final cachedFile = File(cachedPath);
-        if (await cachedFile.exists()) {
-          return cachedPath;
-        } else {
-          // הקובץ נמחק, נסיר מה-cache
-          _pdfFileCache.remove(widget.tab.book.title);
-        }
-      }
-
-      // בדיקה אם כבר יש טעינה בתהליך של אותו ספר
-      if (_loadingFiles.containsKey(widget.tab.book.title)) {
-        return await _loadingFiles[widget.tab.book.title];
-      }
-
-      // יצירת Future לטעינה
-      final loadingFuture = _performFileLoad();
-      _loadingFiles[widget.tab.book.title] = loadingFuture;
-
-      try {
-        final result = await loadingFuture;
-        return result;
-      } finally {
-        // ניקוי ה-loading future אחרי סיום
-        _loadingFiles.remove(widget.tab.book.title);
-      }
-    } catch (e, stackTrace) {
-      debugPrint('❌ Error loading PDF to file: $e\n$stackTrace');
-      return null;
-    }
-  }
-
-  Future<String?> _performFileLoad() async {
-    final provider = SqliteDataProvider.instance;
-    final bytes = await provider.getPdfBytesFromDb(widget.tab.book);
-
-    if (bytes == null) {
-      return null;
-    }
-
-    final tempDir = await getTemporaryDirectory();
-
-    // שימוש בשם קובץ קבוע לפי hash של הכותרת (ללא UUID)
-    final fileName = 'pdf_${widget.tab.book.title.hashCode}.pdf';
-    final file = File('${tempDir.path}/$fileName');
-
-    // אם הקובץ כבר קיים, נשתמש בו
-    if (await file.exists()) {
-      _pdfFileCache[widget.tab.book.title] = file.path;
-      return file.path;
-    }
-
-    await file.writeAsBytes(bytes, flush: true);
-
-    _pdfFileCache[widget.tab.book.title] = file.path;
-    return file.path;
-  }
 
   Text _buildRtlMenuText(String text) =>
       Text(text, textDirection: TextDirection.rtl);
@@ -928,8 +859,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                           ),
                           child: Stack(
                             children: [
-                              FutureBuilder<String?>(
-                                future: _pdfPathFuture,
+                              FutureBuilder<bool>(
+                                future: File(widget.tab.book.path).exists(),
                                 builder: (context, snapshot) {
                                   if (snapshot.connectionState ==
                                       ConnectionState.waiting) {
@@ -938,58 +869,34 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                     );
                                   }
 
-                                  if (snapshot.hasError) {
-                                    return Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(
-                                            FluentIcons.error_circle_24_regular,
-                                            size: 64,
-                                            color: Colors.red,
-                                          ),
-                                          const SizedBox(height: 16),
-                                          Text(
-                                            'שגיאה בטעינת הספר: ${snapshot.error}',
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              color: Colors.red,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
+                                  if (snapshot.hasData && snapshot.data == true) {
+                                    return _buildPdfViewerFromFile(
+                                        widget.tab.book.path);
                                   }
 
-                                  if (!snapshot.hasData ||
-                                      snapshot.data == null) {
-                                    return const Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            FluentIcons
-                                                .document_error_24_regular,
-                                            size: 64,
-                                            color: Colors.grey,
+                                  return Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          FluentIcons
+                                              .document_error_24_regular,
+                                          size: 64,
+                                          color: Theme.of(context).colorScheme.error,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'לא ניתן לטעון את הספר:\n${widget.tab.book.path}',
+                                          textAlign: TextAlign.center,
+                                          textDirection: TextDirection.rtl,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Theme.of(context).colorScheme.error,
                                           ),
-                                          SizedBox(height: 16),
-                                          Text(
-                                            'לא ניתן לטעון את הספר',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }
-
-                                  return _buildPdfViewerFromFile(
-                                      snapshot.data!);
+                                        ),
+                                      ],
+                                    ),
+                                  );
                                 },
                               ),
                               BlocBuilder<PdfBookBloc, PdfBookState>(
