@@ -202,12 +202,7 @@ class _ReadingScreenState extends State<ReadingScreen>
             tab: tab,
           ));
     } else if (tab is SearchingTab) {
-      return FullTextSearchScreen(
-        tab: tab,
-        openBookCallback: (tab, {int index = 1}) {
-          context.read<TabsBloc>().add(AddTab(tab));
-        },
-      );
+      return FullTextSearchScreen(tab: tab);
     }
     return const SizedBox.shrink();
   }
@@ -246,12 +241,7 @@ class _ReadingScreenState extends State<ReadingScreen>
             isInCombinedView: isInCombinedView,
           ));
     } else if (tab is SearchingTab) {
-      return FullTextSearchScreen(
-        tab: tab,
-        openBookCallback: (tab, {int index = 1}) {
-          context.read<TabsBloc>().add(AddTab(tab));
-        },
-      );
+      return FullTextSearchScreen(tab: tab);
     }
     return const SizedBox.shrink();
   }
