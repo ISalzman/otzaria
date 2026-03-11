@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart'
+    hide SwitchSettingsTile;
 import 'package:otzaria/settings/settings_card.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 
 /// טאב הגדרות גימטריה
 class GematriaSettingsTab extends StatefulWidget {
@@ -43,19 +45,20 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
 
   @override
   Widget build(BuildContext context) {
-    // [תיקון] הסרת SingleChildScrollView — ToolsSettingsTab גולל את הכל
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // הגדרות חיפוש
           SettingsCard(
             title: 'חיפוש גימטריה',
             children: [
               ListTile(
                 leading: const Icon(FluentIcons.number_row_24_regular),
-                title: const Text('מספר תוצאות מקסימלי'),
+                title: const Text('מספר תוצאות מקסימלי',
+                    style: kSettingsTitleStyle),
+                subtitle: const Text('כמות התוצאות המקסימלית להצגה',
+                    style: kSettingsSubtitleStyle),
                 trailing: DropdownButton<int>(
                   value: maxResults,
                   underline: const SizedBox(),
@@ -73,48 +76,69 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
                   },
                 ),
               ),
-              CheckboxListTile(
-                title: const Text('סינון תוצאות כפולות'),
+              SwitchSettingsTile(
+                leading: const Icon(FluentIcons.filter_24_regular),
+                title: const Text('סינון תוצאות כפולות',
+                    style: kSettingsTitleStyle),
+                subtitle: Text(
+                  filterDuplicates
+                      ? 'תוצאות זהות יוצגו פעם אחת בלבד'
+                      : 'כל התוצאות יוצגו',
+                  style: kSettingsSubtitleStyle,
+                ),
                 value: filterDuplicates,
                 onChanged: (value) {
-                  setState(() => filterDuplicates = value ?? false);
+                  setState(() => filterDuplicates = value);
                   Settings.setValue<bool>(
                       'key-gematria-filter-duplicates', filterDuplicates);
                 },
               ),
-              CheckboxListTile(
-                title: const Text('חיפוש פסוק שלם בלבד'),
+              SwitchSettingsTile(
+                leading: const Icon(FluentIcons.text_word_count_24_regular),
+                title: const Text('חיפוש פסוק שלם בלבד',
+                    style: kSettingsTitleStyle),
+                subtitle: Text(
+                  wholeVerseOnly
+                      ? 'חיפוש רק בפסוקים שלמים'
+                      : 'חיפוש גם בחלקי פסוקים',
+                  style: kSettingsSubtitleStyle,
+                ),
                 value: wholeVerseOnly,
                 onChanged: (value) {
-                  setState(() => wholeVerseOnly = value ?? false);
+                  setState(() => wholeVerseOnly = value);
                   Settings.setValue<bool>(
                       'key-gematria-whole-verse-only', wholeVerseOnly);
                 },
               ),
-              CheckboxListTile(
-                title: const Text('חיפוש בתורה בלבד'),
+              SwitchSettingsTile(
+                leading: const Icon(FluentIcons.book_24_regular),
+                title:
+                    const Text('חיפוש בתורה בלבד', style: kSettingsTitleStyle),
+                subtitle: Text(
+                  torahOnly ? 'חיפוש רק בחמישה חומשי תורה' : 'חיפוש בכל הספרים',
+                  style: kSettingsSubtitleStyle,
+                ),
                 value: torahOnly,
                 onChanged: (value) {
-                  setState(() => torahOnly = value ?? false);
+                  setState(() => torahOnly = value);
                   Settings.setValue<bool>('key-gematria-torah-only', torahOnly);
                 },
               ),
             ],
           ),
-
-          const SizedBox(height: 16),
-
-          // שיטת חישוב
+          kSettingsCardSpacing,
           SettingsCard(
             title: 'שיטת חישוב גימטריה',
             children: [
-              CheckboxListTile(
-                title: const Text('גימטריה קטנה'),
-                subtitle: const Text('כל אות מחושבת לפי ספרה אחת'),
+              SwitchSettingsTile(
+                leading: const Icon(FluentIcons.number_symbol_24_regular),
+                title: const Text('גימטריה קטנה', style: kSettingsTitleStyle),
+                subtitle: const Text('כל אות מחושבת לפי ספרה אחת',
+                    style: kSettingsSubtitleStyle),
                 value: useSmallGematria,
                 onChanged: (value) {
                   setState(() {
-                    useSmallGematria = value ?? false;
+                    useSmallGematria = value;
                     if (useSmallGematria) {
                       useFinalLetters = false;
                       Settings.setValue<bool>(
@@ -125,13 +149,16 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
                       'key-gematria-use-small', useSmallGematria);
                 },
               ),
-              CheckboxListTile(
-                title: const Text('אותיות סופיות שונות'),
-                subtitle: const Text('מנצפ"ך בערכים שונים'),
+              SwitchSettingsTile(
+                leading: const Icon(FluentIcons.text_font_24_regular),
+                title: const Text('אותיות סופיות שונות',
+                    style: kSettingsTitleStyle),
+                subtitle: const Text('מנצפ"ך בערכים שונים',
+                    style: kSettingsSubtitleStyle),
                 value: useFinalLetters,
                 onChanged: (value) {
                   setState(() {
-                    useFinalLetters = value ?? false;
+                    useFinalLetters = value;
                     if (useFinalLetters) {
                       useSmallGematria = false;
                       Settings.setValue<bool>('key-gematria-use-small', false);
@@ -141,12 +168,14 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
                       'key-gematria-use-final-letters', useFinalLetters);
                 },
               ),
-              CheckboxListTile(
-                title: const Text('עם הכולל'),
-                subtitle: const Text('הוספת מספר האותיות לסכום'),
+              SwitchSettingsTile(
+                leading: const Icon(FluentIcons.add_circle_24_regular),
+                title: const Text('עם הכולל', style: kSettingsTitleStyle),
+                subtitle: const Text('הוספת מספר האותיות לסכום',
+                    style: kSettingsSubtitleStyle),
                 value: useWithKolel,
                 onChanged: (value) {
-                  setState(() => useWithKolel = value ?? false);
+                  setState(() => useWithKolel = value);
                   Settings.setValue<bool>(
                       'key-gematria-use-with-kolel', useWithKolel);
                 },
