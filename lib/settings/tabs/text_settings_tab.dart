@@ -823,7 +823,7 @@ class _TextWidthSliderState extends State<_TextWidthSlider> {
       children: [
         ListTile(
           leading: const Icon(FluentIcons.text_align_justify_24_regular),
-          title: const Text('רוחב השוליים', style: kSettingsTitleStyle),
+          title: const Text('רוחב הטקסט', style: kSettingsTitleStyle),
           subtitle: Text(
             currentLevel == 0
                 ? 'הטקסט ימלא את כל הרוחב הזמין'

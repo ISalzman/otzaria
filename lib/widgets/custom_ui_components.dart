@@ -13,6 +13,28 @@ const kSettingsSubtitleStyle = AppTextStyles.settingSubtitle;
 /// רווח אנכי סטנדרטי בין כרטיסי הגדרות
 const kSettingsCardSpacing = SizedBox(height: AppTokens.spaceMD);
 
+// ── קבועי גודל SegmentedButton ────────────────────────────────────────────────
+/// רוחב בסיס לכפתור עם אייקון (px)
+const _kSegmentBaseWidthWithIcon = 80.0;
+
+/// רוחב בסיס לכפתור ללא אייקון (px)
+const _kSegmentBaseWidthNoIcon = 60.0;
+
+/// הכפלת אורך תווי התווית לחישוב רוחב (px לתו)
+const _kSegmentCharWidthMultiplier = 8.0;
+
+/// ריפוד כולל נוסף לרוחב הכולל של כל הכפתורים (px)
+const _kSegmentGroupPadding = 24.0;
+
+/// רוחב מינימלי לקבוצת הכפתורים (px)
+const _kSegmentMinTotalWidth = 180.0;
+
+/// רוחב מקסימלי לקבוצת הכפתורים (px)
+const _kSegmentMaxTotalWidth = 400.0;
+
+/// סף רוחב להחלטה על פריסה צרה (px נוסף מעבר לרוחב הכפתורים)
+const _kSegmentNarrowLayoutThreshold = 200.0;
+
 // ── דיאלוגים ─────────────────────────────────────────────────────────────────
 
 /// דיאלוג עם פעולה אחת (כפתור אישור בלבד)
@@ -375,12 +397,15 @@ class _SegmentedSettingsTileState<T> extends State<SegmentedSettingsTile<T>> {
     final maxLen = widget.options
         .map((o) => o.label.length)
         .reduce((a, b) => a > b ? a : b);
-    final btnWidth = (hasIcons ? 80.0 : 60.0) + maxLen * 8.0;
-    final totalW =
-        (btnWidth * widget.options.length + 24.0).clamp(180.0, 400.0);
+    final btnWidth =
+        (hasIcons ? _kSegmentBaseWidthWithIcon : _kSegmentBaseWidthNoIcon) +
+            maxLen * _kSegmentCharWidthMultiplier;
+    final totalW = (btnWidth * widget.options.length + _kSegmentGroupPadding)
+        .clamp(_kSegmentMinTotalWidth, _kSegmentMaxTotalWidth);
 
     return LayoutBuilder(builder: (ctx, constraints) {
-      final isNarrow = constraints.maxWidth < totalW + 200;
+      final isNarrow =
+          constraints.maxWidth < totalW + _kSegmentNarrowLayoutThreshold;
       final button = _buildButton(cs, hasIcons, totalW);
 
       if (isNarrow) {
