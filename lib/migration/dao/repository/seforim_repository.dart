@@ -2706,17 +2706,19 @@ extension BookAcronymRepository on SeforimRepository {
       final lineIndex = entry['lineIndex'] as int? ?? 0;
       final parentId = entry['parentId'] as int?;
 
-      // Step 4: Skip level 1 entries - they always contain book name
-      // This prevents duplicates like "בראשית בראשית"
-      if (level == 1) continue;
+      // Skip level 0 entries – they hold the book title itself.
+      // (In the DB, h1→level 0 is the book name; chapters start at level 1.)
+      // Previously this skipped level 1, which inadvertently dropped all
+      // chapter headings for books that have only level 0 + level 1 (e.g. בראשית).
+      if (level == 0) continue;
 
-      // Build full reference path, skipping level 1 parents
+      // Build full reference path, skipping the book-name level (level 0).
       String fullRef = bookTitle;
       if (text.isNotEmpty) {
-        // Check if parent exists and is NOT level 1
+        // Check if parent exists and is NOT the book-name level (level 0)
         if (parentId != null &&
             parentTexts.containsKey(parentId) &&
-            parentLevels[parentId] != 1) {
+            parentLevels[parentId] != 0) {
           fullRef = '$bookTitle ${parentTexts[parentId]} $text';
         } else {
           fullRef = '$bookTitle $text';
@@ -2751,6 +2753,20 @@ extension BookAcronymRepository on SeforimRepository {
         'segment': lineIndex,
         'level': level,
       });
+    }
+
+    // When filtering by queryTokens, prefer the shallowest matching level.
+    // This prevents verse-level entries (level 2) from flooding results when
+    // chapter-level entries (level 1) already satisfy the query.
+    // Example: "בראשית א" → returns "גור אריה על בראשית פרק א" (level 1)
+    // but NOT "גור אריה על בראשית פרק ב פסוק א" (level 2).
+    if (queryTokens != null && queryTokens.isNotEmpty && results.isNotEmpty) {
+      var minLevel = results.first['level'] as int;
+      for (final r in results) {
+        final l = r['level'] as int;
+        if (l < minLevel) minLevel = l;
+      }
+      results.retainWhere((r) => (r['level'] as int) == minLevel);
     }
 
     // Sort results by segment (lineIndex) for logical ordering

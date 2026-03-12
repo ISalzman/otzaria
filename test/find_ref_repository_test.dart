@@ -124,4 +124,104 @@ void main() {
     expect(results.map((r) => r.reference),
         contains('שולחן ערוך אורח חיים סימן יב'));
   });
+
+  test(
+      'FindRef: "בראשית א" finds Genesis – not commentary books that contain "בראשית א" mid-title',
+      () async {
+    // Regression: "זוהר חי - בראשית א" contains "בראשית א" but the second
+    // token of its *title* is not "א" – it should be ignored for phrase=2.
+    // The single-token fallback should then find "בראשית" (Genesis) instead.
+
+    final repository = FindRefRepository(
+      dataRepository: MockDataRepository(),
+      isReferenceBooksCacheLoaded: () => true,
+      warmUpReferenceBooksCache: () async {},
+      searchReferenceBooks: (query, {int limit = 50}) {
+        if (query == 'בראשית') {
+          return [
+            ReferenceBookHit(
+              bookId: 1,
+              title: 'בראשית',
+              filePath: '',
+              fileType: 'txt',
+              matchRank: 0, // exact
+              orderIndex: 1.0,
+            ),
+          ];
+        }
+        if (query == 'בראשית א') {
+          // Commentary books: "בראשית" is token 0 but "א" is NOT token 1 in their title.
+          return [
+            ReferenceBookHit(
+              bookId: 99,
+              title: 'זוהר חי בראשית א',
+              filePath: '',
+              fileType: 'txt',
+              matchRank: 2, // contains-only
+              orderIndex: 99.0,
+            ),
+          ];
+        }
+        return const <ReferenceBookHit>[];
+      },
+      getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async {
+        if (bookId == 1) {
+          return [
+            {'reference': 'בראשית פרק א', 'segment': 10, 'level': 3},
+          ];
+        }
+        return const <Map<String, dynamic>>[];
+      },
+    );
+
+    final results = await repository.findRefs('בראשית א');
+
+    expect(results.map((r) => r.title), contains('בראשית'),
+        reason: 'Genesis must appear');
+    expect(results.map((r) => r.title), isNot(contains('זוהר חי בראשית א')),
+        reason: 'Commentary with mid-title match must not appear');
+  });
+
+  test(
+      'FindRef: "בראשית א" finds a book whose second title-token starts with "א"',
+      () async {
+    // A book titled "בראשית אמר" starts with "בראשית" and its second token
+    // "אמר" starts with "א" → the 2-token phrase query should select it.
+
+    final repository = FindRefRepository(
+      dataRepository: MockDataRepository(),
+      isReferenceBooksCacheLoaded: () => true,
+      warmUpReferenceBooksCache: () async {},
+      searchReferenceBooks: (query, {int limit = 50}) {
+        if (query == 'בראשית א') {
+          return [
+            ReferenceBookHit(
+              bookId: 10,
+              title: 'בראשית אמר',
+              filePath: '',
+              fileType: 'txt',
+              matchRank: 1, // startsWith "בראשית א"
+              orderIndex: 5.0,
+            ),
+          ];
+        }
+        return const <ReferenceBookHit>[];
+      },
+      getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async {
+        if (bookId == 10) {
+          return [
+            {'reference': 'בראשית אמר פסוק א', 'segment': 10, 'level': 2},
+          ];
+        }
+        return const <Map<String, dynamic>>[];
+      },
+    );
+
+    final results = await repository.findRefs('בראשית א');
+
+    // "בראשית א" matches phrase "בראשית א" → should find "בראשית אמר" book
+    expect(results.map((r) => r.title), contains('בראשית אמר'),
+        reason: 'Book whose second token starts with the query token must appear');
+  });
 }
+
