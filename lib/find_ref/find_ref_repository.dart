@@ -79,8 +79,39 @@ class FindRefRepository {
     for (var n = maxPhraseTokens; n >= 1; n--) {
       final phrase = queryTokens.take(n).join(' ');
       final hits = searchBooks(phrase, limit: 50);
-      if (hits.isNotEmpty) {
+      if (hits.isEmpty) continue;
+
+      // For single-token queries, keep all hits as usual.
+      if (n == 1) {
         bookHits = hits;
+        bookQueryTokenCount = n;
+        break;
+      }
+
+      // For multi-token phrases: only accept a hit if every query token at
+      // position i (0-indexed) starts a word at position i in the book title.
+      // This prevents "בראשית א" from matching "גור אריה על בראשית פסוק א"
+      // (matchRank=2, "א" appears in the 5th word, not the 2nd).
+      // Acronym hits (matchRank >= 3) are accepted without this restriction
+      // because the phrase matched as a whole acronym.
+      // Contains-only hits (matchRank == 2) are always excluded for multi-token
+      // phrases: "גור אריה על בראשית" should never be selected when the user
+      // types "בראשית א".
+      final phraseTokens = queryTokens.take(n).toList();
+      final qualifiedHits = hits.where((hit) {
+        if (hit.matchRank >= 3) return true; // acronym match – always accept
+        if (hit.matchRank == 2) return false; // contains-only – never accept for n>1
+        final titleTokens = _tokenize(_normalizeForMatch(hit.title));
+        // Every phrase token at index i must match the start of title token i.
+        for (var i = 0; i < phraseTokens.length; i++) {
+          if (i >= titleTokens.length) return false;
+          if (!titleTokens[i].startsWith(phraseTokens[i])) return false;
+        }
+        return true;
+      }).toList();
+
+      if (qualifiedHits.isNotEmpty) {
+        bookHits = qualifiedHits;
         bookQueryTokenCount = n;
         break;
       }
