@@ -23,7 +23,7 @@ class ToolsSettingsTab extends StatelessWidget {
         children: const [
           CalendarSettingsTab(),
           GematriaSettingsTab(),
-          EditorSettingsTab(),
+          // [EDITING DISABLED] EditorSettingsTab(),
           SizedBox(height: 16),
         ],
       ),

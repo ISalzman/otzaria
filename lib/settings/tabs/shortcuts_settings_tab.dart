@@ -171,13 +171,13 @@ class ShortcutsSettingsTab extends StatelessWidget {
                 icon: FluentIcons.search_24_regular,
                 allShortcuts: _shortcutsList,
               ),
-              _ShortcutTile(
-                settingKey: 'key-shortcut-edit-section',
-                label: 'עריכת קטע',
-                defaultShortcut: 'ctrl+e',
-                icon: FluentIcons.document_edit_24_regular,
-                allShortcuts: _shortcutsList,
-              ),
+              // _ShortcutTile(
+              //   settingKey: 'key-shortcut-edit-section',
+              //   label: 'עריכת קטע',
+              //   defaultShortcut: 'ctrl+e',
+              //   icon: FluentIcons.document_edit_24_regular,
+              //   allShortcuts: _shortcutsList,
+              // ),
               _ShortcutTile(
                 settingKey: 'key-shortcut-print',
                 label: 'הדפסה',
