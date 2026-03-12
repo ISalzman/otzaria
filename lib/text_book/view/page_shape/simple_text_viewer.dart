@@ -271,13 +271,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           enabled: index >= 0 && index < widget.content.length,
           onSelected: (_) => _copyParagraphByIndex(index),
         ),
-        const ctx.MenuDivider(),
-        // עריכת פסקה
-        ctx.MenuItem(
-          label: const Text('ערוך פסקה זו'),
-          icon: const Icon(FluentIcons.edit_24_regular),
-          onSelected: (_) => _editParagraph(index),
-        ),
+        // [EDITING DISABLED]
+        // const ctx.MenuDivider(),
+        // // עריכת פסקה
+        // ctx.MenuItem(
+        //   label: const Text('ערוך פסקה זו'),
+        //   icon: const Icon(FluentIcons.edit_24_regular),
+        //   onSelected: (_) => _editParagraph(index),
+        // ),
       ],
     );
   }
@@ -328,12 +329,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     );
   }
 
-  /// עריכת פסקה
-  void _editParagraph(int index) {
-    if (index >= 0 && index < widget.content.length) {
-      context.read<TextBookBloc>().add(OpenEditor(index: index));
-    }
-  }
+  // [EDITING DISABLED]
+  // /// עריכת פסקה
+  // void _editParagraph(int index) {
+  //   if (index >= 0 && index < widget.content.length) {
+  //     context.read<TextBookBloc>().add(OpenEditor(index: index));
+  //   }
+  // }
 
   /// העתקת פסקה לפי אינדקס
   Future<void> _copyParagraphByIndex(int index) async {

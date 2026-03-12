@@ -20,7 +20,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+// [EDITING DISABLED] import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -33,9 +33,9 @@ import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/ref_helper.dart';
-import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
+// [EDITING DISABLED] import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
-import 'package:otzaria/text_book/editing/helpers/editor_settings_helper.dart';
+// [EDITING DISABLED] import 'package:otzaria/text_book/editing/helpers/editor_settings_helper.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
@@ -735,11 +735,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             return BlocConsumer<TextBookBloc, TextBookState>(
               bloc: context.read<TextBookBloc>(),
               listener: (context, state) {
-                if (state is TextBookLoaded &&
-                    state.isEditorOpen &&
-                    state.editorIndex != null) {
-                  _openEditorDialog(context, state);
-                }
+                // [EDITING DISABLED]
+                // if (state is TextBookLoaded &&
+                //     state.isEditorOpen &&
+                //     state.editorIndex != null) {
+                //   _openEditorDialog(context, state);
+                // }
 
                 if (state is TextBookLoaded) {
                   final pendingSidebarTab =
@@ -1436,14 +1437,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           onPressed: () => _resetPerBookSettings(),
         ),
 
-      // 5) ערוך את הספר - לא בתצוגה משולבת
-      if (!widget.isInCombinedView)
-        ActionButtonData(
-          widget: _buildFullFileEditorButton(context, state),
-          icon: FluentIcons.document_edit_24_regular,
-          tooltip: 'ערוך את הספר',
-          onPressed: () => _handleFullFileEditorPress(context, state),
-        ),
+      // [EDITING DISABLED]
+      // // 5) ערוך את הספר - לא בתצוגה משולבת
+      // if (!widget.isInCombinedView)
+      //   ActionButtonData(
+      //     widget: _buildFullFileEditorButton(context, state),
+      //     icon: FluentIcons.document_edit_24_regular,
+      //     tooltip: 'ערוך את הספר',
+      //     onPressed: () => _handleFullFileEditorPress(context, state),
+      //   ),
 
       // 6) הדפסה - לא בתצוגה משולבת
       if (!widget.isInCombinedView)
@@ -1483,12 +1485,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 tooltip: 'אפס הגדרות ספר זה',
                 onPressed: () => _resetPerBookSettings(),
               ),
-            ActionButtonData(
-              widget: const SizedBox.shrink(),
-              icon: FluentIcons.document_edit_24_regular,
-              tooltip: 'ערוך את הספר',
-              onPressed: () => _handleFullFileEditorPress(context, state),
-            ),
+            // [EDITING DISABLED]
+            // ActionButtonData(
+            //   widget: const SizedBox.shrink(),
+            //   icon: FluentIcons.document_edit_24_regular,
+            //   tooltip: 'ערוך את הספר',
+            //   onPressed: () => _handleFullFileEditorPress(context, state),
+            // ),
             ActionButtonData(
               widget: const SizedBox.shrink(),
               icon: FluentIcons.print_24_regular,
@@ -2470,35 +2473,37 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 }
 
-// החלף את כל המחלקה הזו בקובץ text_book_screen.TXT
-
-Widget _buildFullFileEditorButton(BuildContext context, TextBookLoaded state) {
-  final shortcut =
-      Settings.getValue<String>('key-shortcut-edit-section') ?? 'ctrl+e';
-  return IconButton(
-    onPressed: () => _handleFullFileEditorPress(context, state),
-    icon: const Icon(FluentIcons.document_edit_24_regular),
-    tooltip: 'ערוך את הספר (${shortcut.toUpperCase()})',
-  );
-}
-
-void _handleTextEditorPress(BuildContext context, TextBookLoaded state) {
-  final positions = state.positionsListener.itemPositions.value;
-  if (positions.isEmpty) return;
-
-  final currentIndex = positions.first.index;
-  context.read<TextBookBloc>().add(OpenEditor(index: currentIndex));
-}
-
-void _handleFullFileEditorPress(BuildContext context, TextBookLoaded state) {
-  context.read<TextBookBloc>().add(OpenFullFileEditor());
-}
+// [EDITING DISABLED]
+// // החלף את כל המחלקה הזו בקובץ text_book_screen.TXT
+//
+// Widget _buildFullFileEditorButton(BuildContext context, TextBookLoaded state) {
+//   final shortcut =
+//       Settings.getValue<String>('key-shortcut-edit-section') ?? 'ctrl+e';
+//   return IconButton(
+//     onPressed: () => _handleFullFileEditorPress(context, state),
+//     icon: const Icon(FluentIcons.document_edit_24_regular),
+//     tooltip: 'ערוך את הספר (${shortcut.toUpperCase()})',
+//   );
+// }
+//
+// void _handleTextEditorPress(BuildContext context, TextBookLoaded state) {
+//   final positions = state.positionsListener.itemPositions.value;
+//   if (positions.isEmpty) return;
+//
+//   final currentIndex = positions.first.index;
+//   context.read<TextBookBloc>().add(OpenEditor(index: currentIndex));
+// }
+//
+// void _handleFullFileEditorPress(BuildContext context, TextBookLoaded state) {
+//   context.read<TextBookBloc>().add(OpenFullFileEditor());
+// }
 
 bool _handleGlobalKeyEvent(KeyEvent event, BuildContext context,
     TextBookLoaded state, TextBookTab tab) {
   // קריאת קיצורים מההגדרות
-  final editSectionShortcut =
-      Settings.getValue<String>('key-shortcut-edit-section') ?? 'ctrl+e';
+  // [EDITING DISABLED]
+  // final editSectionShortcut =
+  //     Settings.getValue<String>('key-shortcut-edit-section') ?? 'ctrl+e';
   final searchInBookShortcut =
       Settings.getValue<String>('key-shortcut-search-in-book') ?? 'ctrl+f';
   final printShortcut =
@@ -2512,17 +2517,18 @@ bool _handleGlobalKeyEvent(KeyEvent event, BuildContext context,
           ShortcutValidator.defaultShortcuts['key-shortcut-toggle-pdf-view'] ??
           'ctrl+shift+p';
 
-  // עריכת קטע
-  if (ShortcutHelper.matchesShortcut(event, editSectionShortcut)) {
-    if (!state.isEditorOpen) {
-      if (HardwareKeyboard.instance.isShiftPressed) {
-        _handleFullFileEditorPress(context, state);
-      } else {
-        _handleTextEditorPress(context, state);
-      }
-      return true;
-    }
-  }
+  // [EDITING DISABLED]
+  // // עריכת קטע
+  // if (ShortcutHelper.matchesShortcut(event, editSectionShortcut)) {
+  //   if (!state.isEditorOpen) {
+  //     if (HardwareKeyboard.instance.isShiftPressed) {
+  //       _handleFullFileEditorPress(context, state);
+  //     } else {
+  //       _handleTextEditorPress(context, state);
+  //     }
+  //     return true;
+  //   }
+  // }
 
   // חיפוש בספר
   if (ShortcutHelper.matchesShortcut(event, searchInBookShortcut)) {
@@ -2776,55 +2782,56 @@ Future<void> _addNoteFromKeyboard(
   }
 }
 
-void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
-  if (state.editorIndex == null || state.editorSectionId == null) return;
-
-  final settings = EditorSettingsHelper.getSettings();
-
-  // Reload the content from file system to ensure fresh data
-  String freshContent = '';
-  try {
-    // Try to reload content from file system
-    final dataProvider = FileSystemData.instance;
-    freshContent = await dataProvider.getBookText(
-      state.book.title,
-      categoryId: state.book.categoryId,
-      fileType: state.book.fileType,
-    );
-  } catch (e) {
-    debugPrint('Failed to load fresh content: $e');
-    // Fall back to cached content
-    freshContent = state.editorText ?? '';
-  }
-
-  if (!context.mounted) return;
-
-  await showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (dialogContext) => BlocProvider.value(
-      value: context.read<TextBookBloc>(),
-      child: TextSectionEditorDialog(
-        bookId: state.book.title,
-        category: state.book.categoryPath,
-        categoryId: state.book.categoryId,
-        fileType: state.book.fileType,
-        sectionIndex: state.editorIndex!,
-        sectionId: state.editorSectionId!,
-        initialContent:
-            freshContent.isNotEmpty ? freshContent : state.editorText ?? '',
-        hasLinksFile: state.hasLinksFile,
-        hasDraft: state.hasDraft,
-        settings: settings,
-      ),
-    ),
-  );
-
-  if (!context.mounted) return;
-
-  // Close editor when dialog is dismissed
-  context.read<TextBookBloc>().add(const CloseEditor());
-}
+// [EDITING DISABLED]
+// void _openEditorDialog(BuildContext context, TextBookLoaded state) async {
+//   if (state.editorIndex == null || state.editorSectionId == null) return;
+//
+//   final settings = EditorSettingsHelper.getSettings();
+//
+//   // Reload the content from file system to ensure fresh data
+//   String freshContent = '';
+//   try {
+//     // Try to reload content from file system
+//     final dataProvider = FileSystemData.instance;
+//     freshContent = await dataProvider.getBookText(
+//       state.book.title,
+//       categoryId: state.book.categoryId,
+//       fileType: state.book.fileType,
+//     );
+//   } catch (e) {
+//     debugPrint('Failed to load fresh content: $e');
+//     // Fall back to cached content
+//     freshContent = state.editorText ?? '';
+//   }
+//
+//   if (!context.mounted) return;
+//
+//   await showDialog(
+//     context: context,
+//     barrierDismissible: false,
+//     builder: (dialogContext) => BlocProvider.value(
+//       value: context.read<TextBookBloc>(),
+//       child: TextSectionEditorDialog(
+//         bookId: state.book.title,
+//         category: state.book.categoryPath,
+//         categoryId: state.book.categoryId,
+//         fileType: state.book.fileType,
+//         sectionIndex: state.editorIndex!,
+//         sectionId: state.editorSectionId!,
+//         initialContent:
+//             freshContent.isNotEmpty ? freshContent : state.editorText ?? '',
+//         hasLinksFile: state.hasLinksFile,
+//         hasDraft: state.hasDraft,
+//         settings: settings,
+//       ),
+//     ),
+//   );
+//
+//   if (!context.mounted) return;
+//
+//   // Close editor when dialog is dismissed
+//   context.read<TextBookBloc>().add(const CloseEditor());
+// }
 
 void _togglePdfView(
     BuildContext context, TextBookLoaded state, TextBookTab tab) async {

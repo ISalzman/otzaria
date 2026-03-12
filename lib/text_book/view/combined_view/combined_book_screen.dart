@@ -454,13 +454,14 @@ class _CombinedViewState extends State<CombinedView> {
           icon: const Icon(FluentIcons.copy_select_24_regular),
           onSelected: (_) => _copyVisibleText(),
         ),
-        const ctx.MenuDivider(),
-        // Edit paragraph option
-        ctx.MenuItem(
-          label: const Text('ערוך פסקה זו'),
-          icon: const Icon(FluentIcons.edit_24_regular),
-          onSelected: (_) => _editParagraph(paragraphIndex),
-        ),
+        // [EDITING DISABLED]
+        // const ctx.MenuDivider(),
+        // // Edit paragraph option
+        // ctx.MenuItem(
+        //   label: const Text('ערוך פסקה זו'),
+        //   icon: const Icon(FluentIcons.edit_24_regular),
+        //   onSelected: (_) => _editParagraph(paragraphIndex),
+        // ),
       ],
     );
   }
@@ -1265,12 +1266,13 @@ $textWithBreaks
     return buildKeyboardListener();
   }
 
-  /// Opens the text editor for a specific paragraph
-  void _editParagraph(int paragraphIndex) {
-    if (paragraphIndex >= 0 && paragraphIndex < widget.data.length) {
-      context.read<TextBookBloc>().add(OpenEditor(index: paragraphIndex));
-    }
-  }
+  // [EDITING DISABLED]
+  // /// Opens the text editor for a specific paragraph
+  // void _editParagraph(int paragraphIndex) {
+  //   if (paragraphIndex >= 0 && paragraphIndex < widget.data.length) {
+  //     context.read<TextBookBloc>().add(OpenEditor(index: paragraphIndex));
+  //   }
+  // }
 }
 
 class _CommentaryCard extends StatefulWidget {

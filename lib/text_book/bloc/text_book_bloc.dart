@@ -15,15 +15,15 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/text_book/editing/repository/overrides_repository.dart';
-import 'package:otzaria/text_book/editing/models/section_identifier.dart';
+// [EDITING DISABLED] import 'package:otzaria/text_book/editing/repository/overrides_repository.dart';
+// [EDITING DISABLED] import 'package:otzaria/text_book/editing/models/section_identifier.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/migration/core/models/category.dart' as db;
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   final TextBookRepository repository;
-  final OverridesRepository _overridesRepository;
+  // [EDITING DISABLED] final OverridesRepository _overridesRepository;
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
 
@@ -33,11 +33,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   TextBookBloc({
     required this.repository,
-    required OverridesRepository overridesRepository,
+    // [EDITING DISABLED] required OverridesRepository overridesRepository,
     required TextBookInitial initialState,
     required this.scrollController,
     required this.positionsListener,
-  })  : _overridesRepository = overridesRepository,
+  })  : // [EDITING DISABLED] _overridesRepository = overridesRepository,
         super(initialState) {
     on<LoadContent>(_onLoadContent);
     on<UpdateFontSize>(_onUpdateFontSize);
@@ -56,15 +56,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<CreateNoteFromToolbar>(_onCreateNoteFromToolbar);
     on<UpdateSelectedTextForNote>(_onUpdateSelectedTextForNote);
 
-    // Editor events
-    on<OpenEditor>(_onOpenEditor);
-    on<OpenFullFileEditor>(_onOpenFullFileEditor);
-    on<SaveEditedSection>(_onSaveEditedSection);
-    on<LoadDraftIfAny>(_onLoadDraftIfAny);
-    on<DiscardDraft>(_onDiscardDraft);
-    on<CloseEditor>(_onCloseEditor);
-    on<UpdateEditorText>(_onUpdateEditorText);
-    on<AutoSaveDraft>(_onAutoSaveDraft);
+    // [EDITING DISABLED] Editor events
+    // on<OpenEditor>(_onOpenEditor);
+    // on<OpenFullFileEditor>(_onOpenFullFileEditor);
+    // on<SaveEditedSection>(_onSaveEditedSection);
+    // on<LoadDraftIfAny>(_onLoadDraftIfAny);
+    // on<DiscardDraft>(_onDiscardDraft);
+    // on<CloseEditor>(_onCloseEditor);
+    // on<UpdateEditorText>(_onUpdateEditorText);
+    // on<AutoSaveDraft>(_onAutoSaveDraft);
     on<UpdateLinks>(_onUpdateLinks);
     on<UpdateAvailableCommentators>(_onUpdateAvailableCommentators);
   }
@@ -597,259 +597,259 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return visibleLinks;
   }
 
-  // Editor event handlers
-  Future<void> _onOpenEditor(
-    OpenEditor event,
-    Emitter<TextBookState> emit,
-  ) async {
-    if (state is! TextBookLoaded) return;
-
-    final currentState = state as TextBookLoaded;
-
-    try {
-      // Generate section identifier
-      final content = currentState.content[event.index];
-      final sectionId = SectionIdentifier.fromContent(
-        content: content,
-        index: event.index,
-      );
-
-      // Check if book has links file
-      final hasLinks =
-          await _overridesRepository.hasLinksFile(currentState.book.title);
-
-      // Load existing override or original content
-      final override = await _overridesRepository.readOverride(
-        currentState.book.title,
-        sectionId.sectionId,
-      );
-
-      final editorText = override?.markdownContent ?? content;
-
-      // Check for draft
-      final hasDraft = await _overridesRepository.hasNewerDraftThanOverride(
-        currentState.book.title,
-        sectionId.sectionId,
-      );
-
-      emit(currentState.copyWith(
-        isEditorOpen: true,
-        editorIndex: event.index,
-        editorSectionId: sectionId.sectionId,
-        editorText: editorText,
-        hasDraft: hasDraft,
-        hasLinksFile: hasLinks,
-      ));
-    } catch (e) {
-      // Handle error - could emit error state or show notification
-    }
-  }
-
-  Future<void> _onOpenFullFileEditor(
-    OpenFullFileEditor event,
-    Emitter<TextBookState> emit,
-  ) async {
-    if (state is! TextBookLoaded) return;
-
-    final currentState = state as TextBookLoaded;
-
-    try {
-      // Combine all content into one string
-      final fullContent = currentState.content.join('\n\n');
-
-      // We don't need section identifier for full file - using fixed ID
-
-      // Check if book has links file
-      final hasLinks =
-          await _overridesRepository.hasLinksFile(currentState.book.title);
-
-      // Load existing override or original content
-      final override = await _overridesRepository.readOverride(
-        currentState.book.title,
-        'full_file',
-      );
-
-      final editorText = override?.markdownContent ?? fullContent;
-
-      // Check for draft
-      final hasDraft = await _overridesRepository.hasNewerDraftThanOverride(
-        currentState.book.title,
-        'full_file',
-      );
-
-      emit(currentState.copyWith(
-        isEditorOpen: true,
-        editorIndex: -1, // Special index for full file
-        editorSectionId: 'full_file',
-        editorText: editorText,
-        hasDraft: hasDraft,
-        hasLinksFile: hasLinks,
-      ));
-    } catch (e) {
-      // Debug: Error in _onOpenFullFileEditor: $e
-      // Handle error - could emit error state or show notification
-    }
-  }
-
-  Future<void> _onSaveEditedSection(
-    SaveEditedSection event,
-    Emitter<TextBookState> emit,
-  ) async {
-    if (state is! TextBookLoaded) return;
-
-    final currentState = state as TextBookLoaded;
-
-    try {
-      // Handle full file editing differently
-      if (event.sectionId == 'full_file' && event.index == -1) {
-        // For full file editing, save the entire content to the original file
-        await repository.saveBookContent(currentState.book, event.markdown);
-
-        // Split the content back into sections for display
-        final sections = event.markdown
-            .split('\n\n')
-            .where((s) => s.trim().isNotEmpty)
-            .toList();
-
-        // If we have fewer sections than before, pad with empty strings
-        while (sections.length < currentState.content.length) {
-          sections.add('');
-        }
-
-        // Reload content to ensure we have the latest version
-        add(LoadContent(
-          fontSize: currentState.fontSize,
-          showSplitView: currentState.showSplitView,
-          removeNikud: currentState.removeNikud,
-          preserveState: true,
-        ));
-
-        return;
-      }
-
-      // Regular section editing - update the specific section and save the entire file
-      final updatedContent = List<String>.from(currentState.content);
-      updatedContent[event.index] = event.markdown;
-
-      // Join all sections back together and save to original file
-      final fullContent = updatedContent.join('\n\n');
-      await repository.saveBookContent(currentState.book, fullContent);
-
-      // Close editor immediately
-      emit(currentState.copyWith(
-        isEditorOpen: false,
-        editorIndex: null,
-        editorSectionId: null,
-        editorText: null,
-        hasDraft: false,
-      ));
-
-      // Reload content to ensure we have the latest version from the file system
-      add(LoadContent(
-        fontSize: currentState.fontSize,
-        showSplitView: currentState.showSplitView,
-        removeNikud: currentState.removeNikud,
-        preserveState: true,
-      ));
-    } catch (e) {
-      // Debug: Error in _onSaveEditedSection: $e
-      // Handle error - could show error message to user
-    }
-  }
-
-  Future<void> _onLoadDraftIfAny(
-    LoadDraftIfAny event,
-    Emitter<TextBookState> emit,
-  ) async {
-    if (state is! TextBookLoaded) return;
-
-    final currentState = state as TextBookLoaded;
-
-    try {
-      final draft = await _overridesRepository.readDraft(
-        currentState.book.title,
-        event.sectionId,
-      );
-
-      if (draft != null) {
-        emit(currentState.copyWith(
-          editorText: draft.markdownContent,
-          hasDraft: false, // Draft is now loaded, so no longer "pending"
-        ));
-      }
-    } catch (e) {
-      // Handle error
-    }
-  }
-
-  Future<void> _onDiscardDraft(
-    DiscardDraft event,
-    Emitter<TextBookState> emit,
-  ) async {
-    if (state is! TextBookLoaded) return;
-
-    final currentState = state as TextBookLoaded;
-
-    try {
-      await _overridesRepository.deleteDraft(
-        currentState.book.title,
-        event.sectionId,
-      );
-
-      emit(currentState.copyWith(hasDraft: false));
-    } catch (e) {
-      // Handle error
-    }
-  }
-
-  Future<void> _onCloseEditor(
-    CloseEditor event,
-    Emitter<TextBookState> emit,
-  ) async {
-    if (state is! TextBookLoaded) return;
-
-    final currentState = state as TextBookLoaded;
-
-    emit(currentState.copyWith(
-      isEditorOpen: false,
-      editorIndex: null,
-      editorSectionId: null,
-      editorText: null,
-      hasDraft: false,
-    ));
-  }
-
-  Future<void> _onUpdateEditorText(
-    UpdateEditorText event,
-    Emitter<TextBookState> emit,
-  ) async {
-    if (state is! TextBookLoaded) return;
-
-    final currentState = state as TextBookLoaded;
-
-    emit(currentState.copyWith(editorText: event.text));
-  }
-
-  Future<void> _onAutoSaveDraft(
-    AutoSaveDraft event,
-    Emitter<TextBookState> emit,
-  ) async {
-    if (state is! TextBookLoaded) return;
-
-    final currentState = state as TextBookLoaded;
-
-    try {
-      await _overridesRepository.writeDraft(
-        currentState.book.title,
-        event.sectionId,
-        event.markdown,
-      );
-
-      // Don't emit state change for auto-save to avoid unnecessary rebuilds
-    } catch (e) {
-      // Handle error silently for auto-save
-    }
-  }
+  // [EDITING DISABLED] - All editor event handlers commented out
+  // Future<void> _onOpenEditor(
+  //   OpenEditor event,
+  //   Emitter<TextBookState> emit,
+  // ) async {
+  //   if (state is! TextBookLoaded) return;
+  //
+  //   final currentState = state as TextBookLoaded;
+  //
+  //   try {
+  //     // Generate section identifier
+  //     final content = currentState.content[event.index];
+  //     final sectionId = SectionIdentifier.fromContent(
+  //       content: content,
+  //       index: event.index,
+  //     );
+  //
+  //     // Check if book has links file
+  //     final hasLinks =
+  //         await _overridesRepository.hasLinksFile(currentState.book.title);
+  //
+  //     // Load existing override or original content
+  //     final override = await _overridesRepository.readOverride(
+  //       currentState.book.title,
+  //       sectionId.sectionId,
+  //     );
+  //
+  //     final editorText = override?.markdownContent ?? content;
+  //
+  //     // Check for draft
+  //     final hasDraft = await _overridesRepository.hasNewerDraftThanOverride(
+  //       currentState.book.title,
+  //       sectionId.sectionId,
+  //     );
+  //
+  //     emit(currentState.copyWith(
+  //       isEditorOpen: true,
+  //       editorIndex: event.index,
+  //       editorSectionId: sectionId.sectionId,
+  //       editorText: editorText,
+  //       hasDraft: hasDraft,
+  //       hasLinksFile: hasLinks,
+  //     ));
+  //   } catch (e) {
+  //     // Handle error - could emit error state or show notification
+  //   }
+  // }
+  //
+  // Future<void> _onOpenFullFileEditor(
+  //   OpenFullFileEditor event,
+  //   Emitter<TextBookState> emit,
+  // ) async {
+  //   if (state is! TextBookLoaded) return;
+  //
+  //   final currentState = state as TextBookLoaded;
+  //
+  //   try {
+  //     // Combine all content into one string
+  //     final fullContent = currentState.content.join('\n\n');
+  //
+  //     // We don't need section identifier for full file - using fixed ID
+  //
+  //     // Check if book has links file
+  //     final hasLinks =
+  //         await _overridesRepository.hasLinksFile(currentState.book.title);
+  //
+  //     // Load existing override or original content
+  //     final override = await _overridesRepository.readOverride(
+  //       currentState.book.title,
+  //       'full_file',
+  //     );
+  //
+  //     final editorText = override?.markdownContent ?? fullContent;
+  //
+  //     // Check for draft
+  //     final hasDraft = await _overridesRepository.hasNewerDraftThanOverride(
+  //       currentState.book.title,
+  //       'full_file',
+  //     );
+  //
+  //     emit(currentState.copyWith(
+  //       isEditorOpen: true,
+  //       editorIndex: -1, // Special index for full file
+  //       editorSectionId: 'full_file',
+  //       editorText: editorText,
+  //       hasDraft: hasDraft,
+  //       hasLinksFile: hasLinks,
+  //     ));
+  //   } catch (e) {
+  //     // Debug: Error in _onOpenFullFileEditor: $e
+  //     // Handle error - could emit error state or show notification
+  //   }
+  // }
+  //
+  // Future<void> _onSaveEditedSection(
+  //   SaveEditedSection event,
+  //   Emitter<TextBookState> emit,
+  // ) async {
+  //   if (state is! TextBookLoaded) return;
+  //
+  //   final currentState = state as TextBookLoaded;
+  //
+  //   try {
+  //     // Handle full file editing differently
+  //     if (event.sectionId == 'full_file' && event.index == -1) {
+  //       // For full file editing, save the entire content to the original file
+  //       await repository.saveBookContent(currentState.book, event.markdown);
+  //
+  //       // Split the content back into sections for display
+  //       final sections = event.markdown
+  //           .split('\n\n')
+  //           .where((s) => s.trim().isNotEmpty)
+  //           .toList();
+  //
+  //       // If we have fewer sections than before, pad with empty strings
+  //       while (sections.length < currentState.content.length) {
+  //         sections.add('');
+  //       }
+  //
+  //       // Reload content to ensure we have the latest version
+  //       add(LoadContent(
+  //         fontSize: currentState.fontSize,
+  //         showSplitView: currentState.showSplitView,
+  //         removeNikud: currentState.removeNikud,
+  //         preserveState: true,
+  //       ));
+  //
+  //       return;
+  //     }
+  //
+  //     // Regular section editing - update the specific section and save the entire file
+  //     final updatedContent = List<String>.from(currentState.content);
+  //     updatedContent[event.index] = event.markdown;
+  //
+  //     // Join all sections back together and save to original file
+  //     final fullContent = updatedContent.join('\n\n');
+  //     await repository.saveBookContent(currentState.book, fullContent);
+  //
+  //     // Close editor immediately
+  //     emit(currentState.copyWith(
+  //       isEditorOpen: false,
+  //       editorIndex: null,
+  //       editorSectionId: null,
+  //       editorText: null,
+  //       hasDraft: false,
+  //     ));
+  //
+  //     // Reload content to ensure we have the latest version from the file system
+  //     add(LoadContent(
+  //       fontSize: currentState.fontSize,
+  //       showSplitView: currentState.showSplitView,
+  //       removeNikud: currentState.removeNikud,
+  //       preserveState: true,
+  //     ));
+  //   } catch (e) {
+  //     // Debug: Error in _onSaveEditedSection: $e
+  //     // Handle error - could show error message to user
+  //   }
+  // }
+  //
+  // Future<void> _onLoadDraftIfAny(
+  //   LoadDraftIfAny event,
+  //   Emitter<TextBookState> emit,
+  // ) async {
+  //   if (state is! TextBookLoaded) return;
+  //
+  //   final currentState = state as TextBookLoaded;
+  //
+  //   try {
+  //     final draft = await _overridesRepository.readDraft(
+  //       currentState.book.title,
+  //       event.sectionId,
+  //     );
+  //
+  //     if (draft != null) {
+  //       emit(currentState.copyWith(
+  //         editorText: draft.markdownContent,
+  //         hasDraft: false, // Draft is now loaded, so no longer "pending"
+  //       ));
+  //     }
+  //   } catch (e) {
+  //     // Handle error
+  //   }
+  // }
+  //
+  // Future<void> _onDiscardDraft(
+  //   DiscardDraft event,
+  //   Emitter<TextBookState> emit,
+  // ) async {
+  //   if (state is! TextBookLoaded) return;
+  //
+  //   final currentState = state as TextBookLoaded;
+  //
+  //   try {
+  //     await _overridesRepository.deleteDraft(
+  //       currentState.book.title,
+  //       event.sectionId,
+  //     );
+  //
+  //     emit(currentState.copyWith(hasDraft: false));
+  //   } catch (e) {
+  //     // Handle error
+  //   }
+  // }
+  //
+  // Future<void> _onCloseEditor(
+  //   CloseEditor event,
+  //   Emitter<TextBookState> emit,
+  // ) async {
+  //   if (state is! TextBookLoaded) return;
+  //
+  //   final currentState = state as TextBookLoaded;
+  //
+  //   emit(currentState.copyWith(
+  //     isEditorOpen: false,
+  //     editorIndex: null,
+  //     editorSectionId: null,
+  //     editorText: null,
+  //     hasDraft: false,
+  //   ));
+  // }
+  //
+  // Future<void> _onUpdateEditorText(
+  //   UpdateEditorText event,
+  //   Emitter<TextBookState> emit,
+  // ) async {
+  //   if (state is! TextBookLoaded) return;
+  //
+  //   final currentState = state as TextBookLoaded;
+  //
+  //   emit(currentState.copyWith(editorText: event.text));
+  // }
+  //
+  // Future<void> _onAutoSaveDraft(
+  //   AutoSaveDraft event,
+  //   Emitter<TextBookState> emit,
+  // ) async {
+  //   if (state is! TextBookLoaded) return;
+  //
+  //   final currentState = state as TextBookLoaded;
+  //
+  //   try {
+  //     await _overridesRepository.writeDraft(
+  //       currentState.book.title,
+  //       event.sectionId,
+  //       event.markdown,
+  //     );
+  //
+  //     // Don't emit state change for auto-save to avoid unnecessary rebuilds
+  //   } catch (e) {
+  //     // Handle error silently for auto-save
+  //   }
+  // }
 
   @override
   Future<void> close() {
