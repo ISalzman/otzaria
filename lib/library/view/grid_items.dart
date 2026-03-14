@@ -210,8 +210,8 @@ class BookGridItem extends StatelessWidget {
                           child: Center(
                             child: book is TextBook
                                 ? DataSourceIndicatorAsync(
-                                    sourceFuture:
-                                        FileSystemData.instance.getBookDataSource(
+                                    sourceFuture: FileSystemData.instance
+                                        .getBookDataSource(
                                       book.title,
                                       categoryId: book.categoryId,
                                       fileType: book.fileType,
@@ -252,7 +252,8 @@ class BookGridItem extends StatelessWidget {
                       SizedBox(
                         width: 32,
                         height: 32,
-                        child: book is! ExternalLibraryBook
+                        child: (book.categoryPath?.startsWith('ספרים אישיים') ==
+                                true)
                             ? PopupMenuButton<String>(
                                 icon: Icon(
                                   FluentIcons.more_vertical_24_regular,

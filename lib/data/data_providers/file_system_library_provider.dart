@@ -90,7 +90,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
     final personalBooksDir = Directory(personalBooksPath);
     if (await personalBooksDir.exists()) {
       await _loadBooksRecursively(
-          personalBooksDir, metadata, booksByCategory, ['אישי'], map);
+          personalBooksDir, metadata, booksByCategory, ['ספרים אישיים'], map);
     }
 
     await _loadBundledTalmudBavliBooks(metadata, booksByCategory, map);
@@ -100,8 +100,6 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
     return booksByCategory;
   }
-
-
 
   Future<void> _loadBundledTalmudBavliBooks(
     Map<String, Map<String, dynamic>> metadata,
@@ -354,7 +352,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
     if (await Directory(personalBooksPath).exists()) {
       final personalPaths = await _getAllBookPaths(personalBooksPath);
       for (var path in personalPaths) {
-        addPath(path, personalBooksPath, ['אישי']);
+        addPath(path, personalBooksPath, ['ספרים אישיים']);
       }
     }
 
