@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/external_catalog/view/external_catalog_settings_helper.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/settings_card.dart';
@@ -125,12 +127,88 @@ class LibrarySettingsPanel extends StatelessWidget {
                       );
                     },
                   ),
+                  const _CatalogSyncTile(),
                 ],
               ],
             ),
           ],
         );
       },
+    );
+  }
+}
+
+/// ווידג'ט לסנכרון קטלוגים חיצוניים
+class _CatalogSyncTile extends StatefulWidget {
+  const _CatalogSyncTile();
+
+  @override
+  State<_CatalogSyncTile> createState() => _CatalogSyncTileState();
+}
+
+class _CatalogSyncTileState extends State<_CatalogSyncTile> {
+  bool _isSyncing = false;
+  String _message = 'סנכרן קטלוגים';
+
+  Future<void> _syncCatalogs() async {
+    setState(() {
+      _isSyncing = true;
+      _message = 'מסנכרן...';
+    });
+
+    try {
+      final repository = ExternalCatalogRepository.instance;
+
+      if (!await repository.databaseExists()) {
+        setState(() {
+          _isSyncing = false;
+          _message = 'אין קטלוגים להצגה';
+        });
+        return;
+      }
+
+      final updated = await repository.updateDatabaseIfNeeded();
+
+      if (updated) {
+        DataRepository.instance.invalidateExternalBooksCache();
+        setState(() {
+          _isSyncing = false;
+          _message = 'הקטלוגים עודכנו בהצלחה';
+        });
+      } else {
+        setState(() {
+          _isSyncing = false;
+          _message = 'הקטלוגים מעודכנים';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isSyncing = false;
+        _message = 'שגיאה: ${e.toString()}';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: const Icon(FluentIcons.arrow_sync_24_regular),
+      title: const Text('סנכרון קטלוגים', style: kSettingsTitleStyle),
+      subtitle: Text(_message, style: kSettingsSubtitleStyle),
+      hoverColor: Colors.transparent,
+      trailing: _isSyncing
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : RecommendedActionButton(
+              text: 'סנכרן',
+              icon: FluentIcons.arrow_sync_24_regular,
+              onPressed: () {
+                _syncCatalogs();
+              },
+            ),
     );
   }
 }
