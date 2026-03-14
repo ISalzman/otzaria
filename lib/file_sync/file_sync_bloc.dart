@@ -63,19 +63,13 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
 
     try {
       final successCount = await repository.syncFiles();
-      final catalogUpdated = repository.catalogUpdatedInLastSync;
       _progressTimer?.cancel();
 
-      if (successCount > 0 || catalogUpdated) {
-        final message = successCount > 0 && catalogUpdated
-            ? 'הוחלו $successCount עדכוני DB ועודכן גם קטלוג הספרים'
-            : successCount > 0
-                ? 'הוחלו $successCount עדכוני DB'
-                : 'קטלוג הספרים עודכן';
+      if (successCount > 0) {
         emit(state.copyWith(
           status: FileSyncStatus.completed,
           hasNewSync: true,
-          message: message,
+          message: 'הוחלו $successCount עדכוני DB',
         ));
       } else {
         emit(state.copyWith(
