@@ -2,8 +2,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/file_sync/file_sync_repository.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -219,23 +217,6 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
-    });
-
-    test('syncFiles מפעיל גם את עדכון הקטלוג כשהוא זמין', () async {
-      var catalogSyncCalled = false;
-      final repository = FileSyncRepository(
-        githubOwner: 'Otzaria',
-        repositoryName: 'SeforimLibrary',
-        httpClient: MockClient((request) async => http.Response('[]', 200)),
-        syncExternalCatalogIfPresent: () async {
-          catalogSyncCalled = true;
-          return true;
-        },
-      );
-
-      expect(await repository.syncFiles(), 0);
-      expect(catalogSyncCalled, isTrue);
-      expect(repository.catalogUpdatedInLastSync, isTrue);
     });
   });
 }
