@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:logging/logging.dart';
 
-
 import '../../core/models/author.dart';
 import '../../core/models/book.dart';
 import '../../core/models/category.dart';
@@ -963,6 +962,17 @@ class SeforimRepository {
     _logger.fine('Updating external book metadata: bookId=$bookId');
     await _database.bookDao
         .updateExternalMetadata(bookId, fileSize, lastModified);
+  }
+
+  /// Updates a book's storage details (file path, file size, last modified).
+  /// Required when a book transitions between being stored externally and within the DB.
+  Future<void> updateBookStorage(
+      int bookId, String? filePath, int? fileSize, int? lastModified) async {
+    _logger.fine('Updating book storage: bookId=$bookId, filePath=$filePath');
+    final db = await _database.database;
+    await db.rawUpdate(
+        'UPDATE book SET filePath = ?, fileSize = ?, lastModified = ? WHERE id = ?',
+        [filePath, fileSize, lastModified, bookId]);
   }
 
   /// Gets an external book by its file path.
@@ -2185,7 +2195,8 @@ class SeforimRepository {
 
     // Use the optimized query that loads all relations in a single batch
     // External catalog books (fileType='link') are excluded since they are in a separate DB
-    final booksWithRelations = await _database.bookDao.getAllBooksWithRelations();
+    final booksWithRelations =
+        await _database.bookDao.getAllBooksWithRelations();
     _logger.fine('Found ${booksWithRelations.length} books');
 
     // Convert to Book objects
@@ -2351,45 +2362,86 @@ class SeforimRepository {
   Future<void> deleteBookCompletely(int bookId) async {
     _logger.info('Deleting book completely: $bookId');
 
-    // Delete all related data first (due to foreign key constraints)
     final db = await _database.database;
+    await db.transaction((txn) async {
+      // Delete links where this book is source or target
+      await txn.rawDelete(
+          'DELETE FROM link WHERE sourceBookId = ? OR targetBookId = ?',
+          [bookId, bookId]);
 
-    // Delete links where this book is source or target
-    await db.rawDelete(
-        'DELETE FROM link WHERE sourceBookId = ? OR targetBookId = ?',
-        [bookId, bookId]);
+      // Delete book_has_links
+      await txn
+          .rawDelete('DELETE FROM book_has_links WHERE bookId = ?', [bookId]);
 
-    // Delete book_has_links
-    await db.rawDelete('DELETE FROM book_has_links WHERE bookId = ?', [bookId]);
+      // Delete line_toc mappings for lines of this book
+      await txn.rawDelete(
+          'DELETE FROM line_toc WHERE lineId IN (SELECT id FROM line WHERE bookId = ?)',
+          [bookId]);
 
-    // Delete TOC entries
-    await db.rawDelete('DELETE FROM tocEntry WHERE bookId = ?', [bookId]);
+      // Delete line_toc mappings for tocEntries of this book
+      await txn.rawDelete(
+          'DELETE FROM line_toc WHERE tocEntryId IN (SELECT id FROM tocEntry WHERE bookId = ?)',
+          [bookId]);
 
-    // Delete lines
-    await db.rawDelete('DELETE FROM line WHERE bookId = ?', [bookId]);
+      // Delete TOC entries
+      await txn.rawDelete('DELETE FROM tocEntry WHERE bookId = ?', [bookId]);
 
-    // Delete junction tables
-    await db.rawDelete('DELETE FROM book_author WHERE bookId = ?', [bookId]);
-    await db.rawDelete('DELETE FROM book_topic WHERE bookId = ?', [bookId]);
-    await db.rawDelete('DELETE FROM book_pub_place WHERE bookId = ?', [bookId]);
-    await db.rawDelete('DELETE FROM book_pub_date WHERE bookId = ?', [bookId]);
+      // Delete lines
+      await txn.rawDelete('DELETE FROM line WHERE bookId = ?', [bookId]);
 
-    // Finally delete the book itself
-    await _database.bookDao.deleteBook(bookId);
+      // Delete junction tables
+      await txn.rawDelete('DELETE FROM book_author WHERE bookId = ?', [bookId]);
+      await txn.rawDelete('DELETE FROM book_topic WHERE bookId = ?', [bookId]);
+      await txn
+          .rawDelete('DELETE FROM book_pub_place WHERE bookId = ?', [bookId]);
+      await txn
+          .rawDelete('DELETE FROM book_pub_date WHERE bookId = ?', [bookId]);
+
+      // Finally delete the book itself
+      await txn.rawDelete('DELETE FROM book WHERE id = ?', [bookId]);
+    });
 
     _logger.info('Book $bookId deleted completely');
+  }
+
+  /// Deletes tocText entries that are no longer referenced by any tocEntry or alt_toc_entry.
+  /// Should be called after bulk deletions of books/categories.
+  Future<void> deleteOrphanedTocTexts() async {
+    final db = await _database.database;
+    final count = await db.rawDelete(
+        'DELETE FROM tocText WHERE id NOT IN (SELECT DISTINCT textId FROM tocEntry) AND id NOT IN (SELECT DISTINCT textId FROM alt_toc_entry)');
+    _logger.info('Deleted $count orphaned tocText entries');
+  }
+
+  /// Updates tocEntry.lineId for all entries in a book by matching lineIndex.
+  /// Should be called after lines and tocEntries are inserted for a book (insertContent=true).
+  Future<void> updateTocEntryLineIdsByLineIndex(int bookId) async {
+    final db = await _database.database;
+    final count = await db.rawUpdate('''
+      UPDATE tocEntry SET lineId = (
+        SELECT l.id FROM line l
+        WHERE l.bookId = tocEntry.bookId AND l.lineIndex = tocEntry.lineIndex
+      ) WHERE bookId = ? AND lineIndex IS NOT NULL
+    ''', [bookId]);
+    _logger.info('Updated lineId for $count tocEntry rows in book $bookId');
+  }
+
+  /// Deletes orphaned line_toc rows (where lineId or tocEntryId no longer exist in their tables).
+  /// Should be called after bulk deletions of books/categories.
+  Future<void> deleteOrphanedLineToc() async {
+    final db = await _database.database;
+    final count = await db.rawDelete('''
+      DELETE FROM line_toc
+      WHERE lineId NOT IN (SELECT id FROM line)
+         OR tocEntryId NOT IN (SELECT id FROM tocEntry)
+    ''');
+    _logger.info('Deleted $count orphaned line_toc entries');
   }
 
   /// Deletes a category from the database.
   /// Note: Make sure to delete all books and subcategories first!
   Future<void> deleteCategory(int categoryId) async {
     _logger.info('Deleting category: $categoryId');
-
-    // Delete from category_closure table
-    final db = await _database.database;
-    await db.rawDelete(
-        'DELETE FROM category_closure WHERE ancestor = ? OR descendant = ?',
-        [categoryId, categoryId]);
 
     // Delete the category itself
     await _database.categoryDao.deleteCategory(categoryId);
