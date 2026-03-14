@@ -2443,6 +2443,12 @@ class SeforimRepository {
   Future<void> deleteCategory(int categoryId) async {
     _logger.info('Deleting category: $categoryId');
 
+    // Delete from category_closure table first to maintain hierarchy integrity
+    final db = await _database.database;
+    await db.rawDelete(
+        'DELETE FROM category_closure WHERE ancestorId = ? OR descendantId = ?',
+        [categoryId, categoryId]);
+
     // Delete the category itself
     await _database.categoryDao.deleteCategory(categoryId);
 
