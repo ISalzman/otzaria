@@ -317,7 +317,7 @@ class _CombinedViewState extends State<CombinedView> {
           label: const Text('מפרשים'),
           icon: const Icon(FluentIcons.book_24_regular),
           enabled: state.availableCommentators.isNotEmpty,
-          items: [
+          items: <ctx.ContextMenuEntry>[
             ctx.MenuItem(
               label: const Text('הצג את כל המפרשים'),
               icon: state.activeCommentators
@@ -397,8 +397,8 @@ class _CombinedViewState extends State<CombinedView> {
           icon: const Icon(FluentIcons.link_24_regular),
           enabled: state.visibleLinks.isNotEmpty,
           items: state.visibleLinks
-              .map(
-                (link) => ctx.MenuItem(
+              .map<ctx.ContextMenuEntry>(
+                (link) => ctx.MenuItem<void>(
                   label: Text(link.heRef),
                   onSelected: (_) {
                     widget.openBookCallback(

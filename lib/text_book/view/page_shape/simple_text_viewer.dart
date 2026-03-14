@@ -748,7 +748,7 @@ $textWithBreaks
         availableCommentators.where((c) => !allGrouped.contains(c)).toList();
 
     // בניית תפריט משנה
-    final submenuItems = <dynamic>[];
+    final submenuItems = <ctx.ContextMenuEntry>[];
 
     // הוספת קבוצות
     if (tanachGroup.commentators.isNotEmpty) {
@@ -784,15 +784,15 @@ $textWithBreaks
       ctx.MenuItem.submenu(
         label: const Text('החלף מפרש'),
         icon: const Icon(FluentIcons.arrow_swap_24_regular),
-        items: submenuItems.cast<ctx.ContextMenuEntry>(),
+        items: submenuItems,
       ),
     ];
   }
 
   /// בניית פריטי תפריט לקבוצת מפרשים
-  List<ctx.MenuItem> _buildCommentatorGroupItems(
+  List<ctx.ContextMenuEntry> _buildCommentatorGroupItems(
       List<String> commentators, TextBookLoaded state) {
-    return commentators.map((commentator) {
+    return commentators.map<ctx.ContextMenuEntry>((commentator) {
       final isSelected = commentator == widget.bookTitle;
       return ctx.MenuItem<void>(
         label: Text(commentator),

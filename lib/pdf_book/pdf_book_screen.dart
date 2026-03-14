@@ -344,7 +344,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           label: _buildRtlMenuText('מפרשים'),
           icon: const Icon(FluentIcons.book_24_regular),
           enabled: relevantCommentators.isNotEmpty,
-          items: [
+          items: <ctx.ContextMenuEntry>[
             ctx.MenuItem(
               label: _buildRtlMenuText('הצג את כל המפרשים'),
               icon: relevantCommentators.isNotEmpty &&
@@ -355,8 +355,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               onSelected: (_) => _toggleAllCommentators(relevantCommentators),
             ),
             if (relevantCommentators.isNotEmpty) const ctx.MenuDivider(),
-            ...relevantCommentators.map(
-              (commentator) => ctx.MenuItem(
+            ...relevantCommentators.map<ctx.ContextMenuEntry>(
+              (commentator) => ctx.MenuItem<void>(
                 label: Text(commentator, textDirection: TextDirection.rtl),
                 icon: widget.tab.activeCommentators.contains(commentator)
                     ? const Icon(FluentIcons.checkmark_24_regular)
@@ -371,8 +371,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           icon: const Icon(FluentIcons.link_24_regular),
           enabled: relevantLinks.isNotEmpty,
           items: relevantLinks
-              .map(
-                (link) => ctx.MenuItem(
+              .map<ctx.ContextMenuEntry>(
+                (link) => ctx.MenuItem<void>(
                   label: Text(link.heRef, textDirection: TextDirection.rtl),
                   onSelected: (_) {
                     openBook(
