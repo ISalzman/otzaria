@@ -142,7 +142,6 @@ class SearchingTab extends OpenedTab {
     super.dispose();
   }
 
-  @override
   factory SearchingTab.fromJson(Map<String, dynamic> json) {
     final tab = SearchingTab(json['title'], json['searchText'],
         isPinned: json['isPinned'] ?? false);
