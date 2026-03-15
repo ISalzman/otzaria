@@ -61,7 +61,8 @@ class AppPaths {
     return p.join(libraryPath, 'files_manifest.json');
   }
 
-  /// Resolves the notes database path - for cross-platform compatibility
+  /// Resolves the notes database path - for cross-platform compatibility.
+  /// Also migrates the DB from the old sqflite location the first time it runs on mobile.
   static Future<String> resolveNotesDbPath(String fileName) async {
     final Directory dbDir;
     if (Platform.isAndroid || Platform.isIOS) {
@@ -72,7 +73,35 @@ class AppPaths {
       dbDir = Directory(p.join(support.path, 'databases'));
     }
     if (!await dbDir.exists()) await dbDir.create(recursive: true);
-    return p.join(dbDir.path, fileName);
+    final newPath = p.join(dbDir.path, fileName);
+
+    // Migrate from old sqflite location on mobile (one-time, idempotent)
+    if (!File(newPath).existsSync()) {
+      await _migrateNotesDbIfExists(fileName, newPath);
+    }
+
+    return newPath;
+  }
+
+  /// Copies the old sqflite database file to [newPath] if it exists at the
+  /// platform-specific sqflite default location.
+  static Future<void> _migrateNotesDbIfExists(
+      String fileName, String newPath) async {
+    try {
+      final supportDir = await getApplicationSupportDirectory();
+      // sqflite stored the DB differently per platform:
+      //   Android: {app}/databases/ (sibling of the 'files' dir)
+      //   iOS:     Library/ (parent of Application Support)
+      final oldDir = Platform.isAndroid
+          ? p.join(supportDir.parent.path, 'databases')
+          : supportDir.parent.path;
+      final oldFile = File(p.join(oldDir, fileName));
+      if (await oldFile.exists()) {
+        await oldFile.copy(newPath);
+      }
+    } catch (_) {
+      // Migration is best-effort; failure should not prevent the app from starting.
+    }
   }
 
   /// Creates necessary directories for the application

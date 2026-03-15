@@ -211,18 +211,17 @@ class SeforimRepository {
 
   // --- Transactions ---
 
-  /// Runs a block of code in a transaction
-  Future<T> runInTransaction<T>(Future<T> Function() block) async {
+  /// Runs a synchronous block of code in a transaction.
+  /// The block must be synchronous — do NOT use async/await inside it.
+  /// sqlite3 is a synchronous API and using await inside a transaction
+  /// would yield control to other tasks, risking database locked errors.
+  Future<T> runInTransaction<T>(T Function() block) async {
     final db = await _database.database;
-    db.execute('BEGIN');
-    try {
-      final result = await block();
-      db.execute('COMMIT');
-      return result;
-    } catch (_) {
-      db.execute('ROLLBACK');
-      rethrow;
-    }
+    late T result;
+    withTransaction(db, () {
+      result = block();
+    });
+    return result;
   }
 
   Future<void> setSynchronous(String mode) async {
