@@ -25,8 +25,9 @@ class BookDao {
 
   /// Gets minimal book data, optionally within an ongoing transaction.
   /// Used by [DatabaseLibraryProvider] to load books and categories atomically.
-  Future<List<Map<String, dynamic>>> getAllBooksMinimal(
-      sqlite3.Database db) async {
+  /// Must be called synchronously inside a [withTransaction] block.
+  List<Map<String, dynamic>> getAllBooksMinimal(
+      sqlite3.Database db) {
     return db.select('''
       SELECT id, title, categoryId, orderIndex, fileType, filePath,
              heShortDesc

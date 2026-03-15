@@ -645,8 +645,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
     late final List<Map<String, dynamic>> allCatRows;
 
     final db = await repository.database.database;
-    allDbBooks = await repository.database.bookDao.getAllBooksMinimal(db);
-    allCatRows = await repository.database.categoryDao.getAllCategoryRows(db);
+    withTransaction(db, () {
+      allDbBooks = repository.database.bookDao.getAllBooksMinimal(db);
+      allCatRows = repository.database.categoryDao.getAllCategoryRows(db);
+    });
 
     debugPrint(
         '⏱️ Transaction (books+categories): ${DateTime.now().difference(tQuery).inMilliseconds}ms (${allDbBooks.length} books, ${allCatRows.length} categories)');
