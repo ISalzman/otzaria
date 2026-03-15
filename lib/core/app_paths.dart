@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
@@ -64,19 +63,16 @@ class AppPaths {
 
   /// Resolves the notes database path - for cross-platform compatibility
   static Future<String> resolveNotesDbPath(String fileName) async {
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      // Windows, Linux, macOS: this will go into application support directory
-      final support = await getApplicationSupportDirectory();
-      final dbDir = Directory(p.join(support.path, 'databases'));
-      if (!await dbDir.exists()) await dbDir.create(recursive: true);
-      return p.join(dbDir.path, fileName);
+    final Directory dbDir;
+    if (Platform.isAndroid || Platform.isIOS) {
+      final appDir = await getApplicationDocumentsDirectory();
+      dbDir = Directory(p.join(appDir.path, 'databases'));
     } else {
-      // Mobile: the standard path for sqflite
-      final dbs = await getDatabasesPath();
-      final dbDir = Directory(dbs);
-      if (!await dbDir.exists()) await dbDir.create(recursive: true);
-      return p.join(dbs, fileName);
+      final support = await getApplicationSupportDirectory();
+      dbDir = Directory(p.join(support.path, 'databases'));
     }
+    if (!await dbDir.exists()) await dbDir.create(recursive: true);
+    return p.join(dbDir.path, fileName);
   }
 
   /// Creates necessary directories for the application

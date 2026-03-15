@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
-import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/migration/dao/sqflite/sqlite3_utils.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -595,7 +596,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   /// Private helper for database operations to reduce boilerplate
   Future<T> _dbOperation<T>(
-    Future<T> Function(sqflite.Database db) operation,
+    Future<T> Function(sqlite3.Database db) operation,
     T defaultValue,
     String errorContext,
   ) async {
@@ -644,13 +645,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
     late final List<Map<String, dynamic>> allCatRows;
 
     final db = await repository.database.database;
-    await db.transaction((txn) async {
-      allDbBooks = await repository.database.bookDao.getAllBooksMinimalInTxn(
-        txn,
-      );
-      allCatRows =
-          await repository.database.categoryDao.getAllCategoryRowsInTxn(txn);
-    });
+    allDbBooks = await repository.database.bookDao.getAllBooksMinimal(db);
+    allCatRows = await repository.database.categoryDao.getAllCategoryRows(db);
 
     debugPrint(
         '⏱️ Transaction (books+categories): ${DateTime.now().difference(tQuery).inMilliseconds}ms (${allDbBooks.length} books, ${allCatRows.length} categories)');
@@ -1129,7 +1125,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         }
 
         // Get all links where this book is the source
-        final result = await db.rawQuery('''
+        final result = db.select('''
         SELECT 
           l.sourceLineId,
           l.targetLineId,
@@ -1144,7 +1140,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
         WHERE l.sourceBookId = ?
         ORDER BY sl.lineIndex
-      ''', [book.id]);
+      ''', [book.id]).toMapList();
 
         final links = result.map((row) {
           final targetTitle = row['targetBookTitle'] as String;
@@ -1209,12 +1205,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return _dbOperation<List<AltTocStructure>>(
       (db) async {
         // First get the book ID
-        final bookResults = await db.query(
-          'book',
-          columns: ['id'],
-          where: 'title = ?',
-          whereArgs: [bookTitle],
-        );
+        final bookResults = db.select(
+          'SELECT id FROM book WHERE title = ?',
+          [bookTitle],
+        ).toMapList();
 
         if (bookResults.isEmpty) {
           return [];
@@ -1223,11 +1217,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
         final bookId = bookResults.first['id'] as int;
 
         // Then get the structures
-        final results = await db.query(
-          'alt_toc_structure',
-          where: 'bookId = ?',
-          whereArgs: [bookId],
-        );
+        final results = db.select(
+          'SELECT * FROM alt_toc_structure WHERE bookId = ?',
+          [bookId],
+        ).toMapList();
 
         return results.map((json) => AltTocStructure.fromJson(json)).toList();
       },
@@ -1240,7 +1233,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
   Future<List<AltTocStructure>> getAlternativeStructures() async {
     return _dbOperation<List<AltTocStructure>>(
       (db) async {
-        final results = await db.query('alt_toc_structure');
+        final results =
+            db.select('SELECT * FROM alt_toc_structure').toMapList();
         return results.map((json) => AltTocStructure.fromJson(json)).toList();
       },
       [],
@@ -1254,13 +1248,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
       (db) async {
         // We join with tocText to get the actual text
         // Order by ID to ensure consistent order (or maybe level/parentId)
-        final results = await db.rawQuery('''
+        final results = db.select('''
           SELECT e.*, t.text
           FROM alt_toc_entry e
           JOIN tocText t ON e.textId = t.id
           WHERE e.structureId = ?
           ORDER BY e.id
-        ''', [structureId]);
+        ''', [structureId]).toMapList();
 
         return results.map((json) => AltTocEntry.fromJson(json)).toList();
       },
@@ -1275,7 +1269,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return _dbOperation<List<Link>>(
       (db) async {
         // Join line_alt_toc -> line -> book
-        final results = await db.rawQuery('''
+        final results = db.select('''
           SELECT 
             b.title as bookTitle,
             l.lineIndex,
@@ -1285,7 +1279,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           JOIN book b ON l.bookId = b.id
           WHERE lat.structureId = ? AND lat.altTocEntryId = ?
           ORDER BY b.title, l.lineIndex
-        ''', [structureId, altTocEntryId]);
+        ''', [structureId, altTocEntryId]).toMapList();
 
         return results.map((row) {
           final bookTitle = row['bookTitle'] as String;
@@ -1310,14 +1304,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
       String bookTitle, int lineIndex, int structureId) async {
     return _dbOperation<int?>(
       (db) async {
-        final results = await db.rawQuery('''
+        final results = db.select('''
           SELECT lat.altTocEntryId
           FROM line_alt_toc lat
           JOIN line l ON lat.lineId = l.id
           JOIN book b ON l.bookId = b.id
           WHERE b.title = ? AND l.lineIndex = ? AND lat.structureId = ?
           LIMIT 1
-  ''', [bookTitle, lineIndex, structureId]);
+  ''', [bookTitle, lineIndex, structureId]).toMapList();
 
         if (results.isNotEmpty) {
           return results.first['altTocEntryId'] as int;

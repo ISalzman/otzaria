@@ -15,7 +15,6 @@ void main() {
   late SeforimRepository repository;
 
   setUp(() async {
-    MyDatabase.initialize();
     tempDir = await Directory.systemTemp.createTemp(
       'otzaria-negative-ids-test-',
     );
@@ -25,7 +24,7 @@ void main() {
   });
 
   tearDown(() async {
-    await database.close();
+    database.close();
     if (await tempDir.exists()) {
       await tempDir.delete(recursive: true);
     }
