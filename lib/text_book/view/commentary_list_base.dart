@@ -424,16 +424,22 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                       ];
 
                 // בדיקה אם יש בכלל קישורים לאינדקסים הנוכחיים (ללא סינון מפרשים)
-                final hasAnyCommentaryLinks = state.links.any((link) =>
-                    currentIndexes.contains(link.index1 - 1) &&
-                    (link.connectionType.toUpperCase() == "COMMENTARY" ||
-                        link.connectionType.toUpperCase() == "TARGUM"));
+                final hasAnyCommentaryLinks = currentIndexes.any((idx) {
+                  final lineLinks = state.linksByLine[idx + 1];
+                  if (lineLinks == null) return false;
+                  return lineLinks.any((link) {
+                    final type = link.connectionType.toUpperCase();
+                    return type == "COMMENTARY" || type == "TARGUM";
+                  });
+                });
 
                 // סינון מהיר של קישורים רלוונטיים
-                final hasRelevantLinks = state.links.any((link) =>
-                    currentIndexes.contains(link.index1 - 1) &&
-                    selectedCommentators
-                        .contains(utils.getTitleFromPath(link.path2)));
+                final hasRelevantLinks = currentIndexes.any((idx) {
+                  final lineLinks = state.linksByLine[idx + 1];
+                  if (lineLinks == null) return false;
+                  return lineLinks.any((link) => selectedCommentators
+                      .contains(utils.getTitleFromPath(link.path2)));
+                });
 
                 // אם אין קישורים רלוונטיים
                 if (!hasRelevantLinks) {
