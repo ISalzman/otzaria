@@ -14,8 +14,6 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/pdf_book/pdf_commentators_selector.dart';
 import 'package:otzaria/pdf_book/pdf_commentary_content.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
-import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
-import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
@@ -1048,39 +1046,11 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       builder: (context, snapshot) {
         final bookId = widget.tab.book.title; // תמיד נשתמש בשם הספר המקורי
 
-        // עדכון visible lines לפי טווח השורות של העמוד הנוכחי
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && widget.tab.currentTextLineNumber != null) {
-            final startLine = widget.tab.currentTextLineNumber!;
-            int endLine = startLine + 50; // טווח ברירת מחדל
-
-            // אם יש headings, חשב את הטווח בדיוק
-            if (widget.tab.pdfHeadings != null) {
-              final sortedHeadings =
-                  widget.tab.pdfHeadings!.getSortedHeadings();
-              final currentIndex =
-                  sortedHeadings.indexWhere((e) => e.value == startLine);
-
-              if (currentIndex != -1 &&
-                  currentIndex < sortedHeadings.length - 1) {
-                endLine = sortedHeadings[currentIndex + 1].value - 1;
-              }
-            }
-
-            final visibleLines = List<int>.generate(
-              endLine - startLine + 1,
-              (index) => startLine + index,
-            );
-            context.read<PersonalNotesBloc>().add(
-                  UpdateVisibleLines(visibleLines),
-                );
-          }
-        });
-
         return PersonalNotesSidebar(
           key: ValueKey(bookId),
           bookId: bookId,
           isPdf: true,
+          visibleLineIndices: _getVisibleLineIndicesForCurrentPage(),
           onNavigateToLine: (lineNumber) {
             // מנסים למצוא את העמוד המתאים למספר השורה
             if (widget.tab.pdfHeadings != null) {
@@ -1116,6 +1086,28 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           },
         );
       },
+    );
+  }
+
+  List<int>? _getVisibleLineIndicesForCurrentPage() {
+    final currentLine = widget.tab.currentTextLineNumber;
+    if (currentLine == null) return null;
+
+    int endLine = currentLine + 50;
+    if (widget.tab.pdfHeadings != null) {
+      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
+      final currentIndex = sortedHeadings.indexWhere(
+        (heading) => heading.value == currentLine,
+      );
+
+      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
+        endLine = sortedHeadings[currentIndex + 1].value - 1;
+      }
+    }
+
+    return List<int>.generate(
+      endLine - currentLine + 1,
+      (index) => currentLine + index - 1,
     );
   }
 

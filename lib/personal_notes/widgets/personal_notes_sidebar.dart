@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -21,12 +22,14 @@ class PersonalNotesSidebar extends StatefulWidget {
   final String bookId;
   final ValueChanged<int> onNavigateToLine;
   final bool isPdf;
+  final List<int>? visibleLineIndices;
 
   const PersonalNotesSidebar({
     super.key,
     required this.bookId,
     required this.onNavigateToLine,
     this.isPdf = false,
+    this.visibleLineIndices,
   });
 
   @override
@@ -44,6 +47,12 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<PersonalNotesBloc>().add(LoadPersonalNotes(widget.bookId));
+      final visibleLineIndices = widget.visibleLineIndices;
+      if (visibleLineIndices != null) {
+        context
+            .read<PersonalNotesBloc>()
+            .add(UpdateVisibleLines(visibleLineIndices));
+      }
     });
   }
 
@@ -53,6 +62,13 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
     if (oldWidget.bookId != widget.bookId) {
       context.read<PersonalNotesBloc>().add(const CancelCreatingPersonalNote());
       context.read<PersonalNotesBloc>().add(LoadPersonalNotes(widget.bookId));
+    }
+
+    if (!listEquals(oldWidget.visibleLineIndices, widget.visibleLineIndices) &&
+        widget.visibleLineIndices != null) {
+      context
+          .read<PersonalNotesBloc>()
+          .add(UpdateVisibleLines(widget.visibleLineIndices!));
     }
   }
 
