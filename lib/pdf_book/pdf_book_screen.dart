@@ -343,23 +343,23 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _openCommentaryPane();
   }
 
-  ctx.ContextMenu _buildPdfContextMenu() {
+  ctx.ContextMenu<Object> _buildPdfContextMenu() {
     final (commentators: relevantCommentators, links: relevantLinks) =
         _getRelevantContent();
 
     return ctx.ContextMenu(
-      entries: [
-        ctx.MenuItem(
+      entries: <ctx.ContextMenuEntry<Object>>[
+        ctx.MenuItem<Object>(
           label: _buildRtlMenuText('חיפוש'),
           icon: const Icon(FluentIcons.search_24_regular),
           onSelected: (_) => _ensureSearchTabIsActive(),
         ),
-        ctx.MenuItem.submenu(
+        ctx.MenuItem<Object>.submenu(
           label: _buildRtlMenuText('מפרשים'),
           icon: const Icon(FluentIcons.book_24_regular),
           enabled: relevantCommentators.isNotEmpty,
-          items: <ctx.ContextMenuEntry>[
-            ctx.MenuItem(
+          items: <ctx.ContextMenuEntry<Object>>[
+            ctx.MenuItem<Object>(
               label: _buildRtlMenuText('הצג את כל המפרשים'),
               icon: relevantCommentators.isNotEmpty &&
                       widget.tab.activeCommentators
@@ -369,8 +369,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               onSelected: (_) => _toggleAllCommentators(relevantCommentators),
             ),
             if (relevantCommentators.isNotEmpty) const ctx.MenuDivider(),
-            ...relevantCommentators.map<ctx.ContextMenuEntry>(
-              (commentator) => ctx.MenuItem<void>(
+            ...relevantCommentators.map<ctx.ContextMenuEntry<Object>>(
+              (commentator) => ctx.MenuItem<Object>(
                 label: Text(commentator, textDirection: TextDirection.rtl),
                 icon: widget.tab.activeCommentators.contains(commentator)
                     ? const Icon(FluentIcons.checkmark_24_regular)
@@ -380,13 +380,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             ),
           ],
         ),
-        ctx.MenuItem.submenu(
+        ctx.MenuItem<Object>.submenu(
           label: _buildRtlMenuText('קישורים'),
           icon: const Icon(FluentIcons.link_24_regular),
           enabled: relevantLinks.isNotEmpty,
           items: relevantLinks
-              .map<ctx.ContextMenuEntry>(
-                (link) => ctx.MenuItem<void>(
+              .map<ctx.ContextMenuEntry<Object>>(
+                (link) => ctx.MenuItem<Object>(
                   label: Text(link.heRef, textDirection: TextDirection.rtl),
                   onSelected: (_) {
                     openBook(
