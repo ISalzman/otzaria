@@ -683,7 +683,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final settingsBloc = context.read<SettingsBloc>();
     if (!settingsBloc.state.enablePerBookSettings) return;
 
+    final existingSettings =
+        await PdfBookPerBookSettings.load(widget.tab.book.title);
     final settings = PdfBookPerBookSettings(
+      zoom: existingSettings?.zoom,
       activeCommentators: List.from(widget.tab.activeCommentators),
     );
     await settings.save(widget.tab.book.title);
