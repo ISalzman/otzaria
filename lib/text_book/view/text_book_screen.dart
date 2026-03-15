@@ -96,6 +96,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   // RepaintBoundary key עבור הדפסה של "צורת הדף" כפי שמוצג
   final GlobalKey _pageShapePrintBoundaryKey = GlobalKey();
 
+  // בקשות לפתיחת חלונית פנימית ב"צורת הדף": 0=קישורים, 1=הערות
+  final ValueNotifier<int?> _pageShapeSidebarTabNotifier =
+      ValueNotifier<int?>(null);
+
   // Cache לרשימת אינדקסי TOC ממוינת - למניעת חישוב מחדש בכל לחיצה
   List<int>? _cachedTocIndices;
   String? _cachedTocBookTitle;
@@ -643,8 +647,21 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     navigationSearchFocusNode.dispose();
     _bookContentFocusNode.dispose();
     _sidebarWidth.dispose();
+    _pageShapeSidebarTabNotifier.dispose();
     _settingsSub.cancel();
     super.dispose();
+  }
+
+  void _openPersonalNotesForCurrentView(TextBookLoaded state) {
+    if (state.showPageShapeView) {
+      _pageShapeSidebarTabNotifier.value = 1;
+      return;
+    }
+
+    setState(() {
+      _sidebarTabIndex = 2;
+    });
+    context.read<TextBookBloc>().add(const ToggleSplitView(true));
   }
 
   void _openLeftPaneTab(int index, {String? searchText}) {
@@ -1384,25 +1401,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // 2) הצג הערות אישיות
       ActionButtonData(
         widget: IconButton(
-          onPressed: () {
-            // פתיחת חלונית הצד עם כרטיסיית ההערות (אינדקס 2)
-            setState(() {
-              _sidebarTabIndex = 2; // כרטיסיית ההערות
-            });
-            context.read<TextBookBloc>().add(const ToggleSplitView(true));
-          },
+          onPressed: () => _openPersonalNotesForCurrentView(state),
           icon: const Icon(FluentIcons.note_24_regular),
           tooltip: 'הצג הערות אישיות',
         ),
         icon: FluentIcons.note_24_regular,
         tooltip: 'הצג הערות אישיות',
-        onPressed: () {
-          // פתיחת חלונית הצד עם כרטיסיית ההערות (אינדקס 2)
-          setState(() {
-            _sidebarTabIndex = 2; // כרטיסיית ההערות
-          });
-          context.read<TextBookBloc>().add(const ToggleSplitView(true));
-        },
+        onPressed: () => _openPersonalNotesForCurrentView(state),
       ),
 
       // 3) שמור וזכור - סמן כנלמד או הוסף למעקב
@@ -2283,6 +2288,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               initialSidebarTabIndex: _sidebarTabIndex,
               pageShapeKey: _pageShapeKey,
               pageShapePrintBoundaryKey: _pageShapePrintBoundaryKey,
+              pageShapeSidebarTabNotifier: _pageShapeSidebarTabNotifier,
             ),
           ),
         ),
@@ -2775,6 +2781,13 @@ Future<void> _addNoteFromKeyboard(
         initialContent: draft?.content ?? '',
         initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
       ));
+
+  if (state.showPageShapeView) {
+    final viewerState =
+        context.findAncestorStateOfType<_TextBookViewerBlocState>();
+    viewerState?._pageShapeSidebarTabNotifier.value = 1;
+    return;
+  }
 
   // פתח את ה-split view אם הוא סגור
   if (!state.showSplitView) {
