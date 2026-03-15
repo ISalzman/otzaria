@@ -42,6 +42,7 @@ class SettingsRepository {
   static const String keyEnablePerBookSettings = 'key-enable-per-book-settings';
   static const String keyOfflineMode = 'key-offline-mode';
   static const String keyAutoSync = 'key-auto-sync';
+  static const String keyAutoSyncCatalogs = 'key-auto-sync-catalogs';
   static const String keyLibraryPath = 'key-library-path';
   static const String keyLibraryFolderName = 'key-library-folder-name';
   static const String keyHebrewBooksPath = 'key-hebrew-books-path';
@@ -214,6 +215,13 @@ class SettingsRepository {
       'isOfflineMode': _settings.getValue<bool>(
         keyOfflineMode,
         defaultValue: false,
+      ),
+      'autoSyncCatalogs': _settings.getValue<bool>(
+        keyAutoSyncCatalogs,
+        defaultValue: _settings.getValue<bool>(
+          keyShowExternalBooks,
+          defaultValue: false,
+        ),
       ),
       'alignTabsToRight': _settings.getValue<bool>(
         keyAlignTabsToRight,
@@ -421,6 +429,10 @@ class SettingsRepository {
 
   Future<void> updateOfflineMode(bool value) async {
     await _settings.setValue(keyOfflineMode, value);
+  }
+
+  Future<void> updateAutoSyncCatalogs(bool value) async {
+    await _settings.setValue(keyAutoSyncCatalogs, value);
   }
 
   Future<void> updateAlignTabsToRight(bool value) async {
