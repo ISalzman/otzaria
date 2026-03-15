@@ -9,8 +9,10 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_mana
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/text_book/view/page_shape/links_notes_sidebar.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/commentary_sync_helper.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
+import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/widgets/loading_indicator.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -181,6 +183,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     debugPrint('📖 PageShape: Config to resolve: $config');
 
     return Map.fromEntries(config.entries.map((entry) {
+      if (isPageShapeRemainingCommentatorsValue(entry.value)) {
+        return MapEntry(entry.key, entry.value);
+      }
+
       final resolved =
           _findMatchingCommentator(entry.value, availableCommentators);
       debugPrint('📖 PageShape: Resolving "${entry.value}" → "$resolved"');
@@ -196,6 +202,72 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     return available.firstWhereOrNull((name) => name == shortName) ??
         available.firstWhereOrNull((name) => name.startsWith(shortName)) ??
         available.firstWhereOrNull((name) => name.contains(shortName));
+  }
+
+  List<String> _availableCommentators(TextBookLoaded state) {
+    return state.links
+        .where((link) => LinkTypes.isCommentaryOrTargum(link.connectionType))
+        .map((link) => utils.getTitleFromPath(link.path2))
+        .toSet()
+        .toList();
+  }
+
+  List<String> _remainingPaneCommentators(TextBookLoaded state) {
+    if (_rightCommentator == null) {
+      return const [];
+    }
+
+    if (!isPageShapeRemainingCommentatorsValue(_rightCommentator)) {
+      return [_rightCommentator!];
+    }
+
+    return resolveRemainingPageShapeCommentators(
+      availableCommentators: _availableCommentators(state),
+      excludedCommentators: [
+        _leftCommentator,
+        _bottomCommentator,
+        _bottomRightCommentator,
+      ],
+    );
+  }
+
+  String? _rightPaneLabel() {
+    if (_rightCommentator == null) {
+      return null;
+    }
+
+    return formatPageShapeCommentatorSelection(_rightCommentator);
+  }
+
+  Widget _buildRightPane(TextBookLoaded state) {
+    if (_rightCommentator == null) {
+      return const SizedBox.shrink();
+    }
+
+    if (!isPageShapeRemainingCommentatorsValue(_rightCommentator)) {
+      return _CommentaryPane(
+        commentatorName: _rightCommentator!,
+        openBookCallback: widget.openBookCallback,
+      );
+    }
+
+    final commentators = _remainingPaneCommentators(state);
+    if (commentators.isEmpty) {
+      return const Center(
+        child: Text(
+          'אין מפרשים נוספים להצגה',
+          textDirection: TextDirection.rtl,
+        ),
+      );
+    }
+
+    return CommentaryListBase(
+      key: ValueKey('page_shape_remaining_${commentators.join(',')}'),
+      openBookCallback: (tab) => widget.openBookCallback(tab),
+      fontSize: PageShapeSettingsManager.getCommentaryFontSize(),
+      showSearch: false,
+      selectedCommentatorsOverride: commentators,
+    );
   }
 
   /// הסתרת טור
@@ -501,11 +573,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                         width: _rightWidth ??
                                             MediaQuery.of(context).size.width *
                                                 _kCommentaryPaneWidthFactor,
-                                        child: _CommentaryPane(
-                                          commentatorName: _rightCommentator!,
-                                          openBookCallback:
-                                              widget.openBookCallback,
-                                        ),
+                                        child: _buildRightPane(state),
                                       ),
                                       const SizedBox(width: 4),
                                       SizedBox(
@@ -514,7 +582,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                           child: RotatedBox(
                                             quarterTurns: 3,
                                             child: Text(
-                                              _rightCommentator!,
+                                              _rightPaneLabel()!,
                                               style: const TextStyle(
                                                 fontSize: 14,
                                               ),
@@ -546,7 +614,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                 leftWidth: _leftWidth,
                                 rightWidth: _rightWidth,
                                 leftCommentator: _leftCommentator,
-                                rightCommentator: _rightCommentator,
+                                rightCommentator: _rightPaneLabel(),
                                 onPanUpdate: (details) {
                                   setState(() {
                                     _bottomHeight = ((_bottomHeight ?? 0) -

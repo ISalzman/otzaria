@@ -891,7 +891,8 @@ $textWithBreaks
     final categoryToSave = !hasActualBookConfig &&
             state.book.heCategories != null &&
             state.book.heCategories!.isNotEmpty
-        ? state.book.heCategories
+        ? PageShapeSettingsManager.getActiveCategory(state.book.heCategories) ??
+            PageShapeSettingsManager.getParentCategory(state.book.heCategories)
         : null;
 
     PageShapeSettingsManager.saveConfiguration(
