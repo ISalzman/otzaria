@@ -206,22 +206,22 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   /// בניית תפריט הקשר כללי
-  ctx.ContextMenu _buildContextMenu() {
+  ctx.ContextMenu<Object> _buildContextMenu() {
     return ctx.ContextMenu(
-      entries: [
-        ctx.MenuItem(
+      entries: <ctx.ContextMenuEntry<Object>>[
+        ctx.MenuItem<Object>(
           label: const Text('העתק'),
           icon: const Icon(FluentIcons.copy_24_regular),
           enabled: _savedSelectedText != null &&
               _savedSelectedText!.trim().isNotEmpty,
           onSelected: (_) => _copyFormattedText(),
         ),
-        ctx.MenuItem(
+        ctx.MenuItem<Object>(
           label: const Text('העתק את כל הטקסט'),
           icon: const Icon(FluentIcons.document_copy_24_regular),
           onSelected: (_) => _copyAllVisibleText(),
         ),
-        ctx.MenuItem(
+        ctx.MenuItem<Object>(
           label: const Text('בחר את כל הטקסט'),
           icon: const Icon(FluentIcons.select_all_on_24_regular),
           onSelected: (_) =>

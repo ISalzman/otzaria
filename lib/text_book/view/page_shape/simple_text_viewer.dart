@@ -221,10 +221,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   /// תפריט הקשר - מעתיק מהתצוגה הרגילה
-  ctx.ContextMenu _buildContextMenu(
+  ctx.ContextMenu<Object> _buildContextMenu(
       TextBookLoaded state, int index, BuildContext menuContext) {
     // בניית רשימת מפרשים אם זה מפרש (לא טקסט ראשי)
-    List<ctx.MenuItem> commentatorMenuItems = [];
+    List<ctx.MenuItem<Object>> commentatorMenuItems = [];
     if (!widget.isMainText && widget.bookTitle != null) {
       commentatorMenuItems = _buildCommentatorSwitchMenu(state);
     }
@@ -238,7 +238,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
               link.end == null,
         )
         .map(
-          (link) => ctx.MenuItem<void>(
+          (link) => ctx.MenuItem<Object>(
             label: Text(link.heRef),
             onSelected: (_) {
               widget.openBookCallback(
@@ -259,8 +259,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         .toList();
 
     return ctx.ContextMenu(
-      entries: [
-        ctx.MenuItem(
+      entries: <ctx.ContextMenuEntry<Object>>[
+        ctx.MenuItem<Object>(
           label: const Text('חיפוש'),
           icon: const Icon(FluentIcons.search_24_regular),
           onSelected: (_) {
@@ -275,7 +275,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ],
         if (linksMenuItems.isNotEmpty) ...[
           const ctx.MenuDivider(),
-          ctx.MenuItem<void>.submenu(
+          ctx.MenuItem<Object>.submenu(
             label: const Text('קישורים'),
             icon: const Icon(FluentIcons.link_24_regular),
             items: linksMenuItems,
@@ -283,13 +283,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ],
         const ctx.MenuDivider(),
         // הערות אישיות
-        ctx.MenuItem(
+        ctx.MenuItem<Object>(
           label: const Text('הוסף הערה אישית '),
           icon: const Icon(FluentIcons.note_add_24_regular),
           onSelected: (_) => _createNoteForCurrentLine(index),
         ),
         // דיווח על טעות בספר
-        ctx.MenuItem(
+        ctx.MenuItem<Object>(
           label: const Text('דווח על טעות בספר'),
           icon: const Icon(FluentIcons.error_circle_24_regular),
           enabled: _savedSelectedText != null &&
@@ -298,14 +298,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ),
         const ctx.MenuDivider(),
         // העתקה
-        ctx.MenuItem(
+        ctx.MenuItem<Object>(
           label: const Text('העתק'),
           icon: const Icon(FluentIcons.copy_24_regular),
           enabled: _savedSelectedText != null &&
               _savedSelectedText!.trim().isNotEmpty,
           onSelected: (_) => _copyFormattedText(),
         ),
-        ctx.MenuItem(
+        ctx.MenuItem<Object>(
           label: const Text('העתק את כל הפסקה'),
           icon: const Icon(FluentIcons.document_copy_24_regular),
           enabled: index >= 0 && index < widget.content.length,
@@ -754,7 +754,7 @@ $textWithBreaks
   }
 
   /// בניית תפריט החלפת מפרש
-  List<ctx.MenuItem> _buildCommentatorSwitchMenu(TextBookLoaded state) {
+  List<ctx.MenuItem<Object>> _buildCommentatorSwitchMenu(TextBookLoaded state) {
     // קבלת רשימת המפרשים הזמינים
     final availableCommentators = state.links
         .where((link) => LinkTypes.isCommentaryOrTargum(link.connectionType))
@@ -785,7 +785,7 @@ $textWithBreaks
         availableCommentators.where((c) => !allGrouped.contains(c)).toList();
 
     // בניית תפריט משנה
-    final submenuItems = <ctx.ContextMenuEntry>[];
+    final submenuItems = <ctx.ContextMenuEntry<Object>>[];
 
     // הוספת קבוצות
     if (tanachGroup.commentators.isNotEmpty) {
@@ -818,7 +818,7 @@ $textWithBreaks
     }
 
     return [
-      ctx.MenuItem.submenu(
+      ctx.MenuItem<Object>.submenu(
         label: const Text('החלף מפרש'),
         icon: const Icon(FluentIcons.arrow_swap_24_regular),
         items: submenuItems,
@@ -827,11 +827,11 @@ $textWithBreaks
   }
 
   /// בניית פריטי תפריט לקבוצת מפרשים
-  List<ctx.ContextMenuEntry> _buildCommentatorGroupItems(
+  List<ctx.ContextMenuEntry<Object>> _buildCommentatorGroupItems(
       List<String> commentators, TextBookLoaded state) {
-    return commentators.map<ctx.ContextMenuEntry>((commentator) {
+    return commentators.map<ctx.ContextMenuEntry<Object>>((commentator) {
       final isSelected = commentator == widget.bookTitle;
-      return ctx.MenuItem<void>(
+      return ctx.MenuItem<Object>(
         label: Text(commentator),
         icon: isSelected ? const Icon(FluentIcons.checkmark_24_regular) : null,
         onSelected: (_) => _switchCommentator(commentator, state),
