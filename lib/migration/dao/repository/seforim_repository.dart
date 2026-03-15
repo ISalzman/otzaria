@@ -934,13 +934,18 @@ class SeforimRepository {
   }) async {
     // Get or create a source for external content books
     final sourceId = await insertSource('external', -1);
+    final bookId = await getNextNegativeBookId();
 
-    final bookId = await _database.bookDao.insertExternalContentBook(
-      categoryId: categoryId,
-      sourceId: sourceId,
-      title: title,
-      heShortDesc: heShortDesc,
-      orderIndex: orderIndex,
+    await _database.bookDao.insertBookWithId(
+      bookId,
+      categoryId,
+      sourceId,
+      title,
+      heShortDesc,
+      orderIndex,
+      0,
+      false,
+      null,
       isPersonal: isPersonal,
       filePath: filePath,
       fileType: fileType,
@@ -992,17 +997,30 @@ class SeforimRepository {
       int bookId, List<TocEntry> entries) async {
     _logger.fine(
         'Inserting ${entries.length} TOC entries for external book $bookId');
+    final localToActualIds = <int, int>{};
+    var nextNegativeTocId = await getNextNegativeTocEntryId();
 
     for (final entry in entries) {
       // Create toc_text entry
       final textId = await _getOrCreateTocText(entry.text);
+      final actualParentId =
+          entry.parentId == null ? null : localToActualIds[entry.parentId];
+
+      if (entry.parentId != null && actualParentId == null) {
+        throw StateError(
+          'Unresolved external TOC parentId ${entry.parentId} for book $bookId',
+        );
+      }
+
+      final actualTocId = nextNegativeTocId;
+      nextNegativeTocId--;
 
       // Create toc_entry with the book ID
       // For external books, use lineIndex (not lineId) to store the line number
       final tocEntry = TocEntry(
-        id: 0,
+        id: actualTocId,
         bookId: bookId,
-        parentId: entry.parentId,
+        parentId: actualParentId,
         textId: textId,
         level: entry.level,
         lineId: null, // No line table entry for external books
@@ -1011,7 +1029,11 @@ class SeforimRepository {
         hasChildren: entry.hasChildren,
       );
 
-      await _database.tocDao.insertTocEntry(tocEntry);
+      await _database.tocDao.insertWithId(tocEntry);
+
+      if (entry.id != 0) {
+        localToActualIds[entry.id] = actualTocId;
+      }
     }
 
     _logger.fine('Inserted TOC entries for external book $bookId');
@@ -1186,9 +1208,11 @@ class SeforimRepository {
   Future<int> insertTocEntry(TocEntry entry) async {
     // Get or create the tocText entry
     final textId = entry.textId ?? await _getOrCreateTocText(entry.text);
+    final tocEntryId =
+        entry.id > 0 ? entry.id : await getNextNegativeTocEntryId();
 
     final entryWithTextId = TocEntry(
-      id: entry.id,
+      id: tocEntryId,
       bookId: entry.bookId,
       parentId: entry.parentId,
       textId: textId,
@@ -1200,119 +1224,8 @@ class SeforimRepository {
       hasChildren: entry.hasChildren,
     );
 
-    // Use the ID from the entry object if it's greater than 0
-    if (entry.id > 0) {
-      await _database.tocDao.insertWithId(entryWithTextId);
-      return entry.id;
-    } else {
-      // Fall back to auto-generated ID if entry.id is 0
-      final tocId = await _database.tocDao.insertTocEntry(entryWithTextId);
-
-      // Check if insertion failed
-      if (tocId == 0) {
-        // Try to find a matching TOC entry by bookId and text
-        final existingEntries =
-            await _database.tocDao.selectByBookId(entry.bookId);
-        final matchingEntry = existingEntries.firstWhere(
-          (e) => e.text == entry.text && e.level == entry.level,
-          orElse: () => TocEntry(
-              id: 0,
-              bookId: 0,
-              parentId: null,
-              textId: 0,
-              text: '',
-              level: 0,
-              lineId: null,
-              lineIndex: null,
-              isLastChild: false,
-              hasChildren: false),
-        );
-
-        if (matchingEntry.id > 0) {
-          return matchingEntry.id;
-        }
-
-        throw Exception(
-            'Failed to insert TOC entry for book ${entry.bookId} with text \'${entry.text.substring(0, entry.text.length < 30 ? entry.text.length : 30)}${entry.text.length > 30 ? "..." : ""}\' - insertion returned ID 0. Context: parentId=${entry.parentId}, level=${entry.level}, lineId=${entry.lineId}');
-      }
-
-      return tocId;
-    }
-  }
-
-  /// Inserts multiple TOC entries in a single batch operation for better performance
-  Future<void> insertTocEntriesBatch(List<TocEntry> entries) async {
-    if (entries.isEmpty) return;
-
-    // Pre-create all tocText entries
-    final textIds = <String, int>{};
-    for (final entry in entries) {
-      if (!textIds.containsKey(entry.text)) {
-        textIds[entry.text] = await _getOrCreateTocText(entry.text);
-      }
-    }
-
-    // Create entries with textIds
-    final entriesWithTextIds = entries
-        .map((entry) {
-          final textId = textIds[entry.text];
-          if (textId == null) {
-            _logger.warning(
-                'Text ID not found for TOC entry text: ${entry.text}, skipping entry');
-            return null;
-          }
-          return TocEntry(
-            id: entry.id,
-            bookId: entry.bookId,
-            parentId: entry.parentId,
-            textId: textId,
-            text: entry.text,
-            level: entry.level,
-            lineId: entry.lineId,
-            lineIndex: entry.lineIndex,
-            isLastChild: entry.isLastChild,
-            hasChildren: entry.hasChildren,
-          );
-        })
-        .whereType<TocEntry>()
-        .toList();
-
-    // Batch insert using raw SQL
-    final db = await _database.database;
-    final batch = db.batch();
-
-    for (final entry in entriesWithTextIds) {
-      if (entry.id > 0) {
-        batch.rawInsert('''
-          INSERT OR IGNORE INTO tocEntry (id, bookId, parentId, textId, level, lineId, isLastChild, hasChildren)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', [
-          entry.id,
-          entry.bookId,
-          entry.parentId,
-          entry.textId,
-          entry.level,
-          entry.lineId,
-          entry.isLastChild ? 1 : 0,
-          entry.hasChildren ? 1 : 0,
-        ]);
-      } else {
-        batch.rawInsert('''
-          INSERT INTO tocEntry (bookId, parentId, textId, level, lineId, isLastChild, hasChildren)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', [
-          entry.bookId,
-          entry.parentId,
-          entry.textId,
-          entry.level,
-          entry.lineId,
-          entry.isLastChild ? 1 : 0,
-          entry.hasChildren ? 1 : 0,
-        ]);
-      }
-    }
-
-    await batch.commit(noResult: true);
+    await _database.tocDao.insertWithId(entryWithTextId);
+    return tocEntryId;
   }
 
   // Nouvelle méthode pour mettre à jour hasChildren
