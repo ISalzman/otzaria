@@ -104,6 +104,7 @@ TextBookLoaded _loadedState() {
     availableCommentators: const [],
     links: const [],
     visibleLinks: const [],
+    linksByLine: const {},
     tableOfContents: const [],
     removeNikud: false,
     visibleIndices: const [0],

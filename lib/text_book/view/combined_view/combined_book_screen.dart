@@ -1252,13 +1252,14 @@ $textWithBreaks
   /// בדיקה אם יש מפרשים לאינדקס מסוים
   bool _hasCommentaries(TextBookLoaded state, int index) {
     // בדיקה אם יש קישורים רלוונטיים לאינדקס הזה
-    final hasRelevantLinks = state.links.any((link) =>
-        link.index1 == index + 1 &&
-        (link.connectionType.toUpperCase() == "COMMENTARY" ||
-            link.connectionType.toUpperCase() == "TARGUM") &&
-        state.activeCommentators.contains(utils.getTitleFromPath(link.path2)));
+    final lineLinks = state.linksByLine[index + 1];
+    if (lineLinks == null || lineLinks.isEmpty) return false;
 
-    return hasRelevantLinks;
+    return lineLinks.any((link) {
+      final type = link.connectionType.toUpperCase();
+      return (type == "COMMENTARY" || type == "TARGUM") &&
+          state.activeCommentators.contains(utils.getTitleFromPath(link.path2));
+    });
   }
 
   @override
