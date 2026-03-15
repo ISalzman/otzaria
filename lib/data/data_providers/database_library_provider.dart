@@ -124,10 +124,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
       }
       final targetCategory =
           titleToSubCategory[title] ?? orphanCategory ?? category;
-      final targetCategoryId =
-          titleToSubCategory.containsKey(title)
-              ? targetCategory.title.hashCode
-              : DatabaseConstants.talmudBavliFolderName.hashCode;
+      final targetCategoryId = titleToSubCategory.containsKey(title)
+          ? targetCategory.title.hashCode
+          : DatabaseConstants.talmudBavliFolderName.hashCode;
 
       final bookMeta = metadata[title];
       final matchingTextBook = targetCategory.books
@@ -911,9 +910,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
       final entry = entries[i];
       final isLastChild = i == entries.length - 1;
       final hasChildren = entry.children.isNotEmpty;
+      final localEntryId = dbEntries.length + 1;
 
       final dbEntry = db_models.TocEntry(
-        id: 0,
+        id: localEntryId,
         bookId: bookId,
         parentId: parentId,
         text: entry.text,
@@ -926,11 +926,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
       dbEntries.add(dbEntry);
 
-      // Process children recursively
-      // Note: We can't set the actual parentId here since we don't have the inserted ID yet
-      // The repository will handle this during insertion
       if (hasChildren) {
-        _convertTocEntriesToDb(entry.children, dbEntries, bookId, null);
+        _convertTocEntriesToDb(
+          entry.children,
+          dbEntries,
+          bookId,
+          localEntryId,
+        );
       }
     }
   }
@@ -951,7 +953,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       title: dbCategory.title,
       description: metadata[dbCategory.title]?['heDesc'] ?? '',
       shortDescription: metadata[dbCategory.title]?['heShortDesc'] ?? '',
-      order: dbCategory.orderIndex, // Use DB orderIndex instead of metadata
+      order: dbCategory.orderIndex,
       subCategories: [],
       books: [],
       parent: parent,
@@ -1465,6 +1467,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         lastModified: lastModified,
         heShortDesc: metadata[title]?['heShortDesc'],
         orderIndex: (metadata[title]?['order'] ?? 999).toDouble(),
+        isPersonal: true,
         tocEntries: tocEntries,
       );
 
