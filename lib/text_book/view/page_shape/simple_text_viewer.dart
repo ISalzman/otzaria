@@ -23,6 +23,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 
 /// תצוגת טקסט פשוטה - משמשת גם לטקסט המרכזי וגם למפרשים
 class SimpleTextViewer extends StatefulWidget {
@@ -38,6 +39,7 @@ class SimpleTextViewer extends StatefulWidget {
   final Set<int>? highlightedIndices; // אינדקסים להדגשה (למפרשים)
   final VoidCallback? onCommentatorChanged; // callback לרענון אחרי החלפת מפרש
   final bool useInternalScroll; // האם להשתמש בגלילה פנימית
+  final ValueChanged<int>? onOpenSidebarTab;
 
   const SimpleTextViewer({
     super.key,
@@ -53,6 +55,7 @@ class SimpleTextViewer extends StatefulWidget {
     this.highlightedIndices,
     this.onCommentatorChanged,
     this.useInternalScroll = true, // ברירת מחדל - עם גלילה פנימית
+    this.onOpenSidebarTab,
   });
 
   @override
@@ -226,6 +229,35 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       commentatorMenuItems = _buildCommentatorSwitchMenu(state);
     }
 
+    final linksMenuItems = state.links
+        .where(
+          (link) =>
+              link.index1 == index + 1 &&
+              !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+              link.start == null &&
+              link.end == null,
+        )
+        .map(
+          (link) => ctx.MenuItem<void>(
+            label: Text(link.heRef),
+            onSelected: (_) {
+              widget.openBookCallback(
+                TextBookTab(
+                  book: TextBook(
+                    title: utils.getTitleFromPath(link.path2),
+                  ),
+                  index: link.index2 - 1,
+                  openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
+                          false) ||
+                      (Settings.getValue<bool>('key-default-sidebar-open') ??
+                          false),
+                ),
+              );
+            },
+          ),
+        )
+        .toList();
+
     return ctx.ContextMenu(
       entries: [
         ctx.MenuItem(
@@ -240,6 +272,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         if (commentatorMenuItems.isNotEmpty) ...[
           const ctx.MenuDivider(),
           ...commentatorMenuItems,
+        ],
+        if (linksMenuItems.isNotEmpty) ...[
+          const ctx.MenuDivider(),
+          ctx.MenuItem<void>.submenu(
+            label: const Text('קישורים'),
+            icon: const Icon(FluentIcons.link_24_regular),
+            items: linksMenuItems,
+          ),
         ],
         const ctx.MenuDivider(),
         // הערות אישיות
@@ -677,23 +717,20 @@ $textWithBreaks
                             .read<TextBookBloc>()
                             .add(UpdateSelectedIndex(index));
                         context.read<TextBookBloc>().add(HighlightLine(index));
-                        context
-                            .read<TextBookBloc>()
-                            .add(const ToggleLeftPane(true));
+                        if (widget.onOpenSidebarTab != null) {
+                          widget.onOpenSidebarTab!(1);
+                        } else {
+                          context
+                              .read<TextBookBloc>()
+                              .add(const ToggleLeftPane(true));
+                        }
                       },
                       onLongPress: () {
-                        showDialog<void>(
+                        showSingleActionDialog(
                           context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('הערה לשורה זו'),
-                            content: PersonalNoteContentView(note: note),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: const Text('סגור'),
-                              ),
-                            ],
-                          ),
+                          title: 'הערה לשורה זו',
+                          customContent: PersonalNoteContentView(note: note),
+                          confirmText: 'סגור',
                         );
                       },
                       child: Padding(
