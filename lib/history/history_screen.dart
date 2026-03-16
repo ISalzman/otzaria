@@ -85,6 +85,8 @@ class HistoryView extends StatelessWidget {
               searchTab.spacingValues.addAll(item.spacingValues ?? {});
 
               // Trigger search
+              searchTab
+                  .updateTitleFromAppliedQuery(searchTab.queryController.text);
               searchTab.searchBloc.add(UpdateSearchQuery(
                 searchTab.queryController.text,
                 customSpacing: searchTab.spacingValues,
