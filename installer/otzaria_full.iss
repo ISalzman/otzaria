@@ -225,7 +225,6 @@ end;
 
 [Run]
 Filename: "{tmp}\VisualCppRedist_AIO_x86_x64.exe"; Parameters: "/ai /gm2"; StatusMsg: "מתקין Visual C++ Redistributable..."; Flags: waituntilterminated; Check: VCRedistNeedsInstall
-Filename: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"; WorkingDir: "{app}"; Parameters: " -sta -WindowStyle Hidden -noprofile -executionpolicy bypass -file uninstall_msix.ps1"; Flags: runhidden waituntilterminated
 Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent 
 
 [Icons]
@@ -241,7 +240,7 @@ Name: "resetsettings"; Description: "איפוס הגדרות משתמש והסר
 Source: "..\build\windows\x64\runner\Release\*.dll"; DestDir: "{app}"; Flags: ignoreversion nocompression
 ; Copy all other app files
 Source: "..\build\windows\x64\runner\Release\*"; \
-    Excludes: "*.msix,*.msixbundle,*.appx,*.appxbundle,*.appinstaller,*.dll"; \
+  Excludes: "*.dll"; \
     DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Copy compressed library assets and extraction tool for post-install extraction
@@ -250,7 +249,6 @@ Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{app}\אוצריא"; Fla
 Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion
 Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-Source: "uninstall_msix.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "VisualCppRedist_AIO_x86_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [INI]
