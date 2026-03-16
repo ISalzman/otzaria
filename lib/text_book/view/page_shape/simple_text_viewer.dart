@@ -383,12 +383,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
+    final resolvedBookTitle =
+        (widget.bookTitle != null && widget.bookTitle!.trim().isNotEmpty)
+            ? widget.bookTitle!
+            : state.book.title;
+
     ErrorReportHelper.showErrorReportDialog(
       context: context,
       selectedText: selectedText,
       state: state,
       fontSize: widget.fontSize,
-      bookTitle: widget.bookTitle ?? 'ספר לא ידוע',
+      bookTitle: resolvedBookTitle,
       savedSelectedIndex: _savedSelectedIndex,
     );
   }
