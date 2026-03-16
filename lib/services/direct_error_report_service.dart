@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:otzaria/data/repository/hive_list_repository.dart';
 import 'package:otzaria/models/direct_error_report.dart';
@@ -70,15 +69,12 @@ class DirectErrorReportService {
     HiveListRepository<DirectErrorReport>? queueRepository,
   })  : _client = client ?? http.Client(),
         _queueRepository = queueRepository ??
-            (() {
-              Hive.box(name: _queueBoxName, maxSizeMiB: 20);
-              return HiveListRepository<DirectErrorReport>(
-                boxName: _queueBoxName,
-                key: _queueKey,
-                fromJson: DirectErrorReport.fromJson,
-                toJson: (report) => report.toJson(),
-              );
-            })();
+            HiveListRepository<DirectErrorReport>(
+              boxName: _queueBoxName,
+              key: _queueKey,
+              fromJson: DirectErrorReport.fromJson,
+              toJson: (report) => report.toJson(),
+            );
 
   String get senderEmail => (Settings.getValue<String>(
               SettingsRepository.keyErrorReportSenderEmail) ??
@@ -189,6 +185,10 @@ exit /b %OTZARIA_EXIT_CODE%
           'הדיווח נשלח בהצלחה לצוות אוצריא.');
     }
 
+    if (attemptResult.isPermanentFailure) {
+      return DirectReportDeliveryResult.failed(attemptResult.message);
+    }
+
     await _enqueueIfNeeded(
       report,
       queueType: DirectErrorReportQueueType.automaticRetry,
@@ -235,6 +235,14 @@ exit /b %OTZARIA_EXIT_CODE%
         if (attemptResult.isSuccess) {
           remainingReports.removeWhere((item) => item.id == report.id);
           sentCount++;
+          continue;
+        }
+
+        if (attemptResult.isPermanentFailure) {
+          debugPrint(
+            'Direct report permanently failed and was removed from queue: ${report.id}',
+          );
+          remainingReports.removeWhere((item) => item.id == report.id);
           continue;
         }
 
@@ -299,6 +307,12 @@ exit /b %OTZARIA_EXIT_CODE%
         return const _SendAttemptResult.success();
       }
 
+      if (_isPermanentHttpFailure(response.statusCode)) {
+        return _SendAttemptResult.permanentFailure(
+          'שרת הדיווחים החזיר ${response.statusCode}. הדיווח לא נשמר להמשך כי נראה שיש בעיה קבועה בנתונים שנשלחו.',
+        );
+      }
+
       return _SendAttemptResult.transientFailure(
         'שרת הדיווחים החזיר ${response.statusCode}. הדיווח יישמר להמשך.',
       );
@@ -322,6 +336,10 @@ exit /b %OTZARIA_EXIT_CODE%
         'אירעה שגיאה לא צפויה בשליחת הדיווח.',
       );
     }
+  }
+
+  bool _isPermanentHttpFailure(int statusCode) {
+    return statusCode == HttpStatus.badRequest || statusCode == 422;
   }
 
   String _buildOfflineSendPowerShellScript(String payloadJson) {
@@ -384,18 +402,38 @@ Write-Host ('נכשלו: ' + $failed)
 class _SendAttemptResult {
   final bool isSuccess;
   final String message;
+  final _SendAttemptFailureType? failureType;
 
   const _SendAttemptResult._({
     required this.isSuccess,
     required this.message,
+    this.failureType,
   });
 
-  const _SendAttemptResult.success() : this._(isSuccess: true, message: '');
+  const _SendAttemptResult.success()
+      : this._(isSuccess: true, message: '', failureType: null);
+
+  bool get isPermanentFailure =>
+      !isSuccess && failureType == _SendAttemptFailureType.permanent;
 
   factory _SendAttemptResult.transientFailure(String message) {
     return _SendAttemptResult._(
       isSuccess: false,
       message: message,
+      failureType: _SendAttemptFailureType.transient,
     );
   }
+
+  factory _SendAttemptResult.permanentFailure(String message) {
+    return _SendAttemptResult._(
+      isSuccess: false,
+      message: message,
+      failureType: _SendAttemptFailureType.permanent,
+    );
+  }
+}
+
+enum _SendAttemptFailureType {
+  transient,
+  permanent,
 }
