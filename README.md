@@ -145,12 +145,16 @@ If using the regular installer, make sure that Visual C++ Redistributable is ins
 ```sudo apt-get install libgtk-3-0 libblkid1 liblzma5```
 #### Installation
 * Download the linux build from releases, extract and run Otzaria.
+* For version releases there is also a FULL bundle: `otzaria-linux-full.tar.gz`.
+* The FULL bundle includes the app and the library together. Extract it and run `run-otzaria.sh`.
 * When first running the app, you will be asked to download the library.
 * Llternatively, you can download the library manually from [here](https://github.com/Sivan22/otzaria-library/releases), extract it and provide its path to the app.
 
 ### android
 * The app is available on Google Play: [link](https://play.google.com/store/apps/details?id=com.mendelg.otzaria&pli=1)
 * Alternatively, you can download the .apk file from the releases page, and install it.
+* For version releases there is also a FULL bundle: `otzaria-android-full.zip`.
+* The Android FULL bundle includes the APK together with the offline library payload for distribution.
 * When first running the app, you will be asked to download the library.
 * Alternatively, you can download the library manually from [here](https://github.com/Sivan22/otzaria-library/releases) and provide the zip file to the app.
 
@@ -160,6 +164,8 @@ If using the regular installer, make sure that Visual C++ Redistributable is ins
 
 ### macos
 * Download the latest MacOS build from the releases page.
+* For version releases there is also a FULL bundle: `otzaria-macos-full.zip`.
+* The FULL bundle includes the app and the library together. Extract it and launch `Run Otzaria.command`.
 * Run the app while pressing the ctrl key.
 * When first running the app, you will be asked to download the library.
 * Alternatively, you can download the library manually from [here](https://github.com/Sivan22/otzaria-library/releases), extract it and provide its path to the app.
