@@ -109,10 +109,10 @@ jobs:
           if (-not $relDir) { throw 'Release directory not found' }
           Compress-Archive -Path "$relDir\runner\Release\*" -DestinationPath otzaria-windows.zip
 
-      - name: Build MSIX package
-        shell: pwsh
-        run: |
-          dart run msix:create --install-certificate false
+      # - name: Build MSIX package
+      #   shell: pwsh
+      #   run: |
+      #     dart run msix:create --install-certificate false
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -276,11 +276,11 @@ jobs:
           name: otzaria-windows-zip
           path: otzaria-windows.zip
 
-      - name: Upload Windows MSIX
-        uses: actions/upload-artifact@v4
-        with:
-          name: otzaria.msix
-          path: build/windows/x64/runner/release/*.msix
+      # - name: Upload Windows MSIX
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: otzaria.msix
+      #     path: build/windows/x64/runner/release/*.msix
 
   build_linux:
     if: github.event_name != 'release' && github.event_name != 'pull_request'
