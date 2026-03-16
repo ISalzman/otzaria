@@ -239,6 +239,9 @@ jobs:
           if ("${{ steps.check_version.outputs.is_version }}" -eq "true") {
             Write-Host "Building FULL installer with library and VC++ Redistributable (version tag detected)..."
             & "$env:ISCC" installer\otzaria_full.iss
+            if ($LASTEXITCODE -ne 0) {
+              throw "FULL installer build failed"
+            }
             
             # ניקוי קבצי הספרייה והחולץ לאחר בניית ה-FULL installer
             Write-Host "Cleaning up bundled DB assets to free disk space..."
@@ -258,9 +261,15 @@ jobs:
             
             Write-Host "Building REGULAR installer (without VC++ Redistributable)..."
             & "$env:ISCC" installer\otzaria.iss
+            if ($LASTEXITCODE -ne 0) {
+              throw "Regular installer build failed"
+            }
           } else {
             Write-Host "Building regular installer only (not a version tag)..."
             & "$env:ISCC" installer\otzaria.iss
+            if ($LASTEXITCODE -ne 0) {
+              throw "Regular installer build failed"
+            }
           }
 
       - name: Upload Windows installer
