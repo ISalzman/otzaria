@@ -135,7 +135,7 @@ Also, it is a multiplatform framework.
 Download the latest build for Windows from [releases](https://github.com/Sivan22/otzaria/releases). 
 
 **Note:** The library is included in the .exe file.
-In case you need only the app itself (for upgrading) you can download the .msix file.
+In case you need only the app itself for upgrading, download the Windows ZIP build from releases.
 
 #### Prerequisites (for Regular Installer only)
 If using the regular installer, make sure that Visual C++ Redistributable is installed on your computer. If not, download it from [here](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) and install it.

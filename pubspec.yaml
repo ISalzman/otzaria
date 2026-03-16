@@ -4,26 +4,6 @@ description: "A Jewish books library."
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
-msix_config:
-  display_name: אוצריא
-  display_name_short: אוצריא
-  publisher_display_name: sivan22
-  identity_name: sivan22.Otzaria
-  description: "ספריית ספרים יהודיים עם אפשרויות חיפוש חכם"
-  msix_version: 0.9.74.0
-  logo_path: assets/icon/iconnew.png
-  publisher: CN=sivan22, O=sivan22, C=IL
-  certificate_path: sivan22.pfx
-  certificate_password: sivan22
-  signtool_options: /debug
-  app_installer: #<-- app installer configuration
-    publish_folder_path: C:\dev\otzaria\build\windows\x64\runner\Release
-    hours_between_update_checks: 24
-    automatic_background_task: true
-    update_blocks_activation: true
-    show_prompt: true
-    force_update_from_any_version: false
-
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
 # followed by an optional build number separated by a +.
@@ -62,7 +42,6 @@ dependencies:
   hive: ^4.0.0-dev.2
   isar_flutter_libs: ^4.0.0-dev.14
   isar: ^4.0.0-dev.14
-  msix: ^3.16.13
   path_provider: ^2.1.5
   html: ^0.15.1
   pdfrx: ^2.2.24
