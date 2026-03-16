@@ -42,6 +42,11 @@ class _ReadingScreenState extends State<ReadingScreen>
     // Check if widget is still mounted before accessing context
     if (mounted) {
       try {
+        context.read<TabsBloc>().add(const SaveTabs());
+      } catch (e) {
+        // Ignore errors during disposal
+      }
+      try {
         context.read<HistoryBloc>().add(FlushHistory());
       } catch (e) {
         // Ignore errors during disposal
