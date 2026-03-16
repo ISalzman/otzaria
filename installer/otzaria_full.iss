@@ -39,9 +39,9 @@ DisableDirPage=no
 Type: filesandordirs; Name: "{code:GetDataDir}\books"
 
 [Dirs]
-Name: "{commonappdata}\{#MyAppName}"; Permissions: users-modify; Check: IsAdminInstallMode
-Name: "{commonappdata}\{#MyAppName}\books"; Permissions: users-modify; Check: IsAdminInstallMode
-Name: "{commonappdata}\{#MyAppName}\index"; Permissions: users-modify; Check: IsAdminInstallMode
+Name: "{commonappdata}\otzaria"; Permissions: users-modify; Check: IsAdminInstallMode
+Name: "{commonappdata}\otzaria\books"; Permissions: users-modify; Check: IsAdminInstallMode
+Name: "{commonappdata}\otzaria\index"; Permissions: users-modify; Check: IsAdminInstallMode
 
 [Languages]
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
@@ -51,9 +51,9 @@ Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 function GetDataDir(Param: String): String;
 begin
   if IsAdminInstallMode then
-    Result := ExpandConstant('{commonappdata}\{#MyAppName}')
+    Result := ExpandConstant('{commonappdata}\otzaria')
   else
-    Result := ExpandConstant('{localappdata}\{#MyAppName}\Data');
+    Result := ExpandConstant('{userappdata}\otzaria');
 end;
 
 function InitializeSetup(): Boolean;
@@ -111,7 +111,7 @@ var
   ArchivePath, DatabasePath, ZstdPath, Params: String;
   ResultCode: Integer;
 begin
-  ArchivePath := ExpandConstant('{app}\אוצריא\' + ArchiveName);
+  ArchivePath := ExpandConstant('{app}\_staging\' + ArchiveName);
   if not FileExists(ArchivePath) then
   begin
     Log('Bundled database archive not found, skipping: ' + ArchivePath);
@@ -140,7 +140,7 @@ var
   ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, PowerShellPath, Params: String;
   ResultCode: Integer;
 begin
-  ArchivePath := ExpandConstant('{app}\אוצריא\' + ArchiveName);
+  ArchivePath := ExpandConstant('{app}\_staging\' + ArchiveName);
   if not FileExists(ArchivePath) then
   begin
     Log('Bundled archive not found, skipping: ' + ArchivePath);
@@ -194,7 +194,7 @@ begin
     if WizardIsTaskSelected('resetsettings') then
     begin
       // Delete previous installation directory (usually in LocalAppData)
-      AppDataPath := ExpandConstant('{localappdata}\אוצריא');
+      AppDataPath := ExpandConstant('{userappdata}\otzaria');
       if DirExists(AppDataPath) then
         DelTree(AppDataPath, True, True, True);
         
@@ -222,7 +222,7 @@ begin
   DeleteFile(ZstdPath);
   
   // Cleanup the temporary extraction directory
-  DelTree(ExpandConstant('{app}\אוצריא'), True, True, True);
+  DelTree(ExpandConstant('{app}\_staging'), True, True, True);
 end;
 
 [Run]
@@ -246,9 +246,9 @@ Source: "..\build\windows\x64\runner\Release\*"; \
     DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Copy compressed library assets and extraction tool for post-install extraction
-Source: "library_db\seforim.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion nocompression
-Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion nocompression
-Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion nocompression
+Source: "library_db\seforim.db.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
+Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
+Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
 Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 Source: "VisualCppRedist_AIO_x86_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall

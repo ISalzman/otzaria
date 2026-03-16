@@ -72,7 +72,7 @@ begin
     if WizardIsTaskSelected('resetsettings') then
     begin
       // Delete previous installation directory (usually in LocalAppData)
-      AppDataPath := ExpandConstant('{localappdata}\אוצריא');
+      AppDataPath := ExpandConstant('{userappdata}\otzaria');
       if DirExists(AppDataPath) then
         DelTree(AppDataPath, True, True, True);
         
