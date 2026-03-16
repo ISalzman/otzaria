@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:bloc/bloc.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -18,11 +19,11 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     http.Client? httpClient,
     Future<void> Function(String archivePath, String outputPath)?
         extractCompressedDatabase,
-    String? installationDirectoryPath,
+    String? defaultLibraryPathOverride,
   })  : _httpClient = httpClient ?? http.Client(),
         _extractCompressedDatabase =
             extractCompressedDatabase ?? _extractZstWithSystemProcess,
-        _installationDirectoryPath = installationDirectoryPath,
+        _defaultLibraryPathOverride = defaultLibraryPathOverride,
         super(EmptyLibraryInitial()) {
     on<PickDirectoryRequested>(_onPickDirectoryRequested);
     on<PickArchiveFileRequested>(_onPickArchiveFileRequested);
@@ -33,7 +34,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   final http.Client _httpClient;
   final Future<void> Function(String archivePath, String outputPath)
       _extractCompressedDatabase;
-  final String? _installationDirectoryPath;
+  final String? _defaultLibraryPathOverride;
 
   Future<void> _onPickDirectoryRequested(
       PickDirectoryRequested event, Emitter<EmptyLibraryState> emit) async {
@@ -234,24 +235,17 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   Future<void> _onDownloadLibraryRequested(
       DownloadLibraryRequested event, Emitter<EmptyLibraryState> emit) async {
+    File? tempArchive;
     try {
       final latestAsset = await _fetchLatestDatabaseAsset();
 
-      // קבלת תיקיית ההתקנה
-      final installDir = _installationDirectoryPath ??
-          path.dirname(Platform.resolvedExecutable);
-      final otzariaDir = Directory(
-        path.join(installDir, DatabaseConstants.otzariaFolderName),
+      // הורדה לתיקיית temp זמנית
+      final tempArchivePath = path.join(
+        Directory.systemTemp.path,
+        'otzaria_${latestAsset.assetName}',
       );
+      tempArchive = File(tempArchivePath);
 
-      // יצירת תיקיית אוצריא אם לא קיימת
-      if (!await otzariaDir.exists()) {
-        await otzariaDir.create(recursive: true);
-      }
-
-      final archivePath = path.join(otzariaDir.path, latestAsset.assetName);
-
-      // הורדת הקובץ
       emit(const EmptyLibraryDownloading(
         progress: 0.0,
         message: 'מתחבר לשרת...',
@@ -269,8 +263,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
       final contentLength = response.contentLength ?? 0;
       var downloadedBytes = 0;
-      final file = File(archivePath);
-      final sink = file.openWrite();
+      final sink = tempArchive.openWrite();
 
       try {
         await for (var chunk in response.stream) {
@@ -291,11 +284,50 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         await sink.close();
       }
 
-      await _handleZstFile(archivePath, emit);
+      // קבלת נתיב ברירת מחדל של הספרייה ויצירתו אם לא קיים
+      final libraryPath =
+          _defaultLibraryPathOverride ?? await AppPaths.getDefaultLibraryPath();
+      final libraryDir = Directory(libraryPath);
+      if (!await libraryDir.exists()) {
+        await libraryDir.create(recursive: true);
+      }
+
+      final outputPath = path.join(
+        libraryPath,
+        DatabaseConstants.databaseFileName,
+      );
+
+      emit(EmptyLibraryExtracting(
+        selectedPath: tempArchivePath,
+        progress: 0.0,
+        message: 'מחלץ קובץ DB דחוס...',
+      ));
+
+      await _extractCompressedDatabase(tempArchivePath, outputPath);
+
+      // מחיקת קובץ ה-temp מיד לאחר חילוץ מוצלח
+      await tempArchive.delete();
+      tempArchive = null;
+
+      emit(EmptyLibraryExtracting(
+        selectedPath: tempArchivePath,
+        progress: 1.0,
+        message: 'החילוץ הושלם',
+      ));
+
+      await Settings.setValue(SettingsRepository.keyLibraryPath, libraryPath);
+      await Settings.setValue(SettingsRepository.keyLibraryFolderName, '');
+
+      emit(EmptyLibraryDirectorySelected(selectedPath: libraryPath));
     } catch (e) {
       emit(EmptyLibraryError(
         errorMessage: 'שגיאה בהורדה: $e',
       ));
+    } finally {
+      // מחיקת קובץ ה-temp תמיד, גם במקרה שגיאה
+      if (tempArchive != null && await tempArchive.exists()) {
+        await tempArchive.delete();
+      }
     }
   }
 
