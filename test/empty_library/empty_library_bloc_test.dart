@@ -86,62 +86,28 @@ void main() {
 
       final bloc = EmptyLibraryBloc(
         httpClient: client,
-        installationDirectoryPath: tempDir.path,
+        defaultLibraryPathOverride: tempDir.path,
         extractCompressedDatabase: (archivePath, outputPath) async {
-          expect(
-            archivePath,
-            path.join(
-              tempDir.path,
-              DatabaseConstants.otzariaFolderName,
-              'seforim.db.zst',
-            ),
-          );
+          // הקובץ הזמני חייב להיות בתיקיית temp של המערכת
+          expect(archivePath, startsWith(Directory.systemTemp.path));
+          expect(path.basename(archivePath), 'otzaria_seforim.db.zst');
           expect(await File(archivePath).readAsBytes(), downloadedBytes);
+          // כתיבת DB לנתיב הפלט הצפוי (תיקיית הספרייה)
+          expect(
+            outputPath,
+            path.join(tempDir.path, DatabaseConstants.databaseFileName),
+          );
           await File(outputPath).writeAsBytes(const [1, 2, 3], flush: true);
         },
       );
       addTearDown(bloc.close);
-
-      final askingDeleteFuture = bloc.stream
-          .where((state) => state is EmptyLibraryAskingDeleteZip)
-          .cast<EmptyLibraryAskingDeleteZip>()
-          .first;
-
-      bloc.add(DownloadLibraryRequested());
-
-      final askingDeleteState = await askingDeleteFuture.timeout(
-        const Duration(seconds: 5),
-      );
-
-      expect(
-        askingDeleteState.zipPath,
-        path.join(
-          tempDir.path,
-          DatabaseConstants.otzariaFolderName,
-          'seforim.db.zst',
-        ),
-      );
-      expect(
-        File(
-          path.join(
-            tempDir.path,
-            DatabaseConstants.otzariaFolderName,
-            DatabaseConstants.databaseFileName,
-          ),
-        ).existsSync(),
-        isTrue,
-      );
 
       final directorySelectedFuture = bloc.stream
           .where((state) => state is EmptyLibraryDirectorySelected)
           .cast<EmptyLibraryDirectorySelected>()
           .first;
 
-      bloc.add(DeleteZipAnswered(
-        shouldDelete: false,
-        zipPath: askingDeleteState.zipPath,
-        extractedPath: askingDeleteState.extractedPath,
-      ));
+      bloc.add(DownloadLibraryRequested());
 
       final selectedState = await directorySelectedFuture.timeout(
         const Duration(seconds: 5),
@@ -154,7 +120,13 @@ void main() {
       );
       expect(
         Settings.getValue<String>(SettingsRepository.keyLibraryFolderName),
-        DatabaseConstants.otzariaFolderName,
+        '',
+      );
+      // הקובץ הזמני נמחק אוטומטית
+      expect(
+        File(path.join(Directory.systemTemp.path, 'otzaria_seforim.db.zst'))
+            .existsSync(),
+        isFalse,
       );
     });
   });
