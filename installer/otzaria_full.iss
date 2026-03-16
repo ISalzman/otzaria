@@ -137,7 +137,7 @@ end;
 
 procedure ExtractBundledTarArchive(const ArchiveName, TargetDirName: String);
 var
-  ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, PowerShellPath, Params: String;
+  ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, SevenZipPath, Params: String;
   ResultCode: Integer;
 begin
   ArchivePath := ExpandConstant('{app}\_staging\' + ArchiveName);
@@ -151,13 +151,12 @@ begin
   TarPath := ParentDir + '\' + ChangeFileExt(ArchiveName, '');
   TargetDir := ExpandConstant('{code:GetDataDir}\books\' + TargetDirName);
   ZstdPath := ExpandConstant('{app}\zstd.exe');
-  PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  SevenZipPath := ExpandConstant('{app}\7za.exe');
 
   if DirExists(TargetDir) then
   begin
     DelTree(TargetDir, True, True, True);
   end;
-  ForceDirectories(TargetDir);
 
   Log('Extracting bundled tar archive from ' + ArchivePath);
   Params := '-d -f -T0 --long=31 "' + ArchivePath + '" -o "' + TarPath + '"';
@@ -168,10 +167,8 @@ begin
     Abort;
   end;
 
-  Params :=
-    '-NoProfile -ExecutionPolicy Bypass -Command "tar -xf ''' + TarPath + ''' -C ''' +
-    ParentDir + '''"';
-  if (not Exec(PowerShellPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
+  Params := 'x -y "' + TarPath + '" "-o' + ParentDir + '"';
+  if (not Exec(SevenZipPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
      (ResultCode <> 0) then
   begin
     MsgBox('פתיחת ארכיון ה-PDF נכשלה. קוד יציאה: ' + IntToStr(ResultCode), mbCriticalError, MB_OK);
@@ -186,7 +183,7 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  ZstdPath: String;
+  ZstdPath, SevenZipPath: String;
   AppDataPath: string;
 begin
   if CurStep = ssInstall then
@@ -209,6 +206,7 @@ begin
     exit;
 
   ZstdPath := ExpandConstant('{app}\zstd.exe');
+  SevenZipPath := ExpandConstant('{app}\7za.exe');
 
   if not FileExists(ZstdPath) then
   begin
@@ -216,10 +214,17 @@ begin
     Abort;
   end;
 
+  if not FileExists(SevenZipPath) then
+  begin
+    MsgBox('קובץ החילוץ 7za.exe לא נמצא. ההתקנה לא יכולה לחלץ את קבצי ה-PDF המצורפים.', mbCriticalError, MB_OK);
+    Abort;
+  end;
+
   ExtractBundledDatabase('seforim.db.zst', 'seforim.db');
   ExtractBundledDatabase('otzar-HB_catalog.db.zst', 'otzar-HB_catalog.db');
   ExtractBundledTarArchive('talmud_bavli_latest.tar.zst', 'תלמוד בבלי');
   DeleteFile(ZstdPath);
+  DeleteFile(SevenZipPath);
   
   // Cleanup the temporary extraction directory
   DelTree(ExpandConstant('{app}\_staging'), True, True, True);
@@ -250,6 +255,7 @@ Source: "library_db\seforim.db.zst"; DestDir: "{app}\_staging"; Flags: ignorever
 Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
 Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\_staging"; Flags: ignoreversion nocompression
 Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "7za.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 Source: "VisualCppRedist_AIO_x86_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 

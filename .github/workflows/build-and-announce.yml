@@ -184,12 +184,20 @@ jobs:
             Invoke-WebRequest -Uri $talmudArchiveUrl -OutFile "installer\library_db\talmud_bavli_latest.tar.zst" -UseBasicParsing
             Write-Host "Compressed Talmud Bavli PDFs downloaded successfully"
 
-            # הורדת zstd.exe כדי שה-installer יוכל לחלץ את ה-DB בזמן ההתקנה
+            # הורדת כלי החילוץ כדי שה-installer יוכל לחלץ את קבצי הספרייה בזמן ההתקנה
             $zstdRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/facebook/zstd/releases/latest"
             $zstdAsset = $zstdRelease.assets | Where-Object { $_.name -like "zstd-*-win64.zip" } | Select-Object -First 1
+            $sevenZipRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/ip7z/7zip/releases/latest"
+            $sevenZipBootstrap = $sevenZipRelease.assets | Where-Object { $_.name -eq "7zr.exe" } | Select-Object -First 1
+            $sevenZipExtra = $sevenZipRelease.assets | Where-Object { $_.name -like "7z*-extra.7z" } | Select-Object -First 1
 
             if (-not $zstdAsset) {
               Write-Host "::error::Could not find win64 zstd asset in latest release"
+              exit 1
+            }
+
+            if ((-not $sevenZipBootstrap) -or (-not $sevenZipExtra)) {
+              Write-Host "::error::Could not find 7-Zip bootstrap assets in latest release"
               exit 1
             }
 
@@ -208,9 +216,35 @@ jobs:
             }
 
             Copy-Item -Path $zstdExe -Destination "installer\zstd.exe" -Force
+
+            Write-Host "Downloading 7zr from: $($sevenZipBootstrap.browser_download_url)"
+            Invoke-WebRequest -Uri $sevenZipBootstrap.browser_download_url -OutFile "installer\7zr.exe" -UseBasicParsing
+            Write-Host "Downloading 7-Zip extra package from: $($sevenZipExtra.browser_download_url)"
+            Invoke-WebRequest -Uri $sevenZipExtra.browser_download_url -OutFile "installer\7zip-extra.7z" -UseBasicParsing
+
+            if (Test-Path "installer\7zip_tmp") {
+              Remove-Item -Path "installer\7zip_tmp" -Recurse -Force
+            }
+
+            & "installer\7zr.exe" x "installer\7zip-extra.7z" "-oinstaller\7zip_tmp" -y
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::Failed to extract 7-Zip extra package"
+              exit 1
+            }
+
+            $sevenZipExe = Get-ChildItem -Path "installer\7zip_tmp" -Filter "7za.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+            if (-not $sevenZipExe) {
+              Write-Host "::error::7za.exe was not found inside 7-Zip extra package"
+              exit 1
+            }
+
+            Copy-Item -Path $sevenZipExe -Destination "installer\7za.exe" -Force
             Remove-Item -Path "installer\zstd-win64.zip" -Force
             Remove-Item -Path "installer\zstd_tmp" -Recurse -Force
-            Write-Host "zstd.exe prepared successfully"
+            Remove-Item -Path "installer\7zip-extra.7z" -Force
+            Remove-Item -Path "installer\7zip_tmp" -Recurse -Force
+            Remove-Item -Path "installer\7zr.exe" -Force
+            Write-Host "zstd.exe and 7za.exe prepared successfully"
           }
           catch {
             Write-Host "::error::Failed to download library: $_"
@@ -251,11 +285,23 @@ jobs:
             if (Test-Path "installer\zstd.exe") {
               Remove-Item -Path "installer\zstd.exe" -Force
             }
+            if (Test-Path "installer\7za.exe") {
+              Remove-Item -Path "installer\7za.exe" -Force
+            }
             if (Test-Path "installer\zstd_tmp") {
               Remove-Item -Path "installer\zstd_tmp" -Recurse -Force
             }
             if (Test-Path "installer\zstd-win64.zip") {
               Remove-Item -Path "installer\zstd-win64.zip" -Force
+            }
+            if (Test-Path "installer\7zip_tmp") {
+              Remove-Item -Path "installer\7zip_tmp" -Recurse -Force
+            }
+            if (Test-Path "installer\7zip-extra.7z") {
+              Remove-Item -Path "installer\7zip-extra.7z" -Force
+            }
+            if (Test-Path "installer\7zr.exe") {
+              Remove-Item -Path "installer\7zr.exe" -Force
             }
             Write-Host "Bundled DB assets cleaned up successfully"
             

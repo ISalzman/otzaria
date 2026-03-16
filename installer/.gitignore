@@ -2,9 +2,14 @@
 VisualCppRedist_AIO_x86_x64.exe
 zstd.exe
 zstd-win64.zip
+7za.exe
+7zr.exe
+7zip-extra.7z
 
 # Ignore generated DB bundle for full installer
 library_db/
+7zip_tmp/
+zstd_tmp/
 
 # Ignore built installers (but not icon file)
 otzaria-*.exe
