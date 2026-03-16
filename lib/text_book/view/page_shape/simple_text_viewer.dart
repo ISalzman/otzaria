@@ -68,6 +68,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   late final FocusNode _focusNode;
   String? _savedSelectedText;
   int? _savedSelectedIndex;
+  int _initialScrollRestoreAttempts = 0;
 
   @override
   void initState() {
@@ -79,9 +80,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
+      _scheduleInitialScrollRestore();
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToCurrentPosition();
-        // בקשת פוקוס לטקסט המרכזי כדי שהחיצים יעבדו
         if (mounted) {
           _focusNode.requestFocus();
         }
@@ -105,18 +106,41 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     super.dispose();
   }
 
-  /// גלילה למיקום הנוכחי (selectedIndex או visibleIndices)
-  void _scrollToCurrentPosition() {
+  void _scheduleInitialScrollRestore() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final restored = _scrollToCurrentPosition();
+      if (restored || _initialScrollRestoreAttempts >= 10) {
+        return;
+      }
+
+      _initialScrollRestoreAttempts++;
+      Future.delayed(
+        const Duration(milliseconds: 50),
+        _scheduleInitialScrollRestore,
+      );
+    });
+  }
+
+  /// גלילה למיקום הנוכחי (visibleIndices או selectedIndex)
+  bool _scrollToCurrentPosition() {
     final bloc = context.read<TextBookBloc>();
     final state = bloc.state;
-    if (state is TextBookLoaded && _scrollController.isAttached) {
-      final targetIndex = state.selectedIndex ??
-          (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : null);
-
-      if (targetIndex != null && targetIndex < widget.content.length) {
-        _scrollController.jumpTo(index: targetIndex);
-      }
+    if (state is! TextBookLoaded || !_scrollController.isAttached) {
+      return false;
     }
+
+    final targetIndex = state.visibleIndices.isNotEmpty
+        ? state.visibleIndices.first
+        : state.selectedIndex;
+
+    if (targetIndex == null || targetIndex >= widget.content.length) {
+      return false;
+    }
+
+    _scrollController.jumpTo(index: targetIndex);
+    return true;
   }
 
   /// טיפול באירועי מקלדת - חיצים לניווט

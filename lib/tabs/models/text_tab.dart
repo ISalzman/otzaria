@@ -46,6 +46,8 @@ class TextBookTab extends OpenedTab {
   final currentTitle = ValueNotifier<String>("");
 
   List<String>? commentators;
+  bool _lastSplitView = false;
+  bool _lastShowPageShapeView = false;
 
   // StreamSubscription לניהול ה-listener
   StreamSubscription<TextBookState>? _stateSubscription;
@@ -80,6 +82,9 @@ class TextBookTab extends OpenedTab {
     // רק אם הספר כבר היה פתוח במצב צורת הדף, הוא יישאר כך
     final bool effectiveShowPageShapeView = showPageShapeView ?? false;
 
+    _lastSplitView = effectiveSplitedView;
+    _lastShowPageShapeView = effectiveShowPageShapeView;
+
     // Initialize the bloc with initial state
     bloc = TextBookBloc(
       repository: TextBookRepository(
@@ -107,6 +112,8 @@ class TextBookTab extends OpenedTab {
     _stateSubscription = bloc.stream.listen((state) {
       if (state is TextBookLoaded && state.visibleIndices.isNotEmpty) {
         index = state.visibleIndices.first;
+        _lastSplitView = state.showSplitView;
+        _lastShowPageShapeView = state.showPageShapeView;
         // עדכון הכותרת הנוכחית
         if (state.currentTitle != null && state.currentTitle!.isNotEmpty) {
           currentTitle.value = state.currentTitle!;
@@ -166,8 +173,8 @@ class TextBookTab extends OpenedTab {
   @override
   Map<String, dynamic> toJson() {
     List<String> commentators = [];
-    bool splitedView = false;
-    bool showPageShapeView = false;
+    bool splitedView = _lastSplitView;
+    bool showPageShapeView = _lastShowPageShapeView;
     int currentIndex = index; // שמירת האינדקס הנוכחי כברירת מחדל
 
     if (bloc.state is TextBookLoaded) {
