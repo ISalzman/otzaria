@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
 import 'dart:io';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart'
@@ -10,6 +11,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/services/safer_mode/password_verification_dialog.dart';
@@ -20,10 +22,12 @@ import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
+import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/widgets/zip_extraction_progress_dialog.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/error_report_sender_email_dialog.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/app_theme.dart';
 import 'package:otzaria/theme/layout_tokens.dart';
@@ -61,6 +65,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   String? _appVersion;
   String? _libraryVersion;
   int? _bookCount;
+  bool _isFlushingPendingReports = false;
+  bool _isClearingPendingReports = false;
+  bool _isExportingPendingReports = false;
 
   @override
   void initState() {
@@ -94,6 +101,150 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       _selectedBackupMode == _BackupMode.all ||
       (Settings.getValue<bool>(key) ?? true);
 
+  Future<void> _editSenderEmail() async {
+    final reportService = DirectErrorReportService();
+    final email = await showErrorReportSenderEmailDialog(
+      context: context,
+      initialValue: reportService.senderEmail,
+    );
+
+    if (email == null) {
+      return;
+    }
+
+    if (!DirectErrorReportService.isValidSenderEmail(email)) {
+      UiSnack.showError('יש להזין כתובת דוא"ל תקינה.');
+      return;
+    }
+
+    await reportService.saveSenderEmail(email);
+    if (!mounted) return;
+    setState(() {});
+    UiSnack.showSuccess('כתובת הזיהוי נשמרה. ניתן לשנות אותה בהגדרות.');
+  }
+
+  Future<void> _clearSenderEmail() async {
+    await DirectErrorReportService().clearSenderEmail();
+    if (!mounted) return;
+    setState(() {});
+    UiSnack.show('כתובת הזיהוי הוסרה.');
+  }
+
+  Future<void> _flushPendingReports() async {
+    setState(() {
+      _isFlushingPendingReports = true;
+    });
+
+    final reportService = DirectErrorReportService();
+    final pendingBefore = await reportService.getPendingReportsCount();
+    final sentCount = await reportService.flushPendingReports();
+    final pendingAfter = await reportService.getPendingReportsCount();
+
+    if (!mounted) return;
+    setState(() {
+      _isFlushingPendingReports = false;
+    });
+
+    if (sentCount > 0) {
+      UiSnack.showSuccess('נשלחו $sentCount דיווחים ממתינים.');
+    } else if (pendingBefore == 0) {
+      UiSnack.show('לא נמצאו דיווחים שמורים לשליחה.');
+    } else {
+      UiSnack.show(
+        'לא ניתן לשלוח כרגע את הדיווחים השמורים. עדיין שמורים בתור $pendingAfter דיווחים, וניתן לנהל אותם בהגדרות.',
+      );
+    }
+  }
+
+  Future<void> _clearPendingReports() async {
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: 'למחוק דיווחים שמורים?',
+      content: 'כל הדיווחים השמורים בתור יימחקו מהמחשב.',
+      subtitle: 'לא ניתן לשחזר דיווחים שנמחקו.',
+      cancelText: 'ביטול',
+      confirmText: 'מחק',
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isClearingPendingReports = true;
+    });
+
+    await DirectErrorReportService().clearPendingReports();
+
+    if (!mounted) return;
+    setState(() {
+      _isClearingPendingReports = false;
+    });
+    UiSnack.show('הדיווחים השמורים נמחקו.');
+  }
+
+  Future<void> _exportPendingReportsScript() async {
+    final verified = await verifyPasswordForAction(context);
+    if (!verified) {
+      return;
+    }
+
+    final reportService = DirectErrorReportService();
+    final reports = await reportService.getPendingReports();
+    if (reports.isEmpty) {
+      if (!mounted) return;
+      UiSnack.show('אין דיווחים שמורים לייצוא.');
+      return;
+    }
+
+    final downloadsDirectory = await getDownloadsDirectory();
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: 'בחר מיקום לשמירת סקריפט השליחה',
+      fileName: 'otzaria_send_saved_reports.bat',
+      initialDirectory: downloadsDirectory?.path,
+      allowedExtensions: ['bat'],
+      type: FileType.custom,
+    );
+    if (path == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isExportingPendingReports = true;
+    });
+
+    try {
+      final script = reportService.buildOfflineSendBatchScript(reports);
+      await File(path).writeAsString(script, encoding: ascii);
+
+      if (!mounted) return;
+      UiSnack.showSuccess(
+        'סקריפט השליחה נשמר בהצלחה. לשליחת הדיווחים הפעילו את הקובץ במחשב מחובר.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      UiSnack.showError('שגיאה בשמירת הסקריפט: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExportingPendingReports = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildManagedActionButton({
+    required bool enabled,
+    required Widget child,
+  }) {
+    return IgnorePointer(
+      ignoring: !enabled,
+      child: Opacity(
+        opacity: enabled ? 1 : 0.45,
+        child: child,
+      ),
+    );
+  }
+
   // ════════════════════════════════════════════════════════════════════════════
   //  BUILD
   // ════════════════════════════════════════════════════════════════════════════
@@ -113,13 +264,16 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               // 2. עדכוני מערכת (רשת + עדכון מפתחים)
               _buildSystemUpdatesSection(context, state),
 
-              // 3. תורמים (כרטיסי זיכרון)
+              // 3. דיווחי טעויות
+              _buildErrorReportsSection(context, state),
+
+              // 4. תורמים (כרטיסי זיכרון)
               _buildMemorialSection(context),
 
-              // 4. מתקדם (גיבוי + מצב סייפר)
+              // 5. מתקדם (גיבוי + מצב סייפר)
               _buildAdvancedSection(context, state),
 
-              // 5. איפוס
+              // 6. איפוס
               _buildResetSection(context),
             ],
           ),
@@ -212,6 +366,144 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             },
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildErrorReportsSection(BuildContext context, SettingsState state) {
+    final reportService = DirectErrorReportService();
+    final senderEmail = reportService.senderEmail;
+    final queueWhenOffline = reportService.queueWhenOfflineEnabled;
+
+    return SettingsCard(
+      title: 'דיווחי טעויות',
+      subtitle: 'שליחה ישירה לצוות אוצריא, כולל תור אוטומטי במצב אופליין.',
+      children: [
+        ListTile(
+          hoverColor: Colors.transparent,
+          leading: const Icon(FluentIcons.mail_24_regular),
+          title: const Text('כתובת מייל לזיהוי', style: kSettingsTitleStyle),
+          subtitle: Text(
+            senderEmail.isEmpty ? 'עדיין לא הוגדרה כתובת זיהוי' : senderEmail,
+            style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.ltr,
+          ),
+          trailing: Wrap(
+            spacing: 8,
+            children: [
+              if (senderEmail.isNotEmpty)
+                NeutralActionButton(
+                  text: 'נקה',
+                  onPressed: _clearSenderEmail,
+                ),
+              RecommendedActionButton(
+                text: senderEmail.isEmpty ? 'הגדר' : 'ערוך',
+                onPressed: _editSenderEmail,
+              ),
+            ],
+          ),
+        ),
+        SwitchListTile(
+          secondary: const Icon(FluentIcons.cloud_arrow_up_24_regular),
+          title: const Text(
+            'שמירת דיווחים אוטומטית כשאין חיבור',
+            style: TextStyle(fontSize: 16),
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: Text(
+            queueWhenOffline
+                ? 'דיווחים שלא נשלחו יישמרו ויישלחו אוטומטית בהמשך'
+                : 'במצב אופליין לא יתבצע תור אוטומטי לדיווחים ישירים',
+            style: const TextStyle(fontSize: 13),
+            textDirection: TextDirection.rtl,
+          ),
+          value: queueWhenOffline,
+          onChanged: (value) async {
+            await reportService.setQueueWhenOfflineEnabled(value);
+            if (!mounted) return;
+            setState(() {});
+          },
+        ),
+        FutureBuilder<int>(
+          future: reportService.getPendingReportsCount(),
+          builder: (context, snapshot) {
+            final pendingCount = snapshot.data ?? 0;
+            final hasReports = pendingCount > 0;
+            final canSendNow = hasReports && !state.isOfflineMode;
+
+            return Column(
+              children: [
+                ListTile(
+                  hoverColor: Colors.transparent,
+                  leading: const Icon(FluentIcons.task_list_ltr_24_regular),
+                  title: const Text('ניהול דיווחים שמורים',
+                      style: kSettingsTitleStyle),
+                  subtitle: Text(
+                    pendingCount == 0
+                        ? 'אין כרגע דיווחים שמורים בתור'
+                        : 'יש כרגע $pendingCount דיווחים שמורים בתור',
+                    style: kSettingsSubtitleStyle,
+                    textDirection: TextDirection.rtl,
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.only(right: 16, left: 16, bottom: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildManagedActionButton(
+                          enabled: canSendNow,
+                          child: RecommendedActionButton(
+                            text:
+                                state.isOfflineMode ? 'שלח עכשיו' : 'שלח עכשיו',
+                            icon: FluentIcons.arrow_sync_24_regular,
+                            onPressed: _flushPendingReports,
+                            isLoading: _isFlushingPendingReports,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildManagedActionButton(
+                          enabled: hasReports,
+                          child: NeutralActionButton(
+                            text: 'נקה דיווחים',
+                            icon: FluentIcons.delete_24_regular,
+                            onPressed: _clearPendingReports,
+                            isLoading: _isClearingPendingReports,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildManagedActionButton(
+                          enabled: hasReports,
+                          child: NeutralActionButton(
+                            text: 'הורד לשליחה במחשב מחובר',
+                            icon: FluentIcons.arrow_download_24_regular,
+                            onPressed: _exportPendingReportsScript,
+                            isLoading: _isExportingPendingReports,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (state.isOfflineMode)
+                  Padding(
+                    padding:
+                        const EdgeInsets.only(right: 16, left: 16, bottom: 16),
+                    child: Text(
+                      'במצב מנותק אי אפשר לשלוח כעת, אך ניתן להוריד סקריפט לשליחה ממחשב מחובר.',
+                      style: kSettingsSubtitleStyle,
+                      textDirection: TextDirection.rtl,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }

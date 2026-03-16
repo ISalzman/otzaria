@@ -1,16 +1,18 @@
-import 'dart:io';
-import 'dart:convert';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/models/direct_error_report.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/models/phone_report_data.dart';
 import 'package:otzaria/services/data_collection_service.dart';
+import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/services/phone_report_service.dart';
 import 'package:otzaria/services/book_details_service.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/error_report_sender_email_dialog.dart';
 import 'package:otzaria/widgets/phone_report_tab.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
@@ -30,6 +32,7 @@ class ReportedErrorData {
 enum ErrorReportAction {
   cancel,
   sendEmail,
+  sendDirect,
   saveForLater,
   phone,
 }
@@ -59,9 +62,6 @@ class SelectionContextResolution {
 
 /// Helper class for managing error report dialogs and actions
 class ErrorReportHelper {
-  static const String _reportFileName = 'דיווח שגיאות בספרים.txt';
-  static const String _reportSeparator = '==============================';
-  static const String _reportSeparator2 = '------------------------------';
   static const String _fallbackMail = 'otzaria.200@gmail.com';
 
   /// Build 4+4 words context around a selection range within fullText
@@ -267,7 +267,12 @@ class ErrorReportHelper {
     String errorDetails,
     int lineNumber,
     String contextText,
+    String? senderEmail,
   ) {
+    final senderSection = (senderEmail == null || senderEmail.isEmpty)
+        ? ''
+        : '\nכתובת ליצירת קשר: $senderEmail\n';
+
     final detailsSection = (() {
       final base = errorDetails.isEmpty ? '' : '\n$errorDetails';
       final extra = '''
@@ -284,6 +289,7 @@ class ErrorReportHelper {
 שם הקובץ: ${bookDetails['שם הקובץ']}
 נתיב הקובץ: ${bookDetails['נתיב הקובץ']}
 תיקיית המקור: ${bookDetails['תיקיית המקור']}
+$senderSection
 
 הטקסט שבו נמצאה הטעות:
 $selectedText
@@ -301,71 +307,6 @@ $detailsSection
               '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}',
         )
         .join('&');
-  }
-
-  /// שמירת דיווח לקובץ בתיקייה הראשית של הספרייה (libraryPath).
-  static Future<bool> saveReportToFile(String reportContent) async {
-    try {
-      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
-
-      if (libraryPath == null || libraryPath.isEmpty) {
-        debugPrint('libraryPath not set; cannot save report.');
-        return false;
-      }
-
-      final filePath = '$libraryPath${Platform.pathSeparator}$_reportFileName';
-      final file = File(filePath);
-
-      final exists = await file.exists();
-
-      final sink = file.openWrite(
-        mode: exists ? FileMode.append : FileMode.write,
-        encoding: utf8,
-      );
-
-      // אם זה קובץ חדש, כתוב את השורה הראשונה עם הוראות השליחה
-      if (!exists) {
-        sink.writeln('יש לשלוח קובץ זה למייל: $_fallbackMail');
-        sink.writeln(_reportSeparator2);
-        sink.writeln(''); // שורת רווח
-      }
-
-      // אם יש כבר תוכן קודם בקובץ קיים -> הוסף מפריד לפני הרשומה החדשה
-      if (exists && (await file.length()) > 0) {
-        sink.writeln(''); // שורת רווח
-        sink.writeln(_reportSeparator);
-        sink.writeln(''); // שורת רווח
-      }
-
-      sink.write(reportContent);
-      await sink.flush();
-      await sink.close();
-      return true;
-    } catch (e) {
-      debugPrint('Failed saving report: $e');
-      return false;
-    }
-  }
-
-  /// סופר כמה דיווחים יש בקובץ – לפי המפריד.
-  static Future<int> countReportsInFile() async {
-    try {
-      final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
-      if (libraryPath == null || libraryPath.isEmpty) return 0;
-
-      final filePath = '$libraryPath${Platform.pathSeparator}$_reportFileName';
-      final file = File(filePath);
-      if (!await file.exists()) return 0;
-
-      final content = await file.readAsString(encoding: utf8);
-      if (content.trim().isEmpty) return 0;
-
-      final occurrences = _reportSeparator.allMatches(content).length;
-      return occurrences + 1;
-    } catch (e) {
-      debugPrint('countReports error: $e');
-      return 0;
-    }
   }
 
   /// Launch mailto URL
@@ -389,66 +330,58 @@ $detailsSection
     UiSnack.show(message);
   }
 
-  /// SnackBar לאחר שמירה: מציג מונה + פעולה לפתיחת דוא"ל (mailto).
-  static void showSavedSnack(BuildContext context, int count) {
-    if (!context.mounted) return;
+  static Future<String?> ensureSenderEmail(BuildContext context) async {
+    final reportService = DirectErrorReportService();
+    final currentEmail = reportService.senderEmail;
 
-    final message =
-        "הדיווח נשמר בהצלחה לקובץ '$_reportFileName', הנמצא בתיקייה הראשית של אוצריא.\n"
-        "יש לך כבר $count דיווחים!\n"
-        "כעת תוכל לשלוח את הקובץ למייל: $_fallbackMail";
+    if (DirectErrorReportService.isValidSenderEmail(currentEmail)) {
+      return currentEmail;
+    }
 
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    final enteredEmail = await showErrorReportSenderEmailDialog(
+      context: context,
+      initialValue: currentEmail,
+    );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(fontSize: 14),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 8),
-            // הכפתור "שלח עכשיו בדוא"ל" מוסתר במצב אופליין
-            if (!(Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ??
-                false))
-              TextButton(
-                onPressed: () {
-                  launchMail(_fallbackMail, context);
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                },
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  minimumSize: const Size(0, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: Text(
-                  'שלח עכשיו בדוא"ל',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            TextButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-              child: const Text(
-                'סגור',
-                style: TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
-        ),
-        duration: const Duration(seconds: 10),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
+    if (enteredEmail == null || enteredEmail.isEmpty) {
+      return null;
+    }
+
+    if (!DirectErrorReportService.isValidSenderEmail(enteredEmail)) {
+      UiSnack.showError('יש להזין כתובת דוא"ל תקינה.');
+      return null;
+    }
+
+    await reportService.saveSenderEmail(enteredEmail);
+    if (context.mounted) {
+      UiSnack.showSuccess('כתובת הזיהוי נשמרה. ניתן לשנות אותה בהגדרות.');
+    }
+    return enteredEmail.trim();
+  }
+
+  static DirectErrorReport buildDirectReport({
+    required String senderEmail,
+    required ReportedErrorData reportData,
+    required String bookTitle,
+    required String currentRef,
+    required Map<String, String> bookDetails,
+    required int lineNumber,
+    required String contextText,
+  }) {
+    return DirectErrorReport(
+      id:
+          '${DateTime.now().microsecondsSinceEpoch}-${widgetHash(bookTitle, currentRef, reportData.selectedText)}',
+      senderEmail: senderEmail,
+      subject: 'דיווח על טעות: $bookTitle',
+      bookTitle: bookTitle,
+      currentRef: currentRef,
+      lineNumber: lineNumber,
+      selectedText: reportData.selectedText,
+      errorDetails: reportData.errorDetails,
+      contextText: contextText,
+      filePath: bookDetails['נתיב הקובץ'] ?? '',
+      sourceFolder: bookDetails['תיקיית המקור'] ?? '',
+      createdAt: DateTime.now(),
     );
   }
 
@@ -522,6 +455,49 @@ $detailsSection
     }
   }
 
+  static Future<void> handleDirectReport(
+    BuildContext context,
+    DirectErrorReport reportData,
+  ) async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final reportService = DirectErrorReportService();
+      final result = await reportService.submitReport(reportData);
+
+      if (context.mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+
+      if (!context.mounted) {
+        return;
+      }
+
+      if (result.isSent) {
+        UiSnack.showSuccess(result.message);
+      } else if (result.isQueued) {
+        UiSnack.show(result.message);
+      } else {
+        UiSnack.showError(result.message);
+      }
+    } catch (e) {
+      if (context.mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+
+      debugPrint('Direct report error: $e');
+      if (context.mounted) {
+        UiSnack.showError('שגיאה בשליחת הדיווח: ${e.toString()}');
+      }
+    }
+  }
+
   /// Handle regular report action (email or save)
   static Future<void> handleRegularReportAction(
     BuildContext context,
@@ -541,6 +517,7 @@ $detailsSection
       reportData.errorDetails,
       lineNumber,
       contextText,
+      null,
     );
 
     if (action == ErrorReportAction.sendEmail) {
@@ -595,17 +572,31 @@ $detailsSection
         }
       }
     } else if (action == ErrorReportAction.saveForLater) {
-      final saved = await saveReportToFile(emailBody);
-      if (!saved) {
-        if (context.mounted) {
-          showSimpleSnack(context, 'שמירת הדיווח נכשלה.');
-        }
+      final senderEmail = await ensureSenderEmail(context);
+      if (senderEmail == null) {
         return;
       }
 
-      final count = await countReportsInFile();
+      final directReport = buildDirectReport(
+        senderEmail: senderEmail,
+        reportData: reportData,
+        bookTitle: bookTitle,
+        currentRef: currentRef,
+        bookDetails: bookDetails,
+        lineNumber: lineNumber,
+        contextText: contextText,
+      );
+
+      final reportService = DirectErrorReportService();
+      await reportService.queueReport(
+        directReport,
+        queueType: DirectErrorReportQueueType.manual,
+      );
+      final count = await reportService.getPendingReportsCount();
       if (context.mounted) {
-        showSavedSnack(context, count);
+        UiSnack.show(
+          'הדיווח נשמר להמשך. יש כרגע $count דיווחים ממתינים בתור, וניתן לנהל את הדיווחים השמורים בהגדרות.',
+        );
       }
     }
   }
@@ -692,6 +683,25 @@ $detailsSection
             currentLineNumber + 1,
             contextText,
           );
+        } else if (result.action == ErrorReportAction.sendDirect) {
+          if (!context.mounted) return;
+
+          final senderEmail = await ensureSenderEmail(context);
+          if (senderEmail == null || !context.mounted) {
+            return;
+          }
+
+          final directReport = buildDirectReport(
+            senderEmail: senderEmail,
+            reportData: errorData,
+            bookTitle: bookTitle,
+            currentRef: currentRef,
+            bookDetails: bookDetails,
+            lineNumber: currentLineNumber + 1,
+            contextText: contextText,
+          );
+
+          await handleDirectReport(context, directReport);
         }
       } else if (result.data is PhoneReportData) {
         // === דיווח טלפוני ===
@@ -705,6 +715,11 @@ $detailsSection
       }
     }
   }
+}
+
+String widgetHash(String bookTitle, String currentRef, String selectedText) {
+  final normalized = '$bookTitle|$currentRef|$selectedText';
+  return normalized.hashCode.abs().toString();
 }
 
 /// Tabbed dialog for error reporting with regular and phone options
@@ -941,33 +956,26 @@ class RegularReportTab extends StatefulWidget {
 class _RegularReportTabState extends State<RegularReportTab> {
   final TextEditingController _detailsController = TextEditingController();
 
+  bool get _canSubmit =>
+      widget.selectedText.isNotEmpty && _detailsController.text.trim().isNotEmpty;
+
   @override
   void initState() {
     super.initState();
-  }
-
-  Future<bool> _isPhoneReportDisabled() async {
-    try {
-      final bookDetails =
-          await BookDetailsService().getBookDetails(widget.state.book);
-      final sourceFolder = bookDetails['תיקיית המקור'];
-
-      if (sourceFolder != null) {
-        return sourceFolder.contains('sefariaToOtzaria') ||
-            sourceFolder.contains('wiki_jewish_books');
-      }
-
-      return false;
-    } catch (e) {
-      debugPrint('Error checking phone report availability: $e');
-      return false;
-    }
+    _detailsController.addListener(_handleDetailsChanged);
   }
 
   @override
   void dispose() {
+    _detailsController.removeListener(_handleDetailsChanged);
     _detailsController.dispose();
     super.dispose();
+  }
+
+  void _handleDetailsChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -1058,66 +1066,60 @@ class _RegularReportTabState extends State<RegularReportTab> {
     final isOfflineMode =
         Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false;
 
-    return FutureBuilder<bool>(
-      future: _isPhoneReportDisabled(),
-      builder: (context, snapshot) {
-        final isPhoneDisabled = snapshot.data ?? false;
-        final canSubmit = widget.selectedText.isNotEmpty;
+    final reportData = ReportedErrorData(
+      selectedText: widget.selectedText,
+      errorDetails: _detailsController.text.trim(),
+    );
 
-        return SizedBox(
-          width: double.infinity,
-          child: Wrap(
-            spacing: 8.0,
-            runSpacing: 8.0,
-            alignment: WrapAlignment.end,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              TextButton(
-                onPressed: widget.onCancel,
-                child: const Text('ביטול'),
-              ),
-              ElevatedButton.icon(
-                onPressed: canSubmit
-                    ? () {
-                        widget.onActionSelected(
-                          ErrorReportAction.saveForLater,
-                          ReportedErrorData(
-                            selectedText: widget.selectedText,
-                            errorDetails: _detailsController.text.trim(),
-                          ),
-                        );
-                      }
-                    : null,
-                icon: const Icon(FluentIcons.save_24_regular, size: 18),
-                label: const Text('לא מחובר לרשת? שמור לדיווח מאוחר'),
-              ),
-              // הכפתור "שלח בדוא"ל" מוסתר במצב אופליין
-              if (!isOfflineMode)
-                ElevatedButton.icon(
-                  onPressed: canSubmit
-                      ? () {
-                          widget.onActionSelected(
-                            ErrorReportAction.sendEmail,
-                            ReportedErrorData(
-                              selectedText: widget.selectedText,
-                              errorDetails: _detailsController.text.trim(),
-                            ),
-                          );
-                        }
-                      : null,
-                  icon: const Icon(FluentIcons.mail_24_regular, size: 18),
-                  label: const Text('שלח בדוא"ל'),
-                ),
-              // הכפתור "שלח ישירות לאוצריא" מוסתר במצב אופליין
-              if (!isPhoneDisabled && !isOfflineMode)
-                OutlinedButton(
-                  onPressed: null,
-                  child: const Text('שלח ישירות לאוצריא (לא פעיל זמנית)'),
-                ),
-            ],
+    return SizedBox(
+      width: double.infinity,
+      child: Wrap(
+        spacing: 8.0,
+        runSpacing: 8.0,
+        alignment: WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          NeutralActionButton(
+            text: 'ביטול',
+            onPressed: widget.onCancel,
           ),
-        );
-      },
+          if (_canSubmit)
+            NeutralActionButton(
+              text: 'שמור לשליחה מאוחרת',
+              icon: FluentIcons.save_24_regular,
+              onPressed: () {
+                widget.onActionSelected(
+                  ErrorReportAction.saveForLater,
+                  reportData,
+                );
+              },
+            ),
+          if (!isOfflineMode && _canSubmit)
+            NeutralActionButton(
+              text: 'שלח בדוא"ל',
+              icon: FluentIcons.mail_24_regular,
+              onPressed: () {
+                widget.onActionSelected(
+                  ErrorReportAction.sendEmail,
+                  reportData,
+                );
+              },
+            ),
+          if (_canSubmit)
+            RecommendedActionButton(
+              text: isOfflineMode
+                  ? 'שמור בתור לאוצריא'
+                  : 'שלח ישירות לאוצריא',
+              icon: FluentIcons.arrow_upload_24_regular,
+              onPressed: () {
+                widget.onActionSelected(
+                  ErrorReportAction.sendDirect,
+                  reportData,
+                );
+              },
+            ),
+        ],
+      ),
     );
   }
 }
