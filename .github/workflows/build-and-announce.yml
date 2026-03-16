@@ -114,6 +114,10 @@ jobs:
         shell: pwsh
         run: |
           $commitMessage = "${{ github.event.head_commit.message }}"
+          if ([string]::IsNullOrWhiteSpace($commitMessage)) {
+            Write-Host "Commit message not available in event payload; using checked-out HEAD commit message instead"
+            $commitMessage = git log -1 --pretty=%B
+          }
           $commitMessage = $commitMessage.Split([Environment]::NewLine)[0].Trim()
           Write-Host "Commit message: $commitMessage"
           
