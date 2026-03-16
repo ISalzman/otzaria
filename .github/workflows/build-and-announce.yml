@@ -521,9 +521,9 @@ jobs:
           mkdir -p "$BUNDLE_ROOT/app" "$BUNDLE_ROOT/אוצריא"
 
           cp -r linux-build/. "$BUNDLE_ROOT/app/"
-          unzstd -c full_installer/library_db/seforim.db.zst > "$BUNDLE_ROOT/אוצריא/seforim.db"
-          unzstd -c full_installer/library_db/otzar-HB_catalog.db.zst > "$BUNDLE_ROOT/אוצריא/otzar-HB_catalog.db"
-          unzstd -c full_installer/library_db/talmud_bavli_latest.tar.zst | tar -xf - -C "$BUNDLE_ROOT/אוצריא"
+          zstd -d -c --long=31 --memory=2048MB full_installer/library_db/seforim.db.zst > "$BUNDLE_ROOT/אוצריא/seforim.db"
+          zstd -d -c --long=31 --memory=2048MB full_installer/library_db/otzar-HB_catalog.db.zst > "$BUNDLE_ROOT/אוצריא/otzar-HB_catalog.db"
+          zstd -d -c --long=31 --memory=2048MB full_installer/library_db/talmud_bavli_latest.tar.zst | tar -xf - -C "$BUNDLE_ROOT/אוצריא"
 
           cat > "$BUNDLE_ROOT/run-otzaria.sh" << 'EOF'
           #!/usr/bin/env bash
@@ -947,9 +947,9 @@ jobs:
           mkdir -p "$BUNDLE_ROOT/אוצריא"
 
           cp -R build/macos/Build/Products/Release/otzaria.app "$BUNDLE_ROOT/otzaria.app"
-          zstd -d -c full_installer/library_db/seforim.db.zst > "$BUNDLE_ROOT/אוצריא/seforim.db"
-          zstd -d -c full_installer/library_db/otzar-HB_catalog.db.zst > "$BUNDLE_ROOT/אוצריא/otzar-HB_catalog.db"
-          zstd -d -c full_installer/library_db/talmud_bavli_latest.tar.zst | tar -xf - -C "$BUNDLE_ROOT/אוצריא"
+          zstd -d -c --long=31 --memory=2048MB full_installer/library_db/seforim.db.zst > "$BUNDLE_ROOT/אוצריא/seforim.db"
+          zstd -d -c --long=31 --memory=2048MB full_installer/library_db/otzar-HB_catalog.db.zst > "$BUNDLE_ROOT/אוצריא/otzar-HB_catalog.db"
+          zstd -d -c --long=31 --memory=2048MB full_installer/library_db/talmud_bavli_latest.tar.zst | tar -xf - -C "$BUNDLE_ROOT/אוצריא"
 
           cat > "$BUNDLE_ROOT/Run Otzaria.command" << 'EOF'
           #!/bin/bash
@@ -969,6 +969,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$BUNDLE_ROOT" otzaria-macos-full.zip
 
       - name: Upload macOS DMG
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: otzaria-macos.dmg
