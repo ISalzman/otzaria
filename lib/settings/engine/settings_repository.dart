@@ -44,6 +44,8 @@ class SettingsRepository {
   static const String keyAutoSync = 'key-auto-sync';
   static const String keyAutoSyncCatalogs = 'key-auto-sync-catalogs';
   static const String keyLibraryPath = 'key-library-path';
+  static const String keyIndexPath = 'key-index-path';
+  static const String keyBackupPath = 'key-backup-path';
   static const String keyLibraryFolderName = 'key-library-folder-name';
   static const String keyHebrewBooksPath = 'key-hebrew-books-path';
   static const String keyDevChannel = 'key-dev-channel';
