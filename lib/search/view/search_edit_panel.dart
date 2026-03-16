@@ -35,6 +35,8 @@ class SearchEditPanel extends StatelessWidget {
       return;
     }
 
+    tab.updateTitleFromAppliedQuery(query);
+
     tab.searchBloc.add(
       UpdateSearchQuery(
         query,

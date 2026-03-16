@@ -311,6 +311,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
         query = utils.removeVolwels(query);
       }
 
+      widget.tab.updateTitleFromAppliedQuery(query);
       context.read<HistoryBloc>().add(AddHistory(widget.tab));
       context.read<SearchBloc>().add(
             UpdateSearchQuery(
