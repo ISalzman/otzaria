@@ -455,8 +455,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                         child: _buildManagedActionButton(
                           enabled: canSendNow,
                           child: RecommendedActionButton(
-                            text:
-                                state.isOfflineMode ? 'שלח עכשיו' : 'שלח עכשיו',
+                            text: 'שלח עכשיו',
                             icon: FluentIcons.arrow_sync_24_regular,
                             onPressed: _flushPendingReports,
                             isLoading: _isFlushingPendingReports,

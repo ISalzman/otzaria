@@ -208,6 +208,101 @@ void main() {
         ['manual-report'],
       );
     });
+
+    test('permanent failure is removed and does not block later reports',
+        () async {
+      final repository = InMemoryDirectErrorReportRepository();
+
+      await repository.save([
+        _buildReport(
+          id: 'invalid-report',
+          queueType: DirectErrorReportQueueType.automaticRetry,
+        ),
+        _buildReport(
+          id: 'valid-report',
+          queueType: DirectErrorReportQueueType.automaticRetry,
+        ),
+        _buildReport(
+          id: 'manual-report',
+          queueType: DirectErrorReportQueueType.manual,
+        ),
+      ]);
+
+      final attemptedReportIds = <String>[];
+      final service = DirectErrorReportService(
+        client: MockClient((request) async {
+          final payload = jsonDecode(request.body) as Map<String, dynamic>;
+          final reportId = payload['report_id'] as String;
+          attemptedReportIds.add(reportId);
+
+          if (reportId == 'invalid-report') {
+            return http.Response('bad request', 400);
+          }
+
+          return http.Response('', 200);
+        }),
+        queueRepository: repository,
+      );
+
+      final sentCount =
+          await service.flushPendingReports(onlyAutomaticRetry: true);
+      final remainingReports = await repository.load();
+
+      expect(sentCount, 1);
+      expect(attemptedReportIds, ['invalid-report', 'valid-report']);
+      expect(
+        remainingReports.map((report) => report.id).toList(),
+        ['manual-report'],
+      );
+    });
+  });
+
+  group('DirectErrorReportService.submitReport', () {
+    test('permanent failure does not queue the current report', () async {
+      final repository = InMemoryDirectErrorReportRepository();
+      final service = DirectErrorReportService(
+        client: MockClient((request) async => http.Response('bad request', 400)),
+        queueRepository: repository,
+      );
+
+      final result = await service.submitReport(
+        _buildReport(
+          id: 'invalid-current-report',
+          queueType: DirectErrorReportQueueType.automaticRetry,
+        ),
+      );
+      final remainingReports = await repository.load();
+
+      expect(result.status, DirectReportDeliveryStatus.failed);
+      expect(result.isQueued, isFalse);
+      expect(remainingReports, isEmpty);
+    });
+
+    test('404 is treated as transient and queues the current report', () async {
+      final repository = InMemoryDirectErrorReportRepository();
+      final service = DirectErrorReportService(
+        client: MockClient((request) async => http.Response('not found', 404)),
+        queueRepository: repository,
+      );
+
+      final result = await service.submitReport(
+        _buildReport(
+          id: 'missing-endpoint-report',
+          queueType: DirectErrorReportQueueType.automaticRetry,
+        ),
+      );
+      final remainingReports = await repository.load();
+
+      expect(result.status, DirectReportDeliveryStatus.queued);
+      expect(result.isQueued, isTrue);
+      expect(remainingReports.map((report) => report.id).toList(), [
+        'missing-endpoint-report',
+      ]);
+      expect(
+        remainingReports.single.queueType,
+        DirectErrorReportQueueType.automaticRetry,
+      );
+    });
   });
 }
 
