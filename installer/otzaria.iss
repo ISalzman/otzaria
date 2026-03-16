@@ -69,7 +69,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   AppDataPath: string;
 begin
-  if CurStep = csInstall then
+  if CurStep = ssInstall then
   begin
     if WizardIsTaskSelected('resetsettings') then
     begin
