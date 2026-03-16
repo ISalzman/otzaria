@@ -244,9 +244,9 @@ Source: "..\build\windows\x64\runner\Release\*"; \
     DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Copy compressed library assets and extraction tool for post-install extraction
-Source: "library_db\seforim.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion
-Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion
-Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion
+Source: "library_db\seforim.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion nocompression
+Source: "library_db\otzar-HB_catalog.db.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion nocompression
+Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\אוצריא"; Flags: ignoreversion nocompression
 Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 Source: "VisualCppRedist_AIO_x86_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
