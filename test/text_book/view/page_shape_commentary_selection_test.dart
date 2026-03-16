@@ -29,5 +29,58 @@ void main() {
         pageShapeRemainingCommentatorsLabel,
       );
     });
+
+    test('encodes and decodes explicit multi selection', () {
+      final encoded = encodePageShapeCommentatorsSelection(
+        const ['רש"י', 'תוספות', 'רש"י'],
+      );
+
+      expect(isPageShapeMultiCommentatorsValue(encoded), isTrue);
+      expect(
+        decodePageShapeCommentatorsSelection(encoded),
+        ['רש"י', 'תוספות'],
+      );
+    });
+
+    test('preserves explicit multi mode without initial selection', () {
+      final encoded = encodePageShapeCommentatorsSelection(
+        const [],
+        forceMultipleMode: true,
+      );
+
+      expect(encoded, pageShapeMultipleCommentatorsModeValue);
+      expect(isPageShapeMultipleCommentatorsMode(encoded), isTrue);
+      expect(
+        resolvePageShapeSelectedCommentators(
+          selection: encoded,
+          availableCommentators: const ['רש"י', 'תוספות'],
+        ),
+        isEmpty,
+      );
+    });
+
+    test('resolves explicit multi selection against available commentators',
+        () {
+      final encoded = encodePageShapeCommentatorsSelection(
+        const ['רש"י', 'רמב"ן'],
+      );
+
+      final resolved = resolvePageShapeSelectedCommentators(
+        selection: encoded,
+        availableCommentators: const ['רש"י על ברכות', 'תוספות', 'רמב"ן'],
+      );
+
+      expect(resolved, ['רש"י על ברכות', 'רמב"ן']);
+    });
+
+    test('keeps legacy remaining selection compatible', () {
+      final resolved = resolvePageShapeSelectedCommentators(
+        selection: pageShapeRemainingCommentatorsValue,
+        availableCommentators: const ['רש"י', 'תוספות', 'רמב"ן', 'רא"ש'],
+        excludedCommentators: const ['רש"י', 'רמב"ן'],
+      );
+
+      expect(resolved, ['תוספות', 'רא"ש']);
+    });
   });
 }
