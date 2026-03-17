@@ -21,7 +21,7 @@ AppUpdatesURL={#MyAppURL}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequiredOverridesAllowed=dialog
-DefaultDirName={autopf}\Otzaria
+DefaultDirName={code:GetDefaultInstallDir}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=.
@@ -47,6 +47,65 @@ Name: "{commonappdata}\otzaria\index"; Permissions: users-modify; Check: IsAdmin
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Code]
+
+function TryGetInstallDirFromRegistry(RootKey: Integer; const SubKey: String; var InstallDir: String): Boolean;
+begin
+  Result := RegQueryStringValue(RootKey, SubKey, 'Inno Setup: App Path', InstallDir);
+  if (not Result) or (InstallDir = '') then
+    Result := RegQueryStringValue(RootKey, SubKey, 'InstallLocation', InstallDir);
+
+  if Result and DirExists(InstallDir) then
+    exit;
+
+  InstallDir := '';
+  Result := False;
+end;
+
+function FindPreviousInstallDir(): String;
+var
+  InstallDir: String;
+  LegacyDir: String;
+  UninstallKey: String;
+begin
+  UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{EEC4F712-CD05-4D15-A753-509E840A51A5}_is1';
+
+  if TryGetInstallDirFromRegistry(HKLM64, UninstallKey, InstallDir) or
+     TryGetInstallDirFromRegistry(HKCU, UninstallKey, InstallDir) then
+  begin
+    Result := InstallDir;
+    exit;
+  end;
+
+  LegacyDir := 'C:\אוצריא';
+  if DirExists(LegacyDir) then
+  begin
+    Result := LegacyDir;
+    exit;
+  end;
+
+  LegacyDir := ExpandConstant('{autopf}\אוצריא');
+  if DirExists(LegacyDir) then
+  begin
+    Result := LegacyDir;
+    exit;
+  end;
+
+  LegacyDir := ExpandConstant('{autopf}\Otzaria');
+  if DirExists(LegacyDir) then
+  begin
+    Result := LegacyDir;
+    exit;
+  end;
+
+  Result := '';
+end;
+
+function GetDefaultInstallDir(Param: String): String;
+begin
+  Result := FindPreviousInstallDir();
+  if Result = '' then
+    Result := ExpandConstant('{autopf}\Otzaria');
+end;
 
 function GetDataDir(Param: String): String;
 begin
