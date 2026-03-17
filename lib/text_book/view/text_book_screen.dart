@@ -1066,8 +1066,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
         // אם אין הגדרות שמורות, נשתמש בברירות מחדל
         final currentSettings = config ??
-            await DefaultCommentators.getDefaults(state.book,
-                links: state.links);
+            await DefaultCommentators.getDefaults(
+              state.book,
+              availableCommentators: state.availableCommentators,
+            );
 
         if (!context.mounted) return;
 

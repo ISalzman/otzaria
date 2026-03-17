@@ -1,6 +1,7 @@
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/data/book_locator.dart';
@@ -129,6 +130,56 @@ class TextBookRepository {
     } catch (_) {
       return const [];
     }
+  }
+
+  Future<List<Link>> getBookLinksInRange(
+    TextBook book, {
+    required int startIndex,
+    required int endIndex,
+  }) async {
+    final normalizedStart = startIndex < 0 ? 0 : startIndex;
+    final normalizedEnd = endIndex < normalizedStart ? normalizedStart : endIndex;
+
+    final title = book.title;
+    final categoryId = book.categoryId;
+    final fileType = book.fileType ?? 'txt';
+
+    final provider = LibraryProviderManager.instance.getProviderForBook(
+      title,
+      categoryId: categoryId,
+      fileType: fileType,
+    );
+
+    if (provider is DatabaseLibraryProvider && categoryId != null) {
+      return provider.getLinksForBookRange(
+        title,
+        categoryId,
+        fileType,
+        startLineIndex: normalizedStart,
+        endLineIndex: normalizedEnd,
+      );
+    }
+
+    final providerLinks = await book.links;
+    if (providerLinks.isNotEmpty) {
+      final rangeStart = normalizedStart + 1;
+      final rangeEnd = normalizedEnd + 1;
+      return providerLinks
+          .where((link) => link.index1 >= rangeStart && link.index1 <= rangeEnd)
+          .toList();
+    }
+
+    if (categoryId != null && _sqliteProvider.repository != null) {
+      return DatabaseLibraryProvider.instance.getLinksForBookRange(
+        title,
+        categoryId,
+        fileType,
+        startLineIndex: normalizedStart,
+        endLineIndex: normalizedEnd,
+      );
+    }
+
+    return const [];
   }
 
   Future<List<TocEntry>> getTableOfContents(TextBook book) async {

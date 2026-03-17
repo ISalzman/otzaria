@@ -145,14 +145,17 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       debugPrint('📖 PageShape: Found saved configuration: $config');
       // יש הגדרה שמורה - צריך להתאים שמות בסיסיים לשמות מלאים
       // (כי הגדרות קטגוריה שומרות רק שמות בסיסיים כמו "רמב"ן")
-      commentators = _resolveCommentatorNames(config, state.links);
+      commentators =
+          _resolveCommentatorNames(config, state.availableCommentators);
       debugPrint('📖 PageShape: Resolved commentators: $commentators');
     } else {
       debugPrint(
           '📖 PageShape: No saved configuration, loading defaults from JSON');
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
-      commentators =
-          await DefaultCommentators.getDefaults(state.book, links: state.links);
+      commentators = await DefaultCommentators.getDefaults(
+        state.book,
+        availableCommentators: state.availableCommentators,
+      );
       debugPrint('📖 PageShape: Default commentators loaded: $commentators');
     }
 
@@ -171,14 +174,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   /// התאמת שמות מפרשים בסיסיים לשמות מלאים מתוך הקישורים הזמינים
   /// למשל: "רמב"ן" → "רמב"ן על בבא מציעא"
   Map<String, String?> _resolveCommentatorNames(
-      Map<String, String?> config, List<Link> links) {
-    // קבלת רשימת שמות המפרשים הזמינים
-    final availableCommentators = links
-        .where((link) => LinkTypes.isCommentaryOrTargum(link.connectionType))
-        .map((link) => utils.getTitleFromPath(link.path2))
-        .toSet()
-        .toList();
-
+      Map<String, String?> config, List<String> availableCommentators) {
     debugPrint('📖 PageShape: Available commentators: $availableCommentators');
     debugPrint('📖 PageShape: Config to resolve: $config');
 
@@ -205,11 +201,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   }
 
   List<String> _availableCommentators(TextBookLoaded state) {
-    return state.links
-        .where((link) => LinkTypes.isCommentaryOrTargum(link.connectionType))
-        .map((link) => utils.getTitleFromPath(link.path2))
-        .toSet()
-        .toList();
+    return state.availableCommentators;
   }
 
   List<String> _remainingPaneCommentators(TextBookLoaded state) {
@@ -404,11 +396,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     }
 
     // קבלת רשימת המפרשים הזמינים
-    final availableCommentators = state.links
-        .where((link) => LinkTypes.isCommentaryOrTargum(link.connectionType))
-        .map((link) => utils.getTitleFromPath(link.path2))
-        .toSet()
-        .toList();
+    final availableCommentators = state.availableCommentators;
 
     if (availableCommentators.isEmpty) {
       return;
@@ -440,14 +428,16 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         BlocListener<TextBookBloc, TextBookState>(
           listenWhen: (previous, current) {
             if (previous is TextBookLoaded && current is TextBookLoaded) {
-              return previous.links.length != current.links.length;
+              return previous.availableCommentators.length !=
+                  current.availableCommentators.length;
             }
             return previous is! TextBookLoaded && current is TextBookLoaded;
           },
           listener: (context, state) {
-            if (state is TextBookLoaded && state.links.isNotEmpty) {
+            if (state is TextBookLoaded &&
+                state.availableCommentators.isNotEmpty) {
               debugPrint(
-                  '📖 PageShape: Links loaded (${state.links.length}), reloading configuration...');
+                  '📖 PageShape: Commentators loaded (${state.availableCommentators.length}), reloading configuration...');
               _loadConfiguration();
             }
           },
@@ -930,10 +920,19 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
     _blocSubscription = context.read<TextBookBloc>().stream.listen((state) {
       if (state is TextBookLoaded && mounted) {
+        _refreshRelevantLinks(state);
         _syncWithMainText(state);
         _updateHighlights(state);
       }
     });
+  }
+
+  void _refreshRelevantLinks(TextBookLoaded state) {
+    _relevantLinks = state.links.where((link) {
+      final linkTitle = utils.getTitleFromPath(link.path2);
+      return linkTitle == widget.commentatorName &&
+          LinkTypes.isCommentaryOrTargum(link.connectionType);
+    }).toList();
   }
 
   void _updateHighlights(TextBookLoaded state) {
@@ -993,11 +992,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
       if (state is TextBookLoaded) {
         // סינון קישורים לפי שם המפרש ולפי סוג הקישור (COMMENTARY/TARGUM)
-        _relevantLinks = state.links.where((link) {
-          final linkTitle = utils.getTitleFromPath(link.path2);
-          return linkTitle == widget.commentatorName &&
-              LinkTypes.isCommentaryOrTargum(link.connectionType);
-        }).toList();
+        _refreshRelevantLinks(state);
       }
 
       // מציאת הספר המלא של המפרש עם categoryId

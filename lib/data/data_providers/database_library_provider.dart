@@ -63,6 +63,49 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
   }
 }
 
+List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+  required String fileType,
+  required int startLineIndex,
+  required int endLineIndex,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+
+    final bookResults = db.select(
+      'SELECT id FROM book WHERE title = ? AND categoryId = ? AND fileType = ? LIMIT 1',
+      [title, categoryId, fileType],
+    ).toMapList();
+
+    if (bookResults.isEmpty) {
+      return const [];
+    }
+
+    final bookId = bookResults.first['id'] as int;
+
+    return db.select('''
+        SELECT 
+          sl.lineIndex as sourceLineIndex,
+          tl.lineIndex as targetLineIndex,
+          tb.title as targetBookTitle,
+          ct.name as connectionTypeName
+        FROM link l
+        JOIN line sl ON l.sourceLineId = sl.id
+        JOIN line tl ON l.targetLineId = tl.id
+        JOIN book tb ON l.targetBookId = tb.id
+        LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        WHERE l.sourceBookId = ?
+          AND sl.lineIndex BETWEEN ? AND ?
+        ORDER BY sl.lineIndex, tb.orderIndex
+      ''', [bookId, startLineIndex, endLineIndex]).toMapList();
+  } finally {
+    db?.close();
+  }
+}
+
 List<Map<String, dynamic>> _loadAlternativeStructuresRowsInIsolate({
   required String dbPath,
   required String bookTitle,
@@ -134,6 +177,25 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return _loadAlternativeStructuresRowsInIsolate(
       dbPath: dbPath,
       bookTitle: bookTitle,
+    );
+  }
+
+  @visibleForTesting
+  static List<Map<String, dynamic>> loadBookLinksRowsInRangeForTesting({
+    required String dbPath,
+    required String title,
+    required int categoryId,
+    required String fileType,
+    required int startLineIndex,
+    required int endLineIndex,
+  }) {
+    return _loadBookLinksRowsInRangeInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+      startLineIndex: startLineIndex,
+      endLineIndex: endLineIndex,
     );
   }
 
@@ -1245,6 +1307,48 @@ class DatabaseLibraryProvider implements LibraryProvider {
       return links;
     } catch (e) {
       debugPrint('⚠️ Error in getAllLinksForBook "$title": $e');
+      return [];
+    }
+  }
+
+  Future<List<Link>> getLinksForBookRange(
+    String title,
+    int categoryId,
+    String fileType, {
+    required int startLineIndex,
+    required int endLineIndex,
+  }) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return [];
+    }
+
+    try {
+      final result = await Isolate.run(
+        () => _loadBookLinksRowsInRangeInIsolate(
+          dbPath: _sqliteProvider.dbPath,
+          title: title,
+          categoryId: categoryId,
+          fileType: fileType,
+          startLineIndex: startLineIndex,
+          endLineIndex: endLineIndex,
+        ),
+      );
+
+      return result.map((row) {
+        final targetTitle = row['targetBookTitle'] as String;
+        final connectionType =
+            row['connectionTypeName'] as String? ?? 'reference';
+
+        return Link(
+          heRef: targetTitle,
+          index1: (row['sourceLineIndex'] as int) + 1,
+          path2: targetTitle,
+          index2: (row['targetLineIndex'] as int) + 1,
+          connectionType: connectionType,
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('⚠️ Error in getLinksForBookRange "$title": $e');
       return [];
     }
   }

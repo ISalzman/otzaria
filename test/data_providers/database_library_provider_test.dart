@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
+import 'package:otzaria/models/links.dart';
+import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:path/path.dart' as path;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -138,6 +140,46 @@ void main() {
       }
     });
 
+    test('loadBookLinksRowsInRangeForTesting מסנן לפי חלון שורות', () async {
+      final tempDir = await Directory.systemTemp.createTemp('otzaria_db_range');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute('CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT, orderIndex INTEGER)');
+        db.execute('CREATE TABLE line (id INTEGER PRIMARY KEY, lineIndex INTEGER)');
+        db.execute('CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
+        db.execute('CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+
+        db.execute("INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (1, 'בראשית', 7, 'txt', 1)");
+        db.execute("INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (2, 'מפרש א', 8, 'txt', 1)");
+        db.execute("INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (3, 'מפרש ב', 8, 'txt', 2)");
+        db.execute('INSERT INTO line (id, lineIndex) VALUES (10, 4)');
+        db.execute('INSERT INTO line (id, lineIndex) VALUES (11, 40)');
+        db.execute('INSERT INTO line (id, lineIndex) VALUES (20, 0)');
+        db.execute('INSERT INTO line (id, lineIndex) VALUES (21, 1)');
+        db.execute("INSERT INTO connection_type (id, name) VALUES (5, 'reference')");
+        db.execute('INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 20, 2, 5)');
+        db.execute('INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 11, 21, 3, 5)');
+
+        final rows = DatabaseLibraryProvider.loadBookLinksRowsInRangeForTesting(
+          dbPath: dbPath,
+          title: 'בראשית',
+          categoryId: 7,
+          fileType: 'txt',
+          startLineIndex: 0,
+          endLineIndex: 10,
+        );
+
+        expect(rows, hasLength(1));
+        expect(rows.first['sourceLineIndex'], 4);
+        expect(rows.first['targetBookTitle'], 'מפרש א');
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
     test('loadAlternativeStructuresRowsForTesting טוען כותרות חלופיות מה-DB',
         () async {
       final tempDir = await Directory.systemTemp.createTemp('otzaria_db_alt');
@@ -166,6 +208,48 @@ void main() {
         db.close();
         await tempDir.delete(recursive: true);
       }
+    });
+
+    test('mergeLinksForTesting ממזג קישורים בלי כפילויות ושומר קישורים קודמים',
+        () {
+      final existing = [
+        Link(
+          heRef: 'א',
+          index1: 75,
+          path2: 'מפרש א',
+          index2: 3,
+          connectionType: 'reference',
+        ),
+        Link(
+          heRef: 'ב',
+          index1: 100,
+          path2: 'מפרש ב',
+          index2: 5,
+          connectionType: 'reference',
+        ),
+      ];
+
+      final incoming = [
+        Link(
+          heRef: 'ב',
+          index1: 100,
+          path2: 'מפרש ב',
+          index2: 5,
+          connectionType: 'reference',
+        ),
+        Link(
+          heRef: 'ג',
+          index1: 200,
+          path2: 'מפרש ג',
+          index2: 7,
+          connectionType: 'reference',
+        ),
+      ];
+
+      final merged = TextBookBloc.mergeLinksForTesting(existing, incoming);
+
+      expect(merged, hasLength(3));
+      expect(merged.map((link) => link.index1), [75, 100, 200]);
     });
   });
 }

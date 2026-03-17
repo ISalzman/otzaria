@@ -21,7 +21,40 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/migration/core/models/category.dart' as db;
 
+List<Link> _mergeLinksByIdentity(List<Link> existing, List<Link> incoming) {
+  final merged = <String, Link>{
+    for (final link in existing) _linkIdentityKey(link): link,
+  };
+
+  for (final link in incoming) {
+    merged[_linkIdentityKey(link)] = link;
+  }
+
+  final links = merged.values.toList();
+  links.sort((a, b) {
+    final indexCompare = a.index1.compareTo(b.index1);
+    if (indexCompare != 0) return indexCompare;
+
+    final pathCompare = a.path2.compareTo(b.path2);
+    if (pathCompare != 0) return pathCompare;
+
+    final targetCompare = a.index2.compareTo(b.index2);
+    if (targetCompare != 0) return targetCompare;
+
+    return a.connectionType.compareTo(b.connectionType);
+  });
+
+  return links;
+}
+
+String _linkIdentityKey(Link link) {
+  return '${link.index1}|${link.path2}|${link.index2}|${link.connectionType}|${link.start}|${link.end}';
+}
+
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
+  static const int _linkLookBehindLines = 25;
+  static const int _linkLookAheadLines = 50;
+
   final TextBookRepository repository;
   // [EDITING DISABLED] final OverridesRepository _overridesRepository;
   final ItemScrollController scrollController;
@@ -30,6 +63,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   Timer? _debounceTimer;
   Timer? _highlightTimer;
   VoidCallback? _positionListenerCallback;
+  int? _loadedLinksStart;
+  int? _loadedLinksEnd;
+  String? _loadedLinksBookTitle;
+  bool _isLoadingLinks = false;
 
   TextBookBloc({
     required this.repository,
@@ -67,6 +104,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     // on<AutoSaveDraft>(_onAutoSaveDraft);
     on<UpdateLinks>(_onUpdateLinks);
     on<UpdateAvailableCommentators>(_onUpdateAvailableCommentators);
+  }
+
+  @visibleForTesting
+  static List<Link> mergeLinksForTesting(
+      List<Link> existing, List<Link> incoming) {
+    return _mergeLinksByIdentity(existing, incoming);
   }
 
   Future<void> _onLoadContent(
@@ -253,6 +296,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       ));
 
       // ── שלב 5: טעינות ברקע - לא חוסמות את ה-UI ──
+      _resetLoadedLinksWindow(book);
+
       // טעינת קישורים ברקע אחרי הצגת הספר
       _loadLinksInBackground(book, visibleIndices);
 
@@ -459,7 +504,38 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         selectedIndex: index,
         visibleLinks: visibleLinks,
       ));
+
+      _loadLinksInBackground(currentState.book, event.visibleIndecies);
     }
+  }
+
+  void _resetLoadedLinksWindow(TextBook book) {
+    _loadedLinksBookTitle = book.title;
+    _loadedLinksStart = null;
+    _loadedLinksEnd = null;
+    _isLoadingLinks = false;
+  }
+
+  ({int start, int end}) _calculateLinksWindow(List<int> visibleIndices) {
+    if (visibleIndices.isEmpty) {
+      return (start: 0, end: _linkLookAheadLines);
+    }
+
+    final minVisible = visibleIndices.reduce((a, b) => a < b ? a : b);
+    final maxVisible = visibleIndices.reduce((a, b) => a > b ? a : b);
+
+    return (
+      start: (minVisible - _linkLookBehindLines).clamp(0, minVisible),
+      end: maxVisible + _linkLookAheadLines,
+    );
+  }
+
+  bool _isLinksWindowLoaded(String bookTitle, int start, int end) {
+    return _loadedLinksBookTitle == bookTitle &&
+        _loadedLinksStart != null &&
+        _loadedLinksEnd != null &&
+        start >= _loadedLinksStart! &&
+        end <= _loadedLinksEnd!;
   }
 
   /// בדיקה אם שתי רשימות שוות
@@ -907,23 +983,53 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   /// Loads links in the background after the book is displayed
   void _loadLinksInBackground(TextBook book, List<int> visibleIndices) async {
+    final window = _calculateLinksWindow(visibleIndices);
+
+    if (_isLoadingLinks ||
+        _isLinksWindowLoaded(book.title, window.start, window.end)) {
+      return;
+    }
+
+    _isLoadingLinks = true;
+
     try {
-      // Load all links for the book
-      final links = await repository.getBookLinks(book);
+      final links = await repository.getBookLinksInRange(
+        book,
+        startIndex: window.start,
+        endIndex: window.end,
+      );
 
       // Check if still in the same book
       if (isClosed || state is! TextBookLoaded) {
+        _isLoadingLinks = false;
         return;
       }
 
       final currentState = state as TextBookLoaded;
       if (currentState.book.title != book.title) {
+        _isLoadingLinks = false;
         return;
       }
 
+      _loadedLinksBookTitle = book.title;
+      _loadedLinksStart = window.start;
+      _loadedLinksEnd = window.end;
+      _isLoadingLinks = false;
+
       // Use event to update links
       add(UpdateLinks(links));
+
+      if (state is TextBookLoaded) {
+        final latestState = state as TextBookLoaded;
+        final latestWindow = _calculateLinksWindow(latestState.visibleIndices);
+        if (!_isLinksWindowLoaded(
+            latestState.book.title, latestWindow.start, latestWindow.end)) {
+          _loadLinksInBackground(
+              latestState.book, latestState.visibleIndices);
+        }
+      }
     } catch (e) {
+      _isLoadingLinks = false;
       // Silent fail - user already has the book displayed
     }
   }
@@ -934,7 +1040,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
-      final links = event.links.cast<Link>();
+      final links = _mergeLinksByIdentity(
+        currentState.links,
+        event.links.cast<Link>(),
+      );
 
       // Build linksByLine map for O(1) lookups
       final Map<int, List<Link>> linksByLine = {};
