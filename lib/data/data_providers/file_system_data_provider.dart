@@ -633,18 +633,54 @@ class FileSystemData {
   ///
   /// The check is performed by examining the book path and verifying that it
   /// resides under one of the Tanach directories.
-  Future<bool> isTanachBook(String title) async {
-    final path = await _getBookPath(title);
-    final normalized = path
-        .replaceAll('/', Platform.pathSeparator)
-        .replaceAll('\\', Platform.pathSeparator);
-    final tanachBase =
-        '${Platform.pathSeparator}אוצריא${Platform.pathSeparator}תנך${Platform.pathSeparator}';
-    final torah = '$tanachBaseתורה';
-    final neviim = '$tanachBaseנביאים';
-    final ktuvim = '$tanachBaseכתובים';
-    return normalized.contains(torah) ||
-        normalized.contains(neviim) ||
-        normalized.contains(ktuvim);
+  Future<bool> isTanachBook(String title,
+      {int? categoryId, String? fileType}) async {
+    final categoryPath =
+        await findBookCategoryPath(title, categoryId: categoryId);
+    if (categoryPath != null && categoryPath.isNotEmpty) {
+      return isTanachPathForTesting(categoryPath);
+    }
+
+    final path =
+        await _getBookPath(title, categoryId: categoryId, fileType: fileType);
+    return isTanachPathForTesting(path);
+  }
+
+  @visibleForTesting
+  static bool isTanachPathForTesting(String path) {
+    if (path.isEmpty || path.startsWith('error:')) {
+      return false;
+    }
+
+    final normalizedSegments = path
+        .replaceAll('\\', '/')
+        .split(RegExp(r'[/,]'))
+        .map((segment) => segment.trim())
+        .where((segment) => segment.isNotEmpty)
+        .map(_normalizeTanachSegment)
+        .toList();
+
+    for (var i = 0; i < normalizedSegments.length; i++) {
+      if (normalizedSegments[i] != 'תנך') {
+        continue;
+      }
+
+      if (i + 1 >= normalizedSegments.length) {
+        return true;
+      }
+
+      final nextSegment = normalizedSegments[i + 1];
+      if (nextSegment == 'תורה' ||
+          nextSegment == 'נביאים' ||
+          nextSegment == 'כתובים') {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static String _normalizeTanachSegment(String segment) {
+    return segment.replaceAll(RegExp(r'''["'׳״]'''), '');
   }
 }

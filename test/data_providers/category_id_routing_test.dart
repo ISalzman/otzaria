@@ -207,6 +207,22 @@ void main() {
     expect(categoryPath, isNot('101'));
   });
 
+  test('isTanachPath מזהה נתיבי DB ונתיבי קבצים ישנים', () {
+    expect(FileSystemData.isTanachPathForTesting('תנ"ך/תורה/בראשית'), isTrue);
+    expect(
+      FileSystemData.isTanachPathForTesting(
+        r'C:\library\אוצריא\תנך\נביאים\ישעיהו.txt',
+      ),
+      isTrue,
+    );
+    expect(FileSystemData.isTanachPathForTesting('תנך, כתובים'), isTrue);
+    expect(FileSystemData.isTanachPathForTesting('הלכה/רמב"ם'), isFalse);
+    expect(
+      FileSystemData.isTanachPathForTesting('error: book path not found'),
+      isFalse,
+    );
+  });
+
   test('titleToPath עבור ספרי DB מחזיר נתיב קטגוריה תקין', () async {
     final fsKey = BookCompositeKey.create(
       title: 'ספר קבצים',
