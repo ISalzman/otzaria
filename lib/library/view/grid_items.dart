@@ -54,7 +54,7 @@ class CategoryGridItem extends StatelessWidget {
         hoverDuration: Durations.medium1,
         onTap: () => onCategoryClickCallback(),
         child: Align(
-            alignment: Alignment.topRight,
+            alignment: Alignment.centerRight,
             child: Row(
               children: [
                 Expanded(
