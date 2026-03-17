@@ -220,7 +220,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           Settings.getValue<bool>('key-default-nikud') ?? false;
       final removeNikudFromTanach =
           Settings.getValue<bool>('key-remove-nikud-tanach') ?? false;
-      final isTanach = await FileSystemData.instance.isTanachBook(book.title);
+      final isTanach = await FileSystemData.instance.isTanachBook(
+        book.title,
+        categoryId: book.categoryId,
+        fileType: book.fileType,
+      );
       final removeNikud =
           defaultRemoveNikud && (removeNikudFromTanach || !isTanach);
 
@@ -1024,8 +1028,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         final latestWindow = _calculateLinksWindow(latestState.visibleIndices);
         if (!_isLinksWindowLoaded(
             latestState.book.title, latestWindow.start, latestWindow.end)) {
-          _loadLinksInBackground(
-              latestState.book, latestState.visibleIndices);
+          _loadLinksInBackground(latestState.book, latestState.visibleIndices);
         }
       }
     } catch (e) {
