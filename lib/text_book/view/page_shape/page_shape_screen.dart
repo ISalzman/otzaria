@@ -8,6 +8,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/text_book/view/page_shape/links_notes_sidebar.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/commentary_sync_helper.dart';
@@ -179,42 +180,23 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     debugPrint('📖 PageShape: Config to resolve: $config');
 
     return Map.fromEntries(config.entries.map((entry) {
-      if (isPageShapeRemainingCommentatorsValue(entry.value)) {
-        return MapEntry(entry.key, entry.value);
-      }
-
-      final resolved =
-          _findMatchingCommentator(entry.value, availableCommentators);
+      final resolved = resolvePageShapeCommentatorSelection(
+        selection: entry.value,
+        availableCommentators: availableCommentators,
+      );
       debugPrint('📖 PageShape: Resolving "${entry.value}" → "$resolved"');
       return MapEntry(entry.key, resolved);
     }));
-  }
-
-  /// מחפש מפרש שמתאים לשם הנתון (בסיסי או מלא)
-  String? _findMatchingCommentator(String? shortName, List<String> available) {
-    if (shortName == null) return null;
-
-    // The order of matching is important: exact, then startsWith, then contains.
-    return available.firstWhereOrNull((name) => name == shortName) ??
-        available.firstWhereOrNull((name) => name.startsWith(shortName)) ??
-        available.firstWhereOrNull((name) => name.contains(shortName));
   }
 
   List<String> _availableCommentators(TextBookLoaded state) {
     return state.availableCommentators;
   }
 
-  List<String> _remainingPaneCommentators(TextBookLoaded state) {
-    if (_rightCommentator == null) {
-      return const [];
-    }
-
-    if (!isPageShapeRemainingCommentatorsValue(_rightCommentator)) {
-      return [_rightCommentator!];
-    }
-
-    return resolveRemainingPageShapeCommentators(
-      availableCommentators: _availableCommentators(state),
+  List<String> _selectedRightPaneCommentators(TextBookLoaded state) {
+    return resolvePageShapeSelectedCommentators(
+      selection: _rightCommentator,
+      availableCommentators: _rightPaneSelectableCommentators(state),
       excludedCommentators: [
         _leftCommentator,
         _bottomCommentator,
@@ -223,33 +205,99 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     );
   }
 
-  String? _rightPaneLabel() {
-    if (_rightCommentator == null) {
+  bool _isRightPaneMultipleMode() {
+    return isPageShapeMultipleCommentatorsMode(_rightCommentator);
+  }
+
+  List<String> _rightPaneSelectableCommentators(TextBookLoaded state) {
+    final excludedCommentators = {
+      if (_leftCommentator != null) _leftCommentator!,
+      if (_bottomCommentator != null) _bottomCommentator!,
+      if (_bottomRightCommentator != null) _bottomRightCommentator!,
+    };
+
+    return _availableCommentators(state)
+        .where((commentator) => !excludedCommentators.contains(commentator))
+        .toList();
+  }
+
+  List<CommentatorGroup> _rightPaneCommentatorGroups(TextBookLoaded state) {
+    final selectableCommentators =
+        _rightPaneSelectableCommentators(state).toSet();
+
+    return state.commentatorGroups
+        .map(
+          (group) => CommentatorGroup(
+            title: group.title,
+            commentators: group.commentators
+                .where(selectableCommentators.contains)
+                .toList(),
+          ),
+        )
+        .where((group) => group.commentators.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> _saveRightPaneCommentators(
+    TextBookLoaded state,
+    List<String> commentators,
+  ) async {
+    final updatedConfig = {
+      'left': _leftCommentator,
+      'right': encodePageShapeCommentatorsSelection(
+        commentators,
+        forceMultipleMode: true,
+      ),
+      'bottom': _bottomCommentator,
+      'bottomRight': _bottomRightCommentator,
+    };
+
+    final hasActualBookConfig =
+        PageShapeSettingsManager.loadConfiguration(state.book.title) != null;
+
+    final categoryToSave = !hasActualBookConfig &&
+            state.book.heCategories != null &&
+            state.book.heCategories!.isNotEmpty
+        ? PageShapeSettingsManager.getActiveCategory(state.book.heCategories) ??
+            PageShapeSettingsManager.getParentCategory(state.book.heCategories)
+        : null;
+
+    await PageShapeSettingsManager.saveConfiguration(
+      state.book.title,
+      updatedConfig,
+      saveToCategory: categoryToSave,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _rightCommentator = encodePageShapeCommentatorsSelection(
+        commentators,
+        forceMultipleMode: true,
+      );
+    });
+  }
+
+  String? _rightPaneLabel(TextBookLoaded state) {
+    final commentators = _selectedRightPaneCommentators(state);
+    if (commentators.isEmpty) {
       return null;
     }
 
-    return formatPageShapeCommentatorSelection(_rightCommentator);
+    return formatPageShapeCommentatorSelection(
+      encodePageShapeCommentatorsSelection(commentators),
+    );
   }
 
   Widget _buildRightPane(TextBookLoaded state) {
-    if (_rightCommentator == null) {
-      return const SizedBox.shrink();
-    }
+    final commentators = _selectedRightPaneCommentators(state);
 
-    if (!isPageShapeRemainingCommentatorsValue(_rightCommentator)) {
+    if (!_isRightPaneMultipleMode() && commentators.length == 1) {
       return _CommentaryPane(
-        commentatorName: _rightCommentator!,
+        commentatorName: commentators.single,
         openBookCallback: widget.openBookCallback,
-      );
-    }
-
-    final commentators = _remainingPaneCommentators(state);
-    if (commentators.isEmpty) {
-      return const Center(
-        child: Text(
-          'אין מפרשים נוספים להצגה',
-          textDirection: TextDirection.rtl,
-        ),
       );
     }
 
@@ -257,8 +305,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       key: ValueKey('page_shape_remaining_${commentators.join(',')}'),
       openBookCallback: (tab) => widget.openBookCallback(tab),
       fontSize: PageShapeSettingsManager.getCommentaryFontSize(),
-      showSearch: false,
+      showSearch: true,
       selectedCommentatorsOverride: commentators,
+      commentatorGroupsOverride: _rightPaneCommentatorGroups(state),
+      bookTitleOverride: state.book.title,
+      onSelectedCommentatorsOverrideChanged: (selected) =>
+          _saveRightPaneCommentators(state, selected),
     );
   }
 
@@ -468,255 +520,284 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                         children: [
                           Expanded(
                             child: Column(
-                          children: [
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  if (_columnVisibility['left'] == true) ...[
-                                    if (_leftCommentator != null) ...[
-                                      SizedBox(
-                                        width: 20,
-                                        child: Center(
-                                          child: RotatedBox(
-                                            quarterTurns: 1,
-                                            child: Text(
-                                              _leftCommentator!,
-                                              style: const TextStyle(
-                                                fontSize: 14,
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      if (_columnVisibility['left'] ==
+                                          true) ...[
+                                        if (_leftCommentator != null) ...[
+                                          SizedBox(
+                                            width: 20,
+                                            child: Center(
+                                              child: RotatedBox(
+                                                quarterTurns: 1,
+                                                child: Text(
+                                                  _leftCommentator!,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
+                                          const SizedBox(width: 4),
+                                          SizedBox(
+                                            width: _leftWidth ??
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    _kCommentaryPaneWidthFactor,
+                                            child: _CommentaryPane(
+                                              commentatorName:
+                                                  _leftCommentator!,
+                                              openBookCallback:
+                                                  widget.openBookCallback,
+                                            ),
+                                          ),
+                                        ] else ...[
+                                          SizedBox(
+                                            width: _leftWidth ??
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    _kCommentaryPaneWidthFactor,
+                                            child: _buildEmptyColumnContent(
+                                              columnName: 'left',
+                                              onSelectCommentator: () =>
+                                                  _openCommentatorSelector(
+                                                      'left'),
+                                              onHideColumn: () =>
+                                                  _hideColumn('left'),
+                                            ),
+                                          ),
+                                        ],
+                                        ResizableDragHandle(
+                                          isVertical: true,
+                                          showDivider: false,
+                                          onDragDelta: (delta) {
+                                            setState(() {
+                                              _leftWidth =
+                                                  ((_leftWidth ?? 0) - delta)
+                                                      .clamp(
+                                                80.0,
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    0.4,
+                                              );
+                                            });
+                                          },
+                                          onDragEnd: _saveSizes,
                                         ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      SizedBox(
-                                        width: _leftWidth ??
-                                            MediaQuery.of(context).size.width *
-                                                _kCommentaryPaneWidthFactor,
-                                        child: _CommentaryPane(
-                                          commentatorName: _leftCommentator!,
+                                      ],
+                                      Expanded(
+                                        child: SimpleTextViewer(
+                                          content: state.content,
+                                          fontSize: state.fontSize,
                                           openBookCallback:
                                               widget.openBookCallback,
+                                          scrollController:
+                                              state.scrollController,
+                                          positionsListener:
+                                              state.positionsListener,
+                                          isMainText: true,
+                                          onOpenSidebarTab: _openLeftSidebarTab,
                                         ),
                                       ),
-                                    ] else ...[
-                                      SizedBox(
-                                        width: _leftWidth ??
-                                            MediaQuery.of(context).size.width *
-                                                _kCommentaryPaneWidthFactor,
-                                        child: _buildEmptyColumnContent(
-                                          columnName: 'left',
-                                          onSelectCommentator: () =>
-                                              _openCommentatorSelector('left'),
-                                          onHideColumn: () =>
-                                              _hideColumn('left'),
+                                      if (_columnVisibility['right'] ==
+                                          true) ...[
+                                        ResizableDragHandle(
+                                          isVertical: true,
+                                          showDivider: false,
+                                          onDragDelta: (delta) {
+                                            setState(() {
+                                              _rightWidth =
+                                                  ((_rightWidth ?? 0) + delta)
+                                                      .clamp(
+                                                80.0,
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    0.4,
+                                              );
+                                            });
+                                          },
+                                          onDragEnd: _saveSizes,
                                         ),
-                                      ),
-                                    ],
-                                    ResizableDragHandle(
-                                      isVertical: true,
-                                      showDivider: false,
-                                      onDragDelta: (delta) {
-                                        setState(() {
-                                          _leftWidth =
-                                              ((_leftWidth ?? 0) - delta).clamp(
-                                            80.0,
-                                            MediaQuery.of(context).size.width *
-                                                0.4,
-                                          );
-                                        });
-                                      },
-                                      onDragEnd: _saveSizes,
-                                    ),
-                                  ],
-                                  Expanded(
-                                    child: SimpleTextViewer(
-                                      content: state.content,
-                                      fontSize: state.fontSize,
-                                      openBookCallback: widget.openBookCallback,
-                                      scrollController: state.scrollController,
-                                      positionsListener:
-                                          state.positionsListener,
-                                      isMainText: true,
-                                      onOpenSidebarTab: _openLeftSidebarTab,
-                                    ),
-                                  ),
-                                  if (_columnVisibility['right'] == true) ...[
-                                    ResizableDragHandle(
-                                      isVertical: true,
-                                      showDivider: false,
-                                      onDragDelta: (delta) {
-                                        setState(() {
-                                          _rightWidth =
-                                              ((_rightWidth ?? 0) + delta)
-                                                  .clamp(
-                                            80.0,
-                                            MediaQuery.of(context).size.width *
-                                                0.4,
-                                          );
-                                        });
-                                      },
-                                      onDragEnd: _saveSizes,
-                                    ),
-                                    if (_rightCommentator != null) ...[
-                                      SizedBox(
-                                        width: _rightWidth ??
-                                            MediaQuery.of(context).size.width *
-                                                _kCommentaryPaneWidthFactor,
-                                        child: _buildRightPane(state),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      SizedBox(
-                                        width: 20,
-                                        child: Center(
-                                          child: RotatedBox(
-                                            quarterTurns: 3,
-                                            child: Text(
-                                              _rightPaneLabel()!,
-                                              style: const TextStyle(
-                                                fontSize: 14,
+                                        if (_rightPaneSelectableCommentators(
+                                                state)
+                                            .isNotEmpty) ...[
+                                          SizedBox(
+                                            width: _rightWidth ??
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    _kCommentaryPaneWidthFactor,
+                                            child: _buildRightPane(state),
+                                          ),
+                                          if (_rightPaneLabel(state) !=
+                                              null) ...[
+                                            const SizedBox(width: 4),
+                                            SizedBox(
+                                              width: 20,
+                                              child: Center(
+                                                child: RotatedBox(
+                                                  quarterTurns: 3,
+                                                  child: Text(
+                                                    _rightPaneLabel(state)!,
+                                                    style: const TextStyle(
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ),
                                               ),
                                             ),
+                                          ],
+                                        ] else ...[
+                                          SizedBox(
+                                            width: _rightWidth ??
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    _kCommentaryPaneWidthFactor,
+                                            child: _buildEmptyColumnContent(
+                                              columnName: 'right',
+                                              onSelectCommentator: () =>
+                                                  _openCommentatorSelector(
+                                                      'right'),
+                                              onHideColumn: () =>
+                                                  _hideColumn('right'),
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    ] else ...[
-                                      SizedBox(
-                                        width: _rightWidth ??
-                                            MediaQuery.of(context).size.width *
-                                                _kCommentaryPaneWidthFactor,
-                                        child: _buildEmptyColumnContent(
-                                          columnName: 'right',
-                                          onSelectCommentator: () =>
-                                              _openCommentatorSelector('right'),
-                                          onHideColumn: () =>
-                                              _hideColumn('right'),
-                                        ),
-                                      ),
+                                        ],
+                                      ],
                                     ],
-                                  ],
-                                ],
-                              ),
-                            ),
-                            if (_bottomCommentator != null ||
-                                _bottomRightCommentator != null) ...[
-                              _HorizontalDragHandle(
-                                leftWidth: _leftWidth,
-                                rightWidth: _rightWidth,
-                                leftCommentator: _leftCommentator,
-                                rightCommentator: _rightPaneLabel(),
-                                onPanUpdate: (details) {
-                                  setState(() {
-                                    _bottomHeight = ((_bottomHeight ?? 0) -
-                                            details.delta.dy)
-                                        .clamp(
-                                      80.0,
-                                      MediaQuery.of(context).size.height * 0.5,
-                                    );
-                                  });
-                                },
-                                onPanEnd: _saveSizes,
-                              ),
-                              SizedBox(
-                                height: _bottomHeight ??
-                                    MediaQuery.of(context).size.height * 0.27,
-                                child: Column(
-                                  children: [
-                                    Expanded(
-                                      child: _bottomRightCommentator != null
-                                          ? Row(
-                                              children: [
-                                                if (_bottomCommentator !=
-                                                    null) ...[
-                                                  SizedBox(
-                                                    width: 20,
-                                                    child: Center(
-                                                      child: RotatedBox(
-                                                        quarterTurns: 1,
-                                                        child: Text(
-                                                          _bottomCommentator!,
-                                                          style:
-                                                              const TextStyle(
-                                                            fontSize: 14,
+                                  ),
+                                ),
+                                if (_bottomCommentator != null ||
+                                    _bottomRightCommentator != null) ...[
+                                  _HorizontalDragHandle(
+                                    leftWidth: _leftWidth,
+                                    rightWidth: _rightWidth,
+                                    leftCommentator: _leftCommentator,
+                                    rightCommentator: _rightPaneLabel(state),
+                                    onPanUpdate: (details) {
+                                      setState(() {
+                                        _bottomHeight = ((_bottomHeight ?? 0) -
+                                                details.delta.dy)
+                                            .clamp(
+                                          80.0,
+                                          MediaQuery.of(context).size.height *
+                                              0.5,
+                                        );
+                                      });
+                                    },
+                                    onPanEnd: _saveSizes,
+                                  ),
+                                  SizedBox(
+                                    height: _bottomHeight ??
+                                        MediaQuery.of(context).size.height *
+                                            0.27,
+                                    child: Column(
+                                      children: [
+                                        Expanded(
+                                          child: _bottomRightCommentator != null
+                                              ? Row(
+                                                  children: [
+                                                    if (_bottomCommentator !=
+                                                        null) ...[
+                                                      SizedBox(
+                                                        width: 20,
+                                                        child: Center(
+                                                          child: RotatedBox(
+                                                            quarterTurns: 1,
+                                                            child: Text(
+                                                              _bottomCommentator!,
+                                                              style:
+                                                                  const TextStyle(
+                                                                fontSize: 14,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Expanded(
+                                                        child: _CommentaryPane(
+                                                          commentatorName:
+                                                              _bottomCommentator!,
+                                                          openBookCallback: widget
+                                                              .openBookCallback,
+                                                          isBottom: true,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                    ],
+                                                    Expanded(
+                                                      child: _CommentaryPane(
+                                                        commentatorName:
+                                                            _bottomRightCommentator!,
+                                                        openBookCallback: widget
+                                                            .openBookCallback,
+                                                        isBottom: true,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    SizedBox(
+                                                      width: 20,
+                                                      child: Center(
+                                                        child: RotatedBox(
+                                                          quarterTurns: 3,
+                                                          child: Text(
+                                                            _bottomRightCommentator!,
+                                                            style:
+                                                                const TextStyle(
+                                                              fontSize: 14,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
                                                     ),
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Expanded(
-                                                    child: _CommentaryPane(
-                                                      commentatorName:
-                                                          _bottomCommentator!,
-                                                      openBookCallback: widget
-                                                          .openBookCallback,
-                                                      isBottom: true,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                ],
-                                                Expanded(
-                                                  child: _CommentaryPane(
-                                                    commentatorName:
-                                                        _bottomRightCommentator!,
-                                                    openBookCallback:
-                                                        widget.openBookCallback,
-                                                    isBottom: true,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 4),
-                                                SizedBox(
-                                                  width: 20,
-                                                  child: Center(
-                                                    child: RotatedBox(
-                                                      quarterTurns: 3,
-                                                      child: Text(
-                                                        _bottomRightCommentator!,
-                                                        style: const TextStyle(
-                                                          fontSize: 14,
+                                                  ],
+                                                )
+                                              : Row(
+                                                  children: [
+                                                    SizedBox(
+                                                      width: 20,
+                                                      child: Center(
+                                                        child: RotatedBox(
+                                                          quarterTurns: 1,
+                                                          child: Text(
+                                                            _bottomCommentator!,
+                                                            style:
+                                                                const TextStyle(
+                                                              fontSize: 14,
+                                                            ),
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
-                                                  ),
-                                                ),
-                                              ],
-                                            )
-                                          : Row(
-                                              children: [
-                                                SizedBox(
-                                                  width: 20,
-                                                  child: Center(
-                                                    child: RotatedBox(
-                                                      quarterTurns: 1,
-                                                      child: Text(
-                                                        _bottomCommentator!,
-                                                        style: const TextStyle(
-                                                          fontSize: 14,
-                                                        ),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: _CommentaryPane(
+                                                        commentatorName:
+                                                            _bottomCommentator!,
+                                                        openBookCallback: widget
+                                                            .openBookCallback,
+                                                        isBottom: true,
                                                       ),
                                                     ),
-                                                  ),
+                                                  ],
                                                 ),
-                                                const SizedBox(width: 4),
-                                                Expanded(
-                                                  child: _CommentaryPane(
-                                                    commentatorName:
-                                                        _bottomCommentator!,
-                                                    openBookCallback:
-                                                        widget.openBookCallback,
-                                                    isBottom: true,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                           if (_isLeftSidebarOpen) ...[
                             ResizableDragHandle(
                               isVertical: true,
@@ -797,12 +878,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                     child: AnimatedOpacity(
                                       duration:
                                           const Duration(milliseconds: 150),
-                                      opacity: _isHoveringSidebarHandle
-                                          ? 1.0
-                                          : 0.6,
+                                      opacity:
+                                          _isHoveringSidebarHandle ? 1.0 : 0.6,
                                       child: Icon(
                                         FluentIcons.chevron_right_24_regular,
-                                        size: _isHoveringSidebarHandle ? 24 : 18,
+                                        size:
+                                            _isHoveringSidebarHandle ? 24 : 18,
                                         color: Theme.of(context)
                                             .colorScheme
                                             .onSurface,

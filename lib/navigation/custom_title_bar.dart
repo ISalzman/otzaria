@@ -603,12 +603,12 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                             ),
                           )
                         else if (tab is SearchingTab)
-                          ValueListenableBuilder(
-                            valueListenable: tab.queryController,
-                            builder: (context, value, child) => Tooltip(
-                              message: tab.title,
+                          ValueListenableBuilder<String>(
+                            valueListenable: tab.titleNotifier,
+                            builder: (context, title, child) => Tooltip(
+                              message: title,
                               child: Text(
-                                truncate(tab.title, 25),
+                                truncate(title, 25),
                               ),
                             ),
                           )

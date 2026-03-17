@@ -9,9 +9,11 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/text_book/view/combined_view/commentary_content.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/widgets/commentators_filter_button.dart';
 import 'package:otzaria/widgets/commentators_filter_screen.dart';
+import 'package:otzaria/widgets/commentators_selection_panel.dart';
 import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
@@ -39,6 +41,9 @@ class CommentaryListBase extends StatefulWidget {
   final bool shrinkWrap;
   final ItemPositionsListener? itemPositionsListener;
   final List<String>? selectedCommentatorsOverride;
+  final List<CommentatorGroup>? commentatorGroupsOverride;
+  final String? bookTitleOverride;
+  final ValueChanged<List<String>>? onSelectedCommentatorsOverrideChanged;
 
   const CommentaryListBase({
     super.key,
@@ -50,6 +55,9 @@ class CommentaryListBase extends StatefulWidget {
     this.shrinkWrap = true,
     this.itemPositionsListener,
     this.selectedCommentatorsOverride,
+    this.commentatorGroupsOverride,
+    this.bookTitleOverride,
+    this.onSelectedCommentatorsOverrideChanged,
   });
 
   @override
@@ -87,6 +95,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   List<String> _selectedCommentators(TextBookLoaded state) {
     return widget.selectedCommentatorsOverride ?? state.activeCommentators;
+  }
+
+  List<CommentatorGroup> _commentatorGroups(TextBookLoaded state) {
+    return widget.commentatorGroupsOverride ?? state.commentatorGroups;
+  }
+
+  String _bookTitle(TextBookLoaded state) {
+    return widget.bookTitleOverride ?? state.book.title;
   }
 
   int _getItemSearchIndex(Link link) {
@@ -402,6 +418,21 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         loadingWidget: const Center(),
         builder: (context, state) {
           final selectedCommentators = _selectedCommentators(state);
+          final shouldAutoOpenOverrideFilter = widget.showSearch &&
+              widget.onSelectedCommentatorsOverrideChanged != null &&
+              selectedCommentators.isEmpty &&
+              !_showCommentatorsFilter;
+
+          if (shouldAutoOpenOverrideFilter) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _showCommentatorsFilter = true;
+                });
+              }
+            });
+            return const Center(child: CircularProgressIndicator());
+          }
 
           Widget buildList() {
             return Builder(
@@ -559,11 +590,21 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           if (widget.showSearch) {
             // אם מסך בחירת המפרשים פתוח, מציג אותו במקום הרשימה
             if (_showCommentatorsFilter) {
+              final groups = _commentatorGroups(state);
+              final customSelection =
+                  widget.onSelectedCommentatorsOverrideChanged;
               return CommentatorsFilterScreen(
                 onBack: _closeCommentatorsFilter,
-                child: CommentatorsListView(
-                  onCommentatorSelected: _closeCommentatorsFilter,
-                ),
+                child: customSelection != null
+                    ? CommentatorsSelectionPanel(
+                        groups: groups,
+                        selectedCommentators: selectedCommentators,
+                        onSelectionChanged: customSelection,
+                        bookTitle: _bookTitle(state),
+                      )
+                    : CommentatorsListView(
+                        onCommentatorSelected: _closeCommentatorsFilter,
+                      ),
               );
             }
 

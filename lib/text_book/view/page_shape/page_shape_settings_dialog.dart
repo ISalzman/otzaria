@@ -42,7 +42,9 @@ class PageShapeSettingsDialog extends StatefulWidget {
 
 class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   String? _leftCommentator;
-  String? _rightCommentator;
+  String? _rightSingleCommentator;
+  bool _rightUsesMultipleSelection = false;
+  List<String> _rightCommentators = [];
   String? _bottomCommentator;
   String? _bottomRightCommentator;
   String _bottomFontFamily = AppFonts.defaultFont;
@@ -106,7 +108,32 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
 
     setState(() {
       _leftCommentator = widget.currentLeft;
-      _rightCommentator = widget.currentRight;
+      final resolvedRightSelection = resolvePageShapeCommentatorSelection(
+        selection: widget.currentRight,
+        availableCommentators: widget.availableCommentators,
+      );
+      _rightUsesMultipleSelection =
+          isPageShapeMultipleCommentatorsMode(resolvedRightSelection);
+      _rightSingleCommentator =
+          _rightUsesMultipleSelection ? null : resolvedRightSelection;
+      _rightCommentators = resolvePageShapeSelectedCommentators(
+        selection: widget.currentRight,
+        availableCommentators: widget.availableCommentators,
+        excludedCommentators: [
+          resolvePageShapeCommentatorSelection(
+            selection: widget.currentLeft,
+            availableCommentators: widget.availableCommentators,
+          ),
+          resolvePageShapeCommentatorSelection(
+            selection: widget.currentBottom,
+            availableCommentators: widget.availableCommentators,
+          ),
+          resolvePageShapeCommentatorSelection(
+            selection: widget.currentBottomRight,
+            availableCommentators: widget.availableCommentators,
+          ),
+        ],
+      );
       _bottomCommentator = widget.currentBottom;
       _bottomRightCommentator = widget.currentBottomRight;
       _bottomFontFamily = Settings.getValue<String>('page_shape_bottom_font') ??
@@ -178,7 +205,12 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     // שמירת הגדרות מפרשים - לספר או לקטגוריה לפי הבחירה
     final config = {
       'left': _leftCommentator,
-      'right': _rightCommentator,
+      'right': _rightUsesMultipleSelection
+          ? encodePageShapeCommentatorsSelection(
+              _rightCommentators,
+              forceMultipleMode: true,
+            )
+          : _rightSingleCommentator,
       'bottom': _bottomCommentator,
       'bottomRight': _bottomRightCommentator,
     };
@@ -248,6 +280,21 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     setState(() {
       _bottomFontFamily = value;
       _hasChanges = true;
+    });
+    _saveSettings();
+  }
+
+  void _onRightCommentatorModeChanged(String? value) {
+    final isMultipleMode = value == pageShapeMultipleCommentatorsModeValue;
+
+    setState(() {
+      _rightUsesMultipleSelection = isMultipleMode;
+      _rightSingleCommentator = isMultipleMode ? null : value;
+      _hasChanges = true;
+      if ((isMultipleMode || value != null) &&
+          _columnVisibility['right'] == false) {
+        _columnVisibility['right'] = true;
+      }
     });
     _saveSettings();
   }
@@ -607,13 +654,17 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
               const SizedBox(height: 12),
               _buildCommentatorDropdown(
                 label: 'מפרש שמאלי',
-                value: _rightCommentator,
-                onChanged: (value) => _onCommentatorChanged(
-                    value, (v) => _rightCommentator = v,
-                    visibilityKey: 'right'),
+                value: _rightUsesMultipleSelection
+                    ? pageShapeMultipleCommentatorsModeValue
+                    : _rightSingleCommentator,
+                onChanged: _onRightCommentatorModeChanged,
                 visibilityKey: 'right',
-                allowRemainingCommentatorsSelection: true,
+                allowMultipleCommentatorsSelection: true,
               ),
+              if (_rightUsesMultipleSelection) ...[
+                const SizedBox(height: 8),
+                _buildRightPaneInfo(),
+              ],
               const SizedBox(height: 12),
               _buildCommentatorDropdown(
                 label: 'מפרש תחתון',
@@ -785,6 +836,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     required ValueChanged<String?> onChanged,
     String? visibilityKey,
     bool allowRemainingCommentatorsSelection = false,
+    bool allowMultipleCommentatorsSelection = false,
   }) {
     final isVisible = visibilityKey != null
         ? (_columnVisibility[visibilityKey] ?? true)
@@ -826,6 +878,8 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
               onChanged,
               allowRemainingCommentatorsSelection:
                   allowRemainingCommentatorsSelection,
+              allowMultipleCommentatorsSelection:
+                  allowMultipleCommentatorsSelection,
             ),
             child: InputDecorator(
               decoration: const InputDecoration(
@@ -851,11 +905,52 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
     );
   }
 
+  Widget _buildRightPaneInfo() {
+    final selectionLabel = _rightCommentators.isEmpty
+        ? 'לא נבחרו מפרשים'
+        : formatPageShapeCommentatorSelection(
+            encodePageShapeCommentatorsSelection(
+              _rightCommentators,
+              forceMultipleMode: true,
+            ),
+          );
+
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            selectionLabel,
+            textDirection: TextDirection.rtl,
+            style: TextStyle(
+              fontSize: 13,
+              color: _rightCommentators.isEmpty
+                  ? Theme.of(context).hintColor
+                  : Theme.of(context).textTheme.bodyLarge?.color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'הבחירה המפורטת נעשית מתוך החלונית עצמה.',
+            textDirection: TextDirection.rtl,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.65),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showCommentatorPicker(
-    String? currentValue,
-    ValueChanged<String?> onChanged,
-    {bool allowRemainingCommentatorsSelection = false}
-  ) async {
+      String? currentValue, ValueChanged<String?> onChanged,
+      {bool allowRemainingCommentatorsSelection = false,
+      bool allowMultipleCommentatorsSelection = false}) async {
     if (_isLoadingGroups) {
       return;
     }
@@ -868,6 +963,7 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
         availableCommentators: widget.availableCommentators,
         allowRemainingCommentatorsSelection:
             allowRemainingCommentatorsSelection,
+        allowMultipleCommentatorsSelection: allowMultipleCommentatorsSelection,
       ),
     );
 
@@ -883,12 +979,14 @@ class _CommentatorPickerDialog extends StatefulWidget {
   final String? currentValue;
   final List<String> availableCommentators;
   final bool allowRemainingCommentatorsSelection;
+  final bool allowMultipleCommentatorsSelection;
 
   const _CommentatorPickerDialog({
     required this.groups,
     required this.currentValue,
     required this.availableCommentators,
     this.allowRemainingCommentatorsSelection = false,
+    this.allowMultipleCommentatorsSelection = false,
   });
 
   @override
@@ -945,6 +1043,19 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
 
     return pageShapeRemainingCommentatorsLabel.contains(query) ||
         'מפרשים נוספים'.contains(query);
+  }
+
+  bool _shouldShowMultipleOption() {
+    if (!widget.allowMultipleCommentatorsSelection) {
+      return false;
+    }
+
+    final query = _searchController.text.trim();
+    if (query.isEmpty) {
+      return true;
+    }
+
+    return pageShapeMultipleCommentatorsModeLabel.contains(query);
   }
 
   @override
@@ -1019,14 +1130,15 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
   Widget _buildGroupedList() {
     return ListView(
       children: [
+        if (_shouldShowMultipleOption()) _buildMultipleCommentatorsTile(),
         if (_shouldShowRemainingOption()) _buildRemainingCommentatorsTile(),
         for (final group in _filteredGroups)
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+                padding: const EdgeInsets.symmetric(
+                    vertical: 10.0, horizontal: 16.0),
                 child: Row(
                   children: [
                     const Expanded(child: Divider()),
@@ -1069,10 +1181,33 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
 
     return ListView(
       children: [
+        if (_shouldShowMultipleOption()) _buildMultipleCommentatorsTile(),
         if (_shouldShowRemainingOption()) _buildRemainingCommentatorsTile(),
         ..._filteredCommentators
             .map((commentator) => _buildCommentatorTile(commentator)),
       ],
+    );
+  }
+
+  Widget _buildMultipleCommentatorsTile() {
+    final isSelected =
+        widget.currentValue == pageShapeMultipleCommentatorsModeValue;
+
+    return ListTile(
+      title: const Text(
+        pageShapeMultipleCommentatorsModeLabel,
+        textDirection: TextDirection.rtl,
+      ),
+      subtitle: const Text(
+        'הבחירה המפורטת תיעשה מתוך חלונית המפרשים',
+        textDirection: TextDirection.rtl,
+      ),
+      selected: isSelected,
+      trailing:
+          isSelected ? const Icon(FluentIcons.checkmark_24_regular) : null,
+      onTap: () => Navigator.of(context).pop(
+        pageShapeMultipleCommentatorsModeValue,
+      ),
     );
   }
 

@@ -43,6 +43,10 @@ class SettingsRepository {
   static const String keyOfflineMode = 'key-offline-mode';
   static const String keyAutoSync = 'key-auto-sync';
   static const String keyAutoSyncCatalogs = 'key-auto-sync-catalogs';
+    static const String keyErrorReportSenderEmail =
+      'key-error-report-sender-email';
+    static const String keyQueueErrorReportsWhenOffline =
+      'key-queue-error-reports-when-offline';
   static const String keyLibraryPath = 'key-library-path';
   static const String keyIndexPath = 'key-index-path';
   static const String keyBackupPath = 'key-backup-path';
@@ -658,6 +662,8 @@ class SettingsRepository {
     await _settings.setValue(keyLibraryViewMode, 'grid');
     await _settings.setValue(keyLibraryShowPreview, true);
     await _settings.setValue(keyEnablePerBookSettings, true);
+    await _settings.setValue(keyErrorReportSenderEmail, '');
+    await _settings.setValue(keyQueueErrorReportsWhenOffline, true);
     await _settings.setValue(keyAlignTabsToRight, false);
     await _settings.setValue(keyPersonalNotesCollapsedByDefault, true);
 

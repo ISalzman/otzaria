@@ -7,6 +7,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/link_types.dart';
@@ -383,12 +384,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
+    final resolvedBookTitle =
+        (widget.bookTitle != null && widget.bookTitle!.trim().isNotEmpty)
+            ? widget.bookTitle!
+            : state.book.title;
+
     ErrorReportHelper.showErrorReportDialog(
       context: context,
       selectedText: selectedText,
       state: state,
       fontSize: widget.fontSize,
-      bookTitle: widget.bookTitle ?? 'ספר לא ידוע',
+      bookTitle: resolvedBookTitle,
       savedSelectedIndex: _savedSelectedIndex,
     );
   }
@@ -875,12 +881,31 @@ $textWithBreaks
 
     // מציאת הטור שבו המפרש הנוכחי מוצג
     String? columnToUpdate;
+    String? matchedSelection;
     for (final entry in config.entries) {
       if (entry.value == null) continue;
 
       // בדיקה אם המפרש הנוכחי תואם לערך בהגדרה
       final configValue = entry.value!;
       final currentTitle = widget.bookTitle!;
+
+      if (isPageShapeMultiCommentatorsValue(configValue)) {
+        for (final selection
+            in decodePageShapeCommentatorsSelection(configValue)) {
+          if (currentTitle == selection ||
+              currentTitle.startsWith(selection) ||
+              currentTitle.contains(selection) ||
+              selection.startsWith(currentTitle) ||
+              selection.contains(currentTitle)) {
+            columnToUpdate = entry.key;
+            matchedSelection = selection;
+            break;
+          }
+        }
+        if (columnToUpdate != null) {
+          break;
+        }
+      }
 
       if (configValue == currentTitle ||
           currentTitle.startsWith(configValue) ||
@@ -900,7 +925,17 @@ $textWithBreaks
 
     // עדכון ההגדרה
     final updatedConfig = Map<String, String?>.from(config);
-    updatedConfig[columnToUpdate] = newCommentator;
+    if (matchedSelection != null) {
+      final updatedSelection =
+          decodePageShapeCommentatorsSelection(updatedConfig[columnToUpdate])
+              .map((selection) =>
+                  selection == matchedSelection ? newCommentator : selection)
+              .toList();
+      updatedConfig[columnToUpdate] =
+          encodePageShapeCommentatorsSelection(updatedSelection);
+    } else {
+      updatedConfig[columnToUpdate] = newCommentator;
+    }
 
     // בדיקה אם יש הגדרה ספציפית לספר (לא רק הדגל, אלא הגדרה ממשית)
     final hasActualBookConfig =

@@ -62,6 +62,10 @@ class CategoryGridItem extends StatelessWidget {
                     mouseCursor: SystemMouseCursors.click,
                     title: Text(
                       category.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      textDirection: TextDirection.rtl,
                       style: const TextStyle(
                           fontSize: 14, fontWeight: FontWeight.bold),
                     ),
@@ -164,35 +168,47 @@ class BookGridItem extends StatelessWidget {
                 Expanded(
                   child: ListTile(
                     mouseCursor: SystemMouseCursors.click,
-                    title: RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: book.title,
+                    title: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          book.title,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          textDirection: TextDirection.rtl,
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary),
+                        ),
+                        if (showTopics)
+                          Text(
+                            book.topics,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            textDirection: TextDirection.rtl,
                             style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary),
+                                fontSize: 11,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withValues(alpha: 0.9)),
                           ),
-                          showTopics
-                              ? TextSpan(
-                                  text: '\n${book.topics}',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary
-                                          .withValues(alpha: 0.9)),
-                                )
-                              : const TextSpan()
-                        ],
-                      ),
+                      ],
                     ),
                     subtitle: Text(
-                        (book.author == "" || book.author == null)
-                            ? ''
-                            : book.author!,
-                        style: const TextStyle(fontSize: 13)),
+                      (book.author == "" || book.author == null)
+                          ? ''
+                          : book.author!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      textDirection: TextDirection.rtl,
+                      style: const TextStyle(fontSize: 13),
+                    ),
                   ),
                 ),
                 // כפתורים מאונכים - מחולקים באופן שווה לאורך גובה הכרטיס
