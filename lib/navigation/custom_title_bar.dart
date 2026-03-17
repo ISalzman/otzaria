@@ -176,14 +176,33 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                               children: [
                                 _buildFullscreenCaptionButton(
                                     context, settingsState),
-                                SizedBox(
-                                  width: _kWindowCaptionButtonsWidth,
-                                  height: 50,
-                                  child: WindowCaption(
+                                if (settingsState.isFullscreen)
+                                  _CaptionActionButton(
                                     brightness: Theme.of(context).brightness,
-                                    backgroundColor: Colors.transparent,
+                                    tooltip: 'מזער',
+                                    icon: FluentIcons.subtract_24_regular,
+                                    onPressed: () async {
+                                      await FullscreenHelper.toggleFullscreen(
+                                          context, false);
+                                      await windowManager.minimize();
+                                    },
                                   ),
-                                ),
+                                if (settingsState.isFullscreen)
+                                  _CaptionActionButton(
+                                    brightness: Theme.of(context).brightness,
+                                    tooltip: 'סגור',
+                                    icon: FluentIcons.dismiss_24_regular,
+                                    onPressed: () => windowManager.close(),
+                                  ),
+                                if (!settingsState.isFullscreen)
+                                  SizedBox(
+                                    width: _kWindowCaptionButtonsWidth,
+                                    height: 50,
+                                    child: WindowCaption(
+                                      brightness: Theme.of(context).brightness,
+                                      backgroundColor: Colors.transparent,
+                                    ),
+                                  ),
                               ],
                             ),
                           ),

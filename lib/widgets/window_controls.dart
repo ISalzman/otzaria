@@ -65,7 +65,12 @@ class _WindowControlsState extends State<WindowControls> with WindowListener {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              onPressed: () => windowManager.minimize(),
+              onPressed: () async {
+                if (settingsState.isFullscreen) {
+                  await FullscreenHelper.toggleFullscreen(context, false);
+                }
+                await windowManager.minimize();
+              },
               icon: const Icon(FluentIcons.subtract_24_regular),
               tooltip: 'מזער',
             ),
