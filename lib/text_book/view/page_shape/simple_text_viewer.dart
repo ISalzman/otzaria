@@ -780,11 +780,7 @@ $textWithBreaks
   /// בניית תפריט החלפת מפרש
   List<ctx.MenuItem<Object>> _buildCommentatorSwitchMenu(TextBookLoaded state) {
     // קבלת רשימת המפרשים הזמינים
-    final availableCommentators = state.links
-        .where((link) => LinkTypes.isCommentaryOrTargum(link.connectionType))
-        .map((link) => utils.getTitleFromPath(link.path2))
-        .toSet()
-        .toList();
+    final availableCommentators = state.availableCommentators;
 
     if (availableCommentators.isEmpty) {
       return [];

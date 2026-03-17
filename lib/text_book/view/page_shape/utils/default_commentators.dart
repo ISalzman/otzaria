@@ -18,7 +18,7 @@ class DefaultCommentators {
   /// מחזיר מפרשי ברירת מחדל לפי קטגוריית הספר
   /// מקבל גם את רשימת הקישורים כדי למצוא את השמות המלאים של המפרשים
   static Future<Map<String, String?>> getDefaults(TextBook book,
-      {List<Link>? links}) async {
+      {List<Link>? links, List<String>? availableCommentators}) async {
     final config = await _loadConfig();
 
     // קבלת נתיב הספר
@@ -35,6 +35,11 @@ class DefaultCommentators {
     final defaults = _getDefaultsFromConfig(config, book.title, bookPath);
 
     // אם יש links, נחפש את השמות המלאים של המפרשים
+    if (availableCommentators != null && availableCommentators.isNotEmpty) {
+      return _resolveCommentatorNamesFromAvailable(
+          defaults, availableCommentators);
+    }
+
     if (links != null && links.isNotEmpty) {
       return _resolveCommentatorNames(defaults, links);
     }
@@ -52,6 +57,19 @@ class DefaultCommentators {
         .toSet()
         .toList();
 
+    return {
+      'right':
+          _findMatchingCommentator(defaults['right'], availableCommentators),
+      'left': _findMatchingCommentator(defaults['left'], availableCommentators),
+      'bottom':
+          _findMatchingCommentator(defaults['bottom'], availableCommentators),
+      'bottomRight': _findMatchingCommentator(
+          defaults['bottomRight'], availableCommentators),
+    };
+  }
+
+  static Map<String, String?> _resolveCommentatorNamesFromAvailable(
+      Map<String, String?> defaults, List<String> availableCommentators) {
     return {
       'right':
           _findMatchingCommentator(defaults['right'], availableCommentators),
