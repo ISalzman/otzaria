@@ -87,6 +87,24 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   String _getLinkKey(Link link) =>
       '${link.path2}_${link.index1}_${link.index2}';
 
+  Future<String> _getCachedLinkContent(String keyStr, Link link) {
+    final cachedFuture = _linkContentCache[keyStr];
+    if (cachedFuture != null) {
+      return cachedFuture;
+    }
+
+    late final Future<String> future;
+    future = link.content.catchError((Object error, StackTrace stackTrace) {
+      if (_linkContentCache[keyStr] == future) {
+        _linkContentCache.remove(keyStr);
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    });
+
+    _linkContentCache[keyStr] = future;
+    return future;
+  }
+
   // Helper to determine relative index for highlighting
   int _getItemSearchIndex(Link link) {
     if (_searchResultsPerLink.isEmpty) return -1;
@@ -919,7 +937,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             ),
             onExpansionChanged: (expanded) {
               if (expanded && !_linkContentCache.containsKey(keyStr)) {
-                _linkContentCache[keyStr] = link.content;
+                _getCachedLinkContent(keyStr, link);
               }
 
               if (_expandedLinkStates[keyStr] != expanded) {
@@ -953,7 +971,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: FutureBuilder<String>(
-                      future: _linkContentCache[keyStr],
+                      future: _getCachedLinkContent(keyStr, link),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
                             ConnectionState.waiting) {
