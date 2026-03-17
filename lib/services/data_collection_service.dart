@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
@@ -15,25 +17,29 @@ class DataCollectionService {
   /// Returns "unknown" if not found or cannot be read
   Future<String> readLibraryVersion() async {
     try {
-      // Try reading from database first
+      // Try reading from db_meta table first
       final dbProvider = SqliteDataProvider.instance;
-      if (await dbProvider.databaseExists() && dbProvider.isInitialized) {
+      if (await dbProvider.databaseExists()) {
+        sqlite3.Database? db;
         try {
-          final bookText = await dbProvider.getBookTextFromDb('גירסת ספריה');
-          if (bookText != null && bookText.isNotEmpty) {
-            // Extract version from the text (remove HTML tags and trim)
-            final cleanText = bookText
-                .replaceAll(RegExp(r'<[^>]*>'), '')
-                .trim()
-                .split('\n')
-                .where((line) => line.trim().isNotEmpty)
-                .first;
-            debugPrint('Library version from DB: $cleanText');
-            return cleanText;
+          db = sqlite3.sqlite3.open(DatabaseConstants.getDatabasePath());
+          final result = db.select(
+            'SELECT value FROM db_meta WHERE key = ? LIMIT 1',
+            ['content_version_str'],
+          );
+
+          if (result.isNotEmpty) {
+            final version = result.first['value']?.toString();
+            if (version != null && version.isNotEmpty) {
+              debugPrint('Library version from db_meta: $version');
+              return version;
+            }
           }
         } catch (e) {
-          debugPrint('Error reading library version from DB: $e');
+          debugPrint('Error reading library version from db_meta: $e');
           // Fall through to file reading
+        } finally {
+          db?.close();
         }
       }
 
