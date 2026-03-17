@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -96,6 +99,73 @@ void main() {
         ),
         isTrue,
       );
+    });
+
+    test('loadBookLinksRowsForTesting טוען קישורים דרך sqlite ב-isolate worker',
+        () async {
+      final tempDir = await Directory.systemTemp.createTemp('otzaria_db_links');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute('CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT)');
+        db.execute('CREATE TABLE line (id INTEGER PRIMARY KEY, lineIndex INTEGER)');
+        db.execute('CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
+        db.execute('CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+
+        db.execute("INSERT INTO book (id, title, categoryId, fileType) VALUES (1, 'בראשית', 7, 'txt')");
+        db.execute("INSERT INTO book (id, title, categoryId, fileType) VALUES (2, 'רש''י על בראשית', 8, 'txt')");
+        db.execute('INSERT INTO line (id, lineIndex) VALUES (10, 0)');
+        db.execute('INSERT INTO line (id, lineIndex) VALUES (20, 3)');
+        db.execute("INSERT INTO connection_type (id, name) VALUES (5, 'reference')");
+        db.execute('INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 20, 2, 5)');
+
+        final rows = DatabaseLibraryProvider.loadBookLinksRowsForTesting(
+          dbPath: dbPath,
+          title: 'בראשית',
+          categoryId: 7,
+          fileType: 'txt',
+        );
+
+        expect(rows, hasLength(1));
+        expect(rows.first['sourceLineIndex'], 0);
+        expect(rows.first['targetLineIndex'], 3);
+        expect(rows.first['targetBookTitle'], 'רש\'י על בראשית');
+        expect(rows.first['connectionTypeName'], 'reference');
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('loadAlternativeStructuresRowsForTesting טוען כותרות חלופיות מה-DB',
+        () async {
+      final tempDir = await Directory.systemTemp.createTemp('otzaria_db_alt');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute('CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT)');
+        db.execute('CREATE TABLE alt_toc_structure (id INTEGER PRIMARY KEY, bookId INTEGER, key TEXT, title TEXT, heTitle TEXT)');
+
+        db.execute("INSERT INTO book (id, title) VALUES (1, 'בראשית')");
+        db.execute("INSERT INTO alt_toc_structure (id, bookId, key, title, heTitle) VALUES (9, 1, 'chapters', 'Chapters', 'פרקים')");
+
+        final rows =
+            DatabaseLibraryProvider.loadAlternativeStructuresRowsForTesting(
+          dbPath: dbPath,
+          bookTitle: 'בראשית',
+        );
+
+        expect(rows, hasLength(1));
+        expect(rows.first['id'], 9);
+        expect(rows.first['bookId'], 1);
+        expect(rows.first['key'], 'chapters');
+        expect(rows.first['heTitle'], 'פרקים');
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
     });
   });
 }
