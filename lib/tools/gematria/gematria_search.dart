@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/migration/core/models/toc_entry.dart';
 
 class SearchResult {
   final String file;
@@ -281,8 +282,11 @@ class GimatriaSearch {
 
           if (totalValue == targetGimatria) {
             final phrase = words.join(' ');
-            final path =
-                await _extractPathFromToc(line.id, tocEntries, repository);
+            final path = extractPathFromTocEntries(
+              currentLineIndex: line.lineIndex,
+              bookTitle: book.title,
+              tocEntries: tocEntries,
+            );
             final cleanPhrase = _cleanHtml(phrase);
             found.add(SearchResult(
               file: book.title,
@@ -314,8 +318,11 @@ class GimatriaSearch {
               if (finalValue == targetGimatria) {
                 final phrase =
                     words.sublist(start, start + offset + 1).join(' ');
-                final path =
-                    await _extractPathFromToc(line.id, tocEntries, repository);
+                final path = extractPathFromTocEntries(
+                  currentLineIndex: line.lineIndex,
+                  bookTitle: book.title,
+                  tocEntries: tocEntries,
+                );
                 final cleanPhrase = _cleanHtml(phrase);
 
                 // Extract context - 2-3 words before and after
@@ -355,35 +362,60 @@ class GimatriaSearch {
     return found;
   }
 
-  /// Extract hierarchical path from TOC entries
-  static Future<String> _extractPathFromToc(
-      int lineId, List<dynamic> tocEntries, dynamic repository) async {
-    try {
-      // Find the TOC entry for this line
-      final tocEntry = await repository.getTocEntryForLine(lineId);
-      if (tocEntry == null) return '';
-
-      // Build path by traversing up the parent chain
-      final List<String> pathParts = [];
-      dynamic current = tocEntry;
-
-      while (current != null) {
-        final tocText = await repository.getTocText(current.textId);
-        if (tocText != null && tocText.text.isNotEmpty) {
-          pathParts.insert(0, _cleanHtml(tocText.text));
-        }
-
-        if (current.parentId != null) {
-          current = await repository.getTocEntry(current.parentId!);
-        } else {
-          current = null;
-        }
-      }
-
-      return pathParts.join(', ');
-    } catch (e) {
+  /// Extract hierarchical path from TOC entries using the line index.
+  ///
+  /// This avoids relying on a direct line_toc lookup, which may resolve to the
+  /// root book entry and omit the chapter heading for Tanach books.
+  @visibleForTesting
+  static String extractPathFromTocEntries({
+    required int currentLineIndex,
+    required String bookTitle,
+    required List<TocEntry> tocEntries,
+  }) {
+    if (tocEntries.isEmpty) {
       return '';
     }
+
+    TocEntry? bestEntry;
+    for (final entry in tocEntries) {
+      final lineIndex = entry.lineIndex;
+      if (lineIndex == null || lineIndex > currentLineIndex) {
+        continue;
+      }
+
+      if (bestEntry == null ||
+          lineIndex > bestEntry.lineIndex! ||
+          (lineIndex == bestEntry.lineIndex! &&
+              entry.level > bestEntry.level)) {
+        bestEntry = entry;
+      }
+    }
+
+    if (bestEntry == null) {
+      return '';
+    }
+
+    final tocEntriesById = {
+      for (final entry in tocEntries) entry.id: entry,
+    };
+
+    final pathParts = <String>[];
+    TocEntry? current = bestEntry;
+    while (current != null) {
+      final text = _cleanHtml(current.text);
+      if (text.isNotEmpty && text != bookTitle) {
+        pathParts.insert(0, text);
+      }
+
+      final parentId = current.parentId;
+      current = parentId == null ? null : tocEntriesById[parentId];
+    }
+
+    if (pathParts.isEmpty) {
+      return bookTitle;
+    }
+
+    return <String>[bookTitle, ...pathParts].join(', ');
   }
 
   /// Legacy file-based search (fallback)
