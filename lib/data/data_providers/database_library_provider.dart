@@ -21,6 +21,76 @@ import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/utils/docx_to_otzaria.dart';
 import 'package:pdfrx/pdfrx.dart';
 
+List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+  required String fileType,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+
+    final bookResults = db.select(
+      'SELECT id FROM book WHERE title = ? AND categoryId = ? AND fileType = ? LIMIT 1',
+      [title, categoryId, fileType],
+    ).toMapList();
+
+    if (bookResults.isEmpty) {
+      return const [];
+    }
+
+    final bookId = bookResults.first['id'] as int;
+
+    return db.select('''
+        SELECT 
+          l.sourceLineId,
+          l.targetLineId,
+          sl.lineIndex as sourceLineIndex,
+          tl.lineIndex as targetLineIndex,
+          tb.title as targetBookTitle,
+          ct.name as connectionTypeName
+        FROM link l
+        JOIN line sl ON l.sourceLineId = sl.id
+        JOIN line tl ON l.targetLineId = tl.id
+        JOIN book tb ON l.targetBookId = tb.id
+        LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        WHERE l.sourceBookId = ?
+        ORDER BY sl.lineIndex
+      ''', [bookId]).toMapList();
+  } finally {
+    db?.close();
+  }
+}
+
+List<Map<String, dynamic>> _loadAlternativeStructuresRowsInIsolate({
+  required String dbPath,
+  required String bookTitle,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+
+    final bookResults = db.select(
+      'SELECT id FROM book WHERE title = ? LIMIT 1',
+      [bookTitle],
+    ).toMapList();
+
+    if (bookResults.isEmpty) {
+      return const [];
+    }
+
+    final bookId = bookResults.first['id'] as int;
+
+    return db.select(
+      'SELECT * FROM alt_toc_structure WHERE bookId = ?',
+      [bookId],
+    ).toMapList();
+  } finally {
+    db?.close();
+  }
+}
+
 /// Library provider that loads books from the SQLite database.
 class DatabaseLibraryProvider implements LibraryProvider {
   final SqliteDataProvider _sqliteProvider = SqliteDataProvider.instance;
@@ -39,6 +109,32 @@ class DatabaseLibraryProvider implements LibraryProvider {
   static DatabaseLibraryProvider get instance {
     _instance ??= DatabaseLibraryProvider._();
     return _instance!;
+  }
+
+  @visibleForTesting
+  static List<Map<String, dynamic>> loadBookLinksRowsForTesting({
+    required String dbPath,
+    required String title,
+    required int categoryId,
+    required String fileType,
+  }) {
+    return _loadBookLinksRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+    );
+  }
+
+  @visibleForTesting
+  static List<Map<String, dynamic>> loadAlternativeStructuresRowsForTesting({
+    required String dbPath,
+    required String bookTitle,
+  }) {
+    return _loadAlternativeStructuresRowsInIsolate(
+      dbPath: dbPath,
+      bookTitle: bookTitle,
+    );
   }
 
   Future<bool> _bundledTalmudBavliDirectoryExists() async {
@@ -1117,53 +1213,40 @@ class DatabaseLibraryProvider implements LibraryProvider {
   @override
   Future<List<Link>> getAllLinksForBook(
       String title, int categoryId, String fileType) async {
-    return _dbOperation<List<Link>>(
-      (db) async {
-        final book = await _sqliteProvider.repository!
-            .getBookByTitleCategoryAndFileType(title, categoryId, fileType);
-        if (book == null) {
-          debugPrint('💾 Book "$title" not found in database');
-          return [];
-        }
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return [];
+    }
 
-        // Get all links where this book is the source
-        final result = db.select('''
-        SELECT 
-          l.sourceLineId,
-          l.targetLineId,
-          sl.lineIndex as sourceLineIndex,
-          tl.lineIndex as targetLineIndex,
-          tb.title as targetBookTitle,
-          ct.name as connectionTypeName
-        FROM link l
-        JOIN line sl ON l.sourceLineId = sl.id
-        JOIN line tl ON l.targetLineId = tl.id
-        JOIN book tb ON l.targetBookId = tb.id
-        LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
-        WHERE l.sourceBookId = ?
-        ORDER BY sl.lineIndex
-      ''', [book.id]).toMapList();
+    try {
+      final result = await Isolate.run(
+        () => _loadBookLinksRowsInIsolate(
+          dbPath: _sqliteProvider.dbPath,
+          title: title,
+          categoryId: categoryId,
+          fileType: fileType,
+        ),
+      );
 
-        final links = result.map((row) {
-          final targetTitle = row['targetBookTitle'] as String;
-          final connectionType =
-              row['connectionTypeName'] as String? ?? 'reference';
+      final links = result.map((row) {
+        final targetTitle = row['targetBookTitle'] as String;
+        final connectionType =
+            row['connectionTypeName'] as String? ?? 'reference';
 
-          return Link(
-            heRef: targetTitle,
-            index1: (row['sourceLineIndex'] as int) + 1,
-            path2: targetTitle,
-            index2: (row['targetLineIndex'] as int) + 1,
-            connectionType: connectionType,
-          );
-        }).toList();
+        return Link(
+          heRef: targetTitle,
+          index1: (row['sourceLineIndex'] as int) + 1,
+          path2: targetTitle,
+          index2: (row['targetLineIndex'] as int) + 1,
+          connectionType: connectionType,
+        );
+      }).toList();
 
-        debugPrint('💾 Found ${links.length} links for book "$title"');
-        return links;
-      },
-      [],
-      'getAllLinksForBook "$title"',
-    );
+      debugPrint('💾 Found ${links.length} links for book "$title"');
+      return links;
+    } catch (e) {
+      debugPrint('⚠️ Error in getAllLinksForBook "$title": $e');
+      return [];
+    }
   }
 
   @override
@@ -1204,31 +1287,23 @@ class DatabaseLibraryProvider implements LibraryProvider {
   /// Get all alternative TOC structures available in the database for a specific book
   Future<List<AltTocStructure>> getAlternativeStructuresForBook(
       String bookTitle) async {
-    return _dbOperation<List<AltTocStructure>>(
-      (db) async {
-        // First get the book ID
-        final bookResults = db.select(
-          'SELECT id FROM book WHERE title = ?',
-          [bookTitle],
-        ).toMapList();
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return [];
+    }
 
-        if (bookResults.isEmpty) {
-          return [];
-        }
+    try {
+      final results = await Isolate.run(
+        () => _loadAlternativeStructuresRowsInIsolate(
+          dbPath: _sqliteProvider.dbPath,
+          bookTitle: bookTitle,
+        ),
+      );
 
-        final bookId = bookResults.first['id'] as int;
-
-        // Then get the structures
-        final results = db.select(
-          'SELECT * FROM alt_toc_structure WHERE bookId = ?',
-          [bookId],
-        ).toMapList();
-
-        return results.map((json) => AltTocStructure.fromJson(json)).toList();
-      },
-      [],
-      'getAlternativeStructuresForBook "$bookTitle"',
-    );
+      return results.map((json) => AltTocStructure.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('⚠️ Error in getAlternativeStructuresForBook "$bookTitle": $e');
+      return [];
+    }
   }
 
   /// Get all alternative TOC structures available in the database
