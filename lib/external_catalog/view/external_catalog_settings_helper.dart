@@ -67,6 +67,17 @@ class ExternalCatalogSettingsHelper {
       return false;
     }
 
+    final settingsState = context.read<SettingsBloc>().state;
+    if (settingsState.protectedModeEnabled) {
+      await showSingleActionDialog(
+        context: context,
+        title: 'מסד הקטלוגים חסר',
+        content: 'לא ניתן להוריד את מסד הקטלוגים החיצוני במצב סייפר. יש לפנות למנהל המערכת.',
+        confirmText: 'הבנתי',
+      );
+      return false;
+    }
+
     final shouldDownload = await showTwoActionsDialog(
       context: context,
       title: 'מסד הקטלוגים חסר',
