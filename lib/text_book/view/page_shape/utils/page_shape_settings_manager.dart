@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 
 /// מנהל הגדרות צורת הדף - שומר ומטעין את בחירת המפרשים
 /// תומך בהגדרות גלובליות, הגדרות פר-קטגוריה, והגדרות פר-ספר (override)
@@ -224,7 +225,20 @@ class PageShapeSettingsManager {
     if (saveToCategory != null) {
       // שמירה לקטגוריה - שומרים רק את השמות הבסיסיים של המפרשים
       final baseConfig = config.map((key, value) {
-        return MapEntry(key, extractBaseCommentatorName(value));
+        if (isPageShapeRemainingCommentatorsValue(value) ||
+            value == pageShapeMultipleCommentatorsModeValue) {
+          return MapEntry(key, value);
+        }
+
+        return MapEntry(
+          key,
+          encodePageShapeCommentatorsSelection(
+            decodePageShapeCommentatorsSelection(value)
+                .map(extractBaseCommentatorName)
+                .whereType<String>(),
+            forceMultipleMode: isPageShapeMultipleCommentatorsMode(value),
+          ),
+        );
       });
       final configString = _serializeConfiguration(baseConfig);
       debugPrint(

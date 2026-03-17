@@ -55,6 +55,7 @@ import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
+import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -396,6 +397,14 @@ Future<void> initialize() async {
       debugPrint('Failed to initialize notification service: $e');
     }
   }
+
+  try {
+    await DirectErrorReportService().startAutomaticFlush();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('Failed to initialize direct error report queue: $e');
+    }
+  }
 }
 
 /// Creates the necessary directory structure for the application.
@@ -426,6 +435,7 @@ initHive() async {
   Hive.box(name: 'workspaces', maxSizeMiB: 100);
   Hive.box(name: 'history', maxSizeMiB: 100);
   Hive.box(name: 'bookmarks', maxSizeMiB: 100);
+  Hive.box(name: 'error_reports_queue', maxSizeMiB: 20);
 }
 
 Future<void> loadCerts() async {

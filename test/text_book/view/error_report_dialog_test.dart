@@ -234,6 +234,7 @@ void main() {
         errorDetails,
         lineNumber,
         contextText,
+        null,
       );
 
       expect(body, contains(bookTitle));
@@ -266,6 +267,7 @@ void main() {
         errorDetails,
         lineNumber,
         contextText,
+        null,
       );
 
       expect(body, contains(bookTitle));

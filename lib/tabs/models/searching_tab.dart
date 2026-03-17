@@ -9,6 +9,7 @@ class SearchingTab extends OpenedTab {
   final searchBloc = SearchBloc();
   final queryController = TextEditingController();
   final searchFieldFocusNode = FocusNode();
+  late final ValueNotifier<String> titleNotifier;
   final ValueNotifier<bool> isLeftPaneOpen = ValueNotifier(true);
   final ItemScrollController scrollController = ItemScrollController();
   List<Book> allBooks = [];
@@ -34,15 +35,33 @@ class SearchingTab extends OpenedTab {
   // מטמון של בקשות ספירה פעילות כדי למנוע קריאות כפולות
   final Map<String, Future<int>> _inflight = {};
 
+  static String titleForQuery(String query) {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) {
+      return 'חיפוש';
+    }
+    return 'חיפוש: $trimmedQuery';
+  }
+
   SearchingTab(
     super.title,
     String? searchText, {
     super.isPinned = false,
   }) {
+    titleNotifier = ValueNotifier(title);
     if (searchText != null) {
       queryController.text = searchText;
       searchBloc.add(UpdateSearchQuery(searchText.trim()));
     }
+  }
+
+  void updateTitleFromAppliedQuery(String query) {
+    final newTitle = titleForQuery(query);
+    if (title == newTitle) {
+      return;
+    }
+    title = newTitle;
+    titleNotifier.value = newTitle;
   }
 
   String _normalizeFacet(String s) =>
@@ -133,6 +152,8 @@ class SearchingTab extends OpenedTab {
 
   @override
   void dispose() {
+    titleNotifier.dispose();
+    queryController.dispose();
     searchFieldFocusNode.dispose();
     searchOptionsChanged.dispose();
     alternativeWordsChanged.dispose();
