@@ -286,6 +286,31 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return (startLine: startLine, endLine: endLine);
   }
 
+  Future<int> _resolveTextLineNumberForPage(
+    int pageNumber, {
+    String? resolvedTitle,
+  }) async {
+    final outline = widget.tab.outline.value ?? const <PdfOutlineNode>[];
+    if (outline.isNotEmpty) {
+      final textIndex =
+          await pdfToTextPage(widget.tab.book, outline, pageNumber, context);
+      if (textIndex != null) {
+        return textIndex + 1;
+      }
+    }
+
+    final title = resolvedTitle ??
+        await refFromPageNumber(pageNumber, outline, widget.tab.book.title);
+    if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
+      final lineNumber = widget.tab.pdfHeadings!.getLineNumberForHeading(title);
+      if (lineNumber != null) {
+        return lineNumber;
+      }
+    }
+
+    return pageNumber;
+  }
+
   ({List<String> commentators, List<otz_links.Link> links})
       _getRelevantContent() {
     final range = _getCurrentPdfLinesRange();
@@ -519,18 +544,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     widget.tab.pageNumber;
                 final jumpedTitle = await refFromPageNumber(jumpedPage,
                     widget.tab.outline.value ?? [], widget.tab.book.title);
-
-                if (widget.tab.pdfHeadings != null && jumpedTitle.isNotEmpty) {
-                  final lineNumber = widget.tab.pdfHeadings!
-                      .getLineNumberForHeading(jumpedTitle);
-                  if (lineNumber != null) {
-                    widget.tab.currentTextLineNumber = lineNumber;
-                  } else {
-                    widget.tab.currentTextLineNumber = jumpedPage;
-                  }
-                } else {
-                  widget.tab.currentTextLineNumber = jumpedPage;
-                }
+                widget.tab.currentTextLineNumber =
+                    await _resolveTextLineNumberForPage(
+                  jumpedPage,
+                  resolvedTitle: jumpedTitle,
+                );
                 setState(() {});
               }
 
@@ -548,18 +566,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           final title = await refFromPageNumber(
               currentPage, widget.tab.outline.value, widget.tab.book.title);
           widget.tab.currentTitle.value = title;
-
-          if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
-            final lineNumber =
-                widget.tab.pdfHeadings!.getLineNumberForHeading(title);
-            if (lineNumber != null) {
-              widget.tab.currentTextLineNumber = lineNumber;
-            } else {
-              widget.tab.currentTextLineNumber = currentPage;
-            }
-          } else {
-            widget.tab.currentTextLineNumber = currentPage;
-          }
+          widget.tab.currentTextLineNumber =
+              await _resolveTextLineNumberForPage(
+            currentPage,
+            resolvedTitle: title,
+          );
         }
 
         if (!mounted) return;
@@ -719,7 +730,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
       if (textBook != null) {
         if (textBook is TextBook) {
-          final loadedLinks = await textBook.links;
+          final loadedLinks = await textBook.links
+            ..sort((a, b) => a.index1.compareTo(b.index1));
           widget.tab.links = loadedLinks;
         }
       }
@@ -793,26 +805,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (token == _lastComputedForPage) {
       widget.tab.currentTitle.value = title;
 
-      if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
-        final lineNumber =
-            widget.tab.pdfHeadings!.getLineNumberForHeading(title);
-
-        if (lineNumber != null) {
-          widget.tab.currentTextLineNumber = lineNumber;
-          if (mounted) {
-            setState(() {});
-          }
-        } else {
-          widget.tab.currentTextLineNumber = newPage;
-          if (mounted) {
-            setState(() {});
-          }
-        }
-      } else {
-        widget.tab.currentTextLineNumber = newPage;
-        if (mounted) {
-          setState(() {});
-        }
+      widget.tab.currentTextLineNumber = await _resolveTextLineNumberForPage(
+        newPage,
+        resolvedTitle: title,
+      );
+      if (mounted) {
+        setState(() {});
       }
     }
   }

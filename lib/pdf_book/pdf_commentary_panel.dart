@@ -3,7 +3,6 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
-import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/widgets/commentators_filter_button.dart';
 import 'package:otzaria/widgets/commentators_filter_screen.dart';
 import 'package:otzaria/models/books.dart';
@@ -79,8 +78,11 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   final ScrollOffsetController _scrollOffsetController =
       ScrollOffsetController();
   final Map<String, GlobalKey> _itemKeys = {};
+  final Map<String, Future<String>> _linkContentCache = {};
+  final Map<String, bool> _expandedLinkStates = {};
   List<Link> _orderedLinks = [];
   List<CommentaryGroup> _orderedGroups = [];
+  _PdfVisibleContentCache? _visibleContentCache;
 
   String _getLinkKey(Link link) =>
       '${link.path2}_${link.index1}_${link.index2}';
@@ -131,6 +133,15 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     if (oldWidget.initialTabIndex != widget.initialTabIndex &&
         widget.initialTabIndex != null) {
       _tabController.animateTo(widget.initialTabIndex!);
+    }
+
+    if (oldWidget.tab != widget.tab) {
+      _visibleContentCache = null;
+      _linkContentCache.clear();
+      _expandedLinkStates.clear();
+      _orderedLinks = [];
+      _orderedGroups = [];
+      _itemKeys.clear();
     }
   }
 
@@ -335,9 +346,24 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildCommentariesView(),
-                  _buildLinksView(),
-                  _buildNotesView(),
+                  _KeepAliveTab(
+                    key: ValueKey(
+                      'commentary_${widget.tab.currentTextLineNumber}_${widget.tab.activeCommentators.hashCode}_$_showFilterTab',
+                    ),
+                    child: _buildCommentariesView(),
+                  ),
+                  _KeepAliveTab(
+                    key: ValueKey(
+                      'links_${widget.tab.currentTextLineNumber}',
+                    ),
+                    child: _buildLinksView(),
+                  ),
+                  _KeepAliveTab(
+                    key: ValueKey(
+                      'notes_${widget.tab.currentTextLineNumber}',
+                    ),
+                    child: _buildNotesView(),
+                  ),
                 ],
               ),
             ),
@@ -524,13 +550,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   Widget _buildCommentariesListContent() {
-    debugPrint('=== PDF Commentary Debug ===');
-    debugPrint('currentTextLineNumber: ${widget.tab.currentTextLineNumber}');
-    debugPrint('total links: ${widget.tab.links.length}');
-    debugPrint('activeCommentators: ${widget.tab.activeCommentators}');
-
-    // בדיקה אם יש מספר שורה נוכחי
-    if (widget.tab.currentTextLineNumber == null) {
+    final visibleContent = _getVisibleContent();
+    if (visibleContent == null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -545,68 +566,9 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       );
     }
 
-    // סינון מפרשים לפי טווח השורות של העמוד הנוכחי
-    final currentLine = widget.tab.currentTextLineNumber!;
+    if (visibleContent.commentaryLinks.isEmpty) {
+      final hasCommentaryLinks = visibleContent.hasAnyCommentaryLinks;
 
-    // מציאת טווח השורות של העמוד הנוכחי
-    int startLine = currentLine;
-    int endLine = startLine;
-
-    if (widget.tab.pdfHeadings != null) {
-      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
-      final currentIndex =
-          sortedHeadings.indexWhere((e) => e.value == currentLine);
-
-      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
-        endLine = sortedHeadings[currentIndex + 1].value - 1;
-      } else {
-        // אם זה העמוד האחרון, נניח טווח של 50 שורות
-        endLine = startLine + 50;
-      }
-    } else {
-      // אם אין headings, נניח טווח של 50 שורות
-      endLine = startLine + 50;
-    }
-
-    debugPrint('Looking for links in range: $startLine-$endLine');
-    debugPrint('Active commentators: ${widget.tab.activeCommentators.length}');
-
-    final relevantLinks = widget.tab.links
-        .where((link) =>
-            link.index1 >= startLine &&
-            link.index1 <= endLine &&
-            (link.connectionType == "COMMENTARY" ||
-                link.connectionType == "TARGUM") &&
-            widget.tab.activeCommentators
-                .contains(utils.getTitleFromPath(link.path2)))
-        .toList();
-
-    // מיון הקישורים קודם לפי שם הספר ואז לפי מספר השורה
-    // כך כל הקישורים של אותו מפרש יהיו ביחד ויקובצו נכון
-    relevantLinks.sort((a, b) {
-      // קודם לפי שם הספר
-      final titleA = utils.getTitleFromPath(a.path2);
-      final titleB = utils.getTitleFromPath(b.path2);
-      final titleCompare = titleA.compareTo(titleB);
-      if (titleCompare != 0) return titleCompare;
-
-      // אם אותו ספר, לפי מספר השורה
-      return a.index1.compareTo(b.index1);
-    });
-
-    debugPrint('Found ${relevantLinks.length} relevant links');
-
-    if (relevantLinks.isEmpty) {
-      // בדיקה מפורטת למה אין קישורים
-      final allLinksInRange = widget.tab.links
-          .where((link) => link.index1 >= startLine && link.index1 <= endLine)
-          .toList();
-
-      final hasCommentaryLinks = allLinksInRange.any((link) =>
-          link.connectionType == "COMMENTARY" ||
-          link.connectionType == "TARGUM");
-
-      // אם יש מפרשים זמינים אבל לא נבחרו בכלל - פתח אוטומטית את מסך הבחירה
       if (hasCommentaryLinks && widget.tab.activeCommentators.isEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && !_showFilterTab) {
@@ -659,12 +621,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       );
     }
 
-    // קיבוץ המפרשים לפי ספר
-    final groups = _groupConsecutiveLinks(relevantLinks);
-
-    // מיון הקבוצות לפי סדר הדורות באמצעות CommentaryService
     return FutureBuilder<List<CommentaryGroup>>(
-      future: CommentaryService.sortGroupsByEra(groups),
+      future: visibleContent.sortedGroupsFuture,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -878,7 +836,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   Widget _buildLinksView() {
-    if (widget.tab.currentTextLineNumber == null) {
+    final visibleContent = _getVisibleContent();
+    if (visibleContent == null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -893,39 +852,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       );
     }
 
-    // סינון קישורים (לא מפרשים) לפי טווח השורות של העמוד
-    final currentLine = widget.tab.currentTextLineNumber!;
-
-    // מציאת טווח השורות של העמוד הנוכחי
-    int startLine = currentLine;
-    int endLine = startLine;
-
-    if (widget.tab.pdfHeadings != null) {
-      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
-      final currentIndex =
-          sortedHeadings.indexWhere((e) => e.value == currentLine);
-
-      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
-        endLine = sortedHeadings[currentIndex + 1].value - 1;
-      } else {
-        endLine = startLine + 50;
-      }
-    } else {
-      endLine = startLine + 50;
-    }
-
-    final relevantLinks = widget.tab.links
-        .where((link) =>
-            link.index1 >= startLine &&
-            link.index1 <= endLine &&
-            link.connectionType.toUpperCase() != "COMMENTARY" &&
-            link.connectionType.toUpperCase() != "TARGUM" &&
-            link.start == null &&
-            link.end == null)
-        .toList();
-
-    // מיון הקישורים לפי מספר השורה
-    relevantLinks.sort((a, b) => a.index1.compareTo(b.index1));
+    final relevantLinks = visibleContent.links;
 
     if (relevantLinks.isEmpty) {
       return Center(
@@ -953,12 +880,20 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
   Widget _buildLinkTile(Link link) {
     final keyStr = _getLinkKey(link);
+
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
+        final restoredExpanded = PageStorage.maybeOf(context)?.readState(
+              context,
+              identifier: keyStr,
+            ) as bool?;
+        final isExpanded = _expandedLinkStates[keyStr] ?? restoredExpanded ?? false;
+
         return ctx.ContextMenuRegion(
           contextMenu: _buildCommentaryContextMenu(link),
           child: ExpansionTile(
             key: PageStorageKey(keyStr),
+            initiallyExpanded: isExpanded,
             maintainState: true,
             backgroundColor: Theme.of(context).colorScheme.surface,
             collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
@@ -982,54 +917,71 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                     .withValues(alpha: 0.5),
               ),
             ),
+            onExpansionChanged: (expanded) {
+              if (expanded && !_linkContentCache.containsKey(keyStr)) {
+                _linkContentCache[keyStr] = link.content;
+              }
+
+              if (_expandedLinkStates[keyStr] != expanded) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  setState(() {
+                    _expandedLinkStates[keyStr] = expanded;
+                  });
+                });
+              }
+            },
             children: [
-              GestureDetector(
-                onTap: () {
-                  // פתיחת הספר בלחיצה על הקישור
-                  widget.openBookCallback(
-                    TextBookTab(
-                      book: TextBook(
-                        title: utils.getTitleFromPath(link.path2),
+              if (isExpanded)
+                GestureDetector(
+                  onTap: () {
+                    widget.openBookCallback(
+                      TextBookTab(
+                        book: TextBook(
+                          title: utils.getTitleFromPath(link.path2),
+                        ),
+                        index: link.index2 - 1,
+                        openLeftPane:
+                            (Settings.getValue<bool>('key-pin-sidebar') ??
+                                    false) ||
+                                (Settings.getValue<bool>(
+                                        'key-default-sidebar-open') ??
+                                    false),
                       ),
-                      index: link.index2 - 1,
-                      openLeftPane:
-                          (Settings.getValue<bool>('key-pin-sidebar') ??
-                                  false) ||
-                              (Settings.getValue<bool>(
-                                      'key-default-sidebar-open') ??
-                                  false),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: FutureBuilder<String>(
+                      future: _linkContentCache[keyStr],
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          debugPrint(
+                              'Error loading link content: ${snapshot.error}');
+                          debugPrint('Stack trace: ${snapshot.stackTrace}');
+                          return Text('שגיאה: ${snapshot.error}');
+                        }
+                        return BlocBuilder<SettingsBloc, SettingsState>(
+                          builder: (context, settingsState) {
+                            return Text(
+                              utils.stripHtmlIfNeeded(snapshot.data ?? ''),
+                              style: TextStyle(
+                                fontSize: settingsState.commentatorsFontSize,
+                                fontFamily:
+                                    settingsState.commentatorsFontFamily,
+                              ),
+                            );
+                          },
+                        );
+                      },
                     ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: FutureBuilder<String>(
-                    future: link.content,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (snapshot.hasError) {
-                        debugPrint(
-                            'Error loading link content: ${snapshot.error}');
-                        debugPrint('Stack trace: ${snapshot.stackTrace}');
-                        return Text('שגיאה: ${snapshot.error}');
-                      }
-                      return BlocBuilder<SettingsBloc, SettingsState>(
-                        builder: (context, settingsState) {
-                          return Text(
-                            utils.stripHtmlIfNeeded(snapshot.data ?? ''),
-                            style: TextStyle(
-                              fontSize: settingsState.commentatorsFontSize,
-                              fontFamily: settingsState.commentatorsFontFamily,
-                            ),
-                          );
-                        },
-                      );
-                    },
                   ),
                 ),
-              ),
             ],
           ),
         );
@@ -1038,55 +990,128 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   Widget _buildNotesView() {
-    // נשתמש בספר הטקסט המקורי תמיד - כך ההערות יהיו משותפות
-    return FutureBuilder(
-      future: DataRepository.instance.library.then(
-        (library) => library.findBookByTitle(widget.tab.book.title, TextBook),
-      ),
-      builder: (context, snapshot) {
-        final bookId = widget.tab.book.title; // תמיד נשתמש בשם הספר המקורי
+    final bookId = widget.tab.book.title;
 
-        return PersonalNotesSidebar(
-          key: ValueKey(bookId),
-          bookId: bookId,
-          isPdf: true,
-          visibleLineIndices: _getVisibleLineIndicesForCurrentPage(),
-          onNavigateToLine: (lineNumber) {
-            // מנסים למצוא את העמוד המתאים למספר השורה
-            if (widget.tab.pdfHeadings != null) {
-              final sortedHeadings =
-                  widget.tab.pdfHeadings!.getSortedHeadings();
+    return PersonalNotesSidebar(
+      key: ValueKey(bookId),
+      bookId: bookId,
+      isPdf: true,
+      visibleLineIndices: _getVisibleLineIndicesForCurrentPage(),
+      onNavigateToLine: (lineNumber) {
+        if (widget.tab.pdfHeadings != null) {
+          final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
 
-              // מציאת הכותרת הקרובה ביותר למספר השורה
-              for (int i = sortedHeadings.length - 1; i >= 0; i--) {
-                if (sortedHeadings[i].value <= lineNumber) {
-                  // מצאנו את הכותרת - צריך למצוא את העמוד שלה
-                  final headingTitle = sortedHeadings[i].key;
-                  final targetPage = _findPageForHeading(headingTitle);
+          for (int i = sortedHeadings.length - 1; i >= 0; i--) {
+            if (sortedHeadings[i].value <= lineNumber) {
+              final headingTitle = sortedHeadings[i].key;
+              final targetPage = _findPageForHeading(headingTitle);
 
-                  if (targetPage != null) {
-                    debugPrint(
-                        'Navigating from line $lineNumber to page: $targetPage');
-                    if (widget.tab.pdfViewerController.isReady) {
-                      widget.tab.pdfViewerController
-                          .goToPage(pageNumber: targetPage);
-                    }
-                    return;
-                  }
-                  break;
+              if (targetPage != null) {
+                debugPrint(
+                    'Navigating from line $lineNumber to page: $targetPage');
+                if (widget.tab.pdfViewerController.isReady) {
+                  widget.tab.pdfViewerController
+                      .goToPage(pageNumber: targetPage);
                 }
+                return;
               }
+              break;
             }
+          }
+        }
 
-            // אם לא הצלחנו למצוא, נניח שזה מספר עמוד
-            debugPrint('Navigating to page: $lineNumber');
-            if (widget.tab.pdfViewerController.isReady) {
-              widget.tab.pdfViewerController.goToPage(pageNumber: lineNumber);
-            }
-          },
-        );
+        debugPrint('Navigating to page: $lineNumber');
+        if (widget.tab.pdfViewerController.isReady) {
+          widget.tab.pdfViewerController.goToPage(pageNumber: lineNumber);
+        }
       },
     );
+  }
+
+  _PdfVisibleContentCache? _getVisibleContent() {
+    final currentLine = widget.tab.currentTextLineNumber;
+    if (currentLine == null) {
+      _visibleContentCache = null;
+      return null;
+    }
+
+    final range = _getCurrentRange(currentLine);
+    final commentatorsKey =
+        (widget.tab.activeCommentators.toList()..sort()).join('|');
+    final cacheKey =
+        '${range.startLine}:${range.endLine}:$commentatorsKey:${widget.tab.links.length}';
+
+    final existingCache = _visibleContentCache;
+    if (existingCache != null && existingCache.cacheKey == cacheKey) {
+      return existingCache;
+    }
+
+    final commentaryLinks = <Link>[];
+    final nonCommentaryLinks = <Link>[];
+    var hasAnyCommentaryLinks = false;
+
+    for (final link in widget.tab.links) {
+      if (link.index1 < range.startLine) {
+        continue;
+      }
+      if (link.index1 > range.endLine) {
+        continue;
+      }
+
+      final connectionType = link.connectionType.toUpperCase();
+      final isCommentary =
+          connectionType == 'COMMENTARY' || connectionType == 'TARGUM';
+
+      if (isCommentary) {
+        hasAnyCommentaryLinks = true;
+        if (widget.tab.activeCommentators
+            .contains(utils.getTitleFromPath(link.path2))) {
+          commentaryLinks.add(link);
+        }
+        continue;
+      }
+
+      if (link.start == null && link.end == null) {
+        nonCommentaryLinks.add(link);
+      }
+    }
+
+    commentaryLinks.sort((a, b) {
+      final titleA = utils.getTitleFromPath(a.path2);
+      final titleB = utils.getTitleFromPath(b.path2);
+      final titleCompare = titleA.compareTo(titleB);
+      if (titleCompare != 0) {
+        return titleCompare;
+      }
+      return a.index1.compareTo(b.index1);
+    });
+    nonCommentaryLinks.sort((a, b) => a.index1.compareTo(b.index1));
+
+    final groups = _groupConsecutiveLinks(commentaryLinks);
+    final cache = _PdfVisibleContentCache(
+      cacheKey: cacheKey,
+      commentaryLinks: List.unmodifiable(commentaryLinks),
+      links: List.unmodifiable(nonCommentaryLinks),
+      hasAnyCommentaryLinks: hasAnyCommentaryLinks,
+      sortedGroupsFuture: CommentaryService.sortGroupsByEra(groups),
+    );
+    _visibleContentCache = cache;
+    return cache;
+  }
+
+  ({int startLine, int endLine}) _getCurrentRange(int currentLine) {
+    var endLine = currentLine + 50;
+    if (widget.tab.pdfHeadings != null) {
+      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
+      final currentIndex =
+          sortedHeadings.indexWhere((e) => e.value == currentLine);
+
+      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
+        endLine = sortedHeadings[currentIndex + 1].value - 1;
+      }
+    }
+
+    return (startLine: currentLine, endLine: endLine);
   }
 
   List<int>? _getVisibleLineIndicesForCurrentPage() {
@@ -1128,6 +1153,43 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     }
 
     return findInNodes(outline);
+  }
+}
+
+class _PdfVisibleContentCache {
+  final String cacheKey;
+  final List<Link> commentaryLinks;
+  final List<Link> links;
+  final bool hasAnyCommentaryLinks;
+  final Future<List<CommentaryGroup>> sortedGroupsFuture;
+
+  const _PdfVisibleContentCache({
+    required this.cacheKey,
+    required this.commentaryLinks,
+    required this.links,
+    required this.hasAnyCommentaryLinks,
+    required this.sortedGroupsFuture,
+  });
+}
+
+class _KeepAliveTab extends StatefulWidget {
+  final Widget child;
+
+  const _KeepAliveTab({super.key, required this.child});
+
+  @override
+  State<_KeepAliveTab> createState() => _KeepAliveTabState();
+}
+
+class _KeepAliveTabState extends State<_KeepAliveTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 

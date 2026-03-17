@@ -124,7 +124,8 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       List<Link> links = [];
 
       if (textBook != null) {
-        links = await textBook.links;
+        links = await textBook.links
+          ..sort((a, b) => a.index1.compareTo(b.index1));
         debugPrint('✅ Loaded ${links.length} links');
       }
 
