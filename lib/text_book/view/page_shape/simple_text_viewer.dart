@@ -598,6 +598,9 @@ $textWithBreaks
                     }
 
                     return SelectionArea(
+                      // ביטול תפריט ברירת המחדל של Flutter - נשתמש רק ב-ContextMenuRegion
+                      contextMenuBuilder: (context, selectableRegionState) =>
+                          const SizedBox.shrink(),
                       onSelectionChanged: (selection) {
                         // שמירת הטקסט הנבחר
                         if (selection != null) {
