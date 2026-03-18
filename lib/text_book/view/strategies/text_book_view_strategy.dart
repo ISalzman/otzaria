@@ -14,6 +14,7 @@ class TextBookViewConfig {
   final Key? pageShapeKey;
   final GlobalKey? pageShapePrintBoundaryKey;
   final ValueNotifier<int?>? pageShapeSidebarTabNotifier;
+  final ValueChanged<String?>? openSearch;
 
   const TextBookViewConfig({
     required this.content,
@@ -26,6 +27,7 @@ class TextBookViewConfig {
     this.pageShapeKey,
     this.pageShapePrintBoundaryKey,
     this.pageShapeSidebarTabNotifier,
+    this.openSearch,
   });
 }
 

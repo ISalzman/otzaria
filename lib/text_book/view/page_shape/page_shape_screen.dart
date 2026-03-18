@@ -46,11 +46,13 @@ const double _kCommentaryLabelAndSpacingWidth = 32.0;
 class PageShapeScreen extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
   final ValueNotifier<int?>? sidebarTabNotifier;
+  final ValueChanged<String?>? onOpenSearch;
 
   const PageShapeScreen({
     super.key,
     required this.openBookCallback,
     this.sidebarTabNotifier,
+    this.onOpenSearch,
   });
 
   @override
@@ -603,6 +605,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                               state.positionsListener,
                                           isMainText: true,
                                           onOpenSidebarTab: _openLeftSidebarTab,
+                                          onOpenSearch: widget.onOpenSearch,
                                         ),
                                       ),
                                       if (_columnVisibility['right'] ==
