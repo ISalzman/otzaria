@@ -701,6 +701,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     _openLeftPaneTab(1, searchText: _selectedTextForSearch);
   }
 
+  void _openSearchWithText(String? selectedText) {
+    _openLeftPaneTab(1, searchText: selectedText?.trim().isNotEmpty == true ? selectedText : _selectedTextForSearch);
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
@@ -2158,6 +2162,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               pageShapeKey: _pageShapeKey,
               pageShapePrintBoundaryKey: _pageShapePrintBoundaryKey,
               pageShapeSidebarTabNotifier: _pageShapeSidebarTabNotifier,
+              openSearch: _openSearchWithText,
             ),
           ),
         ),

@@ -16,6 +16,7 @@ class PageShapeStrategyImpl extends TextBookViewStrategy {
       key: config.pageShapeKey,
       openBookCallback: config.openBookCallback,
       sidebarTabNotifier: config.pageShapeSidebarTabNotifier,
+      onOpenSearch: config.openSearch,
     );
 
     // Wrap with RepaintBoundary if print key is provided
