@@ -318,13 +318,8 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                                   child: SingleChildScrollView(
                                                     scrollDirection:
                                                         Axis.horizontal,
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                              bottom: 10.0),
-                                                      child: SearchTermsDisplay(
-                                                        tab: widget.tab,
-                                                      ),
+                                                    child: SearchTermsDisplay(
+                                                      tab: widget.tab,
                                                     ),
                                                   ),
                                                 ),
