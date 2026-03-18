@@ -1,6 +1,9 @@
 
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -35,6 +38,11 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
   TextBookTab? _currentTextTab;
   PdfViewerController? _pdfController;
   double _fontSize = 18.0; // ברירת מחדל לגודל פונט
+  DateTime? _lastPdfPrimaryClickAt;
+  Offset? _lastPdfPrimaryClickPosition;
+  final GlobalKey _pdfPreviewToolbarKey = GlobalKey();
+  final GlobalKey _pdfVerticalScrollbarKey = GlobalKey();
+  final GlobalKey _pdfHorizontalScrollbarKey = GlobalKey();
 
   @override
   void didUpdateWidget(BookPreviewPanel oldWidget) {
@@ -87,6 +95,76 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
         _pdfController = PdfViewerController();
       });
     }
+  }
+
+  void _openCurrentPreviewInReader() {
+    if (widget.book is PdfBook) {
+      final currentPage =
+          (_pdfController != null && _pdfController!.isReady)
+              ? (_pdfController!.pageNumber ?? 1)
+              : 1;
+      widget.onOpenInReader?.call(currentPage);
+      return;
+    }
+
+    if (widget.book is TextBook) {
+      widget.onOpenInReader?.call(_currentTextTab?.index ?? 0);
+      return;
+    }
+
+    widget.onOpenInReader?.call(0);
+  }
+
+  bool _isPointerInsideWidget(GlobalKey key, Offset globalPosition) {
+    final context = key.currentContext;
+    if (context == null) return false;
+
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return false;
+    }
+
+    final widgetOrigin = renderObject.localToGlobal(Offset.zero);
+    final widgetRect = widgetOrigin & renderObject.size;
+    return widgetRect.contains(globalPosition);
+  }
+
+  bool _isPdfPreviewDoubleTapCandidate(PointerDownEvent event) {
+    return event.kind == PointerDeviceKind.mouse &&
+        event.buttons == kPrimaryMouseButton;
+  }
+
+  bool _isPointerInsidePdfChrome(Offset globalPosition) {
+    return _isPointerInsideWidget(_pdfPreviewToolbarKey, globalPosition) ||
+        _isPointerInsideWidget(_pdfVerticalScrollbarKey, globalPosition) ||
+        _isPointerInsideWidget(_pdfHorizontalScrollbarKey, globalPosition);
+  }
+
+  void _handlePdfPreviewPointerDown(PointerDownEvent event) {
+    if (!_isPdfPreviewDoubleTapCandidate(event)) {
+      return;
+    }
+
+    if (_isPointerInsidePdfChrome(event.position)) {
+      _lastPdfPrimaryClickAt = null;
+      _lastPdfPrimaryClickPosition = null;
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastPdfPrimaryClickAt != null &&
+        _lastPdfPrimaryClickPosition != null &&
+        now.difference(_lastPdfPrimaryClickAt!) <= kDoubleTapTimeout &&
+        (event.position - _lastPdfPrimaryClickPosition!).distance <=
+            kDoubleTapSlop) {
+      _lastPdfPrimaryClickAt = null;
+      _lastPdfPrimaryClickPosition = null;
+      _openCurrentPreviewInReader();
+      return;
+    }
+
+    _lastPdfPrimaryClickAt = now;
+    _lastPdfPrimaryClickPosition = event.position;
   }
 
   @override
@@ -179,54 +257,57 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     return Stack(
       children: [
         // תוכן הספר (מלא את כל השטח)
-        BlocProvider.value(
-          value: _currentTextTab!.bloc,
-          child: BlocBuilder<SettingsBloc, SettingsState>(
-            builder: (context, settingsState) {
-              return BlocBuilder(
-                bloc: _currentTextTab!.bloc,
-                builder: (context, state) {
-                  if (state is TextBookInitial) {
-                    _currentTextTab!.bloc.add(
-                      LoadContent(
-                        fontSize: _fontSize,
-                        showSplitView: false,
-                        removeNikud: settingsState.defaultRemoveNikud,
-                        loadCommentators: false, // אל תטען מפרשים בתצוגה מקדימה
-                      ),
-                    );
-                    return _buildSkeletonLoading();
-                  }
+        GestureDetector(
+          onDoubleTap: _openCurrentPreviewInReader,
+          child: BlocProvider.value(
+            value: _currentTextTab!.bloc,
+            child: BlocBuilder<SettingsBloc, SettingsState>(
+              builder: (context, settingsState) {
+                return BlocBuilder(
+                  bloc: _currentTextTab!.bloc,
+                  builder: (context, state) {
+                    if (state is TextBookInitial) {
+                      _currentTextTab!.bloc.add(
+                        LoadContent(
+                          fontSize: _fontSize,
+                          showSplitView: false,
+                          removeNikud: settingsState.defaultRemoveNikud,
+                          loadCommentators: false, // אל תטען מפרשים בתצוגה מקדימה
+                        ),
+                      );
+                      return _buildSkeletonLoading();
+                    }
 
-                  if (state is TextBookLoading) {
-                    return _buildSkeletonLoading();
-                  }
+                    if (state is TextBookLoading) {
+                      return _buildSkeletonLoading();
+                    }
 
-                  if (state is TextBookError) {
-                    return Center(
-                      child: Text('שגיאה: ${state.message}'),
-                    );
-                  }
+                    if (state is TextBookError) {
+                      return Center(
+                        child: Text('שגיאה: ${state.message}'),
+                      );
+                    }
 
-                  if (state is TextBookLoaded) {
-                    return Padding(
-                      padding: const EdgeInsets.only(left: 12.0, right: 0.0),
-                      child: CombinedView(
-                        data: state.content,
-                        textSize: _fontSize,
-                        openBookCallback: (tab) {},
-                        openLeftPaneTab: (index, {String? searchText}) {},
-                        showCommentaryAsExpansionTiles: false,
-                        tab: _currentTextTab!,
-                        isPreviewMode: true,
-                      ),
-                    );
-                  }
+                    if (state is TextBookLoaded) {
+                      return Padding(
+                        padding: const EdgeInsets.only(left: 12.0, right: 0.0),
+                        child: CombinedView(
+                          data: state.content,
+                          textSize: _fontSize,
+                          openBookCallback: (tab) {},
+                          openLeftPaneTab: (index, {String? searchText}) {},
+                          showCommentaryAsExpansionTiles: false,
+                          tab: _currentTextTab!,
+                          isPreviewMode: true,
+                        ),
+                      );
+                    }
 
-                  return const SizedBox.shrink();
-                },
-              );
-            },
+                    return const SizedBox.shrink();
+                  },
+                );
+              },
+            ),
           ),
         ),
         // כפתורים צפים בפינה השמאלית העליונה
@@ -346,23 +427,36 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
               // PDF viewer ready
             },
             viewerOverlayBuilder: (context, size, handleLinkTap) => [
-              PdfScrollbar(
-                controller: _pdfController!,
-                orientation: ScrollbarOrientation.right,
-                trackThickness: 16.0,
-                thumbMinSize: 50.0,
+              KeyedSubtree(
+                key: _pdfVerticalScrollbarKey,
+                child: PdfScrollbar(
+                  controller: _pdfController!,
+                  orientation: ScrollbarOrientation.right,
+                  trackThickness: 16.0,
+                  thumbMinSize: 50.0,
+                ),
               ),
-              PdfHorizontalScrollbar(
-                controller: _pdfController!,
-                trackThickness: 10.0,
+              KeyedSubtree(
+                key: _pdfHorizontalScrollbarKey,
+                child: PdfHorizontalScrollbar(
+                  controller: _pdfController!,
+                  trackThickness: 10.0,
+                ),
               ),
             ],
+          ),
+        ),
+        Positioned.fill(
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: _handlePdfPreviewPointerDown,
           ),
         ),
         Positioned(
           top: 8,
           left: 8,
           child: Container(
+            key: _pdfPreviewToolbarKey,
             decoration: BoxDecoration(
               color:
                   Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
@@ -406,13 +500,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                 IconButton(
                   icon: const Icon(FluentIcons.open_24_regular, size: 20),
                   tooltip: 'פתח בעיון (או לחץ פעמיים על הספר)',
-                  onPressed: () {
-                    int currentPage = 1;
-                    if (_pdfController != null && _pdfController!.isReady) {
-                      currentPage = _pdfController!.pageNumber ?? 1;
-                    }
-                    widget.onOpenInReader?.call(currentPage);
-                  },
+                  onPressed: _openCurrentPreviewInReader,
                   padding: const EdgeInsets.all(8),
                   constraints: const BoxConstraints(
                     minWidth: 36,
