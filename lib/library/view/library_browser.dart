@@ -277,34 +277,24 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                                               current.previewBook;
                                         },
                                         builder: (context, previewState) {
-                                          return GestureDetector(
-                                            onDoubleTap: () {
+                                          return BookPreviewPanel(
+                                            book: previewState.previewBook,
+                                            onOpenInReader: (index) {
                                               if (previewState.previewBook !=
                                                   null) {
                                                 _openBookInReader(
                                                     previewState.previewBook!,
-                                                    0);
+                                                    index);
                                               }
                                             },
-                                            child: BookPreviewPanel(
-                                              book: previewState.previewBook,
-                                              onOpenInReader: (index) {
-                                                if (previewState.previewBook !=
-                                                    null) {
-                                                  _openBookInReader(
-                                                      previewState.previewBook!,
-                                                      index);
-                                                }
-                                              },
-                                              onClose: () {
-                                                context
-                                                    .read<SettingsBloc>()
-                                                    .add(
-                                                      const UpdateLibraryShowPreview(
-                                                          false),
-                                                    );
-                                              },
-                                            ),
+                                            onClose: () {
+                                              context
+                                                  .read<SettingsBloc>()
+                                                  .add(
+                                                    const UpdateLibraryShowPreview(
+                                                        false),
+                                                  );
+                                            },
                                           );
                                         },
                                       ),
