@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -59,158 +58,6 @@ class IndexingRepository {
     }
 
     return false;
-  }
-
-  @visibleForTesting
-  static String resolvePdfPathForIndexing(
-    PdfBook book, {
-    String? libraryPath,
-    String? folderName,
-  }) {
-    final rawPaths = <String>{
-      if (book.path.trim().isNotEmpty) book.path.trim(),
-      if (book.filePath != null && book.filePath!.trim().isNotEmpty)
-        book.filePath!.trim(),
-    };
-
-    final relativeCandidates = <String>{};
-    for (final rawPath in rawPaths) {
-      final normalized = _normalizePdfCandidate(rawPath);
-      if (normalized == null) {
-        continue;
-      }
-
-      if (p.isAbsolute(normalized) && File(normalized).existsSync()) {
-        return normalized;
-      }
-
-      relativeCandidates.add(normalized);
-
-      final withoutOtzariaPrefix = _stripLeadingSegment(
-        normalized,
-        DatabaseConstants.otzariaFolderName,
-      );
-      if (withoutOtzariaPrefix != null) {
-        relativeCandidates.add(withoutOtzariaPrefix);
-      }
-
-      final withoutTalmudPrefix = _stripLeadingSegment(
-        normalized,
-        DatabaseConstants.talmudBavliFolderName,
-      );
-      if (withoutTalmudPrefix != null) {
-        relativeCandidates.add(withoutTalmudPrefix);
-      }
-
-      relativeCandidates.add(p.basename(normalized));
-    }
-
-    final normalizedCategoryPath =
-        _normalizeCategoryPathForPdf(book.categoryPath);
-    if (normalizedCategoryPath != null) {
-      final titleFileName = _ensurePdfExtension(book.title.trim());
-      final categoryCandidate = p.join(normalizedCategoryPath, titleFileName);
-      relativeCandidates.add(categoryCandidate);
-
-      final withoutOtzariaPrefix = _stripLeadingSegment(
-        categoryCandidate,
-        DatabaseConstants.otzariaFolderName,
-      );
-      if (withoutOtzariaPrefix != null) {
-        relativeCandidates.add(withoutOtzariaPrefix);
-      }
-
-      final withoutTalmudPrefix = _stripLeadingSegment(
-        categoryCandidate,
-        DatabaseConstants.talmudBavliFolderName,
-      );
-      if (withoutTalmudPrefix != null) {
-        relativeCandidates.add(withoutTalmudPrefix);
-      }
-    }
-
-    relativeCandidates.add(_ensurePdfExtension(book.title.trim()));
-
-    final roots = <String>{
-      DatabaseConstants.getDatabaseDirectoryPath(),
-      ...DatabaseConstants.getTalmudBavliDirectoryPaths(libraryPath, folderName),
-    };
-
-    final basePath = libraryPath;
-    if (basePath != null && basePath.trim().isNotEmpty) {
-      roots.add(basePath.trim());
-    }
-
-    for (final root in roots) {
-      for (final candidate in relativeCandidates) {
-        final resolved = p.normalize(p.join(root, candidate));
-        if (File(resolved).existsSync()) {
-          return resolved;
-        }
-      }
-    }
-
-    return book.path;
-  }
-
-  static String? _normalizePdfCandidate(String rawPath) {
-    final trimmed = rawPath.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-
-    final normalized = p.normalize(trimmed.replaceAll('\\', '/'));
-    return _ensurePdfExtension(normalized);
-  }
-
-  static String _ensurePdfExtension(String pathValue) {
-    if (pathValue.toLowerCase().endsWith('.pdf')) {
-      return pathValue;
-    }
-
-    return '$pathValue.pdf';
-  }
-
-  static String? _stripLeadingSegment(String pathValue, String segment) {
-    final normalizedPath = p.normalize(pathValue.replaceAll('\\', '/'));
-    final normalizedSegment = p.normalize(segment.replaceAll('\\', '/'));
-    if (normalizedPath == normalizedSegment) {
-      return null;
-    }
-
-    final prefix = '$normalizedSegment/';
-    if (normalizedPath.startsWith(prefix)) {
-      return normalizedPath.substring(prefix.length);
-    }
-
-    return null;
-  }
-
-  static String? _normalizeCategoryPathForPdf(String? rawCategoryPath) {
-    if (rawCategoryPath == null) {
-      return null;
-    }
-
-    final trimmed = rawCategoryPath.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-
-    final normalized = trimmed
-        .replaceAll('\\', '/')
-        .replaceAll(', ', '/')
-        .replaceAll(',', '/');
-    final parts = normalized
-        .split('/')
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList();
-
-    if (parts.isEmpty) {
-      return null;
-    }
-
-    return p.joinAll(parts);
   }
 
   /// Indexes all books in the provided library.
@@ -428,21 +275,17 @@ class IndexingRepository {
   Future<void> _indexPdfBook(PdfBook book) async {
     final index = await _tantivyDataProvider.engine;
     final startTime = DateTime.now();
-    final resolvedPath = resolvePdfPathForIndexing(book);
 
     debugPrint('📚 PDF indexing started: "${book.title}" (${book.path})');
-    if (resolvedPath != book.path) {
-      debugPrint('   📍 נתיב PDF שנפתר לאינדוקס: $resolvedPath');
-    }
 
     // Load PDF from file
     PdfDocument? document;
     try {
-      final file = File(resolvedPath);
+      final file = File(book.path);
 
       if (await file.exists()) {
         final fileSize = await file.length();
-        debugPrint('   📁 מנסה לטעון מקובץ: $resolvedPath');
+        debugPrint('   📁 מנסה לטעון מקובץ: ${book.path}');
         debugPrint(
             '   📊 גודל קובץ: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
 
@@ -450,7 +293,7 @@ class IndexingRepository {
           final openStartTime = DateTime.now();
           debugPrint('   ⏳ פותח PDF מקובץ...');
 
-          document = await PdfDocument.openFile(resolvedPath)
+          document = await PdfDocument.openFile(book.path)
               .timeout(Duration(seconds: 60), onTimeout: () {
             final elapsed = DateTime.now().difference(openStartTime).inSeconds;
             debugPrint(
@@ -469,12 +312,12 @@ class IndexingRepository {
           // Will try database below
         }
       } else {
-        debugPrint('   ⚠️ קובץ PDF לא קיים: $resolvedPath');
+        debugPrint('   ⚠️ קובץ PDF לא קיים: ${book.path}');
       }
 
       // Fallback: file doesn't exist
       if (document == null) {
-        debugPrint('   ❌ לא ניתן לפתוח את ה-PDF: ${book.title} ($resolvedPath)');
+        debugPrint('   ❌ לא ניתן לפתוח את ה-PDF: ${book.title} (${book.path})');
         return;
       }
 
@@ -590,7 +433,7 @@ class IndexingRepository {
               text: normalized,
               segment: BigInt.from(i),
               isPdf: true,
-              filePath: resolvedPath,
+              filePath: book.path,
             );
             addedAny = true;
             addedAnyInBook = true;
@@ -632,8 +475,8 @@ class IndexingRepository {
       if (!addedAnyInBook) {
         debugPrint('   🔍 מחפש קובץ טקסט נלווה (sidecar)...');
         final candidates = <String>{
-          '$resolvedPath.txt',
-          p.setExtension(resolvedPath, '.txt'),
+          '${book.path}.txt',
+          p.setExtension(book.path, '.txt'),
         };
 
         File? sidecar;
@@ -687,7 +530,7 @@ class IndexingRepository {
                 text: normalized,
                 segment: BigInt.from(pageIndex),
                 isPdf: true,
-                filePath: resolvedPath,
+                filePath: book.path,
               );
               addedAnyInBook = true;
               sidecarLinesIndexed++;
