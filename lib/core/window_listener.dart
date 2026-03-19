@@ -97,6 +97,7 @@ class AppWindowListener extends WindowListener {
       print('Window resized');
     }
 
+    if (WindowPersistence.isRestoring) return;
     WindowPersistence.scheduleSave();
   }
 
@@ -106,6 +107,7 @@ class AppWindowListener extends WindowListener {
       print('Window moved');
     }
 
+    if (WindowPersistence.isRestoring) return;
     WindowPersistence.scheduleSave();
   }
 
@@ -114,6 +116,7 @@ class AppWindowListener extends WindowListener {
     if (kDebugMode) {
       print('Window maximized');
     }
+    if (WindowPersistence.isRestoring) return;
     WindowPersistence.scheduleSave();
   }
 
@@ -122,6 +125,7 @@ class AppWindowListener extends WindowListener {
     if (kDebugMode) {
       print('Window unmaximized');
     }
+    if (WindowPersistence.isRestoring) return;
     WindowPersistence.scheduleSave();
   }
 
