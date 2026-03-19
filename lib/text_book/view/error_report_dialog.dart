@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/direct_error_report.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -63,6 +64,39 @@ class SelectionContextResolution {
 /// Helper class for managing error report dialogs and actions
 class ErrorReportHelper {
   static const String _fallbackMail = 'otzaria.200@gmail.com';
+
+  static List<String> resolveReportContent({
+    required TextBookLoaded state,
+    List<String>? reportContent,
+  }) {
+    return reportContent ?? state.content;
+  }
+
+  static TextBook resolveReportBook({
+    required TextBookLoaded state,
+    TextBook? reportBook,
+  }) {
+    return reportBook ?? state.book;
+  }
+
+  static String resolveReportTargetText({
+    required List<String> content,
+    required String selectedText,
+    int? preferredLineNumber,
+  }) {
+    if (selectedText.trim().isNotEmpty) {
+      return selectedText;
+    }
+
+    final hasValidPreferredLine = preferredLineNumber != null &&
+        preferredLineNumber >= 0 &&
+        preferredLineNumber < content.length;
+    if (!hasValidPreferredLine) {
+      return selectedText;
+    }
+
+    return content[preferredLineNumber].trim();
+  }
 
   /// Build 4+4 words context around a selection range within fullText
   static String buildContextAroundSelection(
@@ -369,8 +403,7 @@ $detailsSection
     required String contextText,
   }) {
     return DirectErrorReport(
-      id:
-          '${DateTime.now().microsecondsSinceEpoch}-${widgetHash(bookTitle, currentRef, reportData.selectedText)}',
+      id: '${DateTime.now().microsecondsSinceEpoch}-${widgetHash(bookTitle, currentRef, reportData.selectedText)}',
       senderEmail: senderEmail,
       subject: 'דיווח על טעות: $bookTitle',
       bookTitle: bookTitle,
@@ -612,6 +645,8 @@ $detailsSection
   /// - [fontSize]: Font size to use in the dialog
   /// - [bookTitle]: Title of the book
   /// - [savedSelectedIndex]: Optional saved selected index (can be int or ValueNotifier of int)
+  /// - [reportContent]: Optional content override for reports that target a secondary text
+  /// - [reportBook]: Optional book override for reports that target a secondary text
   static Future<void> showErrorReportDialog({
     required BuildContext context,
     required String selectedText,
@@ -619,7 +654,18 @@ $detailsSection
     required double fontSize,
     required String bookTitle,
     int? savedSelectedIndex,
+    List<String>? reportContent,
+    TextBook? reportBook,
   }) async {
+    final effectiveContent = resolveReportContent(
+      state: state,
+      reportContent: reportContent,
+    );
+    final effectiveBook = resolveReportBook(
+      state: state,
+      reportBook: reportBook,
+    );
+
     // קבלת מספר השורה הנוכחי
     int? currentLineNumber;
 
@@ -630,12 +676,18 @@ $detailsSection
     currentLineNumber ??= state.selectedIndex ??
         (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
 
+    final resolvedSelectedText = resolveReportTargetText(
+      content: effectiveContent,
+      selectedText: selectedText,
+      preferredLineNumber: currentLineNumber,
+    );
+
     // פתיחת הדיאלוג
     final ReportDialogResult? result = await showDialog<ReportDialogResult>(
       context: context,
       builder: (BuildContext dialogContext) {
         return TabbedReportDialog(
-          selectedText: selectedText,
+          selectedText: resolvedSelectedText,
           fontSize: fontSize,
           bookTitle: bookTitle,
           currentLineNumber: currentLineNumber! + 1, // +1 כי השורות מתחילות מ-1
@@ -653,7 +705,7 @@ $detailsSection
         final errorData = result.data as ReportedErrorData;
 
         final selectionResolution = resolveSelectionContext(
-          content: state.content,
+          content: effectiveContent,
           selectedText: errorData.selectedText,
           preferredLineNumber: currentLineNumber,
           wordsBefore: 4,
@@ -664,10 +716,10 @@ $detailsSection
         // קבלת פרטי הספר
         final currentRef = await refFromIndex(
           currentLineNumber,
-          state.book.tableOfContents,
+          effectiveBook.tableOfContents,
         );
         final bookDetails =
-            await BookDetailsService().getBookDetails(state.book);
+            await BookDetailsService().getBookDetails(effectiveBook);
 
         // ביצוע הפעולה שנבחרה
         if (result.action == ErrorReportAction.sendEmail ||
@@ -956,8 +1008,7 @@ class RegularReportTab extends StatefulWidget {
 class _RegularReportTabState extends State<RegularReportTab> {
   final TextEditingController _detailsController = TextEditingController();
 
-  bool get _canSubmit =>
-      widget.selectedText.isNotEmpty && _detailsController.text.trim().isNotEmpty;
+  bool get _canSubmit => _detailsController.text.trim().isNotEmpty;
 
   @override
   void initState() {
@@ -1107,9 +1158,7 @@ class _RegularReportTabState extends State<RegularReportTab> {
             ),
           if (_canSubmit)
             RecommendedActionButton(
-              text: isOfflineMode
-                  ? 'שמור בתור לאוצריא'
-                  : 'שלח ישירות לאוצריא',
+              text: isOfflineMode ? 'שמור בתור לאוצריא' : 'שלח ישירות לאוצריא',
               icon: FluentIcons.arrow_upload_24_regular,
               onPressed: () {
                 widget.onActionSelected(

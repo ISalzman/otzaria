@@ -925,6 +925,7 @@ class _CommentaryPane extends StatefulWidget {
 
 class _CommentaryPaneState extends State<_CommentaryPane> {
   List<String>? _content;
+  TextBook? _reportBook;
   bool _isLoading = true;
   final ItemScrollController _scrollController = ItemScrollController();
   final ItemPositionsListener _positionsListener =
@@ -1184,6 +1185,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       if (!mounted) return;
 
       setState(() {
+        _reportBook = book;
         _content = lines;
         _isLoading = false;
         _lastSyncedIndex = null; // איפוס לסנכרון ראשוני
@@ -1213,6 +1215,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           '❌ CommentaryPane: Error loading "${widget.commentatorName}": $e');
       if (mounted) {
         setState(() {
+          _reportBook = null;
           _content = null;
           _isLoading = false;
         });
@@ -1339,6 +1342,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               positionsListener: _positionsListener,
               isMainText: false,
               bookTitle: widget.commentatorName, // לפתיחה בטאב נפרד
+              reportBook: _reportBook,
               highlightedIndices: _highlightedIndices, // הדגשות מקומיות
               onCommentatorChanged: _reloadCommentary, // callback לרענון
             );
