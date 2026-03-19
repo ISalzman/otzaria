@@ -71,7 +71,18 @@ class _CommentaryListForCombinedViewState
                       itemBuilder: (context, index1) => GestureDetector(
                         child: ListTile(
                           focusNode: FocusNode(),
-                          title: Text(thisLinksSnapshot.data![index1].heRef),
+                          title: FutureBuilder<String>(
+                            future:
+                                thisLinksSnapshot.data![index1].displayReference,
+                            builder: (context, snapshot) {
+                              return Text(
+                                snapshot.data ??
+                                    thisLinksSnapshot
+                                        .data![index1].fallbackDisplayReference,
+                                textDirection: TextDirection.rtl,
+                              );
+                            },
+                          ),
                           subtitle: CommentaryContent(
                             key: ValueKey(
                                 '${thisLinksSnapshot.data![index1].path2}_${thisLinksSnapshot.data![index1].index2}_${widget.index}'),

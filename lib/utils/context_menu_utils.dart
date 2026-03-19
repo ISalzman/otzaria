@@ -86,7 +86,7 @@ class ContextMenuUtils {
 
       if (settingsState.copyWithHeaders != 'none') {
         final bookName = utils.getTitleFromPath(link.path2);
-        final currentPath = link.heRef;
+        final currentPath = await link.displayReference;
 
         finalText = CopyUtils.formatTextWithHeaders(
           originalText: plainText,

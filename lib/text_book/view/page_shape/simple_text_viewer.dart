@@ -269,7 +269,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         )
         .map(
           (link) => ctx.MenuItem<Object>(
-            label: Text(link.heRef),
+            label: FutureBuilder<String>(
+              future: link.displayReference,
+              builder: (context, snapshot) {
+                return Text(
+                  snapshot.data ?? link.fallbackDisplayReference,
+                  textDirection: TextDirection.rtl,
+                );
+              },
+            ),
             onSelected: (_) {
               widget.openBookCallback(
                 TextBookTab(

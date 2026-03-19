@@ -1105,13 +1105,40 @@ class SeforimRepository {
       for (final line in lines) {
         if (line.id > 0) {
           db.execute(
-              'INSERT OR IGNORE INTO line (id, bookId, lineIndex, content) VALUES (?, ?, ?, ?)',
-              [line.id, line.bookId, line.lineIndex, line.content]);
+              'INSERT OR IGNORE INTO line (id, bookId, lineIndex, content, heRef, tocEntryId) VALUES (?, ?, ?, ?, ?, ?)',
+              [
+                line.id,
+                line.bookId,
+                line.lineIndex,
+                line.content,
+                line.heRef,
+                null,
+              ]);
         } else {
           db.execute(
-              'INSERT INTO line (bookId, lineIndex, content) VALUES (?, ?, ?)',
-              [line.bookId, line.lineIndex, line.content]);
+              'INSERT INTO line (bookId, lineIndex, content, heRef, tocEntryId) VALUES (?, ?, ?, ?, ?)',
+              [
+                line.bookId,
+                line.lineIndex,
+                line.content,
+                line.heRef,
+                null,
+              ]);
         }
+      }
+    });
+  }
+
+  Future<void> updateLineHeRefsBatch(Map<int, String> lineIdToHeRef) async {
+    if (lineIdToHeRef.isEmpty) return;
+
+    final db = await _database.database;
+    withTransaction(db, () {
+      for (final entry in lineIdToHeRef.entries) {
+        db.execute(
+          'UPDATE line SET heRef = ? WHERE id = ? AND (heRef IS NULL OR heRef = "" OR LENGTH(heRef) < LENGTH(?))',
+          [entry.value, entry.key, entry.value],
+        );
       }
     });
   }
