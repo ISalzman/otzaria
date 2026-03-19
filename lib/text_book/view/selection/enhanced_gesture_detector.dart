@@ -39,7 +39,7 @@ class _EnhancedGestureDetectorState extends State<EnhancedGestureDetector> {
   int? _tapDownButtons;
   int? _lastTapTime;
   int _tapCount = 0;
-  static const int _doubleTapTimeout = 300;
+  static const int _multiTapTimeout = 300; // זמן מקסימלי בין לחיצות רצופות
   static const double _dragThreshold = 5.0;
 
   @override
@@ -109,12 +109,20 @@ class _EnhancedGestureDetectorState extends State<EnhancedGestureDetector> {
     }
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (_lastTapTime != null && (now - _lastTapTime!) < _doubleTapTimeout) {
+    if (_lastTapTime != null && (now - _lastTapTime!) < _multiTapTimeout) {
       _tapCount++;
-      if (_tapCount >= 2) {
-        widget.onDoubleTap?.call();
+      if (_tapCount >= 3) {
+        // לחיצה משולשת - לא עושים כלום, נותנים ל-SelectionArea לטפל
+        // (SelectionArea בוחר את כל הקטע בלחיצה משולשת)
         _tapCount = 0;
         _lastTapTime = null;
+        _tapDownPosition = null;
+        return;
+      }
+      if (_tapCount >= 2) {
+        widget.onDoubleTap?.call();
+        // לא מאפסים את הספירה - ממשיכים לספור ללחיצה שלישית
+        _lastTapTime = now;
         _tapDownPosition = null;
         return;
       }
@@ -123,7 +131,7 @@ class _EnhancedGestureDetectorState extends State<EnhancedGestureDetector> {
     }
     _lastTapTime = now;
 
-    Future.delayed(const Duration(milliseconds: _doubleTapTimeout), () {
+    Future.delayed(const Duration(milliseconds: _multiTapTimeout), () {
       if (mounted && _tapCount == 1 && _lastTapTime == now) {
         widget.onSingleTap?.call();
         _tapCount = 0;
