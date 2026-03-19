@@ -53,6 +53,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     with TickerProviderStateMixin {
   late final PageController pageController;
   late final CalendarCubit _calendarCubit;
+  late final SettingsScreenController _settingsScreenController;
   Orientation? _previousOrientation;
   int _currentPageIndex = 0;
 
@@ -81,6 +82,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   void initState() {
     super.initState();
     _calendarCubit = CalendarCubit();
+    _settingsScreenController = SettingsScreenController();
     final initialPage = _pageIndexForScreen(
           context.read<NavigationBloc>().state.currentScreen,
         ) ??
@@ -426,7 +428,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
             _cachedReadingPage ??= const ReadingScreen();
             _cachedMorePage ??= MoreScreen(key: moreScreenKey);
-            _cachedSettingsPage ??= const MySettingsScreen();
+            _cachedSettingsPage ??=
+              MySettingsScreen(controller: _settingsScreenController);
 
             _pages = [
               _cachedLibraryPage!,
@@ -613,7 +616,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
                             ),
                           ],
                         ),
-                        const IndexingStatusOverlay(),
+                        IndexingStatusOverlay(
+                          onTap: _openIndexingSettings,
+                        ),
                       ],
                     ),
                   ),
@@ -624,6 +629,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
         ),
       ),
     );
+  }
+
+  void _openIndexingSettings() {
+    _settingsScreenController.openTab(SettingsTab.library);
+    context.read<NavigationBloc>().add(
+          const NavigateToScreen(Screen.settings),
+        );
   }
 
   int? _pageIndexForScreen(Screen screen) {

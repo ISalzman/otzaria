@@ -66,4 +66,38 @@ void main() {
     expect(find.text('התוכנה בתהליך אינדוקס'), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
+
+  testWidgets('לחיצה על החיווי מפעילה את פעולת הניווט שסופקה',
+      (WidgetTester tester) async {
+    final bloc = MockIndexingBloc();
+    const indexingState = IndexingInProgress(
+      booksProcessed: 25,
+      totalBooks: 100,
+    );
+    var tapped = false;
+
+    whenListen(
+      bloc,
+      const Stream<IndexingState>.empty(),
+      initialState: indexingState,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BlocProvider<IndexingBloc>.value(
+          value: bloc,
+          child: Scaffold(
+            body: IndexingStatusOverlay(
+              onTap: () => tapped = true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('התוכנה בתהליך אינדוקס'));
+    await tester.pumpAndSettle();
+
+    expect(tapped, isTrue);
+  });
 }
