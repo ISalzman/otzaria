@@ -160,6 +160,7 @@ class BackupService {
       SettingsRepository.keyCopyWithHeaders,
       SettingsRepository.keyCopyHeaderFormat,
       SettingsRepository.keyLibraryPath,
+      SettingsRepository.keyDbEffectivePath,
       SettingsRepository.keyHebrewBooksPath,
       SettingsRepository.keyDevChannel,
       SettingsRepository.keyAutoSync,
@@ -367,6 +368,13 @@ class BackupService {
   /// Restore settings
   static Future<void> _restoreSettings(Map<String, dynamic> settings) async {
     for (final entry in settings.entries) {
+      // keyDbEffectivePath הוא setting פנימי ל-Android בלבד.
+      // אם backup נוצר ב-Android ומשוחזר על macOS/Windows — מדלגים,
+      // כדי למנוע נתיב /data/user/0/... להחליף את ה-DB path הנכון.
+      if (entry.key == SettingsRepository.keyDbEffectivePath &&
+          !Platform.isAndroid) {
+        continue;
+      }
       await Settings.setValue(entry.key, entry.value);
     }
   }

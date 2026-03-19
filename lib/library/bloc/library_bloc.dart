@@ -200,6 +200,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
           SettingsRepository.keyLibraryPath, event.path);
       await Settings.setValue<String>(
           SettingsRepository.keyLibraryFolderName, '');
+      // ניקוי override Android — DB החדש נמצא ישירות בספרייה
+      await Settings.setValue<String>(
+          SettingsRepository.keyDbEffectivePath, '');
+
       FileSystemData.instance.libraryPath = event.path;
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
       DataRepository.instance.invalidateExternalBooksCache();

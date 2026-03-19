@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/migration/core/models/book.dart' as migration;
 import 'package:otzaria/migration/dao/repository/seforim_repository.dart';
 import 'package:otzaria/migration/dao/daos/database.dart';
 import 'package:otzaria/migration/adapters/model_adapters.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:sqlite3/sqlite3.dart' show SqliteException;
 
 /// A data provider that manages SQLite database operations for the library.
 ///
@@ -66,6 +69,24 @@ class SqliteDataProvider {
       _repository = SeforimRepository(database);
       await _repository.ensureInitialized();
       _isInitialized = true;
+    } on SqliteException catch (e) {
+      // SQLITE_CANTOPEN (code 14): the native library cannot open the file.
+      // On Android this happens when the DB is in Scoped Storage and sqlite3
+      // native cannot access it via a raw file path.
+      // Clear any stale keyDbEffectivePath so that the next
+      // checkLibraryIsEmpty() returns true and the user reaches the
+      // "select library" screen where the copy-to-internal flow is offered.
+      if (Platform.isAndroid && e.resultCode == 14) {
+        debugPrint(
+            '[SqliteDataProvider] SQLITE_CANTOPEN on Android — '
+            'clearing keyDbEffectivePath to trigger library-selection flow.');
+        await Settings.setValue(SettingsRepository.keyDbEffectivePath, '');
+        // Do NOT rethrow: returning without _isInitialized = true causes the
+        // app to treat the DB as missing and show the empty-library screen.
+        return;
+      }
+      debugPrint('Error initializing SQLite database: $e');
+      rethrow;
     } catch (e) {
       debugPrint('Error initializing SQLite database: $e');
       rethrow;

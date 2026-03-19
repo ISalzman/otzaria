@@ -68,6 +68,12 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           if (state is EmptyLibraryAskingDeleteZip) {
             _showDeleteZipDialog(context, state);
           }
+          if (state is EmptyLibraryAskingDbCopy) {
+            if (state.errorMessage != null) {
+              UiSnack.showError(state.errorMessage!);
+            }
+            _showDbCopyDialog(context, state);
+          }
         },
         builder: (context, state) {
           return Center(
@@ -96,6 +102,82 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
             onPressed: () => exit(0),
             icon: const Icon(FluentIcons.sign_out_24_regular),
             label: const Text('סגור את האפליקציה'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// מציג דיאלוג המסביר למשתמש את מגבלת Android Scoped Storage.
+  /// המשתמש בוחר בין העתקה (שמירת מקור) להעברה (מחיקת מקור לפנית מקום).
+  void _showDbCopyDialog(
+      BuildContext context, EmptyLibraryAskingDbCopy state) {
+    final sizeText = state.dbSizeBytes > 0
+        ? '${(state.dbSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB'
+        : 'לא ידוע';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text(
+          'נדרשת העתקה של קובץ הספרייה',
+          textDirection: TextDirection.rtl,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'לא ניתן לגשת ישירות לקובץ seforim.db (גודל: $sizeText) '
+              'מכיוון שהוא נמצא באחסון חיצוני ב-Android.',
+              textDirection: TextDirection.rtl,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'לחץ על כפתור למטה, נווט לאותה תיקייה ובחר את הקובץ seforim.db — '
+              'האפליקציה תעתיק אותו לאחסון הפנימי.',
+              textDirection: TextDirection.rtl,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '(אפשרות "נסה מחק מקור" — ניסיון למחוק לאחר העתקה. '
+              'עשויה שלא להצליח בכל גרסאות Android.)',
+              style: TextStyle(fontSize: 12),
+              textDirection: TextDirection.rtl,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              BlocProvider.of<EmptyLibraryBloc>(context).add(
+                PickDbFileRequested(
+                  libraryPath: state.libraryPath,
+                  internalDbPath: state.internalDbPath,
+                  externalDbPath: state.externalDbPath,
+                  shouldMove: false,
+                ),
+              );
+            },
+            icon: const Icon(FluentIcons.document_copy_24_regular),
+            label: const Text('העתק (שמור מקור)'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              BlocProvider.of<EmptyLibraryBloc>(context).add(
+                PickDbFileRequested(
+                  libraryPath: state.libraryPath,
+                  internalDbPath: state.internalDbPath,
+                  externalDbPath: state.externalDbPath,
+                  shouldMove: true,
+                ),
+              );
+            },
+            icon: const Icon(FluentIcons.arrow_move_24_regular),
+            label: const Text('העתק + נסה מחק מקור'),
           ),
         ],
       ),

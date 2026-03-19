@@ -24,6 +24,27 @@ class NavigationRepository {
       return true;
     }
 
+    // Android: גם אם הקובץ "קיים" (stat עובד), ייתכן שה-native sqlite3
+    // לא יכול לפתוח אותו מאחסון Scoped Storage חיצוני.
+    // אם אין keyDbEffectivePath, המשמעות היא שה-flow לא הושלם — נחזיר true
+    // כדי שהמשתמש יגיע למסך הבחירה עם הדיאלוג המתאים.
+    if (Platform.isAndroid && !_isNativeAccessible(databasePath)) {
+      final effectivePath =
+          Settings.getValue<String>(SettingsRepository.keyDbEffectivePath) ??
+              '';
+      if (effectivePath.isEmpty) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// בודק אם נתיב נגיש ל-sqlite3 native ב-Android.
+  static bool _isNativeAccessible(String filePath) {
+    if (filePath.startsWith('/data/')) return true;
+    if (filePath.contains('/Android/data/')) return true;
+    if (filePath.contains('/Android/obb/')) return true;
     return false;
   }
 
