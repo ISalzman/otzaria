@@ -1,7 +1,76 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/models/books.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    if (!Settings.isInitialized) {
+      await Settings.init();
+    }
+    await Settings.setValue<bool>(SettingsRepository.keyOfflineMode, false);
+    await Settings.setValue<String>(
+        SettingsRepository.keyFontFamily, 'candara');
+  });
+
+  group('ErrorReportHelper.resolveReportTargetText', () {
+    test('uses override content when provided', () {
+      final result = ErrorReportHelper.resolveReportContent(
+        state: _loadedState(),
+        reportContent: const ['פסקת מפרש ראשונה', 'פסקת מפרש שניה'],
+      );
+
+      expect(result, equals(const ['פסקת מפרש ראשונה', 'פסקת מפרש שניה']));
+    });
+
+    test('uses override book when provided', () {
+      final result = ErrorReportHelper.resolveReportBook(
+        state: _loadedState(),
+        reportBook: TextBook(title: 'מפרש בדיקה'),
+      );
+
+      expect(result.title, equals('מפרש בדיקה'));
+    });
+
+    test('returns selected text when selection exists', () {
+      final result = ErrorReportHelper.resolveReportTargetText(
+        content: const ['פסקה ראשונה', 'פסקה שניה'],
+        selectedText: 'טקסט מסומן',
+        preferredLineNumber: 1,
+      );
+
+      expect(result, equals('טקסט מסומן'));
+    });
+
+    test('falls back to current paragraph when selection is empty', () {
+      final result = ErrorReportHelper.resolveReportTargetText(
+        content: const ['פסקה ראשונה', '  פסקה שניה  '],
+        selectedText: '',
+        preferredLineNumber: 1,
+      );
+
+      expect(result, equals('פסקה שניה'));
+    });
+
+    test('keeps empty text when current paragraph is unavailable', () {
+      final result = ErrorReportHelper.resolveReportTargetText(
+        content: const ['פסקה ראשונה'],
+        selectedText: '',
+        preferredLineNumber: 5,
+      );
+
+      expect(result, isEmpty);
+    });
+  });
+
   group('ErrorReportHelper.buildContextAroundSelection', () {
     test('should build context around selection with 4 words before and after',
         () {
@@ -441,4 +510,68 @@ void main() {
       expect(result.usedLineFallback, isFalse);
     });
   });
+
+  group('RegularReportTab', () {
+    testWidgets('allows submitting direct report without selected text',
+        (tester) async {
+      ErrorReportAction? submittedAction;
+      ReportedErrorData? submittedData;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RegularReportTab(
+              selectedText: '',
+              fontSize: 18,
+              state: _loadedState(),
+              onActionSelected: (action, data) {
+                submittedAction = action;
+                submittedData = data;
+              },
+              onCancel: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('שלח ישירות לאוצריא'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'זו טעות בפסקה הנוכחית');
+      await tester.pumpAndSettle();
+
+      expect(find.text('שלח ישירות לאוצריא'), findsOneWidget);
+
+      await tester.tap(find.text('שלח ישירות לאוצריא'));
+      await tester.pumpAndSettle();
+
+      expect(submittedAction, equals(ErrorReportAction.sendDirect));
+      expect(submittedData, isNotNull);
+      expect(submittedData!.selectedText, isEmpty);
+      expect(submittedData!.errorDetails, equals('זו טעות בפסקה הנוכחית'));
+    });
+  });
+}
+
+TextBookLoaded _loadedState() {
+  return TextBookLoaded(
+    book: TextBook(title: 'ספר בדיקה'),
+    showLeftPane: false,
+    content: const ['פסקה ראשונה', 'פסקה שניה'],
+    fontSize: 18,
+    showSplitView: false,
+    activeCommentators: const [],
+    commentatorGroups: const [],
+    availableCommentators: const [],
+    links: const [],
+    visibleLinks: const [],
+    linksByLine: const {},
+    tableOfContents: const [],
+    removeNikud: false,
+    visibleIndices: const [0],
+    selectedIndex: 0,
+    pinLeftPane: false,
+    searchText: '',
+    scrollController: ItemScrollController(),
+    positionsListener: ItemPositionsListener.create(),
+  );
 }

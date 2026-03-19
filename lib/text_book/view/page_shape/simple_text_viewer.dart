@@ -11,10 +11,10 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_se
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
-import 'package:otzaria/models/books.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/utils/copy_utils.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -41,7 +41,9 @@ class SimpleTextViewer extends StatefulWidget {
   final VoidCallback? onCommentatorChanged; // callback לרענון אחרי החלפת מפרש
   final bool useInternalScroll; // האם להשתמש בגלילה פנימית
   final ValueChanged<int>? onOpenSidebarTab;
-  final ValueChanged<String?>? onOpenSearch; // callback לפתיחת חיפוש עם הטקסט הנבחר
+  final ValueChanged<String?>?
+      onOpenSearch; // callback לפתיחת חיפוש עם הטקסט הנבחר
+  final TextBook? reportBook;
 
   const SimpleTextViewer({
     super.key,
@@ -59,6 +61,7 @@ class SimpleTextViewer extends StatefulWidget {
     this.useInternalScroll = true, // ברירת מחדל - עם גלילה פנימית
     this.onOpenSidebarTab,
     this.onOpenSearch,
+    this.reportBook,
   });
 
   @override
@@ -285,8 +288,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         )
         .toList();
 
-    return ctx.ContextMenu(
-      entries: <ctx.ContextMenuEntry<Object>>[
+    final entries = <ctx.ContextMenuEntry<Object>>[];
+
+    if (widget.isMainText) {
+      entries.add(
         ctx.MenuItem<Object>(
           label: const Text('חיפוש'),
           icon: const Icon(FluentIcons.search_24_regular),
@@ -298,59 +303,92 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             }
           },
         ),
-        // הוספת תפריט החלפת מפרש אם זה מפרש
-        if (commentatorMenuItems.isNotEmpty) ...[
-          const ctx.MenuDivider(),
-          ...commentatorMenuItems,
-        ],
-        if (linksMenuItems.isNotEmpty) ...[
-          const ctx.MenuDivider(),
-          ctx.MenuItem<Object>.submenu(
-            label: const Text('קישורים'),
-            icon: const Icon(FluentIcons.link_24_regular),
-            items: linksMenuItems,
-          ),
-        ],
-        const ctx.MenuDivider(),
-        // הערות אישיות
-        ctx.MenuItem<Object>(
-          label: const Text('הוסף הערה אישית '),
-          icon: const Icon(FluentIcons.note_add_24_regular),
-          onSelected: (_) => _createNoteForCurrentLine(index),
+      );
+    }
+
+    // הוספת תפריט החלפת מפרש אם זה מפרש
+    if (commentatorMenuItems.isNotEmpty) {
+      if (entries.isNotEmpty) {
+        entries.add(const ctx.MenuDivider());
+      }
+      entries.addAll(commentatorMenuItems);
+    }
+
+    if (linksMenuItems.isNotEmpty) {
+      entries.add(const ctx.MenuDivider());
+      entries.add(
+        ctx.MenuItem<Object>.submenu(
+          label: const Text('קישורים'),
+          icon: const Icon(FluentIcons.link_24_regular),
+          items: linksMenuItems,
         ),
-        // דיווח על טעות בספר
-        ctx.MenuItem<Object>(
-          label: const Text('דווח על טעות בספר'),
-          icon: const Icon(FluentIcons.error_circle_24_regular),
-          enabled: _savedSelectedText != null &&
-              _savedSelectedText!.trim().isNotEmpty,
-          onSelected: (_) => _openErrorReportDialog(_savedSelectedText!),
-        ),
-        const ctx.MenuDivider(),
-        // העתקה
-        ctx.MenuItem<Object>(
-          label: const Text('העתק'),
-          icon: const Icon(FluentIcons.copy_24_regular),
-          enabled: _savedSelectedText != null &&
-              _savedSelectedText!.trim().isNotEmpty,
-          onSelected: (_) => _copyFormattedText(),
-        ),
-        ctx.MenuItem<Object>(
-          label: const Text('העתק את כל הפסקה'),
-          icon: const Icon(FluentIcons.document_copy_24_regular),
-          enabled: index >= 0 && index < widget.content.length,
-          onSelected: (_) => _copyParagraphByIndex(index),
-        ),
-        // [EDITING DISABLED]
-        // const ctx.MenuDivider(),
-        // // עריכת פסקה
-        // ctx.MenuItem(
-        //   label: const Text('ערוך פסקה זו'),
-        //   icon: const Icon(FluentIcons.edit_24_regular),
-        //   onSelected: (_) => _editParagraph(index),
-        // ),
-      ],
-    );
+      );
+    }
+
+    entries.add(const ctx.MenuDivider());
+    entries.addAll([
+      // הערות אישיות
+      ctx.MenuItem<Object>(
+        label: const Text('הוסף הערה אישית '),
+        icon: const Icon(FluentIcons.note_add_24_regular),
+        onSelected: (_) => _createNoteForCurrentLine(index),
+      ),
+      // דיווח על טעות בספר
+      ctx.MenuItem<Object>(
+        label: const Text('דווח על טעות בספר'),
+        icon: const Icon(FluentIcons.error_circle_24_regular),
+        onSelected: (_) => _openErrorReportDialog(_savedSelectedText ?? ''),
+      ),
+      const ctx.MenuDivider(),
+      // העתקה
+      ctx.MenuItem<Object>(
+        label: const Text('העתק'),
+        icon: const Icon(FluentIcons.copy_24_regular),
+        enabled:
+            _savedSelectedText != null && _savedSelectedText!.trim().isNotEmpty,
+        onSelected: (_) => _copyFormattedText(),
+      ),
+      ctx.MenuItem<Object>(
+        label: const Text('העתק את כל הפסקה'),
+        icon: const Icon(FluentIcons.document_copy_24_regular),
+        enabled: index >= 0 && index < widget.content.length,
+        onSelected: (_) => _copyParagraphByIndex(index),
+      ),
+      // [EDITING DISABLED]
+      // const ctx.MenuDivider(),
+      // // עריכת פסקה
+      // ctx.MenuItem(
+      //   label: const Text('ערוך פסקה זו'),
+      //   icon: const Icon(FluentIcons.edit_24_regular),
+      //   onSelected: (_) => _editParagraph(index),
+      // ),
+    ]);
+
+    return ctx.ContextMenu(entries: _normalizeContextMenuEntries(entries));
+  }
+
+  List<ctx.ContextMenuEntry<Object>> _normalizeContextMenuEntries(
+    List<ctx.ContextMenuEntry<Object>> entries,
+  ) {
+    final normalized = <ctx.ContextMenuEntry<Object>>[];
+
+    for (final entry in entries) {
+      final isDivider = entry is ctx.MenuDivider;
+      final previousIsDivider =
+          normalized.isNotEmpty && normalized.last is ctx.MenuDivider;
+
+      if (isDivider && (normalized.isEmpty || previousIsDivider)) {
+        continue;
+      }
+
+      normalized.add(entry);
+    }
+
+    while (normalized.isNotEmpty && normalized.last is ctx.MenuDivider) {
+      normalized.removeLast();
+    }
+
+    return normalized;
   }
 
   /// יצירת הערה לשורה הנוכחית
@@ -401,6 +439,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       fontSize: widget.fontSize,
       bookTitle: resolvedBookTitle,
       savedSelectedIndex: _savedSelectedIndex,
+      reportContent: widget.content,
+      reportBook: widget.reportBook,
     );
   }
 
@@ -851,11 +891,16 @@ $textWithBreaks
       submenuItems.addAll(_buildCommentatorGroupItems(ungrouped, state));
     }
 
+    final normalizedSubmenuItems = _normalizeContextMenuEntries(submenuItems);
+    if (normalizedSubmenuItems.isEmpty) {
+      return [];
+    }
+
     return [
       ctx.MenuItem<Object>.submenu(
         label: const Text('החלף מפרש'),
         icon: const Icon(FluentIcons.arrow_swap_24_regular),
-        items: submenuItems,
+        items: normalizedSubmenuItems,
       ),
     ];
   }
