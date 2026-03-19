@@ -22,13 +22,35 @@ class CalendarWidget extends StatefulWidget {
   const CalendarWidget({super.key});
 
   @override
-  State<CalendarWidget> createState() => _CalendarWidgetState();
+  CalendarWidgetState createState() => CalendarWidgetState();
 }
 
-class _CalendarWidgetState extends State<CalendarWidget> {
+/// מצב הווידג'ט של לוח השנה.
+///
+/// מאפשר למסכי אב לבקש מחדש פוקוס ניווט במקלדת כאשר חוזרים ללוח
+/// מבלי לבנות את הווידג'ט מחדש.
+class CalendarWidgetState extends State<CalendarWidget> {
   late final FocusNode _keyboardFocusNode;
   Timer? _keyRepeatTimer;
   LogicalKeyboardKey? _currentPressedKey;
+
+  /// מבקש פוקוס ניווט למקלדת עבור לוח השנה.
+  ///
+  /// הבקשה נדחית לפריים הבא כדי לוודא שהווידג'ט כבר מחובר לעץ ויכול
+  /// לקבל פוקוס גם אחרי מעבר מסך או החלפת לשונית.
+  void requestKeyboardFocus() {
+    if (!mounted || !_keyboardFocusNode.canRequestFocus) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          _keyboardFocusNode.canRequestFocus &&
+          !_keyboardFocusNode.hasFocus) {
+        _keyboardFocusNode.requestFocus();
+      }
+    });
+  }
 
   void _stopKeyRepeat() {
     _keyRepeatTimer?.cancel();
@@ -54,9 +76,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     _keyboardFocusNode.addListener(_handleFocusChange);
 
     // בקש פוקוס אוטומטי כשהווידג'ט נטען
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _keyboardFocusNode.requestFocus();
-    });
+    requestKeyboardFocus();
   }
 
   @override

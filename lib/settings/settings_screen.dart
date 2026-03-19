@@ -13,8 +13,25 @@ import 'package:otzaria/theme/layout_tokens.dart';
 /// רוחב מקסימלי לתוכן ההגדרות — מרכוז על מסכים רחבים
 // kSettingsContentMaxWidth הוסר — משתמשים ב-LayoutConstraints.panelContentMaxWidth מ-layout_tokens.dart
 
+/// מייצג את לשוניות מסך ההגדרות שניתן לנווט אליהן בקוד.
+enum SettingsTab { design, text, library, tools, shortcuts, system, about }
+
+/// בקר פשוט לפתיחת לשונית מסוימת במסך ההגדרות.
+class SettingsScreenController extends ChangeNotifier {
+  SettingsTab? _requestedTab;
+
+  SettingsTab? get requestedTab => _requestedTab;
+
+  void openTab(SettingsTab tab) {
+    _requestedTab = tab;
+    notifyListeners();
+  }
+}
+
 class MySettingsScreen extends StatefulWidget {
-  const MySettingsScreen({super.key});
+  const MySettingsScreen({super.key, this.controller});
+
+  final SettingsScreenController? controller;
 
   @override
   State<MySettingsScreen> createState() => _MySettingsScreenState();
@@ -29,14 +46,62 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
   final _contentScrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller?.addListener(_handleRequestedTab);
+    _applyRequestedTab(widget.controller?.requestedTab);
+  }
+
+  @override
   void dispose() {
+    widget.controller?.removeListener(_handleRequestedTab);
     _contentFocusNode.dispose();
     _contentScrollController.dispose();
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant MySettingsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_handleRequestedTab);
+      widget.controller?.addListener(_handleRequestedTab);
+      _applyRequestedTab(widget.controller?.requestedTab);
+    }
+  }
+
   void _changeTab(int index) {
     setState(() => _selectedIndex = index);
+    _contentFocusNode.requestFocus();
+  }
+
+  void _handleRequestedTab() {
+    _applyRequestedTab(widget.controller?.requestedTab);
+  }
+
+  void _applyRequestedTab(SettingsTab? tab) {
+    if (tab == null) return;
+
+    final tabIndex = switch (tab) {
+      SettingsTab.design => 0,
+      SettingsTab.text => 1,
+      SettingsTab.library => 2,
+      SettingsTab.tools => 3,
+      SettingsTab.shortcuts => 4,
+      SettingsTab.system => 5,
+      SettingsTab.about => 6,
+    };
+
+    if (!mounted) {
+      _selectedIndex = tabIndex;
+      _showMobileMenu = false;
+      return;
+    }
+
+    setState(() {
+      _selectedIndex = tabIndex;
+      _showMobileMenu = false;
+    });
     _contentFocusNode.requestFocus();
   }
 
