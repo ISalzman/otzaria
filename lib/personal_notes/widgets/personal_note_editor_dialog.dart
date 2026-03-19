@@ -247,6 +247,7 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog> {
               referenceText: widget.referenceText,
               bookId: widget.bookId,
               linkableNotes: widget.linkableNotes,
+              onSaveShortcut: _submit,
             ),
           ),
           actions: [
