@@ -213,8 +213,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
         MenuItem(
           label: const Text('דווח על טעות בספר'),
           icon: const Icon(FluentIcons.error_circle_24_regular),
-          enabled: selectedText != null && selectedText.trim().isNotEmpty,
-          onSelected: (_) => _openErrorReportDialog(selectedText!),
+          onSelected: (_) => _openErrorReportDialog(selectedText ?? ''),
         ),
         const MenuDivider(),
         MenuItem(

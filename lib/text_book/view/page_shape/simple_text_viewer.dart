@@ -11,10 +11,10 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_se
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
-import 'package:otzaria/models/books.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/utils/copy_utils.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -41,7 +41,9 @@ class SimpleTextViewer extends StatefulWidget {
   final VoidCallback? onCommentatorChanged; // callback לרענון אחרי החלפת מפרש
   final bool useInternalScroll; // האם להשתמש בגלילה פנימית
   final ValueChanged<int>? onOpenSidebarTab;
-  final ValueChanged<String?>? onOpenSearch; // callback לפתיחת חיפוש עם הטקסט הנבחר
+  final ValueChanged<String?>?
+      onOpenSearch; // callback לפתיחת חיפוש עם הטקסט הנבחר
+  final TextBook? reportBook;
 
   const SimpleTextViewer({
     super.key,
@@ -59,6 +61,7 @@ class SimpleTextViewer extends StatefulWidget {
     this.useInternalScroll = true, // ברירת מחדל - עם גלילה פנימית
     this.onOpenSidebarTab,
     this.onOpenSearch,
+    this.reportBook,
   });
 
   @override
@@ -322,9 +325,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ctx.MenuItem<Object>(
           label: const Text('דווח על טעות בספר'),
           icon: const Icon(FluentIcons.error_circle_24_regular),
-          enabled: _savedSelectedText != null &&
-              _savedSelectedText!.trim().isNotEmpty,
-          onSelected: (_) => _openErrorReportDialog(_savedSelectedText!),
+          onSelected: (_) => _openErrorReportDialog(_savedSelectedText ?? ''),
         ),
         const ctx.MenuDivider(),
         // העתקה
@@ -401,6 +402,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       fontSize: widget.fontSize,
       bookTitle: resolvedBookTitle,
       savedSelectedIndex: _savedSelectedIndex,
+      reportContent: widget.content,
+      reportBook: widget.reportBook,
     );
   }
 
