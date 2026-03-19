@@ -200,8 +200,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                             },
                             onCalendarTap: () {
                               // Reset to calendar BEFORE navigation using GlobalKey
-                              (moreScreenKey.currentState as dynamic)
-                                  ?.resetToCalendar();
+                              moreScreenKey.currentState?.resetToCalendar();
                               // Then navigate
                               context.read<NavigationBloc>().add(
                                     const NavigateToScreen(Screen.more),
