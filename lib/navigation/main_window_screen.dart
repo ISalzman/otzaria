@@ -46,8 +46,7 @@ class MainWindowScreen extends StatefulWidget {
 }
 
 // Global key for accessing MoreScreen
-final GlobalKey<State<MoreScreen>> moreScreenKey =
-    GlobalKey<State<MoreScreen>>();
+final GlobalKey<MoreScreenState> moreScreenKey = GlobalKey<MoreScreenState>();
 
 class MainWindowScreenState extends State<MainWindowScreen>
     with TickerProviderStateMixin {
@@ -332,6 +331,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
       context.read<FocusRepository>().requestLibrarySearchFocus(
             selectAll: true,
           );
+    } else if (state.currentScreen == Screen.more) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          moreScreenKey.currentState?.requestActiveTabFocus();
+        }
+      });
     } else if (state.currentScreen == Screen.reading) {
       // בקשת focus לתוכן הספר כשעוברים למסך עיון
       WidgetsBinding.instance.addPostFrameCallback((_) {

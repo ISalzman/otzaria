@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tools/measurement_converter/measurement_converter_screen.dart';
 import 'package:otzaria/tools/gematria/gematria_search_screen.dart';
 import 'package:otzaria/tools/dictionary/dictionary_screen.dart';
@@ -13,16 +15,67 @@ class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
 
   @override
-  State<MoreScreen> createState() => _MoreScreenState();
+  MoreScreenState createState() => MoreScreenState();
 }
 
-class _MoreScreenState extends State<MoreScreen>
+/// מצב מסך "עוד".
+///
+/// אחראי על מעבר בין לשוניות הכלים ועל החזרת פוקוס יזומה ללוח השנה
+/// כאשר חוזרים אליו ממסך אחר או מלשונית אחרת.
+class MoreScreenState extends State<MoreScreen>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  static const int _calendarFocusRetryCount = 6;
   late final TabController _tabController;
+  final GlobalKey<CalendarWidgetState> _calendarKey =
+      GlobalKey<CalendarWidgetState>();
   final GlobalKey<GematriaSearchScreenState> _gematriaKey =
       GlobalKey<GematriaSearchScreenState>();
   late final List<Widget> _pages;
   late final List<Widget> _tabWidgets;
+
+  void _requestCalendarFocus({int remainingAttempts = _calendarFocusRetryCount}) {
+    if (!mounted) {
+      return;
+    }
+
+    final calendarState = _calendarKey.currentState;
+    if (calendarState != null) {
+      calendarState.requestKeyboardFocus();
+      return;
+    }
+
+    if (remainingAttempts <= 0) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      Future<void>.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) {
+          _requestCalendarFocus(remainingAttempts: remainingAttempts - 1);
+        }
+      });
+    });
+  }
+
+  /// מבקש פוקוס ללשונית הפעילה אם היא לוח השנה.
+  ///
+  /// המתודה מנסה שוב לזמן קצר אם לוח השנה עדיין לא חובר לעץ בזמן
+  /// הקריאה, למשל בזמן אנימציית מעבר בין מסכים.
+  void requestActiveTabFocus() {
+    if (_tabController.index == 0) {
+      _requestCalendarFocus();
+    }
+  }
+
+  void _handleTabChange() {
+    if (_tabController.index == 0) {
+      _requestCalendarFocus();
+    }
+  }
 
   final List<_TabInfo> _tabs = [
     const _TabInfo(
@@ -57,6 +110,7 @@ class _MoreScreenState extends State<MoreScreen>
     super.initState();
 
     _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController.addListener(_handleTabChange);
 
     _tabWidgets = _tabs.map((tab) {
       if (tab.imageIcon != null) {
@@ -80,7 +134,7 @@ class _MoreScreenState extends State<MoreScreen>
     // יצירת הדפים פעם אחת ב-initState
     _pages = [
       BlocBuilder<CalendarCubit, CalendarState>(
-        builder: (context, _) => const CalendarWidget(),
+        builder: (context, _) => CalendarWidget(key: _calendarKey),
       ),
       ShamorZachorWidget(
         onTitleChanged: (_) {},
@@ -92,15 +146,22 @@ class _MoreScreenState extends State<MoreScreen>
     ];
   }
 
-  /// Reset to calendar page - public method for external access
+  /// מחזיר את מסך "עוד" ללשונית לוח השנה.
+  ///
+  /// אם לשונית לוח השנה כבר פעילה, מתבצעת בקשת פוקוס מחודשת כדי
+  /// לאפשר ניווט מיידי עם מקשי החיצים.
   void resetToCalendar() {
     if (_tabController.index != 0) {
       _tabController.animateTo(0);
+      return;
     }
+
+    _requestCalendarFocus();
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
     super.dispose();
   }
@@ -111,6 +172,18 @@ class _MoreScreenState extends State<MoreScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final isMoreScreenActive =
+        context.select((NavigationBloc bloc) => bloc.state.currentScreen) ==
+            Screen.more;
+
+    if (isMoreScreenActive && _tabController.index == 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          requestActiveTabFocus();
+        }
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 72,
