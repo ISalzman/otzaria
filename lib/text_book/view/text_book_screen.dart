@@ -47,6 +47,7 @@ import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provide
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/models/book_model.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
@@ -485,8 +486,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // שמירת הגדרות נוכחיות כדי לזהות שינויים
     double previousFontSize = context.read<SettingsBloc>().state.fontSize;
     String previousFontFamily = context.read<SettingsBloc>().state.fontFamily;
-    bool previousRemoveNikud =
-        context.read<SettingsBloc>().state.defaultRemoveNikud;
+    SettingsState previousSettingsState = context.read<SettingsBloc>().state;
 
     _settingsSub = context.read<SettingsBloc>().stream.listen((state) {
       _sidebarWidth.value = state.sidebarWidth;
@@ -505,9 +505,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       // אם משפחת הגופן או הסרת ניקוד השתנו, טען מחדש את התוכן
       if (state.fontFamily != previousFontFamily ||
-          state.defaultRemoveNikud != previousRemoveNikud) {
+          shouldReloadForNikudSettingsChange(
+            previous: previousSettingsState,
+            current: state,
+          )) {
         previousFontFamily = state.fontFamily;
-        previousRemoveNikud = state.defaultRemoveNikud;
+        previousSettingsState = state;
 
         if (!mounted) return;
 
@@ -523,6 +526,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 ),
               );
         }
+      } else {
+        previousSettingsState = state;
       }
     });
   }
@@ -702,7 +707,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   void _openSearchWithText(String? selectedText) {
-    _openLeftPaneTab(1, searchText: selectedText?.trim().isNotEmpty == true ? selectedText : _selectedTextForSearch);
+    _openLeftPaneTab(1,
+        searchText: selectedText?.trim().isNotEmpty == true
+            ? selectedText
+            : _selectedTextForSearch);
   }
 
   @override

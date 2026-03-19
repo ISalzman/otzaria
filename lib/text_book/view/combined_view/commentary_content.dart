@@ -4,6 +4,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/app_future_builder.dart';
@@ -34,6 +35,8 @@ class CommentaryContent extends StatefulWidget {
 
 class _CommentaryContentState extends State<CommentaryContent> {
   late Future<String> content;
+  Future<bool>? _removeNikudFuture;
+  String? _removeNikudCacheKey;
 
   @override
   void initState() {
@@ -68,6 +71,24 @@ class _CommentaryContentState extends State<CommentaryContent> {
     return TextRendererService.countSearchMatches(text, searchQuery);
   }
 
+  Future<bool> _resolveRemoveNikud(SettingsState settingsState) {
+    final title = utils.getTitleFromPath(widget.link.path2);
+    final cacheKey =
+        '$title|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}';
+
+    if (_removeNikudFuture != null && _removeNikudCacheKey == cacheKey) {
+      return _removeNikudFuture!;
+    }
+
+    _removeNikudCacheKey = cacheKey;
+    _removeNikudFuture = resolveRemoveNikudForBook(
+      title: title,
+      defaultRemoveNikud: settingsState.defaultRemoveNikud,
+      removeNikudFromTanach: settingsState.removeNikudFromTanach,
+    );
+    return _removeNikudFuture!;
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -86,30 +107,40 @@ class _CommentaryContentState extends State<CommentaryContent> {
                 child: Text('שגיאה בטעינת הפרשן: $error'),
               ),
           builder: (context, data) {
-            // ספירת תוצאות החיפוש ועדכון הרכיב האב
-            if (widget.searchQuery.isNotEmpty) {
-              final textForCount =
-                  widget.removeNikud ? utils.removeVolwels(data) : data;
-              final searchCount =
-                  _countSearchMatches(textForCount, widget.searchQuery);
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                widget.onSearchResultsCountChanged?.call(searchCount);
-              });
-            }
-
             return BlocBuilder<SettingsBloc, SettingsState>(
               builder: (context, settingsState) {
-                return SmartTextWidget(
-                  text: data,
-                  settings: RenderSettings(
-                    removeNikud: widget.removeNikud,
-                    replaceHolyNames: settingsState.replaceHolyNames,
-                    searchText: widget.searchQuery,
-                    currentSearchIndex: widget.currentSearchIndex,
-                    fontSize: settingsState.commentatorsFontSize,
-                    fontFamily: settingsState.commentatorsFontFamily,
-                    lineHeight: settingsState.lineHeight,
-                  ),
+                return FutureBuilder<bool>(
+                  future: _resolveRemoveNikud(settingsState),
+                  initialData: widget.removeNikud,
+                  builder: (context, snapshot) {
+                    final effectiveRemoveNikud =
+                        snapshot.data ?? widget.removeNikud;
+
+                    if (widget.searchQuery.isNotEmpty) {
+                      final textForCount = effectiveRemoveNikud
+                          ? utils.removeVolwels(data)
+                          : data;
+                      final searchCount =
+                          _countSearchMatches(textForCount, widget.searchQuery);
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        widget.onSearchResultsCountChanged?.call(searchCount);
+                      });
+                    }
+
+                    return SmartTextWidget(
+                      text: data,
+                      settings: RenderSettings(
+                        removeNikud: effectiveRemoveNikud,
+                        removeTeamim: !settingsState.showTeamim,
+                        replaceHolyNames: settingsState.replaceHolyNames,
+                        searchText: widget.searchQuery,
+                        currentSearchIndex: widget.currentSearchIndex,
+                        fontSize: settingsState.commentatorsFontSize,
+                        fontFamily: settingsState.commentatorsFontFamily,
+                        lineHeight: settingsState.lineHeight,
+                      ),
+                    );
+                  },
                 );
               },
             );

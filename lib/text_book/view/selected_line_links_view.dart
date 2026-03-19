@@ -6,6 +6,7 @@ import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -15,6 +16,32 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
+
+@visibleForTesting
+RenderSettings buildSelectedLinkRenderSettings({
+  required SettingsState settingsState,
+  required bool removeNikud,
+  required String searchText,
+}) {
+  return RenderSettings(
+    removeNikud: removeNikud,
+    removeTeamim: !settingsState.showTeamim,
+    replaceHolyNames: settingsState.replaceHolyNames,
+    searchText: searchText,
+    fontSize: settingsState.commentatorsFontSize,
+    fontFamily: settingsState.commentatorsFontFamily,
+    lineHeight: settingsState.lineHeight,
+    justifyText: false,
+  );
+}
+
+@visibleForTesting
+String normalizeSelectedLinkText(String text) {
+  return text
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll(RegExp(r'[^\S\r\n]+'), ' ')
+      .trim();
+}
 
 /// Widget שמציג את הקישורים של השורה הנבחרת בלבד
 class SelectedLineLinksView extends StatefulWidget {
@@ -38,6 +65,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   final Map<String, Future<String>> _contentCache = {};
+  final Map<String, Future<bool>> _removeNikudCache = {};
   final Map<String, bool> _expanded = {};
   bool _searchInContent = false;
   Future<List<Link>>? _filteredLinksFuture;
@@ -195,7 +223,9 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
       if (_searchInContent) {
         try {
           final content = await link.content;
-          final cleanContent = utils.stripHtmlIfNeeded(content).toLowerCase();
+          final cleanContent = normalizeSelectedLinkText(
+            utils.stripHtmlIfNeeded(content),
+          ).toLowerCase();
           if (cleanContent.contains(query)) {
             filteredLinks.add(link);
             _linksWithSearchResults.add(keyStr); // מסמן שיש תוצאות בתוכן
@@ -220,6 +250,22 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
     }
 
     return filteredLinks;
+  }
+
+  Future<bool> _resolveRemoveNikudForLink(
+      Link link, SettingsState settingsState) {
+    final title = utils.getTitleFromPath(link.path2);
+    final cacheKey =
+        '$title|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}';
+
+    return _removeNikudCache.putIfAbsent(
+      cacheKey,
+      () => resolveRemoveNikudForBook(
+        title: title,
+        defaultRemoveNikud: settingsState.defaultRemoveNikud,
+        removeNikudFromTanach: settingsState.removeNikudFromTanach,
+      ),
+    );
   }
 
   Widget _buildExpansionTile(Link link) {
@@ -368,7 +414,9 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   Widget _buildHighlightedText(String content, Link link) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
-        final cleanContent = TextRendererService.stripHtml(content);
+        final cleanContent = normalizeSelectedLinkText(
+          TextRendererService.stripHtml(content),
+        );
 
         // חיפוש בתוכן - בדיקה אם הקישור הזה מכיל תוצאות
         String searchText = '';
@@ -379,15 +427,18 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           }
         }
 
-        return SmartTextWidget(
-          text: cleanContent,
-          settings: RenderSettings(
-            replaceHolyNames: settingsState.replaceHolyNames,
-            searchText: searchText,
-            fontSize: settingsState.commentatorsFontSize,
-            fontFamily: settingsState.commentatorsFontFamily,
-            lineHeight: settingsState.lineHeight,
-          ),
+        return FutureBuilder<bool>(
+          future: _resolveRemoveNikudForLink(link, settingsState),
+          builder: (context, snapshot) {
+            return SmartTextWidget(
+              text: cleanContent,
+              settings: buildSelectedLinkRenderSettings(
+                settingsState: settingsState,
+                removeNikud: snapshot.data ?? false,
+                searchText: searchText,
+              ),
+            );
+          },
         );
       },
     );
