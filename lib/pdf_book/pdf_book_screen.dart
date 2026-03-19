@@ -470,6 +470,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         return null;
       },
       viewerOverlayBuilder: (context, size, handleLinkTap) => [
+        Positioned.fill(
+          child: ctx.ContextMenuRegion(
+            contextMenu: _buildPdfContextMenu(),
+            child: const ColoredBox(color: Colors.transparent),
+          ),
+        ),
         // פס גלילה אנכי עם track מלא
         PdfScrollbar(
           controller: widget.tab.pdfViewerController,
@@ -677,14 +683,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onTap: () {
           _pdfViewFocusNode.requestFocus();
         },
-        child: ctx.ContextMenuRegion(
-          contextMenu: _buildPdfContextMenu(),
-          child: PdfViewer.file(
-            filePath,
-            controller: widget.tab.pdfViewerController,
-            passwordProvider: () => passwordDialog(context),
-            params: _buildPdfViewerParams(),
-          ),
+        child: PdfViewer.file(
+          filePath,
+          controller: widget.tab.pdfViewerController,
+          passwordProvider: () => passwordDialog(context),
+          params: _buildPdfViewerParams(),
         ),
       ),
     );
