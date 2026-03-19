@@ -17,36 +17,46 @@ class WindowPersistence {
 
   static Timer? _debounce;
   static bool _restored = false;
+  static bool _isRestoring = false;
+
+  static bool get isRestoring => _isRestoring;
 
   static Future<void> restoreIfAny() async {
     if (_restored) return;
     _restored = true;
+    _isRestoring = true;
 
-    final prefs = await SharedPreferences.getInstance();
-    final isMaximized = prefs.getBool(_kIsMaximized) ?? false;
-    final left = prefs.getDouble(_kLeft);
-    final top = prefs.getDouble(_kTop);
-    final width = prefs.getDouble(_kWidth);
-    final height = prefs.getDouble(_kHeight);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isMaximized = prefs.getBool(_kIsMaximized) ?? false;
+      final left = prefs.getDouble(_kLeft);
+      final top = prefs.getDouble(_kTop);
+      final width = prefs.getDouble(_kWidth);
+      final height = prefs.getDouble(_kHeight);
 
-    // If we don't have a complete set of bounds, do nothing.
-    if (left == null || top == null || width == null || height == null) {
+      // If we don't have a complete set of bounds, do nothing.
+      if (left == null || top == null || width == null || height == null) {
+        if (isMaximized) {
+          await windowManager.maximize();
+        }
+        return;
+      }
+
+      final clampedWidth = width < _minWidth ? _minWidth : width;
+      final clampedHeight = height < _minHeight ? _minHeight : height;
+
+      // Set bounds before maximizing so Windows records this as the "restore size".
+      // Without this, unmaximize would revert to the runner's default dimensions
+      // instead of the user's last chosen windowed size.
+      await windowManager.setBounds(
+        Rect.fromLTWH(left, top, clampedWidth, clampedHeight),
+      );
+
       if (isMaximized) {
         await windowManager.maximize();
       }
-      return;
-    }
-
-    final clampedWidth = width < _minWidth ? _minWidth : width;
-    final clampedHeight = height < _minHeight ? _minHeight : height;
-
-    // Set bounds before maximizing; some platforms ignore setBounds while maximized.
-    await windowManager.setBounds(
-      Rect.fromLTWH(left, top, clampedWidth, clampedHeight),
-    );
-
-    if (isMaximized) {
-      await windowManager.maximize();
+    } finally {
+      _isRestoring = false;
     }
   }
 
@@ -76,11 +86,12 @@ class WindowPersistence {
     final isMaximized = await windowManager.isMaximized();
     await prefs.setBool(_kIsMaximized, isMaximized);
 
-    // When fullscreen, we don't want to overwrite the user's last "normal" size.
-    if (isFullscreen) return;
+    // When fullscreen or maximized, don't overwrite the last "normal" bounds.
+    // getBounds() while maximized returns the full-screen rect, not the
+    // windowed size — saving that would cause a visible jump on the next launch
+    // (setBounds to full-screen rect, then maximize).
+    if (isFullscreen || isMaximized) return;
 
-    // When maximized, saving bounds is optional; we still keep the last bounds
-    // we saw so restoring after leaving maximize doesn't surprise.
     final bounds = await windowManager.getBounds();
     await prefs.setDouble(_kLeft, bounds.left);
     await prefs.setDouble(_kTop, bounds.top);
