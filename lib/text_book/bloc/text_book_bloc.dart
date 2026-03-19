@@ -18,6 +18,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/repository/overrides_repository.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/models/section_identifier.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/migration/core/models/category.dart' as db;
 
@@ -225,8 +226,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         categoryId: book.categoryId,
         fileType: book.fileType,
       );
-      final removeNikud =
-          defaultRemoveNikud && (removeNikudFromTanach || !isTanach);
+      final removeNikud = shouldRemoveNikudForBook(
+        defaultRemoveNikud: defaultRemoveNikud,
+        removeNikudFromTanach: removeNikudFromTanach,
+        isTanach: isTanach,
+      );
 
       // קישורים מתחילים ריקים - יטענו ברקע אחרי הצגת הספר
       const List<Link> emptyLinks = [];
