@@ -22,8 +22,18 @@ class DatabaseConstants {
   /// The default name of the Otzaria folder
   static const String otzariaFolderName = 'אוצריא';
 
-  /// Gets the full database path based on the library path setting
+  /// Gets the full database path based on the library path setting.
+  ///
+  /// On Android, if the user selected a directory in external/scoped storage,
+  /// the DB is copied/moved to internal storage and [keyDbEffectivePath] is set
+  /// as an override so sqlite3 native can open it.
   static String getDatabasePath() {
+    // Android: check for an internal-storage override first
+    final effectivePath =
+        Settings.getValue<String>('key-db-effective-path') ?? '';
+    if (effectivePath.isNotEmpty) {
+      return effectivePath;
+    }
     final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
     final folderName =
         Settings.getValue<String>('key-library-folder-name') ?? '';
@@ -31,8 +41,14 @@ class DatabaseConstants {
   }
 
   /// Gets the directory that contains the main database file.
+  /// When keyDbEffectivePath is set (Android copy to internal storage),
+  /// this still returns the ORIGINAL library directory so that sibling
+  /// files (external-catalog DB, links, metadata) are found correctly.
   static String getDatabaseDirectoryPath() {
-    return path.dirname(getDatabasePath());
+    final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
+    final folderName =
+        Settings.getValue<String>('key-library-folder-name') ?? '';
+    return path.dirname(_buildDbPath(libraryPath, folderName));
   }
 
   /// Gets the full path for the external catalogs database.
