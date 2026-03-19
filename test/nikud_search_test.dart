@@ -138,6 +138,16 @@ void main() {
       expect(removeVolwels(shema), 'שמע ישראל יהוה אלהינו יהוה אחד');
     });
 
+    test('replaceHolyNames should handle nikud before the holy name', () {
+      expect(replaceHolyNames('לַֽיהֹוָֽה'), 'לַֽיקֹוָֽק');
+      expect(replaceHolyNames('לִפְנֵי יְהֹוָֽה'), 'לִפְנֵי יְקֹוָֽק');
+      expect(replaceHolyNames('לַיקֹוָק'), 'לַיקֹוָק');
+    });
+
+    test('replaceHolyNames should not replace inside larger words', () {
+      expect(replaceHolyNames('ויגביהוהו'), 'ויגביהוהו');
+    });
+
     test('Performance test - large text', () {
       // יצירת טקסט גדול עם ניקוד
       final largeText = 'שָׁלוֹם עוֹלָם ' * 1000;
