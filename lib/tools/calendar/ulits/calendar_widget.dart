@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 import 'calendar_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_spinbox/flutter_spinbox.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/daf_yomi/daf_yomi_helper.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -14,8 +12,8 @@ import 'package:otzaria/widgets/dialogs.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/printing/printing_screen.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'calendar_print_helper.dart' as print_helper;
-import 'package:url_launcher/url_launcher.dart';
 
 // הפכנו את הווידג'ט ל-Stateful כדי לתמוך בניווט עם מקשי חיצים
 class CalendarWidget extends StatefulWidget {
@@ -2838,7 +2836,7 @@ class _TimesAndEventsTabViewState extends State<_TimesAndEventsTabView>
                                   WidgetSpan(
                                     child: InkWell(
                                       onTap: () =>
-                                          _openCalendarCalculationPage(context),
+                                          _showCalendarCalculationInfo(context),
                                       child: Text(
                                         'הזמנים שונים',
                                         style: TextStyle(
@@ -3006,43 +3004,15 @@ class _TimesAndEventsTabViewState extends State<_TimesAndEventsTabView>
     );
   }
 
-  // פונקציה לפתיחת דף חישוב הזמנים
-  static Future<void> _openCalendarCalculationPage(BuildContext context) async {
-    final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
-    if (libraryPath == null || libraryPath.isEmpty) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('לא נמצאה תיקיית הספרייה')),
-      );
-      return;
-    }
-
-    final otzariaSitePath = Directory(
-        '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}otzaria-site');
-
-    if (!await otzariaSitePath.exists()) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('לא נמצאה תיקיית otzaria-site')),
-      );
-      return;
-    }
-
-    final htmlFile = File(
-        '${otzariaSitePath.path}${Platform.pathSeparator}calendar-calculation.html');
-    if (!await htmlFile.exists()) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('הקובץ calendar-calculation.html לא נמצא')),
-      );
-      return;
-    }
-
-    final uri = Uri.file(htmlFile.path);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
+  // פונקציה להצגת מידע על חישוב הזמנים
+  static Future<void> _showCalendarCalculationInfo(BuildContext context) async {
+    await showSingleActionDialog(
+      context: context,
+      title: 'אודות חישובי הלוח',
+      content:
+          'חישובי הלוח בתוכנה זו מיוסדים על דרכו של הרב ישראל דוד הרפנס, כפי שנתבארה בספרו ישראל והזמנים ובשאר ספריו העוסקים בענייני זמני הלכה. מטרת הדברים איננה להציג חישוב עצמאי חדש, אלא ליישם בצורה מסודרת, מדויקת ובהירה את כללי חשבון הלוח העברי על פי הביאור והסידור שנתפרשו בספריו.\n\nהרב הרפנס, מו"ץ בהתאחדות הרבנים ורב קהילת ישראל והזמנים, נודע במיוחד בבירור סוגיות הזמן בהלכה, וספרו ישראל והזמנים נזכר בקובץ זה כספר היסוד שעל פיו נבנתה תשתית החישוב שבתוכנה. לצד ספר זה, חיבר הרב גם ספרים נוספים בענייני הלכה וזמנים.',
+      confirmText: 'הבנתי',
+    );
   }
 }
 
