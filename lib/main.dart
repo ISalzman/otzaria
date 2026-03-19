@@ -47,6 +47,8 @@ import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/migration/file_to_db_migrator.dart';
+import 'package:otzaria/file_sync/file_sync_bloc.dart';
+import 'package:otzaria/file_sync/file_sync_repository.dart';
 
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -298,6 +300,15 @@ Future<void> _runAppBootstrap() async {
                   return ShamorZachorProgressProvider(
                       dataProvider: dataProvider);
                 },
+              ),
+              BlocProvider<FileSyncBloc>(
+                lazy: true, // יוצר רק כשנדרש לראשונה
+                create: (context) => FileSyncBloc(
+                  repository: FileSyncRepository(
+                    githubOwner: 'Otzaria',
+                    repositoryName: 'SeforimLibrary',
+                  ),
+                ),
               ),
             ],
             child: const App(),

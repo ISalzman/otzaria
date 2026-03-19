@@ -12,7 +12,6 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/daf_yomi/daf_yomi_helper.dart';
 import 'package:otzaria/file_sync/file_sync_bloc.dart';
-import 'package:otzaria/file_sync/file_sync_repository.dart';
 import 'package:otzaria/file_sync/file_sync_state.dart';
 import 'package:otzaria/daf_yomi/daf_yomi.dart';
 import 'package:otzaria/file_sync/file_sync_widget.dart';
@@ -85,21 +84,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   static int _normalizeOrder(int order) =>
       order >= 0 ? order : 1000 + order.abs();
 
-  // FileSyncBloc יווצר פעם אחת בלבד
-  late final FileSyncBloc _fileSyncBloc;
-
   @override
   void initState() {
     super.initState();
     context.read<LibraryBloc>().add(LoadLibrary());
-
-    // יצירת FileSyncBloc פעם אחת בלבד
-    _fileSyncBloc = FileSyncBloc(
-      repository: FileSyncRepository(
-        githubOwner: "Otzaria",
-        repositoryName: "SeforimLibrary",
-      ),
-    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -116,7 +104,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   @override
   void dispose() {
-    _fileSyncBloc.close();
     super.dispose();
   }
 
@@ -1080,18 +1067,15 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   /// בניית כפתור סינכרון - משותף לשתי הפונקציות
   ActionButtonData _buildSyncActionButton() {
     return ActionButtonData(
-      widget: BlocProvider.value(
-        value: _fileSyncBloc,
-        child: BlocListener<FileSyncBloc, FileSyncState>(
-          listener: (context, syncState) {
-            if ((syncState.status == FileSyncStatus.completed ||
-                    syncState.status == FileSyncStatus.error) &&
-                syncState.hasNewSync) {
-              context.read<LibraryBloc>().add(RefreshLibrary());
-            }
-          },
-          child: const SyncIconButton(),
-        ),
+      widget: BlocListener<FileSyncBloc, FileSyncState>(
+        listener: (context, syncState) {
+          if ((syncState.status == FileSyncStatus.completed ||
+                  syncState.status == FileSyncStatus.error) &&
+              syncState.hasNewSync) {
+            context.read<LibraryBloc>().add(RefreshLibrary());
+          }
+        },
+        child: const SyncIconButton(),
       ),
       icon: FluentIcons.arrow_sync_24_regular,
       tooltip: 'סינכרון',
