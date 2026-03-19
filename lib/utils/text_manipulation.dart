@@ -412,8 +412,38 @@ String formatTextWithParentheses(String text) {
 String replaceHolyNames(String s) {
   return s.replaceAllMapped(
     SearchRegexPatterns.holyName,
-    (match) => 'י${match[1]}ק${match[2]}ו${match[3]}ק${match[4]}',
+    (match) {
+      if (_hasThreeContiguousHebrewLettersBeforeMatch(s, match.start)) {
+        return match.group(0)!;
+      }
+
+      return 'י${match[1]}ק${match[2]}ו${match[3]}ק${match[4]}';
+    },
   );
+}
+
+bool _hasThreeContiguousHebrewLettersBeforeMatch(String text, int matchStart) {
+  var contiguousLetters = 0;
+
+  for (var index = matchStart - 1; index >= 0; index--) {
+    final char = text[index];
+
+    if (RegExp(r'[\p{Mn}]', unicode: true).hasMatch(char)) {
+      continue;
+    }
+
+    if (RegExp(r'[א-ת]').hasMatch(char)) {
+      contiguousLetters++;
+      if (contiguousLetters >= 3) {
+        return true;
+      }
+      continue;
+    }
+
+    break;
+  }
+
+  return false;
 }
 
 String removeTeamim(String s) => s
