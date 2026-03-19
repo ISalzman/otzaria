@@ -2,10 +2,13 @@
 
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/utils/ref_helper.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 
 /// Represents a link between two books in the library.
 class Link {
+  static final Map<String, Future<String>> _displayReferenceCache = {};
+
   /// The Hebrew reference of the link.
   final String heRef;
 
@@ -21,6 +24,12 @@ class Link {
   /// The type of the connection in the link.
   final String connectionType;
 
+  /// The category ID of the target book when known.
+  final int? targetCategoryId;
+
+  /// The file type of the target book when known.
+  final String? targetFileType;
+
   /// The start character position of the link in the text (optional, for character-based links).
   final int? start;
 
@@ -34,6 +43,8 @@ class Link {
     required this.path2,
     required this.index2,
     required this.connectionType,
+    this.targetCategoryId,
+    this.targetFileType,
     this.start,
     this.end,
   });
@@ -41,6 +52,66 @@ class Link {
   /// Returns the content of the link as a [Future] of [String].
   Future<String> get content =>
       LibraryProviderManager.instance.getLinkContent(this);
+
+  /// מחזירה כתובת תצוגה בטוחה גם כאשר לא ניתן לחשב TOC מלא.
+  String get fallbackDisplayReference {
+    final targetTitle = utils.getTitleFromPath(path2);
+    return formatDisplayReference(
+      bookTitle: targetTitle,
+      fallbackRef: heRef,
+    );
+  }
+
+  /// מחזירה כתובת תצוגה מלאה של ספר היעד, עם מטמון לפי ספר ואינדקס.
+  Future<String> get displayReference {
+    final cacheKey = '${path2}_$index2';
+    return _displayReferenceCache.putIfAbsent(cacheKey, () async {
+      final targetTitle = utils.getTitleFromPath(path2);
+      final targetFileType = _resolveTargetFileType();
+      if (index2 <= 0) {
+        return formatDisplayReference(
+          bookTitle: targetTitle,
+          fallbackRef: heRef,
+        );
+      }
+
+      try {
+        final resolvedRef = await refFromIndex(
+          index2 - 1,
+          LibraryProviderManager.instance.getBookToc(
+                targetTitle,
+                categoryId: targetCategoryId,
+                fileType: targetFileType,
+              ).then((toc) => toc ?? const <TocEntry>[]),
+        );
+        return formatDisplayReference(
+          bookTitle: targetTitle,
+          resolvedRef: resolvedRef,
+          fallbackRef: heRef,
+        );
+      } catch (_) {
+        return formatDisplayReference(
+          bookTitle: targetTitle,
+          fallbackRef: heRef,
+        );
+      }
+    });
+  }
+
+  String? _resolveTargetFileType() {
+    if (targetFileType != null && targetFileType!.trim().isNotEmpty) {
+      return targetFileType;
+    }
+
+    final normalizedPath = path2.replaceAll('\\', '/');
+    final lastDot = normalizedPath.lastIndexOf('.');
+    final lastSlash = normalizedPath.lastIndexOf('/');
+    if (lastDot > lastSlash && lastDot != -1) {
+      return normalizedPath.substring(lastDot + 1).toLowerCase();
+    }
+
+    return null;
+  }
 
   /// Constructs a [Link] object from a JSON object.
   ///
@@ -60,6 +131,10 @@ class Link {
         connectionType = json['Conection Type'].toString().isEmpty
             ? 'reference'
             : json['Conection Type'].toString(),
+      targetCategoryId = json['category_id_2'] != null
+        ? int.tryParse(json['category_id_2'].toString())
+        : null,
+      targetFileType = json['file_type_2']?.toString(),
         start = json['start'] != null
             ? int.tryParse(json['start'].toString())
             : null,

@@ -255,23 +255,32 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
                 fontWeight: FontWeight.bold,
                 fontFamily: settingsState.commentatorsFontFamily,
               ),
+              textDirection: TextDirection.rtl,
             );
           },
         ),
         subtitle: BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
-            String displaySubtitle = link.heRef;
-            if (settingsState.replaceHolyNames) {
-              displaySubtitle = utils.replaceHolyNames(displaySubtitle);
-            }
-            return Text(
-              displaySubtitle,
-              style: TextStyle(
-                fontSize: settingsState.commentatorsFontSize - 4,
-                fontWeight: FontWeight.normal,
-                fontFamily: settingsState.commentatorsFontFamily,
-                color: Theme.of(context).colorScheme.onSurface.withAlpha(128),
-              ),
+            return FutureBuilder<String>(
+              future: link.displayReference,
+              builder: (context, snapshot) {
+                String displaySubtitle =
+                    snapshot.data ?? link.fallbackDisplayReference;
+                if (settingsState.replaceHolyNames) {
+                  displaySubtitle = utils.replaceHolyNames(displaySubtitle);
+                }
+                return Text(
+                  displaySubtitle,
+                  style: TextStyle(
+                    fontSize: settingsState.commentatorsFontSize - 4,
+                    fontWeight: FontWeight.normal,
+                    fontFamily: settingsState.commentatorsFontFamily,
+                    color:
+                        Theme.of(context).colorScheme.onSurface.withAlpha(128),
+                  ),
+                  textDirection: TextDirection.rtl,
+                );
+              },
             );
           },
         ),

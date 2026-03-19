@@ -1055,21 +1055,29 @@ class _CollapsibleCommentaryGroupState
                   children: [
                     BlocBuilder<SettingsBloc, SettingsState>(
                       builder: (context, settingsState) {
-                        String displayTitle = link.heRef;
-                        if (settingsState.replaceHolyNames) {
-                          displayTitle = utils.replaceHolyNames(displayTitle);
-                        }
-                        return Text(
-                          displayTitle,
-                          style: TextStyle(
-                            fontSize: widget.fontSize * 0.75,
-                            fontWeight: FontWeight.normal,
-                            fontFamily: AppFonts.defaultFont,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.5),
-                          ),
+                        return FutureBuilder<String>(
+                          future: link.displayReference,
+                          builder: (context, snapshot) {
+                            String displayTitle =
+                                snapshot.data ?? link.fallbackDisplayReference;
+                            if (settingsState.replaceHolyNames) {
+                              displayTitle =
+                                  utils.replaceHolyNames(displayTitle);
+                            }
+                            return Text(
+                              displayTitle,
+                              style: TextStyle(
+                                fontSize: widget.fontSize * 0.75,
+                                fontWeight: FontWeight.normal,
+                                fontFamily: AppFonts.defaultFont,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.5),
+                              ),
+                              textDirection: TextDirection.rtl,
+                            );
+                          },
                         );
                       },
                     ),
