@@ -19,13 +19,8 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
     on<StopSync>(_onStopSync);
     on<UpdateProgress>(_onUpdateProgress);
     on<ResetState>(_onResetState);
-
-    // Check for auto-sync setting and offline mode
-    final isAutoSync =
-        Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true;
-    if (isAutoSync && !_isOffline) {
-      add(const StartSync());
-    }
+    // הסינכרון האוטומטי מופעל ע"י MainWindowScreen לאחר טעינת הספרייה,
+    // ולא כאן - כדי למנוע התנגשות DB בזמן הטעינה.
   }
 
   Future<void> _onStartSync(

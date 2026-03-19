@@ -36,6 +36,8 @@ import 'package:otzaria/workspaces/bloc/workspace_state.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/file_sync/file_sync_bloc.dart';
+import 'package:otzaria/file_sync/file_sync_event.dart';
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
@@ -75,6 +77,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   bool _hasCheckedAutoIndex = false;
   bool _hasRestoredFullscreen = false;
+  bool _hasStartedFileSync = false;
 
   @override
   void initState() {
@@ -97,6 +100,24 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     // NOTE: Background sync is now triggered by LibraryBloc listener
     // (see MultiBlocListener) to avoid DB lock contention during library loading.
+  }
+
+  /// Trigger FileSyncBloc to start syncing AFTER the library is loaded.
+  /// Runs only once per app session (guard prevents re-triggering on RefreshLibrary).
+  void _startFileSync() {
+    if (_hasStartedFileSync) return;
+    _hasStartedFileSync = true;
+
+    final isAutoSync =
+        Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true;
+    final isOffline = context.read<SettingsBloc>().state.isOfflineMode;
+    if (isAutoSync && !isOffline) {
+      try {
+        context.read<FileSyncBloc>().add(const StartSync());
+      } catch (e) {
+        debugPrint('Could not start file sync: $e');
+      }
+    }
   }
 
   /// Initialize background file sync AFTER library is loaded.
@@ -373,6 +394,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
             // Library finished loading - now safe to start background sync
             // without DB lock contention
             _initializeBackgroundSync();
+            // Also start FileSyncBloc (DB DIFF sync from GitHub)
+            _startFileSync();
           },
         ),
         BlocListener<SettingsBloc, SettingsState>(
