@@ -55,7 +55,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
       AppFonts.fontPaths.keys.first; // ברירת מחדל - הגופן הראשון ברשימה
   late int startLine;
   late int endLine;
-  late Future<Uint8List> pdf;
+  late Future<Uint8List> _previewPdf;
   pw.PageOrientation orientation = pw.PageOrientation.portrait;
   PdfPageFormat format = PdfPageFormat.a4;
   double pageMargin = 20.0;
@@ -103,7 +103,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (widget.createPdfOverride != null) {
       _isHeaderMode = false;
       _flatHeaders = const [];
-      pdf = _createOutputPdf(format);
+      _previewPdf = _createBasePdf(format);
       return;
     }
 
@@ -120,11 +120,12 @@ class _PrintingScreenState extends State<PrintingScreen> {
       _isHeaderMode = false;
       () async {
         endLine = min(startLine + 3, (await widget.data).split('\n').length);
+        _refreshPreviewPdf();
         setState(() {});
       }();
     }
 
-    pdf = _createOutputPdf(format);
+    _previewPdf = _createBasePdf(format);
   }
 
   @override
@@ -165,20 +166,17 @@ class _PrintingScreenState extends State<PrintingScreen> {
         endLine = totalLines;
       }
 
+      _refreshPreviewPdf();
       setState(() {});
-    }
-  }
-
-  @override
-  void setState(VoidCallback fn) {
-    pdf = _createOutputPdf(format);
-    if (mounted) {
-      super.setState(fn);
     }
   }
 
   void printPdf() {
     Printing.layoutPdf(onLayout: createPdf);
+  }
+
+  void _refreshPreviewPdf() {
+    _previewPdf = _createBasePdf(format);
   }
 
   Future<Uint8List> _createOutputPdf(PdfPageFormat format) async {
@@ -627,7 +625,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                   );
                   if (path != null) {
                     final file = File(path);
-                    await file.writeAsBytes(await pdf);
+                    await file.writeAsBytes(await _createOutputPdf(format));
                   }
                 },
                 icon: const Icon(FluentIcons.save_24_regular),
@@ -638,7 +636,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                 onPressed: () async {
                   await Printing.layoutPdf(
                     usePrinterSettings: true,
-                    onLayout: (PdfPageFormat format) async => pdf,
+                    onLayout: _createOutputPdf,
                     format: format,
                   );
                 },
@@ -723,6 +721,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                           if (value == null) return;
                                           setState(() {
                                             format = value;
+                                            _refreshPreviewPdf();
                                           });
                                         },
                                         items: const {
@@ -748,7 +747,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         onChanged: (pw.PageOrientation? value) {
                                           if (value == null) return;
                                           orientation = value;
-                                          setState(() {});
+                                          setState(_refreshPreviewPdf);
                                         },
                                         items: const [
                                           DropdownMenuItem(
@@ -809,7 +808,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                             children: [
                               Expanded(
                                 child: FutureBuilder(
-                                  future: pdf,
+                                  future: _previewPdf,
                                   builder: (context, snapshot) {
                                     if (snapshot.connectionState ==
                                             ConnectionState.done &&
@@ -956,6 +955,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         onChanged: (value) {
                                           setState(() {
                                             _includeCommentaries = value;
+                                            _refreshPreviewPdf();
                                           });
                                         },
                                       ),
@@ -970,6 +970,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                             if (!value) {
                                               _personalNotesCache = null;
                                             }
+                                            _refreshPreviewPdf();
                                           });
                                         },
                                       ),
@@ -1030,6 +1031,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                                           _flatHeaders.length -
                                                               1);
                                                       _updateRangeByHeaders();
+                                                    } else {
+                                                      _refreshPreviewPdf();
                                                     }
                                                   });
                                                 },
@@ -1073,7 +1076,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         onChanged: (value) {
                                           startLine = value.start.toInt();
                                           endLine = value.end.toInt();
-                                          setState(() {});
+                                          setState(_refreshPreviewPdf);
                                         },
                                       ),
                                       Text(
@@ -1193,6 +1196,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       onChanged: (value) {
                                         setState(() {
                                           fontSize = value;
+                                          _refreshPreviewPdf();
                                         });
                                       },
                                     ),
@@ -1237,6 +1241,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                               if (result != null) {
                                                 setState(() {
                                                   fontName = result;
+                                                  _refreshPreviewPdf();
                                                 });
                                               }
                                             },
@@ -1277,6 +1282,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       onChanged: (value) {
                                         setState(() {
                                           _removeNikud = !value;
+                                          _refreshPreviewPdf();
                                         });
                                       },
                                     ),
@@ -1288,6 +1294,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       onChanged: (value) {
                                         setState(() {
                                           _removeTaamim = !value;
+                                          _refreshPreviewPdf();
                                         });
                                       },
                                     ),
@@ -1314,6 +1321,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       onChanged: (value) {
                                         setState(() {
                                           pageMargin = value;
+                                          _refreshPreviewPdf();
                                         });
                                       },
                                     ),
@@ -1328,7 +1336,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         borderRadius: BorderRadius.circular(8),
                                         onChanged: (PdfPageFormat? value) {
                                           format = value!;
-                                          setState(() {});
+                                          setState(_refreshPreviewPdf);
                                         },
                                         items: formats.entries.map<
                                             DropdownMenuItem<
@@ -1352,7 +1360,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                         borderRadius: BorderRadius.circular(8),
                                         onChanged: (pw.PageOrientation? value) {
                                           orientation = value!;
-                                          setState(() {});
+                                          setState(_refreshPreviewPdf);
                                         },
                                         items: const [
                                           DropdownMenuItem(
@@ -1413,7 +1421,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                             children: [
                               Expanded(
                                 child: FutureBuilder(
-                                  future: pdf,
+                                  future: _previewPdf,
                                   builder: (context, snapshot) {
                                     if (snapshot.connectionState ==
                                             ConnectionState.done &&
