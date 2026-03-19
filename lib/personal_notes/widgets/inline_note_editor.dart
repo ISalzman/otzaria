@@ -76,6 +76,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
           referenceText: widget.referenceText,
           bookId: widget.bookId,
           linkableNotes: widget.linkableNotes,
+          onSaveShortcut: _handleSave,
         ),
         const SizedBox(height: 8),
         Row(

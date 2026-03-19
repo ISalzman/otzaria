@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_link_dialog.dart';
@@ -42,6 +43,7 @@ class PersonalNoteEditorBody extends StatefulWidget {
   final String? hintText;
   final List<PersonalNote> linkableNotes;
   final String? bookId;
+  final VoidCallback? onSaveShortcut;
 
   const PersonalNoteEditorBody({
     super.key,
@@ -53,6 +55,7 @@ class PersonalNoteEditorBody extends StatefulWidget {
     this.referenceText,
     this.hintText,
     this.bookId,
+    this.onSaveShortcut,
   });
 
   @override
@@ -139,16 +142,25 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
                 const Divider(height: 1),
                 SizedBox(
                   height: 220,
-                  child: quill.QuillEditor(
-                    controller: widget.controller.quillController,
-                    focusNode: widget.focusNode,
-                    scrollController: widget.scrollController,
-                    config: quill.QuillEditorConfig(
-                      autoFocus: widget.autofocus,
-                      expands: false,
-                      padding: const EdgeInsets.all(12),
-                      placeholder:
-                          widget.hintText ?? 'כתוב כאן... (Alt+Enter לשמירה)',
+                  child: CallbackShortcuts(
+                    bindings: {
+                      if (widget.onSaveShortcut != null)
+                        const SingleActivator(
+                          LogicalKeyboardKey.enter,
+                          alt: true,
+                        ): widget.onSaveShortcut!,
+                    },
+                    child: quill.QuillEditor(
+                      controller: widget.controller.quillController,
+                      focusNode: widget.focusNode,
+                      scrollController: widget.scrollController,
+                      config: quill.QuillEditorConfig(
+                        autoFocus: widget.autofocus,
+                        expands: false,
+                        padding: const EdgeInsets.all(12),
+                        placeholder:
+                            widget.hintText ?? 'כתוב כאן... (Alt+Enter לשמירה)',
+                      ),
                     ),
                   ),
                 ),
