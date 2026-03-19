@@ -42,6 +42,7 @@ class _DictionaryScreenState extends State<DictionaryScreen>
         Expanded(
           child: TabBarView(
             controller: _tabController,
+            physics: const NeverScrollableScrollPhysics(),
             children: const [
               AramaicDictionaryScreen(),
               AcronymsDictionaryScreen(),
