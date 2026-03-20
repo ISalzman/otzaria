@@ -18,6 +18,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/repository/overrides_repository.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/models/section_identifier.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/migration/core/models/category.dart' as db;
 
@@ -90,6 +91,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<ClearHighlightedLine>(_onClearHighlightedLine);
     on<TogglePinLeftPane>(_onTogglePinLeftPane);
     on<UpdateSearchText>(_onUpdateSearchText);
+    on<ApplyFullBookContent>(_onApplyFullBookContent);
     on<CreateNoteFromToolbar>(_onCreateNoteFromToolbar);
     on<UpdateSelectedTextForNote>(_onUpdateSelectedTextForNote);
 
@@ -192,8 +194,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           content = preview;
 
           // Load full book in background
-          _loadFullBookInBackground(book, emit, event, visibleIndices,
-              searchText, showLeftPane, commentators);
+          _loadFullBookInBackground(book);
         } else {
           // Preview failed, load full book normally
           content = await repository.getBookContent(book);
@@ -225,8 +226,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         categoryId: book.categoryId,
         fileType: book.fileType,
       );
-      final removeNikud =
-          defaultRemoveNikud && (removeNikudFromTanach || !isTanach);
+      final removeNikud = shouldRemoveNikudForBook(
+        defaultRemoveNikud: defaultRemoveNikud,
+        removeNikudFromTanach: removeNikudFromTanach,
+        isTanach: isTanach,
+      );
 
       // קישורים מתחילים ריקים - יטענו ברקע אחרי הצגת הספר
       const List<Link> emptyLinks = [];
@@ -637,6 +641,26 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
+  void _onApplyFullBookContent(
+    ApplyFullBookContent event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is! TextBookLoaded) {
+      return;
+    }
+
+    final currentState = state as TextBookLoaded;
+    if (currentState.book.title != event.bookTitle) {
+      return;
+    }
+
+    if (listEquals(currentState.content, event.content)) {
+      return;
+    }
+
+    emit(currentState.copyWith(content: event.content));
+  }
+
   void _onCreateNoteFromToolbar(
     CreateNoteFromToolbar event,
     Emitter<TextBookState> emit,
@@ -965,16 +989,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   /// Loads the full book in the background and updates the state
   void _loadFullBookInBackground(
     TextBook book,
-    Emitter<TextBookState> emit,
-    LoadContent event,
-    List<int> visibleIndices,
-    String searchText,
-    bool showLeftPane,
-    List<String> commentators,
   ) async {
     try {
       // Load full content
       final fullContent = await repository.getBookContent(book);
+
+      if (fullContent.isEmpty) {
+        return;
+      }
 
       // Check if still in the same book (user might have navigated away)
       if (isClosed || state is! TextBookLoaded) {
@@ -986,8 +1008,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         return;
       }
 
-      // Update state with full content
-      emit(currentState.copyWith(
+      add(ApplyFullBookContent(
+        bookTitle: book.title,
         content: fullContent.split('\n'),
       ));
     } catch (e) {

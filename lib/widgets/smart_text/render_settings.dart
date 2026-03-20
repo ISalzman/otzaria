@@ -52,6 +52,9 @@ class RenderSettings {
   /// האם לעצב סוגריים
   final bool formatParentheses;
 
+  /// האם ליישר טקסט ב-justify
+  final bool justifyText;
+
   const RenderSettings({
     this.removeNikud = false,
     this.removeTeamim = true,
@@ -68,6 +71,7 @@ class RenderSettings {
     this.lineHeight = 1.5,
     this.enableInlineLinks = false,
     this.formatParentheses = true,
+    this.justifyText = true,
   });
 
   /// יוצר עותק עם שינויים
@@ -87,6 +91,7 @@ class RenderSettings {
     double? lineHeight,
     bool? enableInlineLinks,
     bool? formatParentheses,
+    bool? justifyText,
   }) {
     return RenderSettings(
       removeNikud: removeNikud ?? this.removeNikud,
@@ -104,6 +109,7 @@ class RenderSettings {
       lineHeight: lineHeight ?? this.lineHeight,
       enableInlineLinks: enableInlineLinks ?? this.enableInlineLinks,
       formatParentheses: formatParentheses ?? this.formatParentheses,
+      justifyText: justifyText ?? this.justifyText,
     );
   }
 
@@ -122,7 +128,8 @@ class RenderSettings {
         fontFamily == other.fontFamily &&
         lineHeight == other.lineHeight &&
         enableInlineLinks == other.enableInlineLinks &&
-        formatParentheses == other.formatParentheses;
+        formatParentheses == other.formatParentheses &&
+        justifyText == other.justifyText;
   }
 
   @override
@@ -140,6 +147,7 @@ class RenderSettings {
       lineHeight,
       enableInlineLinks,
       formatParentheses,
+      justifyText,
     );
   }
 }

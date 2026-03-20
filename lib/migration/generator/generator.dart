@@ -561,6 +561,7 @@ class DatabaseGenerator {
 
     // local-parent-index → [local child indices] (for isLastChild / hasChildren)
     final entriesByParent = <int?, List<int>>{};
+    final currentReference = <String>[];
 
     const batchSize = 1000;
     final linesBatch = <Line>[];
@@ -574,6 +575,9 @@ class DatabaseGenerator {
       if (level > 0) {
         if (plainText.trim().isEmpty) {
           localParentStack.remove(level);
+          if (currentReference.length >= level) {
+            currentReference.removeRange(level - 1, currentReference.length);
+          }
         } else {
           // Find the nearest ancestor's local index
           int? parentLocalIdx;
@@ -593,16 +597,26 @@ class DatabaseGenerator {
             lineIndex: lineIndex,
           ));
 
+          if (currentReference.length >= level) {
+            currentReference.removeRange(level - 1, currentReference.length);
+          }
+          currentReference.add(plainText);
+
           localParentStack[level] = localIdx;
           entriesByParent.putIfAbsent(parentLocalIdx, () => []).add(localIdx);
         }
       }
+
+      final lineHeRef = currentReference.isEmpty
+          ? null
+          : currentReference.join(', ').trim();
 
       linesBatch.add(Line(
         id: 0, // auto-assigned by SQLite
         bookId: bookId,
         lineIndex: lineIndex,
         content: line,
+        heRef: lineHeRef?.isEmpty == true ? null : lineHeRef,
       ));
 
       if (linesBatch.length >= batchSize) {

@@ -922,18 +922,25 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                 fontWeight: FontWeight.bold,
                 fontFamily: settingsState.commentatorsFontFamily,
               ),
+              textDirection: TextDirection.rtl,
             ),
-            subtitle: Text(
-              link.heRef,
-              style: TextStyle(
-                fontSize: settingsState.commentatorsFontSize - 4,
-                fontWeight: FontWeight.normal,
-                fontFamily: settingsState.commentatorsFontFamily,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.5),
-              ),
+            subtitle: FutureBuilder<String>(
+              future: link.displayReference,
+              builder: (context, snapshot) {
+                return Text(
+                  snapshot.data ?? link.fallbackDisplayReference,
+                  style: TextStyle(
+                    fontSize: settingsState.commentatorsFontSize - 4,
+                    fontWeight: FontWeight.normal,
+                    fontFamily: settingsState.commentatorsFontFamily,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
+                  ),
+                  textDirection: TextDirection.rtl,
+                );
+              },
             ),
             onExpansionChanged: (expanded) {
               if (expanded && !_linkContentCache.containsKey(keyStr)) {
@@ -1303,17 +1310,25 @@ class _CollapsibleCommentaryGroupState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      link.heRef,
-                      style: TextStyle(
-                        fontSize: widget.settingsState.commentatorsFontSize - 4,
-                        fontWeight: FontWeight.normal,
-                        fontFamily: widget.settingsState.commentatorsFontFamily,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.5),
-                      ),
+                    FutureBuilder<String>(
+                      future: link.displayReference,
+                      builder: (context, snapshot) {
+                        return Text(
+                          snapshot.data ?? link.fallbackDisplayReference,
+                          style: TextStyle(
+                            fontSize:
+                                widget.settingsState.commentatorsFontSize - 4,
+                            fontWeight: FontWeight.normal,
+                            fontFamily:
+                                widget.settingsState.commentatorsFontFamily,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.5),
+                          ),
+                          textDirection: TextDirection.rtl,
+                        );
+                      },
                     ),
                     const SizedBox(height: 4),
                     PdfCommentaryContent(
