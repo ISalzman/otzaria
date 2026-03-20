@@ -150,13 +150,6 @@ class _PdfCommentatorsSelectorState extends State<PdfCommentatorsSelector> {
     final ungrouped = await filterGroup(
         CommentatorGroup.groupByTitle(_groups, 'שאר מפרשים').commentators);
 
-    _torahShebichtav = torahShebichtav;
-    _chazal = chazal;
-    _rishonim = rishonim;
-    _acharonim = acharonim;
-    _modern = modern;
-    _ungrouped = ungrouped;
-
     // בניית הרשימה עם כותרות לפני כל קבוצה קיימת
     final List<String> merged = [];
 
@@ -190,8 +183,17 @@ class _PdfCommentatorsSelectorState extends State<PdfCommentatorsSelector> {
       merged.add(_ungroupedButton);
       merged.addAll(ungrouped);
     }
+
     if (mounted) {
-      setState(() => commentatorsList = merged);
+      setState(() {
+        _torahShebichtav = torahShebichtav;
+        _chazal = chazal;
+        _rishonim = rishonim;
+        _acharonim = acharonim;
+        _modern = modern;
+        _ungrouped = ungrouped;
+        commentatorsList = merged;
+      });
     }
   }
 
