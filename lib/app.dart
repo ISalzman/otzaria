@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -5,6 +8,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:otzaria/navigation/main_window_screen.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:window_manager/window_manager.dart';
 
 // AppColors הועבר ל-lib/theme/app_colors.dart
 
@@ -43,6 +47,8 @@ class App extends StatelessWidget {
         final state = settingsState;
         final lightColorScheme =
             _createColorScheme(state.seedColor, Brightness.light);
+        final useVirtualWindowFrame = !kIsWeb &&
+            (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
         return MaterialApp(
           navigatorKey: navigatorKey,
           scaffoldMessengerKey: scaffoldMessengerKey,
@@ -120,6 +126,15 @@ class App extends StatelessWidget {
           themeMode: state.followSystemTheme
               ? ThemeMode.system
               : (state.isDarkMode ? ThemeMode.dark : ThemeMode.light),
+          builder: (context, child) {
+            if (!useVirtualWindowFrame || child == null) {
+              return child ?? const SizedBox.shrink();
+            }
+
+            return VirtualWindowFrame(
+              child: child,
+            );
+          },
           home: const MainWindowScreen(),
         );
       },
