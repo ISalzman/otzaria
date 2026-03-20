@@ -114,6 +114,67 @@ class _ScrollableTabBarWithArrowsState
   void _scrollLeft() => _scrollBy(-150);
   void _scrollRight() => _scrollBy(150);
 
+  Widget _buildTabBar({bool shrinkWrap = false}) {
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: (metricsNotification) {
+        final metrics = metricsNotification.metrics;
+        if (metrics.axis == Axis.horizontal) {
+          _adoptPositionFrom(metricsNotification.context);
+          _handleScrollMetrics(metrics);
+        }
+        return false;
+      },
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.metrics.axis == Axis.horizontal) {
+            final ctx = notification.context;
+            if (ctx != null) {
+              _adoptPositionFrom(ctx);
+            }
+            _handleScrollMetrics(notification.metrics);
+          }
+          return false;
+        },
+        child: Builder(
+          builder: (scrollCtx) {
+            if (!identical(_scrollContext, scrollCtx)) {
+              _scrollContext = scrollCtx;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _attachAndSyncPosition();
+              });
+            }
+            final tabBar = TabBar(
+              controller: widget.controller,
+              isScrollable: true,
+              tabs: widget.tabs,
+              tabAlignment: TabAlignment.start,
+              padding: EdgeInsets.zero,
+              labelPadding: EdgeInsets.zero,
+              indicatorPadding: EdgeInsets.zero,
+              dividerColor: Colors.transparent,
+              indicator: const BoxDecoration(),
+              overlayColor: WidgetStateProperty.all(Colors.transparent),
+              splashFactory: NoSplash.splashFactory,
+            );
+
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: shrinkWrap ? IntrinsicWidth(child: tabBar) : tabBar,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  AlignmentGeometry _nonOverflowAlignment() {
+    if (widget.tabAlignment == TabAlignment.center) {
+      return Alignment.center;
+    }
+
+    return AlignmentDirectional.centerStart;
+  }
+
   /// בונה כפתור חץ לגלילה
   Widget _buildArrowButton({
     required String keyValue,
@@ -151,6 +212,13 @@ class _ScrollableTabBarWithArrowsState
     final bool hasOverflow = _canScrollLeft || _canScrollRight;
     final bool showArrows = !widget.hideArrowsWhenNotScrollable || hasOverflow;
 
+    if (!hasOverflow) {
+      return Align(
+        alignment: _nonOverflowAlignment(),
+        child: _buildTabBar(shrinkWrap: true),
+      );
+    }
+
     return Row(
       children: [
         // חץ שמאלי – מוסתר לגמרי אם אין גלילה והאפשרות מופעלת
@@ -164,57 +232,7 @@ class _ScrollableTabBarWithArrowsState
           ),
         // TabBar משופר עם עיצוב יפה יותר
         Expanded(
-          child: NotificationListener<ScrollMetricsNotification>(
-            onNotification: (metricsNotification) {
-              final metrics = metricsNotification.metrics;
-              if (metrics.axis == Axis.horizontal) {
-                _adoptPositionFrom(metricsNotification.context);
-                _handleScrollMetrics(metrics);
-              }
-              return false;
-            },
-            child: NotificationListener<ScrollNotification>(
-              onNotification: (notification) {
-                if (notification.metrics.axis == Axis.horizontal) {
-                  final ctx = notification.context;
-                  if (ctx != null) {
-                    _adoptPositionFrom(ctx);
-                  }
-                  _handleScrollMetrics(notification.metrics);
-                }
-                return false;
-              },
-              child: Builder(
-                builder: (scrollCtx) {
-                  // נשמור context כדי לאמץ את ה-ScrollPosition לאחר הבניה
-                  if (!identical(_scrollContext, scrollCtx)) {
-                    _scrollContext = scrollCtx;
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _attachAndSyncPosition();
-                    });
-                  }
-                  return Align(
-                    alignment: Alignment.bottomCenter,
-                    child: TabBar(
-                      controller: widget.controller,
-                      isScrollable: true,
-                      tabs: widget.tabs,
-                      tabAlignment: widget.tabAlignment,
-                      padding: EdgeInsets.zero,
-                      labelPadding: EdgeInsets.zero,
-                      indicatorPadding: EdgeInsets.zero,
-                      dividerColor: Colors.transparent,
-                      // הסרת האינדיקטור מתחת לטאב
-                      indicator: const BoxDecoration(),
-                      // הסרת ה-hover המרובע
-                      overlayColor: WidgetStateProperty.all(Colors.transparent),
-                      splashFactory: NoSplash.splashFactory,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
+          child: _buildTabBar(),
         ),
         // חץ ימני – מוסתר לגמרי אם אין גלילה והאפשרות מופעלת
         if (showArrows)

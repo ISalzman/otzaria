@@ -232,26 +232,34 @@ class _CustomTitleBarState extends State<CustomTitleBar>
       width: settingsState.alignTabsToRight
           ? _kAppBarControlsWidthRightAligned
           : _kAppBarControlsWidth,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Stack(
         children: [
-          IconButton(
-            icon: const Icon(FluentIcons.history_24_regular, size: 18),
-            tooltip: 'הצג היסטוריה (${historyShortcut.toUpperCase()})',
-            onPressed: () => _showHistoryDialog(context),
-            style: _kIconButtonStyle,
+          const DragToMoveArea(
+            child: SizedBox.expand(),
           ),
-          IconButton(
-            icon: const Icon(FluentIcons.bookmark_24_regular, size: 18),
-            tooltip: 'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
-            onPressed: () => _showBookmarksDialog(context),
-            style: _kIconButtonStyle,
-          ),
-          IconButton(
-            icon: const Icon(FluentIcons.add_square_24_regular, size: 18),
-            tooltip: 'החלף שולחן עבודה (${workspaceShortcut.toUpperCase()})',
-            onPressed: () => _showSaveWorkspaceDialog(context),
-            style: _kIconButtonStyle,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(FluentIcons.history_24_regular, size: 18),
+                tooltip: 'הצג היסטוריה (${historyShortcut.toUpperCase()})',
+                onPressed: () => _showHistoryDialog(context),
+                style: _kIconButtonStyle,
+              ),
+              IconButton(
+                icon: const Icon(FluentIcons.bookmark_24_regular, size: 18),
+                tooltip: 'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
+                onPressed: () => _showBookmarksDialog(context),
+                style: _kIconButtonStyle,
+              ),
+              IconButton(
+                icon: const Icon(FluentIcons.add_square_24_regular, size: 18),
+                tooltip:
+                    'החלף שולחן עבודה (${workspaceShortcut.toUpperCase()})',
+                onPressed: () => _showSaveWorkspaceDialog(context),
+                style: _kIconButtonStyle,
+              ),
+            ],
           ),
         ],
       ),
@@ -377,7 +385,10 @@ class _CustomTitleBarState extends State<CustomTitleBar>
 
         return Row(
           children: [
-            if (leftSpacerWidth > 0) SizedBox(width: leftSpacerWidth),
+            if (leftSpacerWidth > 0)
+              DragToMoveArea(
+                child: SizedBox(width: leftSpacerWidth),
+              ),
             // אזור הטאבים המעודכן
             Expanded(
               child: DragTarget<OpenedTab>(
@@ -434,19 +445,24 @@ class _CustomTitleBarState extends State<CustomTitleBar>
             ),
 
             // כפתורים נוספים (הגדרות)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0),
-              child: IconButton(
-                icon: const Icon(FluentIcons.settings_24_regular, size: 18),
-                tooltip: 'הגדרות תצוגת הספרים',
-                onPressed: () => showReadingSettingsDialog(context),
-                style: _kIconButtonStyle.copyWith(
-                  foregroundColor: WidgetStatePropertyAll(
-                      Theme.of(context).colorScheme.onSurfaceVariant),
+            DragToMoveArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: IconButton(
+                  icon: const Icon(FluentIcons.settings_24_regular, size: 18),
+                  tooltip: 'הגדרות תצוגת הספרים',
+                  onPressed: () => showReadingSettingsDialog(context),
+                  style: _kIconButtonStyle.copyWith(
+                    foregroundColor: WidgetStatePropertyAll(
+                        Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
                 ),
               ),
             ),
-            if (rightSpacerWidth > 0) SizedBox(width: rightSpacerWidth),
+            if (rightSpacerWidth > 0)
+              DragToMoveArea(
+                child: SizedBox(width: rightSpacerWidth),
+              ),
           ],
         );
       },
