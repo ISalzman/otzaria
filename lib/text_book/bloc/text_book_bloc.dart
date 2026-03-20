@@ -303,7 +303,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       _resetLoadedLinksWindow(book);
 
       // טעינת קישורים ברקע אחרי הצגת הספר
-      _loadLinksInBackground(book, visibleIndices);
+      _loadLinksInBackground(
+        book,
+        visibleIndices,
+        useVisibleWindow: initialShowPageShapeView,
+      );
 
       // טעינת מפרשים ברקע (רשימת מפרשים זמינים + חלוקה לתקופות)
       if (event.loadCommentators) {
@@ -509,7 +513,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         visibleLinks: visibleLinks,
       ));
 
-      _loadLinksInBackground(currentState.book, event.visibleIndecies);
+      if (currentState.showPageShapeView) {
+        _loadLinksInBackground(
+          currentState.book,
+          event.visibleIndecies,
+          useVisibleWindow: true,
+        );
+      }
     }
   }
 
@@ -986,7 +996,40 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   /// Loads links in the background after the book is displayed
-  void _loadLinksInBackground(TextBook book, List<int> visibleIndices) async {
+  void _loadLinksInBackground(
+    TextBook book,
+    List<int> visibleIndices, {
+    required bool useVisibleWindow,
+  }) async {
+    if (!useVisibleWindow) {
+      if (_isLoadingLinks) {
+        return;
+      }
+
+      _isLoadingLinks = true;
+
+      try {
+        final links = await repository.getBookLinks(book);
+
+        if (isClosed || state is! TextBookLoaded) {
+          _isLoadingLinks = false;
+          return;
+        }
+
+        final currentState = state as TextBookLoaded;
+        if (currentState.book.title != book.title) {
+          _isLoadingLinks = false;
+          return;
+        }
+
+        _isLoadingLinks = false;
+        add(UpdateLinks(links));
+      } catch (e) {
+        _isLoadingLinks = false;
+      }
+      return;
+    }
+
     final window = _calculateLinksWindow(visibleIndices);
 
     if (_isLoadingLinks ||
@@ -1028,7 +1071,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         final latestWindow = _calculateLinksWindow(latestState.visibleIndices);
         if (!_isLinksWindowLoaded(
             latestState.book.title, latestWindow.start, latestWindow.end)) {
-          _loadLinksInBackground(latestState.book, latestState.visibleIndices);
+          _loadLinksInBackground(
+            latestState.book,
+            latestState.visibleIndices,
+            useVisibleWindow: true,
+          );
         }
       }
     } catch (e) {
