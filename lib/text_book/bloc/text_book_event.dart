@@ -153,6 +153,19 @@ class UpdateSearchText extends TextBookEvent {
   List<Object?> get props => [text];
 }
 
+class ApplyFullBookContent extends TextBookEvent {
+  final String bookTitle;
+  final List<String> content;
+
+  const ApplyFullBookContent({
+    required this.bookTitle,
+    required this.content,
+  });
+
+  @override
+  List<Object?> get props => [bookTitle, content];
+}
+
 class CreateNoteFromToolbar extends TextBookEvent {
   const CreateNoteFromToolbar();
 
