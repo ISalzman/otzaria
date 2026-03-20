@@ -93,4 +93,20 @@ class AuthorDao {
     final db = await database;
     return firstIntValue(db.select(_queries['countBookAuthors']!, [bookId])) ?? 0;
   }
+
+  /// מחזירה מיפוי title ← שם תקופה לכל הספרים שיש להם מחבר עם תקופה ידועה
+  Future<Map<String, String>> getAllBookTitleToGeneration() async {
+    final db = await database;
+    final rows =
+        db.select(_queries['selectAllBookTitleToGeneration']!).toMapList();
+    final result = <String, String>{};
+    for (final row in rows) {
+      final title = row['title'] as String?;
+      final gen = row['generationName'] as String?;
+      if (title != null && gen != null) {
+        result[title] = gen;
+      }
+    }
+    return result;
+  }
 }

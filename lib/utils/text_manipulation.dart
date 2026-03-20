@@ -1,10 +1,11 @@
 import 'dart:io';
 
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:flutter/foundation.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
-import 'package:otzaria/settings/settings_exports.dart';
+
 
 String stripHtmlIfNeeded(String text) {
   return text.replaceAll(SearchRegexPatterns.htmlStripper, '');
@@ -251,11 +252,12 @@ Future<bool> hasTopic(String title, String topic) async {
     await _loadCsvCache();
   }
 
-  // Check if title exists in CSV cache
+  // Check if title exists in DB cache
   if (_csvCache!.containsKey(title)) {
-    final generation = _csvCache![title]!;
-    final mappedCategory = _mapGenerationToCategory(generation);
-    return mappedCategory == topic;
+    final generationRaw = _csvCache![title]!;
+    return generationRaw
+        .split(',')
+        .any((g) => _mapGenerationToCategory(g.trim()) == topic);
   }
 
   // Book not found in CSV, it's "מפרשים נוספים"
@@ -268,79 +270,33 @@ Future<bool> hasTopic(String title, String topic) async {
   return location?.filePath?.contains(topic) ?? false;
 }
 
+/// טוען את ה-cache של תקופות מפרשים מה-DB
 Future<void> _loadCsvCache() async {
   _csvCache = {};
-
   try {
-    final libraryPath =
-        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
-    final csvPath =
-        '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}סדר הדורות.csv';
-    final csvFile = File(csvPath);
-
-    if (await csvFile.exists()) {
-      final csvString = await csvFile.readAsString();
-      final lines = csvString.split('\n');
-
-      // Skip header and parse all lines
-      for (int i = 1; i < lines.length; i++) {
-        final line = lines[i].trim();
-        if (line.isEmpty) continue;
-
-        // Parse CSV line properly - handle commas inside quoted fields
-        final parts = _parseCsvLine(line);
-        if (parts.length >= 2) {
-          final bookTitle = parts[0].trim();
-          final generation = parts[1].trim();
-          _csvCache![bookTitle] = generation;
-        }
-      }
+    final provider = SqliteDataProvider.instance;
+    if (!provider.isInitialized) {
+      await provider.initialize();
+    }
+    final db = provider.repository?.database;
+    if (db != null) {
+      _csvCache = await db.authorDao.getAllBookTitleToGeneration();
+    } else {
+      debugPrint('⚠️ SqliteDataProvider repository is null');
     }
   } catch (e) {
-    // If CSV fails, keep empty cache
+    debugPrint('⚠️ Failed to load era cache from DB: $e');
     _csvCache = {};
   }
 }
 
-/// Clears the CSV cache to force reload on next access
+/// מנקה את ה-cache של תקופות כדי לאלץ טעינה מחדש
 void clearCommentatorOrderCache() {
   _csvCache = null;
 }
 
-// Helper function to parse CSV line with proper comma handling
-List<String> _parseCsvLine(String line) {
-  final List<String> result = [];
-  bool inQuotes = false;
-  String currentField = '';
-
-  for (int i = 0; i < line.length; i++) {
-    final char = line[i];
-
-    if (char == '"') {
-      // Handle escaped quotes (double quotes)
-      if (i + 1 < line.length && line[i + 1] == '"' && inQuotes) {
-        currentField += '"';
-        i++; // Skip the next quote
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char == ',' && !inQuotes) {
-      result.add(currentField.trim());
-      currentField = '';
-    } else {
-      currentField += char;
-    }
-  }
-
-  // Add the last field
-  result.add(currentField.trim());
-
-  return result;
-}
-
-// Helper function to map CSV generation to our categories
+// ממפה שם תקופה מה-DB לקטגוריה (השמות זהים, רק fallback)
 String _mapGenerationToCategory(String generation) {
-  // Check if generation matches any of the era categories
   if (_eraCategories.contains(generation)) {
     return generation;
   }
@@ -795,10 +751,21 @@ Future<Map<String, List<String>>> splitByEra(
 
 /// גרסה סינכרונית של hasTopic - משתמשת ב-cache שכבר נטען
 String _getTopicSync(String title, Map<String, String> titleToPath) {
-  // בדיקה ב-CSV cache
+  // בדיקה ב-DB cache
   if (_csvCache != null && _csvCache!.containsKey(title)) {
-    final generation = _csvCache![title]!;
-    return _mapGenerationToCategory(generation);
+    final generationRaw = _csvCache![title]!;
+    final parsedCategories = generationRaw
+        .split(',')
+        .map((e) => _mapGenerationToCategory(e.trim()))
+        .toSet();
+
+    // העדפת התקופה המוקדמת ביותר על פי סדר הקטגוריות
+    for (final category in _eraCategories) {
+      if (parsedCategories.contains(category)) {
+        return category;
+      }
+    }
+    return parsedCategories.first;
   }
 
   // Fallback לפי נתיב
