@@ -412,7 +412,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           items: relevantLinks
               .map<ctx.ContextMenuEntry<Object>>(
                 (link) => ctx.MenuItem<Object>(
-                  label: Text(link.heRef, textDirection: TextDirection.rtl),
+                  label: FutureBuilder<String>(
+                    future: link.displayReference,
+                    builder: (context, snapshot) {
+                      return Text(
+                        snapshot.data ?? link.fallbackDisplayReference,
+                        textDirection: TextDirection.rtl,
+                      );
+                    },
+                  ),
                   onSelected: (_) {
                     openBook(
                       context,

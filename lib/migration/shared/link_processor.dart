@@ -194,6 +194,7 @@ class LinkProcessor {
 
       // Prepare batch of links
       final linksToInsert = <Link>[];
+      final lineHeRefUpdates = <int, String>{};
       var skipped = 0;
 
       for (final linkData in linksData) {
@@ -267,6 +268,14 @@ class LinkProcessor {
             connectionType: ConnectionType.fromString(linkData.connectionType),
           ));
 
+          final normalizedHeRef = linkData.heRef2.trim();
+          if (normalizedHeRef.isNotEmpty) {
+            final existing = lineHeRefUpdates[targetLineId];
+            if (existing == null || normalizedHeRef.length > existing.length) {
+              lineHeRefUpdates[targetLineId] = normalizedHeRef;
+            }
+          }
+
           // Insert in batches of 1000
           if (linksToInsert.length >= 1000) {
             await _repository.insertLinksBatch(linksToInsert);
@@ -281,6 +290,10 @@ class LinkProcessor {
       // Insert remaining links
       if (linksToInsert.isNotEmpty) {
         await _repository.insertLinksBatch(linksToInsert);
+      }
+
+      if (lineHeRefUpdates.isNotEmpty) {
+        await _repository.updateLineHeRefsBatch(lineHeRefUpdates);
       }
 
       final processed = linksData.length - skipped;

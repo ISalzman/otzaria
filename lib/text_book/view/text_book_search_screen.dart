@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/search_results.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
@@ -20,6 +21,7 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/widgets/nikud_search_button.dart';
 import 'package:otzaria/text_book/utils/section_search_utils.dart';
+import 'package:otzaria/text_book/utils/search_query_sync.dart';
 
 class _GroupedResultItem {
   final String? header;
@@ -115,8 +117,12 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     super.didUpdateWidget(oldWidget);
 
     // עדכון שדה החיפוש אם initialQuery השתנה
-    if (widget.initialQuery != oldWidget.initialQuery) {
-      searchTextController.text = widget.initialQuery;
+    final queryChanged = widget.initialQuery != oldWidget.initialQuery;
+    final needsControllerSync =
+        widget.initialQuery != searchTextController.text;
+
+    if (queryChanged && needsControllerSync) {
+      syncSearchControllerQuery(searchTextController, widget.initialQuery);
 
       // הרצת חיפוש אם יש טקסט חדש
       if (widget.initialQuery.isNotEmpty) {
@@ -468,6 +474,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             searchTextController.text.isNotEmpty &&
             !_isSearching,
         onSearchTextChanged: (value) {
+          context.read<TextBookBloc>().add(UpdateSearchText(value));
           _searchTextUpdated();
         },
         resetSearchCallback: () {
@@ -545,7 +552,13 @@ class TextBookSearchViewState extends State<TextBookSearchView>
               bookTitle: bookTitle,
               onSearch: (query, searchOptions, alternativeWords, spacingValues,
                   searchMode) {
-                searchTextController.text = query;
+                applyInBookSearchQuery(
+                  controller: searchTextController,
+                  query: query,
+                  onQueryChanged: (value) {
+                    context.read<TextBookBloc>().add(UpdateSearchText(value));
+                  },
+                );
                 setState(() {
                   _forceSearchEngine = true;
                   _searchOptions = searchOptions;

@@ -102,6 +102,8 @@ class _RtlTextFieldState extends State<RtlTextField> {
       controller: _effectiveController,
       focusNode: widget.focusNode,
       decoration: widget.decoration,
+      contextMenuBuilder: (context, editableTextState) =>
+          const SizedBox.shrink(),
       onChanged: widget.onChanged,
       onSubmitted: widget.onSubmitted,
       autofocus: shouldUseAutofocus,

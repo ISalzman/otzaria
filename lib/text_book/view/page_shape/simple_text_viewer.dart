@@ -21,6 +21,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
@@ -75,6 +76,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   String? _savedSelectedText;
   int? _savedSelectedIndex;
   int _initialScrollRestoreAttempts = 0;
+  final Map<String, Future<bool>> _removeNikudCache = {};
 
   @override
   void initState() {
@@ -269,7 +271,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         )
         .map(
           (link) => ctx.MenuItem<Object>(
-            label: Text(link.heRef),
+            label: FutureBuilder<String>(
+              future: link.displayReference,
+              builder: (context, snapshot) {
+                return Text(
+                  snapshot.data ?? link.fallbackDisplayReference,
+                  textDirection: TextDirection.rtl,
+                );
+              },
+            ),
             onSelected: (_) {
               widget.openBookCallback(
                 TextBookTab(
@@ -760,23 +770,46 @@ $textWithBreaks
           child: BlocBuilder<SettingsBloc, SettingsState>(
             builder: (context, settingsState) {
               final data = widget.content[index];
+              final targetTitle =
+                  widget.isMainText ? state.book.title : widget.bookTitle;
+              final removeNikudFuture = targetTitle == null
+                  ? Future.value(state.removeNikud)
+                  : _removeNikudCache.putIfAbsent(
+                      '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}',
+                      () => resolveRemoveNikudForBook(
+                        title: targetTitle,
+                        defaultRemoveNikud: settingsState.defaultRemoveNikud,
+                        removeNikudFromTanach:
+                            settingsState.removeNikudFromTanach,
+                        categoryId:
+                            widget.isMainText ? state.book.categoryId : null,
+                        fileType:
+                            widget.isMainText ? state.book.fileType : null,
+                      ),
+                    );
 
               // הדגשת טקסט חיפוש רק בטקסט המרכזי
               final searchText = widget.isMainText ? state.searchText : '';
 
-              final textWidget = SmartTextWidget(
-                text: data,
-                widgetKey: ValueKey('html_simple_text_$index'),
-                settings: RenderSettings(
-                  removeNikud: state.removeNikud,
-                  removeTeamim: !settingsState.showTeamim,
-                  replaceHolyNames: settingsState.replaceHolyNames,
-                  searchText: searchText,
-                  fontSize: widget.fontSize,
-                  fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-                  lineHeight: settingsState.lineHeight,
-                ),
-                onOpenBook: widget.openBookCallback,
+              final textWidget = FutureBuilder<bool>(
+                future: removeNikudFuture,
+                initialData: state.removeNikud,
+                builder: (context, snapshot) {
+                  return SmartTextWidget(
+                    text: data,
+                    widgetKey: ValueKey('html_simple_text_$index'),
+                    settings: RenderSettings(
+                      removeNikud: snapshot.data ?? state.removeNikud,
+                      removeTeamim: !settingsState.showTeamim,
+                      replaceHolyNames: settingsState.replaceHolyNames,
+                      searchText: searchText,
+                      fontSize: widget.fontSize,
+                      fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+                      lineHeight: settingsState.lineHeight,
+                    ),
+                    onOpenBook: widget.openBookCallback,
+                  );
+                },
               );
 
               if (!widget.isMainText || notesForLine.isEmpty) {

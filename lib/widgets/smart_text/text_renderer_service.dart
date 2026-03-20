@@ -144,8 +144,9 @@ class TextRendererService {
   }
 
   /// עוטף טקסט ב-div עם כיווניות RTL ו-justify
-  static String wrapWithRtlDiv(String text) {
-    return '<div style="text-align: justify; direction: rtl;">$text</div>';
+  static String wrapWithRtlDiv(String text, {bool justifyText = true}) {
+    final textAlign = justifyText ? 'justify' : 'right';
+    return '<div style="text-align: $textAlign; direction: rtl;">$text</div>';
   }
 
   /// מעבד ועוטף טקסט בפעולה אחת
@@ -154,7 +155,7 @@ class TextRendererService {
   /// ומחזיר HTML מוכן להצגה ב-HtmlWidget
   static String render(String rawText, RenderSettings settings) {
     final processed = processText(rawText, settings);
-    return wrapWithRtlDiv(processed);
+    return wrapWithRtlDiv(processed, justifyText: settings.justifyText);
   }
 
   /// ספירת התאמות חיפוש בטקסט

@@ -48,7 +48,10 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
           l.targetLineId,
           sl.lineIndex as sourceLineIndex,
           tl.lineIndex as targetLineIndex,
+          tl.heRef as targetLineHeRef,
           tb.title as targetBookTitle,
+          tb.categoryId as targetCategoryId,
+          tb.fileType as targetFileType,
           ct.name as connectionTypeName
         FROM link l
         JOIN line sl ON l.sourceLineId = sl.id
@@ -90,7 +93,10 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
         SELECT 
           sl.lineIndex as sourceLineIndex,
           tl.lineIndex as targetLineIndex,
+          tl.heRef as targetLineHeRef,
           tb.title as targetBookTitle,
+          tb.categoryId as targetCategoryId,
+          tb.fileType as targetFileType,
           ct.name as connectionTypeName
         FROM link l
         JOIN line sl ON l.sourceLineId = sl.id
@@ -1291,15 +1297,20 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
       final links = result.map((row) {
         final targetTitle = row['targetBookTitle'] as String;
+        final targetLineHeRef = row['targetLineHeRef'] as String?;
         final connectionType =
             row['connectionTypeName'] as String? ?? 'reference';
 
         return Link(
-          heRef: targetTitle,
+          heRef: targetLineHeRef?.trim().isNotEmpty == true
+              ? targetLineHeRef!.trim()
+              : targetTitle,
           index1: (row['sourceLineIndex'] as int) + 1,
           path2: targetTitle,
           index2: (row['targetLineIndex'] as int) + 1,
           connectionType: connectionType,
+          targetCategoryId: row['targetCategoryId'] as int?,
+          targetFileType: row['targetFileType'] as String?,
         );
       }).toList();
 
@@ -1336,15 +1347,20 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
       return result.map((row) {
         final targetTitle = row['targetBookTitle'] as String;
+        final targetLineHeRef = row['targetLineHeRef'] as String?;
         final connectionType =
             row['connectionTypeName'] as String? ?? 'reference';
 
         return Link(
-          heRef: targetTitle,
+          heRef: targetLineHeRef?.trim().isNotEmpty == true
+              ? targetLineHeRef!.trim()
+              : targetTitle,
           index1: (row['sourceLineIndex'] as int) + 1,
           path2: targetTitle,
           index2: (row['targetLineIndex'] as int) + 1,
           connectionType: connectionType,
+          targetCategoryId: row['targetCategoryId'] as int?,
+          targetFileType: row['targetFileType'] as String?,
         );
       }).toList();
     } catch (e) {

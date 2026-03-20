@@ -300,12 +300,23 @@ class _CommentaryListState extends State<CommentaryList> {
                     itemBuilder: (context, index1) => ListTile(
                       title: BlocBuilder<SettingsBloc, SettingsState>(
                         builder: (context, settingsState) {
-                          String displayTitle =
-                              thisLinksSnapshot.data![index1].heRef;
-                          if (settingsState.replaceHolyNames) {
-                            displayTitle = utils.replaceHolyNames(displayTitle);
-                          }
-                          return Text(displayTitle);
+                          return FutureBuilder<String>(
+                            future:
+                                thisLinksSnapshot.data![index1].displayReference,
+                            builder: (context, snapshot) {
+                              String displayTitle = snapshot.data ??
+                                  thisLinksSnapshot
+                                      .data![index1].fallbackDisplayReference;
+                              if (settingsState.replaceHolyNames) {
+                                displayTitle =
+                                    utils.replaceHolyNames(displayTitle);
+                              }
+                              return Text(
+                                displayTitle,
+                                textDirection: TextDirection.rtl,
+                              );
+                            },
+                          );
                         },
                       ),
                       subtitle: AnimatedBuilder(

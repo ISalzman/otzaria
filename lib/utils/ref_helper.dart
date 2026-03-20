@@ -103,6 +103,110 @@ Future<String> refFromIndex(
   return texts.join(', ');
 }
 
+/// מחזירה כתובת תצוגה מלאה ואחידה עבור ספר יעד.
+///
+/// אם קיימת כתובת מחושבת מתוך ה-TOC היא מועדפת, אחרת נעשה שימוש
+/// בכתובת הגיבוי הקיימת. שם הספר יתווסף רק אם הוא עדיין לא חלק מהכתובת.
+String formatDisplayReference({
+  required String bookTitle,
+  String? resolvedRef,
+  String? fallbackRef,
+}) {
+  final normalizedResolved = _normalizeReferenceForDisplay(resolvedRef ?? '');
+  final normalizedFallback = _normalizeReferenceForDisplay(fallbackRef ?? '');
+
+  if (normalizedResolved.isNotEmpty) {
+    final resolvedDisplay = addBookTitleToRef(normalizedResolved, bookTitle);
+    if (normalizedFallback.isEmpty) {
+      return resolvedDisplay;
+    }
+
+    final fallbackDisplay = addBookTitleToRef(normalizedFallback, bookTitle);
+    return _chooseMoreSpecificReference(
+      resolvedDisplay: resolvedDisplay,
+      fallbackDisplay: fallbackDisplay,
+    );
+  }
+
+  if (normalizedFallback.isNotEmpty) {
+    return addBookTitleToRef(normalizedFallback, bookTitle);
+  }
+
+  return bookTitle;
+}
+
+String _normalizeReferenceForDisplay(String ref) {
+  final parts = ref
+      .trim()
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .split(',')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty);
+
+  final dedupedParts = <String>[];
+  for (final part in parts) {
+    if (dedupedParts.isNotEmpty && dedupedParts.last == part) {
+      continue;
+    }
+    dedupedParts.add(part);
+  }
+
+  return dedupedParts.join(', ');
+}
+
+String _chooseMoreSpecificReference({
+  required String resolvedDisplay,
+  required String fallbackDisplay,
+}) {
+  final resolvedScore = _referenceSpecificityScore(resolvedDisplay);
+  final fallbackScore = _referenceSpecificityScore(fallbackDisplay);
+
+  if (fallbackScore > resolvedScore) {
+    return fallbackDisplay;
+  }
+
+  if (fallbackScore == resolvedScore &&
+      fallbackDisplay.length > resolvedDisplay.length &&
+      _referencesAreRelated(resolvedDisplay, fallbackDisplay)) {
+    return fallbackDisplay;
+  }
+
+  return resolvedDisplay;
+}
+
+int _referenceSpecificityScore(String ref) {
+  const markers = [
+    'פרק',
+    'פסוק',
+    'דף',
+    'עמוד',
+    'סימן',
+    'סעיף',
+    'הלכה',
+    'פסקה',
+    'משנה',
+    'מאמר',
+    'קטן',
+  ];
+
+  var score = 0;
+  for (final marker in markers) {
+    if (ref.contains(marker)) {
+      score += 2;
+    }
+  }
+
+  score += ','.allMatches(ref).length;
+  score += RegExp(r'[א-ת0-9]+').allMatches(ref).length ~/ 3;
+  return score;
+}
+
+bool _referencesAreRelated(String resolvedDisplay, String fallbackDisplay) {
+  return fallbackDisplay.startsWith(resolvedDisplay) ||
+      fallbackDisplay.contains(resolvedDisplay) ||
+      resolvedDisplay.contains(fallbackDisplay);
+}
+
 /// מוסיף את שם הספר לכותרת אם הוא לא מופיע
 /// ומטפל במקרים מיוחדים כמו כותרת ריקה או פסיק מיותר
 String addBookTitleToRef(String ref, String bookTitle) {
