@@ -24,6 +24,10 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
   final void Function(List<OpenedTab> tabs, int activeIndex)?
       onWorkspaceTabsChanged;
 
+  List<OpenedTab> _cloneTabs(List<OpenedTab> tabs) {
+    return tabs.map(OpenedTab.from).toList(growable: false);
+  }
+
   WorkspaceBloc({
     required WorkspaceRepository repository,
     this.onWorkspaceTabsChanged,
@@ -82,7 +86,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     try {
       final newWorkspace = Workspace(
         name: event.name,
-        tabs: event.tabs,
+        tabs: _cloneTabs(event.tabs),
         activeTabIndex: event.currentTabIndex,
       );
 
@@ -123,7 +127,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       List<Workspace> updatedWorkspaces = state.workspaces.map((w) {
         if (w.id == currentId) {
           return w.copyWith(
-            tabs: event.currentTabsToSave,
+            tabs: _cloneTabs(event.currentTabsToSave),
             activeTabIndex: event.currentTabIndexToSave,
           );
         }
@@ -152,7 +156,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
                   ? targetWorkspace.activeTabIndex
                   : 0;
         }
-        onWorkspaceTabsChanged!(targetWorkspace.tabs, newCurrentTab);
+        onWorkspaceTabsChanged!(
+            _cloneTabs(targetWorkspace.tabs), newCurrentTab);
       }
     } catch (e) {
       emit(state.copyWith(error: 'Failed to switch workspace: $e'));
@@ -180,7 +185,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     try {
       final defaultWorkspace = Workspace(
         name: "ברירת מחדל",
-        tabs: event.currentTabs,
+        tabs: _cloneTabs(event.currentTabs),
         activeTabIndex: event.currentTabIndex,
       );
 
@@ -204,7 +209,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       final updatedWorkspaces = state.workspaces.map((w) {
         if (w.id == currentId) {
           return w.copyWith(
-            tabs: event.tabs,
+            tabs: _cloneTabs(event.tabs),
             activeTabIndex: event.activeTabIndex,
           );
         }
@@ -231,13 +236,13 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         if (w.id == currentId) {
           // מסיר את הטאב משולחן העבודה הנוכחי
           return w.copyWith(
-            tabs: event.currentTabs,
+            tabs: _cloneTabs(event.currentTabs),
             activeTabIndex: event.currentTabIndex,
           );
         } else if (w.id == event.targetWorkspaceId) {
           // מוסיף את הטאב לשולחן העבודה היעד
           return w.copyWith(
-            tabs: [...w.tabs, event.tab],
+            tabs: [..._cloneTabs(w.tabs), OpenedTab.from(event.tab)],
           );
         }
         return w;

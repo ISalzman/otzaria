@@ -16,6 +16,14 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   int _pdfWorkerStopRequestId = 0;
   bool _isStoppingPdfWorker = false;
 
+  void _disposeTabLater(OpenedTab tab) {
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 350), () {
+        tab.dispose();
+      }),
+    );
+  }
+
   bool _containsPdfTab(OpenedTab tab) {
     if (tab is PdfBookTab) {
       return true;
@@ -408,10 +416,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     debugPrint(
         'DEBUG: הפעלת מצב side-by-side: right=${event.rightTab.title}, left=${event.leftTab.title}');
 
-    // יצירת טאב משולב חדש
+    // יצירת עותקים נפרדים כדי לא לשתף controllers עם הטאבים שעדיין מפורקים מהעץ.
     final combinedTab = CombinedTab(
-      rightTab: event.rightTab,
-      leftTab: event.leftTab,
+      rightTab: OpenedTab.from(event.rightTab),
+      leftTab: OpenedTab.from(event.leftTab),
       isPinned: event.rightTab.isPinned || event.leftTab.isPinned,
     );
 
@@ -444,6 +452,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       clearSideBySide: true,
       forceUpdate: true,
     ));
+
+    _disposeTabLater(event.rightTab);
+    _disposeTabLater(event.leftTab);
   }
 
   void _onDisableSideBySideMode(
@@ -457,9 +468,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       // מסירים את הטאב המשולב
       newTabs.removeAt(combinedIndex);
 
-      // מוסיפים את שני הטאבים המקוריים במקומו
-      newTabs.insert(combinedIndex, combinedTab.rightTab);
-      newTabs.insert(combinedIndex + 1, combinedTab.leftTab);
+      // מוסיפים עותקים נפרדים כדי לא לשתף controllers עם ה-combined view
+      newTabs.insert(combinedIndex, OpenedTab.from(combinedTab.rightTab));
+      newTabs.insert(combinedIndex + 1, OpenedTab.from(combinedTab.leftTab));
 
       // האינדקס הנוכחי יהיה הטאב הימני
       final newCurrentIndex = combinedIndex;
@@ -472,6 +483,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         clearSideBySide: true,
         forceUpdate: true,
       ));
+
+      _disposeTabLater(combinedTab);
     } else {
       // אם זה לא טאב משולב, פשוט מנקים את המצב
       _repository.saveTabs(state.tabs, state.currentTabIndex, null);
@@ -506,15 +519,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
       debugPrint('DEBUG: החלפת צדדים במצב side-by-side');
 
-      // החלפת הטאבים
-      final tempTab = combinedTab.rightTab;
-      final newRightTab = combinedTab.leftTab;
-      final newLeftTab = tempTab;
-
-      // יצירת טאב משולב חדש עם הטאבים המוחלפים
+      // יצירת טאב משולב חדש עם עותקים נפרדים של הטאבים המוחלפים.
       final newCombinedTab = CombinedTab(
-        rightTab: newRightTab,
-        leftTab: newLeftTab,
+        rightTab: OpenedTab.from(combinedTab.leftTab),
+        leftTab: OpenedTab.from(combinedTab.rightTab),
         splitRatio: 1.0 - combinedTab.splitRatio,
         isPinned: combinedTab.isPinned,
       );
@@ -532,6 +540,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         tabs: newTabs,
         forceUpdate: true,
       ));
+
+      _disposeTabLater(combinedTab);
     }
   }
 }
