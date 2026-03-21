@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+const String customFoldersRestartHint =
+    'לטעינה מלאה של ספרים חדשים מתיקיות מותאמות אישית, יש לסגור ולהפעיל מחדש את התוכנה.';
+
 /// מודל לתיקייה מותאמת אישית שהמשתמש הוסיף
 class CustomFolder {
   /// נתיב התיקייה במערכת הקבצים
@@ -73,6 +76,11 @@ class CustomFoldersManager {
     } catch (e) {
       return [];
     }
+  }
+
+  /// האם קיימות תיקיות מותאמות אישית פעילות
+  static bool hasFolders(String? jsonString) {
+    return loadFolders(jsonString).isNotEmpty;
   }
 
   /// שמירת רשימת התיקיות להגדרות
