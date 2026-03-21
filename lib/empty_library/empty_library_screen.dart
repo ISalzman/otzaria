@@ -1,12 +1,12 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/app_restart.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 
 class EmptyLibraryScreen extends StatelessWidget {
   final VoidCallback onLibraryLoaded;
@@ -89,23 +89,11 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
   }
 
   void _showRestartDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('נדרשת הפעלה מחדש'),
-        content: const Text(
-          'הספרייה נמצאה בהצלחה.\nלחץ על הכפתור לסגירת האפליקציה, ולאחר מכן פתח אותה מחדש.',
-        ),
-        actions: [
-          FilledButton.icon(
-            onPressed: () => exit(0),
-            icon: const Icon(FluentIcons.sign_out_24_regular),
-            label: const Text('סגור את האפליקציה'),
-          ),
-        ],
-      ),
-    );
+    showRestartRequiredDialog(context: context).then((shouldCloseApp) async {
+      if (shouldCloseApp == true) {
+        await restartApplication();
+      }
+    });
   }
 
   /// מציג דיאלוג המסביר למשתמש את מגבלת Android Scoped Storage.
@@ -116,72 +104,27 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
         ? '${(state.dbSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB'
         : 'לא ידוע';
 
-    showDialog(
+    showDbCopyRequiredDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text(
-          'נדרשת העתקה של קובץ הספרייה',
-          textDirection: TextDirection.rtl,
+      sizeText: sizeText,
+    ).then((shouldMove) {
+      if (shouldMove == null) {
+        return;
+      }
+
+      if (!context.mounted) {
+        return;
+      }
+
+      BlocProvider.of<EmptyLibraryBloc>(context).add(
+        PickDbFileRequested(
+          libraryPath: state.libraryPath,
+          internalDbPath: state.internalDbPath,
+          externalDbPath: state.externalDbPath,
+          shouldMove: shouldMove,
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'לא ניתן לגשת ישירות לקובץ seforim.db (גודל: $sizeText) '
-              'מכיוון שהוא נמצא באחסון חיצוני ב-Android.',
-              textDirection: TextDirection.rtl,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'לחץ על כפתור למטה, נווט לאותה תיקייה ובחר את הקובץ seforim.db — '
-              'האפליקציה תעתיק אותו לאחסון הפנימי.',
-              textDirection: TextDirection.rtl,
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              '(אפשרות "נסה מחק מקור" — ניסיון למחוק לאחר העתקה. '
-              'עשויה שלא להצליח בכל גרסאות Android.)',
-              style: TextStyle(fontSize: 12),
-              textDirection: TextDirection.rtl,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              BlocProvider.of<EmptyLibraryBloc>(context).add(
-                PickDbFileRequested(
-                  libraryPath: state.libraryPath,
-                  internalDbPath: state.internalDbPath,
-                  externalDbPath: state.externalDbPath,
-                  shouldMove: false,
-                ),
-              );
-            },
-            icon: const Icon(FluentIcons.document_copy_24_regular),
-            label: const Text('העתק (שמור מקור)'),
-          ),
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              BlocProvider.of<EmptyLibraryBloc>(context).add(
-                PickDbFileRequested(
-                  libraryPath: state.libraryPath,
-                  internalDbPath: state.internalDbPath,
-                  externalDbPath: state.externalDbPath,
-                  shouldMove: true,
-                ),
-              );
-            },
-            icon: const Icon(FluentIcons.arrow_move_24_regular),
-            label: const Text('העתק + נסה מחק מקור'),
-          ),
-        ],
-      ),
-    );
+      );
+    });
   }
 
   void _showDeleteZipDialog(

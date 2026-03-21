@@ -17,13 +17,16 @@ import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/services/safer_mode/password_verification_dialog.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
+import 'package:otzaria/core/app_restart.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
+import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
+import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
-import 'package:otzaria/widgets/zip_extraction_progress_dialog.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
@@ -42,6 +45,7 @@ class SystemSettingsTab extends StatefulWidget {
 
 class _SystemSettingsTabState extends State<SystemSettingsTab> {
   final GlobalKey _networkModeTileKey = GlobalKey();
+  final EmptyLibraryBloc _librarySelectionBloc = EmptyLibraryBloc();
 
   // ── מפתחות גיבוי ──────────────────────────────────────────────────────────
   static const _keyBackupSettings = 'key-backup-settings';
@@ -73,6 +77,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   void initState() {
     super.initState();
     _loadVersionInfo();
+  }
+
+  @override
+  void dispose() {
+    _librarySelectionBloc.close();
+    super.dispose();
   }
 
   Future<void> _loadVersionInfo() async {
@@ -253,29 +263,58 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, state) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 1. גרסאות + נתיב ספרייה
-              _buildVersionAndPathSection(context, state),
+        return BlocListener<EmptyLibraryBloc, EmptyLibraryState>(
+          bloc: _librarySelectionBloc,
+          listener: (context, librarySelectionState) async {
+            if (librarySelectionState is EmptyLibraryDirectorySelected) {
+              context.read<LibraryBloc>().add(RefreshLibrary());
+              await Future.delayed(const Duration(milliseconds: 500));
+              if (!context.mounted) {
+                return;
+              }
+              context.read<NavigationBloc>().add(const CheckLibrary());
+              await _showLibraryRestartDialog(context);
+            }
 
-              // 2. עדכוני מערכת (רשת + עדכון מפתחים)
-              _buildSystemUpdatesSection(context, state),
+            if (librarySelectionState is EmptyLibraryError &&
+                librarySelectionState.errorMessage != null) {
+              UiSnack.showError(librarySelectionState.errorMessage!);
+            }
 
-              // 3. דיווחי טעויות
-              _buildErrorReportsSection(context, state),
+            if (librarySelectionState is EmptyLibraryAskingDbCopy) {
+              if (librarySelectionState.errorMessage != null) {
+                UiSnack.showError(librarySelectionState.errorMessage!);
+              }
+              if (!context.mounted) {
+                return;
+              }
+              _showLibraryDbCopyDialog(context, librarySelectionState);
+            }
+          },
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. גרסאות + נתיב ספרייה
+                _buildVersionAndPathSection(context, state),
 
-              // 4. תורמים (כרטיסי זיכרון)
-              _buildMemorialSection(context),
+                // 2. עדכוני מערכת (רשת + עדכון מפתחים)
+                _buildSystemUpdatesSection(context, state),
 
-              // 5. מתקדם (גיבוי + מצב סייפר)
-              _buildAdvancedSection(context, state),
+                // 3. דיווחי טעויות
+                _buildErrorReportsSection(context, state),
 
-              // 6. איפוס
-              _buildResetSection(context),
-            ],
+                // 4. תורמים (כרטיסי זיכרון)
+                _buildMemorialSection(context),
+
+                // 5. מתקדם (גיבוי + מצב סייפר)
+                _buildAdvancedSection(context, state),
+
+                // 6. איפוס
+                _buildResetSection(context),
+              ],
+            ),
           ),
         );
       },
@@ -559,12 +598,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             trailing: NeutralActionButton(
               icon: FluentIcons.folder_open_24_regular,
               text: 'בחר תיקייה',
-              onPressed: () async {
-                final path = await FilePicker.platform.getDirectoryPath();
-                if (path != null && context.mounted) {
-                  _showLibraryExtractionDialog(context, path);
-                }
-              },
+              onPressed: _startLibrarySelectionFlow,
             ),
           ),
         ],
@@ -572,27 +606,42 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
   }
 
-  Future<void> _showLibraryExtractionDialog(
-      BuildContext context, String path) async {
-    await ZipExtractionProgressDialog.showAndExtract(
+  void _startLibrarySelectionFlow() {
+    _librarySelectionBloc.add(PickDirectoryRequested());
+  }
+
+  Future<void> _showLibraryRestartDialog(BuildContext context) async {
+    final shouldCloseApp = await showRestartRequiredDialog(context: context);
+
+    if (shouldCloseApp == true) {
+      await restartApplication();
+    }
+  }
+
+  void _showLibraryDbCopyDialog(
+    BuildContext context,
+    EmptyLibraryAskingDbCopy state,
+  ) async {
+    final sizeText = state.dbSizeBytes > 0
+        ? '${(state.dbSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB'
+        : 'לא ידוע';
+
+    final shouldMove = await showDbCopyRequiredDialog(
       context: context,
-      path: path,
-      onSuccess: (result) async {
-        if (!context.mounted) return;
-        context.read<LibraryBloc>().add(UpdateLibraryPath(path));
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (context.mounted) {
-          context.read<NavigationBloc>().add(const CheckLibrary());
-          if (result.successfullyExtracted) {
-            UiSnack.showSuccess(
-                'הקובץ "${result.extractedFileName}" חולץ בהצלחה!');
-          }
-        }
-      },
-      onError: (err) {
-        if (!context.mounted) return;
-        UiSnack.showError(err);
-      },
+      sizeText: sizeText,
+    );
+
+    if (shouldMove == null) {
+      return;
+    }
+
+    _librarySelectionBloc.add(
+      PickDbFileRequested(
+        libraryPath: state.libraryPath,
+        internalDbPath: state.internalDbPath,
+        externalDbPath: state.externalDbPath,
+        shouldMove: shouldMove,
+      ),
     );
   }
 
