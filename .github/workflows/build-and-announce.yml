@@ -1124,6 +1124,196 @@ jobs:
           # List files for debugging
           echo "Release files:"
           ls -la release-files/
+
+      - name: Generate release notes
+        env:
+          RELEASE_TITLE: ${{ steps.version.outputs.title }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          COMMIT_MESSAGE: ${{ steps.commit.outputs.message }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}"
+
+          windows_installers=()
+          windows_portable=()
+          windows_full=()
+          android_apk=()
+          android_full=()
+          linux_deb=()
+          linux_rpm=()
+          linux_portable=()
+          linux_full=()
+          mac_dmg=()
+          mac_full=()
+
+          emit_link_group() {
+            local label="$1"
+            shift
+
+            for file in "$@"; do
+              printf -- "- [%s](%s/%s) - \`%s\`\n" "$label" "$RELEASE_URL" "$file" "$file" >> release-body.md
+            done
+          }
+
+          for path in release-files/*; do
+            [ -f "$path" ] || continue
+            file=$(basename "$path")
+            lower=$(printf '%s' "$file" | tr '[:upper:]' '[:lower:]')
+
+            case "$lower" in
+              *windows-full*.exe)
+                windows_full+=("$file")
+                ;;
+              *windows*.exe)
+                windows_installers+=("$file")
+                ;;
+              *windows*.zip)
+                windows_portable+=("$file")
+                ;;
+              *android-full*.zip)
+                android_full+=("$file")
+                ;;
+              *.apk)
+                android_apk+=("$file")
+                ;;
+              *linux-full*.tar.gz|*linux-full*.tar.*)
+                linux_full+=("$file")
+                ;;
+              *.deb)
+                linux_deb+=("$file")
+                ;;
+              *.rpm)
+                linux_rpm+=("$file")
+                ;;
+              *linux-raw*.zip|*linux*.zip)
+                linux_portable+=("$file")
+                ;;
+              *.dmg)
+                mac_dmg+=("$file")
+                ;;
+              *macos-full*.zip)
+                mac_full+=("$file")
+                ;;
+              *)
+                echo "Ignoring non-user-facing release file in notes: $file"
+                ;;
+            esac
+          done
+
+          safe_commit_message=${COMMIT_MESSAGE//$'\r'/ }
+          safe_commit_message=${safe_commit_message//$'\n'/ }
+          while [[ "$safe_commit_message" == *"  "* ]]; do
+            safe_commit_message=${safe_commit_message//  / }
+          done
+          safe_commit_message=${safe_commit_message# }
+          safe_commit_message=${safe_commit_message% }
+          safe_commit_message=${safe_commit_message//\\/\\\\}
+          safe_commit_message=${safe_commit_message//\`/\\`}
+          safe_commit_message=${safe_commit_message//\*/\\*}
+          safe_commit_message=${safe_commit_message//_/\\_}
+          safe_commit_message=${safe_commit_message//\[/\\[}
+          safe_commit_message=${safe_commit_message//\]/\\]}
+
+          cat > release-body.md <<EOF
+          # ${RELEASE_TITLE}
+
+          > **מה להוריד?**
+          >
+          > אם אתם רק מעדכנים את האפליקציה, ברוב המקרים תרצו את **גרסת תוכנה בלבד**.
+          >
+          > אם אתם צריכים חבילה להפצה או להתקנה לא־מקוונת, בחרו **גרסת ספרייה מלאה (FULL)**.
+          >
+          > קובצי הספרייה זמינים גם בנפרד כאן:
+          > [seforim.db.zst](https://github.com/Otzaria/SeforimLibrary/releases/latest/download/seforim.db.zst),
+          > [otzar-HB_catalog.db.zst](https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst)
+          >
+          > קובצי ה־PDF של תלמוד בבלי זמינים גם בנפרד כאן:
+          > [talmud_bavli_latest.tar.zst](https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst)
+
+          EOF
+
+          if [ ${#windows_installers[@]} -gt 0 ] || [ ${#windows_portable[@]} -gt 0 ] || [ ${#windows_full[@]} -gt 0 ]; then
+            printf "## ווינדוס\n\n" >> release-body.md
+
+            if [ ${#windows_installers[@]} -gt 0 ] || [ ${#windows_portable[@]} -gt 0 ]; then
+              printf "### גרסת תוכנה בלבד\n\n" >> release-body.md
+              emit_link_group "מתקין לווינדוס" "${windows_installers[@]}"
+              emit_link_group "גרסה ניידת לווינדוס" "${windows_portable[@]}"
+              printf "\n" >> release-body.md
+            fi
+
+            if [ ${#windows_full[@]} -gt 0 ]; then
+              printf "### גרסת ספרייה מלאה\n\n" >> release-body.md
+              emit_link_group "חבילה מלאה לווינדוס" "${windows_full[@]}"
+              printf "\n" >> release-body.md
+            fi
+          fi
+
+          if [ ${#android_apk[@]} -gt 0 ] || [ ${#android_full[@]} -gt 0 ]; then
+            printf "## אנדרואיד\n\n" >> release-body.md
+
+            if [ ${#android_apk[@]} -gt 0 ]; then
+              printf "### גרסת תוכנה בלבד\n\n" >> release-body.md
+              emit_link_group "APK לאנדרואיד" "${android_apk[@]}"
+              printf "\n" >> release-body.md
+            fi
+
+            if [ ${#android_full[@]} -gt 0 ]; then
+              printf "### גרסת ספרייה מלאה\n\n" >> release-body.md
+              emit_link_group "חבילה מלאה לאנדרואיד" "${android_full[@]}"
+              printf "\n> **הבהרה:** חבילת ה־FULL לאנדרואיד כוללת את ה־APK יחד עם חומרי הספרייה, ומיועדת להפצה או להתקנה ידנית.\n\n" >> release-body.md
+            fi
+          fi
+
+          if [ ${#linux_deb[@]} -gt 0 ] || [ ${#linux_rpm[@]} -gt 0 ] || [ ${#linux_portable[@]} -gt 0 ] || [ ${#linux_full[@]} -gt 0 ]; then
+            printf "## לינוקס\n\n" >> release-body.md
+
+            if [ ${#linux_deb[@]} -gt 0 ] || [ ${#linux_rpm[@]} -gt 0 ] || [ ${#linux_portable[@]} -gt 0 ]; then
+              printf "### גרסת תוכנה בלבד\n\n" >> release-body.md
+              emit_link_group "חבילת DEB ללינוקס" "${linux_deb[@]}"
+              emit_link_group "חבילת RPM ללינוקס" "${linux_rpm[@]}"
+              emit_link_group "גרסה ניידת ללינוקס" "${linux_portable[@]}"
+              printf "\n" >> release-body.md
+            fi
+
+            if [ ${#linux_full[@]} -gt 0 ]; then
+              printf "### גרסת ספרייה מלאה\n\n" >> release-body.md
+              emit_link_group "חבילה מלאה ללינוקס" "${linux_full[@]}"
+              printf "\n" >> release-body.md
+            fi
+          fi
+
+          if [ ${#mac_dmg[@]} -gt 0 ] || [ ${#mac_full[@]} -gt 0 ]; then
+            printf "## מק\n\n" >> release-body.md
+
+            if [ ${#mac_dmg[@]} -gt 0 ]; then
+              printf "### גרסת תוכנה בלבד\n\n" >> release-body.md
+              emit_link_group "מתקין DMG למק" "${mac_dmg[@]}"
+              printf "\n" >> release-body.md
+            fi
+
+            if [ ${#mac_full[@]} -gt 0 ]; then
+              printf "### גרסת ספרייה מלאה\n\n" >> release-body.md
+              emit_link_group "חבילה מלאה למק" "${mac_full[@]}"
+              printf "\n" >> release-body.md
+            fi
+          fi
+
+          cat >> release-body.md <<EOF
+          <details>
+          <summary>מידע טכני</summary>
+
+          - נבנה מ־commit ${GITHUB_SHA::7}
+          - תיאור commit: ${safe_commit_message}
+          - ענף: ${{ github.ref_name }}
+
+          </details>
+          EOF
+
+          echo "Generated release notes:"
+          cat release-body.md
       
       - name: Create Release
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -1134,13 +1324,7 @@ jobs:
           name: ${{ steps.version.outputs.title }}
           prerelease: ${{ steps.version.outputs.prerelease }}
           files: release-files/*
-          body: |
-            ## שינויים בגרסה זו
-            נבנה מcommit: ${{ github.sha }} - ${{ steps.commit.outputs.message }}
-            קובץ מסד הספרייה להורדה ידנית: https://github.com/Otzaria/SeforimLibrary/releases/latest (asset: seforim.db.zst)
-            קובץ מסד הקטלוגים להורדה ידנית: https://github.com/Otzaria/otzar-HB_catalog/releases/latest (asset: otzar-HB_catalog.db.zst)
-            קובץ PDF של תלמוד בבלי להורדה ידנית: https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst
-            ענף: ${{ github.ref_name }}
+          body_path: release-body.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
