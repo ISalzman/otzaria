@@ -7,9 +7,11 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
+import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/navigation/startup_work_gate.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/empty_library/empty_library_screen.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
@@ -76,6 +78,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   // שמירת מצב הספרייה הקודם כדי לזהות שינויים
   bool? _previousLibraryEmptyState;
 
+  final StartupWorkGate _startupWorkGate = StartupWorkGate();
   bool _hasCheckedAutoIndex = false;
   bool _hasRestoredFullscreen = false;
   bool _hasStartedFileSync = false;
@@ -144,6 +147,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
         }
       },
     );
+  }
+
+  void _tryStartDeferredStartupWork() {
+    if (!_startupWorkGate.consumeStartPermission()) {
+      return;
+    }
+
+    _initializeBackgroundSync();
+    _startFileSync();
   }
 
   /// Setup synchronization between window fullscreen state and settings
@@ -399,11 +411,19 @@ class MainWindowScreenState extends State<MainWindowScreen>
               !current.isLoading &&
               current.library != null,
           listener: (context, state) {
-            // Library finished loading - now safe to start background sync
-            // without DB lock contention
-            _initializeBackgroundSync();
-            // Also start FileSyncBloc (DB DIFF sync from GitHub)
-            _startFileSync();
+            _startupWorkGate.markLibraryLoaded();
+            _tryStartDeferredStartupWork();
+          },
+        ),
+        BlocListener<IndexingBloc, IndexingState>(
+          listenWhen: (previous, current) =>
+              (previous is IndexingInProgress) !=
+              (current is IndexingInProgress),
+          listener: (context, state) {
+            _startupWorkGate.markIndexingRunning(
+              state is IndexingInProgress,
+            );
+            _tryStartDeferredStartupWork();
           },
         ),
         BlocListener<SettingsBloc, SettingsState>(
@@ -419,6 +439,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
           listener: (context, state) {
             // When settings are loaded for the first time, check if we should start indexing
             _checkAndStartIndexing(context);
+            _startupWorkGate.markIndexingDecisionResolved(
+              expectIndexing: state.autoUpdateIndex,
+            );
+            _tryStartDeferredStartupWork();
             // Also restore fullscreen state
             _restoreFullscreenState(context);
           },
@@ -457,7 +481,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
             _cachedReadingPage ??= const ReadingScreen();
             _cachedMorePage ??= MoreScreen(key: moreScreenKey);
             _cachedSettingsPage ??=
-              MySettingsScreen(controller: _settingsScreenController);
+                MySettingsScreen(controller: _settingsScreenController);
 
             _pages = [
               _cachedLibraryPage!,
