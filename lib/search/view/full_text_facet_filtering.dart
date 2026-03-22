@@ -76,6 +76,21 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
   static int _normalizeOrder(int order) =>
       order >= 0 ? order : 1000 + order.abs();
 
+  String _bookDedupKey(Book book) {
+    final baseTitle = book.title.trim();
+    final externalKey = book.externalLibraryId;
+    if (externalKey != null && externalKey.isNotEmpty) {
+      return 'ext:$externalKey';
+    }
+    final idKey = book.id;
+    if (idKey != null) {
+      return 'id:$idKey';
+    }
+    final categoryKey =
+        book.categoryId?.toString() ?? book.categoryPath ?? '';
+    return '$baseTitle|$categoryKey';
+  }
+
   @override
   void dispose() {
     _filterQuery.dispose();
@@ -420,7 +435,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
     // איחוד ספרים כפולים (למשל PDF וטקסט של אותו ספר) לאותה כותרת
     final uniqueBooksInCategory = <String, Book>{};
     for (final book in category.books) {
-      uniqueBooksInCategory[book.title] ??= book;
+      uniqueBooksInCategory[_bookDedupKey(book)] ??= book;
     }
     
     final filteredBooks = uniqueBooksInCategory.values.toList();
@@ -453,7 +468,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
       // איחוד ספרים כפולים (למשל PDF וטקסט של אותו ספר) לאותה כותרת
       final uniqueBooksInCategory = <String, Book>{};
       for (final book in cat.books) {
-        uniqueBooksInCategory[book.title] ??= book;
+        uniqueBooksInCategory[_bookDedupKey(book)] ??= book;
       }
       
       final sortedBooks = uniqueBooksInCategory.values.toList();
@@ -547,7 +562,6 @@ class _IsolatedTooltip extends StatefulWidget {
   final Widget child;
 
   const _IsolatedTooltip({
-    super.key,
     required this.message,
     required this.child,
   });
