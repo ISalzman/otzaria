@@ -194,18 +194,40 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
         ),
         BlocBuilder<IndexingBloc, IndexingState>(
           builder: (context, indexingState) {
+            final processed = indexingState.booksProcessed ?? 0;
+            final total = indexingState.totalBooks ?? 0;
+            final isActive = indexingState is IndexingInProgress && total > 0;
+            String subtitleText;
+            TextDirection subtitleDirection = TextDirection.rtl;
+            final libraryPath =
+                Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+            final library = context.watch<LibraryBloc>().state.library;
+            final hasBooks = library?.getAllBooks().isNotEmpty ?? false;
+            if (libraryPath == null || libraryPath.isEmpty) {
+              subtitleText = 'לא קיימת ספרייה לאינדוקס';
+            } else if (!hasBooks) {
+              subtitleText = 'הספרייה ריקה – אין ספרים לאינדוקס';
+            } else if (isActive) {
+              subtitleText = 'התקדמות האינדקס: $processed/$total';
+            } else if (indexingState is IndexingComplete) {
+              subtitleText = 'האינדקס מעודכן';
+            } else {
+              subtitleText = 'האינדקס לא מעודכן';
+            }
             return ListTile(
               leading: const Icon(FluentIcons.table_24_regular),
-              title: const Text('אינדקס חיפוש', style: kSettingsTitleStyle),
+              title: const Text(
+                'אינדקס חיפוש',
+                style: kSettingsTitleStyle,
+                textDirection: TextDirection.rtl,
+              ),
               subtitle: Text(
-                  indexingState is IndexingInProgress
-                      ? 'התקדמות האינדקס: ${indexingState.booksProcessed}/${indexingState.totalBooks}'
-                      : indexingState is IndexingComplete
-                          ? 'האינדקס מעודכן'
-                          : 'האינדקס לא מעודכן',
-                  style: kSettingsSubtitleStyle),
+                subtitleText,
+                style: kSettingsSubtitleStyle,
+                textDirection: subtitleDirection,
+              ),
               hoverColor: Colors.transparent,
-              trailing: indexingState is IndexingInProgress
+              trailing: isActive
                   ? NeutralActionButton(
                       text: 'עצור',
                       onPressed: () async {
@@ -220,7 +242,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                         }
                       },
                     )
-                  : indexingState is IndexingComplete
+                  : indexingState is IndexingComplete && (total > 0)
                       ? NeutralActionButton(
                           text: 'איפוס',
                           onPressed: () async {
