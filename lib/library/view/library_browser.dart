@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -507,7 +508,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   Future<List<Widget>> _buildSearchResults(List<Book> books) async {
     // בניית כל הפריטים מראש
-    final displayLimit = books.length > 100 ? 100 : books.length;
+    final displayLimit = min(books.length, 100);
 
     return [
       _buildSearchResultsGrid(books, displayLimit),
@@ -1147,9 +1148,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   mainAxisSpacing: 4),
               itemCount: displayLimit,
               itemBuilder: (context, index) {
-                final row = index ~/ crossAxisCount;
-                final col = index % crossAxisCount;
-                final orderIndex = row * crossAxisCount + col;
+                final orderIndex = index;
                 final focusNode =
                     index == 0 ? _firstSearchResultFocusNode : null;
 
