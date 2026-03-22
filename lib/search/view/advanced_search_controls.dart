@@ -347,6 +347,8 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                 final key = '${_wordIndex!}-${_wordIndex! + 1}';
                 widget.tab.spacingValues[key] = text.trim();
                 widget.tab.spacingValuesChanged.value++;
+                // הפעלת חיפוש גם כאשר יש ערך
+                widget.onEmptySubmit?.call();
               } else {
                 widget.onEmptySubmit?.call();
               }
