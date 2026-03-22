@@ -274,9 +274,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                                               }
                                             },
                                             onClose: () {
-                                              context
-                                                  .read<SettingsBloc>()
-                                                  .add(
+                                              context.read<SettingsBloc>().add(
                                                     const UpdateLibraryShowPreview(
                                                         false),
                                                   );
