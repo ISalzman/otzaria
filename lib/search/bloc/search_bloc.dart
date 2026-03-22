@@ -38,6 +38,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     on<ToggleDotAll>(_onToggleDotAll);
     on<ToggleUnicode>(_onToggleUnicode);
     on<UpdateFacetCounts>(_onUpdateFacetCounts);
+    on<ReplaceFacetCounts>(_onReplaceFacetCounts);
     on<LoadMoreResults>(_onLoadMoreResults);
   }
   Future<void> _onUpdateSearchQuery(
@@ -49,9 +50,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         searchQuery: event.query,
         results: [],
         totalResults: 0,
+        facetCounts: const {},
       ));
       return;
     }
+
+    final shouldPreserveFacetCounts =
+        state.searchQuery == event.query && state.facetCounts.isNotEmpty;
 
     // Clear global cache for new search
     TantivyDataProvider.clearGlobalCache();
@@ -59,7 +64,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     emit(state.copyWith(
       searchQuery: event.query,
       isLoading: true,
-      facetCounts: {}, // Clear facet counts for new search
+      facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
     ));
 
     final booksToSearch = state.booksToSearch.map((e) => e.title).toList();
@@ -98,7 +103,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         results: results,
         totalResults: totalResults,
         isLoading: false,
-        facetCounts: {}, // Start with empty facet counts, will be filled by full counts
+        facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
       ));
 
       unawaited(_refreshFacetCountsForAllBooks(event));
@@ -132,7 +137,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     const int kFacetAggregationLimit = 50000;
     final largeResults = await _repository.searchTexts(
       SearchQueryBuilder.sanitizeQuery(query),
-      state.currentFacets,
+      const ['/'], // תמיד חיפוש מהשורש כדי לקבל ספירות לכל הקטגוריות
       kFacetAggregationLimit, // limit גדול כדי לקבל את רוב/כל התוצאות
       fuzzy: state.fuzzy,
       distance: state.distance,
@@ -153,7 +158,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       bookByTitle,
     );
 
-    add(UpdateFacetCounts(aggregated));
+    add(ReplaceFacetCounts(aggregated));
   }
 
   void _onUpdateFilterQuery(
@@ -461,6 +466,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     } else {
       debugPrint('🧹 Facet counts cleared');
     }
+  }
+
+  void _onReplaceFacetCounts(
+    ReplaceFacetCounts event,
+    Emitter<SearchState> emit,
+  ) {
+    emit(state.copyWith(facetCounts: event.facetCounts));
   }
 
   Future<void> _onLoadMoreResults(
