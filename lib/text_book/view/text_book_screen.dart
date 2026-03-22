@@ -618,6 +618,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           debugPrint('🔧 Applying removeNikud: ${settings.removeNikud}');
           textBookBloc.add(ToggleNikud(settings.removeNikud!));
         }
+        if (settings.removePunctuation != null) {
+          debugPrint('🔧 Applying removePunctuation: ${settings.removePunctuation}');
+          textBookBloc.add(TogglePunctuation(settings.removePunctuation!));
+        }
         break;
       }
     }
@@ -1272,9 +1276,23 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () async {
           final newValue = !state.removeNikud;
           context.read<TextBookBloc>().add(ToggleNikud(newValue));
-          // שמירה עם הערך החדש
           await _savePerBookSettingsDirectly(context, state,
               removeNikud: newValue);
+        },
+      ),
+
+      // 3b) Punctuation Button
+      ActionButtonData(
+        widget: _buildPunctuationButton(context, state),
+        icon: state.removePunctuation
+            ? FluentIcons.text_quote_24_regular
+            : FluentIcons.text_clear_formatting_24_regular,
+        tooltip: state.removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
+        onPressed: () async {
+          final newValue = !state.removePunctuation;
+          context.read<TextBookBloc>().add(TogglePunctuation(newValue));
+          await _savePerBookSettingsDirectly(context, state,
+              removePunctuation: newValue);
         },
       ),
 
@@ -1659,6 +1677,21 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ? FluentIcons.text_font_24_regular
           : FluentIcons.text_font_info_24_regular),
       tooltip: state.removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
+    );
+  }
+
+  Widget _buildPunctuationButton(BuildContext context, TextBookLoaded state) {
+    return IconButton(
+      onPressed: () async {
+        final newValue = !state.removePunctuation;
+        context.read<TextBookBloc>().add(TogglePunctuation(newValue));
+        await _savePerBookSettingsDirectly(context, state,
+            removePunctuation: newValue);
+      },
+      icon: Icon(state.removePunctuation
+          ? FluentIcons.text_quote_24_regular
+          : FluentIcons.text_clear_formatting_24_regular),
+      tooltip: state.removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
     );
   }
 
@@ -2526,6 +2559,7 @@ Future<void> _savePerBookSettingsDirectly(
   double? fontSize,
   bool? showSplitView,
   bool? removeNikud,
+  bool? removePunctuation,
 }) async {
   final settingsBloc = context.read<SettingsBloc>();
   if (!settingsBloc.state.enablePerBookSettings) {
@@ -2545,6 +2579,7 @@ Future<void> _savePerBookSettingsDirectly(
   double? newFontSize = existingSettings?.fontSize;
   bool? newCommentatorsBelow = existingSettings?.commentatorsBelow;
   bool? newRemoveNikud = existingSettings?.removeNikud;
+  bool? newRemovePunctuation = existingSettings?.removePunctuation;
 
   // עדכון רק השדה שהשתנה
   if (fontSize != null) {
@@ -2564,10 +2599,15 @@ Future<void> _savePerBookSettingsDirectly(
     newRemoveNikud = (removeNikud == defaultRemoveNikud) ? null : removeNikud;
   }
 
+  if (removePunctuation != null) {
+    newRemovePunctuation = removePunctuation ? true : null;
+  }
+
   // אם כל השדות null, מוחקים את הקובץ כולו
   if (newFontSize == null &&
       newCommentatorsBelow == null &&
-      newRemoveNikud == null) {
+      newRemoveNikud == null &&
+      newRemovePunctuation == null) {
     await TextBookPerBookSettings.delete(state.book.title);
     return;
   }
@@ -2577,6 +2617,7 @@ Future<void> _savePerBookSettingsDirectly(
     fontSize: newFontSize,
     commentatorsBelow: newCommentatorsBelow,
     removeNikud: newRemoveNikud,
+    removePunctuation: newRemovePunctuation,
   );
 
   await settings.save(state.book.title);
