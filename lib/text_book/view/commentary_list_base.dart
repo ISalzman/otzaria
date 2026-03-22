@@ -363,7 +363,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
     // אם אין מצב שמור עבור הקבוצה הזו, משתמש במצב הגלובלי
     if (!_expansionStates.containsKey(groupKey)) {
-      _expansionStates[groupKey] = true;
+      _expansionStates[groupKey] = _allExpanded;
     }
 
     final isExpanded = _expansionStates[groupKey] ?? _allExpanded;
@@ -541,7 +541,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     // אתחול מצבי הרחבה עבור כל הקבוצות
                     for (final group in groups) {
                       final groupKey = group.bookTitle;
-                      _expansionStates.putIfAbsent(groupKey, () => true);
+                      _expansionStates.putIfAbsent(groupKey, () => _allExpanded);
                     }
 
                     // יצירת מפתח ייחודי לאינדקסים הנוכחיים
