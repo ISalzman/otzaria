@@ -156,6 +156,39 @@ class Library extends Category {
     }
   }
 
+  /// מחפש ספר נלווה (Companion Book) כמו גרסת PDF לגרסת טקסט או להיפך.
+  /// החיפוש מתבצע תחילה תחת אותה קטגוריה בה נמצא הספר המקורי.
+  /// אם לא נמצא - נופל לחיפוש גלובלי עם מניעת התנגשויות (ירושלמי <-> בבלי כדוגמה).
+  Book? getCompanionBook(Book book, Type companionType) {
+    final normalizedTitle = _normalizeTitle(book.title);
+    
+    // 1. חיפוש באותה קטגוריה בדיוק:
+    if (book.category != null) {
+      final companion = book.category!.books.where(
+        (b) => _normalizeTitle(b.title) == normalizedTitle && b.runtimeType == companionType
+      ).firstOrNull;
+      
+      if (companion != null) return companion;
+    }
+    
+    // 2. חיפוש גלובלי (מאפשר התאמה לפי נרמול הכותרת כפי שמקובל):
+    final candidates = getAllBooks().where(
+      (b) => b.runtimeType == companionType && _normalizeTitle(b.title) == normalizedTitle
+    ).toList();
+    
+    // סינון התנגשויות ידועות (ירושלמי <-> בבלי)
+    final filtered = candidates.where((candidate) {
+      final bookCat = book.categoryPath ?? book.heCategories ?? (book is FileBook ? book.path : '');
+      final candCat = candidate.categoryPath ?? candidate.heCategories ?? (candidate is FileBook ? candidate.path : '');
+      
+      if (bookCat.contains('ירושלמי') && candCat.contains('בבלי')) return false;
+      if (bookCat.contains('בבלי') && candCat.contains('ירושלמי')) return false;
+      return true;
+    }).toList();
+    
+    return filtered.firstOrNull;
+  }
+
   /// מחפש ספר לפי כותרת עם חיפוש גמיש יותר.
   ///
   /// אם לא נמצא התאמה מדויקת, מנסה למצוא ספר עם כותרת דומה:

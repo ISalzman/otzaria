@@ -88,6 +88,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
   final GlobalKey _viewModeMenuKey = GlobalKey(); // מפתח לתפריט בחירת התצוגה
   String? _selectedTextForSearch;
+  Book? _pdfBook; // Companion PDF
+  bool _hasPdfBook = false;
 
   // Key עבור PageShapeScreen - שינוי המפתח יגרום לבנייה מחדש
   Key _pageShapeKey = UniqueKey();
@@ -456,6 +458,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     // טעינת הגדרות פר-ספר
     _loadPerBookSettings();
+
+    DataRepository.instance.library.then((library) {
+      if (mounted) {
+        setState(() {
+          _pdfBook = library.getCompanionBook(widget.tab.book, PdfBook);
+          _hasPdfBook = _pdfBook != null;
+        });
+      }
+    });
 
     final pendingSidebarTab =
         Settings.getValue<int>('key-sidebar-tab-index-pending');
@@ -1227,12 +1238,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   ) {
     return [
       // 1) PDF Button (ראשון מימין - יעלם אחרון!)
-      ActionButtonData(
-        widget: _buildPdfButton(context, state),
-        icon: FluentIcons.document_pdf_24_regular,
-        tooltip: 'פתח ספר במהדורה מודפסת',
-        onPressed: () => _handlePdfButtonPress(context, state),
-      ),
+      if (_hasPdfBook)
+        ActionButtonData(
+          widget: IconButton(
+            icon: const Icon(FluentIcons.document_pdf_24_regular),
+            tooltip: 'פתח ספר במהדורה מודפסת',
+            onPressed: () => _handlePdfButtonPress(context, state),
+          ),
+          icon: FluentIcons.document_pdf_24_regular,
+          tooltip: 'פתח ספר במהדורה מודפסת',
+          onPressed: () => _handlePdfButtonPress(context, state),
+        ),
 
       // 2) View Mode Dropdown (מאחד את Split View ו-Page Shape View)
       ActionButtonData(
@@ -1512,42 +1528,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ],
         ),
     ];
-  }
-
-  Widget _buildPdfButton(BuildContext context, TextBookLoaded state) {
-    return FutureBuilder<Book?>(
-      future: DataRepository.instance.library.then(
-        (library) => library.findBookByTitleFlexible(state.book.title, PdfBook),
-      ),
-      builder: (context, snapshot) {
-        // Show button only if PDF book exists (snapshot.data is not null)
-        final pdfBook = snapshot.data;
-        if (pdfBook == null) {
-          return const SizedBox.shrink();
-        }
-
-        return IconButton(
-          icon: const Icon(FluentIcons.document_pdf_24_regular),
-          tooltip: 'פתח ספר במהדורה מודפסת ',
-          onPressed: () async {
-            final currentIndex =
-                state.positionsListener.itemPositions.value.isNotEmpty
-                    ? state.positionsListener.itemPositions.value.first.index
-                    : 0;
-            widget.tab.index = currentIndex;
-
-            final index = await textToPdfPage(
-              state.book,
-              currentIndex,
-            );
-
-            if (!context.mounted) return;
-
-            openBook(context, pdfBook, index ?? 1, '', ignoreHistory: true);
-          },
-        );
-      },
-    );
   }
 
   /// קבלת האייקון המתאים למצב התצוגה הנוכחי
@@ -2041,26 +2021,21 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// פונקציות עזר לטיפול בלחיצות על כפתורים בתפריט הנפתח
   void _handlePdfButtonPress(BuildContext context, TextBookLoaded state) async {
+    if (_pdfBook == null) {
+      UiSnack.showError('לא נמצא ספר PDF עבור "${state.book.title}"');
+      return;
+    }
+
     final currentIndex = state.positionsListener.itemPositions.value.isNotEmpty
         ? state.positionsListener.itemPositions.value.first.index
         : 0;
     widget.tab.index = currentIndex;
 
-    final library = await DataRepository.instance.library;
-    if (!context.mounted) return;
-
-    // ניסיון למצוא את ספר ה-PDF עם חיפוש גמיש
-    final book = library.findBookByTitleFlexible(state.book.title, PdfBook);
-    if (book == null) {
-      UiSnack.showError('לא נמצא ספר PDF עבור "${state.book.title}"');
-      return;
-    }
-
     final index = await textToPdfPage(state.book, currentIndex);
 
     if (!context.mounted) return;
 
-    openBook(context, book, index ?? 1, '', ignoreHistory: true);
+    openBook(context, _pdfBook!, index ?? 1, '', ignoreHistory: true);
   }
 
   void _handleBookmarkPress(BuildContext context, TextBookLoaded state) async {
@@ -2738,7 +2713,7 @@ void _togglePdfView(
   final library = await DataRepository.instance.library;
   if (!context.mounted) return;
 
-  final book = library.findBookByTitleFlexible(state.book.title, PdfBook);
+  final book = library.getCompanionBook(state.book, PdfBook);
   if (book == null) {
     UiSnack.showError('לא נמצא ספר PDF עבור "${state.book.title}"');
     return;

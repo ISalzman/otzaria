@@ -11,7 +11,7 @@ final _pageMapCache = <String, _PageMap>{};
 /// This function uses a cached, anchor-based map with local interpolation for accuracy and performance.
 Future<int?> textToPdfPage(TextBook textBook, int textIndex) async {
   final pdfBook = (await DataRepository.instance.library)
-      .findBookByTitleFlexible(textBook.title, PdfBook) as PdfBook?;
+      .getCompanionBook(textBook, PdfBook) as PdfBook?;
   if (pdfBook == null) {
     return null;
   }
@@ -44,7 +44,7 @@ Future<int?> textToPdfPage(TextBook textBook, int textIndex) async {
 Future<int?> pdfToTextPage(PdfBook pdfBook, List<PdfOutlineNode> outline,
     int pdfPage, BuildContext ctx) async {
   final textBook = (await DataRepository.instance.library)
-      .findBookByTitleFlexible(pdfBook.title, TextBook) as TextBook?;
+      .getCompanionBook(pdfBook, TextBook) as TextBook?;
   if (textBook == null) {
     return null;
   }

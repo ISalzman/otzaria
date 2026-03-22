@@ -117,10 +117,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
       // Load links
       final library = await DataRepository.instance.library;
-      final textBook = library.findTextBookByTitleAndCategory(
-        book.title,
-        categoryId: book.categoryId,
-      );
+      final textBook = library.getCompanionBook(book, TextBook) as TextBook?;
       List<Link> links = [];
 
       if (textBook != null) {
