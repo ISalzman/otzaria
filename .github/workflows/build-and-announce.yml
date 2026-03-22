@@ -1202,19 +1202,16 @@ jobs:
             esac
           done
 
-          safe_commit_message=${COMMIT_MESSAGE//$'\r'/ }
-          safe_commit_message=${safe_commit_message//$'\n'/ }
-          while [[ "$safe_commit_message" == *"  "* ]]; do
-            safe_commit_message=${safe_commit_message//  / }
-          done
-          safe_commit_message=${safe_commit_message# }
-          safe_commit_message=${safe_commit_message% }
-          safe_commit_message=${safe_commit_message//\\/\\\\}
-          safe_commit_message=${safe_commit_message//\`/\\`}
-          safe_commit_message=${safe_commit_message//\*/\\*}
-          safe_commit_message=${safe_commit_message//_/\\_}
-          safe_commit_message=${safe_commit_message//\[/\\[}
-          safe_commit_message=${safe_commit_message//\]/\\]}
+          safe_commit_message=$(printf '%s' "$COMMIT_MESSAGE" \
+            | tr '\r\n' ' ' \
+            | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//' \
+            | sed \
+                -e 's/\\/\\\\/g' \
+                -e 's/`/\\`/g' \
+                -e 's/\*/\\*/g' \
+                -e 's/_/\\_/g' \
+                -e 's/\[/\\[/g' \
+                -e 's/\]/\\]/g')
 
           cat > release-body.md <<EOF
           # ${RELEASE_TITLE}
