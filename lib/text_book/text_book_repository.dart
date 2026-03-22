@@ -138,7 +138,8 @@ class TextBookRepository {
     required int endIndex,
   }) async {
     final normalizedStart = startIndex < 0 ? 0 : startIndex;
-    final normalizedEnd = endIndex < normalizedStart ? normalizedStart : endIndex;
+    final normalizedEnd =
+        endIndex < normalizedStart ? normalizedStart : endIndex;
 
     final title = book.title;
     final categoryId = book.categoryId;
@@ -169,11 +170,16 @@ class TextBookRepository {
           .toList();
     }
 
-    if (categoryId != null && _sqliteProvider.repository != null) {
+    final dbBook = await BookLocator.getBookFromDatabase(
+      book.title,
+      category: book.category,
+    );
+
+    if (dbBook != null && _sqliteProvider.repository != null) {
       return DatabaseLibraryProvider.instance.getLinksForBookRange(
         title,
-        categoryId,
-        fileType,
+        dbBook.categoryId,
+        dbBook.fileType ?? fileType,
         startLineIndex: normalizedStart,
         endLineIndex: normalizedEnd,
       );

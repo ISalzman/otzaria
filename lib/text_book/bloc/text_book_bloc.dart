@@ -52,9 +52,20 @@ String _linkIdentityKey(Link link) {
   return '${link.index1}|${link.path2}|${link.index2}|${link.connectionType}|${link.start}|${link.end}';
 }
 
+List<String> _buildPreviewLines(String previewContent, int previewStartLine) {
+  final previewLines = previewContent.split('\n');
+  if (previewStartLine <= 0) {
+    return previewLines;
+  }
+
+  return List<String>.filled(previewStartLine, '', growable: true)
+    ..addAll(previewLines);
+}
+
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   static const int _linkLookBehindLines = 25;
   static const int _linkLookAheadLines = 50;
+  static const int _initialVisibleLinesCount = 12;
 
   final TextBookRepository repository;
   // [EDITING DISABLED] final OverridesRepository _overridesRepository;
@@ -114,6 +125,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return _mergeLinksByIdentity(existing, incoming);
   }
 
+  @visibleForTesting
+  static List<String> buildPreviewLinesForTesting(
+      String previewContent, int previewStartLine) {
+    return _buildPreviewLines(previewContent, previewStartLine);
+  }
+
   Future<void> _onLoadContent(
     LoadContent event,
     Emitter<TextBookState> emit,
@@ -160,7 +177,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       searchMode = initial.searchMode;
       showLeftPane = initial.showLeftPane;
       commentators = initial.commentators;
-      visibleIndices = [initial.index];
+      visibleIndices = _buildInitialVisibleIndices(initial.index);
       initialShowPageShapeView = initial.showPageShapeView;
 
       emit(TextBookLoading(
@@ -191,7 +208,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         );
 
         if (preview != null && preview.isNotEmpty) {
-          content = preview;
+          final previewStartLine =
+              (visibleIndices.first - 10).clamp(0, visibleIndices.first);
+          content = _buildPreviewLines(preview, previewStartLine).join('\n');
 
           // Load full book in background
           _loadFullBookInBackground(book);
@@ -310,7 +329,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       _loadLinksInBackground(
         book,
         visibleIndices,
-        useVisibleWindow: initialShowPageShapeView,
       );
 
       // טעינת מפרשים ברקע (רשימת מפרשים זמינים + חלוקה לתקופות)
@@ -517,13 +535,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         visibleLinks: visibleLinks,
       ));
 
-      if (currentState.showPageShapeView) {
-        _loadLinksInBackground(
-          currentState.book,
-          event.visibleIndecies,
-          useVisibleWindow: true,
-        );
-      }
+      _loadLinksInBackground(
+        currentState.book,
+        event.visibleIndecies,
+      );
     }
   }
 
@@ -532,6 +547,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     _loadedLinksStart = null;
     _loadedLinksEnd = null;
     _isLoadingLinks = false;
+  }
+
+  List<int> _buildInitialVisibleIndices(int firstVisibleIndex) {
+    final start = firstVisibleIndex < 0 ? 0 : firstVisibleIndex;
+    return List<int>.generate(
+      _initialVisibleLinesCount,
+      (offset) => start + offset,
+    );
   }
 
   ({int start, int end}) _calculateLinksWindow(List<int> visibleIndices) {
@@ -1020,38 +1043,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   /// Loads links in the background after the book is displayed
   void _loadLinksInBackground(
     TextBook book,
-    List<int> visibleIndices, {
-    required bool useVisibleWindow,
-  }) async {
-    if (!useVisibleWindow) {
-      if (_isLoadingLinks) {
-        return;
-      }
-
-      _isLoadingLinks = true;
-
-      try {
-        final links = await repository.getBookLinks(book);
-
-        if (isClosed || state is! TextBookLoaded) {
-          _isLoadingLinks = false;
-          return;
-        }
-
-        final currentState = state as TextBookLoaded;
-        if (currentState.book.title != book.title) {
-          _isLoadingLinks = false;
-          return;
-        }
-
-        _isLoadingLinks = false;
-        add(UpdateLinks(links));
-      } catch (e) {
-        _isLoadingLinks = false;
-      }
-      return;
-    }
-
+    List<int> visibleIndices,
+  ) async {
     final window = _calculateLinksWindow(visibleIndices);
 
     if (_isLoadingLinks ||
@@ -1096,7 +1089,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           _loadLinksInBackground(
             latestState.book,
             latestState.visibleIndices,
-            useVisibleWindow: true,
           );
         }
       }

@@ -88,7 +88,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       ValueNotifier<String?>(null); // טקסט נבחר לתפריט הקשר
   bool _showCommentatorsFilter = false; // האם להציג את מסך בחירת המפרשים
 
-  String _getLinkKey(Link link) => '${link.path2}_${link.index2}';
+  String _getLinkKey(Link link) =>
+      '${link.index1}_${link.path2}_${link.index2}';
 
   // רשימה של כל ה-links לפי סדר הופעתם (נבנית מחדש בכל build)
   List<Link> _orderedLinks = [];
@@ -541,7 +542,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     // אתחול מצבי הרחבה עבור כל הקבוצות
                     for (final group in groups) {
                       final groupKey = group.bookTitle;
-                      _expansionStates.putIfAbsent(groupKey, () => _allExpanded);
+                      _expansionStates.putIfAbsent(
+                          groupKey, () => _allExpanded);
                     }
 
                     // יצירת מפתח ייחודי לאינדקסים הנוכחיים
@@ -1097,7 +1099,7 @@ class _CollapsibleCommentaryGroupState
                             : 0;
                         return CommentaryContent(
                           key: ValueKey(
-                              '${link.path2}_${link.index2}_${widget.indexesKey}'),
+                              '${link.index1}_${link.path2}_${link.index2}_${widget.indexesKey}'),
                           link: link,
                           fontSize: widget.fontSize,
                           openBookCallback: widget.openBookCallback,
