@@ -89,6 +89,23 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     _loadSizes();
   }
 
+  /// בדיקה האם מפרש ברירת המחדל קיים, ואם לא – הסתרת הטור כברירת מחדל
+  void _hideColumnIfDefaultMissing(Map<String, String?> commentators, List<String> availableCommentators) {
+    final newColumnVisibility = Map<String, bool>.from(_columnVisibility);
+    for (final entry in commentators.entries) {
+      final col = entry.key;
+      final def = entry.value;
+      // אם יש ברירת מחדל אך היא לא קיימת בספר – הסתר
+      if (def != null && !availableCommentators.contains(def)) {
+        newColumnVisibility[col] = false;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _columnVisibility = newColumnVisibility;
+    });
+  }
+
   /// טעינת גדלים שמורים או חישוב ברירות מחדל
   void _loadSizes() {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -160,6 +177,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         availableCommentators: state.availableCommentators,
       );
       debugPrint('📖 PageShape: Default commentators loaded: $commentators');
+      // כאן נבדוק אם ברירת המחדל לא קיימת – נסיר את הטור
+      _hideColumnIfDefaultMissing(commentators, state.availableCommentators);
     }
 
     if (mounted) {
@@ -300,6 +319,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       return _CommentaryPane(
         commentatorName: commentators.single,
         openBookCallback: widget.openBookCallback,
+        onLoadFailed: () => _hideColumn('right', global: false, showSnack: false),
       );
     }
 
@@ -316,12 +336,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     );
   }
 
-  /// הסתרת טור
-  ///
-  /// שימו לב: פעולה זו שומרת את ההגדרה גלובלית כברירת מחדל.
-  /// אם המשתמש רוצה הגדרות פר-ספר, הוא צריך לפתוח את דיאלוג ההגדרות
-  /// ולהפעיל את האופציה "שמירה לספר הנוכחי בלבד".
-  void _hideColumn(String column) {
+  /// הסתרת טור - ניתן לבחור אם לשמור גלובלית או רק לספר הנוכחי
+  void _hideColumn(String column, {bool global = true, bool showSnack = true}) {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
@@ -329,13 +345,15 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       _columnVisibility[column] = false;
     });
 
-    // שמירה גלובלית - תחול על כל הספרים
+    // שמירה גלובלית או פר-ספר
     PageShapeSettingsManager.saveColumnVisibility(
         state.book.title, _columnVisibility,
-        saveAsGlobal: true);
+        saveAsGlobal: global);
 
-    // הודעה למשתמש
-    UiSnack.show('הטור הוסתר בכל הספרים. ניתן לשנות בהגדרות צורת הדף.');
+    // הודעה למשתמש (רק אם יזום)
+    if (showSnack && global) {
+      UiSnack.show('הטור הוסתר בכל הספרים. ניתן לשנות בהגדרות צורת הדף.');
+    }
   }
 
   /// בניית widget למצב ריק של טור
@@ -552,9 +570,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                     _kCommentaryPaneWidthFactor,
                                             child: _CommentaryPane(
                                               commentatorName:
-                                                  _leftCommentator!,
+                                                _leftCommentator!,
                                               openBookCallback:
-                                                  widget.openBookCallback,
+                                                widget.openBookCallback,
+                                              onLoadFailed: () => _hideColumn('left', global: false, showSnack: false),
                                             ),
                                           ),
                                         ] else ...[
@@ -566,11 +585,21 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                     _kCommentaryPaneWidthFactor,
                                             child: _buildEmptyColumnContent(
                                               columnName: 'left',
-                                              onSelectCommentator: () =>
-                                                  _openCommentatorSelector(
-                                                      'left'),
-                                              onHideColumn: () =>
-                                                  _hideColumn('left'),
+                                              onSelectCommentator: () {
+                                                setState(() {
+                                                  _columnVisibility['left'] = true;
+                                                });
+                                                final state = context.read<TextBookBloc>().state;
+                                                if (state is TextBookLoaded) {
+                                                  PageShapeSettingsManager.saveColumnVisibility(
+                                                    state.book.title,
+                                                    _columnVisibility,
+                                                    saveAsGlobal: false,
+                                                  );
+                                                }
+                                                _openCommentatorSelector('left');
+                                              },
+                                              onHideColumn: () => _hideColumn('left'),
                                             ),
                                           ),
                                         ],
@@ -666,11 +695,21 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                     _kCommentaryPaneWidthFactor,
                                             child: _buildEmptyColumnContent(
                                               columnName: 'right',
-                                              onSelectCommentator: () =>
-                                                  _openCommentatorSelector(
-                                                      'right'),
-                                              onHideColumn: () =>
-                                                  _hideColumn('right'),
+                                              onSelectCommentator: () {
+                                                setState(() {
+                                                  _columnVisibility['right'] = true;
+                                                });
+                                                final state = context.read<TextBookBloc>().state;
+                                                if (state is TextBookLoaded) {
+                                                  PageShapeSettingsManager.saveColumnVisibility(
+                                                    state.book.title,
+                                                    _columnVisibility,
+                                                    saveAsGlobal: false,
+                                                  );
+                                                }
+                                                _openCommentatorSelector('right');
+                                              },
+                                              onHideColumn: () => _hideColumn('right'),
                                             ),
                                           ),
                                         ],
@@ -733,6 +772,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                           openBookCallback: widget
                                                               .openBookCallback,
                                                           isBottom: true,
+                                                          onLoadFailed: () => _hideColumn('bottom', global: false, showSnack: false),
                                                         ),
                                                       ),
                                                       const SizedBox(width: 8),
@@ -744,6 +784,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                         openBookCallback: widget
                                                             .openBookCallback,
                                                         isBottom: true,
+                                                        onLoadFailed: () => _hideColumn('bottomRight', global: false, showSnack: false),
                                                       ),
                                                     ),
                                                     const SizedBox(width: 4),
@@ -789,6 +830,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                         openBookCallback: widget
                                                             .openBookCallback,
                                                         isBottom: true,
+                                                        onLoadFailed: () => _hideColumn('bottom'),
                                                       ),
                                                     ),
                                                   ],
@@ -912,11 +954,13 @@ class _CommentaryPane extends StatefulWidget {
   final String commentatorName;
   final Function(OpenedTab) openBookCallback;
   final bool isBottom; // האם זה מפרש תחתון
+  final VoidCallback? onLoadFailed;
 
   const _CommentaryPane({
     required this.commentatorName,
     required this.openBookCallback,
     this.isBottom = false,
+    this.onLoadFailed,
   });
 
   @override
@@ -1177,6 +1221,11 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       if (bookContent.isEmpty) {
         debugPrint(
             '❌ CommentaryPane: Book text is empty for "${widget.commentatorName}"');
+        if (widget.onLoadFailed != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) widget.onLoadFailed!();
+          });
+        }
         throw Exception('Book text is empty for "${widget.commentatorName}"');
       }
 
@@ -1213,6 +1262,11 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     } catch (e) {
       debugPrint(
           '❌ CommentaryPane: Error loading "${widget.commentatorName}": $e');
+      if (widget.onLoadFailed != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) widget.onLoadFailed!();
+        });
+      }
       if (mounted) {
         setState(() {
           _reportBook = null;
