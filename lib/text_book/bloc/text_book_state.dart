@@ -88,6 +88,7 @@ class TextBookLoaded extends TextBookState {
   final List<Link> visibleLinks;
   final List<TocEntry> tableOfContents;
   final bool removeNikud;
+  final bool removePunctuation;
   final List<int> visibleIndices;
   final int? selectedIndex;
   final bool pinLeftPane;
@@ -133,6 +134,7 @@ class TextBookLoaded extends TextBookState {
     required this.linksByLine,
     required this.tableOfContents,
     required this.removeNikud,
+    this.removePunctuation = false,
     required this.visibleIndices,
     this.selectedIndex,
     required this.pinLeftPane,
@@ -213,6 +215,7 @@ class TextBookLoaded extends TextBookState {
     Map<int, List<Link>>? linksByLine,
     List<TocEntry>? tableOfContents,
     bool? removeNikud,
+    bool? removePunctuation,
     int? selectedIndex,
     List<int>? visibleIndices,
     bool? pinLeftPane,
@@ -253,6 +256,7 @@ class TextBookLoaded extends TextBookState {
       linksByLine: linksByLine ?? this.linksByLine,
       tableOfContents: tableOfContents ?? this.tableOfContents,
       removeNikud: removeNikud ?? this.removeNikud,
+      removePunctuation: removePunctuation ?? this.removePunctuation,
       visibleIndices: visibleIndices ?? this.visibleIndices,
       selectedIndex: selectedIndex,
       pinLeftPane: pinLeftPane ?? this.pinLeftPane,
@@ -294,6 +298,7 @@ class TextBookLoaded extends TextBookState {
         visibleLinks.length,
         tableOfContents.length,
         removeNikud,
+        removePunctuation,
         visibleIndices,
         selectedIndex,
         pinLeftPane,
