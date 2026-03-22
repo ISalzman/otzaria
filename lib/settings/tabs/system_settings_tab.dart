@@ -589,10 +589,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
   }
 
-  void _startLibrarySelectionFlow() {
-    _librarySelectionBloc.add(PickDirectoryRequested());
-  }
-
   Future<void> _showLibraryRestartDialog(BuildContext context) async {
     final shouldCloseApp = await showRestartRequiredDialog(context: context);
 
