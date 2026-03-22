@@ -34,9 +34,6 @@ class SnippetBuilder {
     var plainText =
         html_parser.parse(fullHtml).documentElement?.text.trim() ?? '';
 
-    // ניקוי תווים מיוחדים מהטקסט המקורי כדי שיתאים לשאילתה המנוקה
-    plainText =
-        plainText.replaceAll(RegExp(r'[!?":*\(\)\[\]\{\}\^\$\|\\+.~`]'), '');
 
     // 2. חילוץ מילות החיפוש כולל מילים חילופיות
     final originalWords = query
@@ -99,7 +96,7 @@ class SnippetBuilder {
     // 3. מציאת כל ההתאמות של כל המילים בטקסט המקורי
     final List<Match> allMatches = [];
     for (final term in searchTerms) {
-      final regex = RegExp(RegExp.escape(term), caseSensitive: false);
+      final regex = RegExp(_termToRegexPattern(term), caseSensitive: false);
       allMatches.addAll(regex.allMatches(plainText));
     }
 
@@ -216,6 +213,12 @@ class SnippetBuilder {
         snippetText, searchTerms, defaultStyle, highlightStyle);
   }
 
+  /// בניית תבנית רגקס שמאפשרת מרכאות אופציונליות בין תווים (כדי למצוא רשב"י כשמחפשים רשבי)
+  static String _termToRegexPattern(String term) {
+    const optionalQuotes = r'["״׳]?';
+    return term.split('').map(RegExp.escape).join(optionalQuotes);
+  }
+
   static List<InlineSpan> _buildTextSpans(
     String text,
     List<String> searchTerms,
@@ -226,7 +229,7 @@ class SnippetBuilder {
     int currentPosition = 0;
 
     final highlightRegex = RegExp(
-      searchTerms.map(RegExp.escape).join('|'),
+      searchTerms.map(_termToRegexPattern).join('|'),
       caseSensitive: false,
     );
 
