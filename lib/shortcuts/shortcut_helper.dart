@@ -14,22 +14,39 @@ class ShortcutHelper {
   /// בודק אם האירוע [event] תואם להגדרת הקיצור [shortcutSetting].
   ///
   /// [shortcutSetting] הוא מחרוזת כגון `'ctrl+shift+f'`, `'f11'`, `'ctrl+comma'`.
-  static bool matchesShortcut(KeyEvent event, String shortcutSetting) {
+  /// הפרמטרים האופציונליים מאפשרים בדיקות יחידה מבלי להסתמך על מצב חומרה אמיתי.
+  static bool matchesShortcut(
+    KeyEvent event,
+    String shortcutSetting, {
+    bool? isControlPressed,
+    bool? isShiftPressed,
+    bool? isAltPressed,
+    bool? isMetaPressed,
+  }) {
     if (event is! KeyDownEvent) return false;
 
     final parts = shortcutSetting.toLowerCase().split('+');
     final requiresCtrl = parts.contains('ctrl') || parts.contains('control');
     final requiresShift = parts.contains('shift');
     final requiresAlt = parts.contains('alt');
+    final requiresMeta = parts.contains('meta');
 
     // בדיקת modifiers
-    if (requiresCtrl != HardwareKeyboard.instance.isControlPressed) {
+    final controlPressed =
+        isControlPressed ?? HardwareKeyboard.instance.isControlPressed;
+    final shiftPressed =
+        isShiftPressed ?? HardwareKeyboard.instance.isShiftPressed;
+    final altPressed = isAltPressed ?? HardwareKeyboard.instance.isAltPressed;
+    final metaPressed = isMetaPressed ?? HardwareKeyboard.instance.isMetaPressed;
+
+    if (requiresCtrl != controlPressed) {
       return false;
     }
-    if (requiresShift != HardwareKeyboard.instance.isShiftPressed) {
+    if (requiresShift != shiftPressed) {
       return false;
     }
-    if (requiresAlt != HardwareKeyboard.instance.isAltPressed) return false;
+    if (requiresAlt != altPressed) return false;
+    if (requiresMeta != metaPressed) return false;
 
     // מציאת המקש הראשי (לא modifier)
     final mainKey = parts.where((p) => !_modifiers.contains(p)).firstOrNull;

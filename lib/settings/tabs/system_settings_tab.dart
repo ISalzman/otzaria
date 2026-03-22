@@ -585,29 +585,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             style: kSettingsSubtitleStyle,
           ),
         ),
-        if (!(Platform.isAndroid || Platform.isIOS)) ...[
-          ListTile(
-            leading: const Icon(FluentIcons.folder_24_regular),
-            title:
-                const Text('מיקום ספריית אוצריא', style: kSettingsTitleStyle),
-            subtitle: Text(
-              Settings.getValue<String>(SettingsRepository.keyLibraryPath) ??
-                  'לא נבחר',
-              style: kSettingsSubtitleStyle,
-            ),
-            trailing: NeutralActionButton(
-              icon: FluentIcons.folder_open_24_regular,
-              text: 'בחר תיקייה',
-              onPressed: _startLibrarySelectionFlow,
-            ),
-          ),
-        ],
       ],
     );
-  }
-
-  void _startLibrarySelectionFlow() {
-    _librarySelectionBloc.add(PickDirectoryRequested());
   }
 
   Future<void> _showLibraryRestartDialog(BuildContext context) async {
