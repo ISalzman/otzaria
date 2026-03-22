@@ -156,8 +156,7 @@ class Link {
 /// - The index of the link should be equal to the current index plus one.
 /// - The connection type of the link should be either "commentary" or "targum".
 /// - The title of the second book in the link should be present in the list of commentators to show.
-/// The filtered links are added to the [allLinks] list.
-/// After iterating over all the indexes, the [allLinks] list is sorted based on the order of the commentators to show.
+/// The filtered links are sorted based on the order of the commentators to show.
 /// The sorted list of links is then returned as a [Future] of a list of [Link] objects.
 Future<List<Link>> getLinksforIndexs(
     {required List<int> indexes,
@@ -189,15 +188,13 @@ Future<List<Link>> getLinksforIndexs(
     return commentatorsSet.contains(utils.getTitleFromPath(link.path2));
   }).toList();
 
-  final allLinks = filteredLinks;
-
   // אם אין קישורים, מחזיר רשימה ריקה מיד
-  if (allLinks.isEmpty) {
+  if (filteredLinks.isEmpty) {
     return [];
   }
 
   // מיון אחד משולב במקום שני מיונים נפרדים
-  allLinks.sort((a, b) {
+  filteredLinks.sort((a, b) {
     // קודם לפי סדר המפרשים
     final commentatorComparison = commentatorsToShow
         .indexOf(utils.getTitleFromPath(a.path2))
@@ -215,5 +212,5 @@ Future<List<Link>> getLinksforIndexs(
             b.heRef.replaceAll(' טו,', ' ,יה').replaceAll(' טז,', ' יו,'));
   });
 
-  return allLinks;
+  return filteredLinks;
 }

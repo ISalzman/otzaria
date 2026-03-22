@@ -34,13 +34,12 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(repository.getBookLinksCalls, 0);
       expect(repository.getBookLinksInRangeCalls, 1);
 
       await bloc.close();
     });
 
-    test('באתחול ספר משתמש בחלון visible התחלתי של כמה שורות', () async {
+    test('באתחול ספר משתמש בשורה ההתחלתית לשם טעינת חלון קישורים', () async {
       final repository = _FakeTextBookRepository();
       final bloc =
           _createBloc(repository: repository, showPageShapeView: false);
@@ -58,7 +57,7 @@ void main() {
 
       expect(repository.getBookLinksInRangeCalls, 1);
       expect(repository.lastStartIndex, 0);
-      expect(repository.lastEndIndex, 71);
+      expect(repository.lastEndIndex, 60);
 
       await bloc.close();
     });
@@ -100,7 +99,6 @@ TextBookBloc _createBloc({
 class _FakeTextBookRepository extends TextBookRepository {
   _FakeTextBookRepository() : super(fileSystem: FileSystemData.instance);
 
-  int getBookLinksCalls = 0;
   int getBookLinksInRangeCalls = 0;
   int? lastStartIndex;
   int? lastEndIndex;
@@ -112,12 +110,6 @@ class _FakeTextBookRepository extends TextBookRepository {
 
   @override
   Future<List<TocEntry>> getTableOfContents(TextBook book) async {
-    return const [];
-  }
-
-  @override
-  Future<List<Link>> getBookLinks(TextBook book) async {
-    getBookLinksCalls++;
     return const [];
   }
 

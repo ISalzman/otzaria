@@ -65,7 +65,6 @@ List<String> _buildPreviewLines(String previewContent, int previewStartLine) {
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   static const int _linkLookBehindLines = 25;
   static const int _linkLookAheadLines = 50;
-  static const int _initialVisibleLinesCount = 12;
 
   final TextBookRepository repository;
   // [EDITING DISABLED] final OverridesRepository _overridesRepository;
@@ -178,7 +177,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       searchMode = initial.searchMode;
       showLeftPane = initial.showLeftPane;
       commentators = initial.commentators;
-      visibleIndices = _buildInitialVisibleIndices(initial.index);
+      visibleIndices = [initial.index < 0 ? 0 : initial.index];
       initialShowPageShapeView = initial.showPageShapeView;
 
       emit(TextBookLoading(
@@ -561,14 +560,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     _loadedLinksStart = null;
     _loadedLinksEnd = null;
     _isLoadingLinks = false;
-  }
-
-  List<int> _buildInitialVisibleIndices(int firstVisibleIndex) {
-    final start = firstVisibleIndex < 0 ? 0 : firstVisibleIndex;
-    return List<int>.generate(
-      _initialVisibleLinesCount,
-      (offset) => start + offset,
-    );
   }
 
   ({int start, int end}) _calculateLinksWindow(List<int> visibleIndices) {
