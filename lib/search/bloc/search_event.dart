@@ -89,6 +89,11 @@ class UpdateFacetCounts extends SearchEvent {
   UpdateFacetCounts(this.facetCounts);
 }
 
+class ReplaceFacetCounts extends SearchEvent {
+  final Map<String, int> facetCounts;
+  ReplaceFacetCounts(this.facetCounts);
+}
+
 // Event לטעינת תוצאות נוספות
 class LoadMoreResults extends SearchEvent {
   final Map<String, String>? customSpacing;
