@@ -27,15 +27,21 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     Emitter<IndexingState> emit,
   ) async {
     // Set initial state
+    // מחשב מראש את totalBooks כדי לשדר אותו מיד
+    final allBooks = event.library.getAllBooks();
+    final totalBooks = allBooks.length;
+    if (totalBooks == 0) {
+      emit(IndexingInitial());
+      return;
+    }
     emit(IndexingInProgress(
       booksProcessed: 0,
-      totalBooks: 0,
+      totalBooks: totalBooks,
       booksDone: _repository.getIndexedBooks(),
     ));
 
     try {
-      // Start indexing process
-      await _repository.indexAllBooks(
+      final completed = await _repository.indexAllBooks(
         event.library,
         (processed, total) {
           // Update progress through event
@@ -45,6 +51,11 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
           ));
         },
       );
+      if (completed && totalBooks > 0) {
+        emit(const IndexingComplete());
+      } else {
+        emit(IndexingInitial());
+      }
     } catch (e) {
       emit(IndexingError(e.toString(),
           booksProcessed: state.booksProcessed,

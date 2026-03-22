@@ -16,10 +16,13 @@ class IndexingStatusOverlay extends StatelessWidget {
         if (state is! IndexingInProgress) {
           return const SizedBox.shrink();
         }
-
-        final colorScheme = Theme.of(context).colorScheme;
         final processed = state.booksProcessed ?? 0;
         final total = state.totalBooks ?? 0;
+        if (total == 0) {
+          return const SizedBox.shrink();
+        }
+
+        final colorScheme = Theme.of(context).colorScheme;
         final hasKnownTotal = total > 0;
         final rawProgress = hasKnownTotal ? processed / total : null;
         final progress = rawProgress?.clamp(0.0, 1.0).toDouble();
