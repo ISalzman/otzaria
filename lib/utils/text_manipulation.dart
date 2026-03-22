@@ -21,6 +21,122 @@ String removeVolwels(String s) {
   return s.replaceAll(SearchRegexPatterns.vowelsAndCantillation, '');
 }
 
+/// הסרת סימני פיסוק מטקסט
+/// מסיר !:;.,?-— חוץ מ . או : בסוף הקטע
+/// מסיר " ״ כשזה לא באמצע מילה
+/// מסיר מעבר שורה אם אין . או : בסוף השורה המקורית
+String removePunctuation(String text) {
+  if (text.isEmpty) return text;
+
+  final hadHtmlBreaks =
+      RegExp(r'<br\s*/?>', caseSensitive: false).hasMatch(text);
+  final normalizedText = text
+      .replaceAll(RegExp(r'\r\n?'), '\n')
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+
+  final lines = normalizedText.split('\n');
+  final processedLines = <String>[];
+  final originalEndsWithAllowed = <bool>[];
+
+  for (final line in lines) {
+    if (line.trim().isEmpty) {
+      processedLines.add(line);
+      originalEndsWithAllowed.add(true);
+      continue;
+    }
+
+    final endsWithAllowed = RegExp(r'[.:](\s*)$').hasMatch(line);
+    originalEndsWithAllowed.add(endsWithAllowed);
+
+    String processed = line;
+
+    final lastAllowedPunctuationMatch =
+        RegExp(r'[.:](\s*)$').firstMatch(processed);
+    final lastAllowedPunctuationIndex = lastAllowedPunctuationMatch?.start;
+
+    processed = processed.replaceAllMapped(RegExp(r'[!:;.,?\-—]'), (match) {
+      if (lastAllowedPunctuationIndex != null &&
+          match.start >= lastAllowedPunctuationIndex &&
+          (match.group(0) == '.' || match.group(0) == ':')) {
+        return match.group(0)!;
+      }
+      return '';
+    });
+
+    processed = processed.replaceAllMapped(
+      RegExp(r'["״]'),
+      (match) {
+        final index = match.start;
+        final hasBefore =
+            index > 0 && RegExp(r'[א-תa-zA-Z]').hasMatch(processed[index - 1]);
+        final hasAfter = index < processed.length - 1 &&
+            RegExp(r'[א-תa-zA-Z]').hasMatch(processed[index + 1]);
+        if (hasBefore && hasAfter) {
+          return match.group(0)!;
+        }
+        return '';
+      },
+    );
+
+    processedLines.add(processed);
+  }
+
+  final finalResult = StringBuffer();
+  bool lastCharWasNewline = false;
+  bool lastCharWasSpace = false;
+
+  for (int i = 0; i < processedLines.length; i++) {
+    final line = processedLines[i];
+    final shouldKeepNewline = originalEndsWithAllowed[i] ||
+        isHeadingLine(line) ||
+        (i < processedLines.length - 1 && isHeadingLine(processedLines[i + 1]));
+
+    if (line.trim().isEmpty) {
+      if (finalResult.isNotEmpty) {
+        finalResult.write('\n');
+        lastCharWasNewline = true;
+        lastCharWasSpace = false;
+      }
+      finalResult.write(line);
+      if (i < processedLines.length - 1) {
+        finalResult.write('\n');
+        lastCharWasNewline = true;
+        lastCharWasSpace = false;
+      }
+      continue;
+    }
+
+    if (finalResult.isNotEmpty && !lastCharWasNewline && !lastCharWasSpace) {
+      finalResult.write(' ');
+      lastCharWasSpace = true;
+      lastCharWasNewline = false;
+    }
+
+    finalResult.write(line);
+    lastCharWasNewline = false;
+    lastCharWasSpace = false;
+
+    if (shouldKeepNewline && i < processedLines.length - 1) {
+      finalResult.write('\n');
+      lastCharWasNewline = true;
+    }
+  }
+
+  final result = finalResult.toString();
+  if (!hadHtmlBreaks) {
+    return result;
+  }
+  return result.replaceAll('\n', '<br>');
+}
+
+bool isHeadingLine(String line) {
+  final trimmedLine = line.trim();
+  if (trimmedLine.isEmpty) return false;
+  return RegExp(r'^<h[1-6][^>]*>.*?</h[1-6]>$', caseSensitive: false)
+          .hasMatch(trimmedLine) ||
+      RegExp(r'^#{1,6}\s').hasMatch(trimmedLine);
+}
+
 /// בדיקה אם טקסט מכיל ניקוד או טעמים
 bool hasNikud(String text) {
   return SearchRegexPatterns.vowelsAndCantillation.hasMatch(text);
