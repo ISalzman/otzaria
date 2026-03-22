@@ -1288,12 +1288,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ? FluentIcons.text_quote_24_regular
             : FluentIcons.text_clear_formatting_24_regular,
         tooltip: state.removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
-        onPressed: () async {
-          final newValue = !state.removePunctuation;
-          context.read<TextBookBloc>().add(TogglePunctuation(newValue));
-          await _savePerBookSettingsDirectly(context, state,
-              removePunctuation: newValue);
-        },
+        onPressed: () => _toggleAndSavePunctuation(context, state),
       ),
 
       // 4) Search Button
@@ -1680,14 +1675,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
+  Future<void> _toggleAndSavePunctuation(
+      BuildContext context, TextBookLoaded state) async {
+    final newValue = !state.removePunctuation;
+    context.read<TextBookBloc>().add(TogglePunctuation(newValue));
+    await _savePerBookSettingsDirectly(context, state,
+        removePunctuation: newValue);
+  }
+
   Widget _buildPunctuationButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
-      onPressed: () async {
-        final newValue = !state.removePunctuation;
-        context.read<TextBookBloc>().add(TogglePunctuation(newValue));
-        await _savePerBookSettingsDirectly(context, state,
-            removePunctuation: newValue);
-      },
+      onPressed: () => _toggleAndSavePunctuation(context, state),
       icon: Icon(state.removePunctuation
           ? FluentIcons.text_quote_24_regular
           : FluentIcons.text_clear_formatting_24_regular),
