@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/app_restart.dart';
 import 'package:otzaria/widgets/mixins/dialog_navigation_mixin.dart';
 import 'package:otzaria/theme/app_theme.dart';
 
@@ -84,6 +85,7 @@ class _SingleActionDialogState extends State<SingleActionDialog>
 class TwoActionsDialog extends StatefulWidget {
   final dynamic title;
   final String content;
+  final Widget? customContent;
   final String cancelText;
   final String confirmText;
 
@@ -91,6 +93,7 @@ class TwoActionsDialog extends StatefulWidget {
     super.key,
     required this.title,
     required this.content,
+    this.customContent,
     this.cancelText = 'ביטול',
     this.confirmText = 'אישור',
   });
@@ -109,7 +112,7 @@ class _TwoActionsDialogState extends State<TwoActionsDialog>
       onCancel: () => Navigator.of(context).pop(false),
       child: AlertDialog(
         title: widget.title is String ? Text(widget.title) : widget.title,
-        content: Text(widget.content),
+        content: widget.customContent ?? Text(widget.content),
         actions: [
           // כפתור ביטול — tonal
           FilledButton.tonal(
@@ -289,9 +292,11 @@ Future<bool?> showSingleActionDialog({
   String content = '',
   Widget? customContent,
   String confirmText = 'אישור',
+  bool barrierDismissible = true,
 }) =>
     showDialog<bool>(
       context: context,
+      barrierDismissible: barrierDismissible,
       builder: (_) => SingleActionDialog(
           title: title,
           content: content,
@@ -303,14 +308,18 @@ Future<bool?> showTwoActionsDialog({
   required BuildContext context,
   required String title,
   required String content,
+  Widget? customContent,
   String cancelText = 'ביטול',
   String confirmText = 'אישור',
+  bool barrierDismissible = true,
 }) =>
     showDialog<bool>(
       context: context,
+      barrierDismissible: barrierDismissible,
       builder: (_) => TwoActionsDialog(
           title: title,
           content: content,
+          customContent: customContent,
           cancelText: cancelText,
           confirmText: confirmText),
     );
@@ -331,6 +340,61 @@ Future<bool?> showWarningDialog({
           subtitle: subtitle,
           cancelText: cancelText,
           confirmText: confirmText),
+    );
+
+Future<bool?> showRestartRequiredDialog({
+  required BuildContext context,
+  String title = 'נדרשת הפעלה מחדש',
+  String? content,
+  String? confirmText,
+}) =>
+    showSingleActionDialog(
+      context: context,
+      title: title,
+      content: content ??
+          (canRestartApplication()
+              ? 'הספרייה נמצאה בהצלחה.\nלחץ על הכפתור להפעלה מחדש של התוכנה.'
+              : 'הספרייה נמצאה בהצלחה.\nלחץ על הכפתור לסגירת האפליקציה, ולאחר מכן פתח אותה מחדש.'),
+      confirmText: confirmText ??
+          (canRestartApplication()
+              ? 'הפעל מחדש את התוכנה'
+              : 'סגור את האפליקציה'),
+      barrierDismissible: false,
+    );
+
+Future<bool?> showDbCopyRequiredDialog({
+  required BuildContext context,
+  required String sizeText,
+  bool barrierDismissible = false,
+}) =>
+    showTwoActionsDialog(
+      context: context,
+      title: 'נדרשת העתקה של קובץ הספרייה',
+      content: '',
+      barrierDismissible: barrierDismissible,
+      cancelText: 'העתק (שמור מקור)',
+      confirmText: 'העתק + נסה מחק מקור',
+      customContent: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'לא ניתן לגשת ישירות לקובץ seforim.db (גודל: $sizeText) מכיוון שהוא נמצא באחסון חיצוני ב-Android.',
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'לחץ על כפתור למטה, נווט לאותה תיקייה ובחר את הקובץ seforim.db — האפליקציה תעתיק אותו לאחסון הפנימי.',
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            '(אפשרות "נסה מחק מקור" — ניסיון למחוק לאחר העתקה. עשויה שלא להצליח בכל גרסאות Android.)',
+            style: TextStyle(fontSize: 12),
+            textDirection: TextDirection.rtl,
+          ),
+        ],
+      ),
     );
 
 // ── SegmentedSettingsTile ─────────────────────────────────────────────────────

@@ -31,6 +31,9 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
   bool _isExpanded = false;
   bool _isSyncing = false;
 
+  static const String _customFoldersReloadNotice =
+      'לאחר הוספת ספרים חדשים לתיקייה קיימת, יש ללחוץ על סמל הרענון.';
+
   @override
   void initState() {
     super.initState();
@@ -57,9 +60,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       final dir = Directory(path);
       if (!await dir.exists()) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('התיקייה לא נמצאה')),
-        );
+        UiSnack.showError('התיקייה לא נמצאה');
         return;
       }
 
@@ -123,8 +124,9 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       if (zipExtracted && extractedFileName != null) {
         successMessage += '\nהקובץ "$extractedFileName" חולץ בהצלחה!';
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(successMessage)),
+      UiSnack.show(
+        successMessage,
+        duration: const Duration(seconds: 9),
       );
     }
   }
@@ -165,7 +167,8 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
   /// שואל את המשתמש אם למחוק גם את הנתונים מה-DB.
   /// קבצים פיזיים לעולם לא נמחקים.
   Future<void> _removeFolder(CustomFolder folder) async {
-    debugPrint('[CustomFolders] _removeFolder START: name=${folder.name}, path=${folder.path}, addToDatabase=${folder.addToDatabase}');
+    debugPrint(
+        '[CustomFolders] _removeFolder START: name=${folder.name}, path=${folder.path}, addToDatabase=${folder.addToDatabase}');
 
     final confirmed = await showConfirmationDialog(
       context: context,
@@ -186,12 +189,14 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       _folders = CustomFoldersManager.removeFolder(_folders, folder.path);
     });
     await _saveFolders();
-    debugPrint('[CustomFolders] _removeFolder: link removed. Remaining folders: ${_folders.length}');
+    debugPrint(
+        '[CustomFolders] _removeFolder: link removed. Remaining folders: ${_folders.length}');
 
     if (!mounted) return;
 
     // שואל אם למחוק גם מה-DB
-    debugPrint('[CustomFolders] _removeFolder: asking user about DB deletion...');
+    debugPrint(
+        '[CustomFolders] _removeFolder: asking user about DB deletion...');
     final deleteFromDb = await showTwoActionsDialog(
       context: context,
       title: 'מחיקה ממסד הנתונים',
@@ -224,26 +229,31 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
   /// מחיקת תיקייה מה-DB
   Future<void> _deleteFolderFromDatabase(CustomFolder folder) async {
-    debugPrint('[CustomFolders] _deleteFolderFromDatabase START: ${folder.name}');
+    debugPrint(
+        '[CustomFolders] _deleteFolderFromDatabase START: ${folder.name}');
     try {
       final sqliteProvider = SqliteDataProvider.instance;
       if (!sqliteProvider.isInitialized) {
-        debugPrint('[CustomFolders] _deleteFolderFromDatabase: initializing SqliteProvider...');
+        debugPrint(
+            '[CustomFolders] _deleteFolderFromDatabase: initializing SqliteProvider...');
         await sqliteProvider.initialize();
       }
 
       final repository = sqliteProvider.repository;
       if (repository == null) {
-        debugPrint('[CustomFolders] _deleteFolderFromDatabase: repository is NULL, aborting');
+        debugPrint(
+            '[CustomFolders] _deleteFolderFromDatabase: repository is NULL, aborting');
         return;
       }
 
       // מצא את קטגוריית "ספרים אישיים"
       final rootCategories = await repository.getRootCategories();
-      debugPrint('[CustomFolders] _deleteFolderFromDatabase: found ${rootCategories.length} root categories');
+      debugPrint(
+          '[CustomFolders] _deleteFolderFromDatabase: found ${rootCategories.length} root categories');
       Category? personalCategory;
       for (final cat in rootCategories) {
-        debugPrint('[CustomFolders]   root category: id=${cat.id}, title="${cat.title}"');
+        debugPrint(
+            '[CustomFolders]   root category: id=${cat.id}, title="${cat.title}"');
         if (cat.title == 'ספרים אישיים') {
           personalCategory = cat;
           break;
@@ -251,18 +261,22 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       }
 
       if (personalCategory == null) {
-        debugPrint('[CustomFolders] _deleteFolderFromDatabase: "ספרים אישיים" NOT FOUND, aborting');
+        debugPrint(
+            '[CustomFolders] _deleteFolderFromDatabase: "ספרים אישיים" NOT FOUND, aborting');
         return;
       }
-      debugPrint('[CustomFolders] _deleteFolderFromDatabase: found "ספרים אישיים" id=${personalCategory.id}');
+      debugPrint(
+          '[CustomFolders] _deleteFolderFromDatabase: found "ספרים אישיים" id=${personalCategory.id}');
 
       // מצא את קטגוריית התיקייה
       final folderCategories =
           await repository.getCategoryChildren(personalCategory.id);
-      debugPrint('[CustomFolders] _deleteFolderFromDatabase: ${folderCategories.length} children under "ספרים אישיים"');
+      debugPrint(
+          '[CustomFolders] _deleteFolderFromDatabase: ${folderCategories.length} children under "ספרים אישיים"');
       Category? folderCategory;
       for (final cat in folderCategories) {
-        debugPrint('[CustomFolders]   child category: id=${cat.id}, title="${cat.title}"');
+        debugPrint(
+            '[CustomFolders]   child category: id=${cat.id}, title="${cat.title}"');
         if (cat.title == folder.name) {
           folderCategory = cat;
           break;
@@ -270,19 +284,23 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       }
 
       if (folderCategory == null) {
-        debugPrint('[CustomFolders] _deleteFolderFromDatabase: folder category "${folder.name}" NOT FOUND, aborting');
+        debugPrint(
+            '[CustomFolders] _deleteFolderFromDatabase: folder category "${folder.name}" NOT FOUND, aborting');
         return;
       }
-      debugPrint('[CustomFolders] _deleteFolderFromDatabase: found folder category id=${folderCategory.id}, calling deleteFolderFromDatabase...');
+      debugPrint(
+          '[CustomFolders] _deleteFolderFromDatabase: found folder category id=${folderCategory.id}, calling deleteFolderFromDatabase...');
 
       // מחק את התיקייה וכל תוכנה מה-DB
       final syncService = await FileSyncService.getInstance(repository);
       if (syncService != null) {
         await syncService.deleteFolderFromDatabase(
             folderCategory.id, personalCategory.id);
-        debugPrint('[CustomFolders] _deleteFolderFromDatabase: deletion COMPLETE');
+        debugPrint(
+            '[CustomFolders] _deleteFolderFromDatabase: deletion COMPLETE');
       } else {
-        debugPrint('[CustomFolders] _deleteFolderFromDatabase: syncService is NULL');
+        debugPrint(
+            '[CustomFolders] _deleteFolderFromDatabase: syncService is NULL');
       }
     } catch (e, stackTrace) {
       debugPrint('[CustomFolders] _deleteFolderFromDatabase ERROR: $e');
@@ -291,14 +309,14 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
   }
 
   Future<void> _toggleAddToDatabase(CustomFolder folder, bool value) async {
-    debugPrint('[CustomFolders] _toggleAddToDatabase: ${folder.name}, newValue=$value (was ${folder.addToDatabase})');
+    debugPrint(
+        '[CustomFolders] _toggleAddToDatabase: ${folder.name}, newValue=$value (was ${folder.addToDatabase})');
     if (value) {
       // הצגת אזהרה לפני הפעלה
       final confirmed = await showConfirmationDialog(
         context: context,
         title: 'הכנסת תוכן ל-DB',
-        content:
-            'תוכן הספרים יישמר במסד הנתונים.\n'
+        content: 'תוכן הספרים יישמר במסד הנתונים.\n'
             'הקבצים המקוריים יישארו במקום.\n\n'
             'האם להמשיך?',
         isDangerous: false,
@@ -309,7 +327,8 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
         return;
       }
 
-      debugPrint('[CustomFolders] _toggleAddToDatabase ON confirmed, saving setting...');
+      debugPrint(
+          '[CustomFolders] _toggleAddToDatabase ON confirmed, saving setting...');
       setState(() {
         _folders = CustomFoldersManager.updateFolderDbSetting(
             _folders, folder.path, value);
@@ -318,7 +337,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
       // הפעל סנכרון
       debugPrint('[CustomFolders] _toggleAddToDatabase ON: starting sync...');
-      await _syncFolderToDatabase(folder);
+      await _rescanCustomFolders();
     } else {
       // כיבוי - עדכון הגדרות והפעלת סנכרון כדי לנקות את ה-DB
       debugPrint('[CustomFolders] _toggleAddToDatabase OFF: saving setting');
@@ -330,7 +349,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
       // הפעל סנכרון כדי להחיל את שינוי הסטטוס על הספרים
       debugPrint('[CustomFolders] _toggleAddToDatabase OFF: starting sync...');
-      await _syncFolderToDatabase(folder);
+      await _rescanCustomFolders();
 
       debugPrint('[CustomFolders] _toggleAddToDatabase OFF: done.');
 
@@ -341,7 +360,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     }
   }
 
-  Future<void> _syncFolderToDatabase(CustomFolder folder) async {
+  Future<void> _rescanCustomFolders() async {
     setState(() {
       _isSyncing = true;
     });
@@ -362,7 +381,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
         throw Exception('שירות הסנכרון לא זמין');
       }
 
-      // הפעלת סנכרון לתיקייה הספציפית
+      // סריקה מחדש של כל התיקיות האישיות השמורות בהגדרות
       final result = await syncService.syncFiles(
         onProgress: (progress, message) {
           debugPrint('Sync progress: $progress - $message');
@@ -376,19 +395,15 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'הסנכרון הושלם: ${result.addedBooks} ספרים נוספו, '
-            '${result.updatedBooks} עודכנו',
-          ),
-        ),
-      );
+      final hasChanges = result.addedBooks > 0 || result.updatedBooks > 0;
+      final message = hasChanges
+          ? 'הסריקה הושלמה: ${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו'
+          : 'הסריקה הושלמה. לא נמצאו ספרים חדשים.';
+
+      UiSnack.show(message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('שגיאה בסנכרון: $e')),
-      );
+      UiSnack.showError('שגיאה בסריקת תיקיות אישיות: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -415,6 +430,18 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_folders.isNotEmpty)
+                IconButton(
+                  icon: _isSyncing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(FluentIcons.arrow_clockwise_24_regular),
+                  onPressed: _isSyncing ? null : _rescanCustomFolders,
+                  tooltip: 'סרוק מחדש תיקיות אישיות',
+                ),
               RecommendedActionButton(
                 text: 'הוסף תיקייה',
                 icon: FluentIcons.folder_add_24_regular,
@@ -435,6 +462,43 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                   tooltip: _isExpanded ? 'הסתר' : 'הצג תיקיות',
                 ),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      FluentIcons.info_24_regular,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _customFoldersReloadNotice,
+                      textDirection: TextDirection.rtl,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSecondaryContainer,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
         if (_isExpanded && _folders.isNotEmpty)
