@@ -98,6 +98,7 @@ class BookGridItem extends StatelessWidget {
   final Book book;
   final VoidCallback onBookClickCallback;
   final VoidCallback? onBookDeleted;
+  final FocusNode? focusNode;
 
   const BookGridItem({
     super.key,
@@ -105,6 +106,7 @@ class BookGridItem extends StatelessWidget {
     required this.onBookClickCallback,
     this.showTopics = false,
     this.onBookDeleted,
+    this.focusNode,
   });
 
   @override
@@ -113,6 +115,7 @@ class BookGridItem extends StatelessWidget {
       child: Card(
         child: InkWell(
           mouseCursor: SystemMouseCursors.click,
+          focusNode: focusNode,
           borderRadius: BorderRadius.circular(12.0),
           hoverColor:
               Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),

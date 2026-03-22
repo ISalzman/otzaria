@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
@@ -42,6 +43,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   @override
   bool get wantKeepAlive => true;
 
+  final FocusNode _firstSearchResultFocusNode = FocusNode();
   int _depth = 0;
   final Set<String> _expandedCategories = {}; // קטגוריות שנפתחו בתצוגת רשימה
 
@@ -104,6 +106,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   @override
   void dispose() {
+    _firstSearchResultFocusNode.dispose();
     super.dispose();
   }
 
@@ -344,32 +347,42 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         final focusRepository = context.read<FocusRepository>();
-        return RtlTextField(
-          controller: focusRepository.librarySearchController,
-          focusNode: context.read<FocusRepository>().librarySearchFocusNode,
-          autofocus: true,
-          decoration: InputDecoration(
-            constraints: const BoxConstraints(maxWidth: 400),
-            prefixIcon: const Icon(FluentIcons.search_24_regular),
-            suffixIcon: IconButton(
-              onPressed: () {
-                focusRepository.librarySearchController.clear();
-                _update(context, state, settingsState);
-                _refocusSearchBar();
-              },
-              icon: const Icon(FluentIcons.dismiss_24_regular),
-            ),
-            border: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(8.0)),
-            ),
-            hintText:
-                'איתור ספר או מחבר ב${state.currentCategory?.title ?? ""}',
-          ),
-          onChanged: (value) {
-            context.read<LibraryBloc>().add(UpdateSearchQuery(value));
-            context.read<LibraryBloc>().add(const SelectTopics([]));
-            _update(context, state, settingsState);
+        return CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.tab): () {
+              final moved = _focusFirstSearchResult(state);
+              if (!moved) {
+                FocusScope.of(context).nextFocus();
+              }
+            },
           },
+          child: RtlTextField(
+            controller: focusRepository.librarySearchController,
+            focusNode: context.read<FocusRepository>().librarySearchFocusNode,
+            autofocus: true,
+            decoration: InputDecoration(
+              constraints: const BoxConstraints(maxWidth: 400),
+              prefixIcon: const Icon(FluentIcons.search_24_regular),
+              suffixIcon: IconButton(
+                onPressed: () {
+                  focusRepository.librarySearchController.clear();
+                  _update(context, state, settingsState);
+                  _refocusSearchBar();
+                },
+                icon: const Icon(FluentIcons.dismiss_24_regular),
+              ),
+              border: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(8.0)),
+              ),
+              hintText:
+                  'איתור ספר או מחבר ב${state.currentCategory?.title ?? ""}',
+            ),
+            onChanged: (value) {
+              context.read<LibraryBloc>().add(UpdateSearchQuery(value));
+              context.read<LibraryBloc>().add(const SelectTopics([]));
+              _update(context, state, settingsState);
+            },
+          ),
         );
       },
     );
@@ -494,13 +507,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   Future<List<Widget>> _buildSearchResults(List<Book> books) async {
     // בניית כל הפריטים מראש
-    final bookWidgets = books
-        .take(100)
-        .map((book) => _buildBookItem(book, showTopics: true))
-        .toList();
+    final displayLimit = books.length > 100 ? 100 : books.length;
 
     return [
-      MyGridView(items: bookWidgets),
+      _buildSearchResultsGrid(books, displayLimit),
     ];
   }
 
@@ -592,12 +602,17 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return items;
   }
 
-  Widget _buildBookItem(Book book, {bool showTopics = false}) {
+  Widget _buildBookItem(
+    Book book, {
+    bool showTopics = false,
+    FocusNode? focusNode,
+  }) {
     if (book is ExternalLibraryBook) {
       return BookGridItem(
         book: book,
         onBookClickCallback: () => _openOtzarBook(book),
         showTopics: showTopics,
+        focusNode: focusNode,
       );
     }
 
@@ -628,6 +643,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             child: BookGridItem(
               book: book,
               showTopics: showTopics,
+              focusNode: focusNode,
               onBookClickCallback: () {
                 // אם תצוגה מקדימה מוצגת - הצג את הספר בתצוגה
                 // אחרת - פתח את הספר בעיון
@@ -662,7 +678,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return ListView.builder(
       itemCount: books.length,
       itemBuilder: (context, index) {
-        return _buildListBookItem(books[index], 0);
+        return _buildListBookItem(
+          books[index],
+          0,
+          focusNode: index == 0 ? _firstSearchResultFocusNode : null,
+        );
       },
     );
   }
@@ -788,9 +808,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   /// פריט ספר בתצוגת רשימה
-  Widget _buildListBookItem(Book book, int level) {
+  Widget _buildListBookItem(
+    Book book,
+    int level, {
+    FocusNode? focusNode,
+  }) {
     if (book is ExternalLibraryBook) {
-      return _buildExternalBookListItem(book, level);
+      return _buildExternalBookListItem(book, level, focusNode: focusNode);
     }
 
     return BlocBuilder<LibraryBloc, LibraryState>(
@@ -802,6 +826,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         final isSelected = state.previewBook == book;
 
         return InkWell(
+          focusNode: focusNode,
           onTap: () {
             // אם תצוגה מקדימה מוצגת - הצג את הספר בתצוגה
             // אחרת - פתח את הספר בעיון
@@ -881,8 +906,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   /// פריט ספר חיצוני בתצוגת רשימה
-  Widget _buildExternalBookListItem(ExternalLibraryBook book, int level) {
+  Widget _buildExternalBookListItem(
+    ExternalLibraryBook book,
+    int level, {
+    FocusNode? focusNode,
+  }) {
     return InkWell(
+      focusNode: focusNode,
       onTap: () => _openOtzarBook(book),
       child: Container(
         padding: EdgeInsets.only(
@@ -1074,6 +1104,71 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   void _refocusSearchBar({bool selectAll = false}) {
     final focusRepository = context.read<FocusRepository>();
     focusRepository.requestLibrarySearchFocus(selectAll: selectAll);
+  }
+
+  bool _focusFirstSearchResult(LibraryState state) {
+    final results = state.searchResults;
+    if (results == null || results.isEmpty) {
+      return false;
+    }
+
+    if (_firstSearchResultFocusNode.canRequestFocus) {
+      _firstSearchResultFocusNode.requestFocus();
+      return true;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      if (_firstSearchResultFocusNode.canRequestFocus) {
+        _firstSearchResultFocusNode.requestFocus();
+      }
+    });
+    return true;
+  }
+
+  Widget _buildSearchResultsGrid(List<Book> books, int displayLimit) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount =
+            (constraints.maxWidth ~/ 250).clamp(1, 5).toInt();
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 45),
+          child: FocusTraversalGroup(
+            policy: OrderedTraversalPolicy(),
+            child: GridView.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  //max number of items per row is 5 and min is 1
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: 2,
+                  crossAxisSpacing: 4,
+                  mainAxisSpacing: 4),
+              itemCount: displayLimit,
+              itemBuilder: (context, index) {
+                final row = index ~/ crossAxisCount;
+                final col = index % crossAxisCount;
+                final orderIndex = row * crossAxisCount + col;
+                final focusNode =
+                    index == 0 ? _firstSearchResultFocusNode : null;
+
+                return FocusTraversalOrder(
+                  order: NumericFocusOrder(orderIndex.toDouble()),
+                  child: _buildBookItem(
+                    books[index],
+                    showTopics: true,
+                    focusNode: focusNode,
+                  ),
+                );
+              },
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   /// בניית כפתורי הפעולה של הספרייה עם רכיב רספונסיבי
