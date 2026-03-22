@@ -54,23 +54,14 @@ String removePunctuation(String text) {
         RegExp(r'[.:](\s*)$').firstMatch(processed);
     final lastAllowedPunctuationIndex = lastAllowedPunctuationMatch?.start;
 
-    final chars = processed.split('');
-    final result = StringBuffer();
-
-    for (int i = 0; i < chars.length; i++) {
-      final char = chars[i];
-      if (RegExp(r'[!:;.,?\-—]').hasMatch(char)) {
-        if (lastAllowedPunctuationIndex != null &&
-            i >= lastAllowedPunctuationIndex &&
-            (char == '.' || char == ':')) {
-          result.write(char);
-        }
-      } else {
-        result.write(char);
+    processed = processed.replaceAllMapped(RegExp(r'[!:;.,?\-—]'), (match) {
+      if (lastAllowedPunctuationIndex != null &&
+          match.start >= lastAllowedPunctuationIndex &&
+          (match.group(0) == '.' || match.group(0) == ':')) {
+        return match.group(0)!;
       }
-    }
-
-    processed = result.toString();
+      return '';
+    });
 
     processed = processed.replaceAllMapped(
       RegExp(r'["״]'),
@@ -91,6 +82,8 @@ String removePunctuation(String text) {
   }
 
   final finalResult = StringBuffer();
+  bool lastCharWasNewline = false;
+  bool lastCharWasSpace = false;
 
   for (int i = 0; i < processedLines.length; i++) {
     final line = processedLines[i];
@@ -101,25 +94,31 @@ String removePunctuation(String text) {
     if (line.trim().isEmpty) {
       if (finalResult.isNotEmpty) {
         finalResult.write('\n');
+        lastCharWasNewline = true;
+        lastCharWasSpace = false;
       }
       finalResult.write(line);
       if (i < processedLines.length - 1) {
         finalResult.write('\n');
+        lastCharWasNewline = true;
+        lastCharWasSpace = false;
       }
       continue;
     }
 
-    final resultStr = finalResult.toString();
-    if (resultStr.isNotEmpty &&
-        !resultStr.endsWith('\n') &&
-        !resultStr.endsWith(' ')) {
+    if (finalResult.isNotEmpty && !lastCharWasNewline && !lastCharWasSpace) {
       finalResult.write(' ');
+      lastCharWasSpace = true;
+      lastCharWasNewline = false;
     }
 
     finalResult.write(line);
+    lastCharWasNewline = false;
+    lastCharWasSpace = false;
 
     if (shouldKeepNewline && i < processedLines.length - 1) {
       finalResult.write('\n');
+      lastCharWasNewline = true;
     }
   }
 
