@@ -871,8 +871,17 @@ class SeforimRepository {
     if (existing != null) return existing.id;
 
     final db = await _database.database;
-    db.execute('INSERT OR IGNORE INTO source (id, name) VALUES (?, ?)',
-        [newSourceId, name]);
+    if (newSourceId > 0) {
+      db.execute(
+        'INSERT OR IGNORE INTO source (id, name) VALUES (?, ?)',
+        [newSourceId, name],
+      );
+    } else {
+      db.execute(
+        'INSERT OR IGNORE INTO source (name) VALUES (?)',
+        [name],
+      );
+    }
     final again = await getSourceByName(name);
     if (again != null) return again.id;
     throw Exception('Failed to insert source \'$name\'');
