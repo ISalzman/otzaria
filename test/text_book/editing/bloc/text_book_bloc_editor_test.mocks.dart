@@ -8,7 +8,6 @@ import 'dart:async' as _i3;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i5;
 import 'package:otzaria/models/books.dart' as _i4;
-import 'package:otzaria/models/links.dart' as _i6;
 import 'package:otzaria/text_book/editing/models/text_draft.dart' as _i9;
 import 'package:otzaria/text_book/editing/models/text_override.dart' as _i8;
 import 'package:otzaria/text_book/editing/repository/overrides_repository.dart'
@@ -53,16 +52,6 @@ class MockTextBookRepository extends _i1.Mock
           ),
         )),
       ) as _i3.Future<String>);
-
-  @override
-  _i3.Future<List<_i6.Link>> getBookLinks(_i4.TextBook? book) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #getBookLinks,
-          [book],
-        ),
-        returnValue: _i3.Future<List<_i6.Link>>.value(<_i6.Link>[]),
-      ) as _i3.Future<List<_i6.Link>>);
 
   @override
   _i3.Future<List<_i4.TocEntry>> getTableOfContents(_i4.TextBook? book) =>
