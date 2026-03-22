@@ -337,7 +337,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
       // הפעל סנכרון
       debugPrint('[CustomFolders] _toggleAddToDatabase ON: starting sync...');
-      await _syncFolderToDatabase(folder);
+      await _rescanCustomFolders();
     } else {
       // כיבוי - עדכון הגדרות והפעלת סנכרון כדי לנקות את ה-DB
       debugPrint('[CustomFolders] _toggleAddToDatabase OFF: saving setting');
@@ -349,7 +349,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
       // הפעל סנכרון כדי להחיל את שינוי הסטטוס על הספרים
       debugPrint('[CustomFolders] _toggleAddToDatabase OFF: starting sync...');
-      await _syncFolderToDatabase(folder);
+      await _rescanCustomFolders();
 
       debugPrint('[CustomFolders] _toggleAddToDatabase OFF: done.');
 
@@ -360,7 +360,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     }
   }
 
-  Future<void> _syncFolderToDatabase(CustomFolder folder) async {
+  Future<void> _rescanCustomFolders() async {
     setState(() {
       _isSyncing = true;
     });
@@ -381,7 +381,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
         throw Exception('שירות הסנכרון לא זמין');
       }
 
-      // הפעלת סנכרון לתיקייה הספציפית
+      // סריקה מחדש של כל התיקיות האישיות השמורות בהגדרות
       final result = await syncService.syncFiles(
         onProgress: (progress, message) {
           debugPrint('Sync progress: $progress - $message');
@@ -395,19 +395,15 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'הסנכרון הושלם: ${result.addedBooks} ספרים נוספו, '
-            '${result.updatedBooks} עודכנו',
-          ),
-        ),
-      );
+      final hasChanges = result.addedBooks > 0 || result.updatedBooks > 0;
+      final message = hasChanges
+          ? 'הסריקה הושלמה: ${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו'
+          : 'הסריקה הושלמה. לא נמצאו ספרים חדשים.';
+
+      UiSnack.show(message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('שגיאה בסנכרון: $e')),
-      );
+      UiSnack.showError('שגיאה בסריקת תיקיות אישיות: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -434,6 +430,18 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_folders.isNotEmpty)
+                IconButton(
+                  icon: _isSyncing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(FluentIcons.arrow_clockwise_24_regular),
+                  onPressed: _isSyncing ? null : _rescanCustomFolders,
+                  tooltip: 'סרוק מחדש תיקיות אישיות',
+                ),
               RecommendedActionButton(
                 text: 'הוסף תיקייה',
                 icon: FluentIcons.folder_add_24_regular,
