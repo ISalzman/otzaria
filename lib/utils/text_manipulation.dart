@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/regex_patterns.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -83,9 +84,7 @@ String highLight(
   // debugPrint('highLight: query="$searchQuery", options=$searchOptions');
 
   // 1. חילוץ מילות החיפוש כולל מילים חילופיות
-  final originalWords = searchQuery
-      .trim()
-      .replaceAll(RegExp(r'[!?":*\(\)\[\]\{\}\^\$\|\\+.~`]'), ' ')
+  final originalWords = SearchQueryBuilder.sanitizeQuery(searchQuery)
       .split(RegExp(r'\s+'))
       .where((s) => s.isNotEmpty)
       .toList();
@@ -232,9 +231,7 @@ int countMatches(String text, String searchQuery) {
   if (searchQuery.isEmpty) return 0;
 
   // ניקוי תווים מיוחדים מהשאילתה
-  final cleanedQuery = searchQuery
-      .replaceAll(RegExp(r'[!?":*\(\)\[\]\{\}\^\$\|\\+.~`]'), '')
-      .trim();
+  final cleanedQuery = SearchQueryBuilder.sanitizeQuery(searchQuery);
 
   if (cleanedQuery.isEmpty) return 0;
 

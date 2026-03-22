@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 
 // ignore_for_file: dead_code
@@ -86,6 +87,15 @@ void main() {
       final searchQuery =
           hasNikudInInput ? removeVolwels(userInput) : userInput;
       expect(searchQuery, 'שלום עולם');
+    });
+
+    test('sanitizeQuery should ignore comma and apostrophes', () {
+      expect(SearchQueryBuilder.sanitizeQuery("שלום, עולם'"), 'שלום עולם');
+      expect(SearchQueryBuilder.sanitizeQuery('שלום, עולם׳״'), 'שלום עולם');
+    });
+
+    test('countMatches should ignore comma and apostrophes in query', () {
+      expect(countMatches('שלום עולם שלום', "שלום,'"), 2);
     });
 
     test('Complex nikud patterns', () {

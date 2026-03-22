@@ -10,10 +10,10 @@ class SearchQueryBuilder {
   SearchQueryBuilder._();
 
   /// ניקוי שאילתה מתווים מיוחדים שיכולים להפריע לחיפוש
-  /// מסירים: ! ? " : * ( ) [ ] { } ^ $ | \ + . ~ `
+  /// מסירים גם פסיקים וגרשיים/גרש
   static String sanitizeQuery(String query) {
     return query
-        .replaceAll(RegExp(r'[!?":*\(\)\[\]\{\}\^\$\|\\+.~`]'), '')
+        .replaceAll(RegExp(r"""[,!?'"״׳":*\(\)\[\]\{\}\^\$\|\\+.~`]"""), '')
         .trim();
   }
 

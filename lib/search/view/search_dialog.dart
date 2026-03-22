@@ -12,6 +12,7 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/view/enhanced_search_field.dart';
 import 'package:otzaria/search/view/advanced_search_controls.dart';
 import 'package:otzaria/search/view/full_text_settings_widgets.dart';
@@ -228,6 +229,7 @@ class _SearchDialogState extends State<SearchDialog> {
     if (!_searchWithNikud && utils.hasNikud(query)) {
       query = utils.removeVolwels(query);
     }
+    query = SearchQueryBuilder.sanitizeQuery(query);
 
     // שמירת מצב החיפוש האחרון
     final currentMode = _searchTab.searchBloc.state.configuration.searchMode;
