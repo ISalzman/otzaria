@@ -18,31 +18,10 @@ void main() {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
     });
 
-    test('בתצוגה רגילה טוען את כל הקישורים ולא חלון חלקי', () async {
+    test('בתצוגה רגילה טוען חלון קישורים חלקי ולא את כל הספר', () async {
       final repository = _FakeTextBookRepository();
       final bloc =
           _createBloc(repository: repository, showPageShapeView: false);
-
-      bloc.add(
-        const LoadContent(
-          fontSize: 20,
-          showSplitView: false,
-          removeNikud: false,
-          loadCommentators: false,
-        ),
-      );
-
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-
-      expect(repository.getBookLinksCalls, 1);
-      expect(repository.getBookLinksInRangeCalls, 0);
-
-      await bloc.close();
-    });
-
-    test('בצורת הדף טוען רק חלון קישורים נראה', () async {
-      final repository = _FakeTextBookRepository();
-      final bloc = _createBloc(repository: repository, showPageShapeView: true);
 
       bloc.add(
         const LoadContent(
@@ -59,6 +38,42 @@ void main() {
       expect(repository.getBookLinksInRangeCalls, 1);
 
       await bloc.close();
+    });
+
+    test('באתחול ספר משתמש בחלון visible התחלתי של כמה שורות', () async {
+      final repository = _FakeTextBookRepository();
+      final bloc =
+          _createBloc(repository: repository, showPageShapeView: false);
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(repository.getBookLinksInRangeCalls, 1);
+      expect(repository.lastStartIndex, 0);
+      expect(repository.lastEndIndex, 71);
+
+      await bloc.close();
+    });
+
+    test('preview נשמר עם padding כדי לשמור אינדקסים אבסולוטיים', () {
+      final lines = TextBookBloc.buildPreviewLinesForTesting(
+        'שורה 11\nשורה 12\nשורה 13',
+        11,
+      );
+
+      expect(lines.length, 14);
+      expect(lines[0], '');
+      expect(lines[10], '');
+      expect(lines[11], 'שורה 11');
+      expect(lines[13], 'שורה 13');
     });
   });
 }
@@ -87,6 +102,8 @@ class _FakeTextBookRepository extends TextBookRepository {
 
   int getBookLinksCalls = 0;
   int getBookLinksInRangeCalls = 0;
+  int? lastStartIndex;
+  int? lastEndIndex;
 
   @override
   Future<String> getBookContent(TextBook book) async {
@@ -111,6 +128,8 @@ class _FakeTextBookRepository extends TextBookRepository {
     required int endIndex,
   }) async {
     getBookLinksInRangeCalls++;
+    lastStartIndex = startIndex;
+    lastEndIndex = endIndex;
     return const [];
   }
 

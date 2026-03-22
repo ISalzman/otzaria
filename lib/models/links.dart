@@ -78,11 +78,13 @@ class Link {
       try {
         final resolvedRef = await refFromIndex(
           index2 - 1,
-          LibraryProviderManager.instance.getBookToc(
+          LibraryProviderManager.instance
+              .getBookToc(
                 targetTitle,
                 categoryId: targetCategoryId,
                 fileType: targetFileType,
-              ).then((toc) => toc ?? const <TocEntry>[]),
+              )
+              .then((toc) => toc ?? const <TocEntry>[]),
         );
         return formatDisplayReference(
           bookTitle: targetTitle,
@@ -131,10 +133,10 @@ class Link {
         connectionType = json['Conection Type'].toString().isEmpty
             ? 'reference'
             : json['Conection Type'].toString(),
-      targetCategoryId = json['category_id_2'] != null
-        ? int.tryParse(json['category_id_2'].toString())
-        : null,
-      targetFileType = json['file_type_2']?.toString(),
+        targetCategoryId = json['category_id_2'] != null
+            ? int.tryParse(json['category_id_2'].toString())
+            : null,
+        targetFileType = json['file_type_2']?.toString(),
         start = json['start'] != null
             ? int.tryParse(json['start'].toString())
             : null,
@@ -176,7 +178,7 @@ Future<List<Link>> getLinksforIndexs(
   final commentatorsSet = commentatorsToShow.toSet();
 
   // סינון אחד במקום לולאה עם סינונים מרובים
-  final allLinks = links.where((link) {
+  final filteredLinks = links.where((link) {
     // בדיקות מהירות קודם
     if (!indexSet.contains(link.index1)) return false;
     final type = link.connectionType.toUpperCase();
@@ -186,6 +188,8 @@ Future<List<Link>> getLinksforIndexs(
     // בדיקה איטית יותר בסוף
     return commentatorsSet.contains(utils.getTitleFromPath(link.path2));
   }).toList();
+
+  final allLinks = filteredLinks;
 
   // אם אין קישורים, מחזיר רשימה ריקה מיד
   if (allLinks.isEmpty) {
