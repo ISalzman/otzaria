@@ -130,4 +130,18 @@ void main() {
 
     expect(childEntry.parentId, rootEntry.id);
   });
+
+  test('insertSource does not fail when a different source already uses id -1',
+      () async {
+    final externalSourceId = await repository.insertSource('external', -1);
+    final personalSourceId = await repository.insertSource('Personal', -1);
+
+    expect(externalSourceId, isNonZero);
+    expect(personalSourceId, isNonZero);
+    expect(personalSourceId, isNot(externalSourceId));
+
+    final personalSource = await repository.getSourceByName('Personal');
+    expect(personalSource, isNotNull);
+    expect(personalSource!.id, personalSourceId);
+  });
 }
