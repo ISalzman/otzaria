@@ -32,7 +32,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
   bool _isSyncing = false;
 
   static const String _customFoldersReloadNotice =
-      'לאחר הוספת תיקייה אישית או ספרים חדשים לתיקייה קיימת, ריענון לא תמיד טוען את כל הספרים מיד.';
+      'לאחר הוספת ספרים חדשים לתיקייה קיימת, יש ללחוץ על סמל הרענון.';
 
   @override
   void initState() {
@@ -479,7 +479,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '$_customFoldersReloadNotice\n$customFoldersRestartHint',
+                      _customFoldersReloadNotice,
                       textDirection: TextDirection.rtl,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context)
