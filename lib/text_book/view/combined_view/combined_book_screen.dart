@@ -1144,6 +1144,7 @@ $textWithBreaks
                               ValueKey('html_${widget.tab.book.title}_$index'),
                           settings: RenderSettings(
                             removeNikud: state.removeNikud,
+                            removePunctuation: state.removePunctuation,
                             removeTeamim: !settingsState.showTeamim,
                             replaceHolyNames: settingsState.replaceHolyNames,
                             searchText: state.searchText,
