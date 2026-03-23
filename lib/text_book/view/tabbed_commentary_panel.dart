@@ -8,6 +8,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
+import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 
 /// Widget שמציג כרטיסיות עם מפרשים וקישורים בחלונית הצד
@@ -18,6 +19,7 @@ class TabbedCommentaryPanel extends StatefulWidget {
   final VoidCallback? onClosePane;
   final int? initialTabIndex; // אינדקס הכרטיסייה הראשונית
   final Function(int)? onTabChanged; // callback כשהטאב משתנה
+  final bool showSplitView; // האם במצב מפוצל (true) או מפרשים למטה (false)
 
   const TabbedCommentaryPanel({
     super.key,
@@ -27,6 +29,7 @@ class TabbedCommentaryPanel extends StatefulWidget {
     this.onClosePane,
     this.initialTabIndex,
     this.onTabChanged,
+    this.showSplitView = true,
   });
 
   @override
@@ -108,22 +111,29 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                     Expanded(
                       child: TabBar(
                         controller: _tabController,
-                        tabs: const [
+                        tabs: [
                           Tab(
-                            icon: Icon(FluentIcons.book_24_regular, size: 18),
-                            iconMargin: EdgeInsets.only(bottom: 2),
+                            icon: Icon(
+                              widget.showSplitView
+                                  ? FluentIcons.book_24_regular
+                                  : FluentIcons.settings_24_regular,
+                              size: 18,
+                            ),
+                            iconMargin: const EdgeInsets.only(bottom: 2),
                             height: 48,
-                            child:
-                                Text('מפרשים', style: TextStyle(fontSize: 12)),
+                            child: Text(
+                              widget.showSplitView ? 'מפרשים' : 'הגדרות מפרשים',
+                              style: const TextStyle(fontSize: 12),
+                            ),
                           ),
-                          Tab(
+                          const Tab(
                             icon: Icon(FluentIcons.link_24_regular, size: 18),
                             iconMargin: EdgeInsets.only(bottom: 2),
                             height: 48,
                             child:
                                 Text('קישורים', style: TextStyle(fontSize: 12)),
                           ),
-                          Tab(
+                          const Tab(
                             icon: Icon(FluentIcons.note_24_regular, size: 18),
                             iconMargin: EdgeInsets.only(bottom: 2),
                             height: 48,
@@ -160,13 +170,18 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // כרטיסיית המפרשים - מציגה את תוכן המפרשים הפעילים
-                  CommentaryListBase(
-                    key: const ValueKey('commentary_list_tabbed'),
-                    openBookCallback: widget.openBookCallback,
-                    fontSize: widget.fontSize,
-                    showSearch: widget.showSearch,
-                  ),
+                  // כרטיסייה ראשונה: מפרשים (מצב מפוצל) או הגדרות מפרשים (מצב למטה)
+                  if (widget.showSplitView)
+                    CommentaryListBase(
+                      key: const ValueKey('commentary_list_tabbed'),
+                      openBookCallback: widget.openBookCallback,
+                      fontSize: widget.fontSize,
+                      showSearch: widget.showSearch,
+                    )
+                  else
+                    const CommentatorsListView(
+                      key: ValueKey('commentators_settings_tabbed'),
+                    ),
                   // כרטיסיית הקישורים
                   SelectedLineLinksView(
                     openBookCallback: widget.openBookCallback,

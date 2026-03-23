@@ -336,6 +336,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                             showSearch: true,
                             onClosePane: _togglePane,
                             initialTabIndex: _currentTabIndex,
+                            showSplitView: widget.showSplitView,
                             onTabChanged: (index) {
                               debugPrint(
                                   'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}');
