@@ -278,7 +278,7 @@ class _CombinedViewState extends State<CombinedView> {
       int paragraphIndex, BuildContext menuContext, String? selectedText) {
     // אם זה מצב תצוגה מקדימה, החזר תפריט מצומצם
     if (widget.isPreviewMode) {
-      return ctx.ContextMenu(
+      return ctx.ContextMenu<Object>(
         entries: <ctx.ContextMenuEntry<Object>>[
           ctx.MenuItem<Object>(
             label: const Text('העתק'),
@@ -305,7 +305,7 @@ class _CombinedViewState extends State<CombinedView> {
     // 3. יצירת רשימה של מפרשים שלא שויכו לאף קבוצה
     final List<String> ungrouped = ungroupedGroup.commentators;
 
-    return ctx.ContextMenu(
+    return ctx.ContextMenu<Object>(
       maxHeight: screenHeight * 0.9,
       entries: <ctx.ContextMenuEntry<Object>>[
         ctx.MenuItem<Object>(

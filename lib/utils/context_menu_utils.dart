@@ -23,7 +23,7 @@ class ContextMenuUtils {
     String? savedSelectedText,
     required VoidCallback onCopySelected,
   }) {
-    return ctx.ContextMenu(
+    return ctx.ContextMenu<Object>(
       entries: <ctx.ContextMenuEntry<Object>>[
         ctx.MenuItem<Object>(
           label: const Text('העתק'),

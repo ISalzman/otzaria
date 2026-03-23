@@ -706,7 +706,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
         }
       },
       child: ContextMenuRegion(
-        contextMenu: ContextMenu(
+        contextMenu: ContextMenu<Object>(
           // ... תפריט ההקשר נשאר בדיוק כפי שהיה ...
           maxHeight: 400,
           entries: <ContextMenuEntry<Object>>[

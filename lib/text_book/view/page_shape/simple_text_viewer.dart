@@ -374,7 +374,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       // ),
     ]);
 
-    return ctx.ContextMenu(entries: _normalizeContextMenuEntries(entries));
+    return ctx.ContextMenu<Object>(entries: _normalizeContextMenuEntries(entries));
   }
 
   List<ctx.ContextMenuEntry<Object>> _normalizeContextMenuEntries(
