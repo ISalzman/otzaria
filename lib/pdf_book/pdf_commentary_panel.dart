@@ -346,23 +346,24 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         ),
         // תוכן הכרטיסיות - עטוף ב-SelectionArea כדי לאפשר בחירת טקסט
         Expanded(
-          child: ctx.ContextMenuRegion(
-            contextMenu: _buildContextMenu(),
-            child: SelectionArea(
-              key: _selectionKey,
-              contextMenuBuilder: (context, selectableRegionState) {
-                // מבטל את התפריט הרגיל של Flutter כי יש ContextMenuRegion
-                return const SizedBox.shrink();
-              },
-              onSelectionChanged: (selection) {
-                if (selection != null && selection.plainText.isNotEmpty) {
-                  setState(() {
-                    _savedSelectedText = selection.plainText;
-                  });
-                }
-              },
+          child: SelectionArea(
+            key: _selectionKey,
+            contextMenuBuilder: (context, selectableRegionState) {
+              // מבטל את התפריט הרגיל של Flutter כי יש ContextMenuRegion
+              return const SizedBox.shrink();
+            },
+            onSelectionChanged: (selection) {
+              if (selection != null && selection.plainText.isNotEmpty) {
+                setState(() {
+                  _savedSelectedText = selection.plainText;
+                });
+              }
+            },
+            child: ctx.ContextMenuRegion(
+              contextMenu: _buildContextMenu(),
               child: TabBarView(
                 controller: _tabController,
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   _KeepAliveTab(
                     key: ValueKey(
