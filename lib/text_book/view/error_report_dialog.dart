@@ -1160,11 +1160,22 @@ class _RegularReportTabState extends State<RegularReportTab> {
             RecommendedActionButton(
               text: isOfflineMode ? 'שמור בתור לאוצריא' : 'שלח ישירות לאוצריא',
               icon: FluentIcons.arrow_upload_24_regular,
-              onPressed: () {
-                widget.onActionSelected(
-                  ErrorReportAction.sendDirect,
-                  reportData,
+              onPressed: () async {
+                // דיאלוג אישור לפני שליחה ישירה
+                final shouldSend = await showTwoActionsDialog(
+                  context: context,
+                  title: 'אישור שליחת דיווח',
+                  content:
+                      'לחיצה על שלח דיווח תשלח את השגיאה ישירות לאוצריא, יש לשים לב לתקינות הדיווח לפני השליחה',
+                  cancelText: 'ביטול',
+                  confirmText: 'שלח דיווח',
                 );
+                if (shouldSend == true) {
+                  widget.onActionSelected(
+                    ErrorReportAction.sendDirect,
+                    reportData,
+                  );
+                }
               },
             ),
         ],
