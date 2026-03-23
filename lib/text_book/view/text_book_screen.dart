@@ -1281,15 +1281,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
 
-      // 3b) Punctuation Button
-      ActionButtonData(
-        widget: _buildPunctuationButton(context, state),
-        icon: state.removePunctuation
-            ? FluentIcons.text_quote_24_regular
-            : FluentIcons.text_clear_formatting_24_regular,
-        tooltip: state.removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
-        onPressed: () => _toggleAndSavePunctuation(context, state),
-      ),
+      // 3b) Punctuation Button - מוסתר בספרי תנ"ך
+      if (!state.isTanach)
+        ActionButtonData(
+          widget: _buildPunctuationButton(context, state),
+          icon: state.removePunctuation
+              ? FluentIcons.text_quote_24_regular
+              : FluentIcons.text_clear_formatting_24_regular,
+          tooltip: state.removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
+          onPressed: () => _toggleAndSavePunctuation(context, state),
+        ),
 
       // 4) Search Button
       ActionButtonData(

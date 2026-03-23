@@ -89,6 +89,7 @@ class TextBookLoaded extends TextBookState {
   final List<TocEntry> tableOfContents;
   final bool removeNikud;
   final bool removePunctuation;
+  final bool isTanach;
   final List<int> visibleIndices;
   final int? selectedIndex;
   final bool pinLeftPane;
@@ -135,6 +136,7 @@ class TextBookLoaded extends TextBookState {
     required this.tableOfContents,
     required this.removeNikud,
     this.removePunctuation = false,
+    this.isTanach = false,
     required this.visibleIndices,
     this.selectedIndex,
     required this.pinLeftPane,
@@ -216,6 +218,7 @@ class TextBookLoaded extends TextBookState {
     List<TocEntry>? tableOfContents,
     bool? removeNikud,
     bool? removePunctuation,
+    bool? isTanach,
     int? selectedIndex,
     List<int>? visibleIndices,
     bool? pinLeftPane,
@@ -257,6 +260,7 @@ class TextBookLoaded extends TextBookState {
       tableOfContents: tableOfContents ?? this.tableOfContents,
       removeNikud: removeNikud ?? this.removeNikud,
       removePunctuation: removePunctuation ?? this.removePunctuation,
+      isTanach: isTanach ?? this.isTanach,
       visibleIndices: visibleIndices ?? this.visibleIndices,
       selectedIndex: selectedIndex,
       pinLeftPane: pinLeftPane ?? this.pinLeftPane,
@@ -299,6 +303,7 @@ class TextBookLoaded extends TextBookState {
         tableOfContents.length,
         removeNikud,
         removePunctuation,
+        isTanach,
         visibleIndices,
         selectedIndex,
         pinLeftPane,
