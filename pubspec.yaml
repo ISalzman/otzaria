@@ -98,6 +98,7 @@ dependencies:
   flutter_single_instance: ^1.7.0
   xml: ^6.6.1
   flutter_markdown: ^0.7.7
+  markdown: ^7.3.0
   system_fonts: ^1.0.1
   flutter_quill: ^11.5.0
 
