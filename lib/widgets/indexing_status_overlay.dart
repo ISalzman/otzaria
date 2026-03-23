@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
@@ -15,17 +16,50 @@ class IndexingStatusOverlay extends StatefulWidget {
 
 class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
   bool _hidden = false;
+  bool _delayElapsed = false;
+  Timer? _delayTimer;
+
+  @override
+  void dispose() {
+    _delayTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startDelayTimer() {
+    _delayTimer?.cancel();
+    _delayElapsed = false;
+    _delayTimer = Timer(const Duration(seconds: 13), () {
+      if (mounted) {
+        setState(() {
+          _delayElapsed = true;
+        });
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<IndexingBloc, IndexingState>(
       buildWhen: (previous, current) => previous != current,
       builder: (context, state) {
-        // אם האינדוקס התחיל מחדש - להחזיר את החיווי
-        if (_hidden && state is! IndexingInProgress) {
-          _hidden = false;
+        final isIndexing = state is IndexingInProgress;
+
+        // אם האינדוקס התחיל - הפעל טיימר
+        if (isIndexing && _delayTimer == null) {
+          _startDelayTimer();
         }
-        if (_hidden || state is! IndexingInProgress) {
+
+        // אם האינדוקס נגמר - אפס הכל
+        if (!isIndexing) {
+          _delayTimer?.cancel();
+          _delayTimer = null;
+          if (_hidden || _delayElapsed) {
+            _hidden = false;
+            _delayElapsed = false;
+          }
+        }
+
+        if (_hidden || !isIndexing || !_delayElapsed) {
           return const SizedBox.shrink();
         }
         final processed = state.booksProcessed ?? 0;
