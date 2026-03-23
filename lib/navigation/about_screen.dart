@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -670,6 +671,15 @@ class _AboutScreenState extends State<AboutScreen> {
             height: 400,
             child: Markdown(
               data: changelog,
+              extensionSet: md.ExtensionSet(
+                md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+                [md.AutolinkExtensionSyntax(), ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes],
+              ),
+              onTapLink: (text, href, title) async {
+                if (href == null) return;
+                final uri = Uri.parse(href);
+                if (await canLaunchUrl(uri)) await launchUrl(uri);
+              },
             ),
           ),
           actions: [
@@ -717,6 +727,15 @@ class _AboutScreenState extends State<AboutScreen> {
             height: 400,
             child: Markdown(
               data: changelog,
+              extensionSet: md.ExtensionSet(
+                md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+                [md.AutolinkExtensionSyntax(), ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes],
+              ),
+              onTapLink: (text, href, title) async {
+                if (href == null) return;
+                final uri = Uri.parse(href);
+                if (await canLaunchUrl(uri)) await launchUrl(uri);
+              },
             ),
           ),
           actions: [
