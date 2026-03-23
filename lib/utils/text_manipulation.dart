@@ -48,6 +48,11 @@ String removePunctuation(String text) {
     final endsWithAllowed = RegExp(r'[.:](\s*)$').hasMatch(line);
     originalEndsWithAllowed.add(endsWithAllowed);
 
+    if (isHeadingLine(line.trim())) {
+      processedLines.add(line);
+      continue;
+    }
+
     String processed = line;
 
     final lastAllowedPunctuationMatch =
