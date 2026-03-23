@@ -372,7 +372,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final (commentators: relevantCommentators, links: relevantLinks) =
         _getRelevantContent();
 
-    return ctx.ContextMenu(
+    return ctx.ContextMenu<Object>(
       entries: <ctx.ContextMenuEntry<Object>>[
         ctx.MenuItem<Object>(
           label: _buildRtlMenuText('חיפוש'),
