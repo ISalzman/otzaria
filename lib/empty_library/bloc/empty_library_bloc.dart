@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
+import 'package:archive/archive.dart';
 import 'package:bloc/bloc.dart';
 import 'package:ffi/ffi.dart';
 import 'package:zstandard_native/zstandard_native_bindings.dart';
@@ -534,7 +535,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   Future<void> _onDownloadLibraryRequested(
       DownloadLibraryRequested event, Emitter<EmptyLibraryState> emit) async {
-    File? tempArchive;
     try {
       // בדיקת מקום פנוי (safety net — מכסה מצב שהדיסק התמלא אחרי טעינת המסך)
       final spaceError = await _checkSpaceForDownload();
@@ -548,41 +548,82 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           _defaultLibraryPathOverride ?? await AppPaths.getDefaultLibraryPath();
       final latestAsset = await _fetchLatestDatabaseAsset();
 
-      // הורדה לתיקיית temp זמנית
+      // קובץ temp קבוע — נשמר בין ניסיונות לצורך resume
       final tempArchivePath = path.join(
         Directory.systemTemp.path,
         'otzaria_${latestAsset.assetName}',
       );
-      tempArchive = File(tempArchivePath);
+      final tempArchive = File(tempArchivePath);
 
-      emit(const EmptyLibraryDownloading(
+      // בדיקת כמה כבר הורדנו (resume)
+      var alreadyDownloaded =
+          await tempArchive.exists() ? await tempArchive.length() : 0;
+
+      emit(EmptyLibraryDownloading(
         progress: 0.0,
-        message: 'מתחבר לשרת...',
+        message: alreadyDownloaded > 0
+            ? 'ממשיך הורדה מ-${(alreadyDownloaded / 1024 / 1024).toStringAsFixed(1)} MB...'
+            : 'מתחבר לשרת...',
       ));
 
-      final request = http.Request('GET', Uri.parse(latestAsset.downloadUrl));
+      // פותרים redirect ידנית כדי לשמור על Range header
+      // (package:http מאבד headers בעת redirect)
+      final resolvedUrl = await _resolveRedirect(latestAsset.downloadUrl);
+
+      final request = http.Request('GET', Uri.parse(resolvedUrl));
+      if (alreadyDownloaded > 0) {
+        request.headers['Range'] = 'bytes=$alreadyDownloaded-';
+      }
       final response = await _httpClient.send(request);
 
-      if (response.statusCode != 200) {
-        emit(_error(
+      // 200 = הורדה מלאה מחדש, 206 = המשך (partial content)
+      if (response.statusCode == 200) {
+        // השרת לא תומך ב-Range — מתחילים מחדש
+        alreadyDownloaded = 0;
+        await tempArchive.delete().catchError((_) => tempArchive);
+      } else if (response.statusCode != 206) {
+        emit(EmptyLibraryError(
           errorMessage: 'שגיאה בהורדה: ${response.statusCode}',
         ));
         return;
       }
 
+      // וידוא שה-resume אכן עבד לפי Content-Range header
+      // אם השרת החזיר 206 אבל מ-0, נתאים את alreadyDownloaded
+      if (response.statusCode == 206) {
+        final contentRange = response.headers['content-range'];
+        if (contentRange != null) {
+          // פורמט: "bytes START-END/TOTAL"
+          final match = RegExp(r'bytes (\d+)-').firstMatch(contentRange);
+          if (match != null) {
+            final serverStart = int.tryParse(match.group(1)!) ?? 0;
+            if (serverStart == 0 && alreadyDownloaded > 0) {
+              // השרת התחיל מ-0 למרות הבקשה — מחיקת הקובץ החלקי
+              alreadyDownloaded = 0;
+              await tempArchive.delete().catchError((_) => tempArchive);
+            }
+          }
+        }
+      }
+
       final contentLength = response.contentLength ?? 0;
-      var downloadedBytes = 0;
-      final sink = tempArchive.openWrite();
+      final totalLength =
+          contentLength > 0 ? contentLength + alreadyDownloaded : 0;
+      var downloadedBytes = alreadyDownloaded;
+
+      final sink = tempArchive.openWrite(
+        mode: alreadyDownloaded > 0 ? FileMode.append : FileMode.write,
+      );
 
       try {
         await for (var chunk in response.stream) {
           sink.add(chunk);
           downloadedBytes += chunk.length;
 
-          if (contentLength > 0) {
-            final progress = downloadedBytes / contentLength;
+          if (totalLength > 0) {
+            final progress = downloadedBytes / totalLength;
             final mb = (downloadedBytes / 1024 / 1024).toStringAsFixed(1);
-            final totalMb = (contentLength / 1024 / 1024).toStringAsFixed(1);
+            final totalMb = (totalLength / 1024 / 1024).toStringAsFixed(1);
             emit(EmptyLibraryDownloading(
               progress: progress,
               message: 'מוריד... $mb MB מתוך $totalMb MB',
@@ -612,9 +653,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
       await _extractCompressedDatabase(tempArchivePath, outputPath);
 
-      // מחיקת קובץ ה-temp מיד לאחר חילוץ מוצלח
-      await tempArchive.delete();
-      tempArchive = null;
+      // מחיקת קובץ ה-temp לאחר חילוץ מוצלח
+      await tempArchive.delete().catchError((_) => tempArchive);
 
       emit(EmptyLibraryExtracting(
         selectedPath: tempArchivePath,
@@ -627,16 +667,33 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       // ניקוי override Android — ה-DB החדש נמצא ישירות בספרייה
       await Settings.setValue(SettingsRepository.keyDbEffectivePath, '');
 
+      // הורדת תלמוד בבלי
+      await _downloadAndExtractAsset(
+        url: 'https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst',
+        tempFileName: 'otzaria_talmud_bavli.tar.zst',
+        statusMessage: 'מוריד תלמוד בבלי...',
+        outputDir: libraryPath,
+        isTar: true,
+        emit: emit,
+      );
+
+      // הורדת קטלוגים
+      await _downloadAndExtractAsset(
+        url: 'https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst',
+        tempFileName: 'otzaria_otzar-HB_catalog.db.zst',
+        statusMessage: 'מוריד קטלוגים...',
+        outputDir: libraryPath,
+        outputFileName: DatabaseConstants.externalCatalogDatabaseFileName,
+        isTar: false,
+        emit: emit,
+      );
+
       emit(EmptyLibraryDirectorySelected(selectedPath: libraryPath));
     } catch (e) {
-      emit(_error(
-        errorMessage: 'שגיאה בהורדה: $e',
+      // קובץ ה-temp נשמר בכוונה — ישמש ל-resume בניסיון הבא
+      emit(EmptyLibraryError(
+        errorMessage: 'שגיאה בהורדה: $e\nניתן ללחוץ שוב כדי להמשיך מהנקודה שנעצרה.',
       ));
-    } finally {
-      // מחיקת קובץ ה-temp תמיד, גם במקרה שגיאה
-      if (tempArchive != null && await tempArchive.exists()) {
-        await tempArchive.delete();
-      }
     }
   }
 
@@ -657,6 +714,153 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         errorMessage: 'שגיאה: $e',
       ));
     }
+  }
+
+  /// עוזר כללי: מוריד קובץ (עם resume), מחלץ אותו ומוחק את ה-temp.
+  /// [isTar] = true → מחלץ tar.zst לתיקייה [outputDir]
+  /// [isTar] = false → מחלץ .zst לקובץ [outputDir]/[outputFileName]
+  Future<void> _downloadAndExtractAsset({
+    required String url,
+    required String tempFileName,
+    required String statusMessage,
+    required String outputDir,
+    required bool isTar,
+    required Emitter<EmptyLibraryState> emit,
+    String? outputFileName,
+  }) async {
+    final tempPath = path.join(Directory.systemTemp.path, tempFileName);
+    final tempFile = File(tempPath);
+
+    var alreadyDownloaded =
+        await tempFile.exists() ? await tempFile.length() : 0;
+
+    emit(EmptyLibraryDownloading(
+      progress: alreadyDownloaded > 0 ? 0.0 : 0.0,
+      message: alreadyDownloaded > 0
+          ? '$statusMessage (ממשיך מ-${(alreadyDownloaded / 1024 / 1024).toStringAsFixed(1)} MB)'
+          : statusMessage,
+    ));
+
+    final resolvedUrl = await _resolveRedirect(url);
+    final request = http.Request('GET', Uri.parse(resolvedUrl));
+    if (alreadyDownloaded > 0) {
+      request.headers['Range'] = 'bytes=$alreadyDownloaded-';
+    }
+    final response = await _httpClient.send(request);
+
+    if (response.statusCode == 200) {
+      alreadyDownloaded = 0;
+      await tempFile.delete().catchError((_) => tempFile);
+    } else if (response.statusCode == 206) {
+      final contentRange = response.headers['content-range'];
+      if (contentRange != null) {
+        final match = RegExp(r'bytes (\d+)-').firstMatch(contentRange);
+        if (match != null) {
+          final serverStart = int.tryParse(match.group(1)!) ?? 0;
+          if (serverStart == 0 && alreadyDownloaded > 0) {
+            // השרת התחיל מ-0 למרות הבקשה — מחיקת הקובץ החלקי
+            alreadyDownloaded = 0;
+            await tempFile.delete().catchError((_) => tempFile);
+          } else {
+            // וידוא שה-offset תואם למה שהשרת אישר
+            alreadyDownloaded = serverStart;
+          }
+        }
+      }
+    } else {
+      // שגיאת HTTP — זורקים כדי שהמשתמש יידע
+      throw Exception('שגיאה בהורדת $statusMessage: ${response.statusCode}');
+    }
+
+    final contentLength = response.contentLength ?? 0;
+    final totalLength =
+        contentLength > 0 ? contentLength + alreadyDownloaded : 0;
+    var downloadedBytes = alreadyDownloaded;
+
+    final sink = tempFile.openWrite(
+      mode: alreadyDownloaded > 0 ? FileMode.append : FileMode.write,
+    );
+    try {
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        downloadedBytes += chunk.length;
+        if (totalLength > 0) {
+          final mb = (downloadedBytes / 1024 / 1024).toStringAsFixed(1);
+          final totalMb = (totalLength / 1024 / 1024).toStringAsFixed(1);
+          emit(EmptyLibraryDownloading(
+            progress: downloadedBytes / totalLength,
+            message: '$statusMessage $mb MB / $totalMb MB',
+          ));
+        }
+      }
+    } finally {
+      await sink.close();
+    }
+
+    emit(EmptyLibraryExtracting(
+      selectedPath: tempPath,
+      progress: 0.0,
+      message: 'מחלץ...',
+    ));
+
+    if (isTar) {
+      await _extractTarZst(tempPath, outputDir);
+    } else {
+      final outPath = path.join(outputDir, outputFileName!);
+      await _extractCompressedDatabase(tempPath, outPath);
+    }
+
+    await tempFile.delete().catchError((_) => tempFile);
+  }
+
+  /// מחלץ קובץ tar.zst לתיקיית היעד.
+  /// רץ ב-isolate נפרד כדי למנוע חסימת UI וכדי שהזיכרון ישוחרר בסיום.
+  static Future<void> _extractTarZst(
+      String archivePath, String outputDir) async {
+    await compute(_extractTarZstIsolate, [archivePath, outputDir]);
+  }
+
+  static Future<void> _extractTarZstIsolate(List<String> args) async {
+    final archivePath = args[0];
+    final outputDir = args[1];
+
+    final compressedBytes = await File(archivePath).readAsBytes();
+    final tarBytes = await Zstandard().decompress(compressedBytes);
+    if (tarBytes == null) {
+      throw Exception('חילוץ ZST נכשל: $archivePath');
+    }
+
+    final archive = TarDecoder().decodeBytes(tarBytes);
+    for (final file in archive.files) {
+      final filePath = path.join(outputDir, file.name);
+      if (file.isFile) {
+        final outFile = File(filePath);
+        await outFile.parent.create(recursive: true);
+        await outFile.writeAsBytes(file.content as List<int>);
+      } else {
+        await Directory(filePath).create(recursive: true);
+      }
+    }
+  }
+
+  /// עוקב אחרי redirects ידנית כדי לקבל את ה-URL הסופי.
+  /// נדרש כי package:http מאבד את ה-Range header בעת redirect.
+  Future<String> _resolveRedirect(String url) async {
+    var current = Uri.parse(url);
+    for (var i = 0; i < 5; i++) {
+      final request = http.Request('HEAD', current)
+        ..followRedirects = false;
+      final response = await _httpClient.send(request);
+      if (response.statusCode >= 300 && response.statusCode < 400) {
+        final location = response.headers['location'];
+        if (location == null) break;
+        // תמיכה ב-Location יחסי
+        current = current.resolve(location);
+      } else {
+        break;
+      }
+    }
+    return current.toString();
   }
 
   Future<DatabaseReleaseAsset> _fetchLatestDatabaseAsset() async {
