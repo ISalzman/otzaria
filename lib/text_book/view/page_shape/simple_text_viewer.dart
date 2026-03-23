@@ -772,25 +772,27 @@ $textWithBreaks
               final data = widget.content[index];
               final targetTitle =
                   widget.isMainText ? state.book.title : widget.bookTitle;
-                // אם המשתמש לחץ על כפתור ניקוד (override), נשתמש בערך מה-state
-                final bool? overrideRemoveNikud = state.removeNikud;
-                final removeNikudFuture = (overrideRemoveNikud != null)
+              // אם המשתמש לחץ על כפתור ניקוד (override), נשתמש בערך מה-state
+              final bool? overrideRemoveNikud =
+                  widget.isMainText ? state.removeNikud : null;
+              final removeNikudFuture = (overrideRemoveNikud != null)
                   ? Future.value(overrideRemoveNikud)
                   : (targetTitle == null
-                    ? Future.value(settingsState.defaultRemoveNikud)
-                    : _removeNikudCache.putIfAbsent(
-                      '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}',
-                      () => resolveRemoveNikudForBook(
-                      title: targetTitle,
-                      defaultRemoveNikud: settingsState.defaultRemoveNikud,
-                      removeNikudFromTanach:
-                        settingsState.removeNikudFromTanach,
-                      categoryId:
-                        widget.isMainText ? state.book.categoryId : null,
-                      fileType:
-                        widget.isMainText ? state.book.fileType : null,
-                      ),
-                    ));
+                      ? Future.value(settingsState.defaultRemoveNikud)
+                      : _removeNikudCache.putIfAbsent(
+                          '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}',
+                          () => resolveRemoveNikudForBook(
+                            title: targetTitle,
+                            defaultRemoveNikud:
+                                settingsState.defaultRemoveNikud,
+                            removeNikudFromTanach:
+                                settingsState.removeNikudFromTanach,
+                            categoryId:
+                                widget.isMainText ? state.book.categoryId : null,
+                            fileType:
+                                widget.isMainText ? state.book.fileType : null,
+                          ),
+                        ));
 
               // הדגשת טקסט חיפוש רק בטקסט המרכזי
               final searchText = widget.isMainText ? state.searchText : '';
