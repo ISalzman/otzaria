@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'package:bloc/bloc.dart';
 import 'package:ffi/ffi.dart';
-import 'package:zstandard_android/zstandard_android_bindings_generated.dart';
+import 'package:zstandard_native/zstandard_native_bindings.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -745,7 +745,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   static void _decompressZstStreaming(
       String archivePath, String outputPath) {
     final dylib = DynamicLibrary.open('libzstandard_android.so');
-    final bindings = ZstandardAndroidBindings(dylib);
+    final bindings = ZstandardNativeBindings(dylib);
 
     final inBufSize = bindings.ZSTD_DStreamInSize();
     final outBufSize = bindings.ZSTD_DStreamOutSize();
