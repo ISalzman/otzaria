@@ -78,10 +78,7 @@ dependencies:
   googleapis: ^16.0.0
   googleapis_auth: ^2.0.0
   characters: ^1.4.0
-  flutter_document_picker:
-    git:
-      url: https://github.com/sidlatau/flutter_document_picker
-      ref: master
+  flutter_document_picker: ^5.2.3
   collection: ^1.18.0
   search_engine:
     #path: ../search_engine
