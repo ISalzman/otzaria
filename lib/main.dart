@@ -440,7 +440,7 @@ void createDirectoryIfNotExists(String path) {
   }
 }
 
-initHive() async {
+Future<void> initHive() async {
   Hive.defaultDirectory = (await getApplicationSupportDirectory()).path;
   Hive.box(name: 'tabs', maxSizeMiB: 100);
   Hive.box(name: 'workspaces', maxSizeMiB: 100);
