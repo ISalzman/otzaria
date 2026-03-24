@@ -11,6 +11,10 @@ class PickArchiveFileRequested extends EmptyLibraryEvent {}
 
 class DownloadLibraryRequested extends EmptyLibraryEvent {}
 
+/// בודק מקום פנוי בהתקנה וקובע אם כפתור ההורדה זמין.
+/// נשלח בעת טעינת המסך.
+class CheckDiskSpaceRequested extends EmptyLibraryEvent {}
+
 class DeleteZipAnswered extends EmptyLibraryEvent {
   final bool shouldDelete;
   final String zipPath;

@@ -5,12 +5,15 @@ abstract class EmptyLibraryState extends Equatable {
   final String? selectedPath;
   final String? errorMessage;
   final List<String>? zipFiles;
+  // non-null = כפתור ההורדה מושבת + הסיבה מוצגת למשתמש
+  final String? downloadDisabledReason;
 
   const EmptyLibraryState({
     this.isLoading = false,
     this.selectedPath,
     this.errorMessage,
     this.zipFiles,
+    this.downloadDisabledReason,
   });
 
   @override
@@ -19,10 +22,13 @@ abstract class EmptyLibraryState extends Equatable {
         selectedPath,
         errorMessage,
         zipFiles,
+        downloadDisabledReason,
       ];
 }
 
-class EmptyLibraryInitial extends EmptyLibraryState {}
+class EmptyLibraryInitial extends EmptyLibraryState {
+  const EmptyLibraryInitial({super.downloadDisabledReason});
+}
 
 class EmptyLibraryLoading extends EmptyLibraryState {
   const EmptyLibraryLoading({
@@ -41,6 +47,7 @@ class EmptyLibraryError extends EmptyLibraryState {
     super.errorMessage,
     super.selectedPath,
     super.zipFiles,
+    super.downloadDisabledReason,
   });
 }
 

@@ -365,7 +365,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
         ),
         const SizedBox(height: 24),
         OutlinedButton.icon(
-          onPressed: state.isLoading
+          onPressed: state.isLoading || state.downloadDisabledReason != null
               ? null
               : () {
                   BlocProvider.of<EmptyLibraryBloc>(context)
@@ -378,6 +378,37 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
             textDirection: TextDirection.rtl,
           ),
         ),
+        if (state.downloadDisabledReason != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.errorContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              textDirection: TextDirection.rtl,
+              children: [
+                Icon(
+                  FluentIcons.warning_24_regular,
+                  color: Theme.of(context).colorScheme.onErrorContainer,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    state.downloadDisabledReason!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                    textDirection: TextDirection.rtl,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (state.isLoading && state is EmptyLibraryLoading) ...[
           const SizedBox(height: 24),
           const CircularProgressIndicator(),
