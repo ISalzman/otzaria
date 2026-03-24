@@ -177,6 +177,12 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                       openBookCallback: widget.openBookCallback,
                       fontSize: widget.fontSize,
                       showSearch: widget.showSearch,
+                      selectedCommentatorsOverride: state.activeCommentators,
+                      onSelectedCommentatorsOverrideChanged: (commentators) {
+                        context
+                            .read<TextBookBloc>()
+                            .add(UpdateCommentators(commentators));
+                      },
                     )
                   else
                     const CommentatorsListView(
