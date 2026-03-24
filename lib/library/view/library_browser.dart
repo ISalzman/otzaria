@@ -113,6 +113,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
     return MultiBlocListener(
       listeners: [
+        BlocListener<LibraryBloc, LibraryState>(
+          listenWhen: (previous, current) =>
+              previous.isLoading && !current.isLoading && current.library != null,
+          listener: (context, state) {
+            final book = _getFirstDisplayedBook(state.currentCategory ?? state.library!);
+            if (book != null) {
+              context.read<LibraryBloc>().add(SelectBookForPreview(book));
+            }
+          },
+        ),
         BlocListener<SettingsBloc, SettingsState>(
           listenWhen: (previous, current) {
             return previous.showExternalBooks != current.showExternalBooks ||
@@ -936,9 +946,54 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     openBook(context, book, index, '');
   }
 
+  void _navigateUp(BuildContext context, SettingsState settingsState) {
+    if (settingsState.libraryViewMode == 'list' && _expandedCategories.isNotEmpty) {
+      setState(() {
+        _expandedCategories.remove(_expandedCategories.last);
+      });
+    } else {
+      final parent = context.read<LibraryBloc>().state.currentCategory?.parent;
+      if (parent != null) {
+        setState(() {
+          _depth = _depth > 0 ? _depth - 1 : 0;
+        });
+        context.read<LibraryBloc>().add(NavigateUp());
+        context.read<LibraryBloc>().add(const SearchBooks());
+        final book = _getFirstDisplayedBook(parent);
+        if (book != null) {
+          context.read<LibraryBloc>().add(SelectBookForPreview(book));
+        }
+        _refocusSearchBar(selectAll: true);
+      }
+    }
+  }
+
+  /// מחזיר את הספר הראשון שיוצג בפועל בקטגוריה, לפי אותו סדר תצוגה כמו _buildCategoryContent
+  Book? _getFirstDisplayedBook(Category category) {
+    final books = category.books.toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+    if (books.isNotEmpty) return books.first;
+
+    final subs = category.subCategories.toList();
+    if (category is Library) {
+      subs.sort((a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)));
+    } else {
+      subs.sort((a, b) => _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)));
+    }
+    for (final sub in subs) {
+      final book = _getFirstDisplayedBook(sub);
+      if (book != null) return book;
+    }
+    return null;
+  }
+
   void _openCategory(Category category) {
     setState(() => _depth++);
     context.read<LibraryBloc>().add(NavigateToCategory(category));
+    final book = _getFirstDisplayedBook(category);
+    if (book != null) {
+      context.read<LibraryBloc>().add(SelectBookForPreview(book));
+    }
     _refocusSearchBar();
   }
 
@@ -1094,45 +1149,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         widget: IconButton(
           icon: const Icon(FluentIcons.arrow_up_24_regular),
           tooltip: 'חזרה לתיקיה הקודמת',
-          onPressed: () {
-            // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-            if (settingsState.libraryViewMode == 'list' &&
-                _expandedCategories.isNotEmpty) {
-              setState(() {
-                _expandedCategories.remove(_expandedCategories.last);
-              });
-            }
-            // בתצוגת רשת - חזור לקטגוריה הקודמת
-            else if (state.currentCategory?.parent != null) {
-              setState(() {
-                _depth = _depth > 0 ? _depth - 1 : 0;
-              });
-              context.read<LibraryBloc>().add(NavigateUp());
-              context.read<LibraryBloc>().add(const SearchBooks());
-              _refocusSearchBar(selectAll: true);
-            }
-          },
+          onPressed: () => _navigateUp(context, settingsState),
         ),
         icon: FluentIcons.arrow_up_24_regular,
         tooltip: 'חזרה לתיקיה הקודמת',
-        onPressed: () {
-          // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-          if (settingsState.libraryViewMode == 'list' &&
-              _expandedCategories.isNotEmpty) {
-            setState(() {
-              _expandedCategories.remove(_expandedCategories.last);
-            });
-          }
-          // בתצוגת רשת - חזור לקטגוריה הקודמת
-          else if (state.currentCategory?.parent != null) {
-            setState(() {
-              _depth = _depth > 0 ? _depth - 1 : 0;
-            });
-            context.read<LibraryBloc>().add(NavigateUp());
-            context.read<LibraryBloc>().add(const SearchBooks());
-            _refocusSearchBar(selectAll: true);
-          }
-        },
+        onPressed: () => _navigateUp(context, settingsState),
       ),
 
       // חזרה לתיקיה ראשית
@@ -1198,45 +1219,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         widget: IconButton(
           icon: const Icon(FluentIcons.arrow_up_24_regular),
           tooltip: 'חזרה לתיקיה הקודמת',
-          onPressed: () {
-            // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-            if (settingsState.libraryViewMode == 'list' &&
-                _expandedCategories.isNotEmpty) {
-              setState(() {
-                _expandedCategories.remove(_expandedCategories.last);
-              });
-            }
-            // בתצוגת רשת - חזור לקטגוריה הקודמת
-            else if (state.currentCategory?.parent != null) {
-              setState(() {
-                _depth = _depth > 0 ? _depth - 1 : 0;
-              });
-              context.read<LibraryBloc>().add(NavigateUp());
-              context.read<LibraryBloc>().add(const SearchBooks());
-              _refocusSearchBar(selectAll: true);
-            }
-          },
+          onPressed: () => _navigateUp(context, settingsState),
         ),
         icon: FluentIcons.arrow_up_24_regular,
         tooltip: 'חזרה לתיקיה הקודמת',
-        onPressed: () {
-          // בתצוגת רשימה - סגור את הקטגוריה האחרונה שנפתחה
-          if (settingsState.libraryViewMode == 'list' &&
-              _expandedCategories.isNotEmpty) {
-            setState(() {
-              _expandedCategories.remove(_expandedCategories.last);
-            });
-          }
-          // בתצוגת רשת - חזור לקטגוריה הקודמת
-          else if (state.currentCategory?.parent != null) {
-            setState(() {
-              _depth = _depth > 0 ? _depth - 1 : 0;
-            });
-            context.read<LibraryBloc>().add(NavigateUp());
-            context.read<LibraryBloc>().add(const SearchBooks());
-            _refocusSearchBar(selectAll: true);
-          }
-        },
+        onPressed: () => _navigateUp(context, settingsState),
       ),
 
       // סינכרון - עדיפות גבוהה כדי שלא יכנס לתפריט "..."

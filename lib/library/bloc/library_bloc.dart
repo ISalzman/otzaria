@@ -35,14 +35,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     try {
       Library library = await _repository.library;
 
-      // בחירת הספר הראשון לתצוגה מקדימה
-      final firstBook = _getFirstTextBook(library);
-
       emit(state.copyWith(
         library: library,
         currentCategory: library,
         isLoading: false,
-        previewBook: firstBook,
         searchResults: null,
         searchQuery: null,
         selectedTopics: null,
@@ -57,26 +53,6 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         isLoading: false,
       ));
     }
-  }
-
-  /// מחזיר את ספר הטקסט הראשון בקטגוריה
-  Book? _getFirstTextBook(Category category) {
-    // חיפוש ספר טקסט בקטגוריה הנוכחית
-    for (final book in category.books) {
-      if (book is TextBook) {
-        return book;
-      }
-    }
-
-    // אם לא נמצא, חיפוש בתת-קטגוריות
-    for (final subCategory in category.subCategories) {
-      final book = _getFirstTextBook(subCategory);
-      if (book != null) {
-        return book;
-      }
-    }
-
-    return null;
   }
 
   Future<void> _onRefreshLibrary(
@@ -218,14 +194,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
 
       final library = await _repository.library;
 
-      // בחירת הספר הראשון לתצוגה מקדימה
-      final firstBook = _getFirstTextBook(library);
-
       emit(state.copyWith(
         library: library,
         currentCategory: library,
         isLoading: false,
-        previewBook: firstBook,
         searchResults: null,
         searchQuery: null,
         selectedTopics: null,
@@ -272,14 +244,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
 
       final library = await _repository.library;
 
-      // בחירת הספר הראשון לתצוגה מקדימה
-      final firstBook = _getFirstTextBook(library);
-
       emit(state.copyWith(
         library: library,
         currentCategory: library,
         isLoading: false,
-        previewBook: firstBook,
         searchResults: null,
         searchQuery: null,
         selectedTopics: null,
@@ -296,15 +264,11 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     NavigateToCategory event,
     Emitter<LibraryState> emit,
   ) {
-    // בחירת הספר הראשון בקטגוריה החדשה
-    final firstBook = _getFirstTextBook(event.category);
-
     emit(state.copyWith(
       currentCategory: event.category,
       searchQuery: null,
       searchResults: null,
       selectedTopics: null,
-      previewBook: firstBook,
     ));
   }
 
