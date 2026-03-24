@@ -313,15 +313,25 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   }
 
   Widget _buildRightPane(TextBookLoaded state) {
-    final commentators = _selectedRightPaneCommentators(state);
-
-    if (!_isRightPaneMultipleMode() && commentators.length == 1) {
-      return _CommentaryPane(
-        commentatorName: commentators.single,
-        openBookCallback: widget.openBookCallback,
-        onLoadFailed: () => _hideColumn('right', global: false, showSnack: false),
+    if (!_isRightPaneMultipleMode()) {
+      final resolvedSingle = resolvePageShapeCommentatorSelection(
+        selection: _rightCommentator,
+        availableCommentators: _availableCommentators(state),
       );
+      if (resolvedSingle != null &&
+          !isPageShapeRemainingCommentatorsValue(resolvedSingle) &&
+          !isPageShapeMultiCommentatorsValue(resolvedSingle) &&
+          resolvedSingle != pageShapeMultipleCommentatorsModeValue) {
+        return _CommentaryPane(
+          commentatorName: resolvedSingle,
+          openBookCallback: widget.openBookCallback,
+          onLoadFailed: () =>
+              _hideColumn('right', global: false, showSnack: false),
+        );
+      }
     }
+
+    final commentators = _selectedRightPaneCommentators(state);
 
     return CommentaryListBase(
       // מפתח יציב כדי שלא נאבד את מצב מסך בחירת המפרשים בכל סימון
