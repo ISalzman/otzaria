@@ -156,20 +156,15 @@ class TantivyDataProvider {
 
   Future<void> _loadBooksDone() async {
     try {
-      final statePath = await AppPaths.getIndexStatePath();
-      booksDone = _readBooksDoneFromBox(statePath);
+      final lockPath = await AppPaths.getTantivyLockPath();
+      booksDone = _readBooksDoneFromBox(lockPath);
 
-      // Backward compatibility: migrate legacy data that was stored
-      // inside the Tantivy index directory.
       // Hive caches open boxes by name only (ignoring directory), so we must
       // close the current box before opening the legacy one at a different path.
       if (booksDone.isEmpty) {
-        final legacyPath = await AppPaths.getIndexPath();
-        // Only attempt migration if the legacy directory already exists.
-        // Opening a Hive box on a non-existent path would CREATE the directory,
-        // which would later confuse SearchEngine (non-Tantivy files inside).
-        if (legacyPath != statePath && Directory(legacyPath).existsSync()) {
-          Hive.box(name: 'books_indexed', directory: statePath, maxSizeMiB: 100)
+        final legacyPath = await AppPaths.getLegacyIndexStatePath();
+        if (legacyPath != lockPath && Directory(legacyPath).existsSync()) {
+          Hive.box(name: 'books_indexed', directory: lockPath, maxSizeMiB: 100)
               .close();
           final legacyBooks = _readBooksDoneFromBox(legacyPath);
           if (legacyBooks.isNotEmpty) {
@@ -182,31 +177,31 @@ class TantivyDataProvider {
             await saveBooksDoneToDisk();
 
             // Verify the migration succeeded by reading back from the new path.
-            final verified = _readBooksDoneFromBox(statePath);
+            final verified = _readBooksDoneFromBox(lockPath);
             if (verified.length == legacyBooks.length) {
-              // Close the statePath box first so the cache is clear,
+              // Close the new box first so the cache is clear,
               // otherwise _deleteLegacyHiveFiles would get the cached
-              // statePath box and delete the WRONG files.
+              // lockPath box and delete the WRONG files.
               Hive.box(
                       name: 'books_indexed',
-                      directory: statePath,
+                      directory: lockPath,
                       maxSizeMiB: 100)
                   .close();
               _deleteLegacyHiveFiles(legacyPath);
-              // Re-open the box at statePath for ongoing use.
-              _readBooksDoneFromBox(statePath);
+              // Re-open the box at the new path for ongoing use.
+              _readBooksDoneFromBox(lockPath);
             } else {
               debugPrint('⚠️ Migration verification failed, '
                   'keeping legacy files.');
             }
           } else {
-            // Re-open the box at the new state path for future use.
+            // Re-open the box at the new path for future use.
             Hive.box(
                     name: 'books_indexed',
                     directory: legacyPath,
                     maxSizeMiB: 100)
                 .close();
-            _readBooksDoneFromBox(statePath);
+            _readBooksDoneFromBox(lockPath);
           }
         }
       }
@@ -324,10 +319,10 @@ class TantivyDataProvider {
 
   /// Persists the list of indexed books to disk using Hive storage.
   Future<void> saveBooksDoneToDisk() async {
-    final statePath = await AppPaths.getIndexStatePath();
+    final lockPath = await AppPaths.getTantivyLockPath();
     Hive.box(
       name: 'books_indexed',
-      directory: statePath,
+      directory: lockPath,
       maxSizeMiB: 100,
     ).put('key-books-done', booksDone);
   }
@@ -410,8 +405,8 @@ class TantivyDataProvider {
     Directory indexDirectory = Directory(indexPath);
     if (closeBooksDoneBox) {
       try {
-        final statePath = await AppPaths.getIndexStatePath();
-        Hive.box(name: 'books_indexed', directory: statePath, maxSizeMiB: 100)
+        final lockPath = await AppPaths.getTantivyLockPath();
+        Hive.box(name: 'books_indexed', directory: lockPath, maxSizeMiB: 100)
             .close();
       } catch (e) {
         debugPrint('⚠️ Error closing Hive box: $e');
