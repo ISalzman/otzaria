@@ -1,6 +1,10 @@
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:bloc/bloc.dart';
+import 'package:ffi/ffi.dart';
+import 'package:zstandard_android/zstandard_android_bindings_generated.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -715,6 +719,14 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     String archivePath,
     String outputPath,
   ) async {
+    if (Platform.isAndroid) {
+      // ב-Android טוענים את כל הקובץ לזיכרון RAM (1.5 GB דחוס + 6.5 GB פרוס)
+      // גורם לקריסה על מכשירים עם 4-6 GB RAM.
+      // במקום זאת, משתמשים ב-ZSTD streaming API שמעבד בנתחים של ~128 KB.
+      await Isolate.run(
+          () => _decompressZstStreaming(archivePath, outputPath));
+      return;
+    }
     final compressedBytes = await File(archivePath).readAsBytes();
     final decompressed = await Zstandard().decompress(compressedBytes);
     if (decompressed == null) {
@@ -725,6 +737,93 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       await outputFile.delete();
     }
     await outputFile.writeAsBytes(decompressed, flush: true);
+  }
+
+  /// חילוץ ZST streaming דרך ZSTD FFI — רץ ב-isolate נפרד.
+  /// מעבד את הקובץ בנתחים של ~128 KB ישירות לדיסק.
+  /// שימוש ב-RAM: כמה מאות KB בלבד (במקום ~8 GB).
+  static void _decompressZstStreaming(
+      String archivePath, String outputPath) {
+    final dylib = DynamicLibrary.open('libzstandard_android.so');
+    final bindings = ZstandardAndroidBindings(dylib);
+
+    final inBufSize = bindings.ZSTD_DStreamInSize();
+    final outBufSize = bindings.ZSTD_DStreamOutSize();
+
+    final dStream = bindings.ZSTD_createDStream();
+    if (dStream == nullptr) throw Exception('ZSTD_createDStream נכשל');
+
+    try {
+      final initRet = bindings.ZSTD_initDStream(dStream);
+      if (bindings.ZSTD_isError(initRet) != 0) {
+        throw Exception('ZSTD_initDStream נכשל: $initRet');
+      }
+
+      final inNative = malloc.allocate<Uint8>(inBufSize);
+      final outNative = malloc.allocate<Uint8>(outBufSize);
+      final inBuf = malloc<ZSTD_inBuffer_s>();
+      final outBuf = malloc<ZSTD_outBuffer_s>();
+
+      try {
+        final inputRaf = File(archivePath).openSync();
+        final outFile = File(outputPath);
+        if (outFile.existsSync()) outFile.deleteSync();
+        final outputRaf = outFile.openSync(mode: FileMode.writeOnly);
+
+        try {
+          final inView = inNative.asTypedList(inBufSize);
+
+          // 0 = frame הושלם, >0 = עדיין נתונים בממתנה, <0 = שגיאה
+          int lastRet = 0;
+
+          while (true) {
+            final bytesRead = inputRaf.readIntoSync(inView);
+            if (bytesRead == 0) break;
+
+            inBuf.ref.src = inNative.cast();
+            inBuf.ref.size = bytesRead;
+            inBuf.ref.pos = 0;
+
+            while (inBuf.ref.pos < inBuf.ref.size) {
+              outBuf.ref.dst = outNative.cast();
+              outBuf.ref.size = outBufSize;
+              outBuf.ref.pos = 0;
+
+              lastRet =
+                  bindings.ZSTD_decompressStream(dStream, outBuf, inBuf);
+
+              if (bindings.ZSTD_isError(lastRet) != 0) {
+                throw Exception('שגיאת ZSTD בחילוץ (קוד: $lastRet)');
+              }
+
+              if (outBuf.ref.pos > 0) {
+                outputRaf
+                    .writeFromSync(outNative.asTypedList(outBuf.ref.pos));
+              }
+            }
+          }
+
+          // לפי תיעוד ZSTD: ערך חזרה > 0 אחרי EOF = frame לא הושלם (קובץ קטוע/פגום)
+          if (lastRet != 0) {
+            throw Exception(
+              'קובץ ה-ZST קטוע או פגום: ה-frame לא הושלם (נותרו $lastRet bytes לפענוח)',
+            );
+          }
+
+          outputRaf.flushSync();
+        } finally {
+          inputRaf.closeSync();
+          outputRaf.closeSync();
+        }
+      } finally {
+        malloc.free(inNative);
+        malloc.free(outNative);
+        malloc.free(inBuf);
+        malloc.free(outBuf);
+      }
+    } finally {
+      bindings.ZSTD_freeDStream(dStream);
+    }
   }
 }
 
