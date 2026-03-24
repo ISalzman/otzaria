@@ -192,11 +192,11 @@ Future<List<PdfOutlineNode>> _loadOutlineFromFile(PdfBook book) async {
   return outlines;
 }
 
-openPdfBookFromRef(String bookname, String ref, BuildContext context) async {
+Future<void> openPdfBookFromRef(String bookname, String ref, BuildContext context) async {
   await _openBookFromRefHelper(bookname, ref, context, PdfBook);
 }
 
-openTextBookFromRef(String bookname, String ref, BuildContext context) async {
+Future<void> openTextBookFromRef(String bookname, String ref, BuildContext context) async {
   await _openBookFromRefHelper(bookname, ref, context, TextBook);
 }
 

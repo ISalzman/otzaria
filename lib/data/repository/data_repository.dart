@@ -109,7 +109,7 @@ class DataRepository {
   ///   - [library]: The library containing books to index
   ///
   /// This method now uses the IndexingBloc to handle the indexing process
-  addAllTextsToTantivy(
+  Future<void> addAllTextsToTantivy(
     Library library,
   ) async {
     // Create an instance of IndexingBloc
