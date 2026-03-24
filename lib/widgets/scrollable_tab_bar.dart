@@ -114,6 +114,14 @@ class _ScrollableTabBarWithArrowsState
   void _scrollLeft() => _scrollBy(-150);
   void _scrollRight() => _scrollBy(150);
 
+  AlignmentGeometry _tabBarAlignment() {
+    if (widget.tabAlignment == TabAlignment.center) {
+      return Alignment.bottomCenter;
+    }
+
+    return AlignmentDirectional.bottomStart;
+  }
+
   Widget _buildTabBar({bool shrinkWrap = false}) {
     return NotificationListener<ScrollMetricsNotification>(
       onNotification: (metricsNotification) {
@@ -147,7 +155,7 @@ class _ScrollableTabBarWithArrowsState
               controller: widget.controller,
               isScrollable: true,
               tabs: widget.tabs,
-              tabAlignment: TabAlignment.start,
+              tabAlignment: widget.tabAlignment ?? TabAlignment.start,
               padding: EdgeInsets.zero,
               labelPadding: EdgeInsets.zero,
               indicatorPadding: EdgeInsets.zero,
@@ -158,7 +166,8 @@ class _ScrollableTabBarWithArrowsState
             );
 
             return Align(
-              alignment: Alignment.bottomCenter,
+              alignment: _tabBarAlignment(),
+              widthFactor: shrinkWrap ? 1.0 : null,
               child: shrinkWrap ? IntrinsicWidth(child: tabBar) : tabBar,
             );
           },
