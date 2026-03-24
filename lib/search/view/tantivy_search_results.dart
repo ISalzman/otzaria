@@ -58,10 +58,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   }
 
   String _formatTitleForWrapping(String title) {
-    return title
-        .split(' ')
-        .map(_insertBreakOpportunities)
-        .join(' ');
+    return title.split(' ').map(_insertBreakOpportunities).join(' ');
   }
 
   String _insertBreakOpportunities(String word) {
