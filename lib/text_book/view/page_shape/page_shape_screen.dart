@@ -324,7 +324,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     }
 
     return CommentaryListBase(
-      key: ValueKey('page_shape_remaining_${commentators.join(',')}'),
+      // מפתח יציב כדי שלא נאבד את מצב מסך בחירת המפרשים בכל סימון
+      key: const ValueKey('page_shape_commentary_list'),
       openBookCallback: (tab) => widget.openBookCallback(tab),
       fontSize: PageShapeSettingsManager.getCommentaryFontSize(),
       showSearch: true,
