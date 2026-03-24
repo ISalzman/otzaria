@@ -124,15 +124,23 @@ class AppPaths {
     return getDefaultBackupPath();
   }
 
-  /// Gets a dedicated path for indexing metadata/state files (Hive, etc.)
-  /// Kept separate from Tantivy index files to avoid I/O contention.
-  static Future<String> getIndexStatePath() async {
-    final support = await getApplicationSupportDirectory();
-    final stateDir = Directory(p.join(support.path, 'index_state'));
-    if (!await stateDir.exists()) {
-      await stateDir.create(recursive: true);
+  /// Gets the shared directory used for Tantivy lock/state files.
+  /// It is kept next to the index directory so all users of the same
+  /// installation can access the same lock files.
+  static Future<String> getTantivyLockPath() async {
+    final indexPath = await getIndexPath();
+    final lockDir = Directory(p.join(p.dirname(indexPath), 'tantivy.lock'));
+    if (!await lockDir.exists()) {
+      await lockDir.create(recursive: true);
     }
-    return stateDir.path;
+    return lockDir.path;
+  }
+
+  /// Gets the previous per-user location of the Tantivy lock/state files.
+  /// Used only for migration to the shared `tantivy.lock` directory.
+  static Future<String> getLegacyIndexStatePath() async {
+    final support = await getApplicationSupportDirectory();
+    return p.join(support.path, 'index_state');
   }
 
   /// Gets the manifest file path (library_path/files_manifest.json)
