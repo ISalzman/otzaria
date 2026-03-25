@@ -26,7 +26,8 @@ class IndexingRepository {
   ///
   /// [library] The library containing books to index
   /// [onProgress] Callback function to report progress
-  Future<void> indexAllBooks(
+  /// מבצע אינדוקס ומחזיר true אם הסתיים בהצלחה, false אם בוטל
+  Future<bool> indexAllBooks(
     Library library,
     void Function(int processed, int total) onProgress,
   ) async {
@@ -35,10 +36,11 @@ class IndexingRepository {
         _isolateService ?? await IndexingIsolateService.create();
     _activeIsolateService = isolateService;
 
-    try {
-      final allBooks = library.getAllBooks();
+    final allBooks = library.getAllBooks();
+    final totalBooks = allBooks.length;
+    bool cancelled = false;
 
-      final totalBooks = allBooks.length;
+    try {
       int processedBooks = 0;
       int actuallyIndexed = 0;
       int skipped = 0;
@@ -51,7 +53,8 @@ class IndexingRepository {
       for (Book book in allBooks) {
         if (!_tantivyDataProvider.isIndexing.value) {
           debugPrint('⚠️ אינדוקס בוטל על ידי המשתמש');
-          return;
+          cancelled = true;
+          break;
         }
 
         try {
@@ -106,17 +109,19 @@ class IndexingRepository {
         await Future.delayed(Duration.zero);
       }
 
-      debugPrint('✅ אינדוקס הושלם!');
-      debugPrint('   📊 סה"כ: $totalBooks ספרים');
-      debugPrint('   ✅ מאונדקסים: $actuallyIndexed');
-      debugPrint('   ⏭️ דולגו: $skipped');
-      debugPrint('   ❌ שגיאות: $errors');
+      if (!cancelled) {
+        debugPrint('✅ אינדוקס הושלם!');
+        debugPrint('   📊 סה"כ: $totalBooks ספרים');
+        debugPrint('   ✅ מאונדקסים: $actuallyIndexed');
+        debugPrint('   ⏭️ דולגו: $skipped');
+        debugPrint('   ❌ שגיאות: $errors');
 
-      debugPrint('💾 שומר אינדקס סופי (final commit)...');
-      final index = await _tantivyDataProvider.engine;
-      await index.commit();
-      saveIndexedBooks();
-      debugPrint('✅ אינדקס נשמר בהצלחה!');
+        debugPrint('💾 שומר אינדקס סופי (final commit)...');
+        final index = await _tantivyDataProvider.engine;
+        await index.commit();
+        saveIndexedBooks();
+        debugPrint('✅ אינדקס נשמר בהצלחה!');
+      }
     } finally {
       _activeIsolateService = null;
       if (!identical(isolateService, _isolateService)) {
@@ -124,6 +129,7 @@ class IndexingRepository {
       }
       _tantivyDataProvider.isIndexing.value = false;
     }
+    return !cancelled;
   }
 
   Future<void> _indexTextBook(

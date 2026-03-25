@@ -300,6 +300,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         activeCommentators: commentators,
         commentatorGroups: existingCommentatorGroups,
         removeNikud: removeNikud,
+        isTanach: isTanach,
         visibleIndices: visibleIndices,
         pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
         searchText: searchText,

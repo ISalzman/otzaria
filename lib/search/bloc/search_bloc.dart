@@ -15,6 +15,7 @@ import 'package:search_engine/search_engine.dart';
 
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final SearchRepository _repository = SearchRepository();
+  int _searchRequestId = 0;
 
   SearchBloc() : super(const SearchState()) {
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
@@ -41,10 +42,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     on<ReplaceFacetCounts>(_onReplaceFacetCounts);
     on<LoadMoreResults>(_onLoadMoreResults);
   }
+
   Future<void> _onUpdateSearchQuery(
     UpdateSearchQuery event,
     Emitter<SearchState> emit,
   ) async {
+    final requestId = ++_searchRequestId;
+    final query = event.query;
     if (event.query.isEmpty) {
       emit(state.copyWith(
         searchQuery: event.query,
@@ -55,14 +59,15 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       return;
     }
 
+    final requestedFacets = List<String>.from(state.currentFacets);
     final shouldPreserveFacetCounts =
-        state.searchQuery == event.query && state.facetCounts.isNotEmpty;
+        state.searchQuery == query && state.facetCounts.isNotEmpty;
 
     // Clear global cache for new search
     TantivyDataProvider.clearGlobalCache();
 
     emit(state.copyWith(
-      searchQuery: event.query,
+      searchQuery: query,
       isLoading: true,
       facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
     ));
@@ -70,26 +75,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     final booksToSearch = state.booksToSearch.map((e) => e.title).toList();
 
     try {
-      final totalResults = await TantivyDataProvider.instance.countTexts(
-        SearchQueryBuilder.sanitizeQuery(event.query),
-        booksToSearch,
-        state.currentFacets,
-        fuzzy: state.fuzzy,
-        distance: state.distance,
-        customSpacing: event.customSpacing,
-        alternativeWords: event.alternativeWords,
-        searchOptions: event.searchOptions,
-      );
-
-      // If no results with current facets, try root facet
-      if (totalResults == 0 && !state.currentFacets.contains("/")) {
-        add(AddFacet("/"));
-        return;
-      }
-
       final results = await _repository.searchTexts(
-        SearchQueryBuilder.sanitizeQuery(event.query),
-        state.currentFacets,
+        SearchQueryBuilder.sanitizeQuery(query),
+        requestedFacets,
         state.numResults,
         fuzzy: state.fuzzy,
         distance: state.distance,
@@ -99,14 +87,40 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         searchOptions: event.searchOptions,
       );
 
+      // If no results with current facets, try root facet
+      if (results.isEmpty && !requestedFacets.contains("/")) {
+        add(AddFacet("/"));
+        return;
+      }
+      if (requestId != _searchRequestId) {
+        return;
+      }
       emit(state.copyWith(
         results: results,
-        totalResults: totalResults,
+        totalResults: results.length,
         isLoading: false,
         facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
       ));
 
-      unawaited(_refreshFacetCountsForAllBooks(event));
+      final totalResults = await TantivyDataProvider.instance.countTexts(
+        SearchQueryBuilder.sanitizeQuery(query),
+        booksToSearch,
+        requestedFacets,
+        fuzzy: state.fuzzy,
+        distance: state.distance,
+        customSpacing: event.customSpacing,
+        alternativeWords: event.alternativeWords,
+        searchOptions: event.searchOptions,
+      );
+
+      if (requestId != _searchRequestId) {
+        return;
+      }
+      emit(state.copyWith(
+        totalResults: totalResults,
+      ));
+
+      unawaited(_refreshFacetCountsForAllBooks(event, requestId));
 
       // Prefetch disabled - too slow and causes duplicates
       // _prefetchCommonFacetCounts(event.query, event.customSpacing,
@@ -120,9 +134,11 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
   }
 
-  Future<void> _refreshFacetCountsForAllBooks(UpdateSearchQuery event) async {
+  Future<void> _refreshFacetCountsForAllBooks(
+      UpdateSearchQuery event, int requestId) async {
     final query = event.query;
     if (query.isEmpty) return;
+    if (requestId != _searchRequestId) return;
 
     // קבל את כל הספרים מהספרייה כדי למפות title -> Book
     final library = await DataRepository.instance.library;
@@ -148,7 +164,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     );
 
     // Ignore stale results if query changed while searching
-    if (state.searchQuery != query) {
+    if (state.searchQuery != query || requestId != _searchRequestId) {
       return;
     }
 
@@ -254,6 +270,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   ) {
     final newFacets = List<String>.from(state.currentFacets);
     if (!newFacets.contains(event.facet)) {
+      debugPrint('➕ AddFacet: ${event.facet} (before=$newFacets)');
       newFacets.add(event.facet);
       final newConfig = state.configuration.copyWith(currentFacets: newFacets);
       emit(state.copyWith(configuration: newConfig));
@@ -267,6 +284,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   ) {
     final newFacets = List<String>.from(state.currentFacets);
     if (newFacets.contains(event.facet)) {
+      debugPrint('➖ RemoveFacet: ${event.facet} (before=$newFacets)');
       newFacets.remove(event.facet);
       final newConfig = state.configuration.copyWith(currentFacets: newFacets);
       emit(state.copyWith(configuration: newConfig));

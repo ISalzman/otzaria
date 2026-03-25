@@ -139,7 +139,10 @@ String? resolvePageShapeCommentatorSelection({
     }
   }
 
-  return encodePageShapeCommentatorsSelection(resolved);
+  return encodePageShapeCommentatorsSelection(
+    resolved,
+    forceMultipleMode: true,
+  );
 }
 
 /// מחזיר את רשימת המפרשים שיש להציג בפועל עבור הבחירה השמורה.

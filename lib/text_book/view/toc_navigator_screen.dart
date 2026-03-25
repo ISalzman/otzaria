@@ -9,7 +9,9 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/text_book/view/toc_filter.dart';
 
 class TocViewer extends StatefulWidget {
   const TocViewer({
@@ -127,254 +129,33 @@ class _TocViewerState extends State<TocViewer>
   }
 
   Widget _buildFilteredList(List<TocEntry> entries, BuildContext context) {
-    List<TocEntry> matchingEntries = [];
-    Set<int> matchingIndices = {}; // לשמור את כל האינדקסים שנמצאו
-
-    // הסרת ניקוד מטקסט החיפוש
-    final searchQuery = utils.removeVolwels(searchController.text.trim());
-
-    // שלב 1: מצא את כל הכותרות שמתאימות לחיפוש
-    void findMatchingEntries(List<TocEntry> entries,
-        {int depth = 0, bool isFirstEntry = true}) {
-      for (int i = 0; i < entries.length; i++) {
-        final TocEntry entry = entries[i];
-
-        // דלג רק על הכותרת הראשונה ברמה 0 או 1 (שם הספר עצמו)
-        final bool isBookTitle = (depth == 0 && i == 0) ||
-            (entry.level <= 1 && i == 0 && isFirstEntry);
-
-        if (!isBookTitle) {
-          // הסרת ניקוד מהכותרת והשוואה
-          final entryText = utils.removeVolwels(entry.text);
-
-          if (entryText.contains(searchQuery)) {
-            matchingIndices.add(entry.index);
-          }
-        }
-
-        // תמיד חפש בילדים
-        if (entry.children.isNotEmpty) {
-          findMatchingEntries(entry.children,
-              depth: depth + 1, isFirstEntry: false);
-        }
-      }
+    final normalizedQuery = utils.removeVolwels(
+        SearchQueryBuilder.sanitizeQuery(searchController.text).trim());
+    if (normalizedQuery.isEmpty) {
+      return const SizedBox.shrink();
     }
 
-    // שלב 2: אסוף את כל ההורים של הכותרות שנמצאו
-    void collectEntriesWithParents(
-        List<TocEntry> entries, List<TocEntry> parentChain) {
-      for (final entry in entries) {
-        final currentChain = [...parentChain, entry];
-
-        // אם הכותרת הזו או אחד מהילדים שלה נמצאו בחיפוש
-        bool hasMatchInSubtree = matchingIndices.contains(entry.index);
-
-        // בדוק אם יש התאמה בילדים
-        bool hasMatchingChild = false;
-        void checkChildren(List<TocEntry> children) {
-          for (final child in children) {
-            if (matchingIndices.contains(child.index)) {
-              hasMatchingChild = true;
-              return;
-            }
-            checkChildren(child.children);
-          }
-        }
-
-        checkChildren(entry.children);
-
-        // אם יש התאמה בכותרת הזו או בילדים שלה, הוסף את כל השרשרת
-        if (hasMatchInSubtree || hasMatchingChild) {
-          // הוסף את כל ההורים שעוד לא נוספו
-          for (final parent in currentChain) {
-            if (!matchingEntries.any((e) => e.index == parent.index)) {
-              matchingEntries.add(parent);
-            }
-          }
-        }
-
-        // המשך לילדים
-        if (entry.children.isNotEmpty) {
-          collectEntriesWithParents(entry.children, currentChain);
-        }
-      }
-    }
-
-    findMatchingEntries(entries);
-
-    if (matchingIndices.isNotEmpty) {
-      collectEntriesWithParents(entries, []);
-
-      // מיין לפי אינדקס כדי לשמור על הסדר המקורי
-      matchingEntries.sort((a, b) => a.index.compareTo(b.index));
-    }
+    final filteredEntries =
+        filterTocEntriesForSearch(entries, searchController.text);
 
     return ListView.builder(
         physics: const NeverScrollableScrollPhysics(),
         shrinkWrap: true,
-        itemCount: matchingEntries.length,
-        itemBuilder: (context, index) {
-          final entry = matchingEntries[index];
-
-          // אם לכותרת יש ילדים, הצג אותה עם אפשרות לפתוח/לסגור
-          if (entry.children.isNotEmpty) {
-            final bool isExpanded = _expanded[entry.index] ?? false;
-
-            return Column(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: Theme.of(context).dividerColor,
-                        width: 0.5,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      // אזור הטקסט לניווט
-                      Expanded(
-                        child: InkWell(
-                          onTap: () {
-                            setState(() {
-                              _isManuallyScrolling = false;
-                              _lastScrolledTocIndex = null;
-                            });
-                            widget.scrollController.scrollTo(
-                              index: entry.index,
-                              duration: const Duration(milliseconds: 250),
-                              curve: Curves.ease,
-                            );
-                            if (Platform.isAndroid) {
-                              widget.closeLeftPaneCallback();
-                            }
-                          },
-                          child: Container(
-                            padding: EdgeInsets.only(
-                              right: 16.0 + (entry.level * 24.0),
-                              left: 8.0,
-                              top: 10.0,
-                              bottom: 10.0,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  entry.level == 1
-                                      ? FluentIcons.book_24_regular
-                                      : FluentIcons.text_bullet_list_24_regular,
-                                  color: entry.level == 1
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.secondary,
-                                  size: entry.level == 1 ? 20 : 18,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    entry.fullText,
-                                    style: TextStyle(
-                                      fontSize: entry.level == 1 ? 15 : 14,
-                                      fontWeight: entry.level == 1
-                                          ? FontWeight.w600
-                                          : FontWeight.normal,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      // כפתור החץ לפתיחה/סגירה
-                      InkWell(
-                        onTap: () {
-                          setState(() {
-                            _expanded[entry.index] = !isExpanded;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.only(
-                            left: 16.0,
-                            right: 8.0,
-                            top: 10.0,
-                            bottom: 10.0,
-                          ),
-                          child: Icon(
-                            isExpanded
-                                ? FluentIcons.chevron_up_24_regular
-                                : FluentIcons.chevron_down_24_regular,
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // הצג את הילדים אם הכותרת פתוחה
-                if (isExpanded)
-                  ...entry.children.map((child) => _buildTocItem(child)),
-              ],
-            );
-          } else {
-            // כותרת ללא ילדים - הצג כרגיל
-            return InkWell(
-              onTap: () {
-                setState(() {
-                  _isManuallyScrolling = false;
-                  _lastScrolledTocIndex = null;
-                });
-                widget.scrollController.scrollTo(
-                  index: entry.index,
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.ease,
-                );
-                if (Platform.isAndroid) {
-                  widget.closeLeftPaneCallback();
-                }
-              },
-              child: Container(
-                padding: EdgeInsets.only(
-                  right: 16.0 + (entry.level * 24.0),
-                  left: 16.0,
-                  top: 10.0,
-                  bottom: 10.0,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Theme.of(context).dividerColor,
-                      width: 0.5,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      FluentIcons.text_bullet_list_24_regular,
-                      color: Theme.of(context).colorScheme.secondary,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        entry.fullText,
-                        style: const TextStyle(
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+        itemCount: filteredEntries.length,
+        itemBuilder: (context, index) => _buildTocItem(
+              filteredEntries[index],
+              isFirstChild: index == 0,
+              showFullText: true,
+              defaultExpanded: shouldExpandInSearch(
+                _expanded[filteredEntries[index].index],
               ),
-            );
-          }
-        });
+            ));
   }
 
   Widget _buildTocItem(TocEntry entry,
-      {bool showFullText = false, bool isFirstChild = false}) {
+      {bool showFullText = false,
+      bool isFirstChild = false,
+      bool? defaultExpanded}) {
     final itemKey = _tocItemKeys.putIfAbsent(entry.index, () => GlobalKey());
     void navigateToEntry() {
       setState(() {
@@ -440,7 +221,7 @@ class _TocViewerState extends State<TocViewer>
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      entry.text,
+                      showFullText ? entry.fullText : entry.text,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight:
@@ -457,8 +238,9 @@ class _TocViewerState extends State<TocViewer>
         },
       );
     } else {
+      final bool fallbackExpanded = entry.level == 1 || isFirstChild;
       final bool isExpanded =
-          _expanded[entry.index] ?? (entry.level == 1 || isFirstChild);
+          _expanded[entry.index] ?? (defaultExpanded ?? fallbackExpanded);
 
       return Column(
         key: itemKey,
@@ -567,8 +349,12 @@ class _TocViewerState extends State<TocViewer>
             },
           ),
           if (isExpanded)
-            ...entry.children.asMap().entries.map((e) => _buildTocItem(e.value,
-                isFirstChild: isFirstChild && e.key == 0)),
+            ...entry.children.asMap().entries.map((e) => _buildTocItem(
+                  e.value,
+                  isFirstChild: isFirstChild && e.key == 0,
+                  defaultExpanded: defaultExpanded,
+                  showFullText: showFullText,
+                )),
         ],
       );
     }

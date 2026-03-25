@@ -236,7 +236,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
   /// בניית תפריט הקשר כללי
   ctx.ContextMenu<Object> _buildContextMenu() {
-    return ctx.ContextMenu(
+    return ctx.ContextMenu<Object>(
       entries: <ctx.ContextMenuEntry<Object>>[
         ctx.MenuItem<Object>(
           label: const Text('העתק'),
@@ -261,7 +261,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   /// בניית תפריט הקשר למפרש ספציפי
-  ctx.ContextMenu _buildCommentaryContextMenu(Link link) {
+  ctx.ContextMenu<Object> _buildCommentaryContextMenu(Link link) {
     return ContextMenuUtils.buildCommentaryContextMenu(
       context: context,
       link: link,
@@ -346,23 +346,24 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         ),
         // תוכן הכרטיסיות - עטוף ב-SelectionArea כדי לאפשר בחירת טקסט
         Expanded(
-          child: ctx.ContextMenuRegion(
-            contextMenu: _buildContextMenu(),
-            child: SelectionArea(
-              key: _selectionKey,
-              contextMenuBuilder: (context, selectableRegionState) {
-                // מבטל את התפריט הרגיל של Flutter כי יש ContextMenuRegion
-                return const SizedBox.shrink();
-              },
-              onSelectionChanged: (selection) {
-                if (selection != null && selection.plainText.isNotEmpty) {
-                  setState(() {
-                    _savedSelectedText = selection.plainText;
-                  });
-                }
-              },
+          child: SelectionArea(
+            key: _selectionKey,
+            contextMenuBuilder: (context, selectableRegionState) {
+              // מבטל את התפריט הרגיל של Flutter כי יש ContextMenuRegion
+              return const SizedBox.shrink();
+            },
+            onSelectionChanged: (selection) {
+              if (selection != null && selection.plainText.isNotEmpty) {
+                setState(() {
+                  _savedSelectedText = selection.plainText;
+                });
+              }
+            },
+            child: ctx.ContextMenuRegion(
+              contextMenu: _buildContextMenu(),
               child: TabBarView(
                 controller: _tabController,
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   _KeepAliveTab(
                     key: ValueKey(
@@ -1226,7 +1227,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   final PdfBookTab tab;
   final double fontSize;
   final Function(OpenedTab) openBookCallback;
-  final ctx.ContextMenu Function(Link) buildContextMenu;
+  final ctx.ContextMenu<Object> Function(Link) buildContextMenu;
   final bool isExpanded;
   final Function(bool) onExpansionChanged;
   final String searchQuery;
