@@ -479,9 +479,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       },
       viewerOverlayBuilder: (context, size, handleLinkTap) => [
         Positioned.fill(
-          child: ctx.ContextMenuRegion(
-            contextMenu: _buildPdfContextMenu(),
-            child: const ColoredBox(color: Colors.transparent),
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (event) {
+              if (event.buttons == kSecondaryMouseButton) {
+                ctx.showContextMenu(
+                  context,
+                  contextMenu: _buildPdfContextMenu()
+                      .copyWith(position: event.position),
+                );
+              }
+            },
           ),
         ),
         // פס גלילה אנכי עם track מלא
