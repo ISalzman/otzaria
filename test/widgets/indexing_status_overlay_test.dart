@@ -11,7 +11,7 @@ class MockIndexingBloc extends MockBloc<IndexingEvent, IndexingState>
     implements IndexingBloc {}
 
 void main() {
-  testWidgets('מציג חיווי אינדוקס עם התקדמות בזמן אינדוקס',
+  testWidgets('מציג חיווי אינדוקס עם התקדמות לאחר 13 שניות',
       (WidgetTester tester) async {
     final bloc = MockIndexingBloc();
     const indexingState = IndexingInProgress(
@@ -35,6 +35,12 @@ void main() {
         ),
       ),
     );
+
+    // לפני 13 שניות - לא אמור להופיע
+    expect(find.text('התוכנה בתהליך אינדוקס'), findsNothing);
+
+    // אחרי 13 שניות - אמור להופיע
+    await tester.pump(const Duration(seconds: 13));
 
     expect(find.text('התוכנה בתהליך אינדוקס'), findsOneWidget);
     expect(find.text('תיתכן איטיות בפעילות התוכנה'), findsOneWidget);
@@ -94,6 +100,9 @@ void main() {
         ),
       ),
     );
+
+    // המתן עד שהחיווי יופיע
+    await tester.pump(const Duration(seconds: 13));
 
     await tester.tap(find.text('התוכנה בתהליך אינדוקס'));
     await tester.pumpAndSettle();

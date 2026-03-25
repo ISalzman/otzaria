@@ -193,10 +193,10 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     super.dispose();
   }
 
-  ContextMenu _buildContextMenu(TextBookLoaded state, String? selectedText) {
-    return ContextMenu(
+  ContextMenu<Object> _buildContextMenu(TextBookLoaded state, String? selectedText) {
+    return ContextMenu<Object>(
       entries: [
-        MenuItem(
+        MenuItem<Object>(
           label: const Text('העתק'),
           icon: const Icon(FluentIcons.copy_24_regular),
           enabled: selectedText != null && selectedText.trim().isNotEmpty,
@@ -206,17 +206,17 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
             fontSize: state.fontSize,
           ),
         ),
-        MenuItem(
+        MenuItem<Object>(
             label: const Text('חיפוש'),
             onSelected: (_) =>
                 widget.openLeftPaneTab(1, searchText: selectedText)),
-        MenuItem(
+        MenuItem<Object>(
           label: const Text('דווח על טעות בספר'),
           icon: const Icon(FluentIcons.error_circle_24_regular),
           onSelected: (_) => _openErrorReportDialog(selectedText ?? ''),
         ),
         const MenuDivider(),
-        MenuItem(
+        MenuItem<Object>(
           label: const Text('בחר את כל הטקסט'),
           onSelected: (_) =>
               _selectionKey.currentState?.selectableRegion.selectAll(),
@@ -336,6 +336,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                             showSearch: true,
                             onClosePane: _togglePane,
                             initialTabIndex: _currentTabIndex,
+                            showSplitView: widget.showSplitView,
                             onTabChanged: (index) {
                               debugPrint(
                                   'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}');
