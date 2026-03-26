@@ -437,6 +437,9 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   void _toggleLeftSidebar() {
     setState(() {
       _isLeftSidebarOpen = !_isLeftSidebarOpen;
+      if (!_isLeftSidebarOpen) {
+        _isHoveringSidebarHandle = false;
+      }
     });
   }
 
