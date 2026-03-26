@@ -79,6 +79,14 @@ void main() {
 
       expect(result, isEmpty);
     });
+
+    test('decodes html entities including hexadecimal entities', () {
+      final result = ErrorReportHelper.sanitizeReportText(
+        'שלום &#x27;עולם&#x27; &amp; בדיקה',
+      );
+
+      expect(result, equals("שלום 'עולם' & בדיקה"));
+    });
   });
 
   group('ErrorReportHelper.buildContextAroundSelection', () {
