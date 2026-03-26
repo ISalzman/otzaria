@@ -18,6 +18,7 @@ class DirectErrorReport extends Equatable {
   final String contextText;
   final String filePath;
   final String sourceFolder;
+  final String libraryVersion;
   final DirectErrorReportQueueType queueType;
   final DateTime createdAt;
 
@@ -33,6 +34,7 @@ class DirectErrorReport extends Equatable {
     this.contextText = '',
     this.filePath = '',
     this.sourceFolder = '',
+    this.libraryVersion = 'unknown',
     this.queueType = DirectErrorReportQueueType.manual,
     required this.createdAt,
   });
@@ -52,6 +54,7 @@ class DirectErrorReport extends Equatable {
       contextText: contextText,
       filePath: filePath,
       sourceFolder: sourceFolder,
+      libraryVersion: libraryVersion,
       queueType: queueType ?? this.queueType,
       createdAt: createdAt,
     );
@@ -69,6 +72,7 @@ class DirectErrorReport extends Equatable {
         'contextText': contextText,
         'filePath': filePath,
         'sourceFolder': sourceFolder,
+        'libraryVersion': libraryVersion,
         'queueType': queueType.name,
         'createdAt': createdAt.toIso8601String(),
       };
@@ -86,6 +90,7 @@ class DirectErrorReport extends Equatable {
       contextText: (json['contextText'] as String?) ?? '',
       filePath: (json['filePath'] as String?) ?? '',
       sourceFolder: (json['sourceFolder'] as String?) ?? '',
+      libraryVersion: (json['libraryVersion'] as String?) ?? 'unknown',
       queueType: _queueTypeFromJson(json['queueType']),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
@@ -110,6 +115,7 @@ class DirectErrorReport extends Equatable {
         'context_text': contextText,
         'file_path': filePath,
         'source_folder': sourceFolder,
+        'library_version': libraryVersion,
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -126,6 +132,7 @@ class DirectErrorReport extends Equatable {
         contextText,
         filePath,
         sourceFolder,
+        libraryVersion,
         queueType,
         createdAt,
       ];
