@@ -399,15 +399,15 @@ class _CombinedViewState extends State<CombinedView> {
           items: state.visibleLinks
               .map<ctx.ContextMenuEntry<Object>>(
                 (link) => ctx.MenuItem<Object>(
-                    label: FutureBuilder<String>(
-                      future: link.displayReference,
-                      builder: (context, snapshot) {
-                        return Text(
-                          snapshot.data ?? link.fallbackDisplayReference,
-                          textDirection: TextDirection.rtl,
-                        );
-                      },
-                    ),
+                  label: FutureBuilder<String>(
+                    future: link.displayReference,
+                    builder: (context, snapshot) {
+                      return Text(
+                        snapshot.data ?? link.fallbackDisplayReference,
+                        textDirection: TextDirection.rtl,
+                      );
+                    },
+                  ),
                   onSelected: (_) {
                     widget.openBookCallback(
                       TextBookTab(
