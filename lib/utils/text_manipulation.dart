@@ -59,14 +59,41 @@ String removePunctuation(String text) {
         RegExp(r'[.:](\s*)$').firstMatch(processed);
     final lastAllowedPunctuationIndex = lastAllowedPunctuationMatch?.start;
 
-    processed = processed.replaceAllMapped(RegExp(r'[!:;.,?\-—]'), (match) {
-      if (lastAllowedPunctuationIndex != null &&
-          match.start >= lastAllowedPunctuationIndex &&
-          (match.group(0) == '.' || match.group(0) == ':')) {
-        return match.group(0)!;
-      }
+    // 1. הגנה על : ו- . בתוך סוגריים עגולות
+    final List<Map<String, dynamic>> parenSpans = [];
+    final parenRegex = RegExp(r'\(([^)]*)\)');
+    String temp = processed;
+    temp.replaceAllMapped(parenRegex, (match) {
+      parenSpans.add({
+        'start': match.start,
+        'end': match.end,
+      });
       return '';
     });
+
+    // 2. בונה מחרוזת חדשה תוך שמירה על : ו- . בתוך סוגריים
+    final buffer = StringBuffer();
+    for (int i = 0; i < processed.length; i++) {
+      final ch = processed[i];
+      final inParen = parenSpans.any((span) => i >= span['start'] && i < span['end']);
+      if (inParen && (ch == ':' || ch == '.')) {
+        buffer.write(ch);
+        continue;
+      }
+      // שאר הפיסוק - כמו קודם
+      if (RegExp(r'[!:;.,?\-—]').hasMatch(ch)) {
+        // בדיקה לסוף שורה
+        if (lastAllowedPunctuationIndex != null &&
+            i >= lastAllowedPunctuationIndex &&
+            (ch == '.' || ch == ':')) {
+          buffer.write(ch);
+        }
+        // אחרת - מוחק
+        continue;
+      }
+      buffer.write(ch);
+    }
+    processed = buffer.toString();
 
     processed = processed.replaceAllMapped(
       RegExp(r'["״]'),
