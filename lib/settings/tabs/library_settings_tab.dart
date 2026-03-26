@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart'
@@ -18,6 +19,7 @@ import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
+import 'package:otzaria/core/ui_snack.dart';
 
 /// טאב הגדרות ספרייה
 class LibrarySettingsTab extends StatefulWidget {
@@ -79,22 +81,46 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     final hasPath = pathStr != null;
 
     return ListTile(
+      hoverColor: Colors.transparent,
       leading: const Icon(FluentIcons.folder_24_regular),
       title: const Text('מיקום ספריית אוצריא', style: kSettingsTitleStyle),
       subtitle: Text(
         hasPath ? pathStr : 'בחר מיקום עבור מאגר הספרים',
         style: kSettingsSubtitleStyle,
+        textDirection: TextDirection.rtl,
       ),
-      trailing: RecommendedActionButton(
-        text: hasPath ? 'שנה מיקום' : 'בחר מיקום',
-        icon: FluentIcons.folder_24_regular,
-        onPressed: () async {
-          String? path = await FilePicker.platform.getDirectoryPath();
-          if (path != null && context.mounted) {
-            await _showExtractionDialog(context, path, isLibraryPath: true);
-            if (mounted) setState(() {});
-          }
-        },
+      trailing: Wrap(
+        spacing: 8,
+        children: [
+          if (hasPath)
+            NeutralActionButton(
+              text: 'העתק נתיב',
+              icon: FluentIcons.copy_24_regular,
+              onPressed: () async {
+                try {
+                  await Clipboard.setData(ClipboardData(text: pathStr));
+                  if (context.mounted) {
+                    UiSnack.show(UiSnack.textCopied);
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    UiSnack.showError('שגיאה בהעתקה: ${e.toString()}');
+                  }
+                }
+              },
+            ),
+          RecommendedActionButton(
+            text: hasPath ? 'שנה מיקום' : 'בחר מיקום',
+            icon: FluentIcons.folder_24_regular,
+            onPressed: () async {
+              String? path = await FilePicker.platform.getDirectoryPath();
+              if (path != null && context.mounted) {
+                await _showExtractionDialog(context, path, isLibraryPath: true);
+                if (mounted) setState(() {});
+              }
+            },
+          ),
+        ],
       ),
     );
   }
@@ -106,22 +132,46 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     final hasPath = pathStr != null;
 
     return ListTile(
+      hoverColor: Colors.transparent,
       leading: const Icon(FluentIcons.folder_24_regular),
       title: const Text('מיקום ספרי היברובוקס', style: kSettingsTitleStyle),
       subtitle: Text(
         hasPath ? pathStr : 'במידה וקיימים ברשותך ספרים ממאגר זה',
         style: kSettingsSubtitleStyle,
+        textDirection: TextDirection.rtl,
       ),
-      trailing: RecommendedActionButton(
-        text: hasPath ? 'שנה מיקום' : 'בחר מיקום',
-        icon: FluentIcons.folder_24_regular,
-        onPressed: () async {
-          String? path = await FilePicker.platform.getDirectoryPath();
-          if (path != null && context.mounted) {
-            await _showExtractionDialog(context, path, isLibraryPath: false);
-            if (mounted) setState(() {});
-          }
-        },
+      trailing: Wrap(
+        spacing: 8,
+        children: [
+          if (hasPath)
+            NeutralActionButton(
+              text: 'העתק נתיב',
+              icon: FluentIcons.copy_24_regular,
+              onPressed: () async {
+                try {
+                  await Clipboard.setData(ClipboardData(text: pathStr));
+                  if (context.mounted) {
+                    UiSnack.show(UiSnack.textCopied);
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    UiSnack.showError('שגיאה בהעתקה: ${e.toString()}');
+                  }
+                }
+              },
+            ),
+          RecommendedActionButton(
+            text: hasPath ? 'שנה מיקום' : 'בחר מיקום',
+            icon: FluentIcons.folder_24_regular,
+            onPressed: () async {
+              String? path = await FilePicker.platform.getDirectoryPath();
+              if (path != null && context.mounted) {
+                await _showExtractionDialog(context, path, isLibraryPath: false);
+                if (mounted) setState(() {});
+              }
+            },
+          ),
+        ],
       ),
     );
   }
