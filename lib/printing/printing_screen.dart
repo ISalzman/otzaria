@@ -759,59 +759,17 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (!supportsWord) {
       return _ExportFormat.pdf;
     }
-
-    return showDialog<_ExportFormat>(
+    final result = await showTwoActionsDialog(
       context: context,
+      title: 'בחירת סוג קובץ',
+      content: 'בחר פורמט לייצוא',
+      cancelText: 'PDF',
+      confirmText: 'Word',
       barrierDismissible: true,
-      builder: (dialogContext) {
-        return AlertDialog(
-          titlePadding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
-          contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'בחירת סוג קובץ',
-                  textDirection: TextDirection.rtl,
-                  style: Theme.of(dialogContext).textTheme.titleMedium,
-                ),
-              ),
-              IconButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                icon: const Icon(FluentIcons.dismiss_24_regular),
-                tooltip: 'סגור',
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 300,
-            child: Row(
-              children: [
-                Expanded(
-                  child: NeutralActionButton(
-                    text: 'PDF',
-                    onPressed: () {
-                      Navigator.of(dialogContext).pop(_ExportFormat.pdf);
-                    },
-                    icon: FluentIcons.document_pdf_24_regular,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: RecommendedActionButton(
-                    text: 'Word',
-                    onPressed: () {
-                      Navigator.of(dialogContext).pop(_ExportFormat.word);
-                    },
-                    icon: FluentIcons.document_24_regular,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
+
+    if (result == null) return null;
+    return result ? _ExportFormat.word : _ExportFormat.pdf;
   }
 
   String _sanitizeFileName(String value) {

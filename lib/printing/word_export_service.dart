@@ -130,9 +130,9 @@ class WordExportService {
           registry: footnotes,
         );
       case PrintBlockKind.commentaryTitle:
-        return _paragraphXml(_rtlPrefix(text), 'CommentaryHeading');
+        return _paragraphXml(text, 'CommentaryHeading');
       case PrintBlockKind.commentaryGroupTitle:
-        return _paragraphXml(_rtlPrefix(text), 'CommentarySubheading');
+        return _paragraphXml(text, 'CommentarySubheading');
       case PrintBlockKind.commentary:
         return _paragraphXml(text, 'CommentaryBody');
     }
@@ -195,13 +195,11 @@ class WordExportService {
     final jc = switch (styleId) {
       'Title' || 'Header' || 'Footer' => '<w:jc w:val="center"/>',
       'BodyRtl' || 'CommentaryBody' => '<w:jc w:val="both"/>',
-      _ => '',
+      _ => '<w:jc w:val="right"/>',
     };
 
     return '<w:bidi/>$jc<w:rPr><w:rtl/></w:rPr>';
   }
-
-  static String _rtlPrefix(String text) => '\u200F$text';
 
   static String _buildFootnotesXml(List<_WordFootnote> footnotes) {
     final buffer =
