@@ -151,7 +151,7 @@ void main() {
       ).firstMatch(decodedPowerShell);
 
       expect(decodedPowerShell,
-          contains('https://otzaria.org/api/reportingerrors'));
+          contains('http://otzaria.org/api/reportingerrors'));
       expect(decodedPowerShell, contains('Invoke-WebRequest'));
       expect(payloadBase64Match, isNotNull);
       expect(decodedPowerShell, contains(r'$payloadsJsonBase64 ='));

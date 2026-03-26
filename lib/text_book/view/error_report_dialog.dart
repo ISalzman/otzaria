@@ -18,6 +18,7 @@ import 'package:otzaria/widgets/phone_report_tab.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/utils/ref_helper.dart';
+import 'package:otzaria/utils/text_manipulation.dart' as text_utils;
 
 /// נתוני הדיווח שנאספו מתיבת סימון הטקסט + פירוט הטעות שהמשתמש הקליד.
 class ReportedErrorData {
@@ -85,17 +86,39 @@ class ErrorReportHelper {
     int? preferredLineNumber,
   }) {
     if (selectedText.trim().isNotEmpty) {
-      return selectedText;
+      return sanitizeReportText(selectedText);
     }
 
     final hasValidPreferredLine = preferredLineNumber != null &&
         preferredLineNumber >= 0 &&
         preferredLineNumber < content.length;
     if (!hasValidPreferredLine) {
-      return selectedText;
+      return sanitizeReportText(selectedText);
     }
 
-    return content[preferredLineNumber].trim();
+    return sanitizeReportText(content[preferredLineNumber]);
+  }
+
+  /// מנקה טקסט לדיווח: מסיר תגיות HTML ומפענח ישויות HTML נפוצות.
+  static String sanitizeReportText(String text) {
+    if (text.trim().isEmpty) {
+      return '';
+    }
+
+    final withoutTags = text_utils.stripHtmlIfNeeded(text);
+    return _decodeCommonHtmlEntities(withoutTags).trim();
+  }
+
+  static String _decodeCommonHtmlEntities(String input) {
+    return input
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#34;', '"')
+        .replaceAll('&apos;', "'")
+        .replaceAll('&#39;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&amp;', '&');
   }
 
   /// Build 4+4 words context around a selection range within fullText
@@ -301,6 +324,7 @@ class ErrorReportHelper {
     String errorDetails,
     int lineNumber,
     String contextText,
+    String libraryVersion,
     String? senderEmail,
   ) {
     final senderSection = (senderEmail == null || senderEmail.isEmpty)
@@ -320,6 +344,7 @@ class ErrorReportHelper {
     return '''
 שם הספר: $bookTitle
 מיקום: $currentRef
+גרסת ספרייה: $libraryVersion
 שם הקובץ: ${bookDetails['שם הקובץ']}
 נתיב הקובץ: ${bookDetails['נתיב הקובץ']}
 תיקיית המקור: ${bookDetails['תיקיית המקור']}
@@ -401,7 +426,10 @@ $detailsSection
     required Map<String, String> bookDetails,
     required int lineNumber,
     required String contextText,
+    required String libraryVersion,
   }) {
+    final normalizedLibraryVersion =
+        libraryVersion.trim().isEmpty ? 'unknown' : libraryVersion.trim();
     return DirectErrorReport(
       id: '${DateTime.now().microsecondsSinceEpoch}-${widgetHash(bookTitle, currentRef, reportData.selectedText)}',
       senderEmail: senderEmail,
@@ -409,11 +437,12 @@ $detailsSection
       bookTitle: bookTitle,
       currentRef: currentRef,
       lineNumber: lineNumber,
-      selectedText: reportData.selectedText,
-      errorDetails: reportData.errorDetails,
+      selectedText: sanitizeReportText(reportData.selectedText),
+      errorDetails: reportData.errorDetails.trim(),
       contextText: contextText,
       filePath: bookDetails['נתיב הקובץ'] ?? '',
       sourceFolder: bookDetails['תיקיית המקור'] ?? '',
+      libraryVersion: normalizedLibraryVersion,
       createdAt: DateTime.now(),
     );
   }
@@ -541,6 +570,7 @@ $detailsSection
     Map<String, String> bookDetails,
     int lineNumber,
     String contextText,
+    String libraryVersion,
   ) async {
     final emailBody = buildEmailBody(
       bookTitle,
@@ -550,6 +580,7 @@ $detailsSection
       reportData.errorDetails,
       lineNumber,
       contextText,
+      libraryVersion,
       null,
     );
 
@@ -618,6 +649,7 @@ $detailsSection
         bookDetails: bookDetails,
         lineNumber: lineNumber,
         contextText: contextText,
+        libraryVersion: libraryVersion,
       );
 
       final reportService = DirectErrorReportService();
@@ -700,18 +732,25 @@ $detailsSection
     if (result == null || !context.mounted) return;
 
     try {
+      final libraryVersion = await DataCollectionService().readLibraryVersion();
+      if (!context.mounted) return;
+
       if (result.data is ReportedErrorData) {
         // === דיווח רגיל (מייל או שמירה) ===
         final errorData = result.data as ReportedErrorData;
+        final sanitizedErrorData = ReportedErrorData(
+          selectedText: sanitizeReportText(errorData.selectedText),
+          errorDetails: errorData.errorDetails.trim(),
+        );
 
         final selectionResolution = resolveSelectionContext(
           content: effectiveContent,
-          selectedText: errorData.selectedText,
+          selectedText: sanitizedErrorData.selectedText,
           preferredLineNumber: currentLineNumber,
           wordsBefore: 4,
           wordsAfter: 4,
         );
-        final contextText = selectionResolution.contextText;
+        final contextText = sanitizeReportText(selectionResolution.contextText);
 
         // קבלת פרטי הספר
         final currentRef = await refFromIndex(
@@ -728,12 +767,13 @@ $detailsSection
           await handleRegularReportAction(
             context,
             result.action,
-            errorData,
+            sanitizedErrorData,
             bookTitle,
             currentRef,
             bookDetails,
             currentLineNumber + 1,
             contextText,
+            libraryVersion,
           );
         } else if (result.action == ErrorReportAction.sendDirect) {
           if (!context.mounted) return;
@@ -745,12 +785,13 @@ $detailsSection
 
           final directReport = buildDirectReport(
             senderEmail: senderEmail,
-            reportData: errorData,
+            reportData: sanitizedErrorData,
             bookTitle: bookTitle,
             currentRef: currentRef,
             bookDetails: bookDetails,
             lineNumber: currentLineNumber + 1,
             contextText: contextText,
+            libraryVersion: libraryVersion,
           );
 
           await handleDirectReport(context, directReport);
