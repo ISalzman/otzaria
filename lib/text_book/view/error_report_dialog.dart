@@ -2,6 +2,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:html/parser.dart' as html_parser;
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/direct_error_report.dart';
@@ -106,19 +107,8 @@ class ErrorReportHelper {
     }
 
     final withoutTags = text_utils.stripHtmlIfNeeded(text);
-    return _decodeCommonHtmlEntities(withoutTags).trim();
-  }
-
-  static String _decodeCommonHtmlEntities(String input) {
-    return input
-        .replaceAll('&nbsp;', ' ')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#34;', '"')
-        .replaceAll('&apos;', "'")
-        .replaceAll('&#39;', "'")
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&amp;', '&');
+    final decoded = html_parser.parseFragment(withoutTags).text ?? '';
+    return decoded.replaceAll('\u00A0', ' ').trim();
   }
 
   /// Build 4+4 words context around a selection range within fullText
@@ -437,8 +427,8 @@ $detailsSection
       bookTitle: bookTitle,
       currentRef: currentRef,
       lineNumber: lineNumber,
-      selectedText: sanitizeReportText(reportData.selectedText),
-      errorDetails: reportData.errorDetails.trim(),
+      selectedText: reportData.selectedText,
+      errorDetails: reportData.errorDetails,
       contextText: contextText,
       filePath: bookDetails['נתיב הקובץ'] ?? '',
       sourceFolder: bookDetails['תיקיית המקור'] ?? '',
