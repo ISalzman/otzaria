@@ -229,6 +229,31 @@ void main() {
 
       await _closeBlocAndAllowDeferredDispose(bloc);
     });
+
+    test('ממקד טאב חיפוש קיים לפי dedupeKey גם בלי מזהה ספר יציב', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final existingTab = TextBookTab(
+        book: TextBook(title: 'ספר זהה'),
+        index: 12,
+        dedupeKey: 'search:text|ספר זהה|ספר זהה, פרק א|12',
+      );
+
+      bloc.add(AddTab(existingTab));
+      await Future<void>.delayed(Duration.zero);
+
+      final targetTab = TextBookTab(
+        book: TextBook(title: 'ספר זהה'),
+        index: 12,
+        dedupeKey: 'search:text|ספר זהה|ספר זהה, פרק א|12',
+      );
+      bloc.add(OpenOrFocusTab(targetTab, targetTitle: 'ספר זהה, פרק א'));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(bloc.state.tabs, hasLength(1));
+      expect(bloc.state.currentTabIndex, 0);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
   });
 }
 

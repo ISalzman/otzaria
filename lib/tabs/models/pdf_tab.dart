@@ -77,7 +77,8 @@ class PdfBookTab extends OpenedTab {
     this.pdfSearchMatches,
     this.pdfSearchCurrentMatchIndex,
     bool isPinned = false,
-  }) : super(book.title, isPinned: isPinned) {
+    String? dedupeKey,
+  }) : super(book.title, isPinned: isPinned, dedupeKey: dedupeKey) {
     debugPrint(
         '🔧 PdfBookTab created: book=${book.title}, pageNumber=$pageNumber');
     showLeftPane = ValueNotifier<bool>(openLeftPane);

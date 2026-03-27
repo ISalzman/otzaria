@@ -254,6 +254,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     OpenedTab targetTab,
     String? normalizedTargetTitle,
   ) async {
+    if (_hasMatchingDedupeKey(openTab, targetTab)) {
+      return true;
+    }
+
     if (!_isSameBook(openTab, targetTab)) {
       return false;
     }
@@ -265,6 +269,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       openTab: openTab,
       targetTab: targetTab,
     );
+  }
+
+  bool _hasMatchingDedupeKey(OpenedTab openTab, OpenedTab targetTab) {
+    final openKey = openTab.dedupeKey;
+    final targetKey = targetTab.dedupeKey;
+    return openKey != null && targetKey != null && openKey == targetKey;
   }
 
   bool _isSameBook(OpenedTab openTab, OpenedTab targetTab) {

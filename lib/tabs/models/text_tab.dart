@@ -71,7 +71,8 @@ class TextBookTab extends OpenedTab {
     bool? splitedView,
     bool? showPageShapeView,
     bool isPinned = false,
-  }) : super(book.title, isPinned: isPinned) {
+    String? dedupeKey,
+  }) : super(book.title, isPinned: isPinned, dedupeKey: dedupeKey) {
     debugPrint('DEBUG: TextBookTab נוצר עם אינדקס: $index לספר: ${book.title}');
 
     // קביעת ברירת המחדל של splitedView מההגדרות אם לא סופק
