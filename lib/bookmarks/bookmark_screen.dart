@@ -18,7 +18,12 @@ class BookmarkView extends StatelessWidget {
   const BookmarkView({super.key});
 
   void _openBook(
-      BuildContext context, Book book, int index, List<String>? commentators) {
+    BuildContext context,
+    Book book,
+    int index,
+    List<String>? commentators, {
+    String? targetTitle,
+  }) {
     final tab = OpenedTab.fromBook(
       book,
       index,
@@ -27,7 +32,9 @@ class BookmarkView extends StatelessWidget {
           (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
     );
 
-    context.read<TabsBloc>().add(AddTab(tab));
+    context.read<TabsBloc>().add(
+          OpenOrFocusTab(tab, targetTitle: targetTitle),
+        );
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.reading));
     // Close the dialog if this view is displayed inside one
     if (Navigator.of(context).canPop()) {
@@ -41,8 +48,13 @@ class BookmarkView extends StatelessWidget {
       builder: (context, state) {
         return ItemsListView(
           items: state.bookmarks,
-          onItemTap: (ctx, item, originalIndex) =>
-              _openBook(ctx, item.book, item.index, item.commentatorsToShow),
+          onItemTap: (ctx, item, originalIndex) => _openBook(
+            ctx,
+            item.book,
+            item.index,
+            item.commentatorsToShow,
+            targetTitle: item.ref,
+          ),
           onDelete: (ctx, originalIndex) {
             ctx.read<BookmarkBloc>().removeBookmark(originalIndex);
             UiSnack.show('הסימניה נמחקה');
