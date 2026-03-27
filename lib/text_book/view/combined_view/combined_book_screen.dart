@@ -28,6 +28,7 @@ import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/selection/text_selection_manager.dart';
 import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
+import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 
 class CombinedView extends StatefulWidget {
@@ -584,7 +585,7 @@ class _CombinedViewState extends State<CombinedView> {
       );
     }
 
-    final combinedHtml = finalText.split('\n\n').map(_formatTextAsHtml).join();
+    final combinedHtml = _formatTextAsHtml(finalText);
 
     final item = DataWriterItem();
     item.add(Formats.plainText(finalText));
@@ -596,7 +597,6 @@ class _CombinedViewState extends State<CombinedView> {
   /// עיצוב טקסט כ-HTML עם הגדרות הגופן הנוכחיות
   String _formatTextAsHtml(String text) {
     final settingsState = context.read<SettingsBloc>().state;
-    // ממיר \n ל-<br> ב-HTML
     return CopyUtils.buildStyledHtml(
       htmlText: text,
       fontFamily: settingsState.fontFamily,
@@ -745,6 +745,38 @@ class _CombinedViewState extends State<CombinedView> {
     widget.onOpenPersonalNotes?.call();
   }
 
+  RenderSettings _selectionRenderSettings(
+    TextBookLoaded state,
+    SettingsState settingsState,
+  ) {
+    return RenderSettings(
+      removeNikud: state.removeNikud,
+      removePunctuation: state.removePunctuation,
+      removeTeamim: !settingsState.showTeamim,
+      replaceHolyNames: settingsState.replaceHolyNames,
+      searchText: state.searchText,
+      fontSize: widget.textSize,
+      fontFamily: settingsState.fontFamily,
+      lineHeight: settingsState.lineHeight,
+    );
+  }
+
+  List<String> _buildRenderedVisibleLines(
+    TextBookLoaded state,
+    SettingsState settingsState,
+  ) {
+    final renderSettings = _selectionRenderSettings(state, settingsState);
+    return state.visibleIndices
+        .where((idx) => idx >= 0 && idx < widget.data.length)
+        .map(
+          (idx) => renderSelectionLine(
+            rawText: widget.data[idx],
+            settings: renderSettings,
+          ),
+        )
+        .toList();
+  }
+
   Widget buildKeyboardListener() {
     return BlocBuilder<TextBookBloc, TextBookState>(
       bloc: context.read<TextBookBloc>(),
@@ -770,8 +802,6 @@ class _CombinedViewState extends State<CombinedView> {
                   _selectionManager.exitSelectionMode();
                   return;
                 }
-                final selectedPlainText = plain!;
-
                 // כניסה למצב בחירה כשיש טקסט נבחר
                 if (!_selectionManager.isInSelectionMode) {
                   // שימוש באינדקס הראשון הנראה במקום 0
@@ -793,20 +823,19 @@ class _CombinedViewState extends State<CombinedView> {
                 var fixedPlain = plain;
 
                 if (state is TextBookLoaded) {
+                  final settingsState = context.read<SettingsBloc>().state;
                   // מקבל את השורה הראשונה הנראית
                   final baseIndex = state.visibleIndices.isNotEmpty
                       ? state.visibleIndices.first
                       : 0;
 
-                  // בונה את הטקסט הנראה
-                  final visibleText = state.visibleIndices
-                      .map((idx) =>
-                          widget.data[idx].replaceAll(RegExp(r'<[^>]*>'), ''))
-                      .join('\n');
+                  final visibleLines =
+                      _buildRenderedVisibleLines(state, settingsState);
+                  final visibleText = visibleLines.join('\n');
 
-                  fixedPlain = _restoreNewlinesFromVisibleText(
-                    selectedPlainText,
-                    visibleText,
+                  fixedPlain = restoreSelectedTextLineBreaks(
+                    selectedText: plain!,
+                    visibleLines: visibleLines,
                   );
 
                   // מוצא את המיקום של הטקסט המודגש
@@ -942,32 +971,6 @@ class _CombinedViewState extends State<CombinedView> {
         );
       },
     );
-  }
-
-  String _restoreNewlinesFromVisibleText(String plain, String visibleText) {
-    if (plain.contains('\n')) return plain;
-
-    final normalizedVisible = visibleText.replaceAll('\n', '');
-    final normalizedPlain = plain.replaceAll('\n', '');
-
-    if (normalizedPlain.isEmpty) return plain;
-
-    final startNon = normalizedVisible.indexOf(normalizedPlain);
-    if (startNon < 0) return plain;
-
-    final nonNewlineToVisible = <int>[];
-    for (var i = 0; i < visibleText.length; i++) {
-      if (visibleText[i] != '\n') {
-        nonNewlineToVisible.add(i);
-      }
-    }
-
-    final endNon = startNon + normalizedPlain.length - 1;
-    if (endNon >= nonNewlineToVisible.length) return plain;
-
-    final startVisible = nonNewlineToVisible[startNon];
-    final endVisible = nonNewlineToVisible[endNon];
-    return visibleText.substring(startVisible, endVisible + 1);
   }
 
   Widget buildOuterList(
