@@ -9,6 +9,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
+import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/books.dart';
@@ -657,10 +658,12 @@ $textWithBreaks
                       contextMenuBuilder: (context, selectableRegionState) =>
                           const SizedBox.shrink(),
                       onSelectionChanged: (selection) {
-                        // שמירת הטקסט הנבחר
-                        if (selection != null) {
+                        final selectedText = selection?.plainText;
+                        // שומרים רק בחירה לא ריקה כדי שפעולות תפריט ימשיכו
+                        // לעבוד על הטקסט האחרון שהמשתמש סימן.
+                        if (shouldPersistSelectedText(selectedText)) {
                           setState(() {
-                            _savedSelectedText = selection.plainText;
+                            _savedSelectedText = selectedText;
                           });
                         }
                       },

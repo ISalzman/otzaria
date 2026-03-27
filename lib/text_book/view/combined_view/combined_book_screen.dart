@@ -27,6 +27,7 @@ import 'package:otzaria/widgets/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/selection/text_selection_manager.dart';
 import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
+import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 
 class CombinedView extends StatefulWidget {
@@ -764,15 +765,12 @@ class _CombinedViewState extends State<CombinedView> {
               },
               onSelectionChanged: (selection) {
                 final plain = selection?.plainText;
-                if (plain == null || plain.trim().isEmpty) {
+                if (!shouldPersistSelectedText(plain)) {
                   // אם הבחירה נוקתה, יוצאים ממצב בחירה
                   _selectionManager.exitSelectionMode();
-                  _savedSelectedText.value = null;
-                  _savedSelectedIndex.value = null;
-                  _currentSelectedIndex.value = null;
-                  widget.onSelectedTextChanged?.call(null);
                   return;
                 }
+                final selectedPlainText = plain!;
 
                 // כניסה למצב בחירה כשיש טקסט נבחר
                 if (!_selectionManager.isInSelectionMode) {
@@ -806,8 +804,10 @@ class _CombinedViewState extends State<CombinedView> {
                           widget.data[idx].replaceAll(RegExp(r'<[^>]*>'), ''))
                       .join('\n');
 
-                  fixedPlain =
-                      _restoreNewlinesFromVisibleText(plain, visibleText);
+                  fixedPlain = _restoreNewlinesFromVisibleText(
+                    selectedPlainText,
+                    visibleText,
+                  );
 
                   // מוצא את המיקום של הטקסט המודגש
                   final selectionStart = visibleText.indexOf(fixedPlain);

@@ -15,6 +15,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
+import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -71,6 +72,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(openedTab, 1);
+  });
+
+  test('שומר בחירה אחרונה רק כאשר הטקסט הנבחר אינו ריק', () {
+    expect(shouldPersistSelectedText('טקסט נבחר'), isTrue);
+    expect(shouldPersistSelectedText('  טקסט עם רווחים  '), isTrue);
+    expect(shouldPersistSelectedText(''), isFalse);
+    expect(shouldPersistSelectedText('   '), isFalse);
+    expect(shouldPersistSelectedText(null), isFalse);
   });
 }
 
