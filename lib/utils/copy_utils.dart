@@ -112,6 +112,20 @@ class CopyUtils {
     return result;
   }
 
+  /// בונה HTML מעוצב עבור טקסט שמועתק ללוח.
+  static String buildStyledHtml({
+    required String htmlText,
+    required String fontFamily,
+    required double fontSize,
+  }) {
+    final textWithBreaks = htmlText.replaceAll('\n', '<br>');
+    return '''
+<div style="font-family: $fontFamily; font-size: ${fontSize}px; text-align: justify; direction: rtl;">
+$textWithBreaks
+</div>
+''';
+  }
+
   /// העתקת טקסט מעוצב ללוח עם HTML
   /// מטפל בהמרת \n ל-<br>, עיצוב HTML עם גופן וגודל, וכתיבה ללוח עם חיווי באפליקציה
   static Future<void> copyStyledToClipboard({
@@ -127,13 +141,11 @@ class CopyUtils {
         return;
       }
 
-      // המרת \n ל-<br> והוספת עיצוב HTML
-      final textWithBreaks = htmlText.replaceAll('\n', '<br>');
-      final htmlContent = '''
-<div style="font-family: $fontFamily; font-size: ${fontSize}px; text-align: justify; direction: rtl;">
-$textWithBreaks
-</div>
-''';
+      final htmlContent = buildStyledHtml(
+        htmlText: htmlText,
+        fontFamily: fontFamily,
+        fontSize: fontSize,
+      );
 
       final item = DataWriterItem();
       item.add(Formats.plainText(plainText)); // טקסט רגיל כגיבוי

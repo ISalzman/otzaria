@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
@@ -15,6 +17,21 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+
+@visibleForTesting
+TextBook? findUniqueTextBookForSearchResult(Library? library, String title) {
+  if (library == null) {
+    return null;
+  }
+
+  final matches = library
+      .getAllBooks()
+      .whereType<TextBook>()
+      .where((book) => book.title == title)
+      .toList(growable: false);
+
+  return matches.length == 1 ? matches.first : null;
+}
 
 class TantivySearchResults extends StatefulWidget {
   final SearchingTab tab;
@@ -30,6 +47,15 @@ class TantivySearchResults extends StatefulWidget {
 class _TantivySearchResultsState extends State<TantivySearchResults> {
   static const int _maxUnbrokenWordLength = 12;
   final ScrollController _scrollController = ScrollController();
+
+  TextBook? _resolveUniqueTextBook(String title) {
+    try {
+      final libraryState = context.read<LibraryBloc>().state;
+      return findUniqueTextBookForSearchResult(libraryState.library, title);
+    } catch (_) {
+      return null;
+    }
+  }
 
   String _formatTitleForWrapping(String title) {
     return title
@@ -239,27 +265,36 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                           ),
                         );
                   } else {
-                    context.read<TabsBloc>().add(
-                          OpenOrFocusTab(
-                            TextBookTab(
-                                book: TextBook(
-                                  title: result.title,
-                                ),
-                                index: result.segment.toInt(),
-                                searchText: rawQuery,
-                                searchOptions: widget.tab.searchOptions,
-                                alternativeWords: widget.tab.alternativeWords,
-                                spacingValues: widget.tab.spacingValues,
-                                searchMode: inBookMode,
-                                openLeftPane: (Settings.getValue<bool>(
-                                            'key-pin-sidebar') ??
-                                        false) ||
-                                    (Settings.getValue<bool>(
-                                            'key-default-sidebar-open') ??
-                                        false)),
-                            targetTitle: result.reference,
+                    final resolvedBook = _resolveUniqueTextBook(result.title);
+                    final textTab = TextBookTab(
+                      book: resolvedBook ??
+                          TextBook(
+                            title: result.title,
                           ),
-                        );
+                      index: result.segment.toInt(),
+                      searchText: rawQuery,
+                      searchOptions: widget.tab.searchOptions,
+                      alternativeWords: widget.tab.alternativeWords,
+                      spacingValues: widget.tab.spacingValues,
+                      searchMode: inBookMode,
+                      openLeftPane:
+                          (Settings.getValue<bool>('key-pin-sidebar') ??
+                                  false) ||
+                              (Settings.getValue<bool>(
+                                      'key-default-sidebar-open') ??
+                                  false),
+                    );
+
+                    if (resolvedBook != null) {
+                      context.read<TabsBloc>().add(
+                            OpenOrFocusTab(
+                              textTab,
+                              targetTitle: result.reference,
+                            ),
+                          );
+                    } else {
+                      context.read<TabsBloc>().add(AddTab(textTab));
+                    }
                   }
                 },
                 borderRadius: BorderRadius.circular(12),

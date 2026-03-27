@@ -269,7 +269,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   bool _isSameBook(OpenedTab openTab, OpenedTab targetTab) {
     if (openTab is TextBookTab && targetTab is TextBookTab) {
-      return _textBookIdentity(openTab) == _textBookIdentity(targetTab);
+      final openIdentity = _textBookIdentity(openTab);
+      final targetIdentity = _textBookIdentity(targetTab);
+      if (openIdentity == null || targetIdentity == null) {
+        return false;
+      }
+      return openIdentity == targetIdentity;
     }
 
     if (openTab is PdfBookTab && targetTab is PdfBookTab) {
@@ -279,10 +284,15 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     return false;
   }
 
-  String _textBookIdentity(TextBookTab tab) {
+  String? _textBookIdentity(TextBookTab tab) {
     final categoryId = tab.book.categoryId;
     if (categoryId != null) {
       return 'category:$categoryId';
+    }
+
+    final externalLibraryId = tab.book.externalLibraryId;
+    if (externalLibraryId != null && externalLibraryId.isNotEmpty) {
+      return 'external:$externalLibraryId';
     }
 
     final filePath = tab.book.filePath;
@@ -290,7 +300,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       return 'file:$filePath';
     }
 
-    return 'title:${tab.book.title}';
+    return null;
   }
 
   Future<String?> _resolveTabLocationTitle(
@@ -330,7 +340,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       final ref = await refFromIndex(tab.index, tab.book.tableOfContents);
       return ref.trim().isEmpty ? null : ref;
     } catch (_) {
-      return 'index:${tab.index}';
+      return null;
     }
   }
 
@@ -350,7 +360,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       // Fall back to page-based comparison when outline is unavailable.
     }
 
-    return 'page:${tab.pageNumber}';
+    return null;
   }
 
   String? _normalizeLocationTitle(String bookTitle, String? title) {

@@ -283,10 +283,19 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
         widget.closeLeftPaneCallback();
       }
     } else {
-      context.read<TabsBloc>().add(AddTab(TextBookTab(
-            book: TextBook(title: link.path2),
-            index: link.index2,
-          )));
+      context.read<TabsBloc>().add(
+            OpenOrFocusTab(
+              TextBookTab(
+                book: TextBook(
+                  title: link.path2,
+                  categoryId: link.targetCategoryId,
+                  fileType: link.targetFileType,
+                  filePath: link.path2,
+                ),
+                index: link.index2,
+              ),
+            ),
+          );
       context
           .read<NavigationBloc>()
           .add(const NavigateToScreen(Screen.reading));
