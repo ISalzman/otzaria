@@ -9,7 +9,6 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
-import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/books.dart';
@@ -26,6 +25,7 @@ import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 
@@ -348,6 +348,117 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       level: 'SCROLL',
     );
     return true;
+  }
+
+  Future<bool> _resolveSelectionRemoveNikud(
+    TextBookLoaded state,
+    SettingsState settingsState,
+  ) {
+    if (widget.isMainText) {
+      return Future.value(state.removeNikud);
+    }
+
+    final targetTitle = widget.bookTitle;
+    if (targetTitle == null) {
+      return Future.value(settingsState.defaultRemoveNikud);
+    }
+
+    return _removeNikudCache.putIfAbsent(
+      '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}',
+      () => resolveRemoveNikudForBook(
+        title: targetTitle,
+        defaultRemoveNikud: settingsState.defaultRemoveNikud,
+        removeNikudFromTanach: settingsState.removeNikudFromTanach,
+      ),
+    );
+  }
+
+  RenderSettings _selectionRenderSettings({
+    required TextBookLoaded state,
+    required SettingsState settingsState,
+    required bool removeNikud,
+  }) {
+    return RenderSettings(
+      removeNikud: removeNikud,
+      removePunctuation: state.removePunctuation,
+      removeTeamim: !settingsState.showTeamim,
+      replaceHolyNames: settingsState.replaceHolyNames,
+      searchText: widget.isMainText ? state.searchText : '',
+      fontSize: widget.fontSize,
+      fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+      lineHeight: settingsState.lineHeight,
+    );
+  }
+
+  List<int> _selectionSourceIndices() {
+    final visibleIndices = _positionsListener.itemPositions.value
+        .map((position) => position.index)
+        .toSet()
+        .toList()
+      ..sort();
+
+    if (visibleIndices.isNotEmpty) {
+      return visibleIndices;
+    }
+
+    return List<int>.generate(widget.content.length, (index) => index);
+  }
+
+  Future<void> _handleSelectionChange(String? plainText) async {
+    if (plainText == null || plainText.trim().isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _savedSelectedText = null;
+      });
+      return;
+    }
+
+    final textBookState = context.read<TextBookBloc>().state;
+    if (textBookState is! TextBookLoaded) {
+      if (!mounted) return;
+      setState(() {
+        _savedSelectedText = plainText;
+      });
+      return;
+    }
+
+    final settingsState = context.read<SettingsBloc>().state;
+    final removeNikud =
+        await _resolveSelectionRemoveNikud(textBookState, settingsState);
+    final sourceIndices = _selectionSourceIndices();
+    final renderSettings = _selectionRenderSettings(
+      state: textBookState,
+      settingsState: settingsState,
+      removeNikud: removeNikud,
+    );
+    final renderedLines = sourceIndices
+        .where((index) => index >= 0 && index < widget.content.length)
+        .map(
+          (index) => renderSelectionLine(
+            rawText: widget.content[index],
+            settings: renderSettings,
+          ),
+        )
+        .toList();
+
+    final restoredText = restoreSelectedTextLineBreaks(
+      selectedText: plainText,
+      visibleLines: renderedLines,
+    );
+
+    int? selectedIndex = _savedSelectedIndex;
+    final visibleText = renderedLines.join('\n');
+    final selectionStart = visibleText.indexOf(restoredText);
+    if (selectionStart >= 0 && sourceIndices.isNotEmpty) {
+      final before = visibleText.substring(0, selectionStart);
+      selectedIndex = sourceIndices.first + '\n'.allMatches(before).length;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _savedSelectedText = restoredText;
+      _savedSelectedIndex = selectedIndex;
+    });
   }
 
   /// טיפול באירועי מקלדת - חיצים לניווט
@@ -775,12 +886,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   /// עיצוב טקסט כ-HTML עם הגדרות הגופן הנוכחיות
   String _formatTextAsHtml(String text) {
     final settingsState = context.read<SettingsBloc>().state;
-    final textWithBreaks = text.replaceAll('\n', '<br>');
-    return '''
-<div style="font-family: ${widget.fontFamily ?? settingsState.fontFamily}; font-size: ${widget.fontSize}px; text-align: justify; direction: rtl;">
-$textWithBreaks
-</div>
-''';
+    return CopyUtils.buildStyledHtml(
+      htmlText: text,
+      fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+      fontSize: widget.fontSize,
+    );
   }
 
   /// העתקת טקסט מעוצב
@@ -934,22 +1044,7 @@ $textWithBreaks
                       contextMenuBuilder: (context, selectableRegionState) =>
                           const SizedBox.shrink(),
                       onSelectionChanged: (selection) {
-                        final selectedText = selection?.plainText;
-                        // שומרים רק בחירה לא ריקה כדי שפעולות תפריט ימשיכו
-                        // לעבוד על הטקסט האחרון שהמשתמש סימן.
-                        if (shouldPersistSelectedText(selectedText)) {
-                          PageShapeDebugLogger.log(
-                            'SimpleTextViewer',
-                            'עודכנה בחירת טקסט',
-                            scope: _debugScope,
-                            data: {
-                              'selectedTextLength': selectedText?.length ?? 0,
-                            },
-                          );
-                          setState(() {
-                            _savedSelectedText = selectedText;
-                          });
-                        }
+                        _handleSelectionChange(selection?.plainText);
                       },
                       child: widget.useInternalScroll
                           ? ScrollablePositionedList.builder(

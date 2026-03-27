@@ -112,22 +112,27 @@ class CopyUtils {
     return result;
   }
 
-  /// בונה HTML מעוצב עבור טקסט שמועתק ללוח.
+  /// יוצר HTML מעוצב להעתקה, עם בלוק נפרד לכל שורה כדי לשמור Enter רגיל.
   static String buildStyledHtml({
     required String htmlText,
     required String fontFamily,
     required double fontSize,
   }) {
-    final textWithBreaks = htmlText.replaceAll('\n', '<br>');
+    final normalizedText = htmlText.replaceAll('\r\n', '\n');
+    final lines = normalizedText.split('\n');
+    final htmlLines = lines
+        .map((line) => line.isEmpty ? '<div><br></div>' : '<div>$line</div>')
+        .join();
+
     return '''
 <div style="font-family: $fontFamily; font-size: ${fontSize}px; text-align: justify; direction: rtl;">
-$textWithBreaks
+$htmlLines
 </div>
 ''';
   }
 
   /// העתקת טקסט מעוצב ללוח עם HTML
-  /// מטפל בהמרת \n ל-<br>, עיצוב HTML עם גופן וגודל, וכתיבה ללוח עם חיווי באפליקציה
+  /// מטפל בעיצוב HTML עם גופן וגודל, וכתיבה ללוח עם חיווי באפליקציה.
   static Future<void> copyStyledToClipboard({
     required String plainText,
     required String htmlText,
