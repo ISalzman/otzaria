@@ -1313,6 +1313,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   List<Link> _relevantLinks = [];
   int? _lastSyncedIndex; // האינדקס האחרון שסונכרן
   int? _clickedVisibleFirst; // visibleIndices.first בעת הלחיצה האחרונה
+  List<Link>? _lastLinks; // לדידוב: מסנן מחדש רק כשהקישורים השתנו
   StreamSubscription<TextBookState>? _blocSubscription;
   Set<int> _highlightedIndices = {}; // אינדקסים להדגשה
   bool _highlightEnabled = false;
@@ -1447,7 +1448,12 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           },
         );
         final refreshStopwatch = Stopwatch()..start();
-        _refreshRelevantLinks(state);
+        // מסנן מחדש רק כשהקישורים עצמם השתנו (UpdateLinks),
+        // ולא בכל גלילה (UpdateVisibleIndecies / UpdateSelectedIndex)
+        if (!identical(_lastLinks, state.links)) {
+          _lastLinks = state.links;
+          _refreshRelevantLinks(state);
+        }
         final refreshElapsedMs = refreshStopwatch.elapsedMilliseconds;
         final syncStopwatch = Stopwatch()..start();
         _syncWithMainText(state);
