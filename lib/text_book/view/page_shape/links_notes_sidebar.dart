@@ -3,6 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 
 /// חלונית פנימית עבור צורת הדף שמציגה קישורים והערות אישיות.
 class LinksNotesSidebar extends StatefulWidget {
@@ -31,18 +32,41 @@ class LinksNotesSidebar extends StatefulWidget {
 
 class _LinksNotesSidebarState extends State<LinksNotesSidebar>
     with SingleTickerProviderStateMixin {
+  late final String _debugScope;
   late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _debugScope = PageShapeDebugLogger.newScope(
+      'links-notes-sidebar',
+      label: widget.bookId,
+    );
     _tabController = TabController(
       length: 2,
       vsync: this,
       initialIndex: widget.initialTabIndex.clamp(0, 1),
     );
+    PageShapeDebugLogger.log(
+      'LinksNotesSidebar',
+      'initState',
+      scope: _debugScope,
+      data: {
+        'bookId': widget.bookId,
+        'initialTabIndex': widget.initialTabIndex,
+      },
+      level: 'LIFECYCLE',
+    );
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
+        PageShapeDebugLogger.log(
+          'LinksNotesSidebar',
+          'התחלף טאב פנימי בסיידבר',
+          scope: _debugScope,
+          data: {
+            'index': _tabController.index,
+          },
+        );
         widget.onTabChanged?.call(_tabController.index);
       }
     });
@@ -52,20 +76,55 @@ class _LinksNotesSidebarState extends State<LinksNotesSidebar>
   void didUpdateWidget(covariant LinksNotesSidebar oldWidget) {
     super.didUpdateWidget(oldWidget);
     final targetIndex = widget.initialTabIndex.clamp(0, 1);
+    PageShapeDebugLogger.log(
+      'LinksNotesSidebar',
+      'didUpdateWidget',
+      scope: _debugScope,
+      data: {
+        'oldInitialTabIndex': oldWidget.initialTabIndex,
+        'newInitialTabIndex': widget.initialTabIndex,
+        'currentControllerIndex': _tabController.index,
+      },
+      level: 'LIFECYCLE',
+    );
     if (targetIndex != oldWidget.initialTabIndex &&
         _tabController.index != targetIndex) {
+      PageShapeDebugLogger.log(
+        'LinksNotesSidebar',
+        'מתבצע animateTo לטאב חדש',
+        scope: _debugScope,
+        data: {
+          'targetIndex': targetIndex,
+        },
+      );
       _tabController.animateTo(targetIndex);
     }
   }
 
   @override
   void dispose() {
+    PageShapeDebugLogger.log(
+      'LinksNotesSidebar',
+      'dispose',
+      scope: _debugScope,
+      level: 'END',
+    );
     _tabController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    PageShapeDebugLogger.log(
+      'LinksNotesSidebar',
+      'build',
+      scope: _debugScope,
+      data: {
+        'controllerIndex': _tabController.index,
+        'bookId': widget.bookId,
+      },
+      level: 'BUILD',
+    );
     final colorScheme = Theme.of(context).colorScheme;
 
     return Material(

@@ -35,6 +35,7 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
 const double _kCommentaryPaneWidthFactor = 0.17;
@@ -60,6 +61,9 @@ class PageShapeScreen extends StatefulWidget {
 }
 
 class _PageShapeScreenState extends State<PageShapeScreen> {
+  late final String _debugScope;
+  int _buildCount = 0;
+  int _dependencyChangeCount = 0;
   String? _leftCommentator;
   String? _rightCommentator;
   String? _bottomCommentator;
@@ -85,12 +89,23 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _dependencyChangeCount++;
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'didChangeDependencies',
+      scope: _debugScope,
+      data: {
+        'count': _dependencyChangeCount,
+      },
+      level: 'LIFECYCLE',
+    );
     _loadConfiguration();
     _loadSizes();
   }
 
   /// בדיקה האם מפרש ברירת המחדל קיים, ואם לא – הסתרת הטור כברירת מחדל
-  void _hideColumnIfDefaultMissing(Map<String, String?> commentators, List<String> availableCommentators) {
+  void _hideColumnIfDefaultMissing(
+      Map<String, String?> commentators, List<String> availableCommentators) {
     final newColumnVisibility = Map<String, bool>.from(_columnVisibility);
     for (final entry in commentators.entries) {
       final col = entry.key;
@@ -104,10 +119,27 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     setState(() {
       _columnVisibility = newColumnVisibility;
     });
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'עודכנה נראות טורים בגלל מפרש ברירת מחדל חסר',
+      scope: _debugScope,
+      data: {
+        'commentators': commentators,
+        'availableCommentatorsCount': availableCommentators.length,
+        'columnVisibility': _columnVisibility,
+      },
+    );
   }
 
   /// טעינת גדלים שמורים או חישוב ברירות מחדל
   void _loadSizes() {
+    final trace = PageShapeDebugLogger.start(
+      'PageShapeScreen',
+      'טעינת גדלי חלוניות',
+      scope: _debugScope,
+      longTaskAfter: const Duration(milliseconds: 250),
+      heartbeatEvery: const Duration(milliseconds: 250),
+    );
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
@@ -122,10 +154,31 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         screenHeight * 0.27;
 
     setState(() {});
+    trace.end(
+      data: {
+        'screenWidth': screenWidth,
+        'screenHeight': screenHeight,
+        'leftSidebarWidth': _leftSidebarWidth,
+        'leftWidth': _leftWidth,
+        'rightWidth': _rightWidth,
+        'bottomHeight': _bottomHeight,
+      },
+    );
   }
 
   /// שמירת גדלים
   void _saveSizes() {
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'שמירת גדלי חלוניות',
+      scope: _debugScope,
+      data: {
+        'leftSidebarWidth': _leftSidebarWidth,
+        'leftWidth': _leftWidth,
+        'rightWidth': _rightWidth,
+        'bottomHeight': _bottomHeight,
+      },
+    );
     if (_leftSidebarWidth != null) {
       Settings.setValue<double>(
           'page_shape_left_sidebar_width', _leftSidebarWidth!);
@@ -141,16 +194,55 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     }
   }
 
-  Future<void> _loadConfiguration() async {
+  void _refreshLinksForCurrentConfiguration(String reason) {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) {
-      debugPrint(
-          '⚠️ PageShape: State is not TextBookLoaded, cannot load configuration');
       return;
     }
 
-    debugPrint('📖 PageShape: Loading configuration for "${state.book.title}"');
-    debugPrint('📖 PageShape: heCategories = "${state.book.heCategories}"');
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'נשלחה בקשה לרענון קישורים לפי בחירת חלוניות צורת הדף',
+      scope: _debugScope,
+      data: {
+        'reason': reason,
+        'bookTitle': state.book.title,
+      },
+    );
+    context.read<TextBookBloc>().add(
+          RefreshLinksForCurrentWindow(reason: reason),
+        );
+  }
+
+  Future<void> _loadConfiguration() async {
+    final trace = PageShapeDebugLogger.start(
+      'PageShapeScreen',
+      'טעינת קונפיגורציית צורת הדף',
+      scope: _debugScope,
+      data: {
+        'isLoadingConfigBefore': _isLoadingConfig,
+      },
+    );
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded) {
+      trace.warn(
+        'הטעינה דולגה כי ה־state עדיין לא TextBookLoaded',
+        data: {
+          'stateType': state.runtimeType,
+        },
+      );
+      trace.end(data: {'reason': 'state is not TextBookLoaded'});
+      return;
+    }
+
+    trace.step(
+      'נטענת קונפיגורציה עבור ספר',
+      data: {
+        'bookTitle': state.book.title,
+        'heCategories': state.book.heCategories,
+        'availableCommentatorsCount': state.availableCommentators.length,
+      },
+    );
 
     final config = PageShapeSettingsManager.loadConfiguration(
       state.book.title,
@@ -162,21 +254,35 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 
     final Map<String, String?> commentators;
     if (config != null) {
-      debugPrint('📖 PageShape: Found saved configuration: $config');
+      trace.step(
+        'נמצאה קונפיגורציה שמורה',
+        data: {
+          'config': config,
+        },
+      );
       // יש הגדרה שמורה - צריך להתאים שמות בסיסיים לשמות מלאים
       // (כי הגדרות קטגוריה שומרות רק שמות בסיסיים כמו "רמב"ן")
       commentators =
           _resolveCommentatorNames(config, state.availableCommentators);
-      debugPrint('📖 PageShape: Resolved commentators: $commentators');
+      trace.step(
+        'בוצעה התאמת שמות מפרשים לקונפיגורציה השמורה',
+        data: {
+          'resolvedCommentators': commentators,
+        },
+      );
     } else {
-      debugPrint(
-          '📖 PageShape: No saved configuration, loading defaults from JSON');
+      trace.step('לא נמצאה קונפיגורציה שמורה, נטענות ברירות מחדל');
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
       commentators = await DefaultCommentators.getDefaults(
         state.book,
         availableCommentators: state.availableCommentators,
       );
-      debugPrint('📖 PageShape: Default commentators loaded: $commentators');
+      trace.step(
+        'נטענו מפרשי ברירת מחדל',
+        data: {
+          'defaultCommentators': commentators,
+        },
+      );
       // כאן נבדוק אם ברירת המחדל לא קיימת – נסיר את הטור
       _hideColumnIfDefaultMissing(commentators, state.availableCommentators);
     }
@@ -189,7 +295,18 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         _bottomRightCommentator = commentators['bottomRight'];
         _isLoadingConfig = false;
       });
-      debugPrint('📖 PageShape: Configuration applied successfully');
+      _refreshLinksForCurrentConfiguration('page-shape configuration loaded');
+      trace.end(
+        data: {
+          'leftCommentator': _leftCommentator,
+          'rightCommentator': _rightCommentator,
+          'bottomCommentator': _bottomCommentator,
+          'bottomRightCommentator': _bottomRightCommentator,
+          'columnVisibility': _columnVisibility,
+        },
+      );
+    } else {
+      trace.end(data: {'reason': 'widget unmounted before applying config'});
     }
   }
 
@@ -197,15 +314,31 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   /// למשל: "רמב"ן" → "רמב"ן על בבא מציעא"
   Map<String, String?> _resolveCommentatorNames(
       Map<String, String?> config, List<String> availableCommentators) {
-    debugPrint('📖 PageShape: Available commentators: $availableCommentators');
-    debugPrint('📖 PageShape: Config to resolve: $config');
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'התחלת resolve לשמות מפרשים',
+      scope: _debugScope,
+      data: {
+        'config': config,
+        'availableCommentatorsCount': availableCommentators.length,
+      },
+    );
 
     return Map.fromEntries(config.entries.map((entry) {
       final resolved = resolvePageShapeCommentatorSelection(
         selection: entry.value,
         availableCommentators: availableCommentators,
       );
-      debugPrint('📖 PageShape: Resolving "${entry.value}" → "$resolved"');
+      PageShapeDebugLogger.log(
+        'PageShapeScreen',
+        'resolve לשם מפרש בודד',
+        scope: _debugScope,
+        data: {
+          'column': entry.key,
+          'requestedSelection': entry.value,
+          'resolvedSelection': resolved,
+        },
+      );
       return MapEntry(entry.key, resolved);
     }));
   }
@@ -299,6 +432,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         forceMultipleMode: true,
       );
     });
+    _refreshLinksForCurrentConfiguration('right pane selection changed');
   }
 
   String? _rightPaneLabel(TextBookLoaded state) {
@@ -313,6 +447,18 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   }
 
   Widget _buildRightPane(TextBookLoaded state) {
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'בניית טור ימין',
+      scope: _debugScope,
+      data: {
+        'isMultipleMode': _isRightPaneMultipleMode(),
+        'rightCommentatorSelection': _rightCommentator,
+        'selectableCommentatorsCount':
+            _rightPaneSelectableCommentators(state).length,
+      },
+      level: 'BUILD',
+    );
     if (!_isRightPaneMultipleMode()) {
       final resolvedSingle = resolvePageShapeCommentatorSelection(
         selection: _rightCommentator,
@@ -339,6 +485,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       openBookCallback: (tab) => widget.openBookCallback(tab),
       fontSize: PageShapeSettingsManager.getCommentaryFontSize(),
       showSearch: true,
+      shrinkWrap: false,
       selectedCommentatorsOverride: commentators,
       commentatorGroupsOverride: _rightPaneCommentatorGroups(state),
       bookTitleOverride: state.book.title,
@@ -365,6 +512,9 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     if (showSnack && global) {
       UiSnack.show('הטור הוסתר בכל הספרים. ניתן לשנות בהגדרות צורת הדף.');
     }
+
+    _refreshLinksForCurrentConfiguration(
+        'page-shape column visibility changed');
   }
 
   /// בניית widget למצב ריק של טור
@@ -400,7 +550,22 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   }
 
   Future<void> _navigateToLine(TextBookLoaded state, int lineNumber) async {
+    final trace = PageShapeDebugLogger.start(
+      'PageShapeScreen',
+      'ניווט לשורה מחלונית קישורים/הערות',
+      scope: _debugScope,
+      data: {
+        'lineNumber': lineNumber,
+        'contentLength': state.content.length,
+        'selectedIndexBefore': state.selectedIndex,
+        ...PageShapeDebugLogger.summarizeIndices(state.visibleIndices),
+      },
+      longTaskAfter: const Duration(milliseconds: 300),
+      heartbeatEvery: const Duration(milliseconds: 300),
+    );
     if (lineNumber < 1 || state.content.isEmpty) {
+      trace.warn('דילוג על ניווט לשורה כי lineNumber לא תקין או שהתוכן ריק');
+      trace.end(data: {'reason': 'invalid line number or empty content'});
       return;
     }
 
@@ -412,6 +577,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeInOut,
     );
+    trace.step(
+      'הושלמה גלילה ליעד בחלונית הראשית',
+      data: {
+        'targetIndex': targetIndex,
+      },
+    );
 
     if (!mounted || !context.mounted) {
       return;
@@ -420,11 +591,25 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final bloc = context.read<TextBookBloc>();
     bloc.add(UpdateSelectedIndex(targetIndex));
     bloc.add(HighlightLine(targetIndex));
+    trace.end(
+      data: {
+        'targetIndex': targetIndex,
+      },
+    );
   }
 
   void _openLeftSidebarTab(int index) {
     final validIndex = index.clamp(0, 1);
     if (_isLeftSidebarOpen && _leftSidebarTabIndex == validIndex) {
+      PageShapeDebugLogger.log(
+        'PageShapeScreen',
+        'בקשה לפתיחת סיידבר דולגה כי הוא כבר פתוח על אותו טאב',
+        scope: _debugScope,
+        data: {
+          'requestedIndex': index,
+          'validIndex': validIndex,
+        },
+      );
       return;
     }
 
@@ -432,12 +617,33 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       _isLeftSidebarOpen = true;
       _leftSidebarTabIndex = validIndex;
     });
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'נפתח סיידבר שמאלי',
+      scope: _debugScope,
+      data: {
+        'requestedIndex': index,
+        'validIndex': validIndex,
+      },
+    );
   }
 
   void _toggleLeftSidebar() {
     setState(() {
       _isLeftSidebarOpen = !_isLeftSidebarOpen;
+      if (!_isLeftSidebarOpen) {
+        _isHoveringSidebarHandle = false;
+      }
     });
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'הוחלף מצב פתיחת סיידבר שמאלי',
+      scope: _debugScope,
+      data: {
+        'isLeftSidebarOpen': _isLeftSidebarOpen,
+        'leftSidebarTabIndex': _leftSidebarTabIndex,
+      },
+    );
   }
 
   void _handleSidebarTabRequest() {
@@ -446,6 +652,15 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       return;
     }
 
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'התקבלה בקשת טאב חיצונית לסיידבר',
+      scope: _debugScope,
+      data: {
+        'requestedTab': requestedTab,
+      },
+    );
+
     _openLeftSidebarTab(requestedTab);
     widget.sidebarTabNotifier?.value = null;
   }
@@ -453,12 +668,35 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   @override
   void initState() {
     super.initState();
+    _debugScope = PageShapeDebugLogger.newScope(
+      'page-shape-screen',
+      label: widget.key.toString(),
+    );
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'initState',
+      scope: _debugScope,
+      data: {
+        'widgetKey': widget.key.toString(),
+      },
+      level: 'LIFECYCLE',
+    );
     widget.sidebarTabNotifier?.addListener(_handleSidebarTabRequest);
   }
 
   @override
   void didUpdateWidget(covariant PageShapeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'didUpdateWidget',
+      scope: _debugScope,
+      data: {
+        'oldSidebarNotifierChanged':
+            oldWidget.sidebarTabNotifier != widget.sidebarTabNotifier,
+      },
+      level: 'LIFECYCLE',
+    );
     if (oldWidget.sidebarTabNotifier != widget.sidebarTabNotifier) {
       oldWidget.sidebarTabNotifier?.removeListener(_handleSidebarTabRequest);
       widget.sidebarTabNotifier?.addListener(_handleSidebarTabRequest);
@@ -467,14 +705,33 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 
   @override
   void dispose() {
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'dispose',
+      scope: _debugScope,
+      data: {
+        'buildCount': _buildCount,
+      },
+      level: 'END',
+    );
     widget.sidebarTabNotifier?.removeListener(_handleSidebarTabRequest);
     super.dispose();
   }
 
   /// פתיחת דיאלוג בחירת מפרש לטור ספציפי
   Future<void> _openCommentatorSelector(String column) async {
+    final trace = PageShapeDebugLogger.start(
+      'PageShapeScreen',
+      'פתיחת בורר מפרש',
+      scope: _debugScope,
+      data: {
+        'column': column,
+      },
+    );
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) {
+      trace.warn('לא ניתן לפתוח בורר מפרש כי ה־state אינו TextBookLoaded');
+      trace.end(data: {'reason': 'state is not TextBookLoaded'});
       return;
     }
 
@@ -482,6 +739,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final availableCommentators = state.availableCommentators;
 
     if (availableCommentators.isEmpty) {
+      trace.warn('לא נמצאו מפרשים זמינים לבחירה');
+      trace.end(data: {'reason': 'no available commentators'});
       return;
     }
 
@@ -501,11 +760,35 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     // אם היו שינויים, טען מחדש את ההגדרות
     if (result == true) {
       _loadConfiguration();
+      trace.step('דיאלוג המפרשים חזר עם שינויים; נטענת קונפיגורציה מחדש');
     }
+    trace.end(
+      data: {
+        'result': result,
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    _buildCount++;
+    PageShapeDebugLogger.log(
+      'PageShapeScreen',
+      'build',
+      scope: _debugScope,
+      data: {
+        'buildCount': _buildCount,
+        'isLoadingConfig': _isLoadingConfig,
+        'leftCommentator': _leftCommentator,
+        'rightCommentator': _rightCommentator,
+        'bottomCommentator': _bottomCommentator,
+        'bottomRightCommentator': _bottomRightCommentator,
+        'isLeftSidebarOpen': _isLeftSidebarOpen,
+        'leftSidebarTabIndex': _leftSidebarTabIndex,
+        'columnVisibility': _columnVisibility,
+      },
+      level: 'BUILD',
+    );
     return MultiBlocListener(
       listeners: [
         BlocListener<TextBookBloc, TextBookState>(
@@ -519,8 +802,15 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
           listener: (context, state) {
             if (state is TextBookLoaded &&
                 state.availableCommentators.isNotEmpty) {
-              debugPrint(
-                  '📖 PageShape: Commentators loaded (${state.availableCommentators.length}), reloading configuration...');
+              PageShapeDebugLogger.log(
+                'PageShapeScreen',
+                'התקבל עדכון מפרשים זמינים מה־bloc; נטענת קונפיגורציה מחדש',
+                scope: _debugScope,
+                data: {
+                  'availableCommentatorsCount':
+                      state.availableCommentators.length,
+                },
+              );
               _loadConfiguration();
             }
           },
@@ -530,6 +820,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
               previous.isCreatingNewNote != current.isCreatingNewNote,
           listener: (context, state) {
             if (state.isCreatingNewNote) {
+              PageShapeDebugLogger.log(
+                'PageShapeScreen',
+                'PersonalNotesBloc נכנס למצב יצירת הערה; נפתח סיידבר הערות',
+                scope: _debugScope,
+              );
               _openLeftSidebarTab(1);
             }
           },
@@ -581,10 +876,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                     _kCommentaryPaneWidthFactor,
                                             child: _CommentaryPane(
                                               commentatorName:
-                                                _leftCommentator!,
+                                                  _leftCommentator!,
                                               openBookCallback:
-                                                widget.openBookCallback,
-                                              onLoadFailed: () => _hideColumn('left', global: false, showSnack: false),
+                                                  widget.openBookCallback,
+                                              onLoadFailed: () => _hideColumn(
+                                                  'left',
+                                                  global: false,
+                                                  showSnack: false),
                                             ),
                                           ),
                                         ] else ...[
@@ -598,19 +896,25 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                               columnName: 'left',
                                               onSelectCommentator: () {
                                                 setState(() {
-                                                  _columnVisibility['left'] = true;
+                                                  _columnVisibility['left'] =
+                                                      true;
                                                 });
-                                                final state = context.read<TextBookBloc>().state;
+                                                final state = context
+                                                    .read<TextBookBloc>()
+                                                    .state;
                                                 if (state is TextBookLoaded) {
-                                                  PageShapeSettingsManager.saveColumnVisibility(
+                                                  PageShapeSettingsManager
+                                                      .saveColumnVisibility(
                                                     state.book.title,
                                                     _columnVisibility,
                                                     saveAsGlobal: false,
                                                   );
                                                 }
-                                                _openCommentatorSelector('left');
+                                                _openCommentatorSelector(
+                                                    'left');
                                               },
-                                              onHideColumn: () => _hideColumn('left'),
+                                              onHideColumn: () =>
+                                                  _hideColumn('left'),
                                             ),
                                           ),
                                         ],
@@ -708,19 +1012,25 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                               columnName: 'right',
                                               onSelectCommentator: () {
                                                 setState(() {
-                                                  _columnVisibility['right'] = true;
+                                                  _columnVisibility['right'] =
+                                                      true;
                                                 });
-                                                final state = context.read<TextBookBloc>().state;
+                                                final state = context
+                                                    .read<TextBookBloc>()
+                                                    .state;
                                                 if (state is TextBookLoaded) {
-                                                  PageShapeSettingsManager.saveColumnVisibility(
+                                                  PageShapeSettingsManager
+                                                      .saveColumnVisibility(
                                                     state.book.title,
                                                     _columnVisibility,
                                                     saveAsGlobal: false,
                                                   );
                                                 }
-                                                _openCommentatorSelector('right');
+                                                _openCommentatorSelector(
+                                                    'right');
                                               },
-                                              onHideColumn: () => _hideColumn('right'),
+                                              onHideColumn: () =>
+                                                  _hideColumn('right'),
                                             ),
                                           ),
                                         ],
@@ -783,7 +1093,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                           openBookCallback: widget
                                                               .openBookCallback,
                                                           isBottom: true,
-                                                          onLoadFailed: () => _hideColumn('bottom', global: false, showSnack: false),
+                                                          onLoadFailed: () =>
+                                                              _hideColumn(
+                                                                  'bottom',
+                                                                  global: false,
+                                                                  showSnack:
+                                                                      false),
                                                         ),
                                                       ),
                                                       const SizedBox(width: 8),
@@ -795,7 +1110,12 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                         openBookCallback: widget
                                                             .openBookCallback,
                                                         isBottom: true,
-                                                        onLoadFailed: () => _hideColumn('bottomRight', global: false, showSnack: false),
+                                                        onLoadFailed: () =>
+                                                            _hideColumn(
+                                                                'bottomRight',
+                                                                global: false,
+                                                                showSnack:
+                                                                    false),
                                                       ),
                                                     ),
                                                     const SizedBox(width: 4),
@@ -841,7 +1161,9 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                         openBookCallback: widget
                                                             .openBookCallback,
                                                         isBottom: true,
-                                                        onLoadFailed: () => _hideColumn('bottom'),
+                                                        onLoadFailed: () =>
+                                                            _hideColumn(
+                                                                'bottom'),
                                                       ),
                                                     ),
                                                   ],
@@ -979,6 +1301,9 @@ class _CommentaryPane extends StatefulWidget {
 }
 
 class _CommentaryPaneState extends State<_CommentaryPane> {
+  late final String _debugScope;
+  int _buildCount = 0;
+  int _syncAttemptCount = 0;
   List<String>? _content;
   TextBook? _reportBook;
   bool _isLoading = true;
@@ -987,16 +1312,40 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       ItemPositionsListener.create();
   List<Link> _relevantLinks = [];
   int? _lastSyncedIndex; // האינדקס האחרון שסונכרן
+  int? _clickedVisibleFirst; // visibleIndices.first בעת הלחיצה האחרונה
+  List<Link>? _lastLinks; // לדידוב: מסנן מחדש רק כשהקישורים השתנו
   StreamSubscription<TextBookState>? _blocSubscription;
   Set<int> _highlightedIndices = {}; // אינדקסים להדגשה
   bool _highlightEnabled = false;
+  int _blocLoadedCallbackCount = 0;
+  int _refreshRelevantLinksCount = 0;
+  int _highlightUpdateCallCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _debugScope = PageShapeDebugLogger.newScope(
+      'page-shape-commentary-pane',
+      label: widget.commentatorName,
+    );
+    PageShapeDebugLogger.log(
+      'CommentaryPane',
+      'initState',
+      scope: _debugScope,
+      data: {
+        'commentatorName': widget.commentatorName,
+        'isBottom': widget.isBottom,
+      },
+      level: 'LIFECYCLE',
+    );
     // דוחה את הטעינה כדי לוודא שכל ה-providers מוכנים וה-bloc זמין
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        PageShapeDebugLogger.log(
+          'CommentaryPane',
+          'PostFrame ראשון - מתחילים טעינה והאזנה ל־bloc',
+          scope: _debugScope,
+        );
         _loadCommentary();
         _setupBlocListener();
       }
@@ -1012,6 +1361,16 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   @override
   void didUpdateWidget(_CommentaryPane oldWidget) {
     super.didUpdateWidget(oldWidget);
+    PageShapeDebugLogger.log(
+      'CommentaryPane',
+      'didUpdateWidget',
+      scope: _debugScope,
+      data: {
+        'oldCommentatorName': oldWidget.commentatorName,
+        'newCommentatorName': widget.commentatorName,
+      },
+      level: 'LIFECYCLE',
+    );
     // אם שם המפרש השתנה, טען מחדש את התוכן
     if (oldWidget.commentatorName != widget.commentatorName) {
       _loadCommentary();
@@ -1023,6 +1382,17 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
   @override
   void dispose() {
+    PageShapeDebugLogger.log(
+      'CommentaryPane',
+      'dispose',
+      scope: _debugScope,
+      data: {
+        'buildCount': _buildCount,
+        'syncAttemptCount': _syncAttemptCount,
+        'lastSyncedIndex': _lastSyncedIndex,
+      },
+      level: 'END',
+    );
     _blocSubscription?.cancel();
     super.dispose();
   }
@@ -1035,6 +1405,16 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           PageShapeSettingsManager.getHighlightSetting(state.book.title);
       final highlightChanged = newHighlightEnabled != _highlightEnabled;
       _highlightEnabled = newHighlightEnabled;
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'עודכנה הגדרת הדגשה',
+        scope: _debugScope,
+        data: {
+          'newHighlightEnabled': newHighlightEnabled,
+          'highlightChanged': highlightChanged,
+          'selectedIndex': state.selectedIndex,
+        },
+      );
       // עדכון הדגשות - גם בטעינה ראשונית וגם כשההגדרה משתנה
       if (highlightChanged || _highlightedIndices.isEmpty) {
         _updateHighlights(state);
@@ -1044,44 +1424,113 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
   /// הגדרת מאזין לשינויים ב-Bloc
   void _setupBlocListener() {
+    PageShapeDebugLogger.log(
+      'CommentaryPane',
+      'מתחילה הגדרת מאזין ל־TextBookBloc',
+      scope: _debugScope,
+    );
     // טעינת הגדרת הדגשה ראשונית
     _updateHighlightSettings();
 
-    // סנכרון ראשוני עם ה-state הנוכחי
-    final currentState = context.read<TextBookBloc>().state;
-    if (currentState is TextBookLoaded && mounted) {
-      // נדחה מעט כדי לוודא שה-ScrollController מוכן
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _syncWithMainText(currentState);
-        }
-      });
-    }
-
     _blocSubscription = context.read<TextBookBloc>().stream.listen((state) {
       if (state is TextBookLoaded && mounted) {
-        _refreshRelevantLinks(state);
+        _blocLoadedCallbackCount++;
+        final callbackStopwatch = Stopwatch()..start();
+        PageShapeDebugLogger.log(
+          'CommentaryPane',
+          'התקבל עדכון TextBookLoaded מה־bloc',
+          scope: _debugScope,
+          data: {
+            'blocLoadedCallbackCount': _blocLoadedCallbackCount,
+            'selectedIndex': state.selectedIndex,
+            ...PageShapeDebugLogger.summarizeIndices(state.visibleIndices),
+            'linksCount': state.links.length,
+          },
+        );
+        final refreshStopwatch = Stopwatch()..start();
+        // מסנן מחדש רק כשהקישורים עצמם השתנו (UpdateLinks),
+        // ולא בכל גלילה (UpdateVisibleIndecies / UpdateSelectedIndex)
+        if (!identical(_lastLinks, state.links)) {
+          _lastLinks = state.links;
+          _refreshRelevantLinks(state);
+        }
+        final refreshElapsedMs = refreshStopwatch.elapsedMilliseconds;
+        final syncStopwatch = Stopwatch()..start();
         _syncWithMainText(state);
+        final syncElapsedMs = syncStopwatch.elapsedMilliseconds;
+        final highlightStopwatch = Stopwatch()..start();
         _updateHighlights(state);
+        final highlightElapsedMs = highlightStopwatch.elapsedMilliseconds;
+        PageShapeDebugLogger.log(
+          'CommentaryPane',
+          'הסתיים callback של TextBookLoaded בחלונית מפרש',
+          scope: _debugScope,
+          data: {
+            'blocLoadedCallbackCount': _blocLoadedCallbackCount,
+            'refreshRelevantLinksElapsedMs': refreshElapsedMs,
+            'syncWithMainTextElapsedMs': syncElapsedMs,
+            'updateHighlightsElapsedMs': highlightElapsedMs,
+            'totalElapsedMs': callbackStopwatch.elapsedMilliseconds,
+          },
+          level: 'STEP',
+        );
       }
     });
   }
 
   void _refreshRelevantLinks(TextBookLoaded state) {
+    _refreshRelevantLinksCount++;
+    final stopwatch = Stopwatch()..start();
     _relevantLinks = state.links.where((link) {
       final linkTitle = utils.getTitleFromPath(link.path2);
       return linkTitle == widget.commentatorName &&
           LinkTypes.isCommentaryOrTargum(link.connectionType);
     }).toList();
+    PageShapeDebugLogger.log(
+      'CommentaryPane',
+      'רועננו קישורים רלוונטיים למפרש',
+      scope: _debugScope,
+      data: {
+        'refreshRelevantLinksCount': _refreshRelevantLinksCount,
+        'relevantLinksCount': _relevantLinks.length,
+        'totalLinksCount': state.links.length,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
   }
 
   void _updateHighlights(TextBookLoaded state) {
+    _highlightUpdateCallCount++;
+    final stopwatch = Stopwatch()..start();
     if (!_highlightEnabled || state.selectedIndex == null) {
       if (_highlightedIndices.isNotEmpty) {
         setState(() {
           _highlightedIndices = {};
         });
+        PageShapeDebugLogger.log(
+          'CommentaryPane',
+          'אופסו הדגשות מקומיות',
+          scope: _debugScope,
+          data: {
+            'highlightUpdateCallCount': _highlightUpdateCallCount,
+            'highlightEnabled': _highlightEnabled,
+            'selectedIndex': state.selectedIndex,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
       }
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'חישוב הדגשות הסתיים ללא הדגשות פעילות',
+        scope: _debugScope,
+        data: {
+          'highlightUpdateCallCount': _highlightUpdateCallCount,
+          'highlightEnabled': _highlightEnabled,
+          'selectedIndex': state.selectedIndex,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+        level: 'STEP',
+      );
       return;
     }
 
@@ -1102,12 +1551,48 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       setState(() {
         _highlightedIndices = newHighlights;
       });
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'עודכנו הדגשות למפרש',
+        scope: _debugScope,
+        data: {
+          'highlightUpdateCallCount': _highlightUpdateCallCount,
+          'mainLineNumber': mainLineNumber,
+          'highlightedIndices': _highlightedIndices,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return;
     }
+    PageShapeDebugLogger.log(
+      'CommentaryPane',
+      'חישוב הדגשות הסתיים ללא שינוי',
+      scope: _debugScope,
+      data: {
+        'highlightUpdateCallCount': _highlightUpdateCallCount,
+        'mainLineNumber': mainLineNumber,
+        'highlightedIndicesCount': _highlightedIndices.length,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+      level: 'STEP',
+    );
   }
 
   Future<void> _loadCommentary() async {
+    final trace = PageShapeDebugLogger.start(
+      'CommentaryPane',
+      'טעינת מפרש',
+      scope: _debugScope,
+      data: {
+        'commentatorName': widget.commentatorName,
+        'isBottom': widget.isBottom,
+      },
+      longTaskAfter: const Duration(milliseconds: 400),
+      heartbeatEvery: const Duration(milliseconds: 400),
+    );
     if (!mounted) return;
     setState(() => _isLoading = true);
+    trace.step('הוגדר _isLoading=true');
 
     try {
       // המתנה לכך שה-state יהיה TextBookLoaded
@@ -1124,7 +1609,12 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               )
               .timeout(const Duration(seconds: 5));
         } catch (e) {
-          debugPrint('⚠️ CommentaryPane: Timeout waiting for TextBookLoaded');
+          trace.warn(
+            'Timeout בהמתנה ל־TextBookLoaded',
+            data: {
+              'error': e,
+            },
+          );
         }
       }
 
@@ -1133,11 +1623,26 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       if (state is TextBookLoaded) {
         // סינון קישורים לפי שם המפרש ולפי סוג הקישור (COMMENTARY/TARGUM)
         _refreshRelevantLinks(state);
+        trace.step(
+          'ה־state זמין ורועננו קישורים רלוונטיים',
+          data: {
+            'bookTitle': state.book.title,
+            'relevantLinksCount': _relevantLinks.length,
+          },
+        );
       }
 
       // מציאת הספר המלא של המפרש עם categoryId
       TextBook book;
       final bookLocation = await BookLocator.locateBook(widget.commentatorName);
+      trace.step(
+        'בוצע איתור ספר המפרש',
+        data: {
+          'bookLocationFound': bookLocation != null,
+          'bookLocationHasBook': bookLocation?.book != null,
+          'bookLocationCategoryId': bookLocation?.categoryId,
+        },
+      );
 
       if (bookLocation != null &&
           bookLocation.book != null &&
@@ -1165,7 +1670,12 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               categoryPath = pathParts.join(', ');
             }
           } catch (e) {
-            debugPrint('⚠️ CommentaryPane: Error getting category path: $e');
+            trace.warn(
+              'שגיאה בקבלת category path עבור מפרש',
+              data: {
+                'error': e,
+              },
+            );
           }
         }
 
@@ -1205,11 +1715,18 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           );
         } else {
           // fallback - ספר ללא categoryId (לא יטען קישורים)
-          debugPrint(
-              '⚠️ CommentaryPane: No categoryId found for "${widget.commentatorName}"');
+          trace.warn('לא נמצא categoryId עבור המפרש');
           book = TextBook(title: widget.commentatorName);
         }
       }
+      trace.step(
+        'נבנה אובייקט TextBook עבור המפרש',
+        data: {
+          'reportBookTitle': book.title,
+          'reportBookCategoryId': book.categoryId,
+          'reportBookCategoryPath': book.categoryPath,
+        },
+      );
 
       // טעינת הטקסט ישירות מה-provider המתאים
       String bookContent;
@@ -1228,10 +1745,18 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         // ספר ממערכת הקבצים - נשתמש ב-book.text
         bookContent = await book.text;
       }
+      trace.step(
+        'הוחזר תוכן טקסט למפרש',
+        data: {
+          'contentLength': bookContent.length,
+          'usedDatabaseProvider': bookLocation != null &&
+              bookLocation.book != null &&
+              bookLocation.categoryId != null,
+        },
+      );
 
       if (bookContent.isEmpty) {
-        debugPrint(
-            '❌ CommentaryPane: Book text is empty for "${widget.commentatorName}"');
+        trace.warn('תוכן המפרש חזר ריק');
         if (widget.onLoadFailed != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) widget.onLoadFailed!();
@@ -1250,6 +1775,12 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         _isLoading = false;
         _lastSyncedIndex = null; // איפוס לסנכרון ראשוני
       });
+      trace.step(
+        'התוכן הוחל על ה־widget',
+        data: {
+          'linesCount': lines.length,
+        },
+      );
 
       // סנכרון ראשוני - נדחה מעט כדי לוודא שה-ScrollController מוכן
       final currentState = state;
@@ -1257,22 +1788,23 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         // נחכה שה-widget יבנה ואז נסנכרן
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
+            PageShapeDebugLogger.log(
+              'CommentaryPane',
+              'PostFrame לסנכרון ראשוני אחרי טעינת תוכן',
+              scope: _debugScope,
+            );
             _syncWithMainText(currentState);
           }
         });
-        // ניסיון סנכרון נוסף אחרי זמן קצר (למקרה שה-ScrollController לא היה מוכן)
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted && _lastSyncedIndex == null) {
-            final bloc = context.read<TextBookBloc>();
-            if (bloc.state is TextBookLoaded) {
-              _syncWithMainText(bloc.state as TextBookLoaded);
-            }
-          }
-        });
       }
+      trace.end(
+        data: {
+          'linesCount': lines.length,
+          'relevantLinksCount': _relevantLinks.length,
+        },
+      );
     } catch (e) {
-      debugPrint(
-          '❌ CommentaryPane: Error loading "${widget.commentatorName}": $e');
+      trace.fail(e, StackTrace.current);
       if (widget.onLoadFailed != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) widget.onLoadFailed!();
@@ -1290,29 +1822,82 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
   /// סנכרון המפרש עם הטקסט הראשי
   void _syncWithMainText(TextBookLoaded state) {
+    _syncAttemptCount++;
+    final stopwatch = Stopwatch()..start();
+    PageShapeDebugLogger.log(
+      'CommentaryPane',
+      'ניסיון סנכרון מפרש מול הטקסט הראשי',
+      scope: _debugScope,
+      data: {
+        'syncAttemptCount': _syncAttemptCount,
+        'contentLoaded': _content != null,
+        'contentLength': _content?.length ?? 0,
+        'relevantLinksCount': _relevantLinks.length,
+        'selectedIndex': state.selectedIndex,
+        ...PageShapeDebugLogger.summarizeIndices(state.visibleIndices),
+        'scrollControllerAttached': _scrollController.isAttached,
+      },
+      level: 'SYNC',
+    );
     // אם אין תוכן או אין קישורים - אין מה לסנכרן
     if (_content == null || _content!.isEmpty || _relevantLinks.isEmpty) {
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'סנכרון דולג כי חסר תוכן או חסרים קישורים רלוונטיים',
+        scope: _debugScope,
+        data: {
+          'contentIsNull': _content == null,
+          'contentIsEmpty': _content?.isEmpty ?? true,
+          'relevantLinksCount': _relevantLinks.length,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+        level: 'SYNC',
+      );
       return;
     }
 
     // אם ה-ScrollController עדיין לא מחובר, נדחה את הסנכרון
     if (!_scrollController.isAttached) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _syncWithMainText(state);
-        }
-      });
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'סנכרון נדחה כי ScrollController עדיין לא מחובר',
+        scope: _debugScope,
+        data: {
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+          'willRetryVia': 'next bloc update or post-load sync',
+        },
+        level: 'SYNC',
+      );
       return;
     }
 
     // קביעת האינדקס הנוכחי בטקסט הראשי
-    // נעדיף את visibleIndices כי זה המיקום האמיתי בגלילה
+    // אם המשתמש לחץ על שורה ספציפית, נסנכרן אליה; אחרת לפי visibleIndices
     int currentMainIndex;
-    if (state.visibleIndices.isNotEmpty) {
-      currentMainIndex = state.visibleIndices.first;
-    } else if (state.selectedIndex != null) {
+    if (state.selectedIndex != null) {
       currentMainIndex = state.selectedIndex!;
+      _clickedVisibleFirst =
+          state.visibleIndices.isNotEmpty ? state.visibleIndices.first : null;
+    } else if (state.visibleIndices.isNotEmpty) {
+      final currentFirst = state.visibleIndices.first;
+      // אם לא גללנו יותר מ-3 שורות מאז הלחיצה — לא לדרוס את מיקום הלחיצה
+      // (מתואם עם הסף של ה-BLoC לאיפוס selectedIndex)
+      if (_clickedVisibleFirst != null &&
+          (currentFirst - _clickedVisibleFirst!).abs() <= 3) {
+        return;
+      }
+      _clickedVisibleFirst = null; // גלילה משמעותית — מאפסים
+      currentMainIndex = currentFirst;
     } else {
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'סנכרון דולג כי אין selectedIndex ואין visibleIndices',
+        scope: _debugScope,
+        data: {
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+        level: 'SYNC',
+      );
       return; // אין מידע על מיקום נוכחי
     }
 
@@ -1333,11 +1918,32 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
     // אם אין קישור - לא מזיזים את המפרש
     if (targetIndex == null) {
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'לא נמצא targetIndex לסנכרון',
+        scope: _debugScope,
+        data: {
+          'currentMainIndex': currentMainIndex,
+          'logicalIndex': logicalIndex,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+        level: 'SYNC',
+      );
       return;
     }
 
-    // אם כבר סונכרנו לאינדקס הזה - לא צריך לגלול שוב
-    if (targetIndex == _lastSyncedIndex) {
+    // אם כבר סונכרנו לאינדקס הזה ואין לחיצה מפורשת - לא צריך לגלול שוב
+    if (targetIndex == _lastSyncedIndex && state.selectedIndex == null) {
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'סנכרון דולג כי היעד זהה ליעד האחרון',
+        scope: _debugScope,
+        data: {
+          'targetIndex': targetIndex,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+        level: 'SYNC',
+      );
       return;
     }
 
@@ -1345,17 +1951,61 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     if (targetIndex >= 0 &&
         targetIndex < _content!.length &&
         _scrollController.isAttached) {
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'מתבצעת גלילת סנכרון למפרש',
+        scope: _debugScope,
+        data: {
+          'currentMainIndex': currentMainIndex,
+          'logicalIndex': logicalIndex,
+          'targetIndex': targetIndex,
+          'bestLinkIndex1': bestLink?.index1,
+          'bestLinkIndex2': bestLink?.index2,
+          'distanceFromLastTarget':
+              _lastSyncedIndex == null ? null : targetIndex - _lastSyncedIndex!,
+          'elapsedMsBeforeScrollRequest': stopwatch.elapsedMilliseconds,
+        },
+        level: 'SYNC',
+      );
       _scrollController.scrollTo(
         index: targetIndex,
         duration: const Duration(milliseconds: 300),
         alignment: 0.0, // בראש החלון
       );
       _lastSyncedIndex = targetIndex;
+    } else {
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'סנכרון דולג כי targetIndex מחוץ לטווח או שה־ScrollController מנותק',
+        scope: _debugScope,
+        data: {
+          'targetIndex': targetIndex,
+          'contentLength': _content!.length,
+          'scrollControllerAttached': _scrollController.isAttached,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+        level: 'SYNC',
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    _buildCount++;
+    PageShapeDebugLogger.log(
+      'CommentaryPane',
+      'build',
+      scope: _debugScope,
+      data: {
+        'buildCount': _buildCount,
+        'isLoading': _isLoading,
+        'contentLength': _content?.length ?? 0,
+        'relevantLinksCount': _relevantLinks.length,
+        'highlightedIndicesCount': _highlightedIndices.length,
+        'lastSyncedIndex': _lastSyncedIndex,
+      },
+      level: 'BUILD',
+    );
     if (_isLoading) {
       return Container(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -1378,15 +2028,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     return TextBookStateBuilder(
       loadingWidget: const SizedBox(),
       builder: (context, state) {
-        // ניסיון סנכרון נוסף כשה-widget נבנה (במקרה שהסנכרון הראשוני נכשל)
-        if (_lastSyncedIndex == null && _scrollController.isAttached) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              _syncWithMainText(state);
-            }
-          });
-        }
-
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
             // מפרשים תחתונים משתמשים בגופן מההגדרות, עליונים בגופן הרגיל
@@ -1421,6 +2062,11 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   void _reloadCommentary() {
     // נטען מחדש את ההגדרות מה-parent
     if (mounted) {
+      PageShapeDebugLogger.log(
+        'CommentaryPane',
+        'בקשת reload למפרש דרך ההורה',
+        scope: _debugScope,
+      );
       // נאלץ את ה-parent לטעון מחדש את ההגדרות
       final parentState =
           context.findAncestorStateOfType<_PageShapeScreenState>();

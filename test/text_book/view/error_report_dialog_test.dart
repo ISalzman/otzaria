@@ -60,6 +60,16 @@ void main() {
       expect(result, equals('פסקה שניה'));
     });
 
+    test('strips html tags when fallback paragraph contains html', () {
+      final result = ErrorReportHelper.resolveReportTargetText(
+        content: const ['<span>פסקה <b>ראשונה</b></span>'],
+        selectedText: '',
+        preferredLineNumber: 0,
+      );
+
+      expect(result, equals('פסקה ראשונה'));
+    });
+
     test('keeps empty text when current paragraph is unavailable', () {
       final result = ErrorReportHelper.resolveReportTargetText(
         content: const ['פסקה ראשונה'],
@@ -68,6 +78,14 @@ void main() {
       );
 
       expect(result, isEmpty);
+    });
+
+    test('decodes html entities including hexadecimal entities', () {
+      final result = ErrorReportHelper.sanitizeReportText(
+        'שלום &#x27;עולם&#x27; &amp; בדיקה',
+      );
+
+      expect(result, equals("שלום 'עולם' & בדיקה"));
     });
   });
 
@@ -303,6 +321,7 @@ void main() {
         errorDetails,
         lineNumber,
         contextText,
+        '2026.03',
         null,
       );
 
@@ -313,6 +332,7 @@ void main() {
       expect(body, contains(errorDetails));
       expect(body, contains('42'));
       expect(body, contains(contextText));
+      expect(body, contains('גרסת ספרייה: 2026.03'));
     });
 
     test('should handle empty error details', () {
@@ -336,6 +356,7 @@ void main() {
         errorDetails,
         lineNumber,
         contextText,
+        'unknown',
         null,
       );
 

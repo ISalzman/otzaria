@@ -176,6 +176,101 @@ List<String> resolvePageShapeSelectedCommentators({
       .toList();
 }
 
+String? _resolvePageShapeSingleCommentator({
+  required String? selection,
+  required List<String> availableCommentators,
+}) {
+  final resolved = resolvePageShapeCommentatorSelection(
+    selection: selection,
+    availableCommentators: availableCommentators,
+  );
+
+  if (resolved == null ||
+      isPageShapeRemainingCommentatorsValue(resolved) ||
+      isPageShapeMultipleCommentatorsMode(resolved) ||
+      !availableCommentators.contains(resolved)) {
+    return null;
+  }
+
+  return resolved;
+}
+
+/// מחזיר את כל המפרשים שמוצגים בפועל בחלוניות צורת הדף.
+///
+/// הפונקציה מיישרת את הלוגיקה של טעינת הקישורים עם הלוגיקה של המסך עצמו:
+/// טורים מוסתרים אינם נכללים, ובטור הימני נלקחים בחשבון רק המפרשים שנבחרו
+/// בפועל לאחר החרגת המפרשים ששובצו בחלוניות הייעודיות.
+List<String> resolvePageShapeDisplayedCommentators({
+  required String? leftSelection,
+  required String? rightSelection,
+  required String? bottomSelection,
+  required String? bottomRightSelection,
+  required List<String> availableCommentators,
+  Map<String, bool> columnVisibility = const {
+    'left': true,
+    'right': true,
+    'bottom': true,
+  },
+}) {
+  final resolvedLeft = _resolvePageShapeSingleCommentator(
+    selection: leftSelection,
+    availableCommentators: availableCommentators,
+  );
+  final resolvedBottom = _resolvePageShapeSingleCommentator(
+    selection: bottomSelection,
+    availableCommentators: availableCommentators,
+  );
+  final resolvedBottomRight = _resolvePageShapeSingleCommentator(
+    selection: bottomRightSelection,
+    availableCommentators: availableCommentators,
+  );
+
+  final excludedForRightPane = [
+    resolvedLeft,
+    resolvedBottom,
+    resolvedBottomRight,
+  ];
+
+  final rightSelectableCommentators = availableCommentators
+      .where((commentator) => !excludedForRightPane.contains(commentator))
+      .toList();
+
+  final rightCommentators = columnVisibility['right'] == false
+      ? const <String>[]
+      : resolvePageShapeSelectedCommentators(
+          selection: rightSelection,
+          availableCommentators: rightSelectableCommentators,
+          excludedCommentators: excludedForRightPane,
+        );
+
+  final displayedCommentators = <String>[];
+  final seenCommentators = <String>{};
+
+  void addCommentator(String? commentator) {
+    if (commentator == null || !seenCommentators.add(commentator)) {
+      return;
+    }
+    displayedCommentators.add(commentator);
+  }
+
+  if (columnVisibility['left'] != false) {
+    addCommentator(resolvedLeft);
+  }
+
+  if (columnVisibility['right'] != false) {
+    for (final commentator in rightCommentators) {
+      addCommentator(commentator);
+    }
+  }
+
+  if (columnVisibility['bottom'] != false) {
+    addCommentator(resolvedBottom);
+    addCommentator(resolvedBottomRight);
+  }
+
+  return displayedCommentators;
+}
+
 /// מחזיר את התווית המוצגת למשתמש עבור בחירת מפרש בצורת הדף.
 String formatPageShapeCommentatorSelection(String? value) {
   if (isPageShapeRemainingCommentatorsValue(value)) {

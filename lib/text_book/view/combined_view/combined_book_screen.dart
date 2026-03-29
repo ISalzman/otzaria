@@ -27,6 +27,9 @@ import 'package:otzaria/widgets/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/selection/text_selection_manager.dart';
 import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
+import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
+import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
+import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 
 class CombinedView extends StatefulWidget {
@@ -399,15 +402,15 @@ class _CombinedViewState extends State<CombinedView> {
           items: state.visibleLinks
               .map<ctx.ContextMenuEntry<Object>>(
                 (link) => ctx.MenuItem<Object>(
-                    label: FutureBuilder<String>(
-                      future: link.displayReference,
-                      builder: (context, snapshot) {
-                        return Text(
-                          snapshot.data ?? link.fallbackDisplayReference,
-                          textDirection: TextDirection.rtl,
-                        );
-                      },
-                    ),
+                  label: FutureBuilder<String>(
+                    future: link.displayReference,
+                    builder: (context, snapshot) {
+                      return Text(
+                        snapshot.data ?? link.fallbackDisplayReference,
+                        textDirection: TextDirection.rtl,
+                      );
+                    },
+                  ),
                   onSelected: (_) {
                     widget.openBookCallback(
                       TextBookTab(
@@ -583,8 +586,7 @@ class _CombinedViewState extends State<CombinedView> {
       );
     }
 
-    final combinedHtml =
-        finalText.split('\n\n').map(_formatTextAsHtml).join('<br><br>');
+    final combinedHtml = _formatTextAsHtml(finalText);
 
     final item = DataWriterItem();
     item.add(Formats.plainText(finalText));
@@ -596,13 +598,11 @@ class _CombinedViewState extends State<CombinedView> {
   /// עיצוב טקסט כ-HTML עם הגדרות הגופן הנוכחיות
   String _formatTextAsHtml(String text) {
     final settingsState = context.read<SettingsBloc>().state;
-    // ממיר \n ל-<br> ב-HTML
-    final textWithBreaks = text.replaceAll('\n', '<br>');
-    return '''
-<div style="font-family: ${settingsState.fontFamily}; font-size: ${widget.textSize}px; text-align: justify; direction: rtl;">
-$textWithBreaks
-</div>
-''';
+    return CopyUtils.buildStyledHtml(
+      htmlText: text,
+      fontFamily: settingsState.fontFamily,
+      fontSize: widget.textSize,
+    );
   }
 
   /// העתקת טקסט מעוצב (HTML) ללוח
@@ -619,78 +619,19 @@ $textWithBreaks
     }
 
     try {
-      final clipboard = SystemClipboard.instance;
-      if (clipboard != null) {
-        // קבלת ההגדרות הנוכחיות לעיצוב
-        final settingsState = context.read<SettingsBloc>().state;
-        final textBookState = context.read<TextBookBloc>().state;
+      final settingsState = context.read<SettingsBloc>().state;
+      final textBookState = context.read<TextBookBloc>().state;
+      if (textBookState is! TextBookLoaded) return;
 
-        // ניסיון למצוא את הטקסט המקורי עם תגי HTML
-        String htmlContentToUse = plainText;
-
-        // אם יש לנו אינדקס נוכחי, ננסה למצוא את החלק הרלוונטי מהטקסט המקורי
-        final selectedIndex = _currentSelectedIndex.value;
-        if (selectedIndex != null &&
-            selectedIndex >= 0 &&
-            selectedIndex < widget.data.length) {
-          final originalData = widget.data[selectedIndex];
-
-          // בדיקה אם הטקסט הפשוט מופיע בטקסט המקורי
-          final plainTextCleaned =
-              plainText.replaceAll(RegExp(r'\s+'), ' ').trim();
-          final originalCleaned = originalData
-              .replaceAll(RegExp(r'<[^>]*>'), '') // הסרת תגי HTML
-              .replaceAll(RegExp(r'\s+'), ' ')
-              .trim();
-
-          // אם הטקסט הפשוט תואם בדיוק לכל הטקסט המקורי, נשתמש במקורי
-          if (plainTextCleaned == originalCleaned) {
-            htmlContentToUse = originalData;
-          } else if (originalCleaned.contains(plainTextCleaned)) {
-            // אם הטקסט הנבחר הוא חלק מהטקסט המקורי, נמצא את החלק הרלוונטי
-            // נשתמש בטקסט הפשוט שנבחר (ללא HTML) כדי לא להעתיק יותר ממה שנבחר
-            htmlContentToUse = plainText;
-          }
-        }
-
-        // הוספת כותרות אם נדרש
-        String finalPlainText = plainText;
-        if (settingsState.copyWithHeaders != 'none' &&
-            textBookState is TextBookLoaded) {
-          final bookName = CopyUtils.extractBookName(textBookState.book);
-          final currentIndex = _currentSelectedIndex.value ?? 0;
-          final currentPath = await CopyUtils.extractCurrentPath(
-            textBookState.book,
-            currentIndex,
-            bookContent: textBookState.content,
-          );
-
-          finalPlainText = CopyUtils.formatTextWithHeaders(
-            originalText: plainText,
-            copyWithHeaders: settingsState.copyWithHeaders,
-            copyHeaderFormat: settingsState.copyHeaderFormat,
-            bookName: bookName,
-            currentPath: currentPath,
-          );
-
-          // גם עדכון ה-HTML עם הכותרות
-          htmlContentToUse = CopyUtils.formatTextWithHeaders(
-            originalText: htmlContentToUse,
-            copyWithHeaders: settingsState.copyWithHeaders,
-            copyHeaderFormat: settingsState.copyHeaderFormat,
-            bookName: bookName,
-            currentPath: currentPath,
-          );
-        }
-
-        // שימוש בפונקציית העזר החדשה להעתקה
-        await CopyUtils.copyStyledToClipboard(
-          plainText: finalPlainText,
-          htmlText: htmlContentToUse,
-          fontFamily: settingsState.fontFamily,
-          fontSize: widget.textSize,
-        );
-      }
+      await copySelectedTextForBook(
+        plainText: plainText,
+        selectedIndex: _currentSelectedIndex.value,
+        sourceContent: widget.data,
+        textBookState: textBookState,
+        settingsState: settingsState,
+        fontFamily: settingsState.fontFamily,
+        fontSize: widget.textSize,
+      );
     } catch (e) {
       if (mounted) {
         UiSnack.showError('שגיאה בהעתקה מעוצבת: $e',
@@ -746,6 +687,38 @@ $textWithBreaks
     widget.onOpenPersonalNotes?.call();
   }
 
+  RenderSettings _selectionRenderSettings(
+    TextBookLoaded state,
+    SettingsState settingsState,
+  ) {
+    return RenderSettings(
+      removeNikud: state.removeNikud,
+      removePunctuation: state.removePunctuation,
+      removeTeamim: !settingsState.showTeamim,
+      replaceHolyNames: settingsState.replaceHolyNames,
+      searchText: state.searchText,
+      fontSize: widget.textSize,
+      fontFamily: settingsState.fontFamily,
+      lineHeight: settingsState.lineHeight,
+    );
+  }
+
+  List<String> _buildRenderedVisibleLines(
+    TextBookLoaded state,
+    SettingsState settingsState,
+  ) {
+    final renderSettings = _selectionRenderSettings(state, settingsState);
+    return state.visibleIndices
+        .where((idx) => idx >= 0 && idx < widget.data.length)
+        .map(
+          (idx) => renderSelectionLine(
+            rawText: widget.data[idx],
+            settings: renderSettings,
+          ),
+        )
+        .toList();
+  }
+
   Widget buildKeyboardListener() {
     return BlocBuilder<TextBookBloc, TextBookState>(
       bloc: context.read<TextBookBloc>(),
@@ -766,16 +739,11 @@ $textWithBreaks
               },
               onSelectionChanged: (selection) {
                 final plain = selection?.plainText;
-                if (plain == null || plain.trim().isEmpty) {
+                if (!shouldPersistSelectedText(plain)) {
                   // אם הבחירה נוקתה, יוצאים ממצב בחירה
                   _selectionManager.exitSelectionMode();
-                  _savedSelectedText.value = null;
-                  _savedSelectedIndex.value = null;
-                  _currentSelectedIndex.value = null;
-                  widget.onSelectedTextChanged?.call(null);
                   return;
                 }
-
                 // כניסה למצב בחירה כשיש טקסט נבחר
                 if (!_selectionManager.isInSelectionMode) {
                   // שימוש באינדקס הראשון הנראה במקום 0
@@ -797,19 +765,20 @@ $textWithBreaks
                 var fixedPlain = plain;
 
                 if (state is TextBookLoaded) {
+                  final settingsState = context.read<SettingsBloc>().state;
                   // מקבל את השורה הראשונה הנראית
                   final baseIndex = state.visibleIndices.isNotEmpty
                       ? state.visibleIndices.first
                       : 0;
 
-                  // בונה את הטקסט הנראה
-                  final visibleText = state.visibleIndices
-                      .map((idx) =>
-                          widget.data[idx].replaceAll(RegExp(r'<[^>]*>'), ''))
-                      .join('\n');
+                  final visibleLines =
+                      _buildRenderedVisibleLines(state, settingsState);
+                  final visibleText = visibleLines.join('\n');
 
-                  fixedPlain =
-                      _restoreNewlinesFromVisibleText(plain, visibleText);
+                  fixedPlain = restoreSelectedTextLineBreaks(
+                    selectedText: plain!,
+                    visibleLines: visibleLines,
+                  );
 
                   // מוצא את המיקום של הטקסט המודגש
                   final selectionStart = visibleText.indexOf(fixedPlain);
@@ -944,32 +913,6 @@ $textWithBreaks
         );
       },
     );
-  }
-
-  String _restoreNewlinesFromVisibleText(String plain, String visibleText) {
-    if (plain.contains('\n')) return plain;
-
-    final normalizedVisible = visibleText.replaceAll('\n', '');
-    final normalizedPlain = plain.replaceAll('\n', '');
-
-    if (normalizedPlain.isEmpty) return plain;
-
-    final startNon = normalizedVisible.indexOf(normalizedPlain);
-    if (startNon < 0) return plain;
-
-    final nonNewlineToVisible = <int>[];
-    for (var i = 0; i < visibleText.length; i++) {
-      if (visibleText[i] != '\n') {
-        nonNewlineToVisible.add(i);
-      }
-    }
-
-    final endNon = startNon + normalizedPlain.length - 1;
-    if (endNon >= nonNewlineToVisible.length) return plain;
-
-    final startVisible = nonNewlineToVisible[startNon];
-    final endVisible = nonNewlineToVisible[endNon];
-    return visibleText.substring(startVisible, endVisible + 1);
   }
 
   Widget buildOuterList(

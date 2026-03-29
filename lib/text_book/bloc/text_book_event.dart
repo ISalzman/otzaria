@@ -272,11 +272,18 @@ class AutoSaveDraft extends TextBookEvent {
 /// Event to update links after they're loaded in background
 class UpdateLinks extends TextBookEvent {
   final List<dynamic> links;
+  final bool replaceExisting;
+  final String? targetBookTitlesSignature;
 
-  const UpdateLinks(this.links);
+  const UpdateLinks(
+    this.links, {
+    this.replaceExisting = false,
+    this.targetBookTitlesSignature,
+  });
 
   @override
-  List<Object?> get props => [links];
+  List<Object?> get props =>
+      [links, replaceExisting, targetBookTitlesSignature];
 }
 
 /// Event to update available commentators after background loading
@@ -289,6 +296,15 @@ class UpdateAvailableCommentators extends TextBookEvent {
 
   @override
   List<Object?> get props => [availableCommentators, commentatorGroups];
+}
+
+class RefreshLinksForCurrentWindow extends TextBookEvent {
+  final String reason;
+
+  const RefreshLinksForCurrentWindow({this.reason = 'manual'});
+
+  @override
+  List<Object?> get props => [reason];
 }
 
 class OpenFullFileEditor extends TextBookEvent {

@@ -59,14 +59,53 @@ String removePunctuation(String text) {
         RegExp(r'[.:](\s*)$').firstMatch(processed);
     final lastAllowedPunctuationIndex = lastAllowedPunctuationMatch?.start;
 
-    processed = processed.replaceAllMapped(RegExp(r'[!:;.,?\-—]'), (match) {
-      if (lastAllowedPunctuationIndex != null &&
-          match.start >= lastAllowedPunctuationIndex &&
-          (match.group(0) == '.' || match.group(0) == ':')) {
-        return match.group(0)!;
+    // הסרה לינארית של פיסוק, עם תמיכה בסוגריים מקוננים.
+    // בתוך סוגריים שומרים רק . ו- :
+    final buffer = StringBuffer();
+    var parenDepth = 0;
+    for (var i = 0; i < processed.length; i++) {
+      final ch = processed[i];
+
+      if (ch == '(') {
+        parenDepth++;
+        buffer.write(ch);
+        continue;
       }
-      return '';
-    });
+
+      if (ch == ')') {
+        if (parenDepth > 0) {
+          parenDepth--;
+        }
+        buffer.write(ch);
+        continue;
+      }
+
+      final isPunctuation = ch == '!' ||
+          ch == ':' ||
+          ch == ';' ||
+          ch == '.' ||
+          ch == ',' ||
+          ch == '?' ||
+          ch == '-' ||
+          ch == '—';
+
+      if (parenDepth > 0 && (ch == ':' || ch == '.')) {
+        buffer.write(ch);
+        continue;
+      }
+
+      if (isPunctuation) {
+        if (lastAllowedPunctuationIndex != null &&
+            i >= lastAllowedPunctuationIndex &&
+            (ch == '.' || ch == ':')) {
+          buffer.write(ch);
+        }
+        continue;
+      }
+
+      buffer.write(ch);
+    }
+    processed = buffer.toString();
 
     processed = processed.replaceAllMapped(
       RegExp(r'["״]'),

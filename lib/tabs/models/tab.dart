@@ -11,7 +11,8 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 abstract class OpenedTab {
   String title;
   bool isPinned;
-  OpenedTab(this.title, {this.isPinned = false});
+  final String? dedupeKey;
+  OpenedTab(this.title, {this.isPinned = false, this.dedupeKey});
 
   /// Called when the tab is being disposed.
   /// Override this method to perform cleanup.
@@ -34,12 +35,14 @@ abstract class OpenedTab {
         splitedView: splitedView,
         showPageShapeView: showPageShapeView,
         isPinned: tab.isPinned,
+        dedupeKey: tab.dedupeKey,
       );
     } else if (tab is PdfBookTab) {
       return PdfBookTab(
         book: tab.book,
         pageNumber: tab.pageNumber,
         isPinned: tab.isPinned,
+        dedupeKey: tab.dedupeKey,
       );
     } else if (tab is CombinedTab) {
       return CombinedTab(
