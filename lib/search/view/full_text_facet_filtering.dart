@@ -9,6 +9,7 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
+import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -36,45 +37,6 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
   bool get wantKeepAlive => true;
   final TextEditingController _filterQuery = TextEditingController();
   final Map<String, bool> _expansionState = {};
-
-  // Canonical display order for top-level categories (overrides DB orderIndex).
-  // Titles use ASCII double-quote; Hebrew gershayim (\u05F4 ״) is normalised
-  // to ASCII " before lookup, so both DB titles and placeholder titles match.
-  static const List<String> _orderedTopCategories = [
-    'תנ"ך',
-    'מדרש',
-    'משנה',
-    'תלמוד בבלי',
-    'תלמוד ירושלמי',
-    'תוספתא',
-    'הלכה',
-    'שו"ת',
-    'קבלה',
-    'סדר התפילה',
-    'מחשבת ישראל',
-    'חסידות',
-    'ספרי מוסר',
-    'מילונים וספרי יעץ',
-    'לימוד יומי',
-    'ספרות עזר',
-    'בית שני',
-  ];
-
-  /// Returns a sort key for a top-level category.
-  /// Categories listed in [_orderedTopCategories] get their index (0-based);
-  /// all others are appended after with their DB order as a tie-breaker.
-  int _getTopCategoryOrder(Category cat) {
-    final normalized =
-        cat.title.replaceAll('\u05F4', '"').replaceAll('\u05F3', "'");
-    final idx = _orderedTopCategories.indexOf(normalized);
-    return idx >= 0 ? idx : _orderedTopCategories.length + cat.order;
-  }
-
-  /// Normalises a DB orderIndex for display sorting.
-  /// Negative values (e.g. -5 used for מפרשים) are remapped to the end
-  /// (1000 + abs(value)) so they appear after the primary content.
-  static int _normalizeOrder(int order) =>
-      order >= 0 ? order : 1000 + order.abs();
 
   String _bookDedupKey(Book book) {
     final baseTitle = book.title.trim();
@@ -447,11 +409,13 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
 
     final filteredSubCategories = category.subCategories.toList();
     if (category is Library) {
-      filteredSubCategories.sort(
-          (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)));
+      filteredSubCategories.sort((a, b) =>
+          SearchCatalogueOrderHelper.topCategoryOrder(a)
+              .compareTo(SearchCatalogueOrderHelper.topCategoryOrder(b)));
     } else {
       filteredSubCategories.sort((a, b) =>
-          _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)));
+          SearchCatalogueOrderHelper.normalizeOrder(a.order)
+              .compareTo(SearchCatalogueOrderHelper.normalizeOrder(b.order)));
     }
 
     // הוספת תת-קטגוריות
@@ -508,10 +472,12 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
       final sortedSubCategories = cat.subCategories.toList();
       if (cat is Library) {
         sortedSubCategories.sort((a, b) =>
-            _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)));
+            SearchCatalogueOrderHelper.topCategoryOrder(a)
+                .compareTo(SearchCatalogueOrderHelper.topCategoryOrder(b)));
       } else {
         sortedSubCategories.sort((a, b) =>
-            _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)));
+            SearchCatalogueOrderHelper.normalizeOrder(a.order)
+                .compareTo(SearchCatalogueOrderHelper.normalizeOrder(b.order)));
       }
 
       for (final subCat in sortedSubCategories) {
