@@ -25,6 +25,79 @@ class AramaicDictionaryEntry {
   final String hebrew;
 }
 
+/// מייצג פירוש בודד לאחר פענוח סימוני העיצוב של המילון.
+class ParsedAramaicMeaning {
+  const ParsedAramaicMeaning({
+    required this.mainText,
+    this.expression,
+    this.expansion,
+  });
+
+  final String mainText;
+  final String? expression;
+  final String? expansion;
+}
+
+/// מייצג ערך מלא במילון לאחר חלוקה לפירושים.
+class AramaicDictionaryEntryPresentation {
+  const AramaicDictionaryEntryPresentation({
+    required this.meanings,
+  });
+
+  final List<ParsedAramaicMeaning> meanings;
+
+  static AramaicDictionaryEntryPresentation parse(String raw) {
+    final normalized = raw.replaceAll(RegExp(r'\s*\*\*\*\s*'), '***').trim();
+    final parts = normalized
+        .split('***')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .map(_parseMeaning)
+        .toList();
+
+    if (parts.isEmpty) {
+      return const AramaicDictionaryEntryPresentation(
+        meanings: <ParsedAramaicMeaning>[
+          ParsedAramaicMeaning(mainText: ''),
+        ],
+      );
+    }
+
+    return AramaicDictionaryEntryPresentation(meanings: parts);
+  }
+
+  static ParsedAramaicMeaning _parseMeaning(String raw) {
+    final expressionMatch = RegExp(r'^\{([^{}]+)\}\s*').firstMatch(raw);
+    final expression = expressionMatch?.group(1)?.trim();
+    var remaining = expressionMatch == null
+        ? raw.trim()
+        : raw.substring(expressionMatch.end).trim();
+
+    String? expansion;
+    final expansionAtStart =
+        RegExp(r'^\(=\s*([^)]+?)\)\s*').firstMatch(remaining);
+    if (expansionAtStart != null) {
+      expansion = expansionAtStart.group(1)?.trim();
+      remaining = remaining.substring(expansionAtStart.end).trim();
+    } else {
+      final inlineExpansion =
+          RegExp(r'\s+\(=\s*([^)]+?)\)\s*').firstMatch(remaining);
+      if (inlineExpansion != null) {
+        expansion = inlineExpansion.group(1)?.trim();
+        final before = remaining.substring(0, inlineExpansion.start).trim();
+        final after = remaining.substring(inlineExpansion.end).trim();
+        remaining = [before, after].where((part) => part.isNotEmpty).join(' ');
+      }
+    }
+
+    return ParsedAramaicMeaning(
+      mainText: remaining,
+      expression: expression,
+      expansion: expansion,
+    );
+  }
+}
+
 /// Repository משותף לטעינה וחיפוש במילוני הכלים.
 class DictionaryLookupRepository {
   DictionaryLookupRepository({

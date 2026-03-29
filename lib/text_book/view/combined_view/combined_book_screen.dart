@@ -449,6 +449,7 @@ class _CombinedViewState extends State<CombinedView> {
         ),
         ...(() {
           final dictionaryEntries = buildDictionaryContextMenuEntries(
+            context: context,
             selectedText: selectedText,
             repository: _dictionaryLookupRepository,
           );
