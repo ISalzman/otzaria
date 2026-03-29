@@ -38,7 +38,7 @@ void main() {
     );
 
     expect(find.text('התוכנה בתהליך אינדוקס'), findsOneWidget);
-    expect(find.text('ייתכן איטיות בפעילות התוכנה'), findsOneWidget);
+    expect(find.text('תיתכן איטיות בפעילות התוכנה'), findsOneWidget);
     expect(find.text('25%'), findsOneWidget);
     expect(find.text('התקדמות: 25/100'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
