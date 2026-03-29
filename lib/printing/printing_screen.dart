@@ -27,6 +27,9 @@ import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
+
+enum _PrintRangeMode { headers, altHeaders, lines }
 
 class PrintingScreen extends StatefulWidget {
   final Future<String> data;
@@ -79,11 +82,14 @@ class _PrintingScreenState extends State<PrintingScreen> {
   List<PersonalNote>? _personalNotesCache;
   bool _isLoadingNotes = false;
 
-  // מצב בחירה: שורות או כותרות
-  bool _isHeaderMode = true; // ברירת מחדל: כותרות
+  // מצב בחירה: שורות, כותרות, או כותרות משנה
+  _PrintRangeMode _rangeMode = _PrintRangeMode.headers;
   int? _startHeaderIndex;
   int? _endHeaderIndex;
   List<TocEntry> _flatHeaders = [];
+  int? _startAltHeaderIndex;
+  int? _endAltHeaderIndex;
+  List<TocEntry> _flatAltHeaders = [];
 
   // הגדרות ניקוד וטעמים - ברירת מחדל לפי תצוגת הספר
   late bool _removeNikud;
@@ -108,7 +114,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
     // במצב PDF חיצוני (כמו "צורת הדף") אין טווח שורות/כותרות.
     if (widget.createPdfOverride != null) {
-      _isHeaderMode = false;
+      _rangeMode = _PrintRangeMode.lines;
       _flatHeaders = const [];
       _previewPdf = _createBasePdf(format);
       return;
@@ -124,7 +130,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
       _updateRangeByHeaders();
     } else {
       // אם אין כותרות, עבור למצב שורות
-      _isHeaderMode = false;
+      _rangeMode = _PrintRangeMode.lines;
       () async {
         endLine = min(startLine + 3, (await widget.data).split('\n').length);
         _refreshPreviewPdf();
@@ -133,6 +139,56 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
 
     _previewPdf = _createBasePdf(format);
+    _loadAltHeaders();
+  }
+
+  Future<void> _loadAltHeaders() async {
+    if (widget.createPdfOverride != null) return;
+    try {
+      final structures = await DatabaseLibraryProvider.instance
+          .getAlternativeStructuresForBook(widget.bookId);
+      if (structures.isEmpty || !mounted) return;
+
+      // שימוש ב-structure הראשון בלבד - ריבוי structures מערבב ערכים
+      final rows = await DatabaseLibraryProvider.instance
+          .getAltTocLineIndices(structures.first.id);
+      if (!mounted || rows.isEmpty) return;
+
+      final altEntries = rows
+          .map((r) => TocEntry(text: r.text, index: r.lineIndex))
+          .toList();
+
+      setState(() {
+        _flatAltHeaders = altEntries;
+        _startAltHeaderIndex = 0;
+        _endAltHeaderIndex = min(2, altEntries.length - 1);
+        // אם אין ניווט רגיל, עבור אוטומטית למצב כותרות משנה
+        if (_flatHeaders.isEmpty) {
+          _rangeMode = _PrintRangeMode.altHeaders;
+          _updateRangeByAltHeaders();
+        }
+      });
+    } catch (e) {
+      debugPrint('Error loading alt headers for printing: $e');
+    }
+  }
+
+  void _updateRangeByAltHeaders() async {
+    if (_startAltHeaderIndex != null && _endAltHeaderIndex != null) {
+      final startEntry = _flatAltHeaders[_startAltHeaderIndex!];
+      final totalLines = (await widget.data).split('\n').length;
+
+      startLine = startEntry.index;
+
+      if (_endAltHeaderIndex! < _flatAltHeaders.length - 1) {
+        endLine = _flatAltHeaders[_endAltHeaderIndex! + 1].index;
+      } else {
+        endLine = totalLines;
+      }
+
+      _refreshPreviewPdf();
+      setState(() {});
+    }
   }
 
   @override
@@ -1227,49 +1283,57 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                     FluentIcons.document_page_number_24_regular,
                                 child: Column(
                                   children: [
-                                    // תפריט בחירה: שורות/כותרות
-                                    if (_flatHeaders.isNotEmpty)
+                                    // תפריט בחירה: שורות/כותרות/כותרות משנה
+                                    if (_flatHeaders.isNotEmpty || _flatAltHeaders.isNotEmpty)
                                       Padding(
                                         padding:
                                             const EdgeInsets.only(bottom: 16),
                                         child: Row(
                                           children: [
                                             Expanded(
-                                              child: SegmentedButton<bool>(
-                                                segments: const [
-                                                  ButtonSegment<bool>(
-                                                    value: true,
-                                                    label: Text('כותרות'),
-                                                    icon: Icon(
-                                                        FluentIcons
-                                                            .text_bullet_list_24_regular,
-                                                        size: 16),
-                                                  ),
-                                                  ButtonSegment<bool>(
-                                                    value: false,
+                                              child: SegmentedButton<_PrintRangeMode>(
+                                                showSelectedIcon: false,
+                                                segments: [
+                                                  if (_flatHeaders.isNotEmpty)
+                                                    const ButtonSegment<_PrintRangeMode>(
+                                                      value: _PrintRangeMode.headers,
+                                                      label: Text('כותרות'),
+                                                    ),
+                                                  if (_flatAltHeaders.isNotEmpty)
+                                                    ButtonSegment<_PrintRangeMode>(
+                                                      value: _PrintRangeMode.altHeaders,
+                                                      label: Column(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: const [
+                                                          Text('כותרות', style: TextStyle(fontSize: 11)),
+                                                          Text('משנה', style: TextStyle(fontSize: 11)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  const ButtonSegment<_PrintRangeMode>(
+                                                    value: _PrintRangeMode.lines,
                                                     label: Text('שורות'),
-                                                    icon: Icon(
-                                                        FluentIcons
-                                                            .text_number_list_ltr_24_regular,
-                                                        size: 16),
                                                   ),
                                                 ],
-                                                selected: {_isHeaderMode},
+                                                selected: {_rangeMode},
                                                 onSelectionChanged:
-                                                    (Set<bool> newSelection) {
+                                                    (Set<_PrintRangeMode> newSelection) {
                                                   setState(() {
-                                                    _isHeaderMode =
-                                                        newSelection.first;
-                                                    if (_isHeaderMode &&
-                                                        _flatHeaders
-                                                            .isNotEmpty) {
-                                                      // אתחול ברירת מחדל לכותרת ראשונה
+                                                    _rangeMode = newSelection.first;
+                                                    if (_rangeMode == _PrintRangeMode.headers &&
+                                                        _flatHeaders.isNotEmpty) {
                                                       _startHeaderIndex = 0;
                                                       _endHeaderIndex = min(
                                                           2,
-                                                          _flatHeaders.length -
-                                                              1);
+                                                          _flatHeaders.length - 1);
                                                       _updateRangeByHeaders();
+                                                    } else if (_rangeMode == _PrintRangeMode.altHeaders &&
+                                                        _flatAltHeaders.isNotEmpty) {
+                                                      _startAltHeaderIndex = 0;
+                                                      _endAltHeaderIndex = min(
+                                                          2,
+                                                          _flatAltHeaders.length - 1);
+                                                      _updateRangeByAltHeaders();
                                                     } else {
                                                       _refreshPreviewPdf();
                                                     }
@@ -1282,7 +1346,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       ),
 
                                     // בחירת טווח לפי שורות
-                                    if (!_isHeaderMode) ...[
+                                    if (_rangeMode == _PrintRangeMode.lines) ...[
                                       Row(
                                         mainAxisAlignment:
                                             MainAxisAlignment.spaceBetween,
@@ -1329,7 +1393,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                     ],
 
                                     // בחירת טווח לפי כותרות
-                                    if (_isHeaderMode &&
+                                    if (_rangeMode == _PrintRangeMode.headers &&
                                         _flatHeaders.isNotEmpty) ...[
                                       _buildDropdownRow(
                                         context: context,
@@ -1405,6 +1469,91 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       const SizedBox(height: 8),
                                       Text(
                                         '${(_endHeaderIndex ?? 0) - (_startHeaderIndex ?? 0) + 1} כותרות נבחרו',
+                                        style: TextStyle(
+                                          color: colorScheme.primary,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+
+                                    // בחירת טווח לפי כותרות משנה
+                                    if (_rangeMode == _PrintRangeMode.altHeaders &&
+                                        _flatAltHeaders.isNotEmpty) ...[
+                                      _buildDropdownRow(
+                                        context: context,
+                                        label: 'מ-',
+                                        child: DropdownButton<int>(
+                                          value: _startAltHeaderIndex,
+                                          isExpanded: true,
+                                          underline: const SizedBox(),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          onChanged: (int? value) {
+                                            setState(() {
+                                              _startAltHeaderIndex = value;
+                                              if (_endAltHeaderIndex != null &&
+                                                  value != null &&
+                                                  value > _endAltHeaderIndex!) {
+                                                _endAltHeaderIndex = value;
+                                              }
+                                              _updateRangeByAltHeaders();
+                                            });
+                                          },
+                                          items: _flatAltHeaders
+                                              .asMap()
+                                              .entries
+                                              .map((entry) {
+                                            return DropdownMenuItem<int>(
+                                              value: entry.key,
+                                              child: Text(
+                                                entry.value.fullText,
+                                                overflow: TextOverflow.ellipsis,
+                                                maxLines: 1,
+                                              ),
+                                            );
+                                          }).toList(),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _buildDropdownRow(
+                                        context: context,
+                                        label: 'עד-',
+                                        child: DropdownButton<int>(
+                                          value: _endAltHeaderIndex,
+                                          isExpanded: true,
+                                          underline: const SizedBox(),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          onChanged: (int? value) {
+                                            setState(() {
+                                              _endAltHeaderIndex = value;
+                                              if (_startAltHeaderIndex != null &&
+                                                  value != null &&
+                                                  value < _startAltHeaderIndex!) {
+                                                _startAltHeaderIndex = value;
+                                              }
+                                              _updateRangeByAltHeaders();
+                                            });
+                                          },
+                                          items: _flatAltHeaders
+                                              .asMap()
+                                              .entries
+                                              .map((entry) {
+                                            return DropdownMenuItem<int>(
+                                              value: entry.key,
+                                              child: Text(
+                                                entry.value.fullText,
+                                                overflow: TextOverflow.ellipsis,
+                                                maxLines: 1,
+                                              ),
+                                            );
+                                          }).toList(),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '${(_endAltHeaderIndex ?? 0) - (_startAltHeaderIndex ?? 0) + 1} כותרות משנה נבחרו',
                                         style: TextStyle(
                                           color: colorScheme.primary,
                                           fontSize: 12,
