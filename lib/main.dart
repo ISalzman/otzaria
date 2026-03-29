@@ -72,6 +72,16 @@ AppWindowListener? _appWindowListener;
 /// Getter for accessing the window listener from other parts of the app
 AppWindowListener? get appWindowListener => _appWindowListener;
 
+bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
+  return errorString.contains('!_pressedKeys.containsKey(event.physicalKey)') ||
+      errorString.contains(
+        'A KeyDownEvent is dispatched, but the state shows that the physical key is already pressed',
+      ) ||
+      errorString.contains(
+        'A KeyUpEvent is dispatched, but the state shows that the physical key is not pressed',
+      );
+}
+
 /// Application entry point that initializes necessary components and launches the app.
 ///
 /// This function performs the following initialization steps:
@@ -97,9 +107,7 @@ void main() async {
 
     // Skip HardwareKeyboard assertion error - happens when window loses focus while
     // a key is held down; fixed by clearState() in onWindowFocus but filter as fallback
-    if (errorString.contains('!_pressedKeys.containsKey(event.physicalKey)') ||
-        errorString.contains(
-            'A KeyDownEvent is dispatched, but the state shows that the physical key is already pressed')) {
+    if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
       return; // Silently ignore - handled by HardwareKeyboard.instance.clearState() on focus
     }
 
@@ -123,9 +131,7 @@ void main() async {
     }
 
     // Skip HardwareKeyboard assertion error - handled by clearState() on window focus
-    if (errorString.contains('!_pressedKeys.containsKey(event.physicalKey)') ||
-        errorString.contains(
-            'A KeyDownEvent is dispatched, but the state shows that the physical key is already pressed')) {
+    if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
       return true; // Silently ignore
     }
 
@@ -172,10 +178,7 @@ Future<void> _initializeSentry() async {
             return null; // Don't send to Sentry
           }
           // Filter HardwareKeyboard assertion - handled by clearState() on window focus
-          if (exception
-                  .contains('!_pressedKeys.containsKey(event.physicalKey)') ||
-              exception.contains(
-                  'A KeyDownEvent is dispatched, but the state shows that the physical key is already pressed')) {
+          if (_isIgnorableHardwareKeyboardAssertion(exception)) {
             return null; // Don't send to Sentry
           }
           return event;

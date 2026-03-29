@@ -122,7 +122,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                             iconMargin: const EdgeInsets.only(bottom: 2),
                             height: 48,
                             child: Text(
-                              widget.showSplitView ? 'מפרשים' : 'הגדרות מפרשים',
+                              widget.showSplitView ? 'מפרשים' : 'סינון מפרשים',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),

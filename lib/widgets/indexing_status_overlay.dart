@@ -1,9 +1,8 @@
-import 'dart:async';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 class IndexingStatusOverlay extends StatefulWidget {
   const IndexingStatusOverlay({super.key, this.onTap});
@@ -16,26 +15,6 @@ class IndexingStatusOverlay extends StatefulWidget {
 
 class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
   bool _hidden = false;
-  bool _delayElapsed = false;
-  Timer? _delayTimer;
-
-  @override
-  void dispose() {
-    _delayTimer?.cancel();
-    super.dispose();
-  }
-
-  void _startDelayTimer() {
-    _delayTimer?.cancel();
-    _delayElapsed = false;
-    _delayTimer = Timer(const Duration(seconds: 13), () {
-      if (mounted) {
-        setState(() {
-          _delayElapsed = true;
-        });
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,25 +22,16 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
       buildWhen: (previous, current) => previous != current,
       builder: (context, state) {
         final isIndexing = state is IndexingInProgress;
+        final shouldShowOverlay = isIndexing && state.isCreatingIndex;
 
-        // אם האינדוקס התחיל - הפעל טיימר
-        if (isIndexing && _delayTimer == null) {
-          _startDelayTimer();
+        if (!isIndexing && _hidden) {
+          _hidden = false;
         }
 
-        // אם האינדוקס נגמר - אפס הכל
-        if (!isIndexing) {
-          _delayTimer?.cancel();
-          _delayTimer = null;
-          if (_hidden || _delayElapsed) {
-            _hidden = false;
-            _delayElapsed = false;
-          }
-        }
-
-        if (_hidden || !isIndexing || !_delayElapsed) {
+        if (_hidden || !shouldShowOverlay) {
           return const SizedBox.shrink();
         }
+
         final processed = state.booksProcessed ?? 0;
         final total = state.totalBooks ?? 0;
         if (total == 0) {
@@ -78,15 +48,16 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
 
         final isRtl = Directionality.of(context) == TextDirection.rtl;
         final isWindows = Theme.of(context).platform == TargetPlatform.windows;
-        final alignment = isWindows ? Alignment.topLeft : (isRtl ? Alignment.topRight : Alignment.topLeft);
+        final alignment = isWindows
+            ? Alignment.bottomLeft
+            : (isRtl ? Alignment.bottomRight : Alignment.bottomLeft);
         final padding = isWindows
-            ? const EdgeInsets.only(top: 56, left: 16, right: 0)
+            ? const EdgeInsets.only(bottom: 24, left: 16, right: 0)
             : EdgeInsets.only(
-                top: 56,
+                bottom: 24,
                 left: isRtl ? 0 : 16,
                 right: isRtl ? 16 : 0,
               );
-        // קובע את מיקום האיקס: תמיד באותו צד של החיווי
         final closeOnRight = alignment == Alignment.topRight;
 
         return Align(
@@ -95,10 +66,12 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
             padding: padding,
             child: Material(
               color: Colors.transparent,
+              borderRadius: BorderRadius.circular(18),
+              clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: widget.onTap,
                 borderRadius: BorderRadius.circular(18),
-                child: Ink(
+                child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: colorScheme.surface.withValues(alpha: 0.96),
                     borderRadius: BorderRadius.circular(18),
@@ -117,26 +90,26 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
+                          horizontal: 20,
+                          vertical: 16,
                         ),
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 330),
+                          constraints: const BoxConstraints(maxWidth: 380),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.center,
                             textDirection: TextDirection.ltr,
                             children: [
                               SizedBox(
-                                width: 54,
-                                height: 54,
+                                width: 64,
+                                height: 64,
                                 child: Stack(
                                   alignment: Alignment.center,
                                   children: [
                                     SizedBox.expand(
                                       child: CircularProgressIndicator(
                                         value: progress,
-                                        strokeWidth: 5,
+                                        strokeWidth: 6,
                                         backgroundColor:
                                             colorScheme.surfaceContainerHighest,
                                       ),
@@ -145,7 +118,7 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
                                       percentLabel,
                                       style: Theme.of(context)
                                           .textTheme
-                                          .labelMedium
+                                          .titleSmall
                                           ?.copyWith(
                                             color: colorScheme.onSurface,
                                             fontWeight: FontWeight.w700,
@@ -155,7 +128,7 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 16),
                               Flexible(
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -166,31 +139,31 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
                                       textDirection: TextDirection.rtl,
                                       style: Theme.of(context)
                                           .textTheme
-                                          .titleSmall
+                                          .titleMedium
                                           ?.copyWith(
                                             color: colorScheme.onSurface,
                                             fontWeight: FontWeight.w700,
                                           ),
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 6),
                                     Text(
-                                      'תיתכן איטיות בפעילות התוכנה',
+                                      'ייתכן איטיות בפעילות התוכנה',
                                       textDirection: TextDirection.rtl,
                                       style: Theme.of(context)
                                           .textTheme
-                                          .bodySmall
+                                          .bodyMedium
                                           ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
                                             height: 1.25,
                                           ),
                                     ),
-                                    const SizedBox(height: 6),
+                                    const SizedBox(height: 8),
                                     Text(
                                       'התקדמות: $countLabel',
                                       textDirection: TextDirection.rtl,
                                       style: Theme.of(context)
                                           .textTheme
-                                          .labelLarge
+                                          .titleSmall
                                           ?.copyWith(
                                             color: colorScheme.primary,
                                             fontWeight: FontWeight.w600,
@@ -203,11 +176,10 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
                           ),
                         ),
                       ),
-                      // כפתור סגירה
                       Positioned(
-                        top: 2,
-                        right: closeOnRight ? 2 : null,
-                        left: closeOnRight ? null : 2,
+                        top: 8,
+                        right: closeOnRight ? 8 : null,
+                        left: closeOnRight ? null : 8,
                         child: IconButton(
                           icon: Icon(
                             FluentIcons.dismiss_24_regular,

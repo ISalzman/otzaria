@@ -25,7 +25,11 @@ import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
+import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
+import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 
 /// תצוגת טקסט פשוטה - משמשת גם לטקסט המרכזי וגם למפרשים
 class SimpleTextViewer extends StatefulWidget {
@@ -70,21 +74,77 @@ class SimpleTextViewer extends StatefulWidget {
 }
 
 class _SimpleTextViewerState extends State<SimpleTextViewer> {
+  late final String _debugScope;
+  int _buildCount = 0;
   late final ItemScrollController _scrollController;
   late final ItemPositionsListener _positionsListener;
   late final FocusNode _focusNode;
+  VoidCallback? _positionsDebugListener;
   String? _savedSelectedText;
   int? _savedSelectedIndex;
   int _initialScrollRestoreAttempts = 0;
+  int _initialPositionSnapshotCount = 0;
+  int _rawPositionsCallbackCount = 0;
+  String? _lastRawPositionsSignature;
   final Map<String, Future<bool>> _removeNikudCache = {};
 
   @override
   void initState() {
     super.initState();
+    _debugScope = PageShapeDebugLogger.newScope(
+      'simple-text-viewer',
+      label: widget.title ?? widget.bookTitle ?? (widget.isMainText ? 'main-text' : 'commentary'),
+    );
     _scrollController = widget.scrollController ?? ItemScrollController();
     _positionsListener =
         widget.positionsListener ?? ItemPositionsListener.create();
     _focusNode = FocusNode();
+    PageShapeDebugLogger.log(
+      'SimpleTextViewer',
+      'initState',
+      scope: _debugScope,
+      data: {
+        'isMainText': widget.isMainText,
+        'title': widget.title,
+        'bookTitle': widget.bookTitle,
+        'contentLength': widget.content.length,
+        'useInternalScroll': widget.useInternalScroll,
+        'hasExternalScrollController': widget.scrollController != null,
+        'hasExternalPositionsListener': widget.positionsListener != null,
+      },
+      level: 'LIFECYCLE',
+    );
+
+    if (widget.useInternalScroll) {
+      _positionsDebugListener = () {
+        _rawPositionsCallbackCount++;
+        final positions = _positionsListener.itemPositions.value.toList()
+          ..sort((a, b) => a.index.compareTo(b.index));
+        final signature = _positionsSignature(positions);
+        PageShapeDebugLogger.log(
+          'SimpleTextViewer',
+          'itemPositions listener נורה ב־SimpleTextViewer',
+          scope: _debugScope,
+          data: {
+            'rawPositionsCallbackCount': _rawPositionsCallbackCount,
+            'sameAsPrevious': signature == _lastRawPositionsSignature,
+            ..._positionsSummary(positions),
+          },
+          level: 'SCROLL',
+        );
+        _lastRawPositionsSignature = signature;
+      };
+      _positionsListener.itemPositions.addListener(_positionsDebugListener!);
+      PageShapeDebugLogger.log(
+        'SimpleTextViewer',
+        'נוסף מאזין דיבוג ל־itemPositions',
+        scope: _debugScope,
+        data: {
+          'useInternalScroll': widget.useInternalScroll,
+        },
+        level: 'LIFECYCLE',
+      );
+    }
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
@@ -100,6 +160,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         if (!mounted) return;
         final state = context.read<TextBookBloc>().state;
         if (state is TextBookLoaded) {
+          PageShapeDebugLogger.log(
+            'SimpleTextViewer',
+            'נשלחת טעינת הערות אישיות לטקסט הראשי',
+            scope: _debugScope,
+            data: {
+              'bookTitle': state.book.title,
+            },
+          );
           context
               .read<PersonalNotesBloc>()
               .add(LoadPersonalNotes(state.book.title));
@@ -110,20 +178,76 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   @override
   void dispose() {
+    if (_positionsDebugListener != null) {
+      _positionsListener.itemPositions.removeListener(_positionsDebugListener!);
+      PageShapeDebugLogger.log(
+        'SimpleTextViewer',
+        'הוסר מאזין דיבוג מ־itemPositions',
+        scope: _debugScope,
+        data: {
+          'rawPositionsCallbackCount': _rawPositionsCallbackCount,
+        },
+        level: 'LIFECYCLE',
+      );
+    }
+    PageShapeDebugLogger.log(
+      'SimpleTextViewer',
+      'dispose',
+      scope: _debugScope,
+      data: {
+        'buildCount': _buildCount,
+        'initialScrollRestoreAttempts': _initialScrollRestoreAttempts,
+        'initialPositionSnapshotCount': _initialPositionSnapshotCount,
+        'rawPositionsCallbackCount': _rawPositionsCallbackCount,
+      },
+      level: 'END',
+    );
     _focusNode.dispose();
     super.dispose();
   }
 
   void _scheduleInitialScrollRestore() {
+    PageShapeDebugLogger.log(
+      'SimpleTextViewer',
+      'תוזמן שחזור גלילה ראשוני',
+      scope: _debugScope,
+      data: {
+        'attempt': _initialScrollRestoreAttempts,
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
+      _logVisiblePositionsSnapshot(
+        'snapshot לפני ניסיון שחזור גלילה',
+        attempt: _initialScrollRestoreAttempts,
+      );
+
       final restored = _scrollToCurrentPosition();
-      if (restored || _initialScrollRestoreAttempts >= 10) {
+      if (restored) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _logVisiblePositionsSnapshot(
+            'snapshot אחרי בקשת שחזור גלילה',
+            attempt: _initialScrollRestoreAttempts,
+          );
+        });
+        return;
+      }
+      if (_initialScrollRestoreAttempts >= 10) {
         return;
       }
 
       _initialScrollRestoreAttempts++;
+      PageShapeDebugLogger.log(
+        'SimpleTextViewer',
+        'שחזור גלילה ראשוני לא הצליח עדיין; מתוזמן ניסיון נוסף',
+        scope: _debugScope,
+        data: {
+          'attempt': _initialScrollRestoreAttempts,
+        },
+        level: 'SCROLL',
+      );
       Future.delayed(
         const Duration(milliseconds: 50),
         _scheduleInitialScrollRestore,
@@ -131,11 +255,69 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     });
   }
 
+  void _logVisiblePositionsSnapshot(
+    String reason, {
+    required int attempt,
+  }) {
+    _initialPositionSnapshotCount++;
+    final positions = _positionsListener.itemPositions.value.toList()
+      ..sort((a, b) => a.index.compareTo(b.index));
+    PageShapeDebugLogger.log(
+      'SimpleTextViewer',
+      reason,
+      scope: _debugScope,
+      data: {
+        'attempt': attempt,
+        'snapshotCount': _initialPositionSnapshotCount,
+        'scrollControllerAttached': _scrollController.isAttached,
+        ..._positionsSummary(positions),
+      },
+      level: 'SCROLL',
+    );
+  }
+
+  Map<String, Object?> _positionsSummary(Iterable<ItemPosition> positions) {
+    final list = positions.toList(growable: false);
+    return {
+      'itemPositionsCount': list.length,
+      'indices': PageShapeDebugLogger.summarizeIndices(
+        list.map((position) => position.index),
+      ),
+      'items': list
+          .take(6)
+          .map((position) => {
+                'index': position.index,
+                'leadingEdge': position.itemLeadingEdge,
+                'trailingEdge': position.itemTrailingEdge,
+              })
+          .toList(growable: false),
+    };
+  }
+
+  String _positionsSignature(Iterable<ItemPosition> positions) {
+    return positions
+        .map(
+          (position) =>
+              '${position.index}:${position.itemLeadingEdge.toStringAsFixed(3)}:${position.itemTrailingEdge.toStringAsFixed(3)}',
+        )
+        .join('|');
+  }
+
   /// גלילה למיקום הנוכחי (visibleIndices או selectedIndex)
   bool _scrollToCurrentPosition() {
     final bloc = context.read<TextBookBloc>();
     final state = bloc.state;
     if (state is! TextBookLoaded || !_scrollController.isAttached) {
+      PageShapeDebugLogger.log(
+        'SimpleTextViewer',
+        'שחזור גלילה נכשל זמנית',
+        scope: _debugScope,
+        data: {
+          'stateType': state.runtimeType,
+          'scrollControllerAttached': _scrollController.isAttached,
+        },
+        level: 'SCROLL',
+      );
       return false;
     }
 
@@ -144,11 +326,142 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         : state.selectedIndex;
 
     if (targetIndex == null || targetIndex >= widget.content.length) {
+      PageShapeDebugLogger.log(
+        'SimpleTextViewer',
+        'שחזור גלילה דולג כי targetIndex לא תקין',
+        scope: _debugScope,
+        data: {
+          'targetIndex': targetIndex,
+          'contentLength': widget.content.length,
+        },
+        level: 'SCROLL',
+      );
       return false;
     }
 
     _scrollController.jumpTo(index: targetIndex);
+    PageShapeDebugLogger.log(
+      'SimpleTextViewer',
+      'בוצע jumpTo לשחזור גלילה',
+      scope: _debugScope,
+      data: {
+        'targetIndex': targetIndex,
+      },
+      level: 'SCROLL',
+    );
     return true;
+  }
+
+  Future<bool> _resolveSelectionRemoveNikud(
+    TextBookLoaded state,
+    SettingsState settingsState,
+  ) {
+    if (widget.isMainText) {
+      return Future.value(state.removeNikud);
+    }
+
+    final targetTitle = widget.bookTitle;
+    if (targetTitle == null) {
+      return Future.value(settingsState.defaultRemoveNikud);
+    }
+
+    return _removeNikudCache.putIfAbsent(
+      '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}',
+      () => resolveRemoveNikudForBook(
+        title: targetTitle,
+        defaultRemoveNikud: settingsState.defaultRemoveNikud,
+        removeNikudFromTanach: settingsState.removeNikudFromTanach,
+      ),
+    );
+  }
+
+  RenderSettings _selectionRenderSettings({
+    required TextBookLoaded state,
+    required SettingsState settingsState,
+    required bool removeNikud,
+  }) {
+    return RenderSettings(
+      removeNikud: removeNikud,
+      removePunctuation: state.removePunctuation,
+      removeTeamim: !settingsState.showTeamim,
+      replaceHolyNames: settingsState.replaceHolyNames,
+      searchText: widget.isMainText ? state.searchText : '',
+      fontSize: widget.fontSize,
+      fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+      lineHeight: settingsState.lineHeight,
+    );
+  }
+
+  List<int> _selectionSourceIndices() {
+    final visibleIndices = _positionsListener.itemPositions.value
+        .map((position) => position.index)
+        .toSet()
+        .toList()
+      ..sort();
+
+    if (visibleIndices.isNotEmpty) {
+      return visibleIndices;
+    }
+
+    return List<int>.generate(widget.content.length, (index) => index);
+  }
+
+  Future<void> _handleSelectionChange(String? plainText) async {
+    final persistedText = resolvePersistedSelectedText(
+      previousSelectedText: _savedSelectedText,
+      latestSelectedText: plainText,
+    );
+
+    if (!shouldPersistSelectedText(plainText)) {
+      return;
+    }
+
+    final textBookState = context.read<TextBookBloc>().state;
+    if (textBookState is! TextBookLoaded) {
+      if (!mounted) return;
+      setState(() {
+        _savedSelectedText = persistedText;
+      });
+      return;
+    }
+
+    final settingsState = context.read<SettingsBloc>().state;
+    final removeNikud =
+        await _resolveSelectionRemoveNikud(textBookState, settingsState);
+    final sourceIndices = _selectionSourceIndices();
+    final renderSettings = _selectionRenderSettings(
+      state: textBookState,
+      settingsState: settingsState,
+      removeNikud: removeNikud,
+    );
+    final renderedLines = sourceIndices
+        .where((index) => index >= 0 && index < widget.content.length)
+        .map(
+          (index) => renderSelectionLine(
+            rawText: widget.content[index],
+            settings: renderSettings,
+          ),
+        )
+        .toList();
+
+    final restoredText = restoreSelectedTextLineBreaks(
+      selectedText: persistedText!,
+      visibleLines: renderedLines,
+    );
+
+    int? selectedIndex = _savedSelectedIndex;
+    final visibleText = renderedLines.join('\n');
+    final selectionStart = visibleText.indexOf(restoredText);
+    if (selectionStart >= 0 && sourceIndices.isNotEmpty) {
+      final before = visibleText.substring(0, selectionStart);
+      selectedIndex = sourceIndices.first + '\n'.allMatches(before).length;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _savedSelectedText = restoredText;
+      _savedSelectedIndex = selectedIndex;
+    });
   }
 
   /// טיפול באירועי מקלדת - חיצים לניווט
@@ -158,6 +471,16 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return false;
+    PageShapeDebugLogger.log(
+      'SimpleTextViewer',
+      'התקבל אירוע מקלדת',
+      scope: _debugScope,
+      data: {
+        'logicalKey': event.logicalKey.keyLabel,
+        'selectedIndex': state.selectedIndex,
+      },
+      level: 'KEY',
+    );
 
     // חיצים למעלה ולמטה
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
@@ -166,6 +489,16 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       if (nextIndex != currentIndex) {
         context.read<TextBookBloc>().add(UpdateSelectedIndex(nextIndex));
         if (_scrollController.isAttached) {
+          PageShapeDebugLogger.log(
+            'SimpleTextViewer',
+            'גלילה מהמקלדת - ArrowDown',
+            scope: _debugScope,
+            data: {
+              'currentIndex': currentIndex,
+              'nextIndex': nextIndex,
+            },
+            level: 'SCROLL',
+          );
           _scrollController.scrollTo(
             index: nextIndex,
             duration: const Duration(milliseconds: 200),
@@ -182,6 +515,16 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       if (prevIndex != currentIndex) {
         context.read<TextBookBloc>().add(UpdateSelectedIndex(prevIndex));
         if (_scrollController.isAttached) {
+          PageShapeDebugLogger.log(
+            'SimpleTextViewer',
+            'גלילה מהמקלדת - ArrowUp',
+            scope: _debugScope,
+            data: {
+              'currentIndex': currentIndex,
+              'prevIndex': prevIndex,
+            },
+            level: 'SCROLL',
+          );
           _scrollController.scrollTo(
             index: prevIndex,
             duration: const Duration(milliseconds: 200),
@@ -198,6 +541,16 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       final nextIndex = (currentIndex + 10).clamp(0, widget.content.length - 1);
       context.read<TextBookBloc>().add(UpdateSelectedIndex(nextIndex));
       if (_scrollController.isAttached) {
+        PageShapeDebugLogger.log(
+          'SimpleTextViewer',
+          'גלילה מהמקלדת - PageDown',
+          scope: _debugScope,
+          data: {
+            'currentIndex': currentIndex,
+            'nextIndex': nextIndex,
+          },
+          level: 'SCROLL',
+        );
         _scrollController.scrollTo(
           index: nextIndex,
           duration: const Duration(milliseconds: 300),
@@ -213,6 +566,16 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       final prevIndex = (currentIndex - 10).clamp(0, widget.content.length - 1);
       context.read<TextBookBloc>().add(UpdateSelectedIndex(prevIndex));
       if (_scrollController.isAttached) {
+        PageShapeDebugLogger.log(
+          'SimpleTextViewer',
+          'גלילה מהמקלדת - PageUp',
+          scope: _debugScope,
+          data: {
+            'currentIndex': currentIndex,
+            'prevIndex': prevIndex,
+          },
+          level: 'SCROLL',
+        );
         _scrollController.scrollTo(
           index: prevIndex,
           duration: const Duration(milliseconds: 300),
@@ -227,6 +590,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         HardwareKeyboard.instance.isControlPressed) {
       context.read<TextBookBloc>().add(const UpdateSelectedIndex(0));
       if (_scrollController.isAttached) {
+        PageShapeDebugLogger.log(
+          'SimpleTextViewer',
+          'גלילה מהמקלדת - Ctrl+Home',
+          scope: _debugScope,
+          level: 'SCROLL',
+        );
         _scrollController.scrollTo(
           index: 0,
           duration: const Duration(milliseconds: 300),
@@ -241,6 +610,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       final lastIndex = widget.content.length - 1;
       context.read<TextBookBloc>().add(UpdateSelectedIndex(lastIndex));
       if (_scrollController.isAttached) {
+        PageShapeDebugLogger.log(
+          'SimpleTextViewer',
+          'גלילה מהמקלדת - Ctrl+End',
+          scope: _debugScope,
+          data: {
+            'lastIndex': lastIndex,
+          },
+          level: 'SCROLL',
+        );
         _scrollController.scrollTo(
           index: lastIndex,
           duration: const Duration(milliseconds: 300),
@@ -374,7 +752,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       // ),
     ]);
 
-    return ctx.ContextMenu<Object>(entries: _normalizeContextMenuEntries(entries));
+    return ctx.ContextMenu<Object>(
+        entries: _normalizeContextMenuEntries(entries));
   }
 
   List<ctx.ContextMenuEntry<Object>> _normalizeContextMenuEntries(
@@ -511,12 +890,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   /// עיצוב טקסט כ-HTML עם הגדרות הגופן הנוכחיות
   String _formatTextAsHtml(String text) {
     final settingsState = context.read<SettingsBloc>().state;
-    final textWithBreaks = text.replaceAll('\n', '<br>');
-    return '''
-<div style="font-family: ${widget.fontFamily ?? settingsState.fontFamily}; font-size: ${widget.fontSize}px; text-align: justify; direction: rtl;">
-$textWithBreaks
-</div>
-''';
+    return CopyUtils.buildStyledHtml(
+      htmlText: text,
+      fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+      fontSize: widget.fontSize,
+    );
   }
 
   /// העתקת טקסט מעוצב
@@ -529,66 +907,19 @@ $textWithBreaks
     }
 
     try {
-      final clipboard = SystemClipboard.instance;
-      if (clipboard != null) {
-        final settingsState = context.read<SettingsBloc>().state;
-        final textBookState = context.read<TextBookBloc>().state;
+      final settingsState = context.read<SettingsBloc>().state;
+      final textBookState = context.read<TextBookBloc>().state;
+      if (textBookState is! TextBookLoaded) return;
 
-        String htmlContentToUse = plainText;
-
-        // אם יש לנו אינדקס נוכחי, ננסה למצוא את הטקסט המקורי
-        if (_savedSelectedIndex != null &&
-            _savedSelectedIndex! >= 0 &&
-            _savedSelectedIndex! < widget.content.length) {
-          final originalData = widget.content[_savedSelectedIndex!];
-          final plainTextCleaned =
-              plainText.replaceAll(RegExp(r'\s+'), ' ').trim();
-          final originalCleaned = originalData
-              .replaceAll(RegExp(r'<[^>]*>'), '')
-              .replaceAll(RegExp(r'\s+'), ' ')
-              .trim();
-
-          if (originalCleaned.contains(plainTextCleaned) ||
-              plainTextCleaned.contains(originalCleaned)) {
-            htmlContentToUse = originalData;
-          }
-        }
-
-        String finalPlainText = plainText;
-        if (settingsState.copyWithHeaders != 'none' &&
-            textBookState is TextBookLoaded) {
-          final bookName = CopyUtils.extractBookName(textBookState.book);
-          final currentIndex = _savedSelectedIndex ?? 0;
-          final currentPath = await CopyUtils.extractCurrentPath(
-            textBookState.book,
-            currentIndex,
-            bookContent: textBookState.content,
-          );
-
-          finalPlainText = CopyUtils.formatTextWithHeaders(
-            originalText: plainText,
-            copyWithHeaders: settingsState.copyWithHeaders,
-            copyHeaderFormat: settingsState.copyHeaderFormat,
-            bookName: bookName,
-            currentPath: currentPath,
-          );
-
-          htmlContentToUse = CopyUtils.formatTextWithHeaders(
-            originalText: htmlContentToUse,
-            copyWithHeaders: settingsState.copyWithHeaders,
-            copyHeaderFormat: settingsState.copyHeaderFormat,
-            bookName: bookName,
-            currentPath: currentPath,
-          );
-        }
-
-        await CopyUtils.copyStyledToClipboard(
-          plainText: finalPlainText,
-          htmlText: htmlContentToUse,
-          fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-          fontSize: widget.fontSize,
-        );
-      }
+      await copySelectedTextForBook(
+        plainText: plainText,
+        selectedIndex: _savedSelectedIndex,
+        sourceContent: widget.content,
+        textBookState: textBookState,
+        settingsState: settingsState,
+        fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+        fontSize: widget.fontSize,
+      );
     } catch (e) {
       if (mounted) {
         UiSnack.showError('שגיאה בהעתקה מעוצבת: $e',
@@ -599,6 +930,19 @@ $textWithBreaks
 
   @override
   Widget build(BuildContext context) {
+    _buildCount++;
+    PageShapeDebugLogger.log(
+      'SimpleTextViewer',
+      'build',
+      scope: _debugScope,
+      data: {
+        'buildCount': _buildCount,
+        'isMainText': widget.isMainText,
+        'contentLength': widget.content.length,
+        'useInternalScroll': widget.useInternalScroll,
+      },
+      level: 'BUILD',
+    );
     return KeyboardListener(
       focusNode: _focusNode,
       autofocus: widget.isMainText,
@@ -657,12 +1001,7 @@ $textWithBreaks
                       contextMenuBuilder: (context, selectableRegionState) =>
                           const SizedBox.shrink(),
                       onSelectionChanged: (selection) {
-                        // שמירת הטקסט הנבחר
-                        if (selection != null) {
-                          setState(() {
-                            _savedSelectedText = selection.plainText;
-                          });
-                        }
+                        _handleSelectionChange(selection?.plainText);
                       },
                       child: widget.useInternalScroll
                           ? ScrollablePositionedList.builder(
@@ -724,6 +1063,15 @@ $textWithBreaks
       behavior: HitTestBehavior.translucent,
       onTap: widget.isMainText
           ? () {
+              PageShapeDebugLogger.log(
+                'SimpleTextViewer',
+                'onTap על שורה בטקסט הראשי',
+                scope: _debugScope,
+                data: {
+                  'index': index,
+                  'isSelectedBefore': isSelected,
+                },
+              );
               // איפוס הטקסט השמור
               setState(() {
                 _savedSelectedText = null;
@@ -741,6 +1089,15 @@ $textWithBreaks
           : null,
       onDoubleTap: !widget.isMainText && widget.bookTitle != null
           ? () {
+              PageShapeDebugLogger.log(
+                'SimpleTextViewer',
+                'onDoubleTap על שורת מפרש - פתיחה בטאב נפרד',
+                scope: _debugScope,
+                data: {
+                  'bookTitle': widget.bookTitle,
+                  'index': index,
+                },
+              );
               // לחיצה כפולה במפרש - פתיחה בטאב נפרד
               widget.openBookCallback(TextBookTab(
                 book: TextBook(title: widget.bookTitle!),
@@ -754,6 +1111,16 @@ $textWithBreaks
           : null,
       onSecondaryTapDown: (details) {
         // שמירת האינדקס לשימוש בתפריט ההקשר
+        PageShapeDebugLogger.log(
+          'SimpleTextViewer',
+          'onSecondaryTapDown',
+          scope: _debugScope,
+          data: {
+            'index': index,
+            'globalPositionDx': details.globalPosition.dx,
+            'globalPositionDy': details.globalPosition.dy,
+          },
+        );
         setState(() {
           _savedSelectedIndex = index;
         });
@@ -787,8 +1154,9 @@ $textWithBreaks
                                 settingsState.defaultRemoveNikud,
                             removeNikudFromTanach:
                                 settingsState.removeNikudFromTanach,
-                            categoryId:
-                                widget.isMainText ? state.book.categoryId : null,
+                            categoryId: widget.isMainText
+                                ? state.book.categoryId
+                                : null,
                             fileType:
                                 widget.isMainText ? state.book.fileType : null,
                           ),
