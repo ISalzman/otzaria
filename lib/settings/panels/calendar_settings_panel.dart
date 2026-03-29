@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/widgets/dialogs.dart';
@@ -23,6 +24,8 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
   Widget build(BuildContext context) {
     return BlocBuilder<CalendarCubit, CalendarState>(
       builder: (context, state) {
+        final isOfflineMode =
+            context.watch<SettingsBloc>().state.isOfflineMode;
         // [הוסר] SingleChildScrollView — ToolsSettingsTab גולל את כולם
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -163,9 +166,13 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                     leading: const Icon(FluentIcons.arrow_sync_24_regular),
                     title: const Text('לוח שנה של Google',
                         style: kSettingsTitleStyle),
-                    subtitle: const Text('סנכרון אירועים עם Google Calendar',
+                    subtitle: Text(
+                        isOfflineMode
+                            ? 'מושבת במצב מנותק'
+                            : 'סנכרון אירועים עם Google Calendar',
                         style: kSettingsSubtitleStyle),
                     value: state.googleCalendarEnabled,
+                    enabled: !isOfflineMode,
                     onChanged: (value) {
                       context
                           .read<CalendarCubit>()
@@ -173,7 +180,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                     },
                   ),
 
-                  if (state.googleCalendarEnabled) ...[
+                  if (state.googleCalendarEnabled && !isOfflineMode) ...[
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
