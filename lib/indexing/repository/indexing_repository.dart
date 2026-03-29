@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -20,6 +21,14 @@ class IndexingRepository {
     _docIdSequence++;
     return (BigInt.from(DateTime.now().microsecondsSinceEpoch) << 20) +
         BigInt.from(_docIdSequence);
+  }
+
+  @visibleForTesting
+  static bool shouldResetBeforeFullReindex({
+    required bool indexExistedBeforeInit,
+    required List<String> booksDone,
+  }) {
+    return indexExistedBeforeInit && booksDone.isEmpty;
   }
 
   /// Indexes all books in the provided library.
@@ -43,6 +52,13 @@ class IndexingRepository {
     var didStartActualIndexing = false;
 
     try {
+      if (shouldResetBeforeFullReindex(
+        indexExistedBeforeInit: _tantivyDataProvider.indexExistedBeforeInit,
+        booksDone: _tantivyDataProvider.booksDone,
+      )) {
+        await _resetExistingIndexBeforeFullReindex();
+      }
+
       int processedBooks = 0;
       int actuallyIndexed = 0;
       int skipped = 0;
@@ -152,6 +168,13 @@ class IndexingRepository {
       _tantivyDataProvider.isIndexing.value = false;
     }
     return !cancelled;
+  }
+
+  Future<void> _resetExistingIndexBeforeFullReindex() async {
+    final indexPath = await AppPaths.getIndexPath();
+    debugPrint('🧹 זוהתה בנייה מחדש מלאה - מוחק אינדקס ישן לפני אינדוקס');
+    await _tantivyDataProvider.resetIndex(indexPath);
+    await _tantivyDataProvider.reopenIndex();
   }
 
   Future<void> _indexTextBook(

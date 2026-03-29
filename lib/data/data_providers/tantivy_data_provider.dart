@@ -14,6 +14,8 @@ class TantivyDataProvider {
   /// Instance of the search engine pointing to the index directory
   late Future<SearchEngine> engine;
 
+  bool _indexExistedBeforeInit = false;
+
   /// Track if index is being reopened to prevent concurrent reopens
   bool _isReopening = false;
   DateTime? _lastReopenTime;
@@ -53,6 +55,7 @@ class TantivyDataProvider {
     // Check if the index directory existed BEFORE the engine creates it.
     final indexPath = await AppPaths.getIndexPath();
     final indexExistedBefore = Directory(indexPath).existsSync();
+    _indexExistedBeforeInit = indexExistedBefore;
 
     // Load persisted booksDone from disk.
     await _loadBooksDone();
@@ -272,6 +275,9 @@ class TantivyDataProvider {
     debugPrint('🔄 Reopening search index...');
 
     try {
+      final indexPath = await AppPaths.getIndexPath();
+      _indexExistedBeforeInit = Directory(indexPath).existsSync();
+
       // Dispose previous engine to release locks
       await dispose();
 
@@ -326,6 +332,11 @@ class TantivyDataProvider {
       maxSizeMiB: 100,
     ).put('key-books-done', booksDone);
   }
+
+  /// מחזיר האם תיקיית האינדקס כבר הייתה קיימת לפני פתיחת המנוע הנוכחי.
+  ///
+  /// משמש כדי להבחין בין יצירת אינדקס ראשונית לבין בנייה מחדש מעל אינדקס ישן.
+  bool get indexExistedBeforeInit => _indexExistedBeforeInit;
 
   Future<int> countTexts(String query, List<String> books, List<String> facets,
       {bool fuzzy = false,

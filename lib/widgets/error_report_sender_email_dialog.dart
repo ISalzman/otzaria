@@ -24,15 +24,18 @@ Future<String?> showErrorReportSenderEmailDialog({
           textDirection: TextDirection.rtl,
         ),
         const SizedBox(height: 12),
-        RtlTextField(
-          controller: controller,
-          keyboardType: TextInputType.emailAddress,
-          textAlign: TextAlign.left,
-          decoration: const InputDecoration(
-            labelText: 'כתובת דוא"ל',
-            hintText: 'name@example.com',
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: RtlTextField(
+            controller: controller,
+            keyboardType: TextInputType.emailAddress,
+            textAlign: TextAlign.left,
+            decoration: InputDecoration(
+              labelText: 'כתובת דוא"ל',
+              hintText: 'name@example.com',
+            ),
+            autofocus: true,
           ),
-          autofocus: true,
         ),
       ],
     ),
