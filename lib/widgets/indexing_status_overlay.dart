@@ -147,7 +147,7 @@ class _IndexingStatusOverlayState extends State<IndexingStatusOverlay> {
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      'ייתכן איטיות בפעילות התוכנה',
+                                      'תיתכן איטיות בפעילות התוכנה',
                                       textDirection: TextDirection.rtl,
                                       style: Theme.of(context)
                                           .textTheme
