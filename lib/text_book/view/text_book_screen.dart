@@ -51,6 +51,7 @@ import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -90,6 +91,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   String? _selectedTextForSearch;
   Book? _pdfBook; // Companion PDF
   bool _hasPdfBook = false;
+  late final String _debugScope;
+  int _htmlViewerBuildCount = 0;
+  bool _leftPaneAutoCloseQueuedByScroll = false;
 
   // Key עבור PageShapeScreen - שינוי המפתח יגרום לבנייה מחדש
   Key _pageShapeKey = UniqueKey();
@@ -451,13 +455,31 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   @override
   void initState() {
     super.initState();
+    _debugScope = PageShapeDebugLogger.newScope(
+      'text-book-viewer',
+      label: widget.tab.book.title,
+    );
+    final trace = PageShapeDebugLogger.start(
+      'TextBookViewer',
+      'initState',
+      scope: _debugScope,
+      data: {
+        'bookTitle': widget.tab.book.title,
+        'tabDebugScope': widget.tab.debugScope,
+        'isInCombinedView': widget.isInCombinedView,
+        'tabIndex': widget.tab.index,
+        'tabSearchTextLength': widget.tab.searchText.length,
+      },
+    );
 
     // רישום ה-FocusNode ב-FocusRepository
     _focusRepository = context.read<FocusRepository>();
     _focusRepository!.registerBookContentFocusNode(_bookContentFocusNode);
+    trace.step('נרשם FocusNode של תוכן הספר');
 
     // טעינת הגדרות פר-ספר
     _loadPerBookSettings();
+    trace.step('הוזנקה טעינת הגדרות פר-ספר');
 
     DataRepository.instance.library.then((library) {
       if (mounted) {
@@ -465,6 +487,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           _pdfBook = library.getCompanionBook(widget.tab.book, PdfBook);
           _hasPdfBook = _pdfBook != null;
         });
+        PageShapeDebugLogger.log(
+          'TextBookViewer',
+          'נטען ספר PDF מלווה',
+          scope: _debugScope,
+          data: {
+            'hasPdfBook': _hasPdfBook,
+            'pdfBookTitle': _pdfBook?.title,
+          },
+        );
       }
     });
 
@@ -473,6 +504,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     if (pendingSidebarTab != null && pendingSidebarTab >= 0) {
       _sidebarTabIndex = pendingSidebarTab;
     }
+    trace.step(
+      'נקראה הגדרת sidebar pending',
+      data: {
+        'pendingSidebarTab': pendingSidebarTab,
+      },
+    );
 
     // וודא שהמיקום הנוכחי נשמר בטאב
 
@@ -486,6 +523,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       length: 3, // ברירת מחדל, יעודכן ב-_checkAltTitles
       vsync: this,
       initialIndex: initialIndex,
+    );
+    trace.step(
+      'נוצר TabController התחלתי',
+      data: {
+        'initialIndex': initialIndex,
+        'length': 3,
+      },
     );
 
     // בדיקה האם יש כותרות חלופיות
@@ -501,6 +545,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     _settingsSub = context.read<SettingsBloc>().stream.listen((state) {
       _sidebarWidth.value = state.sidebarWidth;
+      PageShapeDebugLogger.log(
+        'TextBookViewer',
+        'התקבל עדכון מ־SettingsBloc',
+        scope: _debugScope,
+        data: {
+          'fontSize': state.fontSize,
+          'fontFamily': state.fontFamily,
+          'sidebarWidth': state.sidebarWidth,
+          'defaultRemoveNikud': state.defaultRemoveNikud,
+        },
+      );
 
       // אם גודל הגופן השתנה, עדכן אותו מיידית
       if (state.fontSize != previousFontSize) {
@@ -510,6 +565,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
         final currentState = context.read<TextBookBloc>().state;
         if (currentState is TextBookLoaded) {
+          PageShapeDebugLogger.log(
+            'TextBookViewer',
+            'נשלח UpdateFontSize בעקבות שינוי בהגדרות',
+            scope: _debugScope,
+            data: {
+              'fontSize': state.fontSize,
+              'showPageShapeView': currentState.showPageShapeView,
+            },
+          );
           context.read<TextBookBloc>().add(UpdateFontSize(state.fontSize));
         }
       }
@@ -527,6 +591,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
         final currentState = context.read<TextBookBloc>().state;
         if (currentState is TextBookLoaded) {
+          PageShapeDebugLogger.log(
+            'TextBookViewer',
+            'נשלח LoadContent preserveState בעקבות שינוי הגדרות',
+            scope: _debugScope,
+            data: {
+              'fontFamily': state.fontFamily,
+              'showSplitView': currentState.showSplitView,
+              'showPageShapeView': currentState.showPageShapeView,
+              'removeNikud': state.defaultRemoveNikud,
+            },
+          );
           context.read<TextBookBloc>().add(
                 LoadContent(
                   fontSize: state.fontSize,
@@ -541,10 +616,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         previousSettingsState = state;
       }
     });
+    trace.end();
   }
 
   /// טעינת הגדרות פר-ספר
   Future<void> _checkAltTitles() async {
+    final trace = PageShapeDebugLogger.start(
+      'TextBookViewer',
+      'בדיקת כותרות חלופיות',
+      scope: _debugScope,
+      data: {
+        'bookTitle': widget.tab.book.title,
+      },
+    );
     try {
       final structures = await DatabaseLibraryProvider.instance
           .getAlternativeStructuresForBook(widget.tab.book.title);
@@ -572,56 +656,104 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           );
         });
       }
+      trace.end(
+        data: {
+          'structuresCount': structures.length,
+          'hasAltTitles': hasAltTitles,
+          'tabControllerLength': tabController.length,
+          'tabControllerIndex': tabController.index,
+        },
+      );
     } catch (e) {
       debugPrint('Error checking alt titles: $e');
+      trace.fail(e, StackTrace.current);
     }
   }
 
   Future<void> _loadPerBookSettings() async {
+    final trace = PageShapeDebugLogger.start(
+      'TextBookViewer',
+      'טעינת הגדרות פר-ספר',
+      scope: _debugScope,
+      data: {
+        'bookTitle': widget.tab.book.title,
+      },
+      longTaskAfter: const Duration(milliseconds: 500),
+      heartbeatEvery: const Duration(milliseconds: 500),
+    );
     final settingsBloc = context.read<SettingsBloc>();
-    debugPrint(
-        '🔧 _loadPerBookSettings: enablePerBookSettings = ${settingsBloc.state.enablePerBookSettings}');
+    trace.step(
+      'נקראה הגדרת enablePerBookSettings',
+      data: {
+        'enablePerBookSettings': settingsBloc.state.enablePerBookSettings,
+      },
+    );
 
     if (!settingsBloc.state.enablePerBookSettings) {
-      debugPrint('🔧 Per-book settings disabled, skipping load');
+      trace.end(data: {'reason': 'per-book settings disabled'});
       return;
     }
 
     final settings = await TextBookPerBookSettings.load(widget.tab.book.title);
-    debugPrint('🔧 Loaded settings for "${widget.tab.book.title}": $settings');
+    trace.step(
+      'התקבלו הגדרות פר-ספר',
+      data: {
+        'settings': settings,
+      },
+    );
 
     if (settings == null) {
-      debugPrint('🔧 No saved settings found for this book');
+      trace.end(data: {'reason': 'no saved settings'});
       return;
     }
 
-    if (!mounted) return;
+    if (!mounted) {
+      trace.end(data: {'reason': 'widget unmounted before applying settings'});
+      return;
+    }
 
     final textBookBloc = context.read<TextBookBloc>();
 
     // המתן עד שה-TextBookBloc יהיה במצב TextBookLoaded
     await for (final state in textBookBloc.stream) {
       if (state is TextBookLoaded) {
-        debugPrint('🔧 TextBookLoaded state reached, applying settings...');
+        trace.step(
+          'ה־TextBookBloc הגיע ל־TextBookLoaded, מחילים הגדרות',
+          data: {
+            'showPageShapeView': state.showPageShapeView,
+            'showSplitView': state.showSplitView,
+          },
+        );
 
         // החלת ההגדרות
         if (settings.fontSize != null) {
-          debugPrint('🔧 Applying fontSize: ${settings.fontSize}');
+          trace.step('מוחלת הגדרת fontSize', data: {'fontSize': settings.fontSize});
           textBookBloc.add(UpdateFontSize(settings.fontSize!));
         }
         if (settings.commentatorsBelow != null) {
-          debugPrint(
-              '🔧 Applying commentatorsBelow: ${settings.commentatorsBelow}');
+          trace.step(
+            'מוחלת הגדרת commentatorsBelow',
+            data: {
+              'commentatorsBelow': settings.commentatorsBelow,
+            },
+          );
           textBookBloc.add(ToggleSplitView(!settings.commentatorsBelow!));
         }
         if (settings.removeNikud != null) {
-          debugPrint('🔧 Applying removeNikud: ${settings.removeNikud}');
+          trace.step(
+            'מוחלת הגדרת removeNikud',
+            data: {'removeNikud': settings.removeNikud},
+          );
           textBookBloc.add(ToggleNikud(settings.removeNikud!));
         }
         if (settings.removePunctuation != null) {
-          debugPrint('🔧 Applying removePunctuation: ${settings.removePunctuation}');
+          trace.step(
+            'מוחלת הגדרת removePunctuation',
+            data: {'removePunctuation': settings.removePunctuation},
+          );
           textBookBloc.add(TogglePunctuation(settings.removePunctuation!));
         }
+        trace.end();
         break;
       }
     }
@@ -657,6 +789,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   @override
   void dispose() {
+    PageShapeDebugLogger.log(
+      'TextBookViewer',
+      'dispose ל־TextBookViewerBlocState',
+      scope: _debugScope,
+      data: {
+        'bookTitle': widget.tab.book.title,
+        'sidebarTabIndex': _sidebarTabIndex,
+      },
+      level: 'END',
+    );
     // ביטול רישום ה-FocusNode מ-FocusRepository (שימוש בהפניה שנשמרה)
     _focusRepository?.unregisterBookContentFocusNode(_bookContentFocusNode);
 
@@ -671,8 +813,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   void _openPersonalNotesForCurrentView(TextBookLoaded state) {
+    PageShapeDebugLogger.log(
+      'TextBookViewer',
+      'בקשה לפתיחת הערות אישיות עבור התצוגה הנוכחית',
+      scope: _debugScope,
+      data: {
+        'showPageShapeView': state.showPageShapeView,
+        'showSplitView': state.showSplitView,
+      },
+    );
     if (state.showPageShapeView) {
       _pageShapeSidebarTabNotifier.value = 1;
+      PageShapeDebugLogger.log(
+        'TextBookViewer',
+        'נשלחה בקשה לפתיחת טאב הערות בסיידבר של צורת הדף',
+        scope: _debugScope,
+      );
       return;
     }
 
@@ -683,6 +839,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   void _openLeftPaneTab(int index, {String? searchText}) {
+    PageShapeDebugLogger.log(
+      'TextBookViewer',
+      'בקשה לפתיחת טאב בחלונית הצד',
+      scope: _debugScope,
+      data: {
+        'requestedIndex': index,
+        'searchTextLength': searchText?.length ?? 0,
+        'hasAltTitles': _hasAltTitles,
+        'tabControllerLength': tabController.length,
+      },
+    );
     context.read<TextBookBloc>().add(const ToggleLeftPane(true));
 
     // טיפול מיוחד לאינדקס 1 - אם זה אמור להיות חיפוש
@@ -702,6 +869,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // וידוא שהאינדקס תקף לפני הגדרה
     final validIndex = targetIndex.clamp(0, tabController.length - 1);
     tabController.index = validIndex;
+    PageShapeDebugLogger.log(
+      'TextBookViewer',
+      'עודכן טאב חלונית הצד',
+      scope: _debugScope,
+      data: {
+        'targetIndex': targetIndex,
+        'validIndex': validIndex,
+      },
+    );
 
     // אם זה חיפוש, נתן פוקוס לשדה החיפוש
     if (targetIndex == (_hasAltTitles ? 2 : 1)) {
@@ -785,6 +961,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 // }
 
                 if (state is TextBookLoaded) {
+                  if (!state.showLeftPane) {
+                    _leftPaneAutoCloseQueuedByScroll = false;
+                  }
                   final pendingSidebarTab =
                       Settings.getValue<int>('key-sidebar-tab-index-pending');
                   if (pendingSidebarTab != null && pendingSidebarTab >= 0) {
@@ -818,8 +997,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     });
                   }
 
-                  debugPrint(
-                      'DEBUG: LoadContent נקרא עם showSplitView: ${state.splitedView} (isInCombinedView: ${widget.isInCombinedView})');
+                  PageShapeDebugLogger.log(
+                    'TextBookViewer',
+                    'נשלח LoadContent ממצב TextBookInitial',
+                    scope: _debugScope,
+                    data: {
+                      'showSplitViewFromInitial': state.splitedView,
+                      'showPageShapeViewFromInitial': state.showPageShapeView,
+                      'isInCombinedView': widget.isInCombinedView,
+                      'fontSize': settingsState.fontSize,
+                    },
+                  );
 
                   context.read<TextBookBloc>().add(
                         LoadContent(
@@ -1119,6 +1307,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           setState(() {
             _pageShapeKey = UniqueKey();
           });
+          PageShapeDebugLogger.log(
+            'TextBookViewer',
+            'שונה pageShapeKey אחרי דיאלוג הגדרות צורת הדף',
+            scope: _debugScope,
+            data: {
+              'bookTitle': state.book.title,
+            },
+          );
         }
       },
     );
@@ -1587,6 +1783,18 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         // קביעת מצב היעד לפי הבחירה
         final bool isPage = value == _viewModePage;
         final bool isSplit = value == _viewModeSplit;
+        PageShapeDebugLogger.log(
+          'TextBookViewer',
+          'נבחר מצב תצוגה חדש מתפריט',
+          scope: _debugScope,
+          data: {
+            'selectedValue': value,
+            'previousShowPageShapeView': state.showPageShapeView,
+            'previousShowSplitView': state.showSplitView,
+            'nextIsPage': isPage,
+            'nextIsSplit': isSplit,
+          },
+        );
 
         // עדכון תצוגת צורת הדף במידת הצורך
         if (isPage != state.showPageShapeView) {
@@ -2131,10 +2339,35 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildHTMLViewer(TextBookLoaded state) {
+    _htmlViewerBuildCount++;
+    PageShapeDebugLogger.log(
+      'TextBookViewer',
+      'בניית HTML viewer',
+      scope: _debugScope,
+      data: {
+        'buildCount': _htmlViewerBuildCount,
+        'showPageShapeView': state.showPageShapeView,
+        'showSplitView': state.showSplitView,
+        'showLeftPane': state.showLeftPane,
+        'selectedIndex': state.selectedIndex,
+        ...PageShapeDebugLogger.summarizeIndices(state.visibleIndices),
+      },
+      level: 'BUILD',
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 0, 5, 5),
       child: GestureDetector(
         onScaleUpdate: (details) {
+          PageShapeDebugLogger.log(
+            'TextBookViewer',
+            'onScaleUpdate בתוכן הספר',
+            scope: _debugScope,
+            data: {
+              'scale': details.scale,
+              'currentFontSize': state.fontSize,
+            },
+            level: 'GESTURE',
+          );
           context.read<TextBookBloc>().add(
                 UpdateFontSize((state.fontSize * details.scale).clamp(15, 60)),
               );
@@ -2144,16 +2377,59 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           final textBookBloc = context.read<TextBookBloc>();
           final currentState = textBookBloc.state;
           if (currentState is TextBookLoaded) {
+            PageShapeDebugLogger.log(
+              'TextBookViewer',
+              'onScaleEnd נשמר גודל גופן פר-ספר',
+              scope: _debugScope,
+              data: {
+                'fontSize': currentState.fontSize,
+                'showPageShapeView': currentState.showPageShapeView,
+              },
+              level: 'GESTURE',
+            );
             _savePerBookSettingsDirectly(context, currentState,
                 fontSize: currentState.fontSize);
           }
         },
         child: NotificationListener<UserScrollNotification>(
           onNotification: (scrollNotification) {
-            if (!(state.pinLeftPane ||
-                (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
+            PageShapeDebugLogger.log(
+              'TextBookViewer',
+              'UserScrollNotification בתוכן הספר',
+              scope: _debugScope,
+              data: {
+                'direction': scrollNotification.direction.name,
+                'showPageShapeView': state.showPageShapeView,
+                'pinLeftPane': state.pinLeftPane,
+              },
+              level: 'SCROLL',
+            );
+            final isSidebarPinned = state.pinLeftPane ||
+                (Settings.getValue<bool>('key-pin-sidebar') ?? false);
+            final shouldAutoCloseLeftPane =
+                scrollNotification.direction != ScrollDirection.idle &&
+                    state.showLeftPane &&
+                    !isSidebarPinned &&
+                    !_leftPaneAutoCloseQueuedByScroll;
+            if (shouldAutoCloseLeftPane) {
+              _leftPaneAutoCloseQueuedByScroll = true;
               Future.microtask(() {
-                if (!mounted || !context.mounted) return;
+                if (!mounted || !context.mounted) {
+                  _leftPaneAutoCloseQueuedByScroll = false;
+                  return;
+                }
+                final currentState = context.read<TextBookBloc>().state;
+                if (currentState is! TextBookLoaded ||
+                    !currentState.showLeftPane) {
+                  _leftPaneAutoCloseQueuedByScroll = false;
+                  return;
+                }
+                PageShapeDebugLogger.log(
+                  'TextBookViewer',
+                  'נסגרת חלונית הצד בעקבות גלילת משתמש',
+                  scope: _debugScope,
+                  level: 'SCROLL',
+                );
                 context.read<TextBookBloc>().add(const ToggleLeftPane(false));
               });
             }

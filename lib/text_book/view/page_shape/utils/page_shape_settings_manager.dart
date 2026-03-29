@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 
@@ -120,13 +119,9 @@ class PageShapeSettingsManager {
   /// סדר עדיפות: ספר ספציפי → קטגוריה → null (יטען מ-JSON)
   static Map<String, String?>? loadConfiguration(String bookTitle,
       {String? heCategories}) {
-    debugPrint('PageShapeSettings: Loading configuration for: $bookTitle');
-    debugPrint('PageShapeSettings: heCategories: $heCategories');
-
     // 1. קודם בודקים אם יש הגדרות לספר הספציפי
     final bookConfig = _loadBookConfiguration(bookTitle);
     if (bookConfig != null) {
-      debugPrint('PageShapeSettings: Found book-specific config: $bookConfig');
       return bookConfig;
     }
 
@@ -134,13 +129,11 @@ class PageShapeSettingsManager {
     if (heCategories != null) {
       final categoryConfig = _loadCategoryConfiguration(heCategories);
       if (categoryConfig != null) {
-        debugPrint('PageShapeSettings: Found category config: $categoryConfig');
         return categoryConfig;
       }
     }
 
     // 3. אם אין - מחזירים null (יטען מ-JSON)
-    debugPrint('PageShapeSettings: No saved config found, will use defaults');
     return null;
   }
 
@@ -218,10 +211,6 @@ class PageShapeSettingsManager {
     Map<String, String?> config, {
     String? saveToCategory, // אם מוגדר - שומר לקטגוריה במקום לספר
   }) async {
-    debugPrint('PageShapeSettings: Saving configuration for: $bookTitle');
-    debugPrint('PageShapeSettings: Config: $config');
-    debugPrint('PageShapeSettings: Save to category: $saveToCategory');
-
     if (saveToCategory != null) {
       // שמירה לקטגוריה - שומרים רק את השמות הבסיסיים של המפרשים
       final baseConfig = config.map((key, value) {
@@ -241,20 +230,14 @@ class PageShapeSettingsManager {
         );
       });
       final configString = _serializeConfiguration(baseConfig);
-      debugPrint(
-          'PageShapeSettings: Saving to category "$saveToCategory": $configString');
       await Settings.setValue<String>(
           '$_categoryConfigPrefix$saveToCategory', configString);
     } else {
       // שמירה לספר ספציפי - שומרים את השמות המלאים
       final configString = _serializeConfiguration(config);
-      debugPrint(
-          'PageShapeSettings: Saving to book "$bookTitle": $configString');
       await Settings.setValue<String>(
           '$_bookConfigPrefix$bookTitle', configString);
     }
-
-    debugPrint('PageShapeSettings: Configuration saved successfully');
   }
 
   /// המרת הגדרות למחרוזת

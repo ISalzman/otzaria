@@ -19,6 +19,7 @@ import 'package:otzaria/migration/core/models/alt_toc_entry.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/utils/docx_to_otzaria.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
@@ -73,24 +74,97 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
   required String fileType,
   required int startLineIndex,
   required int endLineIndex,
+  required List<String>? targetBookTitles,
 }) {
+  final stopwatch = Stopwatch()..start();
+  final scope = 'db-range-isolate[$title@$startLineIndex-$endLineIndex]';
+  PageShapeDebugLogger.log(
+    'DatabaseLibraryProvider',
+    'START שאילתת isolate לקישורים בטווח',
+    scope: scope,
+    data: {
+      'dbPath': dbPath,
+      'title': title,
+      'categoryId': categoryId,
+      'fileType': fileType,
+      'startLineIndex': startLineIndex,
+      'endLineIndex': endLineIndex,
+      'targetBookTitlesCount': targetBookTitles?.length,
+      'targetBookTitles': targetBookTitles,
+    },
+    level: 'START',
+  );
   sqlite3.Database? db;
   try {
     db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+    PageShapeDebugLogger.log(
+      'DatabaseLibraryProvider',
+      'נפתחה גישת read-only למסד ב־isolate',
+      scope: scope,
+      data: {
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+      level: 'STEP',
+    );
 
     final bookResults = db.select(
       'SELECT id FROM book WHERE title = ? AND categoryId = ? AND fileType = ? LIMIT 1',
       [title, categoryId, fileType],
     ).toMapList();
+    PageShapeDebugLogger.log(
+      'DatabaseLibraryProvider',
+      'הסתיימה שאילתת bookId ב־isolate',
+      scope: scope,
+      data: {
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+        'bookResultsCount': bookResults.length,
+      },
+      level: 'STEP',
+    );
 
     if (bookResults.isEmpty) {
+      PageShapeDebugLogger.log(
+        'DatabaseLibraryProvider',
+        'לא נמצא bookId לשאילתת isolate',
+        scope: scope,
+        data: {
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+        level: 'WARN',
+      );
       return const [];
     }
 
     final bookId = bookResults.first['id'] as int;
 
-    return db.select('''
-        SELECT 
+    final parameters = <Object?>[
+      bookId,
+      startLineIndex,
+      endLineIndex,
+    ];
+    // כשהפילטר ריק (אין מפרשים נבחרים) — עדיין מחזירים קישורי REFERENCE
+    final hasCommentaryFilter =
+        targetBookTitles != null && targetBookTitles.isNotEmpty;
+    final targetBookPlaceholders =
+        hasCommentaryFilter
+            ? List.filled(targetBookTitles.length, '?').join(', ')
+            : '';
+    if (hasCommentaryFilter) {
+      parameters.addAll(targetBookTitles);
+    }
+
+    // תנאי הפילטר:
+    // null     → ללא פילטר (כל הקישורים)
+    // ריק      → רק קישורי non-commentary (REFERENCE וכד׳)
+    // לא ריק   → קישורי non-commentary + המפרשים הנבחרים
+    final commentaryFilterClause = targetBookTitles == null
+        ? ''
+        : hasCommentaryFilter
+            ? 'AND (ct.name IS NULL OR ct.name NOT IN (\'COMMENTARY\', \'TARGUM\') OR tb.title IN ($targetBookPlaceholders))'
+            : 'AND (ct.name IS NULL OR ct.name NOT IN (\'COMMENTARY\', \'TARGUM\'))';
+
+    final rows = db.select('''
+        SELECT
           sl.lineIndex as sourceLineIndex,
           tl.lineIndex as targetLineIndex,
           tl.heRef as targetLineHeRef,
@@ -105,10 +179,46 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
         WHERE l.sourceBookId = ?
           AND sl.lineIndex BETWEEN ? AND ?
+          $commentaryFilterClause
         ORDER BY sl.lineIndex, tb.orderIndex
-      ''', [bookId, startLineIndex, endLineIndex]).toMapList();
+      ''', parameters).toMapList();
+    PageShapeDebugLogger.log(
+      'DatabaseLibraryProvider',
+      'הסתיימה שאילתת rows לקישורים ב־isolate',
+      scope: scope,
+      data: {
+        'bookId': bookId,
+        'rowsCount': rows.length,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+        'targetBookTitlesCount': targetBookTitles?.length,
+      },
+      level: 'STEP',
+    );
+    return rows;
+  } catch (error, stackTrace) {
+    PageShapeDebugLogger.log(
+      'DatabaseLibraryProvider',
+      'ERROR שאילתת isolate לקישורים בטווח',
+      scope: scope,
+      data: {
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+        'error': error,
+        'stackTrace': stackTrace,
+      },
+      level: 'ERROR',
+    );
+    rethrow;
   } finally {
     db?.close();
+    PageShapeDebugLogger.log(
+      'DatabaseLibraryProvider',
+      'END שאילתת isolate לקישורים בטווח',
+      scope: scope,
+      data: {
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+      level: 'END',
+    );
   }
 }
 
@@ -194,6 +304,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     required String fileType,
     required int startLineIndex,
     required int endLineIndex,
+    List<String>? targetBookTitles,
   }) {
     return _loadBookLinksRowsInRangeInIsolate(
       dbPath: dbPath,
@@ -202,6 +313,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       fileType: fileType,
       startLineIndex: startLineIndex,
       endLineIndex: endLineIndex,
+      targetBookTitles: targetBookTitles,
     );
   }
 
@@ -1328,12 +1440,51 @@ class DatabaseLibraryProvider implements LibraryProvider {
     String fileType, {
     required int startLineIndex,
     required int endLineIndex,
+    Iterable<String>? targetBookTitles,
   }) async {
+    final normalizedTargetBookTitles = targetBookTitles
+        ?.map((targetTitle) => targetTitle.trim())
+        .where((targetTitle) => targetTitle.isNotEmpty)
+        .toSet()
+        .toList()
+      ?..sort();
+    final scope = PageShapeDebugLogger.newScope(
+      'database-provider-links-range',
+      label: '$title@$startLineIndex-$endLineIndex',
+    );
+    final trace = PageShapeDebugLogger.start(
+      'DatabaseLibraryProvider',
+      'טעינת קישורי DB לטווח',
+      scope: scope,
+      data: {
+        'title': title,
+        'categoryId': categoryId,
+        'fileType': fileType,
+        'startLineIndex': startLineIndex,
+        'endLineIndex': endLineIndex,
+        'hasTargetBookTitlesFilter': targetBookTitles != null,
+        'targetBookTitlesCount': normalizedTargetBookTitles?.length,
+        'targetBookTitles': normalizedTargetBookTitles,
+        'sqliteInitialized': _sqliteProvider.isInitialized,
+        'repositoryAvailable': _sqliteProvider.repository != null,
+      },
+      longTaskAfter: const Duration(milliseconds: 300),
+      heartbeatEvery: const Duration(milliseconds: 300),
+    );
     if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      trace.warn(
+        'טעינת קישורי DB לטווח דולגה כי SQLite לא מוכן',
+        data: {
+          'sqliteInitialized': _sqliteProvider.isInitialized,
+          'repositoryAvailable': _sqliteProvider.repository != null,
+        },
+      );
+      trace.end(data: {'reason': 'sqlite not ready'});
       return [];
     }
 
     try {
+      trace.step('מתחיל Isolate.run לשאילתת קישורים');
       final result = await Isolate.run(
         () => _loadBookLinksRowsInRangeInIsolate(
           dbPath: _sqliteProvider.dbPath,
@@ -1342,10 +1493,18 @@ class DatabaseLibraryProvider implements LibraryProvider {
           fileType: fileType,
           startLineIndex: startLineIndex,
           endLineIndex: endLineIndex,
+          targetBookTitles: normalizedTargetBookTitles,
         ),
       );
+      trace.step(
+        'הסתיים Isolate.run לשאילתת קישורים',
+        data: {
+          'rowsCount': result.length,
+        },
+      );
 
-      return result.map((row) {
+      final mappingStopwatch = Stopwatch()..start();
+      final links = result.map((row) {
         final targetTitle = row['targetBookTitle'] as String;
         final targetLineHeRef = row['targetLineHeRef'] as String?;
         final connectionType =
@@ -1363,7 +1522,21 @@ class DatabaseLibraryProvider implements LibraryProvider {
           targetFileType: row['targetFileType'] as String?,
         );
       }).toList();
+      trace.step(
+        'הסתיים מיפוי rows ל־Link',
+        data: {
+          'mappingElapsedMs': mappingStopwatch.elapsedMilliseconds,
+          'linksCount': links.length,
+        },
+      );
+      trace.end(
+        data: {
+          'linksCount': links.length,
+        },
+      );
+      return links;
     } catch (e) {
+      trace.fail(e, StackTrace.current);
       debugPrint('⚠️ Error in getLinksForBookRange "$title": $e');
       return [];
     }
@@ -1371,37 +1544,29 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   @override
   Future<String> getLinkContent(Link link) async {
-    return _dbOperation<String>(
-      (db) async {
-        if (link.path2.isEmpty) {
-          return 'שגיאה: נתיב ריק';
-        }
+    if (link.path2.isEmpty) return 'שגיאה: נתיב ריק';
+    if (link.index2 <= 0) return 'שגיאה: אינדקס לא תקין';
 
-        if (link.index2 <= 0) {
-          return 'שגיאה: אינדקס לא תקין';
-        }
+    final targetTitle = link.path2.contains('/')
+        ? link.path2.split('/').last.replaceAll('.txt', '')
+        : link.path2;
 
-        // Get the target book text and extract the specific line
-        final targetTitle = link.path2.contains('/')
-            ? link.path2.split('/').last.replaceAll('.txt', '')
-            : link.path2;
+    final repository = _sqliteProvider.repository;
+    if (repository == null) return 'שגיאה: מאגר לא מאותחל';
 
-        final bookText = await _sqliteProvider.getBookTextFromDb(targetTitle);
-        if (bookText == null) {
-          return 'שגיאה: הספר לא נמצא במסד הנתונים';
-        }
+    try {
+      final book = await repository.getBookByTitle(targetTitle);
+      if (book == null) return 'שגיאה: הספר לא נמצא במסד הנתונים';
 
-        final lines = bookText.split('\n');
+      // link.index2 is 1-based; lineIndex in DB is 0-based
+      final line = await repository.getLineByIndex(book.id, link.index2 - 1);
+      if (line == null) return 'שגיאה: אינדקס מחוץ לטווח';
 
-        if (link.index2 < 1 || link.index2 > lines.length) {
-          return 'שגיאה: אינדקס מחוץ לטווח';
-        }
-
-        return lines[link.index2 - 1];
-      },
-      'שגיאה בטעינת תוכן המפרש',
-      'getLinkContent',
-    );
+      return line.content;
+    } catch (e) {
+      debugPrint('⚠️ Error in getLinkContent: $e');
+      return 'שגיאה בטעינת תוכן המפרש';
+    }
   }
 
   /// Get all alternative TOC structures available in the database for a specific book
@@ -1421,7 +1586,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
       return results.map((json) => AltTocStructure.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('⚠️ Error in getAlternativeStructuresForBook "$bookTitle": $e');
+      debugPrint(
+          '⚠️ Error in getAlternativeStructuresForBook "$bookTitle": $e');
       return [];
     }
   }

@@ -8,6 +8,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 void main() {
@@ -74,12 +75,172 @@ void main() {
       expect(lines[11], 'שורה 11');
       expect(lines[13], 'שורה 13');
     });
+
+    test(
+      'בצורת הדף מתעלם מעדכון visibleIndices שגוי לפני יישור הגלילה הראשוני',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc =
+            _createBloc(repository: repository, showPageShapeView: true);
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(repository.getBookLinksInRangeCalls, 1);
+        expect((bloc.state as TextBookLoaded).visibleIndices, const [10]);
+
+        bloc.add(const UpdateVisibleIndecies([0, 1, 2, 3]));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(repository.getBookLinksInRangeCalls, 1);
+        expect((bloc.state as TextBookLoaded).visibleIndices, const [10]);
+
+        bloc.add(const UpdateVisibleIndecies([10, 11, 12]));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(
+            (bloc.state as TextBookLoaded).visibleIndices, const [10, 11, 12]);
+
+        await bloc.close();
+      },
+    );
+
+    test(
+      'מסווג raw positions שגויים ככאלה שיש להתעלם מהם בזמן היישור הראשוני',
+      () {
+        final classification = TextBookBloc
+            .classifyRawPositionsDuringInitialPageShapeVisibleSyncForTesting(
+          awaitingInitialPageShapeVisibleSync: true,
+          showPageShapeView: true,
+          currentVisibleIndices: const [1360],
+          selectedIndex: null,
+          nextVisibleIndices: const [0, 1, 2, 3],
+        );
+
+        expect(classification.shouldIgnore, isTrue);
+        expect(classification.shouldDispatchImmediately, isFalse);
+      },
+    );
+
+    test(
+      'מסווג raw positions מיושרים ככאלה שיש לשלוח מייד בזמן היישור הראשוני',
+      () {
+        final classification = TextBookBloc
+            .classifyRawPositionsDuringInitialPageShapeVisibleSyncForTesting(
+          awaitingInitialPageShapeVisibleSync: true,
+          showPageShapeView: true,
+          currentVisibleIndices: const [1360],
+          selectedIndex: null,
+          nextVisibleIndices: const [1360, 1361, 1362, 1363],
+        );
+
+        expect(classification.shouldIgnore, isFalse);
+        expect(classification.shouldDispatchImmediately, isTrue);
+      },
+    );
+
+    test('בצורת הדף טוען קישורים רק למפרשים שנבחרו בחלוניות', () async {
+      final repository = _FakeTextBookRepository();
+      await PageShapeSettingsManager.saveConfiguration(
+        'בראשית',
+        {
+          'left': 'אבן עזרא על בראשית',
+          'right': 'תרגום אונקלוס על בראשית',
+          'bottom': 'אברבנאל על תורה',
+          'bottomRight': 'בעל הטורים על בראשית',
+        },
+      );
+      await PageShapeSettingsManager.saveColumnVisibility(
+        'בראשית',
+        {
+          'left': true,
+          'right': true,
+          'bottom': true,
+        },
+        saveAsGlobal: false,
+      );
+
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: true,
+        commentators: const [
+          'אבן עזרא על בראשית',
+          'תרגום אונקלוס על בראשית',
+          'אברבנאל על תורה',
+          'בעל הטורים על בראשית',
+          'כלי יקר על בראשית',
+          'רש"י על בראשית',
+        ],
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(
+        repository.lastTargetBookTitles,
+        [
+          'אבן עזרא על בראשית',
+          'תרגום אונקלוס על בראשית',
+          'אברבנאל על תורה',
+          'בעל הטורים על בראשית',
+        ],
+      );
+
+      await bloc.close();
+    });
+
+    test('ToggleLeftPane לא פולט state חדש אם הערך לא השתנה', () async {
+      final repository = _FakeTextBookRepository();
+      final bloc =
+          _createBloc(repository: repository, showPageShapeView: false);
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      var emittedStates = 0;
+      final subscription = bloc.stream.listen((_) {
+        emittedStates++;
+      });
+
+      bloc.add(const ToggleLeftPane(false));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(emittedStates, 0);
+
+      await subscription.cancel();
+      await bloc.close();
+    });
   });
 }
 
 TextBookBloc _createBloc({
   required _FakeTextBookRepository repository,
   required bool showPageShapeView,
+  List<String> commentators = const [],
 }) {
   return TextBookBloc(
     repository: repository,
@@ -87,7 +248,7 @@ TextBookBloc _createBloc({
       TextBook(title: 'בראשית'),
       10,
       false,
-      const [],
+      commentators,
       searchMode: SearchMode.exact,
       showPageShapeView: showPageShapeView,
     ),
@@ -102,6 +263,7 @@ class _FakeTextBookRepository extends TextBookRepository {
   int getBookLinksInRangeCalls = 0;
   int? lastStartIndex;
   int? lastEndIndex;
+  List<String>? lastTargetBookTitles;
 
   @override
   Future<String> getBookContent(TextBook book) async {
@@ -118,10 +280,12 @@ class _FakeTextBookRepository extends TextBookRepository {
     TextBook book, {
     required int startIndex,
     required int endIndex,
+    Iterable<String>? targetBookTitles,
   }) async {
     getBookLinksInRangeCalls++;
     lastStartIndex = startIndex;
     lastEndIndex = endIndex;
+    lastTargetBookTitles = targetBookTitles?.toList();
     return const [];
   }
 
