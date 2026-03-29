@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'dart:convert';
+import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 
 class AramaicDictionaryScreen extends StatefulWidget {
   const AramaicDictionaryScreen({super.key});
@@ -15,6 +16,8 @@ class AramaicDictionaryScreen extends StatefulWidget {
 
 class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final DictionaryLookupRepository _dictionaryRepository =
+      DictionaryLookupRepository.instance;
   List<Map<String, String>> _dictionaryData = [];
   List<Map<String, String>> _filteredResults = [];
   bool _isLoading = true;
@@ -36,6 +39,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
 
   Future<void> _loadDictionary() async {
     try {
+      await _dictionaryRepository.ensureLoaded();
       final String jsonString =
           await rootBundle.loadString('assets/dictionary.json');
       final Map<String, dynamic> jsonData = json.decode(jsonString);

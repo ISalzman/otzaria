@@ -31,6 +31,8 @@ import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
+import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 
 class CombinedView extends StatefulWidget {
   const CombinedView({
@@ -106,6 +108,8 @@ class _CombinedViewState extends State<CombinedView> {
   double _viewportHeight = 0;
 
   ScrollController? _previewScrollController;
+  final DictionaryLookupRepository _dictionaryLookupRepository =
+      DictionaryLookupRepository.instance;
 
   @override
   void initState() {
@@ -114,6 +118,7 @@ class _CombinedViewState extends State<CombinedView> {
       _previewScrollController = ScrollController();
     }
     _focusNode = FocusNode();
+    _warmUpDictionaryLookup();
     // שמירת ה-BLoC מראש
     _textBookBloc = context.read<TextBookBloc>();
 
@@ -197,6 +202,17 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   // עדכון האינדקס הנוכחי ב-tab
+  Future<void> _warmUpDictionaryLookup() async {
+    try {
+      await _dictionaryLookupRepository.ensureLoaded();
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      UiSnack.showError('שגיאה בטעינת המילונים: $e');
+    }
+  }
+
   void _updateTabIndex() {
     final positions = widget.tab.positionsListener.itemPositions.value;
     if (positions.isNotEmpty) {
@@ -431,6 +447,20 @@ class _CombinedViewState extends State<CombinedView> {
               )
               .toList(),
         ),
+        ...(() {
+          final dictionaryEntries = buildDictionaryContextMenuEntries(
+            selectedText: selectedText,
+            repository: _dictionaryLookupRepository,
+          );
+          if (dictionaryEntries.isEmpty) {
+            return const <ctx.ContextMenuEntry<Object>>[];
+          }
+
+          return <ctx.ContextMenuEntry<Object>>[
+            const ctx.MenuDivider(),
+            ...dictionaryEntries,
+          ];
+        })(),
         const ctx.MenuDivider(),
         // הערות אישיות
         ctx.MenuItem<Object>(

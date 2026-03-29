@@ -28,6 +28,8 @@ import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
+import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
+import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 
@@ -87,13 +89,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   int _rawPositionsCallbackCount = 0;
   String? _lastRawPositionsSignature;
   final Map<String, Future<bool>> _removeNikudCache = {};
+  final DictionaryLookupRepository _dictionaryLookupRepository =
+      DictionaryLookupRepository.instance;
 
   @override
   void initState() {
     super.initState();
     _debugScope = PageShapeDebugLogger.newScope(
       'simple-text-viewer',
-      label: widget.title ?? widget.bookTitle ?? (widget.isMainText ? 'main-text' : 'commentary'),
+      label: widget.title ??
+          widget.bookTitle ??
+          (widget.isMainText ? 'main-text' : 'commentary'),
     );
     _scrollController = widget.scrollController ?? ItemScrollController();
     _positionsListener =
@@ -145,6 +151,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         level: 'LIFECYCLE',
       );
     }
+    _warmUpDictionaryLookup();
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
@@ -204,6 +211,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     );
     _focusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _warmUpDictionaryLookup() async {
+    try {
+      await _dictionaryLookupRepository.ensureLoaded();
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      UiSnack.showError('שגיאה בטעינת המילונים: $e');
+    }
   }
 
   void _scheduleInitialScrollRestore() {
@@ -711,6 +729,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           items: linksMenuItems,
         ),
       );
+    }
+
+    final dictionaryEntries = buildDictionaryContextMenuEntries(
+      selectedText: _savedSelectedText,
+      repository: _dictionaryLookupRepository,
+    );
+    if (dictionaryEntries.isNotEmpty) {
+      entries.add(const ctx.MenuDivider());
+      entries.addAll(dictionaryEntries);
     }
 
     entries.add(const ctx.MenuDivider());

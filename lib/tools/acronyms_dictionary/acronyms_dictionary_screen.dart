@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'dart:convert';
+import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 
 class AcronymsDictionaryScreen extends StatefulWidget {
   const AcronymsDictionaryScreen({super.key});
@@ -15,6 +14,8 @@ class AcronymsDictionaryScreen extends StatefulWidget {
 
 class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final DictionaryLookupRepository _dictionaryRepository =
+      DictionaryLookupRepository.instance;
   Map<String, List<String>> _dictionaryData = {};
   List<MapEntry<String, List<String>>> _filteredResults = [];
   bool _isLoading = true;
@@ -34,19 +35,12 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
 
   Future<void> _loadDictionary() async {
     try {
-      final String jsonString =
-          await rootBundle.loadString('assets/Acronyms.json');
-      final Map<String, dynamic> jsonData = json.decode(jsonString);
+      await _dictionaryRepository.ensureLoaded();
 
       if (!mounted) return;
 
       setState(() {
-        _dictionaryData = jsonData.map((key, value) {
-          if (value is List) {
-            return MapEntry(key, value.cast<String>());
-          }
-          return MapEntry(key, <String>[]);
-        });
+        _dictionaryData = _dictionaryRepository.getAllAcronyms();
         _isLoading = false;
       });
     } catch (e) {
