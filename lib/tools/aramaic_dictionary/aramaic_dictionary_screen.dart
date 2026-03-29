@@ -1,10 +1,12 @@
+import 'dart:convert';
+
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:convert';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
+import 'package:otzaria/tools/dictionary/widgets/aramaic_dictionary_entry_view.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class AramaicDictionaryScreen extends StatefulWidget {
   const AramaicDictionaryScreen({super.key});
@@ -21,8 +23,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
   List<Map<String, String>> _dictionaryData = [];
   List<Map<String, String>> _filteredResults = [];
   bool _isLoading = true;
-  bool _isHebrewToAramaic =
-      true; // כיוון התרגום: true = עברית->ארמית, false = ארמית->עברית
+  bool _isHebrewToAramaic = true;
 
   @override
   void initState() {
@@ -40,37 +41,34 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
   Future<void> _loadDictionary() async {
     try {
       await _dictionaryRepository.ensureLoaded();
-      final String jsonString =
-          await rootBundle.loadString('assets/dictionary.json');
-      final Map<String, dynamic> jsonData = json.decode(jsonString);
-
-      // המילון נמצא תחת המפתח "מילון פשיטא"
-      final List<dynamic> entries = jsonData['מילון פשיטא'] ?? [];
+      final jsonString = await rootBundle.loadString('assets/dictionary.json');
+      final jsonData = json.decode(jsonString) as Map<String, dynamic>;
+      final entries = jsonData['מילון פשיטא'] as List<dynamic>? ?? <dynamic>[];
 
       if (!mounted) return;
 
       setState(() {
         _dictionaryData = entries
             .map((entry) {
-              if (entry is Map<String, dynamic>) {
-                // כל רשומה היא מפה עם מפתח אחד (ארמית) וערך אחד (עברית)
-                final aramaic = entry.keys.first;
-                final hebrew = entry[aramaic].toString();
-                return {'aramaic': aramaic, 'hebrew': hebrew};
+              if (entry is! Map<String, dynamic> || entry.isEmpty) {
+                return <String, String>{};
               }
-              return <String, String>{};
+
+              final aramaic = entry.keys.first;
+              final hebrew = entry[aramaic].toString();
+              return <String, String>{'aramaic': aramaic, 'hebrew': hebrew};
             })
             .where((entry) => entry.isNotEmpty)
             .toList();
         _isLoading = false;
       });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        UiSnack.show('שגיאה בטעינת המילון: $e');
-      }
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+      UiSnack.show('שגיאה בטעינת המילון: $e');
     }
   }
 
@@ -122,7 +120,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8.0, 16.0, 8.0, 8.0),
+      padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
       child: Row(
         children: [
           const SizedBox(width: 8),
@@ -145,9 +143,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
                     ? IconButton(
                         tooltip: 'נקה',
                         icon: const Icon(FluentIcons.dismiss_24_regular),
-                        onPressed: () {
-                          _searchController.clear();
-                        },
+                        onPressed: _searchController.clear,
                       )
                     : null,
               ),
@@ -167,6 +163,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
         children: [
           Text(
             'עברית',
+            textDirection: TextDirection.rtl,
             style: TextStyle(
               fontSize: 16,
               fontWeight:
@@ -193,6 +190,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
           const SizedBox(width: 12),
           Text(
             'ארמית',
+            textDirection: TextDirection.rtl,
             style: TextStyle(
               fontSize: 16,
               fontWeight:
@@ -224,6 +222,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
             const SizedBox(height: 16),
             Text(
               'הזן מילה לחיפוש במילון',
+              textDirection: TextDirection.rtl,
               style: TextStyle(
                 fontSize: 18,
                 color: Theme.of(context)
@@ -253,6 +252,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
             const SizedBox(height: 16),
             Text(
               'לא נמצאו תוצאות',
+              textDirection: TextDirection.rtl,
               style: TextStyle(
                 fontSize: 18,
                 color: Theme.of(context)
@@ -291,6 +291,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Column(
@@ -298,25 +299,22 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
                 children: [
                   Text(
                     _isHebrewToAramaic ? 'עברית:' : 'ארמית:',
+                    textDirection: TextDirection.rtl,
                     style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    _isHebrewToAramaic ? hebrew : aramaic,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.right,
+                  _buildDictionaryValue(
+                    value: _isHebrewToAramaic ? hebrew : aramaic,
+                    isHebrewDefinition: _isHebrewToAramaic,
                   ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Icon(
                 _isHebrewToAramaic
                     ? FluentIcons.arrow_left_24_filled
@@ -330,25 +328,41 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
                 children: [
                   Text(
                     _isHebrewToAramaic ? 'ארמית:' : 'עברית:',
+                    textDirection: TextDirection.rtl,
                     style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    _isHebrewToAramaic ? aramaic : hebrew,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.right,
+                  _buildDictionaryValue(
+                    value: _isHebrewToAramaic ? aramaic : hebrew,
+                    isHebrewDefinition: !_isHebrewToAramaic,
                   ),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDictionaryValue({
+    required String value,
+    required bool isHebrewDefinition,
+  }) {
+    if (isHebrewDefinition) {
+      return AramaicDictionaryEntryView(definition: value);
+    }
+
+    return Text(
+      value,
+      textDirection: TextDirection.rtl,
+      textAlign: TextAlign.right,
+      style: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
       ),
     );
   }

@@ -732,6 +732,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
 
     final dictionaryEntries = buildDictionaryContextMenuEntries(
+      context: context,
       selectedText: _savedSelectedText,
       repository: _dictionaryLookupRepository,
     );
