@@ -242,7 +242,7 @@ List<Map<String, dynamic>> _loadAlternativeStructuresRowsInIsolate({
     final bookId = bookResults.first['id'] as int;
 
     return db.select(
-      'SELECT * FROM alt_toc_structure WHERE bookId = ?',
+      'SELECT * FROM alt_toc_structure WHERE bookId = ? ORDER BY id',
       [bookId],
     ).toMapList();
   } finally {
@@ -1623,6 +1623,32 @@ class DatabaseLibraryProvider implements LibraryProvider {
       },
       [],
       'getAllAlternativeEntries $structureId',
+    );
+  }
+
+  /// מחזיר רשימת (lineIndex, text) לכל ערכי כותרות משנה בעלי שורה מוגדרת
+  Future<List<({int lineIndex, String text})>> getAltTocLineIndices(
+      int structureId) async {
+    return _dbOperation<List<({int lineIndex, String text})>>(
+      (db) async {
+        final results = db.select('''
+          SELECT l.lineIndex, t.text
+          FROM alt_toc_entry e
+          JOIN tocText t ON e.textId = t.id
+          JOIN line l ON e.lineId = l.id
+          WHERE e.structureId = ?
+          ORDER BY l.lineIndex
+        ''', [structureId]).toMapList();
+
+        return results
+            .map((r) => (
+                  lineIndex: r['lineIndex'] as int,
+                  text: r['text'] as String,
+                ))
+            .toList();
+      },
+      [],
+      'getAltTocLineIndices $structureId',
     );
   }
 
