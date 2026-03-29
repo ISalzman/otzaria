@@ -82,5 +82,28 @@ void main() {
 
       expect(resolved, ['תוספות', 'רא"ש']);
     });
+
+    test('מחזיר את המפרשים שמוצגים בפועל בצורת הדף', () {
+      final displayed = resolvePageShapeDisplayedCommentators(
+        leftSelection: 'אבן עזרא על בראשית',
+        rightSelection: 'תרגום אונקלוס על בראשית',
+        bottomSelection: 'אברבנאל על תורה',
+        bottomRightSelection: 'בעל הטורים על בראשית',
+        availableCommentators: const [
+          'אבן עזרא על בראשית',
+          'תרגום אונקלוס על בראשית',
+          'אברבנאל על תורה',
+          'בעל הטורים על בראשית',
+          'רש"י על בראשית',
+        ],
+      );
+
+      expect(displayed, [
+        'אבן עזרא על בראשית',
+        'תרגום אונקלוס על בראשית',
+        'אברבנאל על תורה',
+        'בעל הטורים על בראשית',
+      ]);
+    });
   });
 }

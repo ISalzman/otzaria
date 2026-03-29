@@ -16,6 +16,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 
 @visibleForTesting
 RenderSettings buildSelectedLinkRenderSettings({
@@ -62,6 +63,8 @@ class SelectedLineLinksView extends StatefulWidget {
 }
 
 class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
+  late final String _debugScope;
+  int _buildCount = 0;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   final Map<String, Future<String>> _contentCache = {};
@@ -74,13 +77,50 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   String? _savedSelectedText; // טקסט נבחר לתפריט הקשר
 
   @override
+  void initState() {
+    super.initState();
+    _debugScope = PageShapeDebugLogger.newScope('selected-line-links');
+    PageShapeDebugLogger.log(
+      'SelectedLineLinksView',
+      'initState',
+      scope: _debugScope,
+      data: {
+        'fontSize': widget.fontSize,
+        'showVisibleLinksIfNoSelection': widget.showVisibleLinksIfNoSelection,
+      },
+      level: 'LIFECYCLE',
+    );
+  }
+
+  @override
   void dispose() {
+    PageShapeDebugLogger.log(
+      'SelectedLineLinksView',
+      'dispose',
+      scope: _debugScope,
+      data: {
+        'buildCount': _buildCount,
+      },
+      level: 'END',
+    );
     _searchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    _buildCount++;
+    PageShapeDebugLogger.log(
+      'SelectedLineLinksView',
+      'build',
+      scope: _debugScope,
+      data: {
+        'buildCount': _buildCount,
+        'searchQueryLength': _searchQuery.length,
+        'searchInContent': _searchInContent,
+      },
+      level: 'BUILD',
+    );
     return TextBookStateBuilder(
       builder: (context, state) {
         return Column(
@@ -154,6 +194,15 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
         .toList();
 
     if (links.isEmpty) {
+      PageShapeDebugLogger.log(
+        'SelectedLineLinksView',
+        'לא נמצאו קישורים לשורה הנוכחית',
+        scope: _debugScope,
+        data: {
+          'selectedIndex': state.selectedIndex,
+          ...PageShapeDebugLogger.summarizeIndices(state.visibleIndices),
+        },
+      );
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(16.0),
@@ -176,6 +225,15 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
     if (_lastSearchKey != searchKey) {
       _lastSearchKey = searchKey;
       _filteredLinksFuture = _filterLinksAsync(links);
+      PageShapeDebugLogger.log(
+        'SelectedLineLinksView',
+        'נוצר Future חדש לסינון קישורים',
+        scope: _debugScope,
+        data: {
+          'searchKey': searchKey,
+          'linksCount': links.length,
+        },
+      );
     }
 
     return Container(
@@ -199,9 +257,22 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
 
   // פונקציה אסינכרונית לסינון הקישורים עם חיפוש בתוכן
   Future<List<Link>> _filterLinksAsync(List<Link> links) async {
+    final trace = PageShapeDebugLogger.start(
+      'SelectedLineLinksView',
+      'סינון קישורים בחלונית קישורים',
+      scope: _debugScope,
+      data: {
+        'linksCount': links.length,
+        'searchQuery': _searchQuery,
+        'searchInContent': _searchInContent,
+      },
+      longTaskAfter: const Duration(milliseconds: 300),
+      heartbeatEvery: const Duration(milliseconds: 300),
+    );
     _linksWithSearchResults.clear(); // איפוס רשימת הקישורים עם תוצאות
 
     if (_searchQuery.isEmpty) {
+      trace.end(data: {'reason': 'empty query', 'linksCount': links.length});
       return links;
     }
 
@@ -245,10 +316,24 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
         } catch (e) {
           // אם יש שגיאה בטעינת התוכן, מוסיף בכל זאת אם מתאים לכותרת
           // (כבר בדקנו את זה למעלה)
+          trace.warn(
+            'שגיאה בטעינת תוכן קישור בזמן חיפוש',
+            data: {
+              'linkPath': link.path2,
+              'linkIndex2': link.index2,
+              'error': e,
+            },
+          );
         }
       }
     }
 
+    trace.end(
+      data: {
+        'filteredLinksCount': filteredLinks.length,
+        'linksWithSearchResultsCount': _linksWithSearchResults.length,
+      },
+    );
     return filteredLinks;
   }
 
@@ -275,6 +360,18 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           identifier: keyStr,
         ) as bool?;
     final isExpanded = _expanded[keyStr] ?? restoredExpanded ?? false;
+    PageShapeDebugLogger.log(
+      'SelectedLineLinksView',
+      'בניית ExpansionTile לקישור',
+      scope: _debugScope,
+      data: {
+        'key': keyStr,
+        'isExpanded': isExpanded,
+        'path2': link.path2,
+        'index2': link.index2,
+      },
+      level: 'BUILD',
+    );
     return ctx.ContextMenuRegion(
       contextMenu: ContextMenuUtils.buildCommentaryContextMenu(
         context: context,

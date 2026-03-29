@@ -199,9 +199,6 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
   }
 
   Future<void> _saveSettings() async {
-    debugPrint(
-        'PageShapeDialog: Saving settings for book: ${widget.bookTitle}');
-
     // שמירת הגדרות מפרשים - לספר או לקטגוריה לפי הבחירה
     final config = {
       'left': _leftCommentator,
@@ -215,14 +212,9 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       'bottomRight': _bottomRightCommentator,
     };
 
-    debugPrint('PageShapeDialog: Config to save: $config');
-    debugPrint('PageShapeDialog: Save scope: $_commentatorSaveScope');
-    debugPrint('PageShapeDialog: Selected category: $_selectedCategory');
-
     if (_commentatorSaveScope == CommentatorSaveScope.category &&
         _selectedCategory != null) {
       // שמירה לקטגוריה
-      debugPrint('PageShapeDialog: Saving to category: $_selectedCategory');
       await PageShapeSettingsManager.saveConfiguration(
         widget.bookTitle,
         config,
@@ -233,7 +225,6 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
           widget.bookTitle);
     } else {
       // שמירה לספר ספציפי
-      debugPrint('PageShapeDialog: Saving to book: ${widget.bookTitle}');
       await PageShapeSettingsManager.saveConfiguration(
         widget.bookTitle,
         config,
@@ -257,8 +248,6 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
       _columnVisibility,
       saveAsGlobal: !_saveForCurrentBookOnly,
     );
-
-    debugPrint('PageShapeDialog: Settings saved successfully');
   }
 
   void _onCommentatorChanged(String? value, void Function(String?) setter,

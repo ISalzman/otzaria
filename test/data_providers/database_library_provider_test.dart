@@ -79,7 +79,8 @@ void main() {
       );
     });
 
-    test('getTalmudBavliDirectoryPath מחזיר נתיב ליד ה-DB גם בלי תיקיית אוצריא', () {
+    test('getTalmudBavliDirectoryPath מחזיר נתיב ליד ה-DB גם בלי תיקיית אוצריא',
+        () {
       expect(
         DatabaseConstants.getTalmudBavliDirectoryPath('/library-root', ''),
         path.join('/library-root', DatabaseConstants.talmudBavliFolderName),
@@ -110,17 +111,27 @@ void main() {
       final db = sqlite3.sqlite3.open(dbPath);
 
       try {
-        db.execute('CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT)');
-        db.execute('CREATE TABLE line (id INTEGER PRIMARY KEY, lineIndex INTEGER)');
-        db.execute('CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
-        db.execute('CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+        db.execute(
+            'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT)');
+        db.execute(
+            'CREATE TABLE line (id INTEGER PRIMARY KEY, lineIndex INTEGER, heRef TEXT)');
+        db.execute(
+            'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
+        db.execute(
+            'CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
 
-        db.execute("INSERT INTO book (id, title, categoryId, fileType) VALUES (1, 'בראשית', 7, 'txt')");
-        db.execute("INSERT INTO book (id, title, categoryId, fileType) VALUES (2, 'רש''י על בראשית', 8, 'txt')");
-        db.execute('INSERT INTO line (id, lineIndex) VALUES (10, 0)');
-        db.execute('INSERT INTO line (id, lineIndex) VALUES (20, 3)');
-        db.execute("INSERT INTO connection_type (id, name) VALUES (5, 'reference')");
-        db.execute('INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 20, 2, 5)');
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType) VALUES (1, 'בראשית', 7, 'txt')");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType) VALUES (2, 'רש''י על בראשית', 8, 'txt')");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (10, 0, 'א')");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (20, 3, 'ד')");
+        db.execute(
+            "INSERT INTO connection_type (id, name) VALUES (5, 'reference')");
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 20, 2, 5)');
 
         final rows = DatabaseLibraryProvider.loadBookLinksRowsForTesting(
           dbPath: dbPath,
@@ -146,21 +157,35 @@ void main() {
       final db = sqlite3.sqlite3.open(dbPath);
 
       try {
-        db.execute('CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT, orderIndex INTEGER)');
-        db.execute('CREATE TABLE line (id INTEGER PRIMARY KEY, lineIndex INTEGER)');
-        db.execute('CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
-        db.execute('CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+        db.execute(
+            'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT, orderIndex INTEGER)');
+        db.execute(
+            'CREATE TABLE line (id INTEGER PRIMARY KEY, lineIndex INTEGER, heRef TEXT)');
+        db.execute(
+            'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
+        db.execute(
+            'CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
 
-        db.execute("INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (1, 'בראשית', 7, 'txt', 1)");
-        db.execute("INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (2, 'מפרש א', 8, 'txt', 1)");
-        db.execute("INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (3, 'מפרש ב', 8, 'txt', 2)");
-        db.execute('INSERT INTO line (id, lineIndex) VALUES (10, 4)');
-        db.execute('INSERT INTO line (id, lineIndex) VALUES (11, 40)');
-        db.execute('INSERT INTO line (id, lineIndex) VALUES (20, 0)');
-        db.execute('INSERT INTO line (id, lineIndex) VALUES (21, 1)');
-        db.execute("INSERT INTO connection_type (id, name) VALUES (5, 'reference')");
-        db.execute('INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 20, 2, 5)');
-        db.execute('INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 11, 21, 3, 5)');
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (1, 'בראשית', 7, 'txt', 1)");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (2, 'מפרש א', 8, 'txt', 1)");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (3, 'מפרש ב', 8, 'txt', 2)");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (10, 4, 'ד')");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (11, 40, 'מ')");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (20, 0, 'א')");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (21, 1, 'ב')");
+        db.execute(
+            "INSERT INTO connection_type (id, name) VALUES (5, 'reference')");
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 20, 2, 5)');
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 11, 21, 3, 5)');
 
         final rows = DatabaseLibraryProvider.loadBookLinksRowsInRangeForTesting(
           dbPath: dbPath,
@@ -180,6 +205,62 @@ void main() {
       }
     });
 
+    test('loadBookLinksRowsInRangeForTesting מסנן גם לפי ספרי יעד', () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_target');
+      final dbPath = path.join(tempDir.path, 'db.sqlite');
+      final db = sqlite3.sqlite3.open(dbPath);
+
+      try {
+        db.execute(
+            'CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT, categoryId INTEGER, fileType TEXT, orderIndex INTEGER)');
+        db.execute(
+            'CREATE TABLE line (id INTEGER PRIMARY KEY, lineIndex INTEGER, heRef TEXT)');
+        db.execute(
+            'CREATE TABLE connection_type (id INTEGER PRIMARY KEY, name TEXT)');
+        db.execute(
+            'CREATE TABLE link (sourceBookId INTEGER, sourceLineId INTEGER, targetLineId INTEGER, targetBookId INTEGER, connectionTypeId INTEGER)');
+
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (1, 'בראשית', 7, 'txt', 1)");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (2, 'מפרש א', 8, 'txt', 1)");
+        db.execute(
+            "INSERT INTO book (id, title, categoryId, fileType, orderIndex) VALUES (3, 'מפרש ב', 8, 'txt', 2)");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (10, 4, 'ד')");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (11, 5, 'ה')");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (20, 0, 'א')");
+        db.execute(
+            "INSERT INTO line (id, lineIndex, heRef) VALUES (21, 1, 'ב')");
+        db.execute(
+            "INSERT INTO connection_type (id, name) VALUES (5, 'reference')");
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 10, 20, 2, 5)');
+        db.execute(
+            'INSERT INTO link (sourceBookId, sourceLineId, targetLineId, targetBookId, connectionTypeId) VALUES (1, 11, 21, 3, 5)');
+
+        final rows = DatabaseLibraryProvider.loadBookLinksRowsInRangeForTesting(
+          dbPath: dbPath,
+          title: 'בראשית',
+          categoryId: 7,
+          fileType: 'txt',
+          startLineIndex: 0,
+          endLineIndex: 10,
+          targetBookTitles: const ['מפרש ב'],
+        );
+
+        expect(rows, hasLength(1));
+        expect(rows.first['sourceLineIndex'], 5);
+        expect(rows.first['targetBookTitle'], 'מפרש ב');
+      } finally {
+        db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
     test('loadAlternativeStructuresRowsForTesting טוען כותרות חלופיות מה-DB',
         () async {
       final tempDir = await Directory.systemTemp.createTemp('otzaria_db_alt');
@@ -188,10 +269,12 @@ void main() {
 
       try {
         db.execute('CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT)');
-        db.execute('CREATE TABLE alt_toc_structure (id INTEGER PRIMARY KEY, bookId INTEGER, key TEXT, title TEXT, heTitle TEXT)');
+        db.execute(
+            'CREATE TABLE alt_toc_structure (id INTEGER PRIMARY KEY, bookId INTEGER, key TEXT, title TEXT, heTitle TEXT)');
 
         db.execute("INSERT INTO book (id, title) VALUES (1, 'בראשית')");
-        db.execute("INSERT INTO alt_toc_structure (id, bookId, key, title, heTitle) VALUES (9, 1, 'chapters', 'Chapters', 'פרקים')");
+        db.execute(
+            "INSERT INTO alt_toc_structure (id, bookId, key, title, heTitle) VALUES (9, 1, 'chapters', 'Chapters', 'פרקים')");
 
         final rows =
             DatabaseLibraryProvider.loadAlternativeStructuresRowsForTesting(
