@@ -68,7 +68,7 @@ class CopyUtils {
     required String currentPath,
   }) {
     if (copyWithHeaders == 'none') {
-      return originalText;
+      return originalText.trimRight();
     }
 
     String header;
@@ -118,7 +118,7 @@ class CopyUtils {
     required String fontFamily,
     required double fontSize,
   }) {
-    final normalizedText = htmlText.replaceAll('\r\n', '\n');
+    final normalizedText = htmlText.trimRight().replaceAll('\r\n', '\n');
     final lines = normalizedText.split('\n');
     final htmlLines = lines
         .map((line) => line.isEmpty ? '<div><br></div>' : '<div>$line</div>')
@@ -153,7 +153,7 @@ $htmlLines
       );
 
       final item = DataWriterItem();
-      item.add(Formats.plainText(plainText)); // טקסט רגיל כגיבוי
+      item.add(Formats.plainText(plainText.trimRight())); // טקסט רגיל כגיבוי
       item.add(Formats.htmlText(htmlContent)); // טקסט עם עיצוב
 
       await clipboard.write([item]);
