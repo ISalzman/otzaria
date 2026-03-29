@@ -627,7 +627,8 @@ class ProgressService {
       dates[bookId] = date;
 
       final prefs = await _getPrefs();
-      final jsonString = json.encode(dates);
+      final jsonString =
+          json.encode(dates.map((k, v) => MapEntry(k.toString(), v)));
       await prefs.setString('${_keyPrefix}completion_dates_by_id', jsonString);
 
       _logger.fine('Saved completion date for book $bookId');
@@ -795,8 +796,10 @@ class ProgressService {
 
       // Save migrated data
       await saveProgressDataById(newProgress);
-      await prefs.setString('${_keyPrefix}completion_dates_by_id',
-          json.encode(newCompletionDates));
+      await prefs.setString(
+          '${_keyPrefix}completion_dates_by_id',
+          json.encode(newCompletionDates
+              .map((k, v) => MapEntry(k.toString(), v))));
 
       // Mark migration as completed
       await prefs.setBool('${_keyPrefix}migration_completed', true);
