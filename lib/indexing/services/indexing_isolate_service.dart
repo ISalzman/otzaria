@@ -12,11 +12,13 @@ class PreparedIndexDocument {
   final String reference;
   final String text;
   final int segment;
+  final int ordinal;
 
   const PreparedIndexDocument({
     required this.reference,
     required this.text,
     required this.segment,
+    required this.ordinal,
   });
 
   factory PreparedIndexDocument.fromMap(Map<dynamic, dynamic> map) {
@@ -24,6 +26,7 @@ class PreparedIndexDocument {
       reference: map['reference'] as String? ?? '',
       text: map['text'] as String? ?? '',
       segment: (map['segment'] as num?)?.toInt() ?? 0,
+      ordinal: (map['ordinal'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -72,6 +75,7 @@ class IndexingDocumentBuilder {
             reference: stripHtmlIfNeeded(reference.join(', ')),
             text: headerLine,
             segment: i,
+            ordinal: documents.length,
           ),
         );
         continue;
@@ -83,6 +87,7 @@ class IndexingDocumentBuilder {
           reference: stripHtmlIfNeeded(reference.join(', ')),
           text: line,
           segment: i,
+          ordinal: documents.length,
         ),
       );
     }
@@ -363,6 +368,7 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
     final texts = text.split('\n');
     final reference = <String>[];
     var batch = <Map<String, Object?>>[];
+    var ordinal = 0;
 
     for (int i = 0; i < texts.length; i++) {
       if (shouldCancel) {
@@ -377,12 +383,14 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
           'reference': stripHtmlIfNeeded(reference.join(', ')),
           'text': headerLine,
           'segment': i,
+          'ordinal': ordinal++,
         });
       } else {
         batch.add({
           'reference': stripHtmlIfNeeded(reference.join(', ')),
           'text': removeVolwels(stripHtmlIfNeeded(rawLine)),
           'segment': i,
+          'ordinal': ordinal++,
         });
       }
 
@@ -419,6 +427,7 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
 
       var batch = <Map<String, Object?>>[];
       var addedAny = false;
+      var ordinal = 0;
 
       for (int i = 0; i < document.pages.length; i++) {
         if (shouldCancel) {
@@ -454,6 +463,7 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
             'reference': ref,
             'text': normalized,
             'segment': i,
+            'ordinal': ordinal++,
           });
           addedAny = true;
 
@@ -512,6 +522,7 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
                 'reference': ref,
                 'text': normalized,
                 'segment': pageIndex,
+                'ordinal': ordinal++,
               });
 
               if (batch.length >= IndexingIsolateService._batchSize) {
