@@ -68,11 +68,11 @@ class ExternalCatalogSettingsHelper {
     }
 
     final settingsState = context.read<SettingsBloc>().state;
-    if (settingsState.protectedModeEnabled) {
+    if (settingsState.isOfflineMode) {
       await showSingleActionDialog(
         context: context,
         title: 'מסד הקטלוגים חסר',
-        content: 'לא ניתן להוריד את מסד הקטלוגים החיצוני במצב סייפר. יש לפנות למנהל המערכת.',
+        content: 'לא ניתן להוריד את מסד הקטלוגים החיצוני במצב מנותק.',
         confirmText: 'הבנתי',
       );
       return false;
