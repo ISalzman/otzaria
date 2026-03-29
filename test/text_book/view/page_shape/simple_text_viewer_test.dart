@@ -81,6 +81,30 @@ void main() {
     expect(shouldPersistSelectedText('   '), isFalse);
     expect(shouldPersistSelectedText(null), isFalse);
   });
+
+  test('בחירה ריקה לא דורסת את הטקסט האחרון שנשמר', () {
+    expect(
+      resolvePersistedSelectedText(
+        previousSelectedText: 'טקסט קודם',
+        latestSelectedText: '',
+      ),
+      'טקסט קודם',
+    );
+    expect(
+      resolvePersistedSelectedText(
+        previousSelectedText: 'טקסט קודם',
+        latestSelectedText: null,
+      ),
+      'טקסט קודם',
+    );
+    expect(
+      resolvePersistedSelectedText(
+        previousSelectedText: 'טקסט קודם',
+        latestSelectedText: 'טקסט חדש',
+      ),
+      'טקסט חדש',
+    );
+  });
 }
 
 PersonalNote _note() {

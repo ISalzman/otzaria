@@ -25,6 +25,7 @@ import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
@@ -406,11 +407,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   Future<void> _handleSelectionChange(String? plainText) async {
-    if (plainText == null || plainText.trim().isEmpty) {
-      if (!mounted) return;
-      setState(() {
-        _savedSelectedText = null;
-      });
+    final persistedText = resolvePersistedSelectedText(
+      previousSelectedText: _savedSelectedText,
+      latestSelectedText: plainText,
+    );
+
+    if (!shouldPersistSelectedText(plainText)) {
       return;
     }
 
@@ -418,7 +420,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     if (textBookState is! TextBookLoaded) {
       if (!mounted) return;
       setState(() {
-        _savedSelectedText = plainText;
+        _savedSelectedText = persistedText;
       });
       return;
     }
@@ -443,7 +445,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         .toList();
 
     final restoredText = restoreSelectedTextLineBreaks(
-      selectedText: plainText,
+      selectedText: persistedText!,
       visibleLines: renderedLines,
     );
 
