@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -157,6 +158,24 @@ void main() {
 
       expect(chain, isEmpty);
     });
+
+    test('allows the legacy direct upgrade from version 3 to 134', () {
+      final chain = FileSyncRepository.buildUpdateChain(
+        currentVersion: 3,
+        availableAssets: const [
+          DiffReleaseAsset(
+            fromVersion: 133,
+            toVersion: 134,
+            assetName: '133-134.DIFF.zst',
+            downloadUrl: 'https://example.com/133-134.DIFF.zst',
+            releaseTag: 'db-v134',
+            releaseName: 'db-v134',
+          ),
+        ],
+      );
+
+      expect(chain.map((asset) => asset.assetName), ['133-134.DIFF.zst']);
+    });
   });
 
   group('FileSyncRepository.splitSqlStatements', () {
@@ -191,7 +210,7 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
     });
   });
 
-  group('FileSyncRepository external catalog sync', () {
+  group('FileSyncRepository library sync', () {
     late Directory tempDir;
 
     setUp(() async {
@@ -232,28 +251,7 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
       }
     });
 
-    test('detects legacy full-db fallback from version 3 to 134', () {
-      final release =
-          FileSyncRepository.findLegacyFullDatabaseReplacementRelease(
-        currentVersion: 3,
-        availableAssets: const [
-          DiffReleaseAsset(
-            fromVersion: 133,
-            toVersion: 134,
-            assetName: '133-134.DIFF.zst',
-            downloadUrl: 'https://example.com/133-134.DIFF.zst',
-            releaseTag: 'db-v134',
-            releaseName: 'db-v134',
-          ),
-        ],
-      );
-
-      expect(release, isNotNull);
-      expect(release!.assetName, '133-134.DIFF.zst');
-      expect(release.releaseTag, 'db-v134');
-    });
-
-    test('checkForUpdates falls back to full DB asset for legacy gap',
+    test('checkForUpdates returns the legacy direct diff for version 3',
         () async {
       final repository = FileSyncRepository(
         githubOwner: 'Otzaria',
@@ -272,41 +270,35 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
       );
 
       final updates = await repository.checkForUpdates();
-      expect(updates, ['seforim.db.zst']);
+      expect(updates, ['133-134.DIFF.zst']);
     });
 
-    test('syncFiles replaces the full DB for the legacy v3 to v134 gap',
-        () async {
-      String? requestedDownloadUrl;
-      String? requestedOutputPath;
-
+    test('syncFiles applies the legacy direct diff for version 3', () async {
       final repository = FileSyncRepository(
         githubOwner: 'Otzaria',
         repositoryName: 'SeforimLibrary',
         httpClient: MockClient((request) async {
-          expect(
-            request.url.toString(),
-            'https://api.github.com/repos/Otzaria/SeforimLibrary/releases',
-          );
-          return http.Response(
-            jsonEncode(_buildReleasesPayload()),
-            200,
-            headers: const {'content-type': 'application/json'},
-          );
-        }),
-        replaceDatabaseFromCompressedAsset: (downloadUrl, outputPath) async {
-          requestedDownloadUrl = downloadUrl;
-          requestedOutputPath = outputPath;
-
-          final db = sqlite3.open(outputPath);
-          try {
-            db.execute(
-              'UPDATE db_meta SET value = ? WHERE key = ?',
-              ['134', 'content_version_int'],
-            );
-          } finally {
-            db.close();
+          switch (request.url.toString()) {
+            case 'https://api.github.com/repos/Otzaria/SeforimLibrary/releases':
+              return http.Response(
+                jsonEncode(_buildReleasesPayload()),
+                200,
+                headers: const {'content-type': 'application/json'},
+              );
+            case 'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v134/133-134.DIFF.zst':
+              return http.Response.bytes(const [1, 2, 3], 200);
           }
+
+          fail('Unexpected URL: ${request.url}');
+        }),
+        decompressDiff: (_) async {
+          return Uint8List.fromList(
+            utf8.encode('''
+BEGIN TRANSACTION;
+UPDATE db_meta SET value='134' WHERE "key"='content_version_int';
+COMMIT;
+'''),
+          );
         },
       );
 
@@ -315,11 +307,6 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
       expect(appliedCount, 1);
       expect(repository.totalFiles, 1);
       expect(repository.currentProgress, 1);
-      expect(
-        requestedDownloadUrl,
-        'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v134/seforim.db.zst',
-      );
-      expect(requestedOutputPath, DatabaseConstants.getDatabasePath());
       expect(await repository.getCurrentLibraryVersion(), 134);
     });
   });
@@ -337,11 +324,6 @@ List<Map<String, Object?>> _buildReleasesPayload() {
           'name': '133-134.DIFF.zst',
           'browser_download_url':
               'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v134/133-134.DIFF.zst',
-        },
-        {
-          'name': 'seforim.db.zst',
-          'browser_download_url':
-              'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v134/seforim.db.zst',
         },
       ],
     },
