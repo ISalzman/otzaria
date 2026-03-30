@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/file_sync/file_sync_repository.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -41,6 +44,23 @@ void main() {
       );
 
       expect(asset, isNull);
+    });
+
+    test('parses diff asset names case-insensitively', () {
+      final asset = DiffReleaseAsset.tryParse(
+        {
+          'name': '133-134.diff.zst',
+          'browser_download_url':
+              'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v134/133-134.diff.zst',
+        },
+        releaseTag: 'db-v134',
+        releaseName: 'db-v134',
+      );
+
+      expect(asset, isNotNull);
+      expect(asset!.fromVersion, 133);
+      expect(asset.toVersion, 134);
+      expect(asset.assetName, '133-134.diff.zst');
     });
   });
 
@@ -211,7 +231,134 @@ UPDATE db_meta SET value='value;still-value' WHERE key='note';
         await tempDir.delete(recursive: true);
       }
     });
+
+    test('detects legacy full-db fallback from version 3 to 134', () {
+      final release =
+          FileSyncRepository.findLegacyFullDatabaseReplacementRelease(
+        currentVersion: 3,
+        availableAssets: const [
+          DiffReleaseAsset(
+            fromVersion: 133,
+            toVersion: 134,
+            assetName: '133-134.DIFF.zst',
+            downloadUrl: 'https://example.com/133-134.DIFF.zst',
+            releaseTag: 'db-v134',
+            releaseName: 'db-v134',
+          ),
+        ],
+      );
+
+      expect(release, isNotNull);
+      expect(release!.assetName, '133-134.DIFF.zst');
+      expect(release.releaseTag, 'db-v134');
+    });
+
+    test('checkForUpdates falls back to full DB asset for legacy gap',
+        () async {
+      final repository = FileSyncRepository(
+        githubOwner: 'Otzaria',
+        repositoryName: 'SeforimLibrary',
+        httpClient: MockClient((request) async {
+          expect(
+            request.url.toString(),
+            'https://api.github.com/repos/Otzaria/SeforimLibrary/releases',
+          );
+          return http.Response(
+            jsonEncode(_buildReleasesPayload()),
+            200,
+            headers: const {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final updates = await repository.checkForUpdates();
+      expect(updates, ['seforim.db.zst']);
+    });
+
+    test('syncFiles replaces the full DB for the legacy v3 to v134 gap',
+        () async {
+      String? requestedDownloadUrl;
+      String? requestedOutputPath;
+
+      final repository = FileSyncRepository(
+        githubOwner: 'Otzaria',
+        repositoryName: 'SeforimLibrary',
+        httpClient: MockClient((request) async {
+          expect(
+            request.url.toString(),
+            'https://api.github.com/repos/Otzaria/SeforimLibrary/releases',
+          );
+          return http.Response(
+            jsonEncode(_buildReleasesPayload()),
+            200,
+            headers: const {'content-type': 'application/json'},
+          );
+        }),
+        replaceDatabaseFromCompressedAsset: (downloadUrl, outputPath) async {
+          requestedDownloadUrl = downloadUrl;
+          requestedOutputPath = outputPath;
+
+          final db = sqlite3.open(outputPath);
+          try {
+            db.execute(
+              'UPDATE db_meta SET value = ? WHERE key = ?',
+              ['134', 'content_version_int'],
+            );
+          } finally {
+            db.close();
+          }
+        },
+      );
+
+      final appliedCount = await repository.syncFiles();
+
+      expect(appliedCount, 1);
+      expect(repository.totalFiles, 1);
+      expect(repository.currentProgress, 1);
+      expect(
+        requestedDownloadUrl,
+        'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v134/seforim.db.zst',
+      );
+      expect(requestedOutputPath, DatabaseConstants.getDatabasePath());
+      expect(await repository.getCurrentLibraryVersion(), 134);
+    });
   });
+}
+
+List<Map<String, Object?>> _buildReleasesPayload() {
+  return [
+    {
+      'tag_name': 'db-v134',
+      'name': 'db-v134',
+      'draft': false,
+      'prerelease': false,
+      'assets': [
+        {
+          'name': '133-134.DIFF.zst',
+          'browser_download_url':
+              'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v134/133-134.DIFF.zst',
+        },
+        {
+          'name': 'seforim.db.zst',
+          'browser_download_url':
+              'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v134/seforim.db.zst',
+        },
+      ],
+    },
+    {
+      'tag_name': 'db-v3',
+      'name': 'db-v3',
+      'draft': false,
+      'prerelease': false,
+      'assets': [
+        {
+          'name': '2-3.DIFF.zst',
+          'browser_download_url':
+              'https://github.com/Otzaria/SeforimLibrary/releases/download/db-v3/2-3.DIFF.zst',
+        },
+      ],
+    },
+  ];
 }
 
 class _MemoryCacheProvider extends CacheProvider {
