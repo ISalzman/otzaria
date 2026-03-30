@@ -472,6 +472,8 @@ class _SearchDialogState extends State<SearchDialog> {
                                                   widget: _SearchDialogWrapper(
                                                     tab: _searchTab,
                                                   ),
+                                                  showInlineSearchButton: false,
+                                                  showInlineNikudButton: false,
                                                 ),
                                               ),
                                               // כפתור חיפוש - מצד ימין
