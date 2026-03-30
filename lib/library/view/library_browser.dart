@@ -119,9 +119,12 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       listeners: [
         BlocListener<LibraryBloc, LibraryState>(
           listenWhen: (previous, current) =>
-              previous.isLoading && !current.isLoading && current.library != null,
+              previous.isLoading &&
+              !current.isLoading &&
+              current.library != null,
           listener: (context, state) {
-            final book = _getFirstDisplayedBook(state.currentCategory ?? state.library!);
+            final book =
+                _getFirstDisplayedBook(state.currentCategory ?? state.library!);
             if (book != null) {
               context.read<LibraryBloc>().add(SelectBookForPreview(book));
             }
@@ -978,7 +981,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   void _navigateUp(BuildContext context, SettingsState settingsState) {
-    if (settingsState.libraryViewMode == 'list' && _expandedCategories.isNotEmpty) {
+    if (settingsState.libraryViewMode == 'list' &&
+        _expandedCategories.isNotEmpty) {
       setState(() {
         _expandedCategories.remove(_expandedCategories.last);
       });
@@ -1007,9 +1011,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
     final subs = category.subCategories.toList();
     if (category is Library) {
-      subs.sort((a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)));
+      subs.sort(
+          (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)));
     } else {
-      subs.sort((a, b) => _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)));
+      subs.sort((a, b) =>
+          _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)));
     }
     for (final sub in subs) {
       final book = _getFirstDisplayedBook(sub);
@@ -1280,8 +1286,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         },
       ),
 
-      // סינכרון - מוצג רק אם מצב אופליין לא מופעל
-      if (!settingsState.isOfflineMode) _buildSyncActionButton(),
+      // סינכרון - מוצג רק כשעדכוני תוכנה וספרים פעילים
+      if (settingsState.canUseSoftwareAndBookUpdates) _buildSyncActionButton(),
 
       // טעינה מחדש
       ActionButtonData(
@@ -1321,7 +1327,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       ),
 
       // סינכרון - עדיפות גבוהה כדי שלא יכנס לתפריט "..."
-      if (!settingsState.isOfflineMode) _buildSyncActionButton(),
+      if (settingsState.canUseSoftwareAndBookUpdates) _buildSyncActionButton(),
 
       ActionButtonData(
         widget: IconButton(

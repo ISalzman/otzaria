@@ -308,6 +308,15 @@ class UpdateAutoSyncCatalogs extends SettingsEvent {
   List<Object?> get props => [autoSyncCatalogs];
 }
 
+class UpdateSoftwareAndBookUpdatesEnabled extends SettingsEvent {
+  final bool enabled;
+
+  const UpdateSoftwareAndBookUpdatesEnabled(this.enabled);
+
+  @override
+  List<Object?> get props => [enabled];
+}
+
 class UpdateAlignTabsToRight extends SettingsEvent {
   final bool alignTabsToRight;
 
