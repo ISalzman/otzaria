@@ -322,7 +322,7 @@ Future<void> _runAppBootstrap() async {
     ),
   );
 
-  // טעינת מילוני ארמי וראשי תיבות ברקע – אחרי הפריים הראשון, כדי לא להתחרות עם ה-paint.
+  // טעינת מילוני ארמי, ראשי תיבות וספרים ברקע – אחרי הפריים הראשון, כדי לא להתחרות עם ה-paint.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(
       DictionaryLookupRepository.instance.ensureLoaded().catchError((e) {
@@ -331,6 +331,12 @@ Future<void> _runAppBootstrap() async {
         }
       }),
     );
+    unawaited(BooksCache.instance.warmUp().catchError((e) {
+      if (kDebugMode) debugPrint('Failed to warm up BooksCache: $e');
+    }));
+    unawaited(AcronymsCache.instance.warmUp().catchError((e) {
+      if (kDebugMode) debugPrint('Failed to warm up AcronymsCache: $e');
+    }));
   });
 }
 
@@ -381,18 +387,6 @@ Future<void> initialize() async {
 
   // If the migration created the DB file on a first run, initialize again.
   await SqliteDataProvider.instance.initialize();
-
-  // Warm up shared in-memory caches for books and acronyms.
-  // BooksCache is shared between library screen and FindRef.
-  // AcronymsCache is used exclusively by FindRef.
-  try {
-    await BooksCache.instance.warmUp();
-    await AcronymsCache.instance.warmUp();
-  } catch (e) {
-    if (kDebugMode) {
-      debugPrint('Failed to warm up book/acronym caches: $e');
-    }
-  }
 
   // נדרש לטעינת PDF דרך pdfrx: הגדרת תקיית cache
   try {
