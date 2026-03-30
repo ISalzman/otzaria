@@ -65,6 +65,27 @@ void main() {
       expect(repository.updateCalls, 0);
       expect(invalidateCalls, 0);
     });
+
+    test('skips auto sync when software and book updates are disabled',
+        () async {
+      final repository = _FakeExternalCatalogRepository();
+      var invalidateCalls = 0;
+
+      await ExternalCatalogSettingsHelper.maybeAutoSyncCatalogs(
+        SettingsState.initial().copyWith(
+          showExternalBooks: true,
+          autoSyncCatalogs: true,
+          softwareAndBookUpdatesEnabled: false,
+        ),
+        repository: repository,
+        invalidateExternalBooksCache: () {
+          invalidateCalls++;
+        },
+      );
+
+      expect(repository.updateCalls, 0);
+      expect(invalidateCalls, 0);
+    });
   });
 }
 

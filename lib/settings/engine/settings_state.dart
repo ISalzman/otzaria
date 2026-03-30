@@ -39,6 +39,7 @@ class SettingsState extends Equatable {
   final bool personalNotesCollapsedByDefault;
   final bool protectedModeEnabled;
   final bool autoSyncCatalogs;
+  final bool? _softwareAndBookUpdatesEnabled;
 
   const SettingsState({
     required this.isDarkMode,
@@ -77,7 +78,8 @@ class SettingsState extends Equatable {
     required this.personalNotesCollapsedByDefault,
     required this.protectedModeEnabled,
     required this.autoSyncCatalogs,
-  });
+    bool? softwareAndBookUpdatesEnabled,
+  }) : _softwareAndBookUpdatesEnabled = softwareAndBookUpdatesEnabled;
 
   factory SettingsState.initial() {
     return const SettingsState(
@@ -118,6 +120,7 @@ class SettingsState extends Equatable {
       personalNotesCollapsedByDefault: true,
       protectedModeEnabled: false,
       autoSyncCatalogs: false,
+      softwareAndBookUpdatesEnabled: true,
     );
   }
 
@@ -158,6 +161,7 @@ class SettingsState extends Equatable {
     bool? personalNotesCollapsedByDefault,
     bool? protectedModeEnabled,
     bool? autoSyncCatalogs,
+    bool? softwareAndBookUpdatesEnabled,
   }) {
     return SettingsState(
       isDarkMode: isDarkMode ?? this.isDarkMode,
@@ -200,8 +204,16 @@ class SettingsState extends Equatable {
           this.personalNotesCollapsedByDefault,
       protectedModeEnabled: protectedModeEnabled ?? this.protectedModeEnabled,
       autoSyncCatalogs: autoSyncCatalogs ?? this.autoSyncCatalogs,
+      softwareAndBookUpdatesEnabled:
+          softwareAndBookUpdatesEnabled ?? this.softwareAndBookUpdatesEnabled,
     );
   }
+
+  bool get softwareAndBookUpdatesEnabled =>
+      _softwareAndBookUpdatesEnabled ?? true;
+
+  bool get canUseSoftwareAndBookUpdates =>
+      !isOfflineMode && softwareAndBookUpdatesEnabled;
 
   @override
   List<Object?> get props => [
@@ -241,5 +253,6 @@ class SettingsState extends Equatable {
         personalNotesCollapsedByDefault,
         protectedModeEnabled,
         autoSyncCatalogs,
+        softwareAndBookUpdatesEnabled,
       ];
 }

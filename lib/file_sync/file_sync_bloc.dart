@@ -13,6 +13,12 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
   // Getter לבדיקת מצב אופליין
   bool get _isOffline =>
       Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false;
+  bool get _softwareAndBookUpdatesEnabled =>
+      Settings.getValue<bool>(
+        SettingsRepository.keySoftwareAndBookUpdatesEnabled,
+        defaultValue: true,
+      ) ??
+      true;
 
   FileSyncBloc({required this.repository}) : super(const FileSyncState()) {
     on<StartSync>(_onStartSync);
@@ -30,6 +36,14 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
       emit(state.copyWith(
         status: FileSyncStatus.initial,
         message: 'מצב אופליין מופעל',
+      ));
+      return;
+    }
+
+    if (!_softwareAndBookUpdatesEnabled) {
+      emit(state.copyWith(
+        status: FileSyncStatus.initial,
+        message: 'עדכוני תוכנה וספרים מושבתים',
       ));
       return;
     }
