@@ -35,7 +35,7 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
 
   Future<void> _loadDictionary() async {
     try {
-      await _dictionaryRepository.ensureLoaded();
+      await _dictionaryRepository.ensureAcronymsLoaded();
 
       if (!mounted) return;
 
@@ -44,12 +44,12 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        UiSnack.show('שגיאה בטעינת המילון: $e');
-      }
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+      UiSnack.show('שגיאה בטעינת המילון: $e');
     }
   }
 
@@ -67,6 +67,10 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
       _filteredResults = _dictionaryData.entries
           .where((entry) =>
               entry.key.contains(query) ||
+              _dictionaryRepository.acronymMatchesQuery(
+                acronym: entry.key,
+                query: query,
+              ) ||
               entry.value.any((meaning) => meaning.contains(query)))
           .toList();
     });

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
@@ -12,66 +14,78 @@ List<ctx.ContextMenuEntry<Object>> buildDictionaryContextMenuEntries({
   required DictionaryLookupRepository repository,
 }) {
   final trimmed = selectedText?.trim() ?? '';
-  if (trimmed.isEmpty || !repository.isLoaded) {
+  if (trimmed.isEmpty) {
     return const <ctx.ContextMenuEntry<Object>>[];
   }
 
-  if (repository.isLikelyAcronym(trimmed)) {
-    final acronymEntry = repository.findAcronym(trimmed);
-    if (acronymEntry == null) {
-      return const <ctx.ContextMenuEntry<Object>>[];
-    }
+  final entries = <ctx.ContextMenuEntry<Object>>[];
+  final shouldCheckAcronyms = repository.isLikelyAcronym(trimmed);
 
-    return <ctx.ContextMenuEntry<Object>>[
-      ctx.MenuItem<Object>.submenu(
-        label: const Text(
-          'פתיחת ראשי תיבות',
-          textDirection: TextDirection.rtl,
-        ),
-        icon: const Icon(FluentIcons.text_quote_24_regular),
-        items: acronymEntry.meanings
-            .map<ctx.ContextMenuEntry<Object>>(
-              (meaning) => ctx.MenuItem<Object>(
-                label: SizedBox(
-                  width: 320,
-                  child: Text(
-                    _summarizePlainText(meaning),
-                    textDirection: TextDirection.rtl,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+  if (shouldCheckAcronyms && !repository.areAcronymsLoaded) {
+    unawaited(repository.ensureAcronymsLoaded().catchError((_) {}));
+  }
+
+  if (!repository.areAramaicLoaded) {
+    unawaited(repository.ensureAramaicLoaded().catchError((_) {}));
+  }
+
+  if (shouldCheckAcronyms && repository.areAcronymsLoaded) {
+    final acronymEntries = repository.findAcronymMatches(trimmed);
+    if (acronymEntries.isNotEmpty) {
+      entries.add(_buildAcronymSubmenu(context, acronymEntries));
+    }
+  }
+
+  if (repository.areAramaicLoaded) {
+    final aramaicMatches = repository.findAramaicMatches(trimmed);
+    if (aramaicMatches.isNotEmpty) {
+      entries.add(
+        ctx.MenuItem<Object>.submenu(
+          label: const Text(
+            'מילון ארמי-עברי',
+            textDirection: TextDirection.rtl,
+          ),
+          icon: const Icon(FluentIcons.translate_24_regular),
+          items: aramaicMatches
+              .map<ctx.ContextMenuEntry<Object>>(
+                (entry) => ctx.MenuItem<Object>(
+                  label: SizedBox(
+                    width: 320,
+                    child: Text(
+                      '${entry.aramaic} - ${_summarizeAramaicDefinition(entry.hebrew)}',
+                      textDirection: TextDirection.rtl,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  onSelected: (_) => _showMeaningDialog(
+                    context: context,
+                    title: entry.aramaic,
+                    content: _buildAramaicDialogContent(entry),
                   ),
                 ),
-                onSelected: (_) => _showMeaningDialog(
-                  context: context,
-                  title: acronymEntry.acronym,
-                  content: _buildAcronymDialogContent(meaning),
-                ),
-              ),
-            )
-            .toList(),
-      ),
-    ];
+              )
+              .toList(),
+        ),
+      );
+    }
   }
 
-  final aramaicMatches = repository.findAramaicMatches(trimmed);
-  if (aramaicMatches.isEmpty) {
-    return const <ctx.ContextMenuEntry<Object>>[];
-  }
+  return entries;
+}
 
-  return <ctx.ContextMenuEntry<Object>>[
-    ctx.MenuItem<Object>.submenu(
-      label: const Text(
-        'מילון ארמי-עברי',
-        textDirection: TextDirection.rtl,
-      ),
-      icon: const Icon(FluentIcons.translate_24_regular),
-      items: aramaicMatches
+ctx.ContextMenuEntry<Object> _buildAcronymSubmenu(
+  BuildContext context,
+  List<AcronymDictionaryEntry> acronymEntries,
+) {
+  final items = acronymEntries.length == 1
+      ? acronymEntries.single.meanings
           .map<ctx.ContextMenuEntry<Object>>(
-            (entry) => ctx.MenuItem<Object>(
+            (meaning) => ctx.MenuItem<Object>(
               label: SizedBox(
                 width: 320,
                 child: Text(
-                  '${entry.aramaic} - ${_summarizeAramaicDefinition(entry.hebrew)}',
+                  _summarizePlainText(meaning),
                   textDirection: TextDirection.rtl,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -79,14 +93,69 @@ List<ctx.ContextMenuEntry<Object>> buildDictionaryContextMenuEntries({
               ),
               onSelected: (_) => _showMeaningDialog(
                 context: context,
-                title: entry.aramaic,
-                content: _buildAramaicDialogContent(entry),
+                title: acronymEntries.single.acronym,
+                content: _buildAcronymDialogContent(meaning),
               ),
             ),
           )
-          .toList(),
+          .toList()
+      : acronymEntries
+          .map<ctx.ContextMenuEntry<Object>>(
+            (entry) => entry.meanings.length == 1
+                ? ctx.MenuItem<Object>(
+                    label: SizedBox(
+                      width: 320,
+                      child: Text(
+                        '${entry.acronym} - ${_summarizePlainText(entry.meanings.single)}',
+                        textDirection: TextDirection.rtl,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    onSelected: (_) => _showMeaningDialog(
+                      context: context,
+                      title: entry.acronym,
+                      content:
+                          _buildAcronymDialogContent(entry.meanings.single),
+                    ),
+                  )
+                : ctx.MenuItem<Object>.submenu(
+                    label: Text(
+                      entry.acronym,
+                      textDirection: TextDirection.rtl,
+                    ),
+                    items: entry.meanings
+                        .map<ctx.ContextMenuEntry<Object>>(
+                          (meaning) => ctx.MenuItem<Object>(
+                            label: SizedBox(
+                              width: 320,
+                              child: Text(
+                                _summarizePlainText(meaning),
+                                textDirection: TextDirection.rtl,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            onSelected: (_) => _showMeaningDialog(
+                              context: context,
+                              title: entry.acronym,
+                              content: _buildAcronymDialogContent(meaning),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+          )
+          .toList();
+
+  return ctx.MenuItem<Object>.submenu(
+    label: const Text(
+      'פתיחת ראשי תיבות',
+      textDirection: TextDirection.rtl,
     ),
-  ];
+    icon: const Icon(FluentIcons.text_quote_24_regular),
+    items: items,
+  );
 }
 
 String _summarizeAramaicDefinition(String definition) {
@@ -143,15 +212,6 @@ Widget _buildAramaicDialogContent(AramaicDictionaryEntry entry) {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              entry.aramaic,
-              textDirection: TextDirection.rtl,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(height: 12),
             AramaicDictionaryEntryView(
               definition: entry.hebrew,
             ),

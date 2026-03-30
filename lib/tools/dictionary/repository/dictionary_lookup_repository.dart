@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 
@@ -112,19 +113,78 @@ class DictionaryLookupRepository {
   final Future<Map<String, List<String>>> Function() _loadAcronyms;
   final Future<List<AramaicDictionaryEntry>> Function() _loadAramaicEntries;
 
-  Future<void>? _loadFuture;
-  bool _isLoaded = false;
+  Future<void>? _acronymsLoadFuture;
+  Future<void>? _aramaicLoadFuture;
+  bool _areAcronymsLoaded = false;
+  bool _areAramaicLoaded = false;
 
   Map<String, List<String>> _acronymsByKey = <String, List<String>>{};
   Map<String, String> _originalAcronymByKey = <String, String>{};
   List<AramaicDictionaryEntry> _aramaicEntries = <AramaicDictionaryEntry>[];
   Set<String> _aramaicTerms = <String>{};
 
-  bool get isLoaded => _isLoaded;
+  bool get isLoaded => _areAcronymsLoaded && _areAramaicLoaded;
+  bool get areAcronymsLoaded => _areAcronymsLoaded;
+  bool get areAramaicLoaded => _areAramaicLoaded;
 
   /// טוען את שני המילונים פעם אחת ומשאיר אותם בזיכרון.
-  Future<void> ensureLoaded() {
-    return _loadFuture ??= _loadInternal();
+  Future<void> ensureLoaded() async {
+    await Future.wait<void>([
+      ensureAcronymsLoaded(),
+      ensureAramaicLoaded(),
+    ]);
+  }
+
+  /// טוען את מילון ראשי התיבות בלבד.
+  Future<void> ensureAcronymsLoaded() async {
+    if (_areAcronymsLoaded) return;
+
+    final pendingFuture = _acronymsLoadFuture;
+    if (pendingFuture != null) {
+      await pendingFuture;
+      return;
+    }
+
+    final loadFuture = _loadAcronymsInternal();
+    _acronymsLoadFuture = loadFuture;
+
+    try {
+      await loadFuture;
+      _areAcronymsLoaded = true;
+    } catch (_) {
+      _resetAcronymsCache();
+      rethrow;
+    } finally {
+      if (identical(_acronymsLoadFuture, loadFuture)) {
+        _acronymsLoadFuture = null;
+      }
+    }
+  }
+
+  /// טוען את המילון הארמי-עברי בלבד.
+  Future<void> ensureAramaicLoaded() async {
+    if (_areAramaicLoaded) return;
+
+    final pendingFuture = _aramaicLoadFuture;
+    if (pendingFuture != null) {
+      await pendingFuture;
+      return;
+    }
+
+    final loadFuture = _loadAramaicInternal();
+    _aramaicLoadFuture = loadFuture;
+
+    try {
+      await loadFuture;
+      _areAramaicLoaded = true;
+    } catch (_) {
+      _resetAramaicCache();
+      rethrow;
+    } finally {
+      if (identical(_aramaicLoadFuture, loadFuture)) {
+        _aramaicLoadFuture = null;
+      }
+    }
   }
 
   /// מחזיר את כלל רשומות ראשי התיבות.
@@ -142,7 +202,10 @@ class DictionaryLookupRepository {
   /// בודק אם הטקסט נראה כמו ראשי תיבות.
   bool isLikelyAcronym(String raw) {
     final trimmed = raw.trim();
-    return trimmed.contains('"') || trimmed.contains('״');
+    return trimmed.contains('"') ||
+        trimmed.contains('״') ||
+        trimmed.contains("'") ||
+        trimmed.contains('׳');
   }
 
   /// מחזיר את כל הפירושים לראשי תיבות אם קיימים.
@@ -150,13 +213,51 @@ class DictionaryLookupRepository {
     final normalized = _normalizeAcronym(raw);
     if (normalized.isEmpty) return null;
 
-    final meanings = _acronymsByKey[normalized];
-    if (meanings == null || meanings.isEmpty) return null;
+    return _buildAcronymEntry(normalized);
+  }
 
-    return AcronymDictionaryEntry(
-      acronym: _originalAcronymByKey[normalized] ?? raw.trim(),
-      meanings: meanings,
-    );
+  /// מחזיר התאמות לראשי תיבות, כולל הרחבה לקיצורים שנכתבו בגרש בודד.
+  List<AcronymDictionaryEntry> findAcronymMatches(String raw) {
+    final normalized = _normalizeAcronym(raw);
+    if (normalized.isEmpty) {
+      return const <AcronymDictionaryEntry>[];
+    }
+
+    final exactMatch = _buildAcronymEntry(normalized);
+    if (exactMatch != null) {
+      return <AcronymDictionaryEntry>[exactMatch];
+    }
+
+    if (normalized.length < 2) {
+      return const <AcronymDictionaryEntry>[];
+    }
+
+    return _acronymsByKey.keys
+        .where((key) => key.startsWith(normalized))
+        .map(_buildAcronymEntry)
+        .whereType<AcronymDictionaryEntry>()
+        .toList()
+      ..sort((a, b) {
+        final lengthCompare = a.acronym.length.compareTo(b.acronym.length);
+        if (lengthCompare != 0) {
+          return lengthCompare;
+        }
+
+        return a.acronym.compareTo(b.acronym);
+      });
+  }
+
+  /// בודק אם מפתח ראשי תיבות תואם לשאילתת חיפוש לאחר נרמול גרשיים.
+  bool acronymMatchesQuery({
+    required String acronym,
+    required String query,
+  }) {
+    final normalizedQuery = _normalizeAcronym(query);
+    if (normalizedQuery.isEmpty) {
+      return false;
+    }
+
+    return _normalizeAcronym(acronym).contains(normalizedQuery);
   }
 
   /// מחזיר את כל הביטויים הארמיים המכילים את המילה שנבחרה,
@@ -190,9 +291,8 @@ class DictionaryLookupRepository {
     ];
   }
 
-  Future<void> _loadInternal() async {
+  Future<void> _loadAcronymsInternal() async {
     final acronyms = await _loadAcronyms();
-    final aramaicEntries = await _loadAramaicEntries();
 
     final normalizedAcronyms = <String, List<String>>{};
     final originalAcronyms = <String, String>{};
@@ -200,11 +300,31 @@ class DictionaryLookupRepository {
     acronyms.forEach((acronym, meanings) {
       final normalized = _normalizeAcronym(acronym);
       if (normalized.isEmpty || meanings.isEmpty) return;
-      normalizedAcronyms[normalized] = List<String>.unmodifiable(meanings);
-      originalAcronyms[normalized] = acronym;
+
+      normalizedAcronyms.update(
+        normalized,
+        (existingMeanings) => <String>[
+          ...existingMeanings,
+          ...meanings,
+        ],
+        ifAbsent: () => List<String>.from(meanings),
+      );
+      originalAcronyms.putIfAbsent(normalized, () => acronym);
     });
 
+    _acronymsByKey = normalizedAcronyms.map(
+      (key, meanings) => MapEntry(
+        key,
+        List<String>.unmodifiable(meanings.toSet().toList()),
+      ),
+    );
+    _originalAcronymByKey = originalAcronyms;
+  }
+
+  Future<void> _loadAramaicInternal() async {
+    final aramaicEntries = await _loadAramaicEntries();
     final aramaicTerms = <String>{};
+
     for (final entry in aramaicEntries) {
       final normalizedEntry = _normalizeAramaic(entry.aramaic);
       if (normalizedEntry.isEmpty) {
@@ -215,17 +335,14 @@ class DictionaryLookupRepository {
       aramaicTerms.addAll(_splitAramaicWords(normalizedEntry));
     }
 
-    _acronymsByKey = normalizedAcronyms;
-    _originalAcronymByKey = originalAcronyms;
     _aramaicEntries = List<AramaicDictionaryEntry>.unmodifiable(aramaicEntries);
     _aramaicTerms = Set<String>.unmodifiable(aramaicTerms);
-    _isLoaded = true;
   }
 
   static Future<Map<String, List<String>>> _defaultLoadAcronyms() async {
     final String jsonString =
         await rootBundle.loadString('assets/Acronyms.json');
-    final Map<String, dynamic> jsonData = json.decode(jsonString);
+    final jsonData = await compute(_decodeJsonObject, jsonString);
 
     return jsonData.map((key, value) {
       if (value is List) {
@@ -240,7 +357,7 @@ class DictionaryLookupRepository {
       _defaultLoadAramaicEntries() async {
     final String jsonString =
         await rootBundle.loadString('assets/dictionary.json');
-    final Map<String, dynamic> jsonData = json.decode(jsonString);
+    final jsonData = await compute(_decodeJsonObject, jsonString);
     final List<dynamic> entries = jsonData['מילון פשיטא'] ?? <dynamic>[];
 
     return entries
@@ -261,14 +378,20 @@ class DictionaryLookupRepository {
         .toList();
   }
 
+  static Map<String, dynamic> _decodeJsonObject(String jsonString) {
+    return jsonDecode(jsonString) as Map<String, dynamic>;
+  }
+
   static String _normalizeAcronym(String raw) {
     final compact = _trimDecorations(raw)
         .replaceAll('״', '"')
         .replaceAll('׳', "'")
+        .replaceAll('’', "'")
+        .replaceAll('‘', "'")
         .replaceAll('“', '"')
         .replaceAll('”', '"');
 
-    return _normalizeCommon(compact, keepQuotes: true);
+    return _normalizeCommon(compact, keepQuotes: false);
   }
 
   static String _normalizeAramaic(String raw) {
@@ -303,5 +426,29 @@ class DictionaryLookupRepository {
         .map((word) => word.trim())
         .where((word) => word.isNotEmpty)
         .toSet();
+  }
+
+  AcronymDictionaryEntry? _buildAcronymEntry(String normalized) {
+    final meanings = _acronymsByKey[normalized];
+    if (meanings == null || meanings.isEmpty) {
+      return null;
+    }
+
+    return AcronymDictionaryEntry(
+      acronym: _originalAcronymByKey[normalized] ?? normalized,
+      meanings: meanings,
+    );
+  }
+
+  void _resetAcronymsCache() {
+    _acronymsByKey = <String, List<String>>{};
+    _originalAcronymByKey = <String, String>{};
+    _areAcronymsLoaded = false;
+  }
+
+  void _resetAramaicCache() {
+    _aramaicEntries = <AramaicDictionaryEntry>[];
+    _aramaicTerms = <String>{};
+    _areAramaicLoaded = false;
   }
 }

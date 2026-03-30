@@ -1,8 +1,5 @@
-import 'dart:convert';
-
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/tools/dictionary/widgets/aramaic_dictionary_entry_view.dart';
@@ -40,26 +37,18 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
 
   Future<void> _loadDictionary() async {
     try {
-      await _dictionaryRepository.ensureLoaded();
-      final jsonString = await rootBundle.loadString('assets/dictionary.json');
-      final jsonData = json.decode(jsonString) as Map<String, dynamic>;
-      final entries = jsonData['מילון פשיטא'] as List<dynamic>? ?? <dynamic>[];
+      await _dictionaryRepository.ensureAramaicLoaded();
+      final entries = _dictionaryRepository.getAllAramaicEntries();
 
       if (!mounted) return;
 
       setState(() {
-        _dictionaryData = entries
-            .map((entry) {
-              if (entry is! Map<String, dynamic> || entry.isEmpty) {
-                return <String, String>{};
-              }
-
-              final aramaic = entry.keys.first;
-              final hebrew = entry[aramaic].toString();
-              return <String, String>{'aramaic': aramaic, 'hebrew': hebrew};
-            })
-            .where((entry) => entry.isNotEmpty)
-            .toList();
+        _dictionaryData = entries.map((entry) {
+          return <String, String>{
+            'aramaic': entry.aramaic,
+            'hebrew': entry.hebrew,
+          };
+        }).toList();
         _isLoading = false;
       });
     } catch (e) {
