@@ -57,7 +57,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
       setState(() {
         _isLoading = false;
       });
-      UiSnack.show('שגיאה בטעינת המילון: $e');
+      UiSnack.showError('שגיאה בטעינת המילון: $e');
     }
   }
 
@@ -91,19 +91,15 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
-    return Scaffold(
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          _buildDirectionToggle(),
-          Expanded(child: _buildResultsList()),
-        ],
-      ),
+    return Column(
+      children: [
+        _buildSearchBar(),
+        _buildDirectionToggle(),
+        Expanded(child: _buildResultsList()),
+      ],
     );
   }
 
