@@ -60,6 +60,7 @@ import 'package:otzaria/settings/services/backup_service.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
+import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:logging/logging.dart';
@@ -320,6 +321,17 @@ Future<void> _runAppBootstrap() async {
       ),
     ),
   );
+
+  // טעינת מילוני ארמי וראשי תיבות ברקע – אחרי הפריים הראשון, כדי לא להתחרות עם ה-paint.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(
+      DictionaryLookupRepository.instance.ensureLoaded().catchError((e) {
+        if (kDebugMode) {
+          debugPrint('Failed to warm up dictionary: $e');
+        }
+      }),
+    );
+  });
 }
 
 /// Initializes all required services and configurations for the application.

@@ -49,7 +49,7 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
       setState(() {
         _isLoading = false;
       });
-      UiSnack.show('שגיאה בטעינת המילון: $e');
+      UiSnack.showError('שגיאה בטעינת המילון: $e');
     }
   }
 
@@ -237,7 +237,7 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Icon(
-                Icons.arrow_back,
+                FluentIcons.arrow_right_24_regular,
                 color: Theme.of(context).colorScheme.primary,
               ),
             ),
