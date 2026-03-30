@@ -1,23 +1,17 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:ffi';
-import 'dart:io';
-import 'dart:isolate';
 import 'package:flutter/foundation.dart';
-import 'package:ffi/ffi.dart';
 import 'package:http/http.dart' as http;
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 import 'package:zstandard/zstandard.dart';
-import 'package:zstandard_native/zstandard_native_bindings.dart';
 
 class FileSyncRepository {
   static const int _legacyDirectUpgradeSourceVersion = 3;
   static const int _legacyDirectUpgradePublishedFromVersion = 133;
   static const int _legacyDirectUpgradeTargetVersion = 134;
-  static const String _fullDatabaseAssetName = 'seforim.db.zst';
 
   final String githubOwner;
   final String repositoryName;
@@ -27,8 +21,6 @@ class FileSyncRepository {
   final http.Client _httpClient;
   final Zstandard _zstandard;
   final Future<Uint8List> Function(Uint8List compressedBytes)? _decompressDiff;
-  final Future<void> Function(String downloadUrl, String outputPath)?
-      _replaceDatabaseFromCompressedAsset;
 
   FileSyncRepository({
     required this.githubOwner,
@@ -36,13 +28,9 @@ class FileSyncRepository {
     http.Client? httpClient,
     Zstandard? zstandard,
     Future<Uint8List> Function(Uint8List compressedBytes)? decompressDiff,
-    Future<void> Function(String downloadUrl, String outputPath)?
-        replaceDatabaseFromCompressedAsset,
   })  : _httpClient = httpClient ?? http.Client(),
         _zstandard = zstandard ?? Zstandard(),
-        _decompressDiff = decompressDiff,
-        _replaceDatabaseFromCompressedAsset =
-            replaceDatabaseFromCompressedAsset;
+        _decompressDiff = decompressDiff;
 
   int get currentProgress => _currentProgress;
   int get totalFiles => _totalFiles;
@@ -55,20 +43,7 @@ class FileSyncRepository {
       availableAssets: assets,
       targetVersion: targetVersion,
     );
-    if (chain.isNotEmpty) {
-      return chain.map((asset) => asset.assetName).toList();
-    }
-
-    final legacyReplacement = findLegacyFullDatabaseReplacementRelease(
-      currentVersion: currentVersion,
-      availableAssets: assets,
-      targetVersion: targetVersion,
-    );
-    if (legacyReplacement != null) {
-      return const [_fullDatabaseAssetName];
-    }
-
-    return const [];
+    return chain.map((asset) => asset.assetName).toList();
   }
 
   Future<int> syncFiles({int? targetVersion}) async {
@@ -88,51 +63,18 @@ class FileSyncRepository {
         availableAssets: assets,
         targetVersion: targetVersion,
       );
-      final legacyReplacement = findLegacyFullDatabaseReplacementRelease(
-        currentVersion: currentVersion,
-        availableAssets: assets,
-        targetVersion: targetVersion,
-      );
 
       if (targetVersion != null &&
           currentVersion < targetVersion &&
-          (chain.isEmpty || chain.last.toVersion != targetVersion) &&
-          legacyReplacement == null) {
+          (chain.isEmpty || chain.last.toVersion != targetVersion)) {
         throw Exception(
           'לא נמצא רצף עדכונים מלא מגרסה $currentVersion לגרסה $targetVersion',
         );
       }
 
-      _totalFiles = chain.isNotEmpty
-          ? chain.length
-          : legacyReplacement == null
-              ? 0
-              : 1;
+      _totalFiles = chain.length;
 
       if (chain.isEmpty) {
-        if (legacyReplacement != null) {
-          final outputPath = DatabaseConstants.getDatabasePath();
-          final downloadUrl =
-              _buildFullDatabaseDownloadUrl(legacyReplacement.releaseTag);
-
-          developer.log(
-            'Applying full DB replacement for legacy upgrade '
-            'v$currentVersion -> v${legacyReplacement.toVersion}',
-            name: 'FileSyncRepository',
-          );
-
-          await (_replaceDatabaseFromCompressedAsset?.call(
-                downloadUrl,
-                outputPath,
-              ) ??
-              _downloadAndReplaceDatabaseFromCompressedAsset(
-                downloadUrl,
-                outputPath,
-              ));
-          _currentProgress = 1;
-          return _currentProgress;
-        }
-
         developer.log(
           'No library DIFF updates found for version $currentVersion',
           name: 'FileSyncRepository',
@@ -281,14 +223,22 @@ class FileSyncRepository {
     var version = currentVersion;
 
     while (true) {
-      final candidates = bySourceVersion[version];
-      if (candidates == null || candidates.isEmpty) {
+      final candidates = <DiffReleaseAsset>[
+        ...?bySourceVersion[version],
+        if (version == _legacyDirectUpgradeSourceVersion)
+          ...?bySourceVersion[_legacyDirectUpgradePublishedFromVersion],
+      ];
+      if (candidates.isEmpty) {
         break;
       }
 
       DiffReleaseAsset? nextAsset;
       for (final candidate in candidates) {
-        if (candidate.toVersion == version + 1) {
+        if (candidate.toVersion == version + 1 ||
+            _isLegacyDirectUpgradeCandidate(
+              currentVersion: version,
+              candidate: candidate,
+            )) {
           nextAsset = candidate;
           break;
         }
@@ -308,29 +258,13 @@ class FileSyncRepository {
     return chain;
   }
 
-  @visibleForTesting
-  static DiffReleaseAsset? findLegacyFullDatabaseReplacementRelease({
+  static bool _isLegacyDirectUpgradeCandidate({
     required int currentVersion,
-    required List<DiffReleaseAsset> availableAssets,
-    int? targetVersion,
+    required DiffReleaseAsset candidate,
   }) {
-    if (currentVersion != _legacyDirectUpgradeSourceVersion) {
-      return null;
-    }
-
-    if (targetVersion != null &&
-        targetVersion < _legacyDirectUpgradeTargetVersion) {
-      return null;
-    }
-
-    for (final asset in availableAssets) {
-      if (asset.fromVersion == _legacyDirectUpgradePublishedFromVersion &&
-          asset.toVersion == _legacyDirectUpgradeTargetVersion) {
-        return asset;
-      }
-    }
-
-    return null;
+    return currentVersion == _legacyDirectUpgradeSourceVersion &&
+        candidate.fromVersion == _legacyDirectUpgradePublishedFromVersion &&
+        candidate.toVersion == _legacyDirectUpgradeTargetVersion;
   }
 
   Future<String> _downloadAndExtractDiff(DiffReleaseAsset asset) async {
@@ -355,155 +289,6 @@ class FileSyncRepository {
     }
 
     return utf8.decode(extractedBytes);
-  }
-
-  Future<void> _downloadAndReplaceDatabaseFromCompressedAsset(
-    String downloadUrl,
-    String outputPath,
-  ) async {
-    final response = await _httpClient.get(
-      Uri.parse(downloadUrl),
-      headers: const {'Accept': 'application/octet-stream'},
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception(
-          'שגיאה בהורדת $_fullDatabaseAssetName: ${response.statusCode}');
-    }
-
-    final tempDir = await Directory.systemTemp.createTemp('otzaria-full-db-');
-    final archivePath = '$tempDir/$_fullDatabaseAssetName';
-    final extractedPath = '$tempDir/${DatabaseConstants.databaseFileName}';
-
-    try {
-      await File(archivePath).writeAsBytes(response.bodyBytes, flush: true);
-      await _extractCompressedDatabaseToPath(archivePath, extractedPath);
-      await _replaceDatabaseFileAtomically(
-        extractedPath: extractedPath,
-        outputPath: outputPath,
-      );
-    } finally {
-      if (await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
-      }
-    }
-  }
-
-  Future<void> _extractCompressedDatabaseToPath(
-    String archivePath,
-    String outputPath,
-  ) async {
-    try {
-      await _extractCompressedDatabaseWithSystemProcess(archivePath, outputPath);
-      return;
-    } catch (e) {
-      developer.log(
-        'System zstd extraction unavailable, falling back to native streaming',
-        name: 'FileSyncRepository',
-        error: e,
-      );
-    }
-
-    try {
-      await Isolate.run(() => _decompressZstStreaming(archivePath, outputPath));
-      return;
-    } catch (e) {
-      developer.log(
-        'Native streaming extraction unavailable, falling back to in-memory decompression',
-        name: 'FileSyncRepository',
-        error: e,
-      );
-    }
-
-    final compressedBytes = await File(archivePath).readAsBytes();
-    final decompressed = await _zstandard.decompress(compressedBytes);
-    if (decompressed == null) {
-      throw Exception('חילוץ $_fullDatabaseAssetName נכשל');
-    }
-
-    final outputFile = File(outputPath);
-    if (await outputFile.exists()) {
-      await outputFile.delete();
-    }
-    await outputFile.writeAsBytes(decompressed, flush: true);
-  }
-
-  Future<void> _extractCompressedDatabaseWithSystemProcess(
-    String archivePath,
-    String outputPath,
-  ) async {
-    final process = await Process.start(
-      'zstd',
-      ['--long=31', '-dc', archivePath],
-      runInShell: false,
-    );
-
-    final outputFile = File(outputPath);
-    if (await outputFile.exists()) {
-      await outputFile.delete();
-    }
-    final sink = outputFile.openWrite();
-
-    try {
-      await process.stdout.pipe(sink);
-      final stderr = await utf8.decoder.bind(process.stderr).join();
-      final exitCode = await process.exitCode;
-      if (exitCode != 0) {
-        throw Exception(stderr.trim().isEmpty ? 'zstd exited with $exitCode' : stderr.trim());
-      }
-    } catch (_) {
-      if (await outputFile.exists()) {
-        await outputFile.delete();
-      }
-      rethrow;
-    } finally {
-      await sink.close();
-    }
-  }
-
-  Future<void> _replaceDatabaseFileAtomically({
-    required String extractedPath,
-    required String outputPath,
-  }) async {
-    await SqliteDataProvider.instance.dispose();
-
-    final destinationFile = File(outputPath);
-    await destinationFile.parent.create(recursive: true);
-
-    final tempOutput = File('$outputPath.tmp');
-    if (await tempOutput.exists()) {
-      await tempOutput.delete();
-    }
-    await File(extractedPath).rename(tempOutput.path);
-
-    final backupFile = File('$outputPath.old');
-    if (await backupFile.exists()) {
-      await backupFile.delete();
-    }
-
-    if (await destinationFile.exists()) {
-      await destinationFile.rename(backupFile.path);
-    }
-
-    try {
-      await tempOutput.rename(outputPath);
-      if (await backupFile.exists()) {
-        await backupFile.delete();
-      }
-    } catch (_) {
-      if (await destinationFile.exists()) {
-        await destinationFile.delete();
-      }
-      if (await backupFile.exists()) {
-        await backupFile.rename(outputPath);
-      }
-      rethrow;
-    }
-  }
-
-  String _buildFullDatabaseDownloadUrl(String releaseTag) {
-    return 'https://github.com/$githubOwner/$repositoryName/releases/download/'
-        '$releaseTag/$_fullDatabaseAssetName';
   }
 
   Future<void> _applyDiffSql(String sql) async {
@@ -622,119 +407,6 @@ class FileSyncRepository {
     }
 
     return statements;
-  }
-
-  static void _decompressZstStreaming(String archivePath, String outputPath) {
-    final dylib = _openZstandardDynamicLibrary();
-    final bindings = ZstandardNativeBindings(dylib);
-
-    const int windowLogMax = 31;
-    final inBufSize = bindings.ZSTD_DStreamInSize();
-    final outBufSize = bindings.ZSTD_DStreamOutSize();
-
-    final dStream = bindings.ZSTD_createDStream();
-    if (dStream == nullptr) {
-      throw Exception('ZSTD_createDStream נכשל');
-    }
-
-    try {
-      var ret = bindings.ZSTD_DCtx_setParameter(
-        dStream.cast(),
-        ZSTD_dParameter.ZSTD_d_windowLogMax,
-        windowLogMax,
-      );
-      if (bindings.ZSTD_isError(ret) != 0) {
-        throw Exception('הגדרת ZSTD_d_windowLogMax נכשלה: $ret');
-      }
-
-      ret = bindings.ZSTD_initDStream(dStream);
-      if (bindings.ZSTD_isError(ret) != 0) {
-        throw Exception('ZSTD_initDStream נכשל: $ret');
-      }
-
-      final inNative = malloc.allocate<Uint8>(inBufSize);
-      final outNative = malloc.allocate<Uint8>(outBufSize);
-      final inBuf = malloc<ZSTD_inBuffer_s>();
-      final outBuf = malloc<ZSTD_outBuffer_s>();
-
-      try {
-        final inputRaf = File(archivePath).openSync();
-        final outputFile = File(outputPath);
-        if (outputFile.existsSync()) {
-          outputFile.deleteSync();
-        }
-        final outputRaf = outputFile.openSync(mode: FileMode.writeOnly);
-
-        try {
-          final inView = inNative.asTypedList(inBufSize);
-          var lastRet = 0;
-
-          while (true) {
-            final bytesRead = inputRaf.readIntoSync(inView);
-            if (bytesRead == 0) {
-              break;
-            }
-
-            inBuf.ref.src = inNative.cast();
-            inBuf.ref.size = bytesRead;
-            inBuf.ref.pos = 0;
-
-            while (inBuf.ref.pos < inBuf.ref.size) {
-              outBuf.ref.dst = outNative.cast();
-              outBuf.ref.size = outBufSize;
-              outBuf.ref.pos = 0;
-
-              lastRet = bindings.ZSTD_decompressStream(dStream, outBuf, inBuf);
-              if (bindings.ZSTD_isError(lastRet) != 0) {
-                throw Exception('שגיאת ZSTD בחילוץ (קוד: $lastRet)');
-              }
-
-              if (outBuf.ref.pos > 0) {
-                outputRaf.writeFromSync(outNative.asTypedList(outBuf.ref.pos));
-              }
-            }
-          }
-
-          if (lastRet != 0) {
-            throw Exception(
-              'קובץ ה-ZST קטוע או פגום: ה-frame לא הושלם (נותרו $lastRet bytes לפענוח)',
-            );
-          }
-
-          outputRaf.flushSync();
-        } finally {
-          inputRaf.closeSync();
-          outputRaf.closeSync();
-        }
-      } finally {
-        malloc.free(inNative);
-        malloc.free(outNative);
-        malloc.free(inBuf);
-        malloc.free(outBuf);
-      }
-    } finally {
-      bindings.ZSTD_freeDStream(dStream);
-    }
-  }
-
-  static DynamicLibrary _openZstandardDynamicLibrary() {
-    if (Platform.isAndroid) {
-      return DynamicLibrary.open('libzstandard_android.so');
-    }
-    if (Platform.isLinux) {
-      return DynamicLibrary.open('libzstandard_linux_plugin.so');
-    }
-    if (Platform.isMacOS) {
-      return DynamicLibrary.open('zstandard_macos.framework/zstandard_macos');
-    }
-    if (Platform.isWindows) {
-      return DynamicLibrary.open('zstandard_windows.dll');
-    }
-    if (Platform.isIOS) {
-      return DynamicLibrary.open('zstandard_ios.framework/zstandard_ios');
-    }
-    throw UnsupportedError(
-        'Platform not supported: ${Platform.operatingSystem}');
   }
 }
 
