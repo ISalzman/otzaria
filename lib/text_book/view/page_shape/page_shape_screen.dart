@@ -313,12 +313,32 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 
   Widget _buildRightPane(TextBookLoaded state) {
     if (!_isRightPaneMultipleMode()) {
+      final selectableCommentators = _rightPaneSelectableCommentators(state);
       final resolvedSingle = resolvePageShapeCommentatorSelection(
         selection: _rightCommentator,
-        availableCommentators: _availableCommentators(state),
+        availableCommentators: selectableCommentators,
       );
-      if (resolvedSingle != null &&
-          !isPageShapeRemainingCommentatorsValue(resolvedSingle) &&
+      if (resolvedSingle == null) {
+        return _buildEmptyColumnContent(
+          columnName: 'right',
+          onSelectCommentator: () {
+            setState(() {
+              _columnVisibility['right'] = true;
+            });
+            final blocState = context.read<TextBookBloc>().state;
+            if (blocState is TextBookLoaded) {
+              PageShapeSettingsManager.saveColumnVisibility(
+                blocState.book.title,
+                _columnVisibility,
+                saveAsGlobal: false,
+              );
+            }
+            _openCommentatorSelector('right');
+          },
+          onHideColumn: () => _hideColumn('right'),
+        );
+      }
+      if (!isPageShapeRemainingCommentatorsValue(resolvedSingle) &&
           !isPageShapeMultiCommentatorsValue(resolvedSingle) &&
           resolvedSingle != pageShapeMultipleCommentatorsModeValue) {
         return _CommentaryPane(
