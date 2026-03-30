@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -118,7 +120,6 @@ class _CombinedViewState extends State<CombinedView> {
       _previewScrollController = ScrollController();
     }
     _focusNode = FocusNode();
-    _warmUpDictionaryLookup();
     // שמירת ה-BLoC מראש
     _textBookBloc = context.read<TextBookBloc>();
 
@@ -202,17 +203,6 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   // עדכון האינדקס הנוכחי ב-tab
-  Future<void> _warmUpDictionaryLookup() async {
-    try {
-      await _dictionaryLookupRepository.ensureLoaded();
-      if (mounted) {
-        setState(() {});
-      }
-    } catch (e) {
-      UiSnack.showError('שגיאה בטעינת המילונים: $e');
-    }
-  }
-
   void _updateTabIndex() {
     final positions = widget.tab.positionsListener.itemPositions.value;
     if (positions.isNotEmpty) {
@@ -243,6 +233,25 @@ class _CombinedViewState extends State<CombinedView> {
 
   // מעקב אחר האינדקס הנוכחי שנבחר (לשימוש בהעתקה עם כותרות)
   final ValueNotifier<int?> _currentSelectedIndex = ValueNotifier<int?>(null);
+
+  void _prefetchDictionaryLookups(String? selectedText) {
+    final trimmed = selectedText?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      return;
+    }
+
+    unawaited(_dictionaryLookupRepository.ensureAramaicLoaded().catchError((_) {
+      return;
+    }));
+
+    if (_dictionaryLookupRepository.isLikelyAcronym(trimmed)) {
+      unawaited(
+        _dictionaryLookupRepository.ensureAcronymsLoaded().catchError((_) {
+          return;
+        }),
+      );
+    }
+  }
 
   /// helper קטן שמחזיר רשימת MenuEntry מקבוצה אחת, כולל כפתור הצג/הסתר הכל
   List<ctx.MenuItem<Object>> _buildGroup(
@@ -831,6 +840,7 @@ class _CombinedViewState extends State<CombinedView> {
                   _currentSelectedIndex.value = foundIndex;
                   widget.onSelectedTextChanged?.call(fixedPlain);
                 }
+                _prefetchDictionaryLookups(fixedPlain);
               },
               child: Directionality(
                 textDirection: TextDirection.rtl,

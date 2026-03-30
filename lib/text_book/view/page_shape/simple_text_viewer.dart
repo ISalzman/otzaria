@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -151,8 +153,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         level: 'LIFECYCLE',
       );
     }
-    _warmUpDictionaryLookup();
-
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
       _scheduleInitialScrollRestore();
@@ -211,17 +211,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     );
     _focusNode.dispose();
     super.dispose();
-  }
-
-  Future<void> _warmUpDictionaryLookup() async {
-    try {
-      await _dictionaryLookupRepository.ensureLoaded();
-      if (mounted) {
-        setState(() {});
-      }
-    } catch (e) {
-      UiSnack.showError('שגיאה בטעינת המילונים: $e');
-    }
   }
 
   void _scheduleInitialScrollRestore() {
@@ -480,6 +469,26 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       _savedSelectedText = restoredText;
       _savedSelectedIndex = selectedIndex;
     });
+    _prefetchDictionaryLookups(restoredText);
+  }
+
+  void _prefetchDictionaryLookups(String? selectedText) {
+    final trimmed = selectedText?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      return;
+    }
+
+    unawaited(_dictionaryLookupRepository.ensureAramaicLoaded().catchError((_) {
+      return;
+    }));
+
+    if (_dictionaryLookupRepository.isLikelyAcronym(trimmed)) {
+      unawaited(
+        _dictionaryLookupRepository.ensureAcronymsLoaded().catchError((_) {
+          return;
+        }),
+      );
+    }
   }
 
   /// טיפול באירועי מקלדת - חיצים לניווט

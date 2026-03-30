@@ -11,6 +11,7 @@ void main() {
       repository = DictionaryLookupRepository(
         loadAcronyms: () async => <String, List<String>>{
           'רש"י': <String>['רבי שלמה יצחקי', 'רבן של ישראל'],
+          "וכו'": <String>['וכולי, וכן הלאה'],
         },
         loadAramaicEntries: () async => const <AramaicDictionaryEntry>[
           AramaicDictionaryEntry(aramaic: 'אבא', hebrew: 'יער'),
@@ -28,6 +29,46 @@ void main() {
       expect(entry, isNotNull);
       expect(entry!.meanings, contains('רבי שלמה יצחקי'));
       expect(entry.meanings, contains('רבן של ישראל'));
+    });
+
+    test('מוצא קיצורים עם גרש בודד', () async {
+      await repository.ensureLoaded();
+
+      final entry = repository.findAcronym("וכו'");
+
+      expect(entry, isNotNull);
+      expect(entry!.meanings, contains('וכולי, וכן הלאה'));
+    });
+
+    test('מחזיר הרחבות לראשי תיבות חלקיים עם גרש בודד', () async {
+      repository = DictionaryLookupRepository(
+        loadAcronyms: () async => <String, List<String>>{
+          'ועי"ל': <String>['ועיין לעיל'],
+          'ועי"ש': <String>['ועיין שם'],
+        },
+        loadAramaicEntries: () async => const <AramaicDictionaryEntry>[
+          AramaicDictionaryEntry(aramaic: 'אבא', hebrew: 'יער'),
+        ],
+      );
+      await repository.ensureAcronymsLoaded();
+
+      final matches = repository.findAcronymMatches("ועי'");
+
+      expect(matches.map((entry) => entry.acronym), <String>[
+        'ועי"ל',
+        'ועי"ש',
+      ]);
+    });
+
+    test('שאילתת חיפוש מנורמלת מזהה גרש מול גרשיים', () async {
+      await repository.ensureAcronymsLoaded();
+
+      final matches = repository.acronymMatchesQuery(
+        acronym: 'וכ"ו',
+        query: "וכו'",
+      );
+
+      expect(matches, isTrue);
     });
 
     test('מחזיר צירופים ארמיים רק אם המילה קיימת כמונח במילון', () async {
@@ -131,6 +172,75 @@ void main() {
       final entries = buildDictionaryContextMenuEntries(
         context: context,
         selectedText: 'אבא',
+        repository: repository,
+      );
+
+      expect(entries, hasLength(1));
+    });
+
+    testWidgets('נופל חזרה לחיפוש ארמי כשאין התאמת ראשי תיבות', (tester) async {
+      await repository.ensureLoaded();
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox.shrink(),
+          ),
+        ),
+      );
+
+      final context = tester.element(find.byType(SizedBox));
+      final entries = buildDictionaryContextMenuEntries(
+        context: context,
+        selectedText: '"אבא"',
+        repository: repository,
+      );
+
+      expect(entries, hasLength(1));
+    });
+
+    testWidgets('מציג חיפוש ארמי גם כשמילון ראשי התיבות לא נטען',
+        (tester) async {
+      await repository.ensureAramaicLoaded();
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox.shrink(),
+          ),
+        ),
+      );
+
+      final context = tester.element(find.byType(SizedBox));
+      final entries = buildDictionaryContextMenuEntries(
+        context: context,
+        selectedText: 'אבא',
+        repository: repository,
+      );
+
+      expect(entries, hasLength(1));
+    });
+
+    testWidgets('מציג ראשי תיבות גם כשמילון ארמי לא נטען', (tester) async {
+      repository = DictionaryLookupRepository(
+        loadAcronyms: () async => <String, List<String>>{
+          'וכ"ו': <String>['וכו'],
+        },
+        loadAramaicEntries: () async => const <AramaicDictionaryEntry>[
+          AramaicDictionaryEntry(aramaic: 'אבא', hebrew: 'יער'),
+        ],
+      );
+      await repository.ensureAcronymsLoaded();
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox.shrink(),
+          ),
+        ),
+      );
+
+      final context = tester.element(find.byType(SizedBox));
+      final entries = buildDictionaryContextMenuEntries(
+        context: context,
+        selectedText: "וכו'",
         repository: repository,
       );
 
