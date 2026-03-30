@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -28,6 +30,8 @@ import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
+import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
+import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 
@@ -87,13 +91,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   int _rawPositionsCallbackCount = 0;
   String? _lastRawPositionsSignature;
   final Map<String, Future<bool>> _removeNikudCache = {};
+  final DictionaryLookupRepository _dictionaryLookupRepository =
+      DictionaryLookupRepository.instance;
 
   @override
   void initState() {
     super.initState();
     _debugScope = PageShapeDebugLogger.newScope(
       'simple-text-viewer',
-      label: widget.title ?? widget.bookTitle ?? (widget.isMainText ? 'main-text' : 'commentary'),
+      label: widget.title ??
+          widget.bookTitle ??
+          (widget.isMainText ? 'main-text' : 'commentary'),
     );
     _scrollController = widget.scrollController ?? ItemScrollController();
     _positionsListener =
@@ -145,7 +153,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         level: 'LIFECYCLE',
       );
     }
-
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
       _scheduleInitialScrollRestore();
@@ -462,6 +469,26 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       _savedSelectedText = restoredText;
       _savedSelectedIndex = selectedIndex;
     });
+    _prefetchDictionaryLookups(restoredText);
+  }
+
+  void _prefetchDictionaryLookups(String? selectedText) {
+    final trimmed = selectedText?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      return;
+    }
+
+    unawaited(_dictionaryLookupRepository.ensureAramaicLoaded().catchError((_) {
+      return;
+    }));
+
+    if (_dictionaryLookupRepository.isLikelyAcronym(trimmed)) {
+      unawaited(
+        _dictionaryLookupRepository.ensureAcronymsLoaded().catchError((_) {
+          return;
+        }),
+      );
+    }
   }
 
   /// טיפול באירועי מקלדת - חיצים לניווט
@@ -711,6 +738,16 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           items: linksMenuItems,
         ),
       );
+    }
+
+    final dictionaryEntries = buildDictionaryContextMenuEntries(
+      context: context,
+      selectedText: _savedSelectedText,
+      repository: _dictionaryLookupRepository,
+    );
+    if (dictionaryEntries.isNotEmpty) {
+      entries.add(const ctx.MenuDivider());
+      entries.addAll(dictionaryEntries);
     }
 
     entries.add(const ctx.MenuDivider());
