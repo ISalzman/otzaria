@@ -156,8 +156,7 @@ class DesignSettingsTab extends StatelessWidget {
                     options: const [
                       SegmentOption(value: _SidebarMode.pinned, label: 'הצגה'),
                       SegmentOption(
-                          value: _SidebarMode.openOnBook,
-                          label: 'הסתרה אוטומטית'),
+                          value: _SidebarMode.openOnBook, label: 'אוטומטי'),
                       SegmentOption(value: _SidebarMode.closed, label: 'הסתרה'),
                     ],
                     currentValue: state.pinSidebar

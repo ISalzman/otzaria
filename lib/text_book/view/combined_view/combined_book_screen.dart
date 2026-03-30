@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -31,6 +33,8 @@ import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
+import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 
 class CombinedView extends StatefulWidget {
   const CombinedView({
@@ -106,6 +110,8 @@ class _CombinedViewState extends State<CombinedView> {
   double _viewportHeight = 0;
 
   ScrollController? _previewScrollController;
+  final DictionaryLookupRepository _dictionaryLookupRepository =
+      DictionaryLookupRepository.instance;
 
   @override
   void initState() {
@@ -227,6 +233,25 @@ class _CombinedViewState extends State<CombinedView> {
 
   // מעקב אחר האינדקס הנוכחי שנבחר (לשימוש בהעתקה עם כותרות)
   final ValueNotifier<int?> _currentSelectedIndex = ValueNotifier<int?>(null);
+
+  void _prefetchDictionaryLookups(String? selectedText) {
+    final trimmed = selectedText?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      return;
+    }
+
+    unawaited(_dictionaryLookupRepository.ensureAramaicLoaded().catchError((_) {
+      return;
+    }));
+
+    if (_dictionaryLookupRepository.isLikelyAcronym(trimmed)) {
+      unawaited(
+        _dictionaryLookupRepository.ensureAcronymsLoaded().catchError((_) {
+          return;
+        }),
+      );
+    }
+  }
 
   /// helper קטן שמחזיר רשימת MenuEntry מקבוצה אחת, כולל כפתור הצג/הסתר הכל
   List<ctx.MenuItem<Object>> _buildGroup(
@@ -431,6 +456,21 @@ class _CombinedViewState extends State<CombinedView> {
               )
               .toList(),
         ),
+        ...(() {
+          final dictionaryEntries = buildDictionaryContextMenuEntries(
+            context: context,
+            selectedText: selectedText,
+            repository: _dictionaryLookupRepository,
+          );
+          if (dictionaryEntries.isEmpty) {
+            return const <ctx.ContextMenuEntry<Object>>[];
+          }
+
+          return <ctx.ContextMenuEntry<Object>>[
+            const ctx.MenuDivider(),
+            ...dictionaryEntries,
+          ];
+        })(),
         const ctx.MenuDivider(),
         // הערות אישיות
         ctx.MenuItem<Object>(
@@ -800,6 +840,7 @@ class _CombinedViewState extends State<CombinedView> {
                   _currentSelectedIndex.value = foundIndex;
                   widget.onSelectedTextChanged?.call(fixedPlain);
                 }
+                _prefetchDictionaryLookups(fixedPlain);
               },
               child: Directionality(
                 textDirection: TextDirection.rtl,
