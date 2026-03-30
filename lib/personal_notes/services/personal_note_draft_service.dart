@@ -8,12 +8,18 @@ class PersonalNoteDraft {
   final String contentPlain;
   final PersonalNoteContentFormat contentFormat;
   final DateTime updatedAt;
+  final int? lineNumber;
+  final String? noteId;
+  final String? referenceText;
 
   const PersonalNoteDraft({
     required this.content,
     required this.contentPlain,
     required this.contentFormat,
     required this.updatedAt,
+    this.lineNumber,
+    this.noteId,
+    this.referenceText,
   });
 
   Map<String, dynamic> toJson() => {
@@ -21,6 +27,9 @@ class PersonalNoteDraft {
         'contentPlain': contentPlain,
         'contentFormat': contentFormat.name,
         'updatedAt': updatedAt.toIso8601String(),
+        'lineNumber': lineNumber,
+        'noteId': noteId,
+        'referenceText': referenceText,
       };
 
   factory PersonalNoteDraft.fromJson(Map<String, dynamic> json) {
@@ -33,6 +42,9 @@ class PersonalNoteDraft {
             PersonalNoteContentFormat.plain.name,
       ),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
+      lineNumber: json['lineNumber'] as int?,
+      noteId: json['noteId'] as String?,
+      referenceText: json['referenceText'] as String?,
     );
   }
 }
@@ -40,14 +52,29 @@ class PersonalNoteDraft {
 class PersonalNoteDraftService {
   static const _prefix = 'personal_note_draft:';
 
-  String _key(String bookId, int lineNumber) => '$_prefix$bookId:$lineNumber';
+  String _key(
+    String bookId, {
+    int? lineNumber,
+    String? noteId,
+  }) {
+    assert((lineNumber == null) != (noteId == null));
+    if (noteId != null) {
+      return '$_prefix$bookId:note:$noteId';
+    }
+    return '$_prefix$bookId:$lineNumber';
+  }
+
+  String _bookPrefix(String bookId) => '$_prefix$bookId:';
 
   Future<PersonalNoteDraft?> loadDraft({
     required String bookId,
-    required int lineNumber,
+    int? lineNumber,
+    String? noteId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key(bookId, lineNumber));
+    final raw = prefs.getString(
+      _key(bookId, lineNumber: lineNumber, noteId: noteId),
+    );
     if (raw == null) return null;
     try {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
@@ -59,18 +86,66 @@ class PersonalNoteDraftService {
 
   Future<void> saveDraft({
     required String bookId,
-    required int lineNumber,
+    int? lineNumber,
+    String? noteId,
     required PersonalNoteDraft draft,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key(bookId, lineNumber), jsonEncode(draft.toJson()));
+    final key = _key(bookId, lineNumber: lineNumber, noteId: noteId);
+    final normalizedDraft = PersonalNoteDraft(
+      content: draft.content,
+      contentPlain: draft.contentPlain,
+      contentFormat: draft.contentFormat,
+      updatedAt: draft.updatedAt,
+      lineNumber: lineNumber ?? draft.lineNumber,
+      noteId: noteId ?? draft.noteId,
+      referenceText: draft.referenceText,
+    );
+    await prefs.setString(key, jsonEncode(normalizedDraft.toJson()));
   }
 
   Future<void> clearDraft({
     required String bookId,
-    required int lineNumber,
+    int? lineNumber,
+    String? noteId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_key(bookId, lineNumber));
+    final key = _key(bookId, lineNumber: lineNumber, noteId: noteId);
+    await prefs.remove(key);
+  }
+
+  Future<PersonalNoteDraft?> loadLatestNewNoteDraft({
+    required String bookId,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final prefix = _bookPrefix(bookId);
+    final matchingKeys =
+        prefs.getKeys().where((key) => key.startsWith(prefix)).toList()..sort();
+
+    PersonalNoteDraft? latestDraft;
+    for (final key in matchingKeys) {
+      if (key.contains(':note:')) {
+        continue;
+      }
+
+      final raw = prefs.getString(key);
+      if (raw == null) continue;
+
+      try {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        final draft = PersonalNoteDraft.fromJson(decoded);
+        if (draft.lineNumber == null) {
+          continue;
+        }
+        if (latestDraft == null ||
+            draft.updatedAt.isAfter(latestDraft.updatedAt)) {
+          latestDraft = draft;
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return latestDraft;
   }
 }

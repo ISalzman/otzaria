@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -9,6 +12,10 @@ class InlineNoteEditor extends StatefulWidget {
   final PersonalNote? note;
   final String? referenceText;
   final String bookId;
+  final String initialContent;
+  final PersonalNoteContentFormat initialFormat;
+  final int? draftLineNumber;
+  final String? draftNoteId;
   final List<PersonalNote> linkableNotes;
   final ValueChanged<PersonalNoteEditorResult> onSave;
   final VoidCallback onCancel;
@@ -18,6 +25,10 @@ class InlineNoteEditor extends StatefulWidget {
     this.note,
     this.referenceText,
     required this.bookId,
+    this.initialContent = '',
+    this.initialFormat = PersonalNoteContentFormat.plain,
+    this.draftLineNumber,
+    this.draftNoteId,
     required this.linkableNotes,
     required this.onSave,
     required this.onCancel,
@@ -29,27 +40,38 @@ class InlineNoteEditor extends StatefulWidget {
 
 class _InlineNoteEditorState extends State<InlineNoteEditor> {
   late final PersonalNoteEditorController _controller;
+  late final PersonalNoteEditorResult _initialResult;
   final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
+  final PersonalNoteDraftService _draftService = PersonalNoteDraftService();
+  Timer? _draftSaveTimer;
 
   @override
   void initState() {
     super.initState();
     _controller = buildPersonalNoteEditorController(
-      initialContent: widget.note?.content ?? '',
-      initialFormat:
-          widget.note?.contentFormat ?? PersonalNoteContentFormat.plain,
+      initialContent: widget.initialContent.isNotEmpty
+          ? widget.initialContent
+          : (widget.note?.content ?? ''),
+      initialFormat: widget.initialContent.isNotEmpty
+          ? widget.initialFormat
+          : (widget.note?.contentFormat ?? PersonalNoteContentFormat.plain),
     );
+    _initialResult = _controller.buildResult();
+    _controller.quillController.addListener(_scheduleDraftSave);
   }
 
   @override
   void dispose() {
+    _draftSaveTimer?.cancel();
+    _controller.quillController.removeListener(_scheduleDraftSave);
+    unawaited(_persistDraft());
     _focusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _handleSave() async {
+  Future<void> _handleSave() async {
     // במצב מוגן, נדרוש סיסמה לפני שמירה
     if (!await verifyPasswordForAction(context) || !mounted) {
       return;
@@ -60,7 +82,61 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
       UiSnack.showError('ההערה ריקה, לא נשמרה');
       return;
     }
+    await _clearDraft();
     widget.onSave(result);
+  }
+
+  void _scheduleDraftSave() {
+    _draftSaveTimer?.cancel();
+    _draftSaveTimer = Timer(
+      const Duration(milliseconds: 250),
+      () => unawaited(_persistDraft()),
+    );
+  }
+
+  Future<void> _persistDraft() async {
+    final result = _controller.buildResult();
+    final normalizedInitialContent = _initialResult.content.trimRight();
+    final normalizedCurrentContent = result.content.trimRight();
+    final normalizedInitialPlain = _initialResult.contentPlain.trim();
+    final normalizedCurrentPlain = result.contentPlain.trim();
+
+    final matchesInitial = normalizedInitialContent == normalizedCurrentContent &&
+        normalizedInitialPlain == normalizedCurrentPlain &&
+        _initialResult.contentFormat == result.contentFormat;
+
+    if (matchesInitial || normalizedCurrentPlain.isEmpty) {
+      await _clearDraft();
+      return;
+    }
+
+    await _draftService.saveDraft(
+      bookId: widget.bookId,
+      lineNumber: widget.draftLineNumber,
+      noteId: widget.draftNoteId,
+      draft: PersonalNoteDraft(
+        content: result.content,
+        contentPlain: result.contentPlain,
+        contentFormat: result.contentFormat,
+        updatedAt: DateTime.now(),
+        lineNumber: widget.draftLineNumber,
+        noteId: widget.draftNoteId,
+        referenceText: widget.referenceText ?? widget.note?.displayTitle,
+      ),
+    );
+  }
+
+  Future<void> _clearDraft() {
+    return _draftService.clearDraft(
+      bookId: widget.bookId,
+      lineNumber: widget.draftLineNumber,
+      noteId: widget.draftNoteId,
+    );
+  }
+
+  Future<void> _handleCancel() async {
+    await _clearDraft();
+    widget.onCancel();
   }
 
   @override
@@ -83,7 +159,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             TextButton(
-              onPressed: widget.onCancel,
+              onPressed: _handleCancel,
               child: const Text('ביטול'),
             ),
             const SizedBox(width: 8),
