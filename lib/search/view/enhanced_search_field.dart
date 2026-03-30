@@ -18,7 +18,18 @@ import 'package:otzaria/widgets/nikud_search_button.dart';
 class EnhancedSearchField extends StatefulWidget {
   final dynamic widget;
 
-  const EnhancedSearchField({super.key, required this.widget});
+  /// האם להציג את כפתור החיפוש המובנה בתוך השדה.
+  final bool showInlineSearchButton;
+
+  /// האם להציג את כפתור החיפוש עם ניקוד המובנה בתוך השדה.
+  final bool showInlineNikudButton;
+
+  const EnhancedSearchField({
+    super.key,
+    required this.widget,
+    this.showInlineSearchButton = true,
+    this.showInlineNikudButton = true,
+  });
 
   SearchingTab get tab {
     // Support both TantivyFullTextSearch and _SearchDialogWrapper
@@ -399,10 +410,12 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                         border: const OutlineInputBorder(),
                         hintText: "חפש כאן...",
                         labelText: "לחיפוש הקש אנטר או לחץ על סמל החיפוש",
-                        prefixIcon: IconButton(
-                          onPressed: _performSearch,
-                          icon: const Icon(FluentIcons.search_24_regular),
-                        ),
+                        prefixIcon: widget.showInlineSearchButton
+                            ? IconButton(
+                                onPressed: _performSearch,
+                                icon: const Icon(FluentIcons.search_24_regular),
+                              )
+                            : null,
                         suffixIcon: IconButton(
                           icon: const Icon(FluentIcons.dismiss_24_regular),
                           onPressed: () {
@@ -426,7 +439,8 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
               ),
             ),
             // כפתור "עם ניקוד" - מופיע רק כאשר יש ניקוד בטקסט
-            if (utils.hasNikud(widget.tab.queryController.text))
+            if (widget.showInlineNikudButton &&
+                utils.hasNikud(widget.tab.queryController.text))
               Positioned(
                 left: 56,
                 top: 8,
