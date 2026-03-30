@@ -175,9 +175,10 @@ class BookGridItem extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        _OverflowAwareBookTitle(
-                          title: book.title,
-                          fullPath: _getBookTooltipPath(book),
+                        _OverflowAwareText(
+                          text: book.title,
+                          tooltipText: book.title,
+                          maxLines: 3,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -185,18 +186,17 @@ class BookGridItem extends StatelessWidget {
                           ),
                         ),
                         if (showTopics)
-                          Text(
-                            book.topics,
+                          _OverflowAwareText(
+                            text: book.topics,
+                            tooltipText: _getBookTooltipPath(book) ?? book.topics,
                             maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
-                            textDirection: TextDirection.rtl,
                             style: TextStyle(
-                                fontSize: 11,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .primary
-                                    .withValues(alpha: 0.9)),
+                              fontSize: 11,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.9),
+                            ),
                           ),
                       ],
                     ),
@@ -323,14 +323,16 @@ class BookGridItem extends StatelessWidget {
   }
 }
 
-class _OverflowAwareBookTitle extends StatelessWidget {
-  final String title;
-  final String? fullPath;
+class _OverflowAwareText extends StatelessWidget {
+  final String text;
+  final String tooltipText;
+  final int maxLines;
   final TextStyle style;
 
-  const _OverflowAwareBookTitle({
-    required this.title,
-    required this.fullPath,
+  const _OverflowAwareText({
+    required this.text,
+    required this.tooltipText,
+    required this.maxLines,
     required this.style,
   });
 
@@ -338,9 +340,9 @@ class _OverflowAwareBookTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final titleWidget = Text(
-          title,
-          maxLines: 3,
+        final textWidget = Text(
+          text,
+          maxLines: maxLines,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.right,
           textDirection: TextDirection.rtl,
@@ -348,32 +350,45 @@ class _OverflowAwareBookTitle extends StatelessWidget {
         );
 
         if (!constraints.hasBoundedWidth) {
-          return titleWidget;
+          return textWidget;
         }
 
-        final textPainter = TextPainter(
-          text: TextSpan(text: title, style: style),
-          maxLines: 3,
-          textAlign: TextAlign.right,
-          textDirection: TextDirection.rtl,
-        )..layout(maxWidth: constraints.maxWidth);
+        final overflows = _textOverflows(
+          text: text,
+          style: style,
+          maxWidth: constraints.maxWidth,
+          maxLines: maxLines,
+        );
 
-        if (!textPainter.didExceedMaxLines) {
-          return titleWidget;
+        if (!overflows) {
+          return textWidget;
         }
-
-        final tooltipMessage = (fullPath == null || fullPath!.isEmpty)
-            ? title
-            : '$title\n$fullPath';
 
         return Tooltip(
-          message: tooltipMessage,
+          message: tooltipText,
           waitDuration: Durations.short2,
-          child: titleWidget,
+          child: textWidget,
         );
       },
     );
   }
+}
+
+bool _textOverflows({
+  required String text,
+  required TextStyle style,
+  required double maxWidth,
+  required int maxLines,
+}) {
+  final textPainter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    maxLines: maxLines,
+    ellipsis: '...',
+    textAlign: TextAlign.right,
+    textDirection: TextDirection.rtl,
+  )..layout(maxWidth: maxWidth);
+
+  return textPainter.didExceedMaxLines;
 }
 
 String? _getBookTooltipPath(Book book) {
