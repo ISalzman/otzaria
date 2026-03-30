@@ -19,7 +19,6 @@ import 'package:otzaria/migration/core/models/alt_toc_entry.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/utils/docx_to_otzaria.dart';
-import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
@@ -76,62 +75,16 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
   required int endLineIndex,
   required List<String>? targetBookTitles,
 }) {
-  final stopwatch = Stopwatch()..start();
-  final scope = 'db-range-isolate[$title@$startLineIndex-$endLineIndex]';
-  PageShapeDebugLogger.log(
-    'DatabaseLibraryProvider',
-    'START שאילתת isolate לקישורים בטווח',
-    scope: scope,
-    data: {
-      'dbPath': dbPath,
-      'title': title,
-      'categoryId': categoryId,
-      'fileType': fileType,
-      'startLineIndex': startLineIndex,
-      'endLineIndex': endLineIndex,
-      'targetBookTitlesCount': targetBookTitles?.length,
-      'targetBookTitles': targetBookTitles,
-    },
-    level: 'START',
-  );
   sqlite3.Database? db;
   try {
     db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
-    PageShapeDebugLogger.log(
-      'DatabaseLibraryProvider',
-      'נפתחה גישת read-only למסד ב־isolate',
-      scope: scope,
-      data: {
-        'elapsedMs': stopwatch.elapsedMilliseconds,
-      },
-      level: 'STEP',
-    );
 
     final bookResults = db.select(
       'SELECT id FROM book WHERE title = ? AND categoryId = ? AND fileType = ? LIMIT 1',
       [title, categoryId, fileType],
     ).toMapList();
-    PageShapeDebugLogger.log(
-      'DatabaseLibraryProvider',
-      'הסתיימה שאילתת bookId ב־isolate',
-      scope: scope,
-      data: {
-        'elapsedMs': stopwatch.elapsedMilliseconds,
-        'bookResultsCount': bookResults.length,
-      },
-      level: 'STEP',
-    );
 
     if (bookResults.isEmpty) {
-      PageShapeDebugLogger.log(
-        'DatabaseLibraryProvider',
-        'לא נמצא bookId לשאילתת isolate',
-        scope: scope,
-        data: {
-          'elapsedMs': stopwatch.elapsedMilliseconds,
-        },
-        level: 'WARN',
-      );
       return const [];
     }
 
@@ -182,43 +135,11 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
           $commentaryFilterClause
         ORDER BY sl.lineIndex, tb.orderIndex
       ''', parameters).toMapList();
-    PageShapeDebugLogger.log(
-      'DatabaseLibraryProvider',
-      'הסתיימה שאילתת rows לקישורים ב־isolate',
-      scope: scope,
-      data: {
-        'bookId': bookId,
-        'rowsCount': rows.length,
-        'elapsedMs': stopwatch.elapsedMilliseconds,
-        'targetBookTitlesCount': targetBookTitles?.length,
-      },
-      level: 'STEP',
-    );
     return rows;
-  } catch (error, stackTrace) {
-    PageShapeDebugLogger.log(
-      'DatabaseLibraryProvider',
-      'ERROR שאילתת isolate לקישורים בטווח',
-      scope: scope,
-      data: {
-        'elapsedMs': stopwatch.elapsedMilliseconds,
-        'error': error,
-        'stackTrace': stackTrace,
-      },
-      level: 'ERROR',
-    );
+  } catch (error) {
     rethrow;
   } finally {
     db?.close();
-    PageShapeDebugLogger.log(
-      'DatabaseLibraryProvider',
-      'END שאילתת isolate לקישורים בטווח',
-      scope: scope,
-      data: {
-        'elapsedMs': stopwatch.elapsedMilliseconds,
-      },
-      level: 'END',
-    );
   }
 }
 
@@ -1448,43 +1369,11 @@ class DatabaseLibraryProvider implements LibraryProvider {
         .toSet()
         .toList()
       ?..sort();
-    final scope = PageShapeDebugLogger.newScope(
-      'database-provider-links-range',
-      label: '$title@$startLineIndex-$endLineIndex',
-    );
-    final trace = PageShapeDebugLogger.start(
-      'DatabaseLibraryProvider',
-      'טעינת קישורי DB לטווח',
-      scope: scope,
-      data: {
-        'title': title,
-        'categoryId': categoryId,
-        'fileType': fileType,
-        'startLineIndex': startLineIndex,
-        'endLineIndex': endLineIndex,
-        'hasTargetBookTitlesFilter': targetBookTitles != null,
-        'targetBookTitlesCount': normalizedTargetBookTitles?.length,
-        'targetBookTitles': normalizedTargetBookTitles,
-        'sqliteInitialized': _sqliteProvider.isInitialized,
-        'repositoryAvailable': _sqliteProvider.repository != null,
-      },
-      longTaskAfter: const Duration(milliseconds: 300),
-      heartbeatEvery: const Duration(milliseconds: 300),
-    );
     if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
-      trace.warn(
-        'טעינת קישורי DB לטווח דולגה כי SQLite לא מוכן',
-        data: {
-          'sqliteInitialized': _sqliteProvider.isInitialized,
-          'repositoryAvailable': _sqliteProvider.repository != null,
-        },
-      );
-      trace.end(data: {'reason': 'sqlite not ready'});
       return [];
     }
 
     try {
-      trace.step('מתחיל Isolate.run לשאילתת קישורים');
       final result = await Isolate.run(
         () => _loadBookLinksRowsInRangeInIsolate(
           dbPath: _sqliteProvider.dbPath,
@@ -1496,14 +1385,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           targetBookTitles: normalizedTargetBookTitles,
         ),
       );
-      trace.step(
-        'הסתיים Isolate.run לשאילתת קישורים',
-        data: {
-          'rowsCount': result.length,
-        },
-      );
 
-      final mappingStopwatch = Stopwatch()..start();
       final links = result.map((row) {
         final targetTitle = row['targetBookTitle'] as String;
         final targetLineHeRef = row['targetLineHeRef'] as String?;
@@ -1522,21 +1404,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
           targetFileType: row['targetFileType'] as String?,
         );
       }).toList();
-      trace.step(
-        'הסתיים מיפוי rows ל־Link',
-        data: {
-          'mappingElapsedMs': mappingStopwatch.elapsedMilliseconds,
-          'linksCount': links.length,
-        },
-      );
-      trace.end(
-        data: {
-          'linksCount': links.length,
-        },
-      );
       return links;
     } catch (e) {
-      trace.fail(e, StackTrace.current);
       debugPrint('⚠️ Error in getLinksForBookRange "$title": $e');
       return [];
     }

@@ -10,7 +10,6 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
-import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 
 /// Represents a tab that contains a text book.
 ///
@@ -49,7 +48,6 @@ class TextBookTab extends OpenedTab {
   List<String>? commentators;
   bool _lastSplitView = false;
   bool _lastShowPageShapeView = false;
-  late final String debugScope;
 
   // StreamSubscription לניהול ה-listener
   StreamSubscription<TextBookState>? _stateSubscription;
@@ -75,27 +73,6 @@ class TextBookTab extends OpenedTab {
     bool isPinned = false,
     String? dedupeKey,
   }) : super(book.title, isPinned: isPinned, dedupeKey: dedupeKey) {
-    debugScope = PageShapeDebugLogger.newScope(
-      'text-tab',
-      label: book.title,
-    );
-    final trace = PageShapeDebugLogger.start(
-      'TextBookTab',
-      'יצירת טאב טקסט',
-      scope: debugScope,
-      data: {
-        'bookTitle': book.title,
-        'index': index,
-        'searchTextLength': searchText.length,
-        'commentatorsCount': commentators?.length,
-        'openLeftPane': openLeftPane,
-        'splitedViewArg': splitedView,
-        'showPageShapeViewArg': showPageShapeView,
-        'isPinned': isPinned,
-        'dedupeKey': dedupeKey,
-      },
-    );
-
     // קביעת ברירת המחדל של splitedView מההגדרות אם לא סופק
     final bool effectiveSplitedView =
         splitedView ?? (Settings.getValue<bool>('key-splited-view') ?? false);
@@ -106,13 +83,6 @@ class TextBookTab extends OpenedTab {
 
     _lastSplitView = effectiveSplitedView;
     _lastShowPageShapeView = effectiveShowPageShapeView;
-    trace.step(
-      'חושבו דגלי התצוגה האפקטיביים',
-      data: {
-        'effectiveSplitedView': effectiveSplitedView,
-        'effectiveShowPageShapeView': effectiveShowPageShapeView,
-      },
-    );
 
     // Initialize the bloc with initial state
     bloc = TextBookBloc(
@@ -136,19 +106,10 @@ class TextBookTab extends OpenedTab {
       scrollController: scrollController,
       positionsListener: positionsListener,
     );
-    trace.step(
-      'נוצר TextBookBloc',
-      data: {
-        'blocState': bloc.state.runtimeType,
-      },
-    );
 
     // הוספת listener לעדכון האינדקס כשה-state משתנה
     _stateSubscription = bloc.stream.listen((state) {
       if (state is TextBookLoaded && state.visibleIndices.isNotEmpty) {
-        final previousIndex = index;
-        final previousSplitView = _lastSplitView;
-        final previousPageShape = _lastShowPageShapeView;
         index = state.visibleIndices.first;
         _lastSplitView = state.showSplitView;
         _lastShowPageShapeView = state.showPageShapeView;
@@ -156,49 +117,13 @@ class TextBookTab extends OpenedTab {
         if (state.currentTitle != null && state.currentTitle!.isNotEmpty) {
           currentTitle.value = state.currentTitle!;
         }
-        PageShapeDebugLogger.log(
-          'TextBookTab',
-          'עודכן מצב טאב מזרם ה־bloc',
-          scope: debugScope,
-          data: {
-            ...PageShapeDebugLogger.summarizeIndices(state.visibleIndices),
-            'selectedIndex': state.selectedIndex,
-            'showSplitView': state.showSplitView,
-            'showPageShapeView': state.showPageShapeView,
-            'showLeftPane': state.showLeftPane,
-            'activeCommentatorsCount': state.activeCommentators.length,
-            'linksCount': state.links.length,
-            'changedIndex': previousIndex != index,
-            'changedSplitView': previousSplitView != _lastSplitView,
-            'changedPageShapeView':
-                previousPageShape != _lastShowPageShapeView,
-            'currentTitle': state.currentTitle,
-          },
-        );
       }
     });
-    trace.end(
-      data: {
-        'initialBlocState': bloc.state.runtimeType,
-      },
-    );
   }
 
   /// Cleanup when the tab is disposed
   @override
   void dispose() {
-    PageShapeDebugLogger.log(
-      'TextBookTab',
-      'dispose לטאב טקסט',
-      scope: debugScope,
-      data: {
-        'bookTitle': book.title,
-        'index': index,
-        'lastSplitView': _lastSplitView,
-        'lastShowPageShapeView': _lastShowPageShapeView,
-      },
-      level: 'END',
-    );
     _stateSubscription?.cancel();
     currentTitle.dispose();
     bloc.close();
@@ -210,22 +135,6 @@ class TextBookTab extends OpenedTab {
   /// The JSON map should have 'initalIndex', 'title', 'commentaries',
   /// and 'type' keys.
   factory TextBookTab.fromJson(Map<String, dynamic> json) {
-    final scope = PageShapeDebugLogger.newScope(
-      'text-tab-from-json',
-      label: json['title']?.toString(),
-    );
-    final trace = PageShapeDebugLogger.start(
-      'TextBookTab',
-      'שחזור טאב מ־JSON',
-      scope: scope,
-      data: {
-        'title': json['title'],
-        'initialIndex': json['initalIndex'],
-        'jsonSplitedView': json['splitedView'],
-        'jsonShowPageShapeView': json['showPageShapeView'],
-        'jsonIsPinned': json['isPinned'],
-      },
-    );
     // במצב side-by-side, חלונית הצד תמיד סגורה
     // אחרת, לפי ההגדרות
     final bool shouldOpenLeftPane =
@@ -241,36 +150,15 @@ class TextBookTab extends OpenedTab {
         : TextBook(
             title: json['title'],
           );
-    trace.step(
-      'פוענח ספר משוחזר',
-      data: {
-        'restoredBookTitle': restoredBook.title,
-        'restoredCategoryId': restoredBook.categoryId,
-        'shouldOpenLeftPane': shouldOpenLeftPane,
-      },
+    return TextBookTab(
+      index: json['initalIndex'],
+      book: restoredBook,
+      commentators: List<String>.from(json['commentators']),
+      splitedView: splitedView,
+      showPageShapeView: json['showPageShapeView'] ?? false,
+      openLeftPane: shouldOpenLeftPane,
+      isPinned: json['isPinned'] ?? false,
     );
-
-    try {
-      final tab = TextBookTab(
-        index: json['initalIndex'],
-        book: restoredBook,
-        commentators: List<String>.from(json['commentators']),
-        splitedView: splitedView,
-        showPageShapeView: json['showPageShapeView'] ?? false,
-        openLeftPane: shouldOpenLeftPane,
-        isPinned: json['isPinned'] ?? false,
-      );
-      trace.end(
-        data: {
-          'restoredDebugScope': tab.debugScope,
-          'restoredShowPageShapeView': json['showPageShapeView'] ?? false,
-        },
-      );
-      return tab;
-    } catch (error, stackTrace) {
-      trace.fail(error, stackTrace);
-      rethrow;
-    }
   }
 
   /// Converts the [TextBookTab] instance into a JSON map.
@@ -279,17 +167,6 @@ class TextBookTab extends OpenedTab {
   /// and 'type' keys.
   @override
   Map<String, dynamic> toJson() {
-    final trace = PageShapeDebugLogger.start(
-      'TextBookTab',
-      'שמירת טאב ל־JSON',
-      scope: debugScope,
-      data: {
-        'bookTitle': book.title,
-        'currentIndexField': index,
-      },
-      longTaskAfter: const Duration(milliseconds: 300),
-      heartbeatEvery: const Duration(milliseconds: 300),
-    );
     List<String> commentators = [];
     bool splitedView = _lastSplitView;
     bool showPageShapeView = _lastShowPageShapeView;
@@ -307,18 +184,8 @@ class TextBookTab extends OpenedTab {
         index = currentIndex;
       }
     }
-    trace.step(
-      'חושב payload לשמירה',
-      data: {
-        'currentIndex': currentIndex,
-        'commentatorsCount': commentators.length,
-        'splitedView': splitedView,
-        'showPageShapeView': showPageShapeView,
-        'blocState': bloc.state.runtimeType,
-      },
-    );
 
-    final result = {
+    return {
       'title': title,
       'book': book.toJson(),
       'initalIndex': currentIndex,
@@ -328,11 +195,5 @@ class TextBookTab extends OpenedTab {
       'isPinned': isPinned,
       'type': 'TextBookTab'
     };
-    trace.end(
-      data: {
-        'resultKeys': result.keys.toList(),
-      },
-    );
-    return result;
   }
 }
