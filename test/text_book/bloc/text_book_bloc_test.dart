@@ -19,7 +19,7 @@ void main() {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
     });
 
-    test('בתצוגה רגילה טוען חלון קישורים חלקי ולא את כל הספר', () async {
+    test('בתצוגה רגילה ללא חלונית פעילה לא טוען קישורים מיד', () async {
       final repository = _FakeTextBookRepository();
       final bloc =
           _createBloc(repository: repository, showPageShapeView: false);
@@ -35,12 +35,12 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(repository.getBookLinksInRangeCalls, 1);
+      expect(repository.getBookLinksInRangeCalls, 0);
 
       await bloc.close();
     });
 
-    test('באתחול ספר משתמש בשורה ההתחלתית לשם טעינת חלון קישורים', () async {
+    test('באתחול ספר ללא חלונית פעילה לא מבקש חלון קישורים', () async {
       final repository = _FakeTextBookRepository();
       final bloc =
           _createBloc(repository: repository, showPageShapeView: false);
@@ -56,9 +56,32 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(repository.getBookLinksInRangeCalls, 1);
-      expect(repository.lastStartIndex, 0);
-      expect(repository.lastEndIndex, 60);
+      expect(repository.getBookLinksInRangeCalls, 0);
+      expect(repository.lastStartIndex, isNull);
+      expect(repository.lastEndIndex, isNull);
+      expect(repository.lastTargetBookTitles, isNull);
+
+      await bloc.close();
+    });
+
+    test('בתצוגה רגילה ללא חלונית מפרשים לא מתבצעת כלל טעינת קישורים', () async {
+      final repository = _FakeTextBookRepository();
+      final bloc =
+          _createBloc(repository: repository, showPageShapeView: false);
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(repository.getBookLinksInRangeCalls, 0);
+      expect(repository.lastTargetBookTitles, isNull);
 
       await bloc.close();
     });
@@ -199,6 +222,39 @@ void main() {
           'תרגום אונקלוס על בראשית',
           'אברבנאל על תורה',
           'בעל הטורים על בראשית',
+        ],
+      );
+
+      await bloc.close();
+    });
+
+    test('במצב מפוצל טוען קישורים רק למפרשים הפעילים', () async {
+      final repository = _FakeTextBookRepository();
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: false,
+        commentators: const [
+          'רש"י על בראשית',
+          'אבן עזרא על בראשית',
+        ],
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: true,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(
+        repository.lastTargetBookTitles,
+        [
+          'אבן עזרא על בראשית',
+          'רש"י על בראשית',
         ],
       );
 

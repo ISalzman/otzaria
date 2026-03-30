@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/theme/app_fonts.dart';
@@ -26,6 +27,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:collection/collection.dart';
 import 'dart:async';
+import 'dart:isolate';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -1029,7 +1031,21 @@ class _CommentaryPane extends StatefulWidget {
   State<_CommentaryPane> createState() => _CommentaryPaneState();
 }
 
+class _LoadedCommentaryData {
+  final TextBook book;
+  final List<String> content;
+
+  const _LoadedCommentaryData({
+    required this.book,
+    required this.content,
+  });
+}
+
 class _CommentaryPaneState extends State<_CommentaryPane> {
+  static const int _quickPreviewPaddingLines = 10;
+  static final Map<String, Future<_LoadedCommentaryData?>>
+      _fullCommentaryCache = {};
+
   List<String>? _content;
   TextBook? _reportBook;
   bool _isLoading = true;
@@ -1122,6 +1138,126 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     }).toList();
   }
 
+  String _commentaryCacheKey(TextBook book, {required bool preferDatabase}) {
+    return '${book.title}|${book.categoryId}|${book.categoryPath ?? ''}|$preferDatabase';
+  }
+
+  List<String> _buildPreviewLines(String previewContent, int previewStartLine) {
+    final previewLines = previewContent.split('\n');
+    if (previewStartLine <= 0) {
+      return previewLines;
+    }
+
+    return List<String>.filled(previewStartLine, '', growable: true)
+      ..addAll(previewLines);
+  }
+
+  int _resolveCurrentMainIndex(TextBookLoaded state) {
+    if (state.selectedIndex != null) {
+      return state.selectedIndex!;
+    }
+
+    if (state.visibleIndices.isNotEmpty) {
+      return state.visibleIndices.first;
+    }
+
+    return 0;
+  }
+
+  int? _resolveInitialCommentaryTargetIndex(TextBookLoaded state) {
+    if (_relevantLinks.isEmpty) {
+      return null;
+    }
+
+    final logicalIndex = CommentarySyncHelper.getLogicalIndex(
+      _resolveCurrentMainIndex(state),
+      state.content,
+    );
+
+    final bestLink = CommentarySyncHelper.findBestLink(
+      linksForCommentary: _relevantLinks,
+      logicalMainIndex: logicalIndex,
+    );
+
+    return CommentarySyncHelper.getCommentaryTargetIndex(bestLink);
+  }
+
+  Future<_LoadedCommentaryData?> _fetchFullCommentaryData(
+    TextBook book, {
+    required bool preferDatabase,
+  }) async {
+    final String bookContent;
+    if (preferDatabase && book.categoryId != null) {
+      final dbProvider = LibraryProviderManager.instance.databaseProvider;
+      final text = await dbProvider.getBookText(
+        book.title,
+        book.categoryId!,
+        'txt',
+      );
+      bookContent = text ?? '';
+    } else {
+      bookContent = await book.text;
+    }
+
+    if (bookContent.isEmpty) {
+      return null;
+    }
+
+    final lines = await Isolate.run(() => bookContent.split('\n'));
+    return _LoadedCommentaryData(
+      book: book,
+      content: lines,
+    );
+  }
+
+  Future<void> _applyFullCommentaryData(
+    Future<_LoadedCommentaryData?> dataFuture,
+    String requestedCommentatorName,
+  ) async {
+    final data = await dataFuture;
+    if (!mounted || widget.commentatorName != requestedCommentatorName) {
+      return;
+    }
+
+    if (data == null) {
+      if (_content == null || _content!.isEmpty) {
+        _notifyCommentaryLoadFailed();
+        setState(() {
+          _reportBook = null;
+          _content = null;
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
+    setState(() {
+      _reportBook = data.book;
+      _content = data.content;
+      _isLoading = false;
+      _lastSyncedIndex = null;
+    });
+
+    final currentState = context.read<TextBookBloc>().state;
+    if (currentState is TextBookLoaded) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _syncWithMainText(currentState);
+        }
+      });
+    }
+  }
+
+  void _notifyCommentaryLoadFailed() {
+    if (widget.onLoadFailed != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.onLoadFailed!();
+        }
+      });
+    }
+  }
+
   void _updateHighlights(TextBookLoaded state) {
     if (!_highlightEnabled || state.selectedIndex == null) {
       if (_highlightedIndices.isNotEmpty) {
@@ -1155,6 +1291,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   Future<void> _loadCommentary() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
+    _lastLinks = null;
 
     try {
       // המתנה לכך שה-state יהיה TextBookLoaded
@@ -1257,59 +1394,77 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       }
 
       // טעינת הטקסט ישירות מה-provider המתאים
-      String bookContent;
-      if (bookLocation != null &&
+      final useDatabaseSource = bookLocation != null &&
           bookLocation.book != null &&
-          bookLocation.categoryId != null) {
-        // ספר מה-DB - נשתמש ב-DatabaseLibraryProvider
-        final dbProvider = LibraryProviderManager.instance.databaseProvider;
-        final text = await dbProvider.getBookText(
-          widget.commentatorName,
-          bookLocation.categoryId!,
-          'txt',
-        );
-        bookContent = text ?? '';
-      } else {
-        // ספר ממערכת הקבצים - נשתמש ב-book.text
-        bookContent = await book.text;
-      }
+          bookLocation.categoryId != null;
+      final requestedCommentatorName = widget.commentatorName;
+      final fullCommentaryFuture = _fullCommentaryCache.putIfAbsent(
+        _commentaryCacheKey(book, preferDatabase: useDatabaseSource),
+        () => _fetchFullCommentaryData(
+          book,
+          preferDatabase: useDatabaseSource,
+        ),
+      );
 
-      if (bookContent.isEmpty) {
-        if (widget.onLoadFailed != null) {
+      var previewLoaded = false;
+      final currentState = state;
+      if (useDatabaseSource && currentState is TextBookLoaded) {
+        final previewTargetIndex =
+            _resolveInitialCommentaryTargetIndex(currentState) ?? 0;
+        final previewContent =
+            await SqliteDataProvider.instance.getBookQuickPreview(
+          widget.commentatorName,
+          previewTargetIndex,
+        );
+
+        if (!mounted || widget.commentatorName != requestedCommentatorName) {
+          return;
+        }
+
+        if (previewContent != null && previewContent.isNotEmpty) {
+          final previewStartLine =
+              (previewTargetIndex - _quickPreviewPaddingLines).clamp(
+            0,
+            previewTargetIndex,
+          );
+          setState(() {
+            _reportBook = book;
+            _content = _buildPreviewLines(previewContent, previewStartLine);
+            _isLoading = false;
+            _lastSyncedIndex = null;
+          });
+          previewLoaded = true;
+
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) widget.onLoadFailed!();
+            if (mounted) {
+              _syncWithMainText(currentState);
+            }
           });
         }
-        throw Exception('Book text is empty for "${widget.commentatorName}"');
       }
 
-      final lines = bookContent.split('\n');
-
-      if (!mounted) return;
-
-      setState(() {
-        _reportBook = book;
-        _content = lines;
-        _isLoading = false;
-        _lastSyncedIndex = null; // איפוס לסנכרון ראשוני
-      });
-
-      // סנכרון ראשוני - נדחה מעט כדי לוודא שה-ScrollController מוכן
-      final currentState = state;
-      if (currentState is TextBookLoaded) {
-        // נחכה שה-widget יבנה ואז נסנכרן
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _syncWithMainText(currentState);
-          }
-        });
+      if (previewLoaded) {
+        unawaited(
+          _applyFullCommentaryData(
+            fullCommentaryFuture,
+            requestedCommentatorName,
+          ),
+        );
+        return;
       }
+
+      await _applyFullCommentaryData(
+        fullCommentaryFuture,
+        requestedCommentatorName,
+      );
     } catch (e) {
-      if (widget.onLoadFailed != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) widget.onLoadFailed!();
-        });
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ CommentaryPane::loadCommentary failed '
+          'for ${widget.commentatorName}: $e',
+        );
       }
+      _notifyCommentaryLoadFailed();
       if (mounted) {
         setState(() {
           _reportBook = null;

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:io';
@@ -67,9 +68,18 @@ List<String> _buildPreviewLines(String previewContent, int previewStartLine) {
     ..addAll(previewLines);
 }
 
+Future<List<String>> _splitContentLines(String content) async {
+  if (content.isEmpty) {
+    return const [];
+  }
+
+  return Isolate.run(() => content.split('\n'));
+}
+
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   static const int _linkLookBehindLines = 25;
   static const int _linkLookAheadLines = 50;
+  static const int _linksReloadThresholdLines = 20;
   static const String _allTargetBookTitlesSignature =
       '__all_target_book_titles__';
 
@@ -86,6 +96,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   String? _loadedLinksBookTitle;
   String? _loadedLinksTargetBookTitlesSignature;
   String? _activeLinksTargetBookTitlesSignature;
+  String? _cachedPageShapeTargetBookTitlesKey;
+  List<String>? _cachedPageShapeTargetBookTitles;
   bool _isLoadingLinks = false;
   bool _pendingLinksReload = false; // בקשת טעינה שנדחתה בגלל _isLoadingLinks
   bool _awaitingInitialPageShapeVisibleSync = false;
@@ -290,6 +302,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       // טעינת תוכן הספר (עם fallback ל-preview אם ריק)
       final sqliteProvider = SqliteDataProvider.instance;
       String content = await repository.getBookContent(book);
+      List<String>? contentLines;
       if (content.isEmpty) {
         // Load quick preview (40 lines) for instant display
         final preview = await sqliteProvider.getBookQuickPreview(
@@ -300,7 +313,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         if (preview != null && preview.isNotEmpty) {
           final previewStartLine =
               (visibleIndices.first - 10).clamp(0, visibleIndices.first);
-          content = _buildPreviewLines(preview, previewStartLine).join('\n');
+          contentLines = _buildPreviewLines(preview, previewStartLine);
 
           // Load full book in background
           _loadFullBookInBackground(book);
@@ -309,6 +322,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           content = await repository.getBookContent(book);
         }
       }
+
+      contentLines ??= await _splitContentLines(content);
 
       // ── שלב 2: המתנה ל-TOC (כבר רץ במקביל, צפוי להיות מוכן) ──
       final tableOfContents = await tocFuture;
@@ -406,7 +421,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       // ב-preserveState: שימור מפרשים קיימים כדי למנוע הבהוב
       emit(TextBookLoaded(
         book: book,
-        content: content.split('\n'),
+        content: contentLines,
         links: emptyLinks,
         linksByLine: const {},
         availableCommentators: existingAvailableCommentators,
@@ -520,10 +535,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final currentState = state as TextBookLoaded;
       // שמירת ההגדרה ב-Settings כדי שתישמר כברירת מחדל
       Settings.setValue<bool>('key-splited-view', event.show);
-      emit(currentState.copyWith(
+      final updatedState = currentState.copyWith(
         showSplitView: event.show,
         selectedIndex: currentState.selectedIndex,
-      ));
+      );
+      emit(updatedState);
+      _loadLinksInBackground(
+        updatedState.book,
+        updatedState.visibleIndices,
+        force: true,
+      );
     }
   }
 
@@ -559,14 +580,19 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       // מצב צורת הדף נשמר פר-ספר (ב-toJson של הטאב), לא גלובלית
       _setAwaitingInitialPageShapeVisibleSync(event.show);
-      emit(currentState.copyWith(
+      final updatedState = currentState.copyWith(
         showPageShapeView: event.show,
         showTzuratHadafView: false, // כיבוי התצוגה הישנה
         selectedIndex: currentState.selectedIndex,
         // סגור את חלונית הניווט/חיפוש כשעוברים לצורת הדף
         showLeftPane: event.show ? false : currentState.showLeftPane,
-      ));
-      _loadLinksInBackground(currentState.book, currentState.visibleIndices);
+      );
+      emit(updatedState);
+      _loadLinksInBackground(
+        updatedState.book,
+        updatedState.visibleIndices,
+        force: true,
+      );
 
       // כשיוצאים ממצב צורת הדף למצב רגיל, גלול למיקום הנוכחי
       if (!event.show && currentState.selectedIndex != null) {
@@ -590,10 +616,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final currentState = state as TextBookLoaded;
 
       // עדכון המפרשים הפעילים בלבד, ללא שינוי של סוג התצוגה
-      emit(currentState.copyWith(
+      final updatedState = currentState.copyWith(
         activeCommentators: event.commentators,
         selectedIndex: currentState.selectedIndex,
-      ));
+      );
+      emit(updatedState);
+      if (updatedState.showSplitView || updatedState.showPageShapeView) {
+        _loadLinksInBackground(
+          updatedState.book,
+          updatedState.visibleIndices,
+          force: true,
+        );
+      }
     }
   }
 
@@ -724,7 +758,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     );
   }
 
-  bool _isLinksWindowLoaded(
+  bool _isLinksWindowSufficient(
     String bookTitle,
     int start,
     int end,
@@ -734,8 +768,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         _loadedLinksStart != null &&
         _loadedLinksEnd != null &&
         _loadedLinksTargetBookTitlesSignature == targetBookTitlesSignature &&
-        start >= _loadedLinksStart! &&
-        end <= _loadedLinksEnd!;
+        start >= (_loadedLinksStart! - _linksReloadThresholdLines) &&
+        end <= (_loadedLinksEnd! + _linksReloadThresholdLines);
   }
 
   List<String>? _normalizeTargetBookTitles(Iterable<String>? targetBookTitles) {
@@ -763,6 +797,27 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return normalizedTargetBookTitles.join('||');
   }
 
+  String _serializePageShapeConfiguration(Map<String, String?>? configuration) {
+    if (configuration == null) {
+      return '__default__';
+    }
+
+    return [
+      'left=${configuration['left'] ?? 'null'}',
+      'right=${configuration['right'] ?? 'null'}',
+      'bottom=${configuration['bottom'] ?? 'null'}',
+      'bottomRight=${configuration['bottomRight'] ?? 'null'}',
+    ].join('|');
+  }
+
+  String _serializeColumnVisibility(Map<String, bool> columnVisibility) {
+    return [
+      'left=${columnVisibility['left'] ?? true}',
+      'right=${columnVisibility['right'] ?? true}',
+      'bottom=${columnVisibility['bottom'] ?? true}',
+    ].join('|');
+  }
+
   Future<List<String>?> _resolvePageShapeTargetBookTitlesForLinks(
     TextBookLoaded state,
   ) async {
@@ -776,16 +831,29 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return null;
     }
 
-    final configuration = PageShapeSettingsManager.loadConfiguration(
-          state.book.title,
-          heCategories: state.book.heCategories,
-        ) ??
+    final storedConfiguration = PageShapeSettingsManager.loadConfiguration(
+      state.book.title,
+      heCategories: state.book.heCategories,
+    );
+    final columnVisibility =
+        PageShapeSettingsManager.getColumnVisibility(state.book.title);
+    final cacheKey = [
+      state.book.title,
+      state.book.heCategories ?? '',
+      candidateCommentators.join('||'),
+      _serializePageShapeConfiguration(storedConfiguration),
+      _serializeColumnVisibility(columnVisibility),
+    ].join('::');
+
+    if (_cachedPageShapeTargetBookTitlesKey == cacheKey) {
+      return _cachedPageShapeTargetBookTitles;
+    }
+
+    final configuration = storedConfiguration ??
         await DefaultCommentators.getDefaults(
           state.book,
           availableCommentators: candidateCommentators,
         );
-    final columnVisibility =
-        PageShapeSettingsManager.getColumnVisibility(state.book.title);
 
     final selectedCommentators = resolvePageShapeDisplayedCommentators(
       leftSelection: configuration['left'],
@@ -796,7 +864,38 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       columnVisibility: columnVisibility,
     );
 
+    _cachedPageShapeTargetBookTitlesKey = cacheKey;
+    _cachedPageShapeTargetBookTitles = selectedCommentators;
     return selectedCommentators;
+  }
+
+  List<String> _normalizeCommentaryTargets(Iterable<String> titles) {
+    return titles
+        .map((title) => title.trim())
+        .where((title) => title.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
+  Future<List<String>?> _resolveTargetBookTitlesForLinks(
+    TextBookLoaded state,
+  ) async {
+    if (state.showPageShapeView) {
+      final pageShapeTargets =
+          await _resolvePageShapeTargetBookTitlesForLinks(state);
+      return pageShapeTargets ?? const <String>[];
+    }
+
+    if (state.showSplitView) {
+      return _normalizeCommentaryTargets(state.activeCommentators);
+    }
+
+    return const <String>[];
+  }
+
+  bool _shouldLoadLinksForState(TextBookLoaded state) {
+    return state.showSplitView || state.showPageShapeView;
   }
 
   /// בדיקה אם שתי רשימות שוות
@@ -1253,9 +1352,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       add(ApplyFullBookContent(
         bookTitle: book.title,
-        content: fullContent.split('\n'),
+        content: await _splitContentLines(fullContent),
       ));
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ TextBookBloc::loadFullBook failed for ${book.title}: $e');
+      }
       // Silent fail - user already has preview
     }
   }
@@ -1264,17 +1366,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   void _loadLinksInBackground(
     TextBook book,
     List<int> visibleIndices,
+    {bool force = false}
   ) async {
-    final window = _calculateLinksWindow(visibleIndices);
-
-    List<String>? targetBookTitles;
-    var targetBookTitlesSignature = _allTargetBookTitlesSignature;
-    final runtimeState = state;
-    if (runtimeState is TextBookLoaded && runtimeState.showPageShapeView) {
-      targetBookTitles =
-          await _resolvePageShapeTargetBookTitlesForLinks(runtimeState);
-      targetBookTitlesSignature = _targetBookTitlesSignature(targetBookTitles);
+    final runtimeStateBeforeWindowCheck = state;
+    if (!force &&
+        runtimeStateBeforeWindowCheck is TextBookLoaded &&
+        !_shouldLoadLinksForState(runtimeStateBeforeWindowCheck)) {
+      return;
     }
+
+    final window = _calculateLinksWindow(visibleIndices);
 
     if (_isLoadingLinks) {
       // בקשה חדשה הגיעה בזמן שטעינה אחרת רצה — מסמנים לנסות שוב אחריה
@@ -1282,7 +1383,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return;
     }
 
-    if (_isLinksWindowLoaded(
+    List<String>? targetBookTitles;
+    var targetBookTitlesSignature = _allTargetBookTitlesSignature;
+    final runtimeState = state;
+    if (runtimeState is TextBookLoaded) {
+      targetBookTitles = await _resolveTargetBookTitlesForLinks(runtimeState);
+      targetBookTitlesSignature = _targetBookTitlesSignature(targetBookTitles);
+    }
+
+    if (!force &&
+        _isLinksWindowSufficient(
       book.title,
       window.start,
       window.end,
@@ -1333,7 +1443,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (state is TextBookLoaded) {
         final latestState = state as TextBookLoaded;
         final latestWindow = _calculateLinksWindow(latestState.visibleIndices);
-        final windowOutdated = !_isLinksWindowLoaded(
+        final windowOutdated = !_isLinksWindowSufficient(
           latestState.book.title,
           latestWindow.start,
           latestWindow.end,
@@ -1348,6 +1458,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       }
     } catch (e) {
       _isLoadingLinks = false;
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ TextBookBloc::loadLinks failed for ${book.title} '
+          '(window ${window.start}-${window.end}): $e',
+        );
+      }
       // Silent fail - user already has the book displayed
     }
   }
@@ -1419,7 +1535,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     final currentState = state as TextBookLoaded;
-    _loadLinksInBackground(currentState.book, currentState.visibleIndices);
+    _loadLinksInBackground(
+      currentState.book,
+      currentState.visibleIndices,
+      force: true,
+    );
   }
 
   /// Loads available commentators in the background after the book is displayed
