@@ -9,11 +9,13 @@ import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class NotesSearchHeader extends StatefulWidget {
   final String bookId;
+  final int? categoryId;
   final bool isPdf;
 
   const NotesSearchHeader({
     super.key,
     required this.bookId,
+    this.categoryId,
     this.isPdf = false,
   });
 
@@ -27,8 +29,9 @@ class _NotesSearchHeaderState extends State<NotesSearchHeader> {
   @override
   void didUpdateWidget(covariant NotesSearchHeader oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // איפוס החיפוש כשעוברים לספר אחר
-    if (oldWidget.bookId != widget.bookId) {
+    // איפוס החיפוש כשעוברים לספר אחר (כולל אותו שם בקטגוריה שונה)
+    if (oldWidget.bookId != widget.bookId ||
+        oldWidget.categoryId != widget.categoryId) {
       _searchController.clear();
       // ה-BLoC כבר מתאפס ב-Sidebar, אז לא צריך לשלוח אירוע כאן
     }
@@ -90,9 +93,12 @@ class _NotesSearchHeaderState extends State<NotesSearchHeader> {
                   IconButton(
                     tooltip: 'רענן',
                     onPressed: () {
-                      context
-                          .read<PersonalNotesBloc>()
-                          .add(LoadPersonalNotes(widget.bookId));
+                      context.read<PersonalNotesBloc>().add(
+                            LoadPersonalNotes(
+                              widget.bookId,
+                              categoryId: state.categoryId,
+                            ),
+                          );
                     },
                     icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
                   ),

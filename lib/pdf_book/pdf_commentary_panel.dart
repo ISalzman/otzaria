@@ -1034,6 +1034,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     return PersonalNotesSidebar(
       key: ValueKey(bookId),
       bookId: bookId,
+      categoryId: widget.tab.book.categoryId,
       isPdf: true,
       visibleLineIndices: _getVisibleLineIndicesForCurrentPage(),
       onNavigateToLine: (lineNumber) {

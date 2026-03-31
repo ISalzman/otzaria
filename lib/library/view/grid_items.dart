@@ -826,6 +826,7 @@ Future<void> _deleteBook(Book book) async {
     final success = await BookLocator.deleteBook(
       book.title,
       category: book.category,
+      categoryId: book.categoryId,
     );
 
     if (!success) {

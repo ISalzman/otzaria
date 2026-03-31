@@ -737,7 +737,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     try {
       // טעינת headings מה-DB
       final headings =
-          await PdfHeadings.loadFromDatabase(widget.tab.book.title);
+          await PdfHeadings.loadFromDatabase(
+        widget.tab.book.title,
+        categoryId: widget.tab.book.categoryId,
+      );
       if (headings != null) {
         widget.tab.pdfHeadings = headings;
       }
@@ -1986,6 +1989,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       builder: (context) => PersonalNoteEditorDialog(
         title: dialogTitle,
         bookId: widget.tab.book.title,
+        categoryId: widget.tab.book.categoryId,
         draftLineNumber: currentPage,
         initialContent: draft?.content ?? '',
         initialContentFormat:

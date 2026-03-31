@@ -13,6 +13,7 @@ class PersonalNoteEditorDialog extends StatefulWidget {
   final String? referenceText;
   final IconData? icon;
   final String? bookId;
+  final int? categoryId;
   final List<PersonalNote> linkableNotes;
   final int? draftLineNumber;
 
@@ -24,6 +25,7 @@ class PersonalNoteEditorDialog extends StatefulWidget {
     this.referenceText,
     this.icon,
     this.bookId,
+    this.categoryId,
     this.linkableNotes = const [],
     this.draftLineNumber,
   });
@@ -147,6 +149,7 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog> {
     if (result.contentPlain.trim().isEmpty) return;
     await _draftService.saveDraft(
       bookId: bookId,
+      categoryId: widget.categoryId,
       lineNumber: lineNumber,
       draft: PersonalNoteDraft(
         content: result.content,
@@ -161,7 +164,11 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog> {
     final bookId = widget.bookId;
     final lineNumber = widget.draftLineNumber;
     if (bookId == null || lineNumber == null) return;
-    await _draftService.clearDraft(bookId: bookId, lineNumber: lineNumber);
+    await _draftService.clearDraft(
+      bookId: bookId,
+      categoryId: widget.categoryId,
+      lineNumber: lineNumber,
+    );
   }
 
   @override
