@@ -77,8 +77,7 @@ class SqliteDataProvider {
       // checkLibraryIsEmpty() returns true and the user reaches the
       // "select library" screen where the copy-to-internal flow is offered.
       if (Platform.isAndroid && e.resultCode == 14) {
-        debugPrint(
-            '[SqliteDataProvider] SQLITE_CANTOPEN on Android — '
+        debugPrint('[SqliteDataProvider] SQLITE_CANTOPEN on Android — '
             'clearing keyDbEffectivePath to trigger library-selection flow.');
         await Settings.setValue(SettingsRepository.keyDbEffectivePath, '');
         // Do NOT rethrow: returning without _isInitialized = true causes the
@@ -113,12 +112,11 @@ class SqliteDataProvider {
     if (!_isInitialized) return false;
 
     try {
-      if (categoryId != null && fileType != null) {
-        final book = await _repository.getBookByTitleCategoryAndFileType(
-            title, categoryId, fileType);
-        return book != null;
-      }
-      final book = await _repository.getBookByTitle(title);
+      final book = await _resolveBook(
+        title,
+        categoryId: categoryId,
+        fileType: fileType,
+      );
       return book != null;
     } catch (e) {
       return false;
@@ -126,14 +124,23 @@ class SqliteDataProvider {
   }
 
   /// Retrieves quick preview of a book (40 lines around position) for instant display
-  Future<String?> getBookQuickPreview(String title, int currentLine) async {
+  Future<String?> getBookQuickPreview(
+    String title,
+    int currentLine, {
+    int? categoryId,
+    String? fileType,
+  }) async {
     if (!_isInitialized) {
       await initialize();
     }
     if (!_isInitialized) return null;
 
     try {
-      final book = await _repository.getBookByTitle(title);
+      final book = await _resolveBook(
+        title,
+        categoryId: categoryId,
+        fileType: fileType,
+      );
       if (book == null) return null;
 
       // Load 10 lines before and 10 after (20 total)
@@ -156,14 +163,11 @@ class SqliteDataProvider {
     if (!_isInitialized) return null;
 
     try {
-      migration.Book? book;
-      if (categoryId != null && fileType != null) {
-        book = await _repository.getBookByTitleCategoryAndFileType(
-            title, categoryId, fileType);
-      } else {
-        book = await _repository.getBookByTitle(title);
-      }
-
+      final book = await _resolveBook(
+        title,
+        categoryId: categoryId,
+        fileType: fileType,
+      );
       if (book == null) return null;
 
       final lines = await _repository.getLines(book.id, 0, book.totalLines - 1);
@@ -182,14 +186,11 @@ class SqliteDataProvider {
     if (!_isInitialized) return null;
 
     try {
-      migration.Book? book;
-      if (categoryId != null && fileType != null) {
-        book = await _repository.getBookByTitleCategoryAndFileType(
-            title, categoryId, fileType);
-      } else {
-        book = await _repository.getBookByTitle(title);
-      }
-
+      final book = await _resolveBook(
+        title,
+        categoryId: categoryId,
+        fileType: fileType,
+      );
       if (book == null) return null;
 
       final migrationTocEntries = await _repository.getBookTocs(book.id);
@@ -229,14 +230,11 @@ class SqliteDataProvider {
     if (!_isInitialized) return null;
 
     try {
-      migration.Book? book;
-      if (categoryId != null && fileType != null) {
-        book = await _repository.getBookByTitleCategoryAndFileType(
-            title, categoryId, fileType);
-      } else {
-        book = await _repository.getBookByTitle(title);
-      }
-
+      final book = await _resolveBook(
+        title,
+        categoryId: categoryId,
+        fileType: fileType,
+      );
       if (book == null) return null;
       final source = await _repository.getSourceById(book.sourceId);
       return source?.name;
@@ -371,5 +369,25 @@ class SqliteDataProvider {
       debugPrint('❌ Error optimizing database: $e');
       rethrow;
     }
+  }
+
+  Future<migration.Book?> _resolveBook(
+    String title, {
+    int? categoryId,
+    String? fileType,
+  }) async {
+    if (categoryId != null && fileType != null) {
+      return await _repository.getBookByTitleCategoryAndFileType(
+        title,
+        categoryId,
+        fileType,
+      );
+    }
+
+    if (categoryId != null) {
+      return await _repository.getBookByTitleAndCategory(title, categoryId);
+    }
+
+    return await _repository.getBookByTitle(title);
   }
 }

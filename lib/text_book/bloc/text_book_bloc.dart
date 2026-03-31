@@ -84,6 +84,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       '__all_target_book_titles__';
 
   final TextBookRepository repository;
+  final Future<String?> Function(
+    String title,
+    int currentLine, {
+    int? categoryId,
+    String? fileType,
+  }) _quickPreviewLoader;
   // [EDITING DISABLED] final OverridesRepository _overridesRepository;
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
@@ -104,11 +110,19 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   TextBookBloc({
     required this.repository,
+    Future<String?> Function(
+      String title,
+      int currentLine, {
+      int? categoryId,
+      String? fileType,
+    })? quickPreviewLoader,
     // [EDITING DISABLED] required OverridesRepository overridesRepository,
     required TextBookInitial initialState,
     required this.scrollController,
     required this.positionsListener,
   })  : // [EDITING DISABLED] _overridesRepository = overridesRepository,
+        _quickPreviewLoader = quickPreviewLoader ??
+            SqliteDataProvider.instance.getBookQuickPreview,
         super(initialState) {
     on<LoadContent>(_onLoadContent);
     on<UpdateFontSize>(_onUpdateFontSize);
@@ -232,7 +246,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return _buildPreviewLines(previewContent, previewStartLine);
   }
 
-
   Future<void> _onLoadContent(
     LoadContent event,
     Emitter<TextBookState> emit,
@@ -300,14 +313,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final tocFuture = repository.getTableOfContents(book);
 
       // טעינת תוכן הספר (עם fallback ל-preview אם ריק)
-      final sqliteProvider = SqliteDataProvider.instance;
       String content = await repository.getBookContent(book);
       List<String>? contentLines;
       if (content.isEmpty) {
         // Load quick preview (40 lines) for instant display
-        final preview = await sqliteProvider.getBookQuickPreview(
+        final preview = await _quickPreviewLoader(
           book.title,
           visibleIndices.first,
+          categoryId: book.categoryId,
+          fileType: book.fileType,
         );
 
         if (preview != null && preview.isNotEmpty) {
@@ -1356,18 +1370,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       ));
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ TextBookBloc::loadFullBook failed for ${book.title}: $e');
+        debugPrint(
+            '⚠️ TextBookBloc::loadFullBook failed for ${book.title}: $e');
       }
       // Silent fail - user already has preview
     }
   }
 
   /// Loads links in the background after the book is displayed
-  void _loadLinksInBackground(
-    TextBook book,
-    List<int> visibleIndices,
-    {bool force = false}
-  ) async {
+  void _loadLinksInBackground(TextBook book, List<int> visibleIndices,
+      {bool force = false}) async {
     final runtimeStateBeforeWindowCheck = state;
     if (!force &&
         runtimeStateBeforeWindowCheck is TextBookLoaded &&
@@ -1393,11 +1405,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     if (!force &&
         _isLinksWindowSufficient(
-      book.title,
-      window.start,
-      window.end,
-      targetBookTitlesSignature,
-    )) {
+          book.title,
+          window.start,
+          window.end,
+          targetBookTitlesSignature,
+        )) {
       _pendingLinksReload = false;
       return;
     }
@@ -1579,7 +1591,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           sqliteProvider.isInitialized) {
         final dbRepo = sqliteProvider.repository;
         if (dbRepo != null) {
-          final dbBook = await dbRepo.getBookByTitle(book.title);
+          final dbBook = book.categoryId != null
+              ? await dbRepo.getBookByTitleAndCategory(
+                  book.title,
+                  book.categoryId!,
+                )
+              : await dbRepo.getBookByTitle(book.title);
           if (dbBook != null) {
             final category = await dbRepo.getCategory(dbBook.categoryId);
             if (category != null) {

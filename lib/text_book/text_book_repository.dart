@@ -41,6 +41,7 @@ class TextBookRepository {
     final dbBook = await BookLocator.getBookFromDatabase(
       title,
       category: book.category,
+      categoryId: book.categoryId,
     );
     if (dbBook != null) {
       // Best-effort enrichment for subsequent calls.
@@ -134,6 +135,7 @@ class TextBookRepository {
     final dbBook = await BookLocator.getBookFromDatabase(
       book.title,
       category: book.category,
+      categoryId: book.categoryId,
     );
 
     if (dbBook != null && _sqliteProvider.repository != null) {
@@ -168,6 +170,7 @@ class TextBookRepository {
     final dbBook = await BookLocator.getBookFromDatabase(
       title,
       category: book.category,
+      categoryId: book.categoryId,
     );
     if (dbBook != null) {
       book.fileType ??= dbBook.fileType;
@@ -215,6 +218,7 @@ class TextBookRepository {
     final dbBook = await BookLocator.getBookFromDatabase(
       book.title,
       category: book.category,
+      categoryId: book.categoryId,
     );
     if (dbBook == null) {
       return [];
