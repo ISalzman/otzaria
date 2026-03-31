@@ -1328,36 +1328,9 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           bookLocation.book != null &&
           bookLocation.categoryId != null) {
         // נמצא ספר ב-DB - נשתמש בנתונים שלו
-        final dbBook = bookLocation.book!;
-
-        // נצטרך למצוא את ה-categoryPath מה-DB
-        final repository = SqliteDataProvider.instance.repository;
-        String? categoryPath;
-        if (repository != null) {
-          try {
-            var category = await repository.getCategory(dbBook.categoryId);
-            if (category != null) {
-              // בניית נתיב הקטגוריה
-              final pathParts = <String>[];
-              while (category != null) {
-                pathParts.insert(0, category.title);
-                if (category.parentId != null) {
-                  category = await repository.getCategory(category.parentId!);
-                } else {
-                  break;
-                }
-              }
-              categoryPath = pathParts.join(', ');
-            }
-          } catch (e) {
-            // שגיאה בקבלת category path עבור מפרש
-          }
-        }
-
         book = TextBook(
           title: widget.commentatorName,
           categoryId: bookLocation.categoryId,
-          categoryPath: categoryPath,
         );
       } else {
         // ננסה למצוא את ה-categoryPath מהקישורים הקיימים
@@ -1540,11 +1513,20 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     if (targetIndex >= 0 &&
         targetIndex < _content!.length &&
         _scrollController.isAttached) {
-      _scrollController.scrollTo(
-        index: targetIndex,
-        duration: const Duration(milliseconds: 300),
-        alignment: 0.0, // בראש החלון
-      );
+      // בסנכרון ראשוני (אחרי טעינה) — קפיצה מיידית ללא אנימציה
+      // כדי למנוע בניית אלפי פריטים בזמן אנימציה (גורמת לתקיעה)
+      if (_lastSyncedIndex == null) {
+        _scrollController.jumpTo(
+          index: targetIndex,
+          alignment: 0.0,
+        );
+      } else {
+        _scrollController.scrollTo(
+          index: targetIndex,
+          duration: const Duration(milliseconds: 300),
+          alignment: 0.0,
+        );
+      }
       _lastSyncedIndex = targetIndex;
     }
   }
