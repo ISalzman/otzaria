@@ -64,7 +64,8 @@ void main() {
       await bloc.close();
     });
 
-    test('בתצוגה רגילה ללא חלונית מפרשים לא מתבצעת כלל טעינת קישורים', () async {
+    test('בתצוגה רגילה ללא חלונית מפרשים לא מתבצעת כלל טעינת קישורים',
+        () async {
       final repository = _FakeTextBookRepository();
       final bloc =
           _createBloc(repository: repository, showPageShapeView: false);
@@ -97,6 +98,71 @@ void main() {
       expect(lines[10], '');
       expect(lines[11], 'שורה 11');
       expect(lines[13], 'שורה 13');
+    });
+
+    test('LoadContent משתמש ב-categoryId וב-fileType במסלול quick preview',
+        () async {
+      final repository = _EmptyContentTextBookRepository();
+      final quickPreviewCalls = <({
+        String title,
+        int currentLine,
+        int? categoryId,
+        String? fileType,
+      })>[];
+
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: false,
+        book: TextBook(
+          title: 'ספר כפול',
+          categoryId: 42,
+          fileType: 'txt',
+        ),
+        quickPreviewLoader: (
+          String title,
+          int currentLine, {
+          int? categoryId,
+          String? fileType,
+        }) async {
+          quickPreviewCalls.add((
+            title: title,
+            currentLine: currentLine,
+            categoryId: categoryId,
+            fileType: fileType,
+          ));
+
+          if (categoryId == 42 && fileType == 'txt') {
+            return 'תוכן תצוגה מקדימה נכון';
+          }
+
+          return 'תוכן שגוי';
+        },
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      expect(quickPreviewCalls, hasLength(1));
+      expect(quickPreviewCalls.single.title, 'ספר כפול');
+      expect(quickPreviewCalls.single.currentLine, 10);
+      expect(quickPreviewCalls.single.categoryId, 42);
+      expect(quickPreviewCalls.single.fileType, 'txt');
+
+      final state = bloc.state;
+      expect(state, isA<TextBookLoaded>());
+      expect(
+          (state as TextBookLoaded).content.contains('תוכן תצוגה מקדימה נכון'),
+          isTrue);
+
+      await bloc.close();
     });
 
     test(
@@ -294,14 +360,22 @@ void main() {
 }
 
 TextBookBloc _createBloc({
-  required _FakeTextBookRepository repository,
+  required TextBookRepository repository,
   required bool showPageShapeView,
   List<String> commentators = const [],
+  TextBook? book,
+  Future<String?> Function(
+    String title,
+    int currentLine, {
+    int? categoryId,
+    String? fileType,
+  })? quickPreviewLoader,
 }) {
   return TextBookBloc(
     repository: repository,
+    quickPreviewLoader: quickPreviewLoader,
     initialState: TextBookInitial.named(
-      TextBook(title: 'בראשית'),
+      book ?? TextBook(title: 'בראשית'),
       10,
       false,
       commentators,
@@ -348,6 +422,13 @@ class _FakeTextBookRepository extends TextBookRepository {
   @override
   Future<List<String>> getAvailableCommentators(TextBook book) async {
     return const [];
+  }
+}
+
+class _EmptyContentTextBookRepository extends _FakeTextBookRepository {
+  @override
+  Future<String> getBookContent(TextBook book) async {
+    return '';
   }
 }
 

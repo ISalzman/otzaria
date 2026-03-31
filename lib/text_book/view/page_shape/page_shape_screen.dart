@@ -1415,6 +1415,8 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
             await SqliteDataProvider.instance.getBookQuickPreview(
           widget.commentatorName,
           previewTargetIndex,
+          categoryId: book.categoryId,
+          fileType: book.fileType,
         );
 
         if (!mounted || widget.commentatorName != requestedCommentatorName) {
