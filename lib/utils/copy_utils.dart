@@ -120,15 +120,9 @@ class CopyUtils {
   }) {
     final normalizedText = htmlText.trimRight().replaceAll('\r\n', '\n');
     final lines = normalizedText.split('\n');
-    final htmlLines = lines
-        .map((line) => line.isEmpty ? '<div><br></div>' : '<div>$line</div>')
-        .join();
+    final htmlLines = lines.join('<br>');
 
-    return '''
-<div style="font-family: $fontFamily; font-size: ${fontSize}px; text-align: justify; direction: rtl;">
-$htmlLines
-</div>
-''';
+    return '<html><body><p dir="rtl" style="font-family: $fontFamily; font-size: ${fontSize}px; text-align: justify; direction: rtl; margin: 0; padding: 0;">$htmlLines</p></body></html>';
   }
 
   /// העתקת טקסט מעוצב ללוח עם HTML
