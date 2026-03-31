@@ -766,23 +766,49 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                       onSelectionChanged: (selection) {
                         _handleSelectionChange(selection?.plainText);
                       },
-                      child: widget.useInternalScroll
-                          ? ScrollablePositionedList.builder(
-                              itemScrollController: _scrollController,
-                              itemPositionsListener: _positionsListener,
-                              itemCount: widget.content.length,
-                              padding: const EdgeInsets.all(4),
-                              itemBuilder: (context, index) =>
-                                  _buildLine(index, state, context, noteMap),
-                            )
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: widget.content.length,
-                              padding: const EdgeInsets.all(4),
-                              itemBuilder: (context, index) =>
-                                  _buildLine(index, state, context, noteMap),
-                            ),
+                      child: Actions(
+                        actions: {
+                          _CopyTextIntent:
+                              CallbackAction<_CopyTextIntent>(
+                            onInvoke: (_) {
+                              _copyFormattedText();
+                              return null;
+                            },
+                          ),
+                          CopySelectionTextIntent:
+                              CallbackAction<CopySelectionTextIntent>(
+                            onInvoke: (_) {
+                              _copyFormattedText();
+                              return null;
+                            },
+                          ),
+                        },
+                        child: Shortcuts(
+                          shortcuts: {
+                            LogicalKeySet(LogicalKeyboardKey.control,
+                                LogicalKeyboardKey.keyC): const _CopyTextIntent(),
+                            LogicalKeySet(LogicalKeyboardKey.meta,
+                                LogicalKeyboardKey.keyC): const _CopyTextIntent(),
+                          },
+                          child: widget.useInternalScroll
+                              ? ScrollablePositionedList.builder(
+                                  itemScrollController: _scrollController,
+                                  itemPositionsListener: _positionsListener,
+                                  itemCount: widget.content.length,
+                                  padding: const EdgeInsets.all(4),
+                                  itemBuilder: (context, index) =>
+                                      _buildLine(index, state, context, noteMap),
+                                )
+                              : ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: widget.content.length,
+                                  padding: const EdgeInsets.all(4),
+                                  itemBuilder: (context, index) =>
+                                      _buildLine(index, state, context, noteMap),
+                                ),
+                        ),
+                      ),
                     );
                   },
                 );
@@ -1155,4 +1181,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     // קריאה ל-callback לרענון המסך
     widget.onCommentatorChanged?.call();
   }
+}
+
+class _CopyTextIntent extends Intent {
+  const _CopyTextIntent();
 }
