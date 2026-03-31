@@ -338,57 +338,19 @@ class _OverflowAwareText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final textWidget = Text(
-          text,
-          maxLines: maxLines,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.right,
-          textDirection: TextDirection.rtl,
-          style: style,
-        );
-
-        if (!constraints.hasBoundedWidth) {
-          return textWidget;
-        }
-
-        final overflows = _textOverflows(
-          text: text,
-          style: style,
-          maxWidth: constraints.maxWidth,
-          maxLines: maxLines,
-        );
-
-        if (!overflows) {
-          return textWidget;
-        }
-
-        return Tooltip(
-          message: tooltipText,
-          waitDuration: Durations.short2,
-          child: textWidget,
-        );
-      },
+    return Tooltip(
+      message: tooltipText,
+      waitDuration: Durations.short2,
+      child: Text(
+        text,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.right,
+        textDirection: TextDirection.rtl,
+        style: style,
+      ),
     );
   }
-}
-
-bool _textOverflows({
-  required String text,
-  required TextStyle style,
-  required double maxWidth,
-  required int maxLines,
-}) {
-  final textPainter = TextPainter(
-    text: TextSpan(text: text, style: style),
-    maxLines: maxLines,
-    ellipsis: '...',
-    textAlign: TextAlign.right,
-    textDirection: TextDirection.rtl,
-  )..layout(maxWidth: maxWidth);
-
-  return textPainter.didExceedMaxLines;
 }
 
 String? _getBookTooltipPath(Book book) {

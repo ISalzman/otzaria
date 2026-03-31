@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
+import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -62,6 +63,13 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
 
     // Request focus on search field when the widget is first created
     _requestSearchFieldFocus();
+
+    // הפעל חיפוש ממתין - רק כשהטאב מוצג לראשונה (לא בפתיחת האפליקציה)
+    final pendingQuery = widget.tab.queryController.text.trim();
+    if (pendingQuery.isNotEmpty &&
+        widget.tab.searchBloc.state.searchQuery.isEmpty) {
+      widget.tab.searchBloc.add(UpdateSearchQuery(pendingQuery));
+    }
   }
 
   @override

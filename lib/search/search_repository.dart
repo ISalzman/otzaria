@@ -1,6 +1,5 @@
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/search/search_query_builder.dart';
-import 'package:otzaria/search/utils/regex_patterns.dart';
 import 'package:search_engine/search_engine.dart';
 import 'package:flutter/foundation.dart';
 
@@ -27,25 +26,6 @@ class SearchRepository {
       Map<String, String>? customSpacing,
       Map<int, List<String>>? alternativeWords,
       Map<String, Map<String, bool>>? searchOptions}) async {
-    debugPrint('🚀 searchTexts called with query: "$query"');
-
-    // בדיקת וריאציות כתיב מלא/חסר
-    debugPrint('🔍 Testing spelling variations for "ראשית":');
-    final testVariations =
-        SearchRegexPatterns.generateFullPartialSpellingVariations('ראשית');
-    debugPrint('   variations: $testVariations');
-
-    // בדיקת createPrefixPattern עבור כל וריאציה
-    for (final variation in testVariations) {
-      final prefixPattern = SearchRegexPatterns.createPrefixPattern(variation);
-      debugPrint('   $variation -> $prefixPattern');
-    }
-
-    // בדיקת createSpellingWithPrefixPattern
-    final finalPattern =
-        SearchRegexPatterns.createSpellingWithPrefixPattern('ראשית');
-    debugPrint(
-        '🔍 Final createSpellingWithPrefixPattern result: $finalPattern');
     final index = await TantivyDataProvider.instance.engine;
 
     // בדיקה אם יש מרווחים מותאמים אישית, מילים חילופיות או אפשרויות חיפוש

@@ -729,6 +729,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           links: currentState.links,
           visibleIndices: event.visibleIndecies,
           selectedIndex: index,
+          linksByLine: currentState.linksByLine,
         );
 
         emit(currentState.copyWith(
@@ -931,6 +932,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         links: currentState.links,
         visibleIndices: currentState.visibleIndices,
         selectedIndex: event.index,
+        linksByLine: currentState.linksByLine,
       );
       emit(currentState.copyWith(
         selectedIndex: event.index,
@@ -1043,6 +1045,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     required List<Link> links,
     required List<int> visibleIndices,
     int? selectedIndex,
+    required Map<int, List<Link>> linksByLine,
   }) {
     final targetIndices =
         selectedIndex != null ? [selectedIndex] : visibleIndices;
@@ -1050,17 +1053,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final visibleLinks = <Link>[];
 
     for (final index in targetIndices) {
-      final indexLinks = links
-          .where(
-            (link) =>
-                link.index1 == index + 1 &&
-                !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
-                // מסנן קישורים מבוססי תווים (inline links) - הם אמורים להופיע רק בתוך הטקסט
-                link.start == null &&
-                link.end == null,
-          )
-          .toList();
-      visibleLinks.addAll(indexLinks);
+      final candidates = linksByLine[index + 1] ?? const [];
+
+      for (final link in candidates) {
+        if (!LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+            link.start == null &&
+            link.end == null) {
+          visibleLinks.add(link);
+        }
+      }
     }
 
     visibleLinks.sort(
@@ -1507,6 +1508,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         links: links,
         visibleIndices: currentState.visibleIndices,
         selectedIndex: currentState.selectedIndex,
+        linksByLine: linksByLine,
       );
 
       emit(currentState.copyWith(
