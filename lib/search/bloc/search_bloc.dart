@@ -95,12 +95,26 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       if (requestId != _searchRequestId) {
         return;
       }
+      // בנה ספירות חלקיות מיידיות מהתוצאות שכבר יש - הרשימה הצדדית תופיע מיד
+      Map<String, int> partialFacetCounts = const {};
+      if (!shouldPreserveFacetCounts && results.isNotEmpty) {
+        final library = await DataRepository.instance.library;
+        final bookByTitle = <String, Book>{};
+        for (final book in library.getAllBooks()) {
+          bookByTitle.putIfAbsent(book.title, () => book);
+        }
+        partialFacetCounts = FacetHelper.buildFacetCountsFromResults(results, bookByTitle);
+      }
+
       emit(state.copyWith(
         results: results,
         totalResults: results.length,
         isLoading: false,
-        facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
+        facetCounts: shouldPreserveFacetCounts ? state.facetCounts : partialFacetCounts,
       ));
+
+      // הפעל את שניהם במקביל - אל תחכה ל-countTexts לפני שמתחילים facet refresh
+      unawaited(_refreshFacetCountsForAllBooks(event, requestId));
 
       final totalResults = await TantivyDataProvider.instance.countTexts(
         SearchQueryBuilder.sanitizeQuery(query),
@@ -119,8 +133,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       emit(state.copyWith(
         totalResults: totalResults,
       ));
-
-      unawaited(_refreshFacetCountsForAllBooks(event, requestId));
 
       // Prefetch disabled - too slow and causes duplicates
       // _prefetchCommonFacetCounts(event.query, event.customSpacing,
