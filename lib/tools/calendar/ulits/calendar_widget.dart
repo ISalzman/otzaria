@@ -1268,7 +1268,7 @@ class CalendarWidgetState extends State<CalendarWidget> {
       timesList.add({
         'id': 'omerCounting',
         'name': 'ספירת העומר',
-        'time': dailyTimes['omerCounting']
+        'time': _hebrewOmerDayText(jewishCalendar.getDayOfOmer())
       });
     }
 
@@ -1420,14 +1420,17 @@ class CalendarWidgetState extends State<CalendarWidget> {
                           ),
                         ),
                         itemBuilder: (context) {
+                          final alertLabel = timeId == 'omerCounting'
+                              ? (hasAlert
+                                  ? 'מופעלת התראה בזמן צאת הכוכבים'
+                                  : 'הפעל התראה בזמן צאת הכוכבים')
+                              : (hasAlert
+                                  ? 'מופעלת התראה לזמן זה'
+                                  : 'הפעל התראה לזמן זה');
                           return [
                             PopupMenuItem<_ZmanMenuAction>(
                               value: _ZmanMenuAction.toggle,
-                              child: Text(
-                                hasAlert
-                                    ? 'מופעלת התראה לזמן זה'
-                                    : 'הפעל התראה לזמן זה',
-                              ),
+                              child: Text(alertLabel),
                             ),
                           ];
                         },
@@ -2707,6 +2710,27 @@ class CalendarWidgetState extends State<CalendarWidget> {
       },
     );
   }
+
+  String _hebrewOmerDayText(int day) {
+    const ones = [
+      '', 'יום אחד', 'שני ימים', 'שלשה ימים', 'ארבעה ימים', 'חמשה ימים',
+      'ששה ימים', 'שבעה ימים', 'שמונה ימים', 'תשעה ימים', 'עשרה ימים',
+      'אחד עשר יום', 'שנים עשר יום', 'שלשה עשר יום', 'ארבעה עשר יום',
+      'חמשה עשר יום', 'ששה עשר יום', 'שבעה עשר יום', 'שמונה עשר יום',
+      'תשעה עשר יום',
+    ];
+    const tens = ['', '', 'עשרים', 'שלשים', 'ארבעים'];
+    const onesSimple = [
+      '', 'אחד', 'שנים', 'שלשה', 'ארבעה', 'חמשה',
+      'ששה', 'שבעה', 'שמונה', 'תשעה',
+    ];
+    if (day <= 0 || day > 49) return 'יום $day';
+    if (day < 20) return ones[day];
+    final t = tens[day ~/ 10];
+    final o = day % 10;
+    if (o == 0) return '$t יום';
+    return '$t ו${onesSimple[o]} יום';
+  }
 }
 
 // ווידג'ט עם טאבים לזמני היום ואירועים
@@ -3329,4 +3353,5 @@ class _HoverableDayCellState extends State<_HoverableDayCell> {
       ),
     );
   }
+
 }
