@@ -2729,7 +2729,7 @@ class CalendarWidgetState extends State<CalendarWidget> {
     final t = tens[day ~/ 10];
     final o = day % 10;
     if (o == 0) return '$t יום';
-    return '$t ו${onesSimple[o]} יום';
+    return '${onesSimple[o]} ו$t יום';
   }
 }
 
