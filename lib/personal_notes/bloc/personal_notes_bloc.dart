@@ -37,6 +37,7 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
       state.copyWith(
         isLoading: true,
         bookId: event.bookId,
+        categoryId: event.categoryId,
         errorMessage: null,
         // איפוס החיפוש כשטוענים ספר חדש
         searchQuery: '',
@@ -45,7 +46,10 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
     );
 
     try {
-      final notes = await _repository.loadNotes(event.bookId);
+      final notes = await _repository.loadNotes(
+        event.bookId,
+        categoryId: event.categoryId,
+      );
       _emitNotes(event.bookId, notes, emit);
     } catch (e) {
       emit(
@@ -72,6 +76,7 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
         contentPlain: event.contentPlain,
         contentFormat: event.contentFormat,
         selectedText: event.selectedText,
+        categoryId: state.categoryId,
       );
       _emitNotes(event.bookId, notes, emit, clearCreatingState: true);
     } catch (e) {
@@ -93,6 +98,7 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
         content: event.content,
         contentPlain: event.contentPlain,
         contentFormat: event.contentFormat,
+        categoryId: state.categoryId,
       );
       _emitNotes(event.bookId, notes, emit);
     } catch (e) {
@@ -111,6 +117,7 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
       final notes = await _repository.deleteNote(
         bookId: event.bookId,
         noteId: event.noteId,
+        categoryId: state.categoryId,
       );
       _emitNotes(event.bookId, notes, emit);
     } catch (e) {
@@ -130,6 +137,7 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
         bookId: event.bookId,
         noteId: event.noteId,
         lineNumber: event.lineNumber,
+        categoryId: state.categoryId,
       );
       _emitNotes(event.bookId, notes, emit);
     } catch (e) {

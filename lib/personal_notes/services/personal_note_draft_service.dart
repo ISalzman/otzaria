@@ -54,26 +54,34 @@ class PersonalNoteDraftService {
 
   String _key(
     String bookId, {
+    int? categoryId,
     int? lineNumber,
     String? noteId,
   }) {
     assert((lineNumber == null) != (noteId == null));
+    final bookSegment =
+        categoryId != null ? '$bookId@$categoryId' : bookId;
     if (noteId != null) {
-      return '$_prefix$bookId:note:$noteId';
+      return '$_prefix$bookSegment:note:$noteId';
     }
-    return '$_prefix$bookId:$lineNumber';
+    return '$_prefix$bookSegment:$lineNumber';
   }
 
-  String _bookPrefix(String bookId) => '$_prefix$bookId:';
+  String _bookPrefix(String bookId, {int? categoryId}) {
+    final bookSegment =
+        categoryId != null ? '$bookId@$categoryId' : bookId;
+    return '$_prefix$bookSegment:';
+  }
 
   Future<PersonalNoteDraft?> loadDraft({
     required String bookId,
+    int? categoryId,
     int? lineNumber,
     String? noteId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(
-      _key(bookId, lineNumber: lineNumber, noteId: noteId),
+      _key(bookId, categoryId: categoryId, lineNumber: lineNumber, noteId: noteId),
     );
     if (raw == null) return null;
     try {
@@ -86,12 +94,13 @@ class PersonalNoteDraftService {
 
   Future<void> saveDraft({
     required String bookId,
+    int? categoryId,
     int? lineNumber,
     String? noteId,
     required PersonalNoteDraft draft,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final key = _key(bookId, lineNumber: lineNumber, noteId: noteId);
+    final key = _key(bookId, categoryId: categoryId, lineNumber: lineNumber, noteId: noteId);
     final normalizedDraft = PersonalNoteDraft(
       content: draft.content,
       contentPlain: draft.contentPlain,
@@ -106,19 +115,21 @@ class PersonalNoteDraftService {
 
   Future<void> clearDraft({
     required String bookId,
+    int? categoryId,
     int? lineNumber,
     String? noteId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final key = _key(bookId, lineNumber: lineNumber, noteId: noteId);
+    final key = _key(bookId, categoryId: categoryId, lineNumber: lineNumber, noteId: noteId);
     await prefs.remove(key);
   }
 
   Future<PersonalNoteDraft?> loadLatestNewNoteDraft({
     required String bookId,
+    int? categoryId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final prefix = _bookPrefix(bookId);
+    final prefix = _bookPrefix(bookId, categoryId: categoryId);
     final matchingKeys =
         prefs.getKeys().where((key) => key.startsWith(prefix)).toList()..sort();
 

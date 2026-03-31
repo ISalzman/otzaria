@@ -12,6 +12,7 @@ class InlineNoteEditor extends StatefulWidget {
   final PersonalNote? note;
   final String? referenceText;
   final String bookId;
+  final int? categoryId;
   final String initialContent;
   final PersonalNoteContentFormat initialFormat;
   final int? draftLineNumber;
@@ -25,6 +26,7 @@ class InlineNoteEditor extends StatefulWidget {
     this.note,
     this.referenceText,
     required this.bookId,
+    this.categoryId,
     this.initialContent = '',
     this.initialFormat = PersonalNoteContentFormat.plain,
     this.draftLineNumber,
@@ -112,6 +114,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
 
     await _draftService.saveDraft(
       bookId: widget.bookId,
+      categoryId: widget.categoryId,
       lineNumber: widget.draftLineNumber,
       noteId: widget.draftNoteId,
       draft: PersonalNoteDraft(
@@ -129,6 +132,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
   Future<void> _clearDraft() {
     return _draftService.clearDraft(
       bookId: widget.bookId,
+      categoryId: widget.categoryId,
       lineNumber: widget.draftLineNumber,
       noteId: widget.draftNoteId,
     );

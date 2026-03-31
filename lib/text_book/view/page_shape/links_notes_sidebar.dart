@@ -7,6 +7,7 @@ import 'package:otzaria/text_book/view/selected_line_links_view.dart';
 /// חלונית פנימית עבור צורת הדף שמציגה קישורים והערות אישיות.
 class LinksNotesSidebar extends StatefulWidget {
   final String bookId;
+  final int? categoryId;
   final Function(OpenedTab) openBookCallback;
   final double fontSize;
   final ValueChanged<int> onNavigateToLine;
@@ -17,6 +18,7 @@ class LinksNotesSidebar extends StatefulWidget {
   const LinksNotesSidebar({
     super.key,
     required this.bookId,
+    this.categoryId,
     required this.openBookCallback,
     required this.fontSize,
     required this.onNavigateToLine,
@@ -142,6 +144,7 @@ class _LinksNotesSidebarState extends State<LinksNotesSidebar>
                 ),
                 PersonalNotesSidebar(
                   bookId: widget.bookId,
+                  categoryId: widget.categoryId,
                   onNavigateToLine: widget.onNavigateToLine,
                 ),
               ],

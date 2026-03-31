@@ -198,6 +198,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                   // כרטיסיית ההערות האישיות
                   PersonalNotesSidebar(
                     bookId: state.book.title,
+                    categoryId: state.book.categoryId,
                     onNavigateToLine: (line) =>
                         _handleNoteNavigation(context, state, line),
                   ),

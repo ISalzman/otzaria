@@ -447,7 +447,10 @@ class ShamorZachorDataProvider with ChangeNotifier {
   /// Add a book to Shamor Zachor tracking
   /// This saves the book ID to a tracked books list in SharedPreferences
   /// WITHOUT modifying the books database
-  Future<void> addCustomBook({required String bookName}) async {
+  Future<void> addCustomBook({
+    required String bookName,
+    int? categoryId,
+  }) async {
     final repository = _sqliteDataProvider?.repository;
     if (repository == null) {
       _logger.warning("Repository not initialized");
@@ -456,7 +459,9 @@ class ShamorZachorDataProvider with ChangeNotifier {
 
     try {
       // 1. Check if book exists in DB
-      final existing = await repository.getBookByTitle(bookName);
+      final existing = categoryId != null
+          ? await repository.getBookByTitleAndCategory(bookName, categoryId)
+          : await repository.getBookByTitle(bookName);
       if (existing == null) {
         _logger.warning("Book '$bookName' not found in database");
         throw Exception(
@@ -479,8 +484,11 @@ class ShamorZachorDataProvider with ChangeNotifier {
   /// Remove a book from Shamor Zachor tracking
   /// This removes the book ID from the tracked books list in SharedPreferences
   /// WITHOUT modifying the books database
-  Future<void> removeCustomBook(
-      {required String categoryName, required String bookName}) async {
+  Future<void> removeCustomBook({
+    required String categoryName,
+    required String bookName,
+    int? categoryId,
+  }) async {
     final repository = _sqliteDataProvider?.repository;
     if (repository == null) {
       _logger.warning("Repository not initialized");
@@ -488,7 +496,9 @@ class ShamorZachorDataProvider with ChangeNotifier {
     }
 
     try {
-      final existing = await repository.getBookByTitle(bookName);
+      final existing = categoryId != null
+          ? await repository.getBookByTitleAndCategory(bookName, categoryId)
+          : await repository.getBookByTitle(bookName);
       if (existing == null) {
         _logger.warning("Book '$bookName' not found in database");
         return;

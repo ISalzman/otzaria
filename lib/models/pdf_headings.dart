@@ -17,7 +17,10 @@ class PdfHeadings {
   /// טוען headings עבור ספר PDF מתוך ה-DB (טבלת tocEntry).
   ///
   /// הנתונים נשענים על השדות: bookId, textId, lineIndex.
-  static Future<PdfHeadings?> loadFromDatabase(String bookTitle) async {
+  static Future<PdfHeadings?> loadFromDatabase(
+    String bookTitle, {
+    int? categoryId,
+  }) async {
     try {
       final provider = SqliteDataProvider.instance;
       if (!provider.isInitialized) {
@@ -30,7 +33,9 @@ class PdfHeadings {
         return null;
       }
 
-      final book = await repository.getBookByTitle(bookTitle);
+      final book = categoryId != null
+          ? await repository.getBookByTitleAndCategory(bookTitle, categoryId)
+          : await repository.getBookByTitle(bookTitle);
       if (book == null) {
         debugPrint('Book not found in DB for headings: $bookTitle');
         return null;

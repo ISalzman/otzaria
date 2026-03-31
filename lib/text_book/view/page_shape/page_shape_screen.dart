@@ -927,6 +927,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                   MediaQuery.of(context).size.width * 0.22,
                               child: LinksNotesSidebar(
                                 bookId: state.book.title,
+                                categoryId: state.book.categoryId,
                                 openBookCallback: widget.openBookCallback,
                                 fontSize: state.fontSize,
                                 onNavigateToLine: (lineNumber) =>

@@ -15,6 +15,7 @@ class NoteTile extends StatefulWidget {
   final ValueChanged<String> onLinkTap;
   final bool defaultExpanded;
   final String bookId;
+  final int? categoryId;
   final List<PersonalNote> linkableNotes;
   final Widget? extraAction;
   final Color? backgroundColor;
@@ -29,6 +30,7 @@ class NoteTile extends StatefulWidget {
     required this.onLinkTap,
     required this.defaultExpanded,
     required this.bookId,
+    this.categoryId,
     required this.linkableNotes,
     this.extraAction,
     this.backgroundColor,
@@ -68,6 +70,7 @@ class _NoteTileState extends State<NoteTile> {
   Future<void> _restoreDraftIfExists() async {
     final draft = await _draftService.loadDraft(
       bookId: widget.bookId,
+      categoryId: widget.categoryId,
       noteId: widget.note.id,
     );
     if (!mounted || draft == null) {
@@ -166,6 +169,7 @@ class _NoteTileState extends State<NoteTile> {
                               note: widget.note,
                               referenceText: widget.note.displayTitle,
                               bookId: widget.bookId,
+                              categoryId: widget.categoryId,
                               initialContent:
                                   _draftContent ?? widget.note.content,
                               initialFormat:

@@ -1960,7 +1960,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       String? bookPath = book.filePath;
 
       if (bookPath == null) {
-        final location = await BookLocator.locateBook(bookTitle);
+        final location = await BookLocator.locateBook(
+          bookTitle,
+          categoryId: book.categoryId,
+        );
         bookPath = location?.filePath;
       }
 
@@ -1976,7 +1979,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             try {
               final repository = dbProvider.repository;
               if (repository != null) {
-                final dbBook = await repository.getBookByTitle(bookTitle);
+                final dbBook = book.categoryId != null
+                    ? await repository.getBookByTitleAndCategory(
+                        bookTitle, book.categoryId!)
+                    : await repository.getBookByTitle(bookTitle);
                 if (dbBook != null) {
                   final category =
                       await repository.getCategory(dbBook.categoryId);
@@ -2028,6 +2034,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // 4. Add book via provider (only needs book name)
       await dataProvider.addCustomBook(
         bookName: cleanBookName,
+        categoryId: book.categoryId,
       );
 
       // 5. Success message
