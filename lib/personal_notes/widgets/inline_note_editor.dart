@@ -59,7 +59,15 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
           ? widget.initialFormat
           : (widget.note?.contentFormat ?? PersonalNoteContentFormat.plain),
     );
-    _initialResult = _controller.buildResult();
+    // _initialResult מייצג את המצב ה"נקי" לפני עריכה — לא תוכן הטיוטה.
+    // כך _persistDraft לא ימחק את הטיוטה כשה-Quill מפעיל notifyListeners בהתחלה.
+    final originalController = buildPersonalNoteEditorController(
+      initialContent: widget.note?.content ?? '',
+      initialFormat:
+          widget.note?.contentFormat ?? PersonalNoteContentFormat.plain,
+    );
+    _initialResult = originalController.buildResult();
+    originalController.quillController.dispose();
     _controller.quillController.addListener(_scheduleDraftSave);
   }
 

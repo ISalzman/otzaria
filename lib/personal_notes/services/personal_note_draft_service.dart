@@ -80,14 +80,13 @@ class PersonalNoteDraftService {
     String? noteId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(
-      _key(bookId, categoryId: categoryId, lineNumber: lineNumber, noteId: noteId),
-    );
+    final key = _key(bookId, categoryId: categoryId, lineNumber: lineNumber, noteId: noteId);
+    final raw = prefs.getString(key);
     if (raw == null) return null;
     try {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       return PersonalNoteDraft.fromJson(decoded);
-    } catch (_) {
+    } catch (e) {
       return null;
     }
   }
@@ -135,9 +134,7 @@ class PersonalNoteDraftService {
 
     PersonalNoteDraft? latestDraft;
     for (final key in matchingKeys) {
-      if (key.contains(':note:')) {
-        continue;
-      }
+      if (key.contains(':note:')) continue;
 
       final raw = prefs.getString(key);
       if (raw == null) continue;
@@ -145,9 +142,7 @@ class PersonalNoteDraftService {
       try {
         final decoded = jsonDecode(raw) as Map<String, dynamic>;
         final draft = PersonalNoteDraft.fromJson(decoded);
-        if (draft.lineNumber == null) {
-          continue;
-        }
+        if (draft.lineNumber == null) continue;
         if (latestDraft == null ||
             draft.updatedAt.isAfter(latestDraft.updatedAt)) {
           latestDraft = draft;
