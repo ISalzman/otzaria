@@ -725,12 +725,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           }
         }
 
-        final visibleLinks = _getVisibleLinks(
-          links: currentState.links,
-          visibleIndices: event.visibleIndecies,
-          selectedIndex: index,
-          linksByLine: currentState.linksByLine,
-        );
+        // אופטימיזציה: חישוב ומיון קישורים נראים רק אם החלונית פתוחה או שיש שורה נבחרת לתפריט ההקשר
+        final List<Link> visibleLinks;
+        if (currentState.showLeftPane || index != null) {
+          visibleLinks = _getVisibleLinks(
+            links: currentState.links,
+            visibleIndices: event.visibleIndecies,
+            selectedIndex: index,
+            linksByLine: currentState.linksByLine,
+          );
+        } else {
+          visibleLinks = currentState.visibleLinks;
+        }
 
         emit(currentState.copyWith(
           visibleIndices: event.visibleIndecies,
@@ -1064,12 +1070,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       }
     }
 
-    visibleLinks.sort(
-      (a, b) => a.path2
-          .split(Platform.pathSeparator)
-          .last
-          .compareTo(b.path2.split(Platform.pathSeparator).last),
-    );
+    // אופטימיזציה: שימוש ב-Cache לנתיבים כדי למנוע split חוזר לאותו ספר בתוך לולאת המיון
+    final titles = <Link, String>{};
+    final pathCache = <String, String>{};
+    for (final link in visibleLinks) {
+      titles[link] = pathCache.putIfAbsent(
+          link.path2, () => utils.getTitleFromPath(link.path2));
+    }
+    visibleLinks.sort((a, b) => titles[a]!.compareTo(titles[b]!));
 
     return visibleLinks;
   }
