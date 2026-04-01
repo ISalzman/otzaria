@@ -11,6 +11,7 @@ import '../../settings/services/custom_folders/custom_folder.dart';
 import '../../settings/engine/settings_repository.dart';
 import '../generator/generator.dart';
 import '../shared/link_processor.dart';
+import '../../utils/file_hidden_utils.dart';
 
 /// Result of a file sync operation
 class FileSyncResult {
@@ -480,6 +481,7 @@ class FileSyncService {
 
     await for (final entity in dir.list(recursive: true)) {
       if (entity is File) {
+        if (isHiddenOrSystem(entity.path)) continue;
         final ext = path.extension(entity.path).toLowerCase();
         if (supportedExtensions.contains(ext)) {
           final title = path.basenameWithoutExtension(entity.path);

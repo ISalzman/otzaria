@@ -14,6 +14,7 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/migration/core/models/category.dart' as db_models;
 import 'package:otzaria/migration/core/models/book.dart' as db_models;
 import 'package:otzaria/migration/core/models/toc_entry.dart' as db_models;
+import 'package:otzaria/utils/file_hidden_utils.dart';
 import 'package:otzaria/migration/core/models/alt_toc_structure.dart';
 import 'package:otzaria/migration/core/models/alt_toc_entry.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
@@ -1624,9 +1625,11 @@ class DatabaseLibraryProvider implements LibraryProvider {
       try {
         await entity.stat();
 
+        final entityName = entity.path.split(Platform.pathSeparator).last;
+        if (isHiddenOrSystem(entity.path)) continue;
+
         if (entity is Directory) {
-          final subDirName = entity.path.split(Platform.pathSeparator).last;
-          final newPath = [...categoryPath, subDirName];
+          final newPath = [...categoryPath, entityName];
           await _scanFolderForExternalBooks(
             entity,
             repository,
@@ -1634,8 +1637,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
             newPath,
           );
         } else if (entity is File) {
-          final fileName =
-              entity.path.split(Platform.pathSeparator).last.toLowerCase();
+          final fileName = entityName.toLowerCase();
           // Only process supported file types
           if (!fileName.endsWith('.pdf') &&
               !fileName.endsWith('.txt') &&
