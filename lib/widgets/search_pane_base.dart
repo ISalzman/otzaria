@@ -128,9 +128,12 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
           ),
         const SizedBox(height: 4),
         Expanded(
-          child: widget.isNoResults
-              ? const Center(child: Text('אין תוצאות'))
-              : widget.resultsWidget,
+          child: Material(
+            color: Colors.transparent,
+            child: widget.isNoResults
+                ? const Center(child: Text('אין תוצאות'))
+                : widget.resultsWidget,
+          ),
         ),
       ],
     );
