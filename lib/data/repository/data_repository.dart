@@ -7,6 +7,7 @@ import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/isar_collections/ref.dart';
 import 'package:otzaria/library/models/library.dart';
+import 'package:otzaria/utils/text_manipulation.dart';
 
 /// DataRepository acts as a centralized data access layer that coordinates between different
 /// data providers (file system, Isar database, and Tantivy search engine).
@@ -137,7 +138,8 @@ class DataRepository {
     bool includeHebrewBooks = false,
     bool sortByRatio = true,
   }) async {
-    final queryWords = query.toLowerCase().split(RegExp(r'\s+'));
+    final normalizedQuery = _normalizeForSearch(query);
+    final queryWords = normalizedQuery.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
     var allBooks = category?.getAllBooks() ?? (await library).getAllBooks();
 
     if (includeOtzar) {
@@ -150,8 +152,8 @@ class DataRepository {
     // Filter books based on query and topics
     // Search in both title and author
     final filteredBooks = allBooks.where((book) {
-      final title = book.title.toLowerCase();
-      final author = (book.author ?? '').toLowerCase();
+      final title = _normalizeForSearch(book.title);
+      final author = _normalizeForSearch(book.author ?? '');
       final bookTopics = book.topics.split(', ');
 
       bool matchesQuery = queryWords
@@ -195,5 +197,13 @@ class DataRepository {
           .toList();
     }
     return filteredBooks;
+  }
+
+  String _normalizeForSearch(String input) {
+    var cleaned = removeTeamim(removeVolwels(input));
+    cleaned = cleaned.replaceAll('"', '').replaceAll("'", '');
+    cleaned = cleaned.replaceAll('\u05F4', '').replaceAll('\u05F3', '');
+    cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9\u0590-\u05FF\s]'), ' ');
+    return cleaned.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }
