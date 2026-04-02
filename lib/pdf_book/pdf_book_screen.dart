@@ -1056,6 +1056,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                   const pdf_events.SetRightPaneHovering(false)),
                               child: GestureDetector(
                                 onTap: () {
+                                  setState(() {
+                                    _rightPaneInitialTabIndex = 0;
+                                  });
                                   _bloc.add(const pdf_events.ToggleRightPane(
                                       show: true));
                                 },

@@ -135,22 +135,12 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
 
     int targetTab;
 
-    // בדיקה אם יש מפרשים לקטע הנוכחי
-    final hasCommentary = _hasCommentaryInCurrentLine(state);
-    // בדיקה אם יש קישורים לקטע הנוכחי
-    final hasLinks = state.visibleLinks.isNotEmpty;
-
     if (widget.showSplitView) {
-      // מצב "מפרשים בצד" - פתח מפרשים (אם יש)
-      if (hasCommentary) {
-        targetTab = _commentaryTabIndex;
-      } else if (hasLinks) {
-        targetTab = _linksTabIndex;
-      } else {
-        targetTab = _notesTabIndex;
-      }
+      // מצב "מפרשים בצד" - תמיד פתח על מפרשים
+      targetTab = _commentaryTabIndex;
     } else {
       // מצב "מפרשים מתחת הטקסט" - פתח קישורים (אם יש)
+      final hasLinks = state.visibleLinks.isNotEmpty;
       if (hasLinks) {
         targetTab = _linksTabIndex;
       } else {
@@ -162,21 +152,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
       _paneOpen = true;
       _currentTabIndex = targetTab;
     });
-  }
-
-  bool _hasCommentaryInCurrentLine(TextBookLoaded state) {
-    if (state.visibleIndices.isEmpty) return false;
-
-    for (final index in state.visibleIndices) {
-      final links = state.linksByLine[index + 1];
-      if (links == null) continue;
-
-      for (final link in links) {
-        final type = link.connectionType.toUpperCase();
-        if (type == "COMMENTARY" || type == "TARGUM") return true;
-      }
-    }
-    return false;
   }
 
   void _openPane() {
