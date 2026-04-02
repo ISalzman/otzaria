@@ -214,6 +214,7 @@ class _PdfCommentatorsSelectorState extends State<PdfCommentatorsSelector> {
             'ראשונים',
             'אחרונים',
             'מחברי זמננו',
+            'על ${widget.tab.book.title}',
           ],
           selectedItems: selectedTopics,
           labelBuilder: (item) => item,
