@@ -635,7 +635,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         selectedIndex: currentState.selectedIndex,
       );
       emit(updatedState);
-      if (updatedState.showSplitView || updatedState.showPageShapeView) {
+      if (_shouldLoadLinksForState(updatedState)) {
         _loadLinksInBackground(
           updatedState.book,
           updatedState.visibleIndices,
@@ -742,6 +742,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           visibleIndices: event.visibleIndecies,
           currentTitle: newTitle,
           selectedIndex: index,
+          clearSelectedIndex: index == null && currentState.selectedIndex != null,
           visibleLinks: visibleLinks,
         ));
 
@@ -908,7 +909,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return pageShapeTargets ?? const <String>[];
     }
 
-    if (state.showSplitView) {
+    if (state.showSplitView || state.activeCommentators.isNotEmpty) {
       return _normalizeCommentaryTargets(state.activeCommentators);
     }
 
@@ -916,7 +917,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   bool _shouldLoadLinksForState(TextBookLoaded state) {
-    return state.showSplitView || state.showPageShapeView;
+    return state.showSplitView ||
+        state.showPageShapeView ||
+        state.activeCommentators.isNotEmpty;
   }
 
   /// בדיקה אם שתי רשימות שוות
@@ -942,8 +945,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       );
       emit(currentState.copyWith(
         selectedIndex: event.index,
+        clearSelectedIndex: event.index == null,
         visibleLinks: visibleLinks,
       ));
+      // במצב מפרשים מתחת, קישורים לא נטענים ברקע באופן שוטף —
+      // נטען עבור הקטע הנבחר כדי להציג expansion tiles
+      if (!currentState.showSplitView &&
+          !currentState.showPageShapeView &&
+          event.index != null) {
+        _loadLinksInBackground(currentState.book, [event.index!], force: true);
+      }
     }
   }
 
