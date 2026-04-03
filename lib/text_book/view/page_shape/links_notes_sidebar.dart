@@ -3,6 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
+import 'package:otzaria/widgets/panel_tab_header.dart';
 
 /// חלונית פנימית עבור צורת הדף שמציגה קישורים והערות אישיות.
 class LinksNotesSidebar extends StatefulWidget {
@@ -74,64 +75,25 @@ class _LinksNotesSidebarState extends State<LinksNotesSidebar>
       color: colorScheme.surface,
       child: Column(
         children: [
-          SizedBox(
-            height: 48,
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: Theme.of(context).dividerColor,
-                    width: 1,
-                  ),
-                ),
+          PanelTabHeader(
+            controller: _tabController,
+            onClose: widget.onClosePane,
+            tabs: const [
+              Tab(
+                icon: Icon(FluentIcons.link_24_regular, size: 18),
+                iconMargin: EdgeInsets.only(bottom: 2),
+                height: 48,
+                child: Text('קישורים', style: TextStyle(fontSize: 12),
+                    textDirection: TextDirection.rtl),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TabBar(
-                      controller: _tabController,
-                      tabs: const [
-                        Tab(
-                          icon: Icon(FluentIcons.link_24_regular, size: 18),
-                          iconMargin: EdgeInsets.only(bottom: 2),
-                          height: 48,
-                          child: Text(
-                            'קישורים',
-                            style: TextStyle(fontSize: 12),
-                            textDirection: TextDirection.rtl,
-                          ),
-                        ),
-                        Tab(
-                          icon: Icon(FluentIcons.note_24_regular, size: 18),
-                          iconMargin: EdgeInsets.only(bottom: 2),
-                          height: 48,
-                          child: Text(
-                            'הערות',
-                            style: TextStyle(fontSize: 12),
-                            textDirection: TextDirection.rtl,
-                          ),
-                        ),
-                      ],
-                      labelColor: colorScheme.primary,
-                      unselectedLabelColor:
-                          colorScheme.onSurface.withValues(alpha: 0.6),
-                      indicatorColor: colorScheme.primary,
-                      dividerColor: Colors.transparent,
-                    ),
-                  ),
-                  IconButton(
-                    iconSize: 18,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 40,
-                      minHeight: 40,
-                    ),
-                    icon: const Icon(FluentIcons.dismiss_24_regular),
-                    onPressed: widget.onClosePane,
-                  ),
-                ],
+              Tab(
+                icon: Icon(FluentIcons.note_24_regular, size: 18),
+                iconMargin: EdgeInsets.only(bottom: 2),
+                height: 48,
+                child: Text('הערות', style: TextStyle(fontSize: 12),
+                    textDirection: TextDirection.rtl),
               ),
-            ),
+            ],
           ),
           Expanded(
             child: TabBarView(

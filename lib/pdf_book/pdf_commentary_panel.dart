@@ -19,6 +19,7 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/panel_tab_header.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'dart:async'; // Added for Timer
@@ -316,72 +317,34 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     return Column(
       children: [
         // שורת הכרטיסיות
-        Container(
-          height: 48,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 1,
-              ),
+        PanelTabHeader(
+          controller: _tabController,
+          onClose: widget.onClose,
+          onTap: (index) {
+            if (index == 0 && _showFilterTab) {
+              setState(() => _showFilterTab = false);
+            }
+          },
+          tabs: const [
+            Tab(
+              icon: Icon(FluentIcons.book_24_regular, size: 18),
+              iconMargin: EdgeInsets.only(bottom: 2),
+              height: 48,
+              child: Text('מפרשים', style: TextStyle(fontSize: 12)),
             ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TabBar(
-                  controller: _tabController,
-                  tabs: const [
-                    Tab(
-                      icon: Icon(FluentIcons.book_24_regular, size: 18),
-                      iconMargin: EdgeInsets.only(bottom: 2),
-                      height: 48,
-                      child: Text('מפרשים', style: TextStyle(fontSize: 12)),
-                    ),
-                    Tab(
-                      icon: Icon(FluentIcons.link_24_regular, size: 18),
-                      iconMargin: EdgeInsets.only(bottom: 2),
-                      height: 48,
-                      child: Text('קישורים', style: TextStyle(fontSize: 12)),
-                    ),
-                    Tab(
-                      icon: Icon(FluentIcons.note_24_regular, size: 18),
-                      iconMargin: EdgeInsets.only(bottom: 2),
-                      height: 48,
-                      child: Text('הערות', style: TextStyle(fontSize: 12)),
-                    ),
-                  ],
-                  labelColor: Theme.of(context).colorScheme.primary,
-                  unselectedLabelColor: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6),
-                  indicatorColor: Theme.of(context).colorScheme.primary,
-                  dividerColor: Colors.transparent,
-                  onTap: (index) {
-                    // אם לוחצים על טאב מפרשים (0) ואנחנו בכפתור סינון, סוגרים אותו
-                    if (index == 0 && _showFilterTab) {
-                      setState(() {
-                        _showFilterTab = false;
-                      });
-                    }
-                  },
-                ),
-              ),
-              // לחצן סגירה
-              IconButton(
-                iconSize: 18,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                ),
-                icon: const Icon(FluentIcons.dismiss_24_regular),
-                onPressed: widget.onClose ?? () {},
-              ),
-            ],
-          ),
+            Tab(
+              icon: Icon(FluentIcons.link_24_regular, size: 18),
+              iconMargin: EdgeInsets.only(bottom: 2),
+              height: 48,
+              child: Text('קישורים', style: TextStyle(fontSize: 12)),
+            ),
+            Tab(
+              icon: Icon(FluentIcons.note_24_regular, size: 18),
+              iconMargin: EdgeInsets.only(bottom: 2),
+              height: 48,
+              child: Text('הערות', style: TextStyle(fontSize: 12)),
+            ),
+          ],
         ),
         // תוכן הכרטיסיות - עטוף ב-SelectionArea כדי לאפשר בחירת טקסט
         Expanded(

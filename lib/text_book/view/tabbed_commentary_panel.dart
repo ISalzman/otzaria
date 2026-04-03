@@ -10,6 +10,7 @@ import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
+import 'package:otzaria/widgets/panel_tab_header.dart';
 
 /// Widget שמציג כרטיסיות עם מפרשים וקישורים בחלונית הצד
 class TabbedCommentaryPanel extends StatefulWidget {
@@ -95,75 +96,37 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
         return Column(
           children: [
             // שורת הכרטיסיות עם כפתור סגירה
-            SizedBox(
-              height: 48,
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Theme.of(context).dividerColor,
-                      width: 1,
-                    ),
+            PanelTabHeader(
+              controller: _tabController,
+              onClose: widget.onClosePane,
+              tabs: [
+                Tab(
+                  icon: Icon(
+                    widget.showSplitView
+                        ? FluentIcons.book_24_regular
+                        : FluentIcons.settings_24_regular,
+                    size: 18,
+                  ),
+                  iconMargin: const EdgeInsets.only(bottom: 2),
+                  height: 48,
+                  child: Text(
+                    widget.showSplitView ? 'מפרשים' : 'סינון מפרשים',
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TabBar(
-                        controller: _tabController,
-                        tabs: [
-                          Tab(
-                            icon: Icon(
-                              widget.showSplitView
-                                  ? FluentIcons.book_24_regular
-                                  : FluentIcons.settings_24_regular,
-                              size: 18,
-                            ),
-                            iconMargin: const EdgeInsets.only(bottom: 2),
-                            height: 48,
-                            child: Text(
-                              widget.showSplitView ? 'מפרשים' : 'סינון מפרשים',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                          const Tab(
-                            icon: Icon(FluentIcons.link_24_regular, size: 18),
-                            iconMargin: EdgeInsets.only(bottom: 2),
-                            height: 48,
-                            child:
-                                Text('קישורים', style: TextStyle(fontSize: 12)),
-                          ),
-                          const Tab(
-                            icon: Icon(FluentIcons.note_24_regular, size: 18),
-                            iconMargin: EdgeInsets.only(bottom: 2),
-                            height: 48,
-                            child:
-                                Text('הערות', style: TextStyle(fontSize: 12)),
-                          ),
-                        ],
-                        labelColor: Theme.of(context).colorScheme.primary,
-                        unselectedLabelColor: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.6),
-                        indicatorColor: Theme.of(context).colorScheme.primary,
-                        dividerColor: Colors.transparent,
-                      ),
-                    ),
-                    // לחצן סגירה
-                    IconButton(
-                      iconSize: 18,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 40,
-                        minHeight: 40,
-                      ),
-                      icon: const Icon(FluentIcons.dismiss_24_regular),
-                      onPressed: widget.onClosePane,
-                    ),
-                  ],
+                const Tab(
+                  icon: Icon(FluentIcons.link_24_regular, size: 18),
+                  iconMargin: EdgeInsets.only(bottom: 2),
+                  height: 48,
+                  child: Text('קישורים', style: TextStyle(fontSize: 12)),
                 ),
-              ),
+                const Tab(
+                  icon: Icon(FluentIcons.note_24_regular, size: 18),
+                  iconMargin: EdgeInsets.only(bottom: 2),
+                  height: 48,
+                  child: Text('הערות', style: TextStyle(fontSize: 12)),
+                ),
+              ],
             ),
             // תוכן הכרטיסיות
             Expanded(
