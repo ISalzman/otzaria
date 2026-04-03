@@ -10,8 +10,9 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/pdf_book/pdf_commentators_selector.dart';
 import 'package:otzaria/pdf_book/pdf_commentary_content.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/widgets/commentators_selection_panel.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
@@ -83,6 +84,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   List<Link> _orderedLinks = [];
   List<CommentaryGroup> _orderedGroups = [];
   _PdfVisibleContentCache? _visibleContentCache;
+  List<CommentatorGroup> _commentatorGroups = [];
 
   String _getLinkKey(Link link) =>
       '${link.path2}_${link.index1}_${link.index2}';
@@ -142,6 +144,41 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       initialIndex: widget.initialTabIndex ?? 0,
     );
     _selectionKey = GlobalKey<SelectionAreaState>();
+    _loadCommentatorGroups();
+  }
+
+  Future<void> _loadCommentatorGroups() async {
+    final commentatorsSet = <String>{};
+    for (final link in widget.tab.links) {
+      if (link.connectionType == 'COMMENTARY' ||
+          link.connectionType == 'TARGUM') {
+        commentatorsSet.add(utils.getTitleFromPath(link.path2));
+      }
+    }
+    final availableCommentators = commentatorsSet.toList();
+    final eras = await utils.splitByEra(availableCommentators);
+    final known = <String>{
+      ...?eras['תורה שבכתב'],
+      ...?eras['חז"ל'],
+      ...?eras['ראשונים'],
+      ...?eras['אחרונים'],
+      ...?eras['מחברי זמננו'],
+    };
+    final others = (eras['מפרשים נוספים'] ?? [])
+        .toSet()
+        .union(availableCommentators.where((c) => !known.contains(c)).toSet())
+        .toList();
+    if (!mounted) return;
+    setState(() {
+      _commentatorGroups = [
+        CommentatorGroup(title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
+        CommentatorGroup(title: 'חז"ל', commentators: eras['חז"ל'] ?? const []),
+        CommentatorGroup(title: 'ראשונים', commentators: eras['ראשונים'] ?? const []),
+        CommentatorGroup(title: 'אחרונים', commentators: eras['אחרונים'] ?? const []),
+        CommentatorGroup(title: 'מחברי זמננו', commentators: eras['מחברי זמננו'] ?? const []),
+        CommentatorGroup(title: 'שאר מפרשים', commentators: others),
+      ];
+    });
   }
 
   @override
@@ -160,6 +197,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       _orderedLinks = [];
       _orderedGroups = [];
       _itemKeys.clear();
+      _commentatorGroups = [];
+      _loadCommentatorGroups();
     }
   }
 
@@ -406,9 +445,19 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           }
         });
       },
-      child: PdfCommentatorsSelector(
-        tab: widget.tab,
-        onChanged: () async {
+      child: CommentatorsSelectionPanel(
+        groups: _commentatorGroups,
+        selectedCommentators: widget.tab.activeCommentators.toList(),
+        bookTitle: widget.tab.book.title,
+        onSelectionChanged: (list) async {
+          setState(() {
+            widget.tab.activeCommentators
+              ..clear()
+              ..addAll(list);
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() {});
+          });
           final settingsBloc = context.read<SettingsBloc>();
           if (settingsBloc.state.enablePerBookSettings) {
             final settings = PdfBookPerBookSettings(
