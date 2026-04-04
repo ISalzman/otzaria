@@ -291,7 +291,8 @@ my-plugin.otzplugin
   "contributes": {
     "toolTab": {
       "title": "לוח שנה הלכתי",
-      "order": 700
+      "order": 700,
+      "defaultPinned": true
     },
     "publishedDataTypes": [
       "calendar.event"
@@ -373,10 +374,12 @@ lib/plugins/
 │   └── plugin_system_database.dart
 ├── view/
 │   ├── plugin_tab_page.dart
+│   ├── plugin_side_panel.dart
 │   ├── plugin_management_screen.dart
 │   └── widgets/
 │       ├── plugin_install_button.dart
 │       ├── plugin_tile.dart
+│       ├── plugin_pin_button.dart
 │       ├── plugin_permission_dialog.dart
 │       ├── plugin_error_card.dart
 │       └── plugin_empty_state.dart
@@ -406,20 +409,77 @@ lib/plugins/
 
 זהו הקובץ הקריטי ביותר.
 
+#### עיצוב חדש: פאנל תוספים בצד (בסגנון דפדפן)
+
+במקום להוסיף טאב חדש לכל תוסף מותקן (שעלול לגרום לעומס טאבים), המסך יעבוד בצורה הבאה:
+
+**מבנה המסך:**
+
+```text
+┌─────────────────────────────────────────────────┐
+│ AppBar: [לוח שנה] [שמור וזכור] [מדות..] ... [🧩]│
+├─────────────────────────────────────────────────┤
+│                                    │ 🧩 תוספים  │
+│                                    │ ────────── │
+│     תוכן הטאב הנוכחי               │ ⊕ התקן     │
+│                                    │ ────────── │
+│                                    │ 📅 לוח הלכ│📌│
+│                                    │ 📖 מילון+  │⊘│
+│                                    │ 🔍 חיפוש+  │⊘│
+│                                    │ ────────── │
+│                                    │ ⚙ ניהול   │
+└─────────────────────────────────────────────────┘
+```
+
+**כפתור התוספים (🧩):**
+
+- יופיע בצד שמאל של ה-AppBar (כמו כפתור extensions בדפדפן)
+- אייקון: `FluentIcons.puzzle_piece_24_regular`
+- לחיצה עליו פותחת/סוגרת פאנל צדדי
+
+**פאנל צדדי (PluginSidePanel):**
+
+- נפתח בצד ימין של המסך (RTL — שמאל ויזואלית)
+- רוחב קבוע: ~280px
+- בראש הפאנל: כפתור **"⊕ התקן תוסף"** — מפעיל `FilePicker` ו-install flow
+- מתחת: רשימת כל התוספים המותקנים, כל אחד מציג:
+  - אייקון של התוסף
+  - שם התוסף
+  - כפתור **נעץ (📌)** — pin/unpin toggle
+  - לחיצה על שם התוסף → מעביר לטאב שלו (אם מוצמד) או פותח אותו ב-overlay
+- בתחתית: קישור **"⚙ ניהול תוספים"** — פותח את `PluginManagementScreen`
+
+**מנגנון ה-Pin:**
+
+- תוסף **מוצמד (pinned)** = יש לו טאב קבוע בשורת הטאבים
+- תוסף **לא מוצמד (unpinned)** = אין לו טאב, אבל אפשר לגשת אליו דרך:
+  - לחיצה על שמו בפאנל → פתיחה זמנית בתוך אזור התוכן
+  - או פתיחה ב-overlay/drawer
+- ברירת מחדל: התוסף יוצמד אוטומטית בהתקנה (`defaultPinned: true` ב-manifest)
+- המשתמש יכול לבטל הצמדה בכל עת
+- מצב ה-pin נשמר ב-DB (עמודת `pinned` בטבלת `plugin_installation`)
+
+**ההשפעה על TabController:**
+
+הטאבים במסך כלים יהיו:
+1. **tools מובנים** — תמיד קיימים, סדר קבוע
+2. **תוספים מוצמדים בלבד** — לפי `order` ואז `name`
+
 יש לשנות:
 
 - מעבר ממבנה קשיח של `_tabs` ו-`_pages` ל-`List<ToolDescriptor>`
-- תמיכה ב-tools מובנים + tools מתוספים
-- יצירה מחדש של `TabController` כאשר מספר הטאבים משתנה
+- `ToolDescriptor` מייצג גם built-in וגם plugin
+- רק תוספים עם `pinned == true` נכנסים ל-descriptor list
+- יצירה מחדש של `TabController` כאשר מספר הטאבים משתנה (pin/unpin)
 - שימור הטאב הפעיל לפי `toolId` יציב, לא לפי index בלבד
 - השארת לוגיקת focus של לוח השנה על בסיס `toolId == 'builtin.calendar'`
 
 פתרון מפורש ל-`TabController`:
 
 1. לשמור `selectedToolId` יציב, לא רק `index`
-2. בכל שינוי ב-list של descriptors:
+2. בכל שינוי ב-list של descriptors (כולל pin/unpin):
 3. לחשב `selectedToolId` נוכחי לפני ההחלפה
-4. לבנות רשימת descriptors חדשה
+4. לבנות רשימת descriptors חדשה (מובנים + מוצמדים)
 5. לחשב `newIndex` לפי `selectedToolId`, או `0` אם הטאב נמחק
 6. להסיר listener מה-controller הישן
 7. לעשות `dispose()` ל-controller הישן
@@ -436,9 +496,24 @@ lib/plugins/
 
 מבנה מוצע:
 
-- `BuiltInToolDescriptor`
-- `PluginToolDescriptor`
-- `ToolPageFactory`
+```dart
+abstract class ToolDescriptor {
+  String get toolId;
+  String get label;
+  Widget get icon;
+  int get order;
+  Widget buildPage(BuildContext context);
+}
+
+class BuiltInToolDescriptor extends ToolDescriptor { ... }
+class PluginToolDescriptor extends ToolDescriptor { ... }
+```
+
+**פתיחת תוסף לא-מוצמד:**
+
+כשהמשתמש לוחץ על תוסף בפאנל שאינו מוצמד:
+- נוצר טאב זמני לתוסף, עם כפתור סגירה (temporary tab)
+- זה מאפשר שימוש מהיר בתוסף בלי להצמיד אותו
 
 ### `lib/navigation/main_window_screen.dart`
 
@@ -499,7 +574,8 @@ lib/plugins/
   - `TabsBloc`
   - `NavigationBloc`
   - `HistoryBloc`
-- את ה-blocs הללו אפשר להזריק מתוך `main.dart` בעת יצירת שכבת התוספים
+  - `SettingsRepository` — נדרש כי `openBook` קורא ל-`Settings.getValue('key-pin-sidebar')` ול-`PageShapeSettingsManager`
+- את ה-blocs וה-repository הללו אפשר להזריק מתוך `main.dart` בעת יצירת שכבת התוספים
 - `openBook(BuildContext, ...)` יישאר wrapper UI דק בלבד, שישתמש באותו coordinator
 
 כלל תכנוני:
@@ -562,6 +638,7 @@ lib/plugins/
 - `entrypoint_path TEXT NOT NULL`
 - `icon_path TEXT`
 - `enabled INTEGER NOT NULL`
+- `pinned INTEGER NOT NULL DEFAULT 1` — האם התוסף מוצמד כטאב במסך כלים
 - `manifest_json TEXT NOT NULL`
 - `installed_at TEXT NOT NULL`
 - `updated_at TEXT NOT NULL`
@@ -766,9 +843,25 @@ app.on('reader.current_book_changed', (payload) => {
   },
   "theme": {
     "mode": "light",
-    "primary": "#6750A4",
-    "surface": "#FFFBFE",
-    "onSurface": "#1C1B1F"
+    "colorScheme": {
+      "primary": "#6750A4",
+      "onPrimary": "#FFFFFF",
+      "secondary": "#625B71",
+      "onSecondary": "#FFFFFF",
+      "surface": "#FFFBFE",
+      "onSurface": "#1C1B1F",
+      "surfaceContainerHighest": "#E6E0E9",
+      "error": "#B3261E",
+      "onError": "#FFFFFF",
+      "outline": "#79747E"
+    },
+    "typography": {
+      "fontFamily": "Frank Ruhl Libre",
+      "fontSize": 25,
+      "lineHeight": 1.5,
+      "commentatorsFontFamily": "Shofar",
+      "commentatorsFontSize": 22
+    }
   },
   "permissions": [
     "library.books.read",
@@ -791,7 +884,7 @@ app.on('reader.current_book_changed', (payload) => {
 Methods:
 
 - `app.getInfo`
-- `app.getTheme`
+- `app.getTheme` — מחזיר `colorScheme` מלא + `typography` (כמו ב-boot payload)
 - `app.getLocale`
 
 ### `library.books.read`
@@ -819,7 +912,7 @@ Methods:
 - לא להחזיר ספר שלם כברירת מחדל אם הוא גדול
 - API צריך לתמוך ב:
   - `offset`
-  - `limit`
+  - `limit` — עם `maxLimit = 5000` שנאכף בצד ה-host, גם אם התוסף מבקש יותר
   - `section`
 
 ### `search.fulltext.read`
@@ -837,7 +930,9 @@ Methods:
 Methods:
 
 - `calendar.getSelectedDate`
-- `calendar.getDailyTimes`
+- `calendar.getDailyTimes` — כולל שקיעה, צאת הכוכבים, חצות וכו'
+- `calendar.getHalachicTimes` — זמנים הלכתיים מלאים ליום נתון
+- `calendar.getJewishDate` — המרה בין תאריך עברי ולועזי
 - `calendar.getEvents`
 
 מימוש פנימי:
@@ -855,6 +950,36 @@ Methods:
 
 - גישה רק ל-allowlist של keys
 - לא לחשוף secrets או מפתחות חיצוניים
+
+Allowlist מפורש ב-V1 (keys שתוסף **יכול** לקרוא):
+
+- `key-dark-mode`
+- `key-follow-system-theme`
+- `key-swatch-color` / `key-dark-swatch-color`
+- `key-font-size` / `key-font-family`
+- `key-commentators-font-family` / `key-commentators-font-size`
+- `key-line-height`
+- `key-selected-city`
+- `key-calendar-type`
+- `key-show-teamim`
+- `key-default-nikud`
+- `key-remove-nikud-tanach`
+- `key-replace-holy-names`
+- `key-library-view-mode`
+- `key-align-tabs-to-right`
+- `key-copy-with-headers` / `key-copy-header-format`
+
+Blocklist (keys שתוסף **לא יכול** לקרוא — מסוננים גם עם allowlist כבטחון נוסף):
+
+- `key-protected-mode-password-hash` — סיסמה
+- `key-google-calendar-client-secret` — secret
+- `key-google-calendar-credentials-json` — credentials
+- `key-db-effective-path` — נתיב DB
+- `key-library-path` — נתיב ספרייה
+- `key-index-path` — נתיב אינדקס
+- `key-backup-path` — נתיב גיבוי
+- `key-hebrew-books-path` — נתיב חיצוני
+- `key-error-report-sender-email` — PII
 
 ### `notes.read`
 
@@ -877,11 +1002,12 @@ Methods:
 
 - `reader.openBook`
 - `reader.openBookAtRef`
+- `reader.getCurrentState` — מחזיר את הספר הפתוח כרגע, אינדקס נוכחי, וטאבים פתוחים. חשוב כי תוסף שנטען אחרי שספר כבר פתוח מפספס את ה-event `reader.current_book_changed`
 
 מימוש פנימי:
 
 - `PluginBridgeAdapter.openBook(...)`
-- coordinator פנימי שמוזן ב-`TabsBloc`, `NavigationBloc`, `HistoryBloc`
+- coordinator פנימי שמוזן ב-`TabsBloc`, `NavigationBloc`, `HistoryBloc`, `SettingsRepository`
 - `openBook(BuildContext, ...)` נשאר wrapper בלבד לצרכי UI רגיל
 
 ### `navigation.write`
@@ -913,13 +1039,20 @@ Methods:
 
 Methods:
 
-- `ui.showMessage`
-- `ui.showError`
+- `ui.showMessage` — הודעת toast רגילה
+- `ui.showSuccess` — הודעת הצלחה עם אייקון ✓
+- `ui.showError` — הודעת שגיאה עם אייקון ✗
+- `ui.showConfirm` — דיאלוג מודאלי עם שני כפתורים (ביטול/אישור). מחזיר `Promise<{confirmed: boolean}>`. מימוש דרך `showTwoActionsDialog`
+- `ui.showWarning` — דיאלוג אזהרה עם subtitle באדום. מימוש דרך `showWarningDialog`
 
 מימוש פנימי:
 
 - `UiSnack.show`
+- `UiSnack.showSuccess`
 - `UiSnack.showError`
+- `showTwoActionsDialog` / `showWarningDialog` מ-`custom_ui_components.dart`
+
+הערה חשובה: `showConfirm` ו-`showWarning` דורשים `BuildContext`. ניתן להגיע אליו דרך `navigatorKey.currentContext` שכבר קיים ב-`UiSnack`. ה-bridge ישתמש באותו מנגנון.
 
 ### `plugin.storage.read` / `plugin.storage.write`
 
@@ -1071,7 +1204,8 @@ Topics נתמכים ב-V1:
 
 - `navigation.changed`
 - `reader.current_book_changed`
-- `settings.changed`
+- `theme.changed` — נשלח כשהמשתמש משנה צבע ערכת נושא, מצב כהה/בהיר, או פונט. ה-payload כולל את ה-`colorScheme` וה-`typography` המלאים (כמו ב-boot payload)
+- `settings.changed` — נשלח כשהגדרה כלשהי משתנה. כולל `{key, newValue}` רק עבור keys שב-allowlist
 - `calendar.date_changed`
 - `workspace.changed`
 - `plugin.permissions_changed`
@@ -1115,6 +1249,8 @@ Topics נתמכים ב-V1:
 - אין גישה ישירה ל-DB
 - אין גישה ישירה ל-BLoCs
 - רשת חסומה כברירת מחדל
+- rate limiting — כללי עבור כל method. ב-V1 מספיק throttle פשוט: מקסימום 100 קריאות/שנייה לכל plugin, עם burst buffer של 50. חריגה תחזיר `error.rate_limited`
+- timeout — כל קריאת bridge חייבת להסתיים תוך 30 שניות. חריגה תחזיר `error.timeout`
 
 ### סוגי הרשאות
 
@@ -1170,6 +1306,14 @@ Topics נתמכים ב-V1:
 - גישה לנתיבי מערכת
 - גישה לתיקיית הספרים של אוצריא
 
+### חסימת iframe ו-sandbox escape
+
+- ה-WebView ישתמש ב-`shouldOverrideUrlLoading` כדי לחסום כל ניווט ל-URL שאינו:
+  - `file://` בתוך תיקיית ההתקנה של אותו תוסף
+  - `data:`, `blob:`, `about:blank`
+- יצירת `<iframe>` שמצביע ל-`file:///` חיצוני תיחסם
+- JavaScript `window.open()` ייחסם
+
 ### CSP
 
 מומלץ לדרוש מהתוסף `Content-Security-Policy` ב-HTML שלו.
@@ -1193,40 +1337,70 @@ Topics נתמכים ב-V1:
 
 ## אינטגרציה עם ה-UI
 
-### מסך "כלים"
+### מסך "כלים" — עיצוב פאנל תוספים
 
-הופך למיזוג של:
+המסך עובר שינוי עיצובי משמעותי. במקום להוסיף טאב חדש לכל תוסף (עומס), המסך עובד בשילוב פאנל צדדי:
 
-- tools מובנים
-- tools מתוספים
+**רכיבים:**
+
+1. **שורת טאבים** — tools מובנים + תוספים **מוצמדים בלבד**
+2. **כפתור תוספים (🧩)** — בצד שמאל של ה-AppBar, פותח/סוגר פאנל
+3. **פאנל צדדי** — רשימת כל התוספים עם pin/unpin
 
 ### סדר הטאבים
 
 הסדר יהיה:
 
-1. tools מובנים
-2. tools מתוספים לפי `contributes.toolTab.order`
+1. tools מובנים — תמיד ראשונים
+2. תוספים **מוצמדים** בלבד, לפי `contributes.toolTab.order`
 3. tie-breaker לפי `name`
 
-### כפתור `+`
+תוספים לא-מוצמדים לא מופיעים בשורת הטאבים כלל.
 
-יופיע ב-AppBar של "כלים".
+### כפתור התוספים (🧩)
 
-בלחיצה:
+יופיע בצד שמאל של ה-AppBar של "כלים".
 
-- `FilePicker`
-- install flow
-- dialog אם נדרשות הרשאות חדשות
+- אייקון: `FluentIcons.puzzle_piece_24_regular`
+- לחיצה פותחת/סוגרת את פאנל התוספים
+- badge קטן עם מספר התוספים המותקנים (אופציונלי)
+
+### פאנל תוספים (PluginSidePanel)
+
+רוחב: ~280px, נפתח בצד שמאל.
+
+מבנה:
+
+1. **כותרת:** "תוספים" עם כפתור סגירה
+2. **כפתור "⊕ התקן תוסף חדש"** — בראש הפאנל
+   - מפעיל `FilePicker` לבחירת `.otzplugin`
+   - install flow
+   - dialog הרשאות אם נדרשות
+3. **רשימת תוספים מותקנים** — כל פריט מציג:
+   - אייקון (מתוך `icon/icon.png` בחבילה)
+   - שם התוסף
+   - כפתור **נעץ (📌)** — toggle pin/unpin
+   - לחיצה על שם → פתיחת התוסף (אם מוצמד — מעבר לטאב, אם לא — פתיחה זמנית)
+4. **קישור "⚙ ניהול תוספים"** — בתחתית, פותח `PluginManagementScreen`
+
+### מנגנון Pin — כללים
+
+- תוסף **מוצמד** = יש לו טאב קבוע בשורת הטאבים
+- תוסף **לא מוצמד** = זמין רק דרך הפאנל, בלחיצה נפתח כ-overlay/temporary
+- ברירת מחדל: `defaultPinned: true` ב-manifest ← מוצמד אוטומטית בהתקנה
+- המשתמש יכול לשנות pin בכל עת דרך הפאנל
+- מצב pin נשמר בשדה `pinned` בטבלת `plugin_installation`
+- `PluginSystemBloc` מנהל events `PinPluginRequested` / `UnpinPluginRequested`
 
 ### מסך ניהול תוספים
 
-מומלץ להוסיף גם טאב/דיאלוג ניהול:
+nנגיש דרך קישור בתחתית הפאנל הצדדי. מציג:
 
 - רשימת תוספים מותקנים
 - enable/disable
 - uninstall
 - update info
-- permissions
+- permissions (צפייה ושינוי)
 - storage size
 - open logs
 
@@ -1234,7 +1408,9 @@ Topics נתמכים ב-V1:
 
 - הודעות משתמש דרך `UiSnack`
 - דיאלוגים דרך `custom_ui_components`
+- כפתורי פעולה דרך `RecommendedActionButton` / `NeutralActionButton`
 - אייקונים של Fluent בלבד
+- צבעים דרך `Theme.of(context).colorScheme` בלבד, ללא hardcoded colors
 
 ---
 
@@ -1275,6 +1451,7 @@ Topics נתמכים ב-V1:
 - install plugin
 - uninstall plugin
 - enable/disable plugin
+- pin/unpin plugin
 - refresh registry
 
 Events:
@@ -1283,6 +1460,8 @@ Events:
 - `InstallPluginRequested`
 - `EnablePluginRequested`
 - `DisablePluginRequested`
+- `PinPluginRequested`
+- `UnpinPluginRequested`
 - `UninstallPluginRequested`
 - `RefreshPlugins`
 
@@ -1394,6 +1573,7 @@ controller.addJavaScriptHandler(
 - pagination
 - section-based fetch
 - TOC-driven fetch
+- `maxLimit = 5000` נאכף בצד ה-host, בלי קשר למה שהתוסף מבקש
 
 ### cache
 
@@ -1410,6 +1590,13 @@ controller.addJavaScriptHandler(
 - `Logger('PluginSystem')`
 - `Logger('PluginBridge')`
 - `Logger('PluginRuntime')`
+
+### rate limiting
+
+- throttle כללי: מקסימום 100 קריאות/שנייה לכל plugin
+- burst buffer: 50 קריאות
+- חריגה: `error.rate_limited` מוחזר לתוסף
+- מימוש: counter פשוט ב-`PluginBridgeHandler` עם sliding window
 
 ---
 
@@ -1451,28 +1638,50 @@ controller.addJavaScriptHandler(
 
 ## תוכנית יישום בשלבים
 
-## שלב 1 - תשתית install ו-registry
+## שלב 0 - POC של WebView
+
+מטרה:
+
+- לוודא ש-`flutter_inappwebview` עובד על כל הפלטפורמות לפני כתיבת קוד
+
+משימות:
+
+- הוספת `flutter_inappwebview` ל-pubspec
+- יצירת מסך בדיקה פשוט עם WebView שטוען HTML מקומי
+- רישום JS handler ובדיקת bridge דו-כיווני
+- בדיקה על: Windows, macOS, Linux, Android (iOS ב-V2)
+
+Definition of done:
+
+- WebView נטען, JS bridge עובד, `evaluateJavascript` מחזיר תשובה — על לפחות 3 פלטפורמות
+
+## שלב 1 - תשתית install, registry ופאנל תוספים
 
 מטרה:
 
 - אפשר להתקין תוסף
-- התוסף מופיע במסך "כלים"
+- התוסף מופיע בפאנל תוספים
+- אפשר להצמיד (pin) ולהסיר הצמדה (unpin)
 - אין עדיין Host API עשיר
 
 משימות:
 
 - יצירת `lib/plugins/`
-- DB ייעודי
+- DB ייעודי (כולל שדה `pinned`)
 - `AppPaths` חדשים
-- `PluginSystemBloc`
+- `PluginSystemBloc` (כולל pin/unpin events)
 - install/uninstall
-- שינוי `MoreScreen` ל-dynamic tabs
+- שינוי `MoreScreen`: הוספת כפתור 🧩 ופאנל צדדי
+- שינוי `MoreScreen`: dynamic tabs עבור תוספים מוצמדים
 - טעינת `index.html` בתוך WebView
 
 Definition of done:
 
 - אפשר לבחור `.otzplugin`
-- הטאב מופיע
+- התוסף מופיע בפאנל צדדי
+- אפשר להצמיד — ואז הטאב מופיע
+- אפשר להסיר הצמדה — ואז הטאב נעלם
+- אפשר לפתוח תוסף לא-מוצמד דרך הפאנל
 - אפשר לפתוח את ה-HTML המקומי
 
 ## שלב 2 - Host API קריאה ופקודות בסיס
@@ -1483,12 +1692,12 @@ Definition of done:
 
 משימות:
 
-- `app.getInfo`
+- `app.getInfo` / `app.getTheme` (עם ColorScheme מלא)
 - `library.findBooks`
 - `library.getBookMetadata`
 - `search.fullText`
-- `reader.openBook`
-- `ui.showMessage`
+- `reader.openBook` / `reader.getCurrentState`
+- `ui.showMessage` / `ui.showSuccess` / `ui.showError` / `ui.showConfirm`
 - `storage.get/set`
 
 Definition of done:
@@ -1555,10 +1764,11 @@ Definition of done:
 
 ### Widget tests
 
-- `MoreScreen` עם dynamic tabs
-- מצב בלי תוספים
-- מצב עם תוסף אחד
-- מצב עם כמה תוספים
+- `MoreScreen` עם dynamic tabs ופאנל צדדי
+- מצב בלי תוספים (פאנל ריק)
+- מצב עם תוספים מוצמדים (טאבים מופיעים)
+- מצב עם תוספים לא-מוצמדים (רק בפאנל)
+- מעבר pin ↔ unpin (טאב מתווסף/נמחק)
 
 ### Integration tests
 
@@ -1620,11 +1830,15 @@ Definition of done:
 
 ### החלטה 5
 
-`MoreScreen` יעבור מארכיטקטורה קשיחה לארכיטקטורת registry.
+`MoreScreen` יעבור מארכיטקטורה קשיחה לארכיטקטורת registry, עם פאנל תוספים צדדי בסגנון דפדפן ומנגנון pin/unpin.
 
 ### החלטה 6
 
 למערכת התוספים יהיה DB נפרד ו-storage נפרד.
+
+### החלטה 7
+
+תוספים לא יוסיפו טאב אוטומטית. במקום זה: פאנל צדדי עם pin/unpin — רק תוספים מוצמדים מקבלים טאב.
 
 ---
 
@@ -1633,11 +1847,13 @@ Definition of done:
 בסוף המהלך, אוצריא תקבל מערכת תוספים עם התכונות הבאות:
 
 - התקנה מקובץ
-- ניהול מסודר של תוספים
+- ניהול מסודר של תוספים דרך פאנל צדדי בסגנון דפדפן
+- מנגנון pin/unpin שמונע עומס טאבים
 - WebView runtime יציב
-- API מסודר לנתוני אוצריא
-- API מסודר לפעולות על אוצריא
+- API מסודר לנתוני אוצריא (כולל theme מלא, הגדרות עם allowlist, לוח שנה הלכתי)
+- API מסודר לפעולות על אוצריא (כולל דיאלוגים מודאליים)
 - channel מסודר לפרסום נתונים חזרה אל אוצריא
+- אבטחה עם rate limiting, timeout, ו-sandbox
 - תכנון שמתאים לקוד הקיים, ולא מערכת מקבילה מנותקת
 
 זהו התכנון הנכון למערכת תוספים בפרויקט הזה.
