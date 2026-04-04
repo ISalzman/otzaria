@@ -883,6 +883,18 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                             ),
                             ActionButtonData(
                               widget: IconButton(
+                                icon: const Icon(
+                                    FluentIcons.text_clear_formatting_24_regular),
+                                tooltip: 'הסתר פיסוק',
+                                onPressed: null,
+                              ),
+                              icon: FluentIcons
+                                  .text_clear_formatting_24_regular,
+                              tooltip: 'הסתר פיסוק',
+                              onPressed: null,
+                            ),
+                            ActionButtonData(
+                              widget: IconButton(
                                 icon: const Icon(FluentIcons.search_24_regular),
                                 tooltip: 'חיפוש',
                                 onPressed: null,
