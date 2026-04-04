@@ -58,6 +58,106 @@ String _linkIdentityKey(Link link) {
   return '${link.index1}|${link.path2}|${link.index2}|${link.connectionType}|${link.start}|${link.end}';
 }
 
+Map<int, List<Link>> _buildLinksByLineMap(List<Link> links) {
+  final linksByLine = <int, List<Link>>{};
+  for (final link in links) {
+    final list = linksByLine[link.index1];
+    if (list == null) {
+      linksByLine[link.index1] = [link];
+    } else {
+      list.add(link);
+    }
+  }
+  return linksByLine;
+}
+
+List<Link> _computeVisibleLinks({
+  required List<Link> links,
+  required List<int> visibleIndices,
+  required int? selectedIndex,
+  required Map<int, List<Link>> linksByLine,
+}) {
+  final targetIndices =
+      selectedIndex != null ? [selectedIndex] : visibleIndices;
+
+  final visibleLinks = <Link>[];
+
+  for (final index in targetIndices) {
+    final candidates = linksByLine[index + 1] ?? const [];
+
+    for (final link in candidates) {
+      if (!LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+          link.start == null &&
+          link.end == null) {
+        visibleLinks.add(link);
+      }
+    }
+  }
+
+  final titles = <Link, String>{};
+  final pathCache = <String, String>{};
+  for (final link in visibleLinks) {
+    titles[link] = pathCache.putIfAbsent(
+      link.path2,
+      () => utils.getTitleFromPath(link.path2),
+    );
+  }
+  visibleLinks.sort((a, b) => titles[a]!.compareTo(titles[b]!));
+
+  return visibleLinks;
+}
+
+Future<({List<Link> links, Map<int, List<Link>> linksByLine, List<Link> visibleLinks})>
+    _processLinksForState({
+  required List<Link> existingLinks,
+  required List<Link> incomingLinks,
+  required bool replaceExisting,
+  required List<int> visibleIndices,
+  required int? selectedIndex,
+}) async {
+  const asyncProcessingThreshold = 250;
+  final estimatedLinkCount =
+      (replaceExisting ? 0 : existingLinks.length) + incomingLinks.length;
+
+  if (estimatedLinkCount <= asyncProcessingThreshold) {
+    final links = _mergeLinksByIdentity(
+      replaceExisting ? const [] : existingLinks,
+      incomingLinks,
+    );
+    final linksByLine = _buildLinksByLineMap(links);
+    final visibleLinks = _computeVisibleLinks(
+      links: links,
+      visibleIndices: visibleIndices,
+      selectedIndex: selectedIndex,
+      linksByLine: linksByLine,
+    );
+    return (
+      links: links,
+      linksByLine: linksByLine,
+      visibleLinks: visibleLinks,
+    );
+  }
+
+  return Isolate.run(() {
+    final links = _mergeLinksByIdentity(
+      replaceExisting ? const [] : existingLinks,
+      incomingLinks,
+    );
+    final linksByLine = _buildLinksByLineMap(links);
+    final visibleLinks = _computeVisibleLinks(
+      links: links,
+      visibleIndices: visibleIndices,
+      selectedIndex: selectedIndex,
+      linksByLine: linksByLine,
+    );
+    return (
+      links: links,
+      linksByLine: linksByLine,
+      visibleLinks: visibleLinks,
+    );
+  });
+}
+
 List<String> _buildPreviewLines(String previewContent, int previewStartLine) {
   final previewLines = previewContent.split('\n');
   if (previewStartLine <= 0) {
@@ -534,10 +634,26 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (currentState.showLeftPane == event.show) {
         return;
       }
-      emit(currentState.copyWith(
+      final updatedState = currentState.copyWith(
         showLeftPane: event.show,
         selectedIndex: currentState.selectedIndex,
-      ));
+        visibleLinks: event.show
+            ? _computeVisibleLinks(
+                links: currentState.links,
+                visibleIndices: currentState.visibleIndices,
+                selectedIndex: currentState.selectedIndex,
+                linksByLine: currentState.linksByLine,
+              )
+            : currentState.visibleLinks,
+      );
+      emit(updatedState);
+
+      if (event.show && _shouldLoadLinksForState(updatedState)) {
+        _loadLinksInBackground(
+          updatedState.book,
+          updatedState.visibleIndices,
+        );
+      }
     }
   }
 
@@ -636,10 +752,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       );
       emit(updatedState);
       if (_shouldLoadLinksForState(updatedState)) {
+        final targetIndices =
+            _targetIndicesForCommentaryRefresh(updatedState);
         _loadLinksInBackground(
           updatedState.book,
-          updatedState.visibleIndices,
-          force: true,
+          targetIndices,
+          targetBookTitlesOverride:
+              _normalizeCommentaryTargets(updatedState.activeCommentators),
         );
       }
     }
@@ -728,7 +847,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         // אופטימיזציה: חישוב ומיון קישורים נראים רק אם החלונית פתוחה או שיש שורה נבחרת לתפריט ההקשר
         final List<Link> visibleLinks;
         if (currentState.showLeftPane || index != null) {
-          visibleLinks = _getVisibleLinks(
+          visibleLinks = _computeVisibleLinks(
             links: currentState.links,
             visibleIndices: event.visibleIndecies,
             selectedIndex: index,
@@ -746,10 +865,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           visibleLinks: visibleLinks,
         ));
 
-        _loadLinksInBackground(
-          currentState.book,
-          event.visibleIndecies,
-        );
+        if (_shouldLoadLinksForVisibleIndicesChange(currentState)) {
+          _loadLinksInBackground(
+            currentState.book,
+            event.visibleIndecies,
+          );
+        }
       } catch (_) {
         rethrow;
       }
@@ -922,6 +1043,20 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         state.activeCommentators.isNotEmpty;
   }
 
+  bool _shouldLoadLinksForVisibleIndicesChange(TextBookLoaded state) {
+    return state.showSplitView || state.showPageShapeView || state.showLeftPane;
+  }
+
+  List<int> _targetIndicesForCommentaryRefresh(TextBookLoaded state) {
+    if (state.showSplitView || state.showPageShapeView) {
+      return state.visibleIndices;
+    }
+
+    return state.selectedIndex != null
+        ? [state.selectedIndex!]
+        : state.visibleIndices;
+  }
+
   /// בדיקה אם שתי רשימות שוות
   bool _listsEqual(List<int> list1, List<int> list2) {
     if (list1.length != list2.length) return false;
@@ -937,7 +1072,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
-      final visibleLinks = _getVisibleLinks(
+      final visibleLinks = _computeVisibleLinks(
         links: currentState.links,
         visibleIndices: currentState.visibleIndices,
         selectedIndex: event.index,
@@ -953,7 +1088,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (!currentState.showSplitView &&
           !currentState.showPageShapeView &&
           event.index != null) {
-        _loadLinksInBackground(currentState.book, [event.index!], force: true);
+        _loadLinksInBackground(currentState.book, [event.index!]);
       }
     }
   }
@@ -1056,41 +1191,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         selectedTextEnd: event.end,
       ));
     }
-  }
-
-  List<Link> _getVisibleLinks({
-    required List<Link> links,
-    required List<int> visibleIndices,
-    int? selectedIndex,
-    required Map<int, List<Link>> linksByLine,
-  }) {
-    final targetIndices =
-        selectedIndex != null ? [selectedIndex] : visibleIndices;
-
-    final visibleLinks = <Link>[];
-
-    for (final index in targetIndices) {
-      final candidates = linksByLine[index + 1] ?? const [];
-
-      for (final link in candidates) {
-        if (!LinkTypes.isCommentaryOrTargum(link.connectionType) &&
-            link.start == null &&
-            link.end == null) {
-          visibleLinks.add(link);
-        }
-      }
-    }
-
-    // אופטימיזציה: שימוש ב-Cache לנתיבים כדי למנוע split חוזר לאותו ספר בתוך לולאת המיון
-    final titles = <Link, String>{};
-    final pathCache = <String, String>{};
-    for (final link in visibleLinks) {
-      titles[link] = pathCache.putIfAbsent(
-          link.path2, () => utils.getTitleFromPath(link.path2));
-    }
-    visibleLinks.sort((a, b) => titles[a]!.compareTo(titles[b]!));
-
-    return visibleLinks;
   }
 
   // [EDITING DISABLED] - All editor event handlers commented out
@@ -1398,8 +1498,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   /// Loads links in the background after the book is displayed
-  void _loadLinksInBackground(TextBook book, List<int> visibleIndices,
-      {bool force = false}) async {
+  void _loadLinksInBackground(
+    TextBook book,
+    List<int> visibleIndices, {
+    bool force = false,
+    Iterable<String>? targetBookTitlesOverride,
+  }) async {
     final runtimeStateBeforeWindowCheck = state;
     if (!force &&
         runtimeStateBeforeWindowCheck is TextBookLoaded &&
@@ -1417,10 +1521,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     List<String>? targetBookTitles;
     var targetBookTitlesSignature = _allTargetBookTitlesSignature;
-    final runtimeState = state;
-    if (runtimeState is TextBookLoaded) {
+    if (targetBookTitlesOverride != null) {
+      targetBookTitles = _normalizeTargetBookTitles(targetBookTitlesOverride);
+      targetBookTitlesSignature = _targetBookTitlesSignature(targetBookTitles);
+    } else {
+      final runtimeState = state;
+      if (runtimeState is TextBookLoaded) {
       targetBookTitles = await _resolveTargetBookTitlesForLinks(runtimeState);
       targetBookTitlesSignature = _targetBookTitlesSignature(targetBookTitles);
+      }
     }
 
     if (!force &&
@@ -1503,41 +1612,28 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   void _onUpdateLinks(
     UpdateLinks event,
     Emitter<TextBookState> emit,
-  ) {
-    if (state is TextBookLoaded) {
-      final currentState = state as TextBookLoaded;
-      final links = _mergeLinksByIdentity(
-        event.replaceExisting ? const [] : currentState.links,
-        event.links.cast<Link>(),
-      );
+  ) async {
+    if (state is! TextBookLoaded) return;
+    final stateBeforeAwait = state as TextBookLoaded;
+    final processedLinks = await _processLinksForState(
+      existingLinks: stateBeforeAwait.links,
+      incomingLinks: event.links.cast<Link>(),
+      replaceExisting: event.replaceExisting,
+      visibleIndices: stateBeforeAwait.visibleIndices,
+      selectedIndex: stateBeforeAwait.selectedIndex,
+    );
 
-      // Build linksByLine map for O(1) lookups
-      final Map<int, List<Link>> linksByLine = {};
-      for (final link in links) {
-        final list = linksByLine[link.index1];
-        if (list == null) {
-          linksByLine[link.index1] = [link];
-        } else {
-          list.add(link);
-        }
-      }
+    if (state is! TextBookLoaded) return;
+    final currentState = state as TextBookLoaded;
+    if (currentState.book.title != stateBeforeAwait.book.title) return;
 
-      // Calculate visible links
-      final visibleLinks = _getVisibleLinks(
-        links: links,
-        visibleIndices: currentState.visibleIndices,
-        selectedIndex: currentState.selectedIndex,
-        linksByLine: linksByLine,
-      );
-
-      emit(currentState.copyWith(
-        links: links,
-        linksByLine: linksByLine,
-        visibleLinks: visibleLinks,
-      ));
-      _activeLinksTargetBookTitlesSignature =
-          event.targetBookTitlesSignature ?? _allTargetBookTitlesSignature;
-    }
+    emit(currentState.copyWith(
+      links: processedLinks.links,
+      linksByLine: processedLinks.linksByLine,
+      visibleLinks: processedLinks.visibleLinks,
+    ));
+    _activeLinksTargetBookTitlesSignature =
+        event.targetBookTitlesSignature ?? _allTargetBookTitlesSignature;
   }
 
   /// Handler for updating available commentators after background loading

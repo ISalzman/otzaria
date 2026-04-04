@@ -327,6 +327,107 @@ void main() {
       await bloc.close();
     });
 
+    test('במפרשים למטה גלילה לא טוענת מחדש קישורים כשהחלונית סגורה', () async {
+      final repository = _FakeTextBookRepository();
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: false,
+        commentators: const ['רש"י על בראשית'],
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(repository.getBookLinksInRangeCalls, 1);
+
+      bloc.add(const UpdateVisibleIndecies([20, 21, 22]));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(repository.getBookLinksInRangeCalls, 1);
+
+      await bloc.close();
+    });
+
+    test(
+      'במפרשים למטה בחירה חוזרת של אותה שורה לא טוענת מחדש כשהחלון כבר מכוסה',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+          commentators: const ['רש"י על בראשית'],
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repository.getBookLinksInRangeCalls, 1);
+
+        bloc.add(const UpdateSelectedIndex(12));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        expect(repository.getBookLinksInRangeCalls, 1);
+
+        bloc.add(const UpdateSelectedIndex(12));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        expect(repository.getBookLinksInRangeCalls, 1);
+
+        await bloc.close();
+      },
+    );
+
+    test(
+      'במפרשים למטה שינוי מפרשים טוען את הטווח הנוכחי בלי force מיותר',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+          commentators: const ['רש"י על בראשית'],
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        bloc.add(const UpdateVisibleIndecies([40, 41, 42]));
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        expect(repository.getBookLinksInRangeCalls, 1);
+
+        bloc.add(const UpdateCommentators(['אבן עזרא על בראשית']));
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+
+        expect(repository.getBookLinksInRangeCalls, 2);
+        expect(repository.lastStartIndex, 15);
+        expect(repository.lastEndIndex, 92);
+        expect(repository.lastTargetBookTitles, ['אבן עזרא על בראשית']);
+
+        await bloc.close();
+      },
+    );
+
     test('ToggleLeftPane לא פולט state חדש אם הערך לא השתנה', () async {
       final repository = _FakeTextBookRepository();
       final bloc =
