@@ -600,6 +600,11 @@ class ShamorZachorDataProvider with ChangeNotifier {
 
   /// Add a book ID to the tracked books list
   Future<void> _addToTrackedBooksList(int bookId) async {
+    // Always load from SharedPreferences first to avoid overwriting existing tracked books
+    // when the in-memory list hasn't been loaded yet (e.g. first call after app restart)
+    if (_trackedBookIds.isEmpty) {
+      await _loadTrackedBooksList();
+    }
     _trackedBookIds.add(bookId);
     await _saveTrackedBooksList();
   }

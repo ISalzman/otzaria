@@ -1116,6 +1116,11 @@ class ShamorZachorProgressProvider with ChangeNotifier {
         }
       }
 
+      // וודא שהנתונים נטענו לפני הכתיבה - מניעת מחיקת נתוני ספרים אחרים
+      if (_progressById.isEmpty && !_isLoading) {
+        _progressById = await _progressService.loadProgressDataById();
+      }
+
       // Update local state
       _progressById.putIfAbsent(bookId, () => {});
       _progressById[bookId]!.putIfAbsent(itemIndexKey, () => PageProgress());

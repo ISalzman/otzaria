@@ -192,6 +192,7 @@ class TextBook extends Book {
   /// The JSON object should have a 'title' key.
   factory TextBook.fromJson(Map<String, dynamic> json) {
     return TextBook(
+      id: json['id'],
       title: json['title'],
       filePath: json['filePath'],
       categoryPath: json['categoryPath'],
@@ -209,6 +210,7 @@ class TextBook extends Book {
   @override
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'title': title,
       'type': 'TextBook',
       'filePath': filePath,
