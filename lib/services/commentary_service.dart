@@ -1,6 +1,7 @@
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'dart:isolate';
 
 /// מייצג קבוצת קטעי פירוש רצופים מאותו ספר
 ///
@@ -47,6 +48,8 @@ enum CommentaryEra {
 /// - מיון לפי דורות
 /// - סינון לפי מפרשים פעילים
 class CommentaryService {
+  static const int _asyncGroupingThreshold = 80;
+
   /// מקבץ רשימת קישורים לקבוצות לפי שם הספר (רק קטעים רצופים)
   ///
   /// [links] - רשימת הקישורים לקיבוץ
@@ -58,9 +61,15 @@ class CommentaryService {
     final groups = <LinkGroup>[];
     String? currentTitle;
     List<Link> currentGroup = [];
+    String? lastPath;
 
     for (final link in links) {
-      final title = utils.getTitleFromPath(link.path2);
+      final String title;
+      if (link.path2 == lastPath) {
+        title = currentTitle!;
+      } else {
+        title = utils.getTitleFromPath(link.path2);
+      }
 
       if (currentTitle == null || currentTitle != title) {
         // ספר חדש - שומר את הקבוצה הקודמת ומתחיל קבוצה חדשה
@@ -71,6 +80,7 @@ class CommentaryService {
           ));
         }
         currentTitle = title;
+        lastPath = link.path2;
         currentGroup = [link];
       } else {
         // אותו ספר - מוסיף לקבוצה הנוכחית
@@ -87,6 +97,21 @@ class CommentaryService {
     }
 
     return groups;
+  }
+
+  /// מקבץ רשימת קישורים לקבוצות בצורה אסינכרונית כדי לא לחסום את ה-UI
+  static Future<List<LinkGroup>> groupConsecutiveLinksAsync(
+    List<Link> links,
+  ) async {
+    if (links.isEmpty) {
+      return const [];
+    }
+
+    if (links.length <= _asyncGroupingThreshold) {
+      return groupConsecutiveLinks(links);
+    }
+
+    return Isolate.run(() => groupConsecutiveLinks(links));
   }
 
   /// מחזיר את הדור של ספר לפי שמו
@@ -173,7 +198,7 @@ class CommentaryService {
   ///
   /// מחזיר קבוצות ממוינות לפי דור
   static Future<List<LinkGroup>> groupAndSortLinks(List<Link> links) async {
-    final groups = groupConsecutiveLinks(links);
+    final groups = await groupConsecutiveLinksAsync(links);
     return sortGroupsByEra(groups);
   }
 
@@ -226,14 +251,18 @@ class CommentaryService {
 
     final indexSet = indexes.map((i) => i + 1).toSet();
     final commentatorsSet = activeCommentators.toSet();
+    String? lastPath;
+    String? lastTitle;
 
     return links.any((link) {
       if (!indexSet.contains(link.index1)) return false;
       final type = link.connectionType.toUpperCase();
-      if (type != "COMMENTARY" && type != "TARGUM") {
-        return false;
+      if (type != "COMMENTARY" && type != "TARGUM") return false;
+      if (link.path2 != lastPath) {
+        lastPath = link.path2;
+        lastTitle = utils.getTitleFromPath(link.path2);
       }
-      return commentatorsSet.contains(utils.getTitleFromPath(link.path2));
+      return commentatorsSet.contains(lastTitle);
     });
   }
 }

@@ -24,6 +24,9 @@ class ErrorBoundary extends StatefulWidget {
 
 class _ErrorBoundaryState extends State<ErrorBoundary> {
   static final Logger _logger = Logger('ErrorBoundary');
+  static final List<_ErrorBoundaryState> _activeBoundaries = [];
+  static void Function(FlutterErrorDetails details)?
+      _previousFlutterErrorHandler;
 
   ShamorZachorError? _error;
   bool _hasError = false;
@@ -31,23 +34,13 @@ class _ErrorBoundaryState extends State<ErrorBoundary> {
   @override
   void initState() {
     super.initState();
+    _registerBoundary(this);
+  }
 
-    // Set up global error handler for Flutter errors
-    FlutterError.onError = (FlutterErrorDetails details) {
-      _logger.severe('Flutter error caught by ErrorBoundary', details.exception,
-          details.stack);
-
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-          _error = ShamorZachorError.fromException(
-            details.exception,
-            stackTrace: details.stack,
-            customMessage: 'An unexpected error occurred',
-          );
-        });
-      }
-    };
+  @override
+  void dispose() {
+    _unregisterBoundary(this);
+    super.dispose();
   }
 
   @override
@@ -191,6 +184,71 @@ class _ErrorBoundaryState extends State<ErrorBoundary> {
     if (Navigator.canPop(context)) {
       Navigator.popUntil(context, (route) => route.isFirst);
     }
+  }
+
+  static void _registerBoundary(_ErrorBoundaryState boundary) {
+    if (_activeBoundaries.isEmpty) {
+      _previousFlutterErrorHandler = FlutterError.onError;
+      FlutterError.onError = _handleGlobalFlutterError;
+    }
+
+    _activeBoundaries.add(boundary);
+  }
+
+  static void _unregisterBoundary(_ErrorBoundaryState boundary) {
+    _activeBoundaries.remove(boundary);
+
+    if (_activeBoundaries.isEmpty &&
+        identical(FlutterError.onError, _handleGlobalFlutterError)) {
+      FlutterError.onError = _previousFlutterErrorHandler;
+      _previousFlutterErrorHandler = null;
+    }
+  }
+
+  static void _handleGlobalFlutterError(FlutterErrorDetails details) {
+    _previousFlutterErrorHandler?.call(details);
+
+    for (final boundary in _activeBoundaries.reversed) {
+      if (boundary._shouldHandleFlutterError(details)) {
+        boundary._handleFlutterError(details);
+        break;
+      }
+    }
+  }
+
+  bool _shouldHandleFlutterError(FlutterErrorDetails details) {
+    if (details.exception is ShamorZachorError) {
+      return true;
+    }
+
+    final combinedDetails = [
+      details.exceptionAsString(),
+      details.library ?? '',
+      details.context?.toDescription() ?? '',
+      details.stack?.toString() ?? '',
+    ].join('\n');
+
+    return combinedDetails.contains('shamor_zachor') ||
+        combinedDetails.contains(r'tools\shamor_zachor') ||
+        combinedDetails.contains('ShamorZachor');
+  }
+
+  void _handleFlutterError(FlutterErrorDetails details) {
+    if (!mounted || _hasError) {
+      return;
+    }
+
+    _logger.severe('Flutter error caught by ErrorBoundary', details.exception,
+        details.stack);
+
+    setState(() {
+      _hasError = true;
+      _error = ShamorZachorError.fromException(
+        details.exception,
+        stackTrace: details.stack,
+        customMessage: 'An unexpected error occurred',
+      );
+    });
   }
 }
 

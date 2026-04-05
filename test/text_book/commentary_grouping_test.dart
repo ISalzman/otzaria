@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 
 void main() {
@@ -144,6 +145,40 @@ void main() {
       final groups = groupConsecutiveLinksForTesting(links);
       expect(groups.length, 1);
       expect(groups[0].links.length, 1);
+    });
+
+    test('Async grouping returns the same grouping result', () async {
+      final links = [
+        Link(
+          heRef: 'פירוש א',
+          index1: 1,
+          path2: '/books/commentary1.txt',
+          index2: 1,
+          connectionType: 'commentary',
+        ),
+        Link(
+          heRef: 'פירוש ב',
+          index1: 1,
+          path2: '/books/commentary1.txt',
+          index2: 2,
+          connectionType: 'commentary',
+        ),
+        Link(
+          heRef: 'פירוש ג',
+          index1: 1,
+          path2: '/books/commentary2.txt',
+          index2: 1,
+          connectionType: 'commentary',
+        ),
+      ];
+
+      final groups = await CommentaryService.groupConsecutiveLinksAsync(links);
+
+      expect(groups.length, 2);
+      expect(groups[0].bookTitle, 'commentary1');
+      expect(groups[0].links.length, 2);
+      expect(groups[1].bookTitle, 'commentary2');
+      expect(groups[1].links.length, 1);
     });
   });
 }

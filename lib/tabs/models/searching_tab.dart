@@ -51,7 +51,7 @@ class SearchingTab extends OpenedTab {
     titleNotifier = ValueNotifier(title);
     if (searchText != null) {
       queryController.text = searchText;
-      searchBloc.add(UpdateSearchQuery(searchText.trim()));
+      // החיפוש מופעל לעצמאי כשהטאב מוצג לראשונה (ראה TantivyFullTextSearch.initState)
     }
   }
 

@@ -295,9 +295,14 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   String? _textBookIdentity(TextBookTab tab) {
+    final bookId = tab.book.id;
+    if (bookId != null) {
+      return 'book:$bookId';
+    }
+
     final categoryId = tab.book.categoryId;
     if (categoryId != null) {
-      return 'category:$categoryId';
+      return 'category:$categoryId|title:${tab.book.title}|type:${tab.book.fileType ?? 'txt'}';
     }
 
     final externalLibraryId = tab.book.externalLibraryId;

@@ -409,6 +409,12 @@ Future<bool> hasTopic(String title, String topic) async {
     await _loadCsvCache();
   }
 
+  // For non-era topics (like 'על ברכות'), check if the commentator title contains the topic.
+  // e.g. "רש"י על ברכות".contains("על ברכות") == true
+  if (!_eraCategories.contains(topic) && topic != _defaultCategory) {
+    return title.contains(topic);
+  }
+
   // Check if title exists in DB cache
   if (_csvCache!.containsKey(title)) {
     final generationRaw = _csvCache![title]!;
@@ -418,7 +424,7 @@ Future<bool> hasTopic(String title, String topic) async {
   }
 
   // Book not found in CSV, it's "מפרשים נוספים"
-  if (topic == 'מפרשים נוספים') {
+  if (topic == _defaultCategory) {
     return true;
   }
 

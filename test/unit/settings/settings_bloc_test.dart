@@ -61,6 +61,7 @@ void main() {
         'shortcuts': <String, String>{},
         'isOfflineMode': false,
         'autoSyncCatalogs': true,
+        'softwareAndBookUpdatesEnabled': true,
         'personalNotesCollapsedByDefault': true,
       };
 
@@ -113,6 +114,8 @@ void main() {
             isOfflineMode: mockSettings['isOfflineMode'] as bool? ?? false,
             autoSyncCatalogs:
                 mockSettings['autoSyncCatalogs'] as bool? ?? false,
+            softwareAndBookUpdatesEnabled:
+                mockSettings['softwareAndBookUpdatesEnabled'] as bool? ?? true,
             alignTabsToRight:
                 mockSettings['alignTabsToRight'] as bool? ?? false,
             enableHtmlLinks: mockSettings['enableHtmlLinks'] as bool? ?? true,
@@ -290,6 +293,26 @@ void main() {
         ],
         verify: (_) {
           verify(mockRepository.updateAutoSyncCatalogs(true)).called(1);
+        },
+      );
+    });
+
+    group('UpdateSoftwareAndBookUpdatesEnabled', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'emits updated state when UpdateSoftwareAndBookUpdatesEnabled is added',
+        build: () {
+          when(mockRepository.updateSoftwareAndBookUpdatesEnabled(false))
+              .thenAnswer((_) async {});
+          return settingsBloc;
+        },
+        act: (bloc) =>
+            bloc.add(const UpdateSoftwareAndBookUpdatesEnabled(false)),
+        expect: () => [
+          settingsBloc.state.copyWith(softwareAndBookUpdatesEnabled: false),
+        ],
+        verify: (_) {
+          verify(mockRepository.updateSoftwareAndBookUpdatesEnabled(false))
+              .called(1);
         },
       );
     });

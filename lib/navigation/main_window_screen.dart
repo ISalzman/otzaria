@@ -115,8 +115,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     final isAutoSync =
         Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true;
-    final isOffline = context.read<SettingsBloc>().state.isOfflineMode;
-    if (isAutoSync && !isOffline) {
+    final settingsState = context.read<SettingsBloc>().state;
+    if (isAutoSync && settingsState.canUseSoftwareAndBookUpdates) {
       try {
         context.read<FileSyncBloc>().add(const StartSync());
       } catch (e) {

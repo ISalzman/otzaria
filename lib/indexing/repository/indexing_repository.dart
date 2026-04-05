@@ -1,27 +1,23 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:crypto/crypto.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/indexing/services/indexing_isolate_service.dart';
+import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 
 class IndexingRepository {
   final TantivyDataProvider _tantivyDataProvider;
   final IndexingIsolateService? _isolateService;
   IndexingIsolateService? _activeIsolateService;
-  int _docIdSequence = 0;
 
   IndexingRepository(this._tantivyDataProvider,
       {IndexingIsolateService? isolateService})
       : _isolateService = isolateService;
-
-  BigInt _nextDocumentId() {
-    _docIdSequence++;
-    return (BigInt.from(DateTime.now().microsecondsSinceEpoch) << 20) +
-        BigInt.from(_docIdSequence);
-  }
 
   @visibleForTesting
   static bool shouldResetBeforeFullReindex({
@@ -45,6 +41,11 @@ class IndexingRepository {
     final isolateService =
         _isolateService ?? await IndexingIsolateService.create();
     _activeIsolateService = isolateService;
+    final catalogueOrderSignature = buildCatalogueOrderSignature(library);
+    final catalogueOrderByBookKey = SearchCatalogueOrderHelper.buildKeyOrderMap(
+      library,
+      keyOf: (book) => catalogueOrderKey(book as Book),
+    );
 
     final allBooks = library.getAllBooks();
     final totalBooks = allBooks.length;
@@ -52,6 +53,9 @@ class IndexingRepository {
     var didStartActualIndexing = false;
 
     try {
+      await _tantivyDataProvider
+          .ensureIndexStateMatchesCatalogue(catalogueOrderSignature);
+
       if (shouldResetBeforeFullReindex(
         indexExistedBeforeInit: _tantivyDataProvider.indexExistedBeforeInit,
         booksDone: _tantivyDataProvider.booksDone,
@@ -76,13 +80,14 @@ class IndexingRepository {
         }
 
         try {
+          final indexedBookKey = catalogueOrderKey(book);
           if (book is TextBook) {
-            if (!_tantivyDataProvider.booksDone
-                .contains("${book.title}textBook")) {
+            if (!_tantivyDataProvider.booksDone.contains(indexedBookKey)) {
               debugPrint('📖 מאנדקס ספר טקסט ב-isolate: ${book.title}');
               await _indexTextBook(
                 book,
                 isolateService,
+                catalogueOrderByBookKey: catalogueOrderByBookKey,
                 onActualIndexingStarted: () {
                   if (didStartActualIndexing) {
                     return;
@@ -91,19 +96,19 @@ class IndexingRepository {
                   onActualIndexingStarted?.call();
                 },
               );
-              _tantivyDataProvider.booksDone.add("${book.title}textBook");
+              _tantivyDataProvider.booksDone.add(indexedBookKey);
               actuallyIndexed++;
             } else {
               debugPrint('⏭️ דילוג על ספר טקסט שכבר מאונדקס: ${book.title}');
               skipped++;
             }
           } else if (book is PdfBook) {
-            if (!_tantivyDataProvider.booksDone
-                .contains("${book.title}pdfBook")) {
+            if (!_tantivyDataProvider.booksDone.contains(indexedBookKey)) {
               debugPrint('📄 מאנדקס PDF ב-isolate: ${book.title}');
               await _indexPdfBook(
                 book,
                 isolateService,
+                catalogueOrderByBookKey: catalogueOrderByBookKey,
                 onActualIndexingStarted: () {
                   if (didStartActualIndexing) {
                     return;
@@ -112,7 +117,7 @@ class IndexingRepository {
                   onActualIndexingStarted?.call();
                 },
               );
-              _tantivyDataProvider.booksDone.add("${book.title}pdfBook");
+              _tantivyDataProvider.booksDone.add(indexedBookKey);
               actuallyIndexed++;
             } else {
               debugPrint('⏭️ דילוג על PDF שכבר מאונדקס: ${book.title}');
@@ -180,6 +185,7 @@ class IndexingRepository {
   Future<void> _indexTextBook(
     TextBook book,
     IndexingIsolateService isolateService, {
+    required Map<String, int> catalogueOrderByBookKey,
     String? preloadedText,
     void Function()? onActualIndexingStarted,
   }) async {
@@ -193,6 +199,7 @@ class IndexingRepository {
       book: book,
       stream: stream,
       isolateService: isolateService,
+      catalogueOrderByBookKey: catalogueOrderByBookKey,
       onActualIndexingStarted: onActualIndexingStarted,
     );
   }
@@ -200,6 +207,7 @@ class IndexingRepository {
   Future<void> _indexPdfBook(
     PdfBook book,
     IndexingIsolateService isolateService, {
+    required Map<String, int> catalogueOrderByBookKey,
     void Function()? onActualIndexingStarted,
   }) async {
     final stream = await isolateService.processPdfBook(
@@ -210,6 +218,7 @@ class IndexingRepository {
       book: book,
       stream: stream,
       isolateService: isolateService,
+      catalogueOrderByBookKey: catalogueOrderByBookKey,
       onActualIndexingStarted: onActualIndexingStarted,
     );
   }
@@ -248,6 +257,7 @@ class IndexingRepository {
     required Book book,
     required Stream<IndexingIsolateUpdate> stream,
     required IndexingIsolateService isolateService,
+    required Map<String, int> catalogueOrderByBookKey,
     void Function()? onActualIndexingStarted,
   }) async {
     try {
@@ -264,6 +274,7 @@ class IndexingRepository {
         await _writePreparedBatch(
           book,
           update.documents,
+          catalogueOrderByBookKey: catalogueOrderByBookKey,
           onActualIndexingStarted: onActualIndexingStarted,
         );
         await update.acknowledge();
@@ -277,6 +288,7 @@ class IndexingRepository {
   Future<void> _writePreparedBatch(
     Book book,
     List<PreparedIndexDocument> documents, {
+    required Map<String, int> catalogueOrderByBookKey,
     void Function()? onActualIndexingStarted,
   }) async {
     if (documents.isEmpty) {
@@ -290,6 +302,8 @@ class IndexingRepository {
     final topics = _buildTopicsPath(book);
     final isPdf = book is PdfBook;
     final filePath = isPdf ? book.path : '';
+    final catalogueOrder =
+        catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF;
 
     for (final document in documents) {
       if (!_tantivyDataProvider.isIndexing.value) {
@@ -297,7 +311,10 @@ class IndexingRepository {
       }
 
       await index.addDocument(
-        id: _nextDocumentId(),
+        id: buildCatalogueDocumentId(
+          catalogueOrder: catalogueOrder,
+          ordinal: document.ordinal,
+        ),
         title: title,
         reference: document.reference,
         topics: topics,
@@ -307,6 +324,39 @@ class IndexingRepository {
         filePath: filePath,
       );
     }
+  }
+
+  @visibleForTesting
+  static BigInt buildCatalogueDocumentId({
+    required int catalogueOrder,
+    required int ordinal,
+  }) {
+    return (BigInt.from(catalogueOrder + 1) << 32) + BigInt.from(ordinal + 1);
+  }
+
+  @visibleForTesting
+  static String buildCatalogueOrderSignature(Library library) {
+    final orderedKeys = SearchCatalogueOrderHelper.buildOrderedKeys(
+      library,
+      keyOf: (book) => catalogueOrderKey(book as Book),
+    );
+    return sha1.convert(utf8.encode(orderedKeys.join('\n'))).toString();
+  }
+
+  @visibleForTesting
+  static String catalogueOrderKey(Book book) {
+    if (book.externalLibraryId != null && book.externalLibraryId!.isNotEmpty) {
+      return 'ext:${book.externalLibraryId}';
+    }
+
+    if (book.id != null) {
+      return 'id:${book.id}';
+    }
+
+    final categoryKey = book.category?.path ?? book.categoryPath ?? '';
+    final fileTypeKey = book.fileType ?? book.runtimeType.toString();
+    final pathKey = book is FileBook ? book.path : (book.filePath ?? '');
+    return '${book.title}|$categoryKey|$fileTypeKey|$pathKey';
   }
 
   String _buildTopicsPath(Book book) {

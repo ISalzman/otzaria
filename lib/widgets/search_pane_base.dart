@@ -9,6 +9,7 @@ class SearchPaneBase extends StatefulWidget {
     required this.focusNode,
     this.progressWidget,
     this.resultCountString,
+    this.resultToolbar,
     required this.resultsWidget,
     required this.isNoResults,
     this.onSearchTextChanged,
@@ -23,6 +24,7 @@ class SearchPaneBase extends StatefulWidget {
   final FocusNode focusNode;
   final Widget? progressWidget;
   final String? resultCountString;
+  final Widget? resultToolbar;
   final Widget resultsWidget;
   final bool isNoResults;
   final ValueChanged<String>? onSearchTextChanged;
@@ -110,27 +112,40 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
             },
           ),
         ),
-        if (widget.resultCountString != null)
+        if (widget.resultToolbar != null || widget.resultCountString != null)
           Padding(
             padding:
                 const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16.0),
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(
-                widget.resultCountString!,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).textTheme.bodySmall?.color ??
-                      Colors.grey[700],
-                ),
-              ),
+            child: Row(
+              children: [
+                if (widget.resultCountString != null)
+                  Expanded(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        widget.resultCountString!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).textTheme.bodySmall?.color ??
+                              Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  const Spacer(),
+                if (widget.resultToolbar != null) widget.resultToolbar!,
+              ],
             ),
           ),
         const SizedBox(height: 4),
         Expanded(
-          child: widget.isNoResults
-              ? const Center(child: Text('אין תוצאות'))
-              : widget.resultsWidget,
+          child: Material(
+            color: Colors.transparent,
+            child: widget.isNoResults
+                ? const Center(child: Text('אין תוצאות'))
+                : widget.resultsWidget,
+          ),
         ),
       ],
     );

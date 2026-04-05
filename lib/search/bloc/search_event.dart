@@ -60,6 +60,12 @@ class SetFacet extends SearchEvent {
       {this.customSpacing, this.alternativeWords, this.searchOptions});
 }
 
+/// הגדרת מספר facets בבת אחת ללא הפעלת חיפוש
+class SetFacetsWithoutSearch extends SearchEvent {
+  final List<String> facets;
+  const SetFacetsWithoutSearch(this.facets);
+}
+
 class UpdateSortOrder extends SearchEvent {
   final ResultsOrder order;
   UpdateSortOrder(this.order);

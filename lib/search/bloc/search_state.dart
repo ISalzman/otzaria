@@ -58,6 +58,10 @@ class SearchState {
   bool get fuzzy => configuration.fuzzy;
   bool get isAdvancedSearchEnabled => configuration.isAdvancedSearchEnabled;
   List<String> get currentFacets => configuration.currentFacets;
+  List<String> get searchScopeFacets => configuration.searchScopeFacets;
+  bool get hasNoSelectedFacets => searchScopeFacets.isEmpty;
+  bool get hasScopedFacetFilter =>
+      searchScopeFacets.isNotEmpty && !searchScopeFacets.contains('/');
   ResultsOrder get sortBy => configuration.sortBy;
   int get numResults => configuration.numResults;
 

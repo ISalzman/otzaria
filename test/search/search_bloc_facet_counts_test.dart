@@ -60,5 +60,63 @@ void main() {
                 true),
       ],
     );
+
+    blocTest<SearchBloc, SearchState>(
+      'SetFacetsWithoutSearch מעדכן גם currentFacets וגם searchScopeFacets',
+      build: SearchBloc.new,
+      act: (bloc) => bloc.add(const SetFacetsWithoutSearch(['/תנ"ך'])),
+      expect: () => [
+        isA<SearchState>().having(
+            (state) => state.currentFacets, 'currentFacets', [
+          '/תנ"ך'
+        ]).having((state) => state.searchScopeFacets, 'searchScopeFacets', [
+          '/תנ"ך'
+        ]).having((state) => state.hasScopedFacetFilter, 'hasScopedFacetFilter',
+            true),
+      ],
+    );
+
+    blocTest<SearchBloc, SearchState>(
+      'SetFacet משנה פילטר נוכחי אבל שומר על טווח החיפוש המקורי',
+      build: SearchBloc.new,
+      act: (bloc) {
+        bloc.add(const SetFacetsWithoutSearch(['/תנ"ך']));
+        bloc.add(SetFacet('/תנ"ך/ראשונים'));
+      },
+      expect: () => [
+        isA<SearchState>().having(
+            (state) => state.currentFacets, 'currentFacets', [
+          '/תנ"ך'
+        ]).having(
+            (state) => state.searchScopeFacets, 'searchScopeFacets', ['/תנ"ך']),
+        isA<SearchState>().having(
+            (state) => state.currentFacets, 'currentFacets', [
+          '/תנ"ך/ראשונים'
+        ]).having(
+            (state) => state.searchScopeFacets, 'searchScopeFacets', ['/תנ"ך']),
+        isA<SearchState>()
+            .having((state) => state.isLoading, 'isLoading', false)
+            .having((state) => state.searchQuery, 'searchQuery', '')
+            .having((state) => state.currentFacets, 'currentFacets', [
+          '/תנ"ך/ראשונים'
+        ]).having(
+            (state) => state.searchScopeFacets, 'searchScopeFacets', ['/תנ"ך']),
+      ],
+    );
+
+    blocTest<SearchBloc, SearchState>(
+      'SetFacetsWithoutSearch עם בחירה ריקה מסמן שלא נבחרו קטגוריות',
+      build: SearchBloc.new,
+      act: (bloc) => bloc.add(const SetFacetsWithoutSearch([])),
+      expect: () => [
+        isA<SearchState>()
+            .having((state) => state.currentFacets, 'currentFacets', [])
+            .having(
+                (state) => state.searchScopeFacets, 'searchScopeFacets', [])
+            .having(
+                (state) => state.hasNoSelectedFacets, 'hasNoSelectedFacets',
+                true),
+      ],
+    );
   });
 }

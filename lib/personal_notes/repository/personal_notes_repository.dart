@@ -20,8 +20,11 @@ class PersonalNotesRepository {
         _service = service ?? PersonalNotesService(),
         _database = database ?? PersonalNotesDatabase.instance;
 
-  Future<List<PersonalNote>> loadNotes(String bookId) async {
-    final content = await _loadBookContent(bookId);
+  Future<List<PersonalNote>> loadNotes(
+    String bookId, {
+    int? categoryId,
+  }) async {
+    final content = await _loadBookContent(bookId, categoryId: categoryId);
     return _service.loadNotes(bookId: bookId, bookContent: content);
   }
 
@@ -32,8 +35,9 @@ class PersonalNotesRepository {
     required String contentPlain,
     required PersonalNoteContentFormat contentFormat,
     String? selectedText,
+    int? categoryId,
   }) async {
-    final bookContent = await _loadBookContent(bookId);
+    final bookContent = await _loadBookContent(bookId, categoryId: categoryId);
     return _service.addNote(
       bookId: bookId,
       bookContent: bookContent,
@@ -51,8 +55,9 @@ class PersonalNotesRepository {
     required String content,
     required String contentPlain,
     required PersonalNoteContentFormat contentFormat,
+    int? categoryId,
   }) async {
-    final bookContent = await _loadBookContent(bookId);
+    final bookContent = await _loadBookContent(bookId, categoryId: categoryId);
     return _service.updateNote(
       bookId: bookId,
       bookContent: bookContent,
@@ -66,8 +71,9 @@ class PersonalNotesRepository {
   Future<List<PersonalNote>> deleteNote({
     required String bookId,
     required String noteId,
+    int? categoryId,
   }) async {
-    final bookContent = await _loadBookContent(bookId);
+    final bookContent = await _loadBookContent(bookId, categoryId: categoryId);
     return _service.deleteNote(
       bookId: bookId,
       bookContent: bookContent,
@@ -79,8 +85,9 @@ class PersonalNotesRepository {
     required String bookId,
     required String noteId,
     required int lineNumber,
+    int? categoryId,
   }) async {
-    final bookContent = await _loadBookContent(bookId);
+    final bookContent = await _loadBookContent(bookId, categoryId: categoryId);
     return _service.repositionNote(
       bookId: bookId,
       bookContent: bookContent,
@@ -93,9 +100,12 @@ class PersonalNotesRepository {
     return _database.listBooksWithNotes();
   }
 
-  Future<String> _loadBookContent(String bookId) async {
+  Future<String> _loadBookContent(String bookId, {int? categoryId}) async {
     try {
-      final location = await BookLocator.locateBook(bookId);
+      final location = await BookLocator.locateBook(
+        bookId,
+        categoryId: categoryId,
+      );
       if (location != null) {
         if (location.source == BookSource.database && location.book != null) {
           final dbBook = location.book!;
@@ -107,10 +117,10 @@ class PersonalNotesRepository {
           }
 
           final fileType = dbBook.fileType ?? 'txt';
-          final categoryId = location.categoryId;
+          final resolvedCategoryId = location.categoryId;
           final dbText = await SqliteDataProvider.instance.getBookTextFromDb(
             bookId,
-            categoryId,
+            resolvedCategoryId,
             fileType,
           );
           if (dbText != null) {

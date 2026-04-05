@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_content_view.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
 import 'package:otzaria/personal_notes/widgets/inline_note_editor.dart';
@@ -14,6 +15,7 @@ class NoteTile extends StatefulWidget {
   final ValueChanged<String> onLinkTap;
   final bool defaultExpanded;
   final String bookId;
+  final int? categoryId;
   final List<PersonalNote> linkableNotes;
   final Widget? extraAction;
   final Color? backgroundColor;
@@ -28,6 +30,7 @@ class NoteTile extends StatefulWidget {
     required this.onLinkTap,
     required this.defaultExpanded,
     required this.bookId,
+    this.categoryId,
     required this.linkableNotes,
     this.extraAction,
     this.backgroundColor,
@@ -41,11 +44,45 @@ class NoteTile extends StatefulWidget {
 class _NoteTileState extends State<NoteTile> {
   late bool _isExpanded;
   bool _isInlineEditing = false;
+  String? _draftContent;
+  PersonalNoteContentFormat? _draftFormat;
+  final PersonalNoteDraftService _draftService = PersonalNoteDraftService();
 
   @override
   void initState() {
     super.initState();
     _isExpanded = widget.defaultExpanded;
+    _restoreDraftIfExists();
+  }
+
+  @override
+  void didUpdateWidget(covariant NoteTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.note.id != widget.note.id ||
+        oldWidget.bookId != widget.bookId ||
+        oldWidget.note.updatedAt != widget.note.updatedAt) {
+      _draftContent = null;
+      _draftFormat = null;
+      _restoreDraftIfExists();
+    }
+  }
+
+  Future<void> _restoreDraftIfExists() async {
+    final draft = await _draftService.loadDraft(
+      bookId: widget.bookId,
+      categoryId: widget.categoryId,
+      noteId: widget.note.id,
+    );
+    if (!mounted || draft == null) {
+      return;
+    }
+
+    setState(() {
+      _draftContent = draft.content;
+      _draftFormat = draft.contentFormat;
+      _isExpanded = true;
+      _isInlineEditing = true;
+    });
   }
 
   void _startInlineEdit() {
@@ -132,6 +169,12 @@ class _NoteTileState extends State<NoteTile> {
                               note: widget.note,
                               referenceText: widget.note.displayTitle,
                               bookId: widget.bookId,
+                              categoryId: widget.categoryId,
+                              initialContent:
+                                  _draftContent ?? widget.note.content,
+                              initialFormat:
+                                  _draftFormat ?? widget.note.contentFormat,
+                              draftNoteId: widget.note.id,
                               linkableNotes: widget.linkableNotes,
                               onSave: _handleSave,
                               onCancel: _cancelInlineEdit,

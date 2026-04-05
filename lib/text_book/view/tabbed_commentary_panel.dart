@@ -10,6 +10,7 @@ import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
+import 'package:otzaria/widgets/panel_tab_header.dart';
 
 /// Widget שמציג כרטיסיות עם מפרשים וקישורים בחלונית הצד
 class TabbedCommentaryPanel extends StatefulWidget {
@@ -88,6 +89,15 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
     super.dispose();
   }
 
+  Widget _tabLabel(String text) => Text(
+        text,
+        style: const TextStyle(fontSize: 12),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+      );
+
   @override
   Widget build(BuildContext context) {
     return TextBookStateBuilder(
@@ -95,75 +105,52 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
         return Column(
           children: [
             // שורת הכרטיסיות עם כפתור סגירה
-            SizedBox(
-              height: 48,
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Theme.of(context).dividerColor,
-                      width: 1,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TabBar(
-                        controller: _tabController,
-                        tabs: [
-                          Tab(
-                            icon: Icon(
-                              widget.showSplitView
-                                  ? FluentIcons.book_24_regular
-                                  : FluentIcons.settings_24_regular,
-                              size: 18,
-                            ),
-                            iconMargin: const EdgeInsets.only(bottom: 2),
-                            height: 48,
-                            child: Text(
-                              widget.showSplitView ? 'מפרשים' : 'סינון מפרשים',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // מתחת לסף זה - הצג אייקונים בלבד (ללא טקסט)
+                final isCompact = constraints.maxWidth < 270;
+                final firstTabIcon = Icon(
+                  widget.showSplitView
+                      ? FluentIcons.book_24_regular
+                      : FluentIcons.settings_24_regular,
+                  size: 18,
+                );
+                return PanelTabHeader(
+                  controller: _tabController,
+                  onClose: widget.onClosePane,
+                  tabs: isCompact
+                      ? [
+                          Tab(icon: firstTabIcon),
                           const Tab(
                             icon: Icon(FluentIcons.link_24_regular, size: 18),
-                            iconMargin: EdgeInsets.only(bottom: 2),
-                            height: 48,
-                            child:
-                                Text('קישורים', style: TextStyle(fontSize: 12)),
                           ),
                           const Tab(
                             icon: Icon(FluentIcons.note_24_regular, size: 18),
-                            iconMargin: EdgeInsets.only(bottom: 2),
-                            height: 48,
-                            child:
-                                Text('הערות', style: TextStyle(fontSize: 12)),
+                          ),
+                        ]
+                      : [
+                          Tab(
+                            icon: firstTabIcon,
+                            iconMargin: const EdgeInsets.only(bottom: 2),
+                            child: _tabLabel(
+                              widget.showSplitView ? 'מפרשים' : 'סינון מפרשים',
+                            ),
+                          ),
+                          Tab(
+                            icon:
+                                const Icon(FluentIcons.link_24_regular, size: 18),
+                            iconMargin: const EdgeInsets.only(bottom: 2),
+                            child: _tabLabel('קישורים'),
+                          ),
+                          Tab(
+                            icon:
+                                const Icon(FluentIcons.note_24_regular, size: 18),
+                            iconMargin: const EdgeInsets.only(bottom: 2),
+                            child: _tabLabel('הערות'),
                           ),
                         ],
-                        labelColor: Theme.of(context).colorScheme.primary,
-                        unselectedLabelColor: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.6),
-                        indicatorColor: Theme.of(context).colorScheme.primary,
-                        dividerColor: Colors.transparent,
-                      ),
-                    ),
-                    // לחצן סגירה
-                    IconButton(
-                      iconSize: 18,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 40,
-                        minHeight: 40,
-                      ),
-                      icon: const Icon(FluentIcons.dismiss_24_regular),
-                      onPressed: widget.onClosePane,
-                    ),
-                  ],
-                ),
-              ),
+                );
+              },
             ),
             // תוכן הכרטיסיות
             Expanded(
@@ -198,6 +185,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                   // כרטיסיית ההערות האישיות
                   PersonalNotesSidebar(
                     bookId: state.book.title,
+                    categoryId: state.book.categoryId,
                     onNavigateToLine: (line) =>
                         _handleNoteNavigation(context, state, line),
                   ),

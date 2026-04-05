@@ -30,7 +30,6 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
           onSelectionChanged: (commentators) {
             context.read<TextBookBloc>().add(UpdateCommentators(commentators));
           },
-          onSelectionApplied: widget.onCommentatorSelected,
         );
       },
     );

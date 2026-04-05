@@ -26,6 +26,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     on<AddFacet>(_onAddFacet);
     on<RemoveFacet>(_onRemoveFacet);
     on<SetFacet>(_onSetFacet);
+    on<SetFacetsWithoutSearch>(_onSetFacetsWithoutSearch);
     on<UpdateSortOrder>(_onUpdateSortOrder);
     on<UpdateNumResults>(_onUpdateNumResults);
     on<ResetSearch>(_onResetSearch);
@@ -59,6 +60,17 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       return;
     }
 
+    if (state.currentFacets.isEmpty) {
+      emit(state.copyWith(
+        searchQuery: event.query,
+        results: [],
+        totalResults: 0,
+        isLoading: false,
+        facetCounts: const {},
+      ));
+      return;
+    }
+
     final requestedFacets = List<String>.from(state.currentFacets);
     final shouldPreserveFacetCounts =
         state.searchQuery == query && state.facetCounts.isNotEmpty;
@@ -87,20 +99,31 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         searchOptions: event.searchOptions,
       );
 
-      // If no results with current facets, try root facet
-      if (results.isEmpty && !requestedFacets.contains("/")) {
-        add(AddFacet("/"));
-        return;
-      }
+      // אם אין תוצאות ב-facets שנבחרו - לא עושים fallback אוטומטי ל-"/"
+      // המשתמש בחר קטגוריות ספציפיות ויש לכבד את הבחירה
       if (requestId != _searchRequestId) {
         return;
       }
+      // בנה ספירות חלקיות מיידיות מהתוצאות שכבר יש - הרשימה הצדדית תופיע מיד
+      Map<String, int> partialFacetCounts = const {};
+      if (!shouldPreserveFacetCounts && results.isNotEmpty) {
+        final library = await DataRepository.instance.library;
+        final bookByTitle = <String, Book>{};
+        for (final book in library.getAllBooks()) {
+          bookByTitle.putIfAbsent(book.title, () => book);
+        }
+        partialFacetCounts = FacetHelper.buildFacetCountsFromResults(results, bookByTitle);
+      }
+
       emit(state.copyWith(
         results: results,
         totalResults: results.length,
         isLoading: false,
-        facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
+        facetCounts: shouldPreserveFacetCounts ? state.facetCounts : partialFacetCounts,
       ));
+
+      // הפעל את שניהם במקביל - אל תחכה ל-countTexts לפני שמתחילים facet refresh
+      unawaited(_refreshFacetCountsForAllBooks(event, requestId));
 
       final totalResults = await TantivyDataProvider.instance.countTexts(
         SearchQueryBuilder.sanitizeQuery(query),
@@ -119,8 +142,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       emit(state.copyWith(
         totalResults: totalResults,
       ));
-
-      unawaited(_refreshFacetCountsForAllBooks(event, requestId));
 
       // Prefetch disabled - too slow and causes duplicates
       // _prefetchCommonFacetCounts(event.query, event.customSpacing,
@@ -149,12 +170,14 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
 
     // עשה חיפוש גדול שמחזיר הרבה תוצאות (במקום לספור כל facet בנפרד)
-    // זה הרבה יותר מהיר מ-6876 ספירות נפרדות!
+    // משתמש בטווח החיפוש המקורי (searchScopeFacets) ולא ב-currentFacets
+    // כדי שלחיצה על קטגוריה בעץ לא תצמצם את הספירות
     const int kFacetAggregationLimit = 50000;
+    final activeFacets = List<String>.from(state.searchScopeFacets);
     final largeResults = await _repository.searchTexts(
       SearchQueryBuilder.sanitizeQuery(query),
-      const ['/'], // תמיד חיפוש מהשורש כדי לקבל ספירות לכל הקטגוריות
-      kFacetAggregationLimit, // limit גדול כדי לקבל את רוב/כל התוצאות
+      activeFacets,
+      kFacetAggregationLimit,
       fuzzy: state.fuzzy,
       distance: state.distance,
       order: ResultsOrder.relevance,
@@ -307,6 +330,17 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     ));
   }
 
+  void _onSetFacetsWithoutSearch(
+    SetFacetsWithoutSearch event,
+    Emitter<SearchState> emit,
+  ) {
+    final newConfig = state.configuration.copyWith(
+      currentFacets: event.facets,
+      searchScopeFacets: event.facets,
+    );
+    emit(state.copyWith(configuration: newConfig));
+  }
+
   void _onUpdateSortOrder(
     UpdateSortOrder event,
     Emitter<SearchState> emit,
@@ -339,7 +373,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Map<int, List<String>>? alternativeWords,
     Map<String, Map<String, bool>>? searchOptions,
   }) async {
-    if (state.searchQuery.isEmpty) {
+    if (state.searchQuery.isEmpty || state.currentFacets.isEmpty) {
       return 0;
     }
 
@@ -374,7 +408,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Map<int, List<String>>? alternativeWords,
     Map<String, Map<String, bool>>? searchOptions,
   }) async {
-    if (state.searchQuery.isEmpty) {
+    if (state.searchQuery.isEmpty || state.currentFacets.isEmpty) {
       return {for (final facet in facets) facet: 0};
     }
 

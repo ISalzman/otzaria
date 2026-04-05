@@ -55,6 +55,9 @@ class BookDetailsService {
       await provider.initialize();
       final repo = provider.repository;
       if (repo == null) return null;
+      if (book.categoryId != null) {
+        return await repo.getBookByTitleAndCategory(book.title, book.categoryId!);
+      }
       return await repo.getBookByTitle(book.title);
     } catch (_) {
       return null;

@@ -162,8 +162,37 @@ class _CommentatorsSelectionPanelState
   }
 
   void _emitSelection(List<String> commentators) {
-    widget.onSelectionChanged(commentators);
+    widget.onSelectionChanged(_orderSelection(commentators));
     widget.onSelectionApplied?.call();
+  }
+
+  List<String> _selectionOrder() {
+    return [
+      ..._torahShebichtav,
+      ..._chazal,
+      ..._rishonim,
+      ..._acharonim,
+      ..._modern,
+      ..._ungrouped,
+    ];
+  }
+
+  List<String> _orderSelection(List<String> commentators) {
+    final unique = commentators.toSet();
+    final ordered = <String>[];
+    final order = _selectionOrder();
+
+    for (final commentator in order) {
+      if (unique.remove(commentator)) {
+        ordered.add(commentator);
+      }
+    }
+
+    if (unique.isNotEmpty) {
+      ordered.addAll(unique);
+    }
+
+    return ordered;
   }
 
   void _toggleSingleCommentator(String commentator, bool selected) {

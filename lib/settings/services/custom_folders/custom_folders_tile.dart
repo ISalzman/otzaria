@@ -337,7 +337,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
       // הפעל סנכרון
       debugPrint('[CustomFolders] _toggleAddToDatabase ON: starting sync...');
-      await _rescanCustomFolders();
+      await _rescanCustomFolders(showNoChangesMessage: false);
     } else {
       // כיבוי - עדכון הגדרות והפעלת סנכרון כדי לנקות את ה-DB
       debugPrint('[CustomFolders] _toggleAddToDatabase OFF: saving setting');
@@ -349,7 +349,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
       // הפעל סנכרון כדי להחיל את שינוי הסטטוס על הספרים
       debugPrint('[CustomFolders] _toggleAddToDatabase OFF: starting sync...');
-      await _rescanCustomFolders();
+      await _rescanCustomFolders(showNoChangesMessage: false);
 
       debugPrint('[CustomFolders] _toggleAddToDatabase OFF: done.');
 
@@ -360,7 +360,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     }
   }
 
-  Future<void> _rescanCustomFolders() async {
+  Future<void> _rescanCustomFolders({bool showNoChangesMessage = true}) async {
     setState(() {
       _isSyncing = true;
     });
@@ -400,7 +400,9 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
           ? 'הסריקה הושלמה: ${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו'
           : 'הסריקה הושלמה. לא נמצאו ספרים חדשים.';
 
-      UiSnack.show(message);
+      if (hasChanges || showNoChangesMessage) {
+        UiSnack.show(message);
+      }
     } catch (e) {
       if (!mounted) return;
       UiSnack.showError('שגיאה בסריקת תיקיות אישיות: $e');
