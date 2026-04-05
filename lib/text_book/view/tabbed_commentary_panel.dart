@@ -89,6 +89,15 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
     super.dispose();
   }
 
+  Widget _tabLabel(String text) => Text(
+        text,
+        style: const TextStyle(fontSize: 12),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+      );
+
   @override
   Widget build(BuildContext context) {
     return TextBookStateBuilder(
@@ -96,37 +105,52 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
         return Column(
           children: [
             // שורת הכרטיסיות עם כפתור סגירה
-            PanelTabHeader(
-              controller: _tabController,
-              onClose: widget.onClosePane,
-              tabs: [
-                Tab(
-                  icon: Icon(
-                    widget.showSplitView
-                        ? FluentIcons.book_24_regular
-                        : FluentIcons.settings_24_regular,
-                    size: 18,
-                  ),
-                  iconMargin: const EdgeInsets.only(bottom: 2),
-                  height: 48,
-                  child: Text(
-                    widget.showSplitView ? 'מפרשים' : 'סינון מפרשים',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                const Tab(
-                  icon: Icon(FluentIcons.link_24_regular, size: 18),
-                  iconMargin: EdgeInsets.only(bottom: 2),
-                  height: 48,
-                  child: Text('קישורים', style: TextStyle(fontSize: 12)),
-                ),
-                const Tab(
-                  icon: Icon(FluentIcons.note_24_regular, size: 18),
-                  iconMargin: EdgeInsets.only(bottom: 2),
-                  height: 48,
-                  child: Text('הערות', style: TextStyle(fontSize: 12)),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // מתחת לסף זה - הצג אייקונים בלבד (ללא טקסט)
+                final isCompact = constraints.maxWidth < 270;
+                final firstTabIcon = Icon(
+                  widget.showSplitView
+                      ? FluentIcons.book_24_regular
+                      : FluentIcons.settings_24_regular,
+                  size: 18,
+                );
+                return PanelTabHeader(
+                  controller: _tabController,
+                  onClose: widget.onClosePane,
+                  tabs: isCompact
+                      ? [
+                          Tab(icon: firstTabIcon),
+                          const Tab(
+                            icon: Icon(FluentIcons.link_24_regular, size: 18),
+                          ),
+                          const Tab(
+                            icon: Icon(FluentIcons.note_24_regular, size: 18),
+                          ),
+                        ]
+                      : [
+                          Tab(
+                            icon: firstTabIcon,
+                            iconMargin: const EdgeInsets.only(bottom: 2),
+                            child: _tabLabel(
+                              widget.showSplitView ? 'מפרשים' : 'סינון מפרשים',
+                            ),
+                          ),
+                          Tab(
+                            icon:
+                                const Icon(FluentIcons.link_24_regular, size: 18),
+                            iconMargin: const EdgeInsets.only(bottom: 2),
+                            child: _tabLabel('קישורים'),
+                          ),
+                          Tab(
+                            icon:
+                                const Icon(FluentIcons.note_24_regular, size: 18),
+                            iconMargin: const EdgeInsets.only(bottom: 2),
+                            child: _tabLabel('הערות'),
+                          ),
+                        ],
+                );
+              },
             ),
             // תוכן הכרטיסיות
             Expanded(
