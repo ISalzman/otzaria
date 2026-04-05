@@ -74,6 +74,10 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
 
       final formattedQuery = _buildFormattedQuery(searchingTab);
 
+        final scopeFacets = searchingTab.searchBloc.state.searchScopeFacets;
+        final nonRootScopeFacets =
+          scopeFacets.where((facet) => facet != '/').toList();
+
       return Bookmark(
         ref: formattedQuery,
         book: TextBook(title: text), // Use the original text for the book title
@@ -83,6 +87,8 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
         alternativeWords: searchingTab.alternativeWords,
         spacingValues: searchingTab.spacingValues,
         workspaceName: workspaceName,
+        searchScopeFacets:
+            nonRootScopeFacets.isNotEmpty ? nonRootScopeFacets : null,
       );
     }
 
