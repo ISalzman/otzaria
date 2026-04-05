@@ -17,6 +17,10 @@ class SearchConfiguration {
   final int numResults;
   final List<String> currentFacets;
 
+  /// טווח החיפוש המקורי שנקבע בדיאלוג (לא משתנה ע"י לחיצה בעץ התוצאות)
+  /// משמש לספירת facets ולבאנר חיווי
+  final List<String> searchScopeFacets;
+
   // הגדרות רגקס עתידיות (מוכנות להרחבה)
   final bool regexEnabled;
   final bool caseSensitive;
@@ -31,6 +35,7 @@ class SearchConfiguration {
     this.sortBy = ResultsOrder.catalogue,
     this.numResults = 100,
     this.currentFacets = const ["/"],
+    this.searchScopeFacets = const ["/"],
 
     // ערכי ברירת מחדל לרגקס
     this.regexEnabled = false,
@@ -47,6 +52,7 @@ class SearchConfiguration {
     ResultsOrder? sortBy,
     int? numResults,
     List<String>? currentFacets,
+    List<String>? searchScopeFacets,
     bool? regexEnabled,
     bool? caseSensitive,
     bool? multiline,
@@ -59,6 +65,7 @@ class SearchConfiguration {
       sortBy: sortBy ?? this.sortBy,
       numResults: numResults ?? this.numResults,
       currentFacets: currentFacets ?? this.currentFacets,
+      searchScopeFacets: searchScopeFacets ?? this.searchScopeFacets,
       regexEnabled: regexEnabled ?? this.regexEnabled,
       caseSensitive: caseSensitive ?? this.caseSensitive,
       multiline: multiline ?? this.multiline,
@@ -75,6 +82,7 @@ class SearchConfiguration {
       'sortBy': sortBy.index,
       'numResults': numResults,
       'currentFacets': currentFacets,
+      'searchScopeFacets': searchScopeFacets,
       'regexEnabled': regexEnabled,
       'caseSensitive': caseSensitive,
       'multiline': multiline,
@@ -91,6 +99,7 @@ class SearchConfiguration {
       sortBy: ResultsOrder.values[map['sortBy'] ?? 0],
       numResults: map['numResults'] ?? 100,
       currentFacets: List<String>.from(map['currentFacets'] ?? ["/"]),
+      searchScopeFacets: List<String>.from(map['searchScopeFacets'] ?? ["/"]),
       regexEnabled: map['regexEnabled'] ?? false,
       caseSensitive: map['caseSensitive'] ?? false,
       multiline: map['multiline'] ?? false,
@@ -125,6 +134,7 @@ class SearchConfiguration {
         other.sortBy == sortBy &&
         other.numResults == numResults &&
         other.currentFacets.toString() == currentFacets.toString() &&
+        other.searchScopeFacets.toString() == searchScopeFacets.toString() &&
         other.regexEnabled == regexEnabled &&
         other.caseSensitive == caseSensitive &&
         other.multiline == multiline &&
@@ -140,6 +150,7 @@ class SearchConfiguration {
       sortBy,
       numResults,
       currentFacets,
+      searchScopeFacets,
       regexEnabled,
       caseSensitive,
       multiline,
@@ -156,6 +167,7 @@ class SearchConfiguration {
         'sortBy: $sortBy, '
         'numResults: $numResults, '
         'facets: $currentFacets, '
+        'scope: $searchScopeFacets, '
         'regex: $regexEnabled, '
         'caseSensitive: $caseSensitive, '
         'multiline: $multiline, '
