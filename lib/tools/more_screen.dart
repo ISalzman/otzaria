@@ -1,6 +1,5 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
@@ -23,7 +22,6 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/view/plugin_side_panel.dart';
 import 'package:otzaria/plugins/view/plugin_tab_page.dart';
-import 'package:otzaria/plugins/view/plugin_test_screen.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 
 abstract class ToolDescriptor {
@@ -71,29 +69,19 @@ class BuiltInToolDescriptor extends ToolDescriptor {
 
 class PluginToolDescriptor extends ToolDescriptor {
   final InstalledPlugin plugin;
-  final bool isTransient;
-  PluginToolDescriptor({required this.plugin, this.isTransient = false})
-      : super(toolId: plugin.pluginId, label: plugin.manifest.toolTabTitle, order: plugin.manifest.toolTabOrder);
+  PluginToolDescriptor({required this.plugin})
+      : super(
+            toolId: plugin.pluginId,
+            label: plugin.manifest.toolTabTitle,
+            order: plugin.manifest.toolTabOrder);
 
   @override
   Widget buildTab(BuildContext context) {
     return SizedBox(
       width: 100,
       child: Tab(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(FluentIcons.puzzle_piece_24_regular, size: 16),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: isTransient ? const TextStyle(fontStyle: FontStyle.italic) : null,
-              ),
-            ),
-          ],
-        ),
+        text: label,
+        icon: null, // ללא אייקון — גם לתוספים זמניים
       ),
     );
   }
@@ -126,6 +114,8 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   bool _isPanelOpen = false;
   bool _showMobileMenu = true;
   InstalledPlugin? _transientPlugin;
+  // מונע rebuild מרובה של הטאבים כאשר הזהות המלאה של הלשוניות לא השתנתה
+  String _lastDescriptorsSignature = '';
 
   static const _mobileGroupDefs = [
     (label: 'לוח שנה', toolIds: <String>['builtin.calendar']),
@@ -134,6 +124,10 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   ];
 
   // ─── Focus management ────────────────────────────────────────────────────────
+
+  String _descriptorSignature(List<ToolDescriptor> descriptors) {
+    return descriptors.map((d) => d.toolId).join('|');
+  }
 
   void _requestCalendarFocus({int remainingAttempts = _calendarFocusRetryCount}) {
     if (!mounted) return;
@@ -146,7 +140,9 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Future<void>.delayed(const Duration(milliseconds: 50), () {
-        if (mounted) _requestCalendarFocus(remainingAttempts: remainingAttempts - 1);
+        if (mounted) {
+          _requestCalendarFocus(remainingAttempts: remainingAttempts - 1);
+        }
       });
     });
   }
@@ -225,14 +221,6 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
         order: 70,
         pageBuilder: () => const AcronymsDictionaryScreen(),
       ),
-      if (kDebugMode)
-        BuiltInToolDescriptor(
-          toolId: 'builtin.plugin_test',
-          label: 'Plugin POC (Debug)',
-          icon: FluentIcons.bug_24_regular,
-          order: 999,
-          pageBuilder: () => const PluginTestScreen(),
-        ),
     ];
   }
 
@@ -267,40 +255,58 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
       }
       return;
     }
+    // מגדיר את הפלאגין הזמני ומיד מבצע rebuild — ללא setState נפרד
     _transientPlugin = plugin;
     _selectedToolId = plugin.pluginId;
     final blocState = context.read<PluginSystemBloc>().state;
     if (blocState is PluginSystemLoaded) {
       _rebuildTabs(blocState.pinnedPlugins, transient: _transientPlugin);
-    } else {
-      setState(() {});
     }
   }
 
-  void _rebuildTabs(List<InstalledPlugin> pinnedPlugins, {InstalledPlugin? transient}) {
-    if (!mounted) return;
-
+  void _applyTabState(
+    List<InstalledPlugin> pinnedPlugins, {
+    InstalledPlugin? transient,
+    required bool notify,
+  }) {
     final newDescriptors = <ToolDescriptor>[
       ..._buildBaseDescriptors(),
       ...pinnedPlugins.map((p) => PluginToolDescriptor(plugin: p)),
     ];
     if (transient != null) {
       if (!pinnedPlugins.any((p) => p.pluginId == transient.pluginId)) {
-        newDescriptors.add(PluginToolDescriptor(plugin: transient, isTransient: true));
+        newDescriptors.add(PluginToolDescriptor(plugin: transient));
       }
     }
+
     newDescriptors.sort((a, b) => a.order.compareTo(b.order));
+    final newSignature = _descriptorSignature(newDescriptors);
+    if (newSignature == _lastDescriptorsSignature && _pages.isNotEmpty) {
+      return;
+    }
+    _lastDescriptorsSignature = newSignature;
 
     String newToolId = _selectedToolId ?? newDescriptors.first.toolId;
     if (!newDescriptors.any((d) => d.toolId == newToolId)) {
       newToolId = newDescriptors.first.toolId;
     }
 
-    setState(() {
+    void applyState() {
       _descriptors = newDescriptors;
       _pages = newDescriptors.map((t) => t.buildPage(context)).toList();
       _selectedToolId = newToolId;
-    });
+    }
+
+    if (notify) {
+      setState(applyState);
+    } else {
+      applyState();
+    }
+  }
+
+  void _rebuildTabs(List<InstalledPlugin> pinnedPlugins, {InstalledPlugin? transient}) {
+    if (!mounted) return;
+    _applyTabState(pinnedPlugins, transient: transient, notify: true);
   }
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -309,7 +315,7 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   void initState() {
     super.initState();
     FocusRepository().registerMoreScreenFocusRequester(requestActiveTabFocus);
-    _rebuildTabs([]);
+    _applyTabState([], notify: false);
   }
 
   void resetToCalendar() {
@@ -487,7 +493,8 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
                               children: [
                                 IconButton(
                                   icon: const Icon(FluentIcons.puzzle_piece_24_regular),
-                                  onPressed: () => setState(() => _isPanelOpen = !_isPanelOpen),
+                                  onPressed: () =>
+                                      setState(() => _isPanelOpen = !_isPanelOpen),
                                   tooltip: 'תוספים',
                                 ),
                                 const SizedBox(width: AppTokens.spaceXS),
@@ -549,7 +556,8 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   Widget build(BuildContext context) {
     super.build(context);
     final isMoreScreenActive =
-        context.select((NavigationBloc bloc) => bloc.state.currentScreen) == Screen.more;
+        context.select((NavigationBloc bloc) => bloc.state.currentScreen) ==
+            Screen.more;
 
     if (isMoreScreenActive && _selectedToolId == 'builtin.calendar') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -567,7 +575,8 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
           showWarningDialog(
             context: context,
             title: 'התוסף כבר קיים',
-            content: 'התוסף "${state.pluginName}" בגרסה ${state.version} כבר מותקן.',
+            content:
+                'התוסף "${state.pluginName}" בגרסה ${state.version} כבר מותקן.',
             subtitle: 'האם ברצונך להתקין מחדש ולדרוס אותו?',
             cancelText: 'ביטול',
             confirmText: 'התקן מחדש',
@@ -575,29 +584,35 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
             if (!context.mounted) return;
             if (value == true) {
               context.read<PluginSystemBloc>().add(
-                    InstallPluginRequested(state.archivePath, forceOverwrite: true),
+                    InstallPluginRequested(state.archivePath,
+                        forceOverwrite: true),
                   );
             } else {
               context.read<PluginSystemBloc>().add(LoadPlugins());
             }
           });
         } else if (state is PluginSystemInstallRequiresPermissions) {
-          final permList = state.manifest.permissions.isEmpty 
+          final permList = state.manifest.permissions.isEmpty
               ? 'אין הרשאות מיוחדות נדרשות'
               : state.manifest.permissions.join('\n');
           showWarningDialog(
             context: context,
             title: 'אישור התקנת תוסף',
-            content: 'התוסף "${state.manifest.name}" מבקש גישה למשאבי מערכת.\n\nהרשאות נדרשות:\n$permList',
+            content:
+                'התוסף "${state.manifest.name}" מבקש גישה למשאבי מערכת.\n\nהרשאות נדרשות:\n$permList',
             subtitle: 'האם ברצונך לאשר הרשאות אלו ולהתקין את התוסף?',
             cancelText: 'ביטול',
             confirmText: 'התקן וקבל',
           ).then((value) {
             if (!context.mounted) return;
             if (value == true) {
-              context.read<PluginSystemBloc>().add(ConfirmPluginInstall(state.tempDirPath, state.manifest));
+              context
+                  .read<PluginSystemBloc>()
+                  .add(ConfirmPluginInstall(state.tempDirPath, state.manifest));
             } else {
-              context.read<PluginSystemBloc>().add(CancelPluginInstall(state.tempDirPath));
+              context
+                  .read<PluginSystemBloc>()
+                  .add(CancelPluginInstall(state.tempDirPath));
             }
           });
         }
@@ -611,7 +626,9 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
           builder: (context, constraints) {
             final isMobile = constraints.maxWidth < LayoutBreakpoints.compact;
             final content = isMobile
-                ? (_showMobileMenu ? _buildMobileMenu(bgColor) : _buildMobileContent(bgColor))
+                ? (_showMobileMenu
+                    ? _buildMobileMenu(bgColor)
+                    : _buildMobileContent(bgColor))
                 : _buildDesktop(bgColor);
 
             return AnimatedSwitcher(
