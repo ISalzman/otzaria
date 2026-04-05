@@ -11,6 +11,7 @@ class Bookmark {
   final Map<int, List<String>>? alternativeWords;
   final Map<String, String>? spacingValues;
   final String? workspaceName;
+  final List<String>? searchScopeFacets;
 
   /// A stable key for history management, unique per book title.
   String get historyKey => isSearch ? ref : book.title;
@@ -25,6 +26,7 @@ class Bookmark {
     this.alternativeWords,
     this.spacingValues,
     this.workspaceName,
+    this.searchScopeFacets,
   });
 
   factory Bookmark.fromJson(Map<String, dynamic> json) {
@@ -58,6 +60,9 @@ class Bookmark {
               .map((key, value) => MapEntry(key, value.toString()))
           : null,
       workspaceName: json['workspaceName'] as String?,
+      searchScopeFacets: json['searchScopeFacets'] != null
+          ? List<String>.from(json['searchScopeFacets'] as List)
+          : null,
     );
   }
 
@@ -73,6 +78,7 @@ class Bookmark {
           ?.map((key, value) => MapEntry(key.toString(), value)),
       'spacingValues': spacingValues,
       'workspaceName': workspaceName,
+      'searchScopeFacets': searchScopeFacets,
     };
   }
 }
