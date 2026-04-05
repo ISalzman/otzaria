@@ -126,7 +126,12 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   // ─── Focus management ────────────────────────────────────────────────────────
 
   String _descriptorSignature(List<ToolDescriptor> descriptors) {
-    return descriptors.map((d) => d.toolId).join('|');
+    return descriptors.map((d) {
+      if (d is PluginToolDescriptor) {
+        return '${d.toolId}|${d.label}|${d.order}|${d.plugin.pinned}|${d.plugin.updatedAt.millisecondsSinceEpoch}';
+      }
+      return '${d.toolId}|${d.label}|${d.order}';
+    }).join('::');
   }
 
   void _requestCalendarFocus({int remainingAttempts = _calendarFocusRetryCount}) {
@@ -570,6 +575,12 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
     return BlocListener<PluginSystemBloc, PluginSystemState>(
       listener: (context, state) {
         if (state is PluginSystemLoaded) {
+          if (_transientPlugin != null) {
+            final updatedTransient = state.plugins.firstWhere(
+                (p) => p.pluginId == _transientPlugin!.pluginId,
+                orElse: () => _transientPlugin!);
+            _transientPlugin = updatedTransient;
+          }
           _rebuildTabs(state.pinnedPlugins, transient: _transientPlugin);
         } else if (state is PluginSystemOverwriteRequired) {
           showWarningDialog(
