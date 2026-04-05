@@ -212,19 +212,12 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildNavigationRow(isEnabled),
+          if (isEnabled) ...[
+            const SizedBox(height: 16),
+            _buildInputColumn(isEnabled),
+          ],
           const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (isEnabled) ...[
-                SizedBox(width: 200, child: _buildInputColumn(isEnabled)),
-                const SizedBox(width: 16),
-              ],
-              Expanded(
-                child: _buildCheckboxGrid(isEnabled, compactMode: true),
-              ),
-            ],
-          ),
+          _buildCheckboxGrid(isEnabled, compactMode: true),
         ],
       );
     }
