@@ -126,11 +126,14 @@ class _NotesSearchHeaderState extends State<NotesSearchHeader> {
                               size: 20,
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              widget.isPdf
-                                  ? 'הצג רק הערות לעמוד המוצג'
-                                  : 'הצג רק הערות לטקסט הנראה',
-                              style: Theme.of(context).textTheme.bodySmall,
+                            Expanded(
+                              child: Text(
+                                widget.isPdf
+                                    ? 'הצג רק הערות לעמוד המוצג'
+                                    : 'הצג רק הערות לטקסט הנראה',
+                                style: Theme.of(context).textTheme.bodySmall,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ),

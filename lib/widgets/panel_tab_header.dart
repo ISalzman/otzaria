@@ -20,7 +20,7 @@ class PanelTabHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return SizedBox(
-      height: 48,
+      height: 60,
       child: Container(
         decoration: BoxDecoration(
           border: Border(
