@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
+import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -53,6 +54,59 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     }
   }
 
+  bool _shouldShowFacetFilterBanner(SearchState state) {
+    return state.hasScopedFacetFilter && state.searchQuery.isNotEmpty;
+  }
+
+  Widget _buildNoCategoriesSelectedMessage(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              FluentIcons.filter_dismiss_24_regular,
+              size: 56,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'לא נבחרו קטגוריות',
+              style: TextStyle(
+                fontSize: 18,
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+              textDirection: TextDirection.rtl,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'בחר קטגוריה אחת לפחות כדי לבצע חיפוש.',
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _resetSearchScope() {
+    widget.tab.searchBloc.add(const SetFacetsWithoutSearch(['/']));
+    widget.tab.searchBloc.add(UpdateSearchQuery(
+      widget.tab.searchBloc.state.searchQuery,
+      customSpacing: widget.tab.spacingValues,
+      alternativeWords: widget.tab.alternativeWords,
+      searchOptions: widget.tab.searchOptions,
+    ));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +116,13 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
 
     // Request focus on search field when the widget is first created
     _requestSearchFieldFocus();
+
+    // הפעל חיפוש ממתין - רק כשהטאב מוצג לראשונה (לא בפתיחת האפליקציה)
+    final pendingQuery = widget.tab.queryController.text.trim();
+    if (pendingQuery.isNotEmpty &&
+        widget.tab.searchBloc.state.searchQuery.isEmpty) {
+      widget.tab.searchBloc.add(UpdateSearchQuery(pendingQuery));
+    }
   }
 
   @override
@@ -131,6 +192,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               // השורה התחתונה - מוצגת תמיד!
               _buildBottomRow(state),
               const ThinDivider(),
+              // חיווי סינון קטגוריות
+              if (_shouldShowFacetFilterBanner(state))
+                _buildFacetFilterBanner(context, state),
               // פאנל עריכה - מופיע מתחת לשורה התחתונה
               if (_showEditPanel)
                 SearchEditPanel(
@@ -175,6 +239,8 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                           ],
                         ),
                       )
+                    else if (state.hasNoSelectedFacets)
+                      _buildNoCategoriesSelectedMessage(context)
                     else if (state.results.isEmpty)
                       const Center(
                         child: Padding(
@@ -382,6 +448,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                       ),
                     ),
                     const ThinDivider(),
+                    // חיווי סינון קטגוריות
+                    if (_shouldShowFacetFilterBanner(state))
+                      _buildFacetFilterBanner(context, state),
                     // פאנל עריכה - מופיע מתחת לשורה העליונה
                     if (_showEditPanel)
                       SearchEditPanel(
@@ -452,6 +521,11 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                           ),
                                         );
                                       }
+                                      if (state.hasNoSelectedFacets) {
+                                        return _buildNoCategoriesSelectedMessage(
+                                          context,
+                                        );
+                                      }
                                       if (state.results.isEmpty) {
                                         return const Center(
                                           child: Padding(
@@ -495,6 +569,56 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
         onPressed: () {
           widget.tab.isLeftPaneOpen.value = !widget.tab.isLeftPaneOpen.value;
         },
+      ),
+    );
+  }
+
+  /// באנר שמראה באילו קטגוריות מתבצע החיפוש
+  Widget _buildFacetFilterBanner(BuildContext context, SearchState state) {
+    // חילוץ שמות הקטגוריות מטווח החיפוש המקורי
+    final facetNames = state.searchScopeFacets.map((facet) {
+      // facet בפורמט "/תנ"ך" או "/תנ"ך/ראשונים" - ניקח את החלק האחרון
+      final parts = facet.split('/').where((p) => p.isNotEmpty).toList();
+      return parts.isNotEmpty ? parts.last : facet;
+    }).toList();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+      color:
+          Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+      child: Row(
+        children: [
+          Icon(
+            FluentIcons.filter_24_regular,
+            size: 16,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'חיפוש בקטגוריות: ${facetNames.join(', ')}',
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              textDirection: TextDirection.rtl,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // כפתור לאיפוס הסינון - חזרה לכל הקטגוריות
+          IconButton(
+            icon: Icon(
+              FluentIcons.dismiss_24_regular,
+              size: 16,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            tooltip: 'חפש בכל הקטגוריות',
+            onPressed: _resetSearchScope,
+            constraints: const BoxConstraints(),
+            padding: const EdgeInsets.all(4),
+          ),
+        ],
       ),
     );
   }

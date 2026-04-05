@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/settings/engine/settings_wrapper.dart';
 
 import '../../data/data_providers/sqlite_data_provider.dart';
 import 'file_sync_service.dart';
@@ -14,6 +16,7 @@ class BackgroundSyncInitializer {
   static final _log = Logger('BackgroundSyncInitializer');
   static bool _hasRun = false;
   static Completer<FileSyncResult?>? _syncCompleter;
+  static SettingsWrapper settings = SettingsWrapper();
 
   /// Initialize background sync after a delay.
   ///
@@ -50,6 +53,15 @@ class BackgroundSyncInitializer {
     void Function(FileSyncResult result)? onComplete,
   }) async {
     try {
+      if (!shouldRunBackgroundSync()) {
+        _log.info(
+          'Background file sync skipped because offline mode is active '
+          'or software and book updates are disabled',
+        );
+        _syncCompleter?.complete(null);
+        return;
+      }
+
       _log.info('Starting background file sync...');
 
       // Get SQLite provider
@@ -118,5 +130,21 @@ class BackgroundSyncInitializer {
   static void reset() {
     _hasRun = false;
     _syncCompleter = null;
+    settings = SettingsWrapper();
+  }
+
+  @visibleForTesting
+  static bool shouldRunBackgroundSync({SettingsWrapper? settingsWrapper}) {
+    final wrapper = settingsWrapper ?? settings;
+    final isOfflineMode = wrapper.getValue<bool>(
+      SettingsRepository.keyOfflineMode,
+      defaultValue: false,
+    );
+    final softwareAndBookUpdatesEnabled = wrapper.getValue<bool>(
+      SettingsRepository.keySoftwareAndBookUpdatesEnabled,
+      defaultValue: true,
+    );
+
+    return !isOfflineMode && softwareAndBookUpdatesEnabled;
   }
 }

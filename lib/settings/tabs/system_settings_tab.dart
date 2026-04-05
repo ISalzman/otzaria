@@ -364,8 +364,33 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             },
           ),
         ),
+        SwitchListTile(
+          secondary: const Icon(FluentIcons.arrow_download_24_regular),
+          title: const Text(
+            'עדכוני תוכנה וספרים',
+            style: TextStyle(fontSize: 16),
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: Text(
+            state.isOfflineMode
+                ? 'מושבת במצב מנותק'
+                : state.softwareAndBookUpdatesEnabled
+                    ? 'עדכוני תוכנה וספרים פעילים, אך דיווחי שגיאות ימשיכו לעבוד גם אם תכבו אותם'
+                    : 'עדכוני תוכנה וספרים מושבתים, אך שאר שירותי הרשת נשארים פעילים',
+            style: const TextStyle(fontSize: 13),
+            textDirection: TextDirection.rtl,
+          ),
+          value: state.canUseSoftwareAndBookUpdates,
+          onChanged: state.isOfflineMode
+              ? null
+              : (value) {
+                  context.read<SettingsBloc>().add(
+                        UpdateSoftwareAndBookUpdatesEnabled(value),
+                      );
+                },
+        ),
         if (!(Platform.isAndroid || Platform.isIOS) &&
-            !state.isOfflineMode) ...[
+            state.canUseSoftwareAndBookUpdates) ...[
           SwitchListTile(
             secondary: const Icon(FluentIcons.arrow_sync_24_regular),
             title: const Text(

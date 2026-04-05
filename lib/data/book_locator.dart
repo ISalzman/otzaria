@@ -22,16 +22,25 @@ class BookLocator {
   static Future<BookLocation?> locateBook(
     String bookTitle, {
     Category? category,
+    int? categoryId,
   }) async {
     try {
       // קודם ננסה למצוא ב-DB
-      final dbLocation = await _locateInDatabase(bookTitle, category);
+      final dbLocation = await _locateInDatabase(
+        bookTitle,
+        category,
+        categoryId: categoryId,
+      );
       if (dbLocation != null) {
         return dbLocation;
       }
 
       // אם לא נמצא ב-DB, נחפש בתיקיות
-      final fileLocation = await _locateInFileSystem(bookTitle, category);
+      final fileLocation = await _locateInFileSystem(
+        bookTitle,
+        category,
+        categoryId: categoryId,
+      );
       return fileLocation;
     } catch (e) {
       debugPrint('❌ Error locating book "$bookTitle": $e');
@@ -42,14 +51,32 @@ class BookLocator {
   /// איתור ספר במסד הנתונים
   static Future<BookLocation?> _locateInDatabase(
     String bookTitle,
-    Category? category,
-  ) async {
+    Category? category, {
+    int? categoryId,
+  }) async {
     final repository = SqliteDataProvider.instance.repository;
     if (repository == null) {
       return null;
     }
 
     try {
+      if (categoryId != null) {
+        final dbBook = await repository.getBookByTitleAndCategory(
+          bookTitle,
+          categoryId,
+        );
+        if (dbBook != null) {
+          return BookLocation(
+            book: dbBook,
+            source: BookSource.database,
+            filePath: null,
+            categoryId: dbBook.categoryId,
+          );
+        }
+
+        return null;
+      }
+
       // אם יש קטגוריה, נחפש לפי קטגוריה
       if (category != null) {
         final dbBook = await _findBookInDatabaseByCategory(
@@ -65,6 +92,8 @@ class BookLocator {
             categoryId: dbBook.categoryId,
           );
         }
+
+        return null;
       }
 
       // אם לא מצאנו לפי קטגוריה, נחפש לפי שם בלבד
@@ -144,28 +173,32 @@ class BookLocator {
   /// איתור ספר במערכת הקבצים
   static Future<BookLocation?> _locateInFileSystem(
     String bookTitle,
-    Category? category,
-  ) async {
+    Category? category, {
+    int? categoryId,
+  }) async {
     try {
       final keyToPath = await FileSystemLibraryProvider.instance.keyToPath;
       String? filePath;
 
-      if (category != null) {
-        final categoryPath = category.path
-            .split('/')
-            .where((part) => part.isNotEmpty)
-            .join(', ');
-        // hashCode חייב להתאים לאופן שבו FileSystemLibraryProvider
-        // יוצר categoryId (ראה _createBookFromFile ו-_buildKeyToPath).
-        final categoryId = categoryPath.hashCode;
+      final resolvedCategoryId = categoryId ??
+          category?.path
+              .split('/')
+              .where((part) => part.isNotEmpty)
+              .join(', ')
+              .hashCode;
 
+      if (resolvedCategoryId != null) {
         for (final entry in keyToPath.entries) {
           final key = BookCompositeKey.tryParse(entry.key);
           if (key == null) continue;
-          if (key.title == bookTitle && key.categoryId == categoryId) {
+          if (key.title == bookTitle && key.categoryId == resolvedCategoryId) {
             filePath = entry.value;
             break;
           }
+        }
+
+        if (filePath == null) {
+          return null;
         }
       }
 
@@ -212,9 +245,14 @@ class BookLocator {
   static Future<bool> deleteBook(
     String bookTitle, {
     Category? category,
+    int? categoryId,
   }) async {
     try {
-      final location = await locateBook(bookTitle, category: category);
+      final location = await locateBook(
+        bookTitle,
+        category: category,
+        categoryId: categoryId,
+      );
       if (location == null) {
         debugPrint('❌ Book "$bookTitle" not found');
         return false;
@@ -279,8 +317,13 @@ class BookLocator {
   static Future<bool> bookExists(
     String bookTitle, {
     Category? category,
+    int? categoryId,
   }) async {
-    final location = await locateBook(bookTitle, category: category);
+    final location = await locateBook(
+      bookTitle,
+      category: category,
+      categoryId: categoryId,
+    );
     return location != null;
   }
 
@@ -293,8 +336,13 @@ class BookLocator {
   static Future<migration_book.Book?> getBookFromDatabase(
     String bookTitle, {
     Category? category,
+    int? categoryId,
   }) async {
-    final location = await locateBook(bookTitle, category: category);
+    final location = await locateBook(
+      bookTitle,
+      category: category,
+      categoryId: categoryId,
+    );
     if (location == null || location.source != BookSource.database) {
       return null;
     }

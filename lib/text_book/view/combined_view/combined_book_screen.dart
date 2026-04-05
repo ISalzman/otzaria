@@ -1247,10 +1247,19 @@ class _CombinedViewState extends State<CombinedView> {
     final lineLinks = state.linksByLine[index + 1];
     if (lineLinks == null || lineLinks.isEmpty) return false;
 
+    final activeCommentatorsSet = state.activeCommentators.toSet();
+    String? lastPath;
+    String? lastTitle;
+
     return lineLinks.any((link) {
       final type = link.connectionType.toUpperCase();
-      return (type == "COMMENTARY" || type == "TARGUM") &&
-          state.activeCommentators.contains(utils.getTitleFromPath(link.path2));
+      if (type != "COMMENTARY" && type != "TARGUM") return false;
+      if (link.path2 != lastPath) {
+        lastPath = link.path2;
+        lastTitle = utils.getTitleFromPath(link.path2);
+      }
+      return lastTitle != null && activeCommentatorsSet.contains(lastTitle!);
+
     });
   }
 

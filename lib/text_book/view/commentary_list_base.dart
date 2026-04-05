@@ -20,18 +20,13 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/app_future_builder.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:otzaria/services/commentary_service.dart';
-import 'package:otzaria/text_book/view/page_shape/utils/page_shape_debug_logger.dart';
 
 // Type alias לתאימות לאחור - משתמש ב-LinkGroup מה-Service
 typedef CommentaryGroup = LinkGroup;
-
-// פונקציה לתאימות לאחור - משתמש ב-Service
-List<CommentaryGroup> _groupConsecutiveLinks(List<Link> links) {
-  return CommentaryService.groupConsecutiveLinks(links);
-}
 
 class CommentaryListBase extends StatefulWidget {
   final Function(TextBookTab) openBookCallback;
@@ -66,8 +61,6 @@ class CommentaryListBase extends StatefulWidget {
 }
 
 class CommentaryListBaseState extends State<CommentaryListBase> {
-  late final String _debugScope;
-  int _buildCount = 0;
   final TextEditingController _searchController = TextEditingController();
   final ValueNotifier<String> _searchQueryNotifier = ValueNotifier<String>('');
   final ScrollOffsetController scrollController = ScrollOffsetController();
@@ -82,6 +75,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   bool _allExpanded = true; // מצב גלובלי של פתיחה/סגירה של כל המפרשים
   final Map<String, bool> _expansionStates =
       {}; // מעקב אחרי מצב כל קבוצת מפרשים
+  String? _cachedGroupingSignature;
+  Future<List<CommentaryGroup>>? _cachedGroupsFuture;
 
   // Anti-jitter search stats
   Timer? _searchUpdateDebounce;
@@ -99,6 +94,24 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   List<String> _selectedCommentators(TextBookLoaded state) {
     return widget.selectedCommentatorsOverride ?? state.activeCommentators;
+  }
+
+  String _buildGroupingSignature(List<Link> links) {
+    return links
+        .map((link) =>
+            '${link.index1}|${link.path2}|${link.index2}|${link.connectionType}')
+        .join('||');
+  }
+
+  Future<List<CommentaryGroup>> _getCachedGroups(List<Link> links) {
+    final signature = _buildGroupingSignature(links);
+    if (_cachedGroupingSignature == signature && _cachedGroupsFuture != null) {
+      return _cachedGroupsFuture!;
+    }
+
+    _cachedGroupingSignature = signature;
+    _cachedGroupsFuture = CommentaryService.groupConsecutiveLinksAsync(links);
+    return _cachedGroupsFuture!;
   }
 
   List<CommentatorGroup> _commentatorGroups(TextBookLoaded state) {
@@ -137,35 +150,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   @override
   void initState() {
     super.initState();
-    _debugScope = PageShapeDebugLogger.newScope(
-      'commentary-list-base',
-      label: widget.bookTitleOverride,
-    );
-    PageShapeDebugLogger.log(
-      'CommentaryListBase',
-      'initState',
-      scope: _debugScope,
-      data: {
-        'fontSize': widget.fontSize,
-        'showSearch': widget.showSearch,
-        'hasIndexesOverride': widget.indexes != null,
-        'selectedCommentatorsOverrideCount':
-            widget.selectedCommentatorsOverride?.length,
-      },
-      level: 'LIFECYCLE',
-    );
     // האזנה לשינויים במיקום הגלילה כדי לשמור את המיקום האחרון
     _itemPositionsListener.itemPositions.addListener(_updateLastScrollIndex);
   }
 
   void scrollToTop() {
     if (_itemScrollController.isAttached) {
-      PageShapeDebugLogger.log(
-        'CommentaryListBase',
-        'בקשת scrollToTop',
-        scope: _debugScope,
-        level: 'SCROLL',
-      );
       _itemScrollController.scrollTo(
         index: 0,
         duration: const Duration(milliseconds: 300),
@@ -179,16 +169,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (positions.isNotEmpty) {
       // שומר את האינדקס של הפריט הראשון הנראה
       _lastScrollIndex = positions.first.index;
-      PageShapeDebugLogger.log(
-        'CommentaryListBase',
-        'עודכן lastScrollIndex',
-        scope: _debugScope,
-        data: {
-          'lastScrollIndex': _lastScrollIndex,
-          'positionsCount': positions.length,
-        },
-        level: 'SCROLL',
-      );
     }
   }
 
@@ -206,16 +186,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   @override
   void dispose() {
-    PageShapeDebugLogger.log(
-      'CommentaryListBase',
-      'dispose',
-      scope: _debugScope,
-      data: {
-        'buildCount': _buildCount,
-        'lastScrollIndex': _lastScrollIndex,
-      },
-      level: 'END',
-    );
     _searchUpdateDebounce?.cancel();
     _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
     _searchController.dispose();
@@ -226,30 +196,15 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     super.dispose();
   }
 
-  void _scrollToSearchResult() {
-    final trace = PageShapeDebugLogger.start(
-      'CommentaryListBase',
-      'גלילה לתוצאת חיפוש במפרשים',
-      scope: _debugScope,
-      data: {
-        'totalSearchResults': _totalSearchResultsNotifier.value,
-        'orderedLinksCount': _orderedLinks.length,
-        'currentSearchIndex': _currentSearchIndexNotifier.value,
-        'itemScrollControllerAttached': _itemScrollController.isAttached,
-      },
-      longTaskAfter: const Duration(milliseconds: 300),
-      heartbeatEvery: const Duration(milliseconds: 300),
-    );
+  Future<void> _scrollToSearchResult() async {
     if (_totalSearchResultsNotifier.value == 0 ||
         _orderedLinks.isEmpty ||
         !_itemScrollController.isAttached) {
-      trace.end(data: {'reason': 'missing results or unattached controller'});
       return;
     }
 
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) {
-      trace.end(data: {'reason': 'state is not TextBookLoaded'});
       return;
     }
 
@@ -268,12 +223,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     }
 
     if (targetLink == null) {
-      trace.end(data: {'reason': 'targetLink is null'});
       return;
     }
 
     // 2. מוצא את ה-group שמכיל את ה-link
-    final groups = _groupConsecutiveLinks(_orderedLinks);
+    final groups = await _getCachedGroups(_orderedLinks);
     int targetGroupIndex = -1;
     CommentaryGroup? targetGroup;
 
@@ -287,7 +241,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     }
 
     if (targetGroupIndex == -1 || targetGroup == null) {
-      trace.end(data: {'reason': 'targetGroup not found'});
       return;
     }
 
@@ -372,20 +325,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           }
         } catch (e) {
           debugPrint('Error during micro-scrolling: $e');
-          trace.warn(
-            'שגיאה ב־micro-scrolling',
-            data: {
-              'error': e,
-            },
-          );
         }
       }
-      trace.end(
-        data: {
-          'targetGroupIndex': targetGroupIndex,
-          'targetBookTitle': targetGroup?.bookTitle,
-        },
-      );
     });
   }
 
@@ -408,15 +349,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       _pendingCounts.clear();
       _totalSearchResultsNotifier.value =
           _searchResultsPerLink.values.fold(0, (sum, count) => sum + count);
-      PageShapeDebugLogger.log(
-        'CommentaryListBase',
-        'עודכנו מוני תוצאות חיפוש',
-        scope: _debugScope,
-        data: {
-          'totalSearchResults': _totalSearchResultsNotifier.value,
-          'linksWithCounters': _searchResultsPerLink.length,
-        },
-      );
 
       // תיקון אינדקס אם חרגנו מהגבולות
       if (_currentSearchIndexNotifier.value >=
@@ -492,19 +424,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   @override
   Widget build(BuildContext context) {
-    _buildCount++;
-    PageShapeDebugLogger.log(
-      'CommentaryListBase',
-      'build',
-      scope: _debugScope,
-      data: {
-        'buildCount': _buildCount,
-        'showSearch': widget.showSearch,
-        'showCommentatorsFilter': _showCommentatorsFilter,
-        'allExpanded': _allExpanded,
-      },
-      level: 'BUILD',
-    );
     return TextBookStateBuilder(
         buildWhen: (previous, current) {
           // מבטיח בניה מחדש רק כשיש שינוי בנתונים שמשפיעים על תצוגת המפרשים
@@ -611,7 +530,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                   );
                 }
 
-                return FutureBuilder(
+                return FutureBuilder<List<Link>>(
                   future: getLinksforIndexs(
                       indexes: currentIndexes,
                       links: state.links,
@@ -639,15 +558,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                       _itemKeys.putIfAbsent(key, () => GlobalKey());
                     }
 
-                    // מקבץ את הקישורים לקבוצות רצופות
-                    final groups = _groupConsecutiveLinks(data);
-
-                    // אתחול מצבי הרחבה עבור כל הקבוצות
-                    for (final group in groups) {
-                      final groupKey = group.bookTitle;
-                      _expansionStates.putIfAbsent(
-                          groupKey, () => _allExpanded);
-                    }
+                    _expansionStates.removeWhere(
+                        (key, value) => !data.any((link) => key == utils.getTitleFromPath(link.path2)));
 
                     final indexesKey = currentIndexes.join(',');
 
@@ -658,31 +570,43 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                           _savedSelectedText.value = selection.plainText;
                         }
                       },
-                      child: ProgressiveScroll(
-                        scrollController: scrollController,
-                        maxSpeed: 10000.0,
-                        curve: 10.0,
-                        accelerationFactor: 5,
-                        child: ScrollablePositionedList.builder(
-                          itemScrollController: _itemScrollController,
-                          itemPositionsListener: _itemPositionsListener,
-                          initialScrollIndex:
-                              _lastScrollIndex.clamp(0, groups.length - 1),
-                          key: PageStorageKey(
-                              'commentary_${selectedCommentators.join(',')}_$_allExpanded'),
-                          physics: const ClampingScrollPhysics(),
-                          scrollOffsetController: scrollController,
-                          shrinkWrap: widget.shrinkWrap,
-                          itemCount: groups.length,
-                          itemBuilder: (context, groupIndex) {
-                            final group = groups[groupIndex];
-                            return _buildCommentaryGroupTile(
-                              group: group,
-                              state: state,
-                              indexesKey: indexesKey,
-                            );
-                          },
-                        ),
+                      child: AppFutureBuilder<List<CommentaryGroup>>(
+                        future: _getCachedGroups(data),
+                        loadingWidget: _buildSkeletonLoading(),
+                        builder: (context, groups) {
+                          for (final group in groups) {
+                            final groupKey = group.bookTitle;
+                            _expansionStates.putIfAbsent(
+                                groupKey, () => _allExpanded);
+                          }
+
+                          return ProgressiveScroll(
+                            scrollController: scrollController,
+                            maxSpeed: 10000.0,
+                            curve: 10.0,
+                            accelerationFactor: 5,
+                            child: ScrollablePositionedList.builder(
+                              itemScrollController: _itemScrollController,
+                              itemPositionsListener: _itemPositionsListener,
+                              initialScrollIndex:
+                                  _lastScrollIndex.clamp(0, groups.length - 1),
+                              key: PageStorageKey(
+                                  'commentary_${selectedCommentators.join(',')}_$_allExpanded'),
+                              physics: const ClampingScrollPhysics(),
+                              scrollOffsetController: scrollController,
+                              shrinkWrap: widget.shrinkWrap,
+                              itemCount: groups.length,
+                              itemBuilder: (context, groupIndex) {
+                                final group = groups[groupIndex];
+                                return _buildCommentaryGroupTile(
+                                  group: group,
+                                  state: state,
+                                  indexesKey: indexesKey,
+                                );
+                              },
+                            ),
+                          );
+                        },
                       ),
                     );
                   },
@@ -1077,28 +1001,12 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
 
 class _CollapsibleCommentaryGroupState
     extends State<_CollapsibleCommentaryGroup> {
-  late final String _debugScope;
   late bool _isExpanded;
 
   @override
   void initState() {
     super.initState();
-    _debugScope = PageShapeDebugLogger.newScope(
-      'commentary-group',
-      label: widget.group.bookTitle,
-    );
     _isExpanded = widget.isExpanded;
-    PageShapeDebugLogger.log(
-      'CommentaryGroup',
-      'initState',
-      scope: _debugScope,
-      data: {
-        'bookTitle': widget.group.bookTitle,
-        'linksCount': widget.group.links.length,
-        'isExpanded': _isExpanded,
-      },
-      level: 'LIFECYCLE',
-    );
   }
 
   @override
@@ -1106,31 +1014,11 @@ class _CollapsibleCommentaryGroupState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isExpanded != widget.isExpanded) {
       _isExpanded = widget.isExpanded;
-      PageShapeDebugLogger.log(
-        'CommentaryGroup',
-        'עודכן מצב expansion מבחוץ',
-        scope: _debugScope,
-        data: {
-          'oldExpanded': oldWidget.isExpanded,
-          'newExpanded': widget.isExpanded,
-        },
-      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    PageShapeDebugLogger.log(
-      'CommentaryGroup',
-      'build',
-      scope: _debugScope,
-      data: {
-        'bookTitle': widget.group.bookTitle,
-        'linksCount': widget.group.links.length,
-        'isExpanded': _isExpanded,
-      },
-      level: 'BUILD',
-    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1141,14 +1029,6 @@ class _CollapsibleCommentaryGroupState
             setState(() {
               _isExpanded = !_isExpanded;
             });
-            PageShapeDebugLogger.log(
-              'CommentaryGroup',
-              'המשתמש החליף מצב expansion',
-              scope: _debugScope,
-              data: {
-                'isExpanded': _isExpanded,
-              },
-            );
             widget.onExpansionChanged(_isExpanded);
           },
           child: Padding(

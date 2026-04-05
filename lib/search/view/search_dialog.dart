@@ -6,6 +6,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
+import 'package:otzaria/search/view/category_tree_selector.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
@@ -25,7 +26,6 @@ import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/widgets/indexing_warning.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
-import 'package:otzaria/widgets/nikud_search_button.dart';
 
 /// דיאלוג חיפוש מתקדם - מכיל את כל פקדי החיפוש וההגדרות
 /// כשמבצעים חיפוש, הדיאלוג נסגר ונפתחת לשונית תוצאות
@@ -53,7 +53,7 @@ class _SearchDialogState extends State<SearchDialog> {
   bool _showHistoryDropdown = false;
   final ValueNotifier<bool> _advancedControlsHasFocus = ValueNotifier(false);
   late final VoidCallback _queryListener;
-  bool _searchWithNikud = false;
+  Set<String> _selectedCategoryFacets = {'/'}; // ברירת מחדל: הכל
 
   @override
   void initState() {
@@ -225,8 +225,8 @@ class _SearchDialogState extends State<SearchDialog> {
       return;
     }
 
-    // הסרת ניקוד כברירת מחדל, אלא אם המשתמש לחץ על כפתור "עם ניקוד"
-    if (!_searchWithNikud && utils.hasNikud(query)) {
+    // החיפוש עובד תמיד על טקסט ללא ניקוד.
+    if (utils.hasNikud(query)) {
       query = utils.removeVolwels(query);
     }
     query = SearchQueryBuilder.sanitizeQuery(query);
@@ -263,6 +263,10 @@ class _SearchDialogState extends State<SearchDialog> {
 
     // הוספה להיסטוריה
     context.read<HistoryBloc>().add(AddHistory(newSearchTab));
+
+    // הגדרת ה-facets שנבחרו לפני ביצוע החיפוש
+    final facetsToSearch = _selectedCategoryFacets.toList();
+    newSearchTab.searchBloc.add(SetFacetsWithoutSearch(facetsToSearch));
 
     // ביצוע החיפוש בטאב החדש
     newSearchTab.searchBloc.add(
@@ -446,170 +450,213 @@ class _SearchDialogState extends State<SearchDialog> {
 
                       // תוכן ראשי
                       Expanded(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // שדה החיפוש + מרווח בין מילים + מגירת היסטוריה
-                              Column(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // שדה החיפוש + מרווח בין מילים (גובה קבוע)
+                            IntrinsicHeight(
+                              child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  // שורה עם תיבת החיפוש ומרווח בין מילים - באותו גובה
-                                  IntrinsicHeight(
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
+                                  // שדה החיפוש עם כפתורי היסטוריה וחיפוש
+                                  Expanded(
+                                    child: Stack(
                                       children: [
-                                        // שדה החיפוש עם כפתור היסטוריה
-                                        Expanded(
-                                          child: Stack(
-                                            children: [
-                                              // תיבת החיפוש
-                                              BlocProvider.value(
-                                                value: _searchTab.searchBloc,
-                                                child: EnhancedSearchField(
-                                                  key: enhancedSearchFieldKey,
-                                                  widget: _SearchDialogWrapper(
-                                                    tab: _searchTab,
-                                                  ),
-                                                ),
-                                              ),
-                                              // כפתור חיפוש - מצד ימין
-                                              Positioned(
-                                                right: 10,
-                                                top: 8,
-                                                bottom: 8,
-                                                child: Center(
-                                                  child: IconButton(
-                                                    icon: const Icon(
-                                                      FluentIcons
-                                                          .search_24_filled,
-                                                      size: 20,
-                                                    ),
-                                                    tooltip: 'חפש',
-                                                    onPressed: _performSearch,
-                                                    style: IconButton.styleFrom(
-                                                      backgroundColor:
-                                                          Theme.of(context)
-                                                              .colorScheme
-                                                              .primaryContainer,
-                                                      foregroundColor:
-                                                          Theme.of(context)
-                                                              .colorScheme
-                                                              .primary,
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                              6),
-                                                      minimumSize:
-                                                          const Size(32, 32),
-                                                      tapTargetSize:
-                                                          MaterialTapTargetSize
-                                                              .shrinkWrap,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              // כפתור "עם ניקוד" - מופיע רק כאשר יש ניקוד
-                                              if (utils.hasNikud(_searchTab
-                                                  .queryController.text))
-                                                Positioned(
-                                                  left: 96,
-                                                  top: 8,
-                                                  bottom: 8,
-                                                  child: Center(
-                                                    child: NikudSearchButton(
-                                                      isActive:
-                                                          _searchWithNikud,
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          _searchWithNikud =
-                                                              !_searchWithNikud;
-                                                        });
-                                                      },
-                                                    ),
-                                                  ),
-                                                ),
-                                              // כפתור היסטוריה - ליד כפתור ה-X
-                                              Positioned(
-                                                left: 48,
-                                                top: 0,
-                                                bottom: 0,
-                                                child: Center(
-                                                  child: IconButton(
-                                                    icon: Icon(
-                                                      _showHistoryDropdown
-                                                          ? FluentIcons
-                                                              .chevron_up_24_regular
-                                                          : FluentIcons
-                                                              .history_24_regular,
-                                                      size: 24,
-                                                    ),
-                                                    tooltip:
-                                                        'היסטוריית חיפושים',
-                                                    padding: EdgeInsets.zero,
-                                                    constraints:
-                                                        const BoxConstraints(),
-                                                    onPressed: () {
-                                                      setState(() {
-                                                        _showHistoryDropdown =
-                                                            !_showHistoryDropdown;
-                                                      });
-                                                    },
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
+                                        BlocProvider.value(
+                                          value: _searchTab.searchBloc,
+                                          child: EnhancedSearchField(
+                                            key: enhancedSearchFieldKey,
+                                            widget: _SearchDialogWrapper(
+                                              tab: _searchTab,
+                                            ),
+                                            showInlineSearchButton: false,
                                           ),
                                         ),
-
-                                        // מרווח בין מילים - באותו גובה
-                                        BlocBuilder<SearchBloc, SearchState>(
-                                          builder: (context, state) {
-                                            if (state.fuzzy) {
-                                              return const SizedBox.shrink();
-                                            }
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 16.0,
+                                        // כפתור חיפוש
+                                        Positioned(
+                                          right: 10,
+                                          top: 8,
+                                          bottom: 8,
+                                          child: Center(
+                                            child: IconButton(
+                                              icon: const Icon(
+                                                FluentIcons.search_24_filled,
+                                                size: 20,
                                               ),
-                                              child: Center(
-                                                child: FuzzyDistance(
-                                                  tab: _searchTab,
-                                                ),
+                                              tooltip: 'חפש',
+                                              onPressed: _performSearch,
+                                              style: IconButton.styleFrom(
+                                                backgroundColor:
+                                                    Theme.of(context)
+                                                        .colorScheme
+                                                        .primaryContainer,
+                                                foregroundColor:
+                                                    Theme.of(context)
+                                                        .colorScheme
+                                                        .primary,
+                                                padding:
+                                                    const EdgeInsets.all(6),
+                                                minimumSize:
+                                                    const Size(32, 32),
+                                                tapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
                                               ),
-                                            );
-                                          },
+                                            ),
+                                          ),
+                                        ),
+                                        // כפתור היסטוריה
+                                        Positioned(
+                                          left: 48,
+                                          top: 0,
+                                          bottom: 0,
+                                          child: Center(
+                                            child: IconButton(
+                                              icon: Icon(
+                                                _showHistoryDropdown
+                                                    ? FluentIcons
+                                                        .chevron_up_24_regular
+                                                    : FluentIcons
+                                                        .history_24_regular,
+                                                size: 24,
+                                              ),
+                                              tooltip: 'היסטוריית חיפושים',
+                                              padding: EdgeInsets.zero,
+                                              constraints:
+                                                  const BoxConstraints(),
+                                              onPressed: () {
+                                                setState(() {
+                                                  _showHistoryDropdown =
+                                                      !_showHistoryDropdown;
+                                                });
+                                              },
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
-
-                                  // מגירת היסטוריה - מתחת לשורה
-                                  if (_showHistoryDropdown)
-                                    _buildHistoryDropdown(),
+                                  // מרווח בין מילים
+                                  BlocBuilder<SearchBloc, SearchState>(
+                                    builder: (context, state) {
+                                      if (state.fuzzy) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                            right: 16.0),
+                                        child: Center(
+                                          child: FuzzyDistance(
+                                              tab: _searchTab),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ],
                               ),
+                            ),
 
-                              const SizedBox(height: 16),
+                            // מגירת היסטוריה
+                            if (_showHistoryDropdown) _buildHistoryDropdown(),
 
-                              // אפשרויות חיפוש עם הטיפ
-                              BlocBuilder<SearchBloc, SearchState>(
+                            const SizedBox(height: 16),
+
+                            // תוכן תחתון - משתנה לפי מצב החיפוש
+                            Expanded(
+                              child: BlocBuilder<SearchBloc, SearchState>(
                                 builder: (context, state) {
-                                  if (!state.isAdvancedSearchEnabled) {
+                                  final isAdvanced =
+                                      state.isAdvancedSearchEnabled;
+                                  final showTree = widget.bookTitle == null;
+
+                                  if (isAdvanced && showTree) {
+                                    // מתקדם: בוחר קטגוריות שמאלה + אפשרויות מתקדמות ימינה
+                                    // (ב-RTL: ראשון בשורה = ימין, אחרון = שמאל)
+                                    return LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        // בדיקה אם יש מספיק רוחב לשני עמודות
+                                        // (אפשרויות מתקדמות צריכות לפחות ~320px)
+                                        final isWide =
+                                            constraints.maxWidth >= 520;
+
+                                        final advancedControls =
+                                            AdvancedSearchControls(
+                                          tab: _searchTab,
+                                          compactMode: true,
+                                          onEmptySubmit: _performSearch,
+                                          inputFocusNotifier:
+                                              _advancedControlsHasFocus,
+                                        );
+
+                                        final categoryTree = CategoryTreeSelector(
+                                          selectedFacets: _selectedCategoryFacets,
+                                          onSelectionChanged: (s) => setState(
+                                              () => _selectedCategoryFacets = s),
+                                        );
+
+                                        if (isWide) {
+                                          return Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              // אפשרויות מתקדמות - ימינה (ראשון ב-RTL)
+                                              SizedBox(
+                                                width: 320,
+                                                child: SingleChildScrollView(
+                                                  child: advancedControls,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 16),
+                                              // בוחר קטגוריות - שמאלה (אחרון ב-RTL)
+                                              Expanded(child: categoryTree),
+                                            ],
+                                          );
+                                        }
+
+                                        // מסך צר: ערימה אנכית עם גלילה
+                                        return SingleChildScrollView(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              advancedControls,
+                                              const SizedBox(height: 16),
+                                              ConstrainedBox(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                        maxHeight: 220),
+                                                child: categoryTree,
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  } else if (isAdvanced) {
+                                    // מתקדם ללא עץ (חיפוש בספר ספציפי)
+                                    return SingleChildScrollView(
+                                      child: AdvancedSearchControls(
+                                        tab: _searchTab,
+                                        compactMode: true,
+                                        onEmptySubmit: _performSearch,
+                                        inputFocusNotifier:
+                                            _advancedControlsHasFocus,
+                                      ),
+                                    );
+                                  } else if (showTree) {
+                                    // מדויק/מקורב: עץ קטגוריות ממלא הכל
+                                    return CategoryTreeSelector(
+                                      selectedFacets: _selectedCategoryFacets,
+                                      onSelectionChanged: (s) => setState(
+                                          () => _selectedCategoryFacets = s),
+                                    );
+                                  } else {
                                     return const SizedBox.shrink();
                                   }
-
-                                  return AdvancedSearchControls(
-                                    tab: _searchTab,
-                                    compactMode: true,
-                                    onEmptySubmit: _performSearch,
-                                    inputFocusNotifier:
-                                        _advancedControlsHasFocus,
-                                  );
                                 },
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

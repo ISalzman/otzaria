@@ -82,7 +82,12 @@ class MyUpdatWidget extends StatelessWidget {
     // Don't show update widget in debug mode or offline mode
     final isOfflineMode =
         Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false;
-    if (kDebugMode || isOfflineMode) {
+    final softwareAndBookUpdatesEnabled = Settings.getValue<bool>(
+          SettingsRepository.keySoftwareAndBookUpdatesEnabled,
+          defaultValue: true,
+        ) ??
+        true;
+    if (kDebugMode || isOfflineMode || !softwareAndBookUpdatesEnabled) {
       return child;
     }
 

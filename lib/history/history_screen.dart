@@ -91,6 +91,13 @@ class HistoryView extends StatelessWidget {
               searchTab.spacingValues.clear();
               searchTab.spacingValues.addAll(item.spacingValues ?? {});
 
+              // Restore search scope facets if present
+              if (item.searchScopeFacets != null &&
+                  item.searchScopeFacets!.isNotEmpty) {
+                searchTab.searchBloc
+                    .add(SetFacetsWithoutSearch(item.searchScopeFacets!));
+              }
+
               // Trigger search
               searchTab
                   .updateTitleFromAppliedQuery(searchTab.queryController.text);
@@ -132,9 +139,33 @@ class HistoryView extends StatelessWidget {
           clearAllText: 'מחק את כל ההיסטוריה',
           leadingIconBuilder: (item) =>
               _getLeadingIcon(item.book, item.isSearch),
-          subtitleBuilder: (item) => item.workspaceName,
+          subtitleBuilder: (item) {
+            final parts = <String>[];
+            final facets = item.searchScopeFacets;
+            if (facets != null && facets.isNotEmpty) {
+              final allNames = _facetDisplayNames(facets);
+              final displayed = allNames.length > 2
+                  ? '${allNames.take(2).join(', ')}...'
+                  : allNames.join(', ');
+              parts.add('חיפוש בקטגוריות: $displayed');
+            }
+            if (item.workspaceName != null) parts.add(item.workspaceName!);
+            return parts.isEmpty ? null : parts.join(' | ');
+          },
+          subtitleTooltipBuilder: (item) {
+            final facets = item.searchScopeFacets;
+            if (facets == null || facets.length <= 2) return null;
+            return 'חיפוש בקטגוריות: ${_facetDisplayNames(facets).join(', ')}';
+          },
         );
       },
     );
+  }
+
+  static List<String> _facetDisplayNames(List<String> facets) {
+    return facets.map((f) {
+      final segments = f.split('/').where((s) => s.isNotEmpty).toList();
+      return segments.isNotEmpty ? segments.last : f;
+    }).toList();
   }
 }

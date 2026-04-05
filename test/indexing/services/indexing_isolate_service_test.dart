@@ -22,6 +22,7 @@ void main() {
       expect(documents[2].text, 'סימן א');
       expect(documents[3].reference, 'פרק א, סימן א');
       expect(documents[3].text, 'שורה שניה');
+      expect(documents.map((document) => document.ordinal).toList(), [0, 1, 2, 3]);
     });
 
     test('replaces previous header branch when same level appears again', () {
@@ -62,6 +63,7 @@ void main() {
       expect(documents, hasLength(3));
       expect(documents[1].text, 'שורה א');
       expect(documents[2].text, 'שורה ב');
+      expect(documents.map((document) => document.ordinal).toList(), [0, 1, 2]);
     });
 
     test('cancel stops further batch generation', () async {

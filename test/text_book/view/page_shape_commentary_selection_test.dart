@@ -73,6 +73,41 @@ void main() {
       expect(resolved, ['רש"י על ברכות', 'רמב"ן']);
     });
 
+    test(
+        'does not keep multiple mode when no selected commentator is available',
+        () {
+      final encoded = encodePageShapeCommentatorsSelection(
+        const ['רש"י'],
+        forceMultipleMode: true,
+      );
+
+      expect(
+        resolvePageShapeCommentatorSelection(
+          selection: encoded,
+          availableCommentators: const ['תוספות', 'רמב"ן'],
+        ),
+        isNull,
+      );
+    });
+
+    test('keeps multiple mode when one selected commentator still matches', () {
+      final encoded = encodePageShapeCommentatorsSelection(
+        const ['רש"י'],
+        forceMultipleMode: true,
+      );
+
+      final resolved = resolvePageShapeCommentatorSelection(
+        selection: encoded,
+        availableCommentators: const ['רש"י על ברכות', 'תוספות'],
+      );
+
+      expect(isPageShapeMultipleCommentatorsMode(resolved), isTrue);
+      expect(
+        decodePageShapeCommentatorsSelection(resolved),
+        ['רש"י על ברכות'],
+      );
+    });
+
     test('keeps legacy remaining selection compatible', () {
       final resolved = resolvePageShapeSelectedCommentators(
         selection: pageShapeRemainingCommentatorsValue,

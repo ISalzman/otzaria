@@ -68,11 +68,14 @@ class ExternalCatalogSettingsHelper {
     }
 
     final settingsState = context.read<SettingsBloc>().state;
-    if (settingsState.isOfflineMode) {
+    if (settingsState.isOfflineMode ||
+        !settingsState.softwareAndBookUpdatesEnabled) {
       await showSingleActionDialog(
         context: context,
         title: 'מסד הקטלוגים חסר',
-        content: 'לא ניתן להוריד את מסד הקטלוגים החיצוני במצב מנותק.',
+        content: settingsState.isOfflineMode
+            ? 'לא ניתן להוריד את מסד הקטלוגים החיצוני במצב מנותק.'
+            : 'לא ניתן להוריד את מסד הקטלוגים כשהאפשרות עדכוני תוכנה וספרים מושבתת.',
         confirmText: 'הבנתי',
       );
       return false;
@@ -114,6 +117,7 @@ class ExternalCatalogSettingsHelper {
   }) async {
     if (!settingsState.showExternalBooks ||
         !settingsState.autoSyncCatalogs ||
+        !settingsState.canUseSoftwareAndBookUpdates ||
         _isAutoSyncInProgress) {
       return;
     }

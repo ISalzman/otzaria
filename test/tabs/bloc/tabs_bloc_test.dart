@@ -207,6 +207,37 @@ void main() {
       await _closeBlocAndAllowDeferredDispose(bloc);
     });
 
+    test('לא ממקד ספר אחר רק כי הוא באותה קטגוריה', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final existingTab = TextBookTab(
+        book: TextBook(
+          id: 101,
+          title: 'משנה ברכות',
+          categoryId: 7,
+        ),
+        index: 0,
+      );
+
+      bloc.add(AddTab(existingTab));
+      await Future<void>.delayed(Duration.zero);
+
+      final targetTab = TextBookTab(
+        book: TextBook(
+          id: 102,
+          title: 'משנה פאה',
+          categoryId: 7,
+        ),
+        index: 0,
+      );
+      bloc.add(OpenOrFocusTab(targetTab));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(bloc.state.tabs, hasLength(2));
+      expect(bloc.state.currentTabIndex, 1);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
     test('ממקד טאב PDF קיים גם כשהכותרת עוד לא נטענה לפי מספר עמוד', () async {
       final bloc = TabsBloc(repository: _FakeTabsRepository());
       final existingTab = PdfBookTab(

@@ -10,10 +10,11 @@ abstract class PersonalNotesEvent extends Equatable {
 
 class LoadPersonalNotes extends PersonalNotesEvent {
   final String bookId;
+  final int? categoryId;
 
-  const LoadPersonalNotes(this.bookId);
+  const LoadPersonalNotes(this.bookId, {this.categoryId});
   @override
-  List<Object?> get props => [bookId];
+  List<Object?> get props => [bookId, categoryId];
 }
 
 class AddPersonalNote extends PersonalNotesEvent {

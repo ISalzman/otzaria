@@ -13,6 +13,7 @@ class ItemsListView extends StatefulWidget {
   final String clearAllText;
   final Widget? Function(dynamic item)? leadingIconBuilder;
   final String? Function(dynamic item)? subtitleBuilder;
+  final String? Function(dynamic item)? subtitleTooltipBuilder;
 
   const ItemsListView({
     super.key,
@@ -26,6 +27,7 @@ class ItemsListView extends StatefulWidget {
     required this.clearAllText,
     this.leadingIconBuilder,
     this.subtitleBuilder,
+    this.subtitleTooltipBuilder,
   });
 
   @override
@@ -110,6 +112,8 @@ class _ItemsListViewState extends State<ItemsListView> {
                     final item = filteredItems[index];
                     final originalIndex = widget.items.indexOf(item);
                     final centerText = widget.subtitleBuilder?.call(item);
+                    final centerTooltip =
+                        widget.subtitleTooltipBuilder?.call(item);
                     return InkWell(
                       onTap: () =>
                           widget.onItemTap(context, item, originalIndex),
@@ -131,19 +135,22 @@ class _ItemsListViewState extends State<ItemsListView> {
                               ),
                             ),
                             if (centerText != null)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16.0),
-                                child: Text(
-                                  centerText,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.6),
+                              Tooltip(
+                                message: centerTooltip ?? '',
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16.0),
+                                  child: Text(
+                                    centerText,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.6),
+                                    ),
+                                    textDirection: TextDirection.rtl,
                                   ),
-                                  textDirection: TextDirection.rtl,
                                 ),
                               ),
                             IconButton(

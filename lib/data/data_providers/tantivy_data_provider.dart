@@ -11,6 +11,12 @@ import 'package:otzaria/core/app_paths.dart';
 /// This provider handles the search operations for both text-based and PDF books,
 /// maintaining an index for full-text search capabilities.
 class TantivyDataProvider {
+  static const int currentIndexStateVersion = 3;
+  static const String _booksDoneKey = 'key-books-done';
+  static const String _indexStateVersionKey = 'key-index-state-version';
+  static const String _catalogueOrderSignatureKey =
+      'key-catalogue-order-signature';
+
   /// Instance of the search engine pointing to the index directory
   late Future<SearchEngine> engine;
 
@@ -29,6 +35,8 @@ class TantivyDataProvider {
 
   // Track ongoing counts to prevent duplicates
   static final Set<String> _ongoingCounts = {};
+  int _storedIndexStateVersion = 0;
+  String? _catalogueOrderSignature;
 
   /// Clear global cache when starting new search
   static void clearGlobalCache() {
@@ -208,6 +216,8 @@ class TantivyDataProvider {
           }
         }
       }
+      _storedIndexStateVersion = _readIndexStateVersion(lockPath);
+      _catalogueOrderSignature = _readCatalogueOrderSignature(lockPath);
     } catch (e) {
       debugPrint('⚠️ Error loading books done: $e');
       booksDone = [];
@@ -219,13 +229,90 @@ class TantivyDataProvider {
       name: 'books_indexed',
       directory: directory,
       maxSizeMiB: 100,
-    ).get('key-books-done', defaultValue: []);
+    ).get(_booksDoneKey, defaultValue: []);
 
     if (value is List) {
       return value.map<String>((e) => e.toString()).toList();
     }
 
     return [];
+  }
+
+  int _readIndexStateVersion(String directory) {
+    final dynamic value = Hive.box(
+      name: 'books_indexed',
+      directory: directory,
+      maxSizeMiB: 100,
+    ).get(_indexStateVersionKey, defaultValue: 0);
+
+    if (value is int) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return 0;
+  }
+
+  String? _readCatalogueOrderSignature(String directory) {
+    final dynamic value = Hive.box(
+      name: 'books_indexed',
+      directory: directory,
+      maxSizeMiB: 100,
+    ).get(_catalogueOrderSignatureKey);
+
+    if (value is String && value.isNotEmpty) {
+      return value;
+    }
+
+    return null;
+  }
+
+  @visibleForTesting
+  static bool shouldInvalidateStoredIndexState({
+    required int storedIndexStateVersion,
+    required String? storedCatalogueOrderSignature,
+    required String currentCatalogueOrderSignature,
+  }) {
+    return storedIndexStateVersion != currentIndexStateVersion ||
+        storedCatalogueOrderSignature != currentCatalogueOrderSignature;
+  }
+
+  Future<void> ensureIndexStateMatchesCatalogue(
+    String currentCatalogueOrderSignature,
+  ) async {
+    if (!shouldInvalidateStoredIndexState(
+      storedIndexStateVersion: _storedIndexStateVersion,
+      storedCatalogueOrderSignature: _catalogueOrderSignature,
+      currentCatalogueOrderSignature: currentCatalogueOrderSignature,
+    )) {
+      return;
+    }
+
+    final lockPath = await AppPaths.getTantivyLockPath();
+    debugPrint(
+      '⚠️ מצב האינדקס לא תואם לקטלוג הנוכחי '
+      '(version=$_storedIndexStateVersion, '
+      'signatureMatch=${_catalogueOrderSignature == currentCatalogueOrderSignature}) '
+      '- מסמן צורך בבנייה מחדש מלאה',
+    );
+    booksDone = [];
+    _storedIndexStateVersion = currentIndexStateVersion;
+    _catalogueOrderSignature = currentCatalogueOrderSignature;
+    await _persistIndexState(lockPath);
+  }
+
+  Future<void> _persistIndexState(String directory) async {
+    final box = Hive.box(
+      name: 'books_indexed',
+      directory: directory,
+      maxSizeMiB: 100,
+    );
+    box.put(_booksDoneKey, booksDone);
+    box.put(_indexStateVersionKey, _storedIndexStateVersion);
+    box.put(_catalogueOrderSignatureKey, _catalogueOrderSignature ?? '');
   }
 
   /// Deletes the legacy Hive/Isar `books_indexed` files from [directory].
@@ -326,11 +413,7 @@ class TantivyDataProvider {
   /// Persists the list of indexed books to disk using Hive storage.
   Future<void> saveBooksDoneToDisk() async {
     final lockPath = await AppPaths.getTantivyLockPath();
-    Hive.box(
-      name: 'books_indexed',
-      directory: lockPath,
-      maxSizeMiB: 100,
-    ).put('key-books-done', booksDone);
+    await _persistIndexState(lockPath);
   }
 
   /// מחזיר האם תיקיית האינדקס כבר הייתה קיימת לפני פתיחת המנוע הנוכחי.
@@ -539,6 +622,7 @@ class TantivyDataProvider {
     final index = await engine;
     await index.clear();
     booksDone.clear();
+    _storedIndexStateVersion = currentIndexStateVersion;
     await saveBooksDoneToDisk();
   }
 

@@ -19,7 +19,7 @@ void main() {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
     });
 
-    test('בתצוגה רגילה טוען חלון קישורים חלקי ולא את כל הספר', () async {
+    test('בתצוגה רגילה ללא חלונית פעילה לא טוען קישורים מיד', () async {
       final repository = _FakeTextBookRepository();
       final bloc =
           _createBloc(repository: repository, showPageShapeView: false);
@@ -35,12 +35,12 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(repository.getBookLinksInRangeCalls, 1);
+      expect(repository.getBookLinksInRangeCalls, 0);
 
       await bloc.close();
     });
 
-    test('באתחול ספר משתמש בשורה ההתחלתית לשם טעינת חלון קישורים', () async {
+    test('באתחול ספר ללא חלונית פעילה לא מבקש חלון קישורים', () async {
       final repository = _FakeTextBookRepository();
       final bloc =
           _createBloc(repository: repository, showPageShapeView: false);
@@ -56,9 +56,33 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(repository.getBookLinksInRangeCalls, 1);
-      expect(repository.lastStartIndex, 0);
-      expect(repository.lastEndIndex, 60);
+      expect(repository.getBookLinksInRangeCalls, 0);
+      expect(repository.lastStartIndex, isNull);
+      expect(repository.lastEndIndex, isNull);
+      expect(repository.lastTargetBookTitles, isNull);
+
+      await bloc.close();
+    });
+
+    test('בתצוגה רגילה ללא חלונית מפרשים לא מתבצעת כלל טעינת קישורים',
+        () async {
+      final repository = _FakeTextBookRepository();
+      final bloc =
+          _createBloc(repository: repository, showPageShapeView: false);
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(repository.getBookLinksInRangeCalls, 0);
+      expect(repository.lastTargetBookTitles, isNull);
 
       await bloc.close();
     });
@@ -74,6 +98,71 @@ void main() {
       expect(lines[10], '');
       expect(lines[11], 'שורה 11');
       expect(lines[13], 'שורה 13');
+    });
+
+    test('LoadContent משתמש ב-categoryId וב-fileType במסלול quick preview',
+        () async {
+      final repository = _EmptyContentTextBookRepository();
+      final quickPreviewCalls = <({
+        String title,
+        int currentLine,
+        int? categoryId,
+        String? fileType,
+      })>[];
+
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: false,
+        book: TextBook(
+          title: 'ספר כפול',
+          categoryId: 42,
+          fileType: 'txt',
+        ),
+        quickPreviewLoader: (
+          String title,
+          int currentLine, {
+          int? categoryId,
+          String? fileType,
+        }) async {
+          quickPreviewCalls.add((
+            title: title,
+            currentLine: currentLine,
+            categoryId: categoryId,
+            fileType: fileType,
+          ));
+
+          if (categoryId == 42 && fileType == 'txt') {
+            return 'תוכן תצוגה מקדימה נכון';
+          }
+
+          return 'תוכן שגוי';
+        },
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      expect(quickPreviewCalls, hasLength(1));
+      expect(quickPreviewCalls.single.title, 'ספר כפול');
+      expect(quickPreviewCalls.single.currentLine, 10);
+      expect(quickPreviewCalls.single.categoryId, 42);
+      expect(quickPreviewCalls.single.fileType, 'txt');
+
+      final state = bloc.state;
+      expect(state, isA<TextBookLoaded>());
+      expect(
+          (state as TextBookLoaded).content.contains('תוכן תצוגה מקדימה נכון'),
+          isTrue);
+
+      await bloc.close();
     });
 
     test(
@@ -205,6 +294,140 @@ void main() {
       await bloc.close();
     });
 
+    test('במצב מפוצל טוען קישורים רק למפרשים הפעילים', () async {
+      final repository = _FakeTextBookRepository();
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: false,
+        commentators: const [
+          'רש"י על בראשית',
+          'אבן עזרא על בראשית',
+        ],
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: true,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(
+        repository.lastTargetBookTitles,
+        [
+          'אבן עזרא על בראשית',
+          'רש"י על בראשית',
+        ],
+      );
+
+      await bloc.close();
+    });
+
+    test('במפרשים למטה גלילה לא טוענת מחדש קישורים כשהחלונית סגורה', () async {
+      final repository = _FakeTextBookRepository();
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: false,
+        commentators: const ['רש"י על בראשית'],
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(repository.getBookLinksInRangeCalls, 1);
+
+      bloc.add(const UpdateVisibleIndecies([20, 21, 22]));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(repository.getBookLinksInRangeCalls, 1);
+
+      await bloc.close();
+    });
+
+    test(
+      'במפרשים למטה בחירה חוזרת של אותה שורה לא טוענת מחדש כשהחלון כבר מכוסה',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+          commentators: const ['רש"י על בראשית'],
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repository.getBookLinksInRangeCalls, 1);
+
+        bloc.add(const UpdateSelectedIndex(12));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        expect(repository.getBookLinksInRangeCalls, 1);
+
+        bloc.add(const UpdateSelectedIndex(12));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        expect(repository.getBookLinksInRangeCalls, 1);
+
+        await bloc.close();
+      },
+    );
+
+    test(
+      'במפרשים למטה שינוי מפרשים טוען את הטווח הנוכחי בלי force מיותר',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+          commentators: const ['רש"י על בראשית'],
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        bloc.add(const UpdateVisibleIndecies([40, 41, 42]));
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        expect(repository.getBookLinksInRangeCalls, 1);
+
+        bloc.add(const UpdateCommentators(['אבן עזרא על בראשית']));
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+
+        expect(repository.getBookLinksInRangeCalls, 2);
+        expect(repository.lastStartIndex, 15);
+        expect(repository.lastEndIndex, 92);
+        expect(repository.lastTargetBookTitles, ['אבן עזרא על בראשית']);
+
+        await bloc.close();
+      },
+    );
+
     test('ToggleLeftPane לא פולט state חדש אם הערך לא השתנה', () async {
       final repository = _FakeTextBookRepository();
       final bloc =
@@ -238,14 +461,22 @@ void main() {
 }
 
 TextBookBloc _createBloc({
-  required _FakeTextBookRepository repository,
+  required TextBookRepository repository,
   required bool showPageShapeView,
   List<String> commentators = const [],
+  TextBook? book,
+  Future<String?> Function(
+    String title,
+    int currentLine, {
+    int? categoryId,
+    String? fileType,
+  })? quickPreviewLoader,
 }) {
   return TextBookBloc(
     repository: repository,
+    quickPreviewLoader: quickPreviewLoader,
     initialState: TextBookInitial.named(
-      TextBook(title: 'בראשית'),
+      book ?? TextBook(title: 'בראשית'),
       10,
       false,
       commentators,
@@ -292,6 +523,13 @@ class _FakeTextBookRepository extends TextBookRepository {
   @override
   Future<List<String>> getAvailableCommentators(TextBook book) async {
     return const [];
+  }
+}
+
+class _EmptyContentTextBookRepository extends _FakeTextBookRepository {
+  @override
+  Future<String> getBookContent(TextBook book) async {
+    return '';
   }
 }
 

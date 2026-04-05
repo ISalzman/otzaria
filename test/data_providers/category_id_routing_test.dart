@@ -291,6 +291,86 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
+  test('BookLocator מאתר ספר קובץ גם לפי categoryId בלי אובייקט קטגוריה',
+      () async {
+    final tempDir = await Directory.systemTemp.createTemp('otzaria_locator_');
+    final testFile = File(
+      '${tempDir.path}${Platform.pathSeparator}ספר איתור 2.txt',
+    );
+    await testFile.writeAsString('שורה 1\nשורה 2');
+
+    const categoryPath = 'משנה, סדר זרעים';
+    final categoryId = categoryPath.hashCode;
+    final storageKey = BookCompositeKey.create(
+      title: 'ספר איתור 2',
+      categoryId: categoryId,
+      fileType: 'txt',
+    ).toStorageKey();
+
+    FileSystemLibraryProvider.instance.seedKeyToPathForTesting(
+      keyToPath: {storageKey: testFile.path},
+      categoryIdToPath: {categoryId: categoryPath},
+      libraryPath: tempDir.path,
+    );
+
+    final location = await BookLocator.locateBook(
+      'ספר איתור 2',
+      categoryId: categoryId,
+    );
+
+    expect(location, isNotNull);
+    expect(location!.source, BookSource.fileSystem);
+    expect(location.filePath, testFile.path);
+
+    await tempDir.delete(recursive: true);
+  });
+
+  test('BookLocator לא נופל חזרה לחיפוש לפי שם כשיש categoryId שגוי', () async {
+    final tempDir = await Directory.systemTemp.createTemp('otzaria_locator_');
+    final firstFile = File(
+      '${tempDir.path}${Platform.pathSeparator}ספר כפול א.txt',
+    );
+    final secondFile = File(
+      '${tempDir.path}${Platform.pathSeparator}ספר כפול ב.txt',
+    );
+    await firstFile.writeAsString('תוכן א');
+    await secondFile.writeAsString('תוכן ב');
+
+    const firstCategoryPath = 'משנה, סדר זרעים';
+    const secondCategoryPath = 'תלמוד בבלי, סדר זרעים';
+    final firstCategoryId = firstCategoryPath.hashCode;
+    final secondCategoryId = secondCategoryPath.hashCode;
+
+    FileSystemLibraryProvider.instance.seedKeyToPathForTesting(
+      keyToPath: {
+        BookCompositeKey.create(
+          title: 'ספר כפול',
+          categoryId: firstCategoryId,
+          fileType: 'txt',
+        ).toStorageKey(): firstFile.path,
+        BookCompositeKey.create(
+          title: 'ספר כפול',
+          categoryId: secondCategoryId,
+          fileType: 'txt',
+        ).toStorageKey(): secondFile.path,
+      },
+      categoryIdToPath: {
+        firstCategoryId: firstCategoryPath,
+        secondCategoryId: secondCategoryPath,
+      },
+      libraryPath: tempDir.path,
+    );
+
+    final location = await BookLocator.locateBook(
+      'ספר כפול',
+      categoryId: 'קטגוריה לא קיימת'.hashCode,
+    );
+
+    expect(location, isNull);
+
+    await tempDir.delete(recursive: true);
+  });
+
   test('TextBook.links טוען קישורים עבור ספר DB לפי categoryId', () async {
     final link = Link(
       heRef: 'קישור בדיקה',

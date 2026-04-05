@@ -43,14 +43,17 @@ class SettingsRepository {
   static const String keyOfflineMode = 'key-offline-mode';
   static const String keyAutoSync = 'key-auto-sync';
   static const String keyAutoSyncCatalogs = 'key-auto-sync-catalogs';
-    static const String keyErrorReportSenderEmail =
+  static const String keySoftwareAndBookUpdatesEnabled =
+      'key-software-and-book-updates-enabled';
+  static const String keyErrorReportSenderEmail =
       'key-error-report-sender-email';
-    static const String keyQueueErrorReportsWhenOffline =
+  static const String keyQueueErrorReportsWhenOffline =
       'key-queue-error-reports-when-offline';
   static const String keyLibraryPath = 'key-library-path';
   static const String keyIndexPath = 'key-index-path';
   static const String keyBackupPath = 'key-backup-path';
   static const String keyLibraryFolderName = 'key-library-folder-name';
+
   /// Android only: nתיב ה-DB שנגיש ל-sqlite3 native (override ל-getDatabasePath).
   /// נוצר כאשר המשתמש בחר ספרייה באחסון חיצוני ו-DB הועתק/הועבר פנימה.
   static const String keyDbEffectivePath = 'key-db-effective-path';
@@ -219,7 +222,7 @@ class SettingsRepository {
       'shortcuts': await getShortcuts(),
       'enablePerBookSettings': _settings.getValue<bool>(
         keyEnablePerBookSettings,
-        defaultValue: true,
+        defaultValue: false,
       ),
       'isOfflineMode': _settings.getValue<bool>(
         keyOfflineMode,
@@ -231,6 +234,10 @@ class SettingsRepository {
           keyShowExternalBooks,
           defaultValue: false,
         ),
+      ),
+      'softwareAndBookUpdatesEnabled': _settings.getValue<bool>(
+        keySoftwareAndBookUpdatesEnabled,
+        defaultValue: true,
       ),
       'alignTabsToRight': _settings.getValue<bool>(
         keyAlignTabsToRight,
@@ -442,6 +449,10 @@ class SettingsRepository {
 
   Future<void> updateAutoSyncCatalogs(bool value) async {
     await _settings.setValue(keyAutoSyncCatalogs, value);
+  }
+
+  Future<void> updateSoftwareAndBookUpdatesEnabled(bool value) async {
+    await _settings.setValue(keySoftwareAndBookUpdatesEnabled, value);
   }
 
   Future<void> updateAlignTabsToRight(bool value) async {
@@ -664,7 +675,8 @@ class SettingsRepository {
     await _settings.setValue(keyIsFullscreen, false);
     await _settings.setValue(keyLibraryViewMode, 'grid');
     await _settings.setValue(keyLibraryShowPreview, true);
-    await _settings.setValue(keyEnablePerBookSettings, true);
+    await _settings.setValue(keyEnablePerBookSettings, false);
+    await _settings.setValue(keySoftwareAndBookUpdatesEnabled, true);
     await _settings.setValue(keyErrorReportSenderEmail, '');
     await _settings.setValue(keyQueueErrorReportsWhenOffline, true);
     await _settings.setValue(keyAlignTabsToRight, false);

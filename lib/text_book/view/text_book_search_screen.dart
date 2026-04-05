@@ -26,8 +26,12 @@ import 'package:otzaria/text_book/utils/search_query_sync.dart';
 class _GroupedResultItem {
   final String? header;
   final TextSearchResult? result;
-  const _GroupedResultItem.header(this.header) : result = null;
-  const _GroupedResultItem.result(this.result) : header = null;
+  final int? resultListIndex;
+  const _GroupedResultItem.header(this.header)
+      : result = null,
+        resultListIndex = null;
+  const _GroupedResultItem.result(this.result, this.resultListIndex)
+      : header = null;
   bool get isHeader => header != null;
 }
 
@@ -78,6 +82,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   bool _searchInCurrentSection = false;
   SectionBounds? _currentSectionBounds;
   List<int> _lastVisibleIndices = [];
+  int? _selectedSearchResultIndex;
 
   bool get _isSimpleSearch =>
       !_forceSearchEngine &&
@@ -217,10 +222,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       );
 
       if (mounted) {
-        setState(() {
-          searchResults = results;
-          _isSearching = false;
-        });
+        _applySearchResults(results);
       }
       return;
     }
@@ -275,10 +277,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       );
 
       if (mounted) {
-        setState(() {
-          searchResults = _convertSearchResults(results);
-          _isSearching = false;
-        });
+        _applySearchResults(_convertSearchResults(results));
       }
     } catch (e) {
       debugPrint('Search error: $e');
@@ -286,9 +285,68 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         setState(() {
           searchResults = [];
           _isSearching = false;
+          _selectedSearchResultIndex = null;
         });
       }
     }
+  }
+
+  void _applySearchResults(List<TextSearchResult> results) {
+    setState(() {
+      searchResults = results;
+      _isSearching = false;
+      if (results.isEmpty) {
+        _selectedSearchResultIndex = null;
+      } else if (_selectedSearchResultIndex == null ||
+          _selectedSearchResultIndex! >= results.length) {
+        _selectedSearchResultIndex = 0;
+      }
+    });
+  }
+
+  void _navigateToSearchResult(
+    int resultListIndex, {
+    bool closePaneOnAndroid = false,
+  }) {
+    if (resultListIndex < 0 || resultListIndex >= searchResults.length) {
+      return;
+    }
+
+    final result = searchResults[resultListIndex];
+    setState(() {
+      _selectedSearchResultIndex = resultListIndex;
+    });
+
+    final bloc = context.read<TextBookBloc>();
+    bloc.add(UpdateSelectedIndex(result.index));
+    bloc.add(HighlightLine(result.index));
+
+    widget.scrollControler.scrollTo(
+      index: result.index,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.ease,
+      alignment: 0.35,
+    );
+
+    if (closePaneOnAndroid && Platform.isAndroid) {
+      widget.closeLeftPaneCallback();
+    }
+  }
+
+  void _moveBetweenResults(int offset) {
+    if (searchResults.isEmpty) {
+      return;
+    }
+
+    final currentIndex =
+        _selectedSearchResultIndex ?? (offset >= 0 ? -1 : searchResults.length);
+    final nextIndex =
+        (currentIndex + offset).clamp(0, searchResults.length - 1);
+    if (nextIndex == currentIndex) {
+      return;
+    }
+
+    _navigateToSearchResult(nextIndex);
   }
 
   List<TextSearchResult> _convertSearchResults(List<SearchResult> results) {
@@ -318,12 +376,15 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     // יצירת רשימה מקובצת - כותרת מופיעה רק כשהיא משתנה
     final List<_GroupedResultItem> items = [];
     String? lastAddress;
-    for (final r in searchResults) {
+    for (var resultListIndex = 0;
+        resultListIndex < searchResults.length;
+        resultListIndex++) {
+      final r = searchResults[resultListIndex];
       if (lastAddress != r.address) {
         items.add(_GroupedResultItem.header(r.address));
         lastAddress = r.address;
       }
-      items.add(_GroupedResultItem.result(r));
+      items.add(_GroupedResultItem.result(r, resultListIndex));
     }
 
     return BlocListener<TextBookBloc, TextBookState>(
@@ -339,6 +400,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         focusNode: widget.focusNode,
         progressWidget:
             _isSearching ? const LinearProgressIndicator(minHeight: 4) : null,
+        resultToolbar:
+            searchResults.isNotEmpty ? _buildSearchResultNavigationBar() : null,
         resultCountString: searchResults.isNotEmpty
             ? 'נמצאו ${searchResults.length} תוצאות'
             : null,
@@ -391,6 +454,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
             // אם זו תוצאה רגילה
             final result = item.result!;
+            final resultListIndex = item.resultListIndex!;
             return BlocBuilder<SettingsBloc, SettingsState>(
               builder: (context, settingsState) {
                 String snippet = result.snippet;
@@ -416,26 +480,29 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
+                    color: _selectedSearchResultIndex == resultListIndex
+                        ? Theme.of(context)
+                            .colorScheme
+                            .primaryContainer
+                            .withValues(alpha: 0.35)
+                        : null,
                     border: Border.all(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .outline
-                          .withValues(alpha: 0.3),
+                      color: _selectedSearchResultIndex == resultListIndex
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context)
+                              .colorScheme
+                              .outline
+                              .withValues(alpha: 0.3),
                       width: 1,
                     ),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: InkWell(
                     onTap: () {
-                      // תמיד השתמש ב-scrollController - זה עובד גם בצורת הדף
-                      widget.scrollControler.scrollTo(
-                        index: result.index,
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.ease,
+                      _navigateToSearchResult(
+                        resultListIndex,
+                        closePaneOnAndroid: true,
                       );
-                      if (Platform.isAndroid) {
-                        widget.closeLeftPaneCallback();
-                      }
                     },
                     borderRadius: BorderRadius.circular(8),
                     hoverColor: Theme.of(context)
@@ -571,6 +638,78 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildSearchResultNavigationBar() {
+    final isAtFirstResult =
+        (_selectedSearchResultIndex ?? 0) <= 0 || searchResults.isEmpty;
+    final isAtLastResult = searchResults.isEmpty ||
+        (_selectedSearchResultIndex ?? 0) >= searchResults.length - 1;
+
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(
+        start: 12,
+        end: 12,
+        bottom: 2,
+      ),
+      child: Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildResultNavigationButton(
+              icon: FluentIcons.chevron_up_24_regular,
+              tooltip: 'התוצאה הקודמת',
+              onPressed: isAtFirstResult ? null : () => _moveBetweenResults(-1),
+            ),
+            const SizedBox(width: 4),
+            _buildResultNavigationButton(
+              icon: FluentIcons.chevron_down_24_regular,
+              tooltip: 'התוצאה הבאה',
+              onPressed: isAtLastResult ? null : () => _moveBetweenResults(1),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResultNavigationButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isEnabled = onPressed != null;
+
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: isEnabled
+                ? colorScheme.primaryContainer.withValues(alpha: 0.55)
+                : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isEnabled
+                  ? colorScheme.primary.withValues(alpha: 0.6)
+                  : colorScheme.outline.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: isEnabled
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+          ),
+        ),
       ),
     );
   }

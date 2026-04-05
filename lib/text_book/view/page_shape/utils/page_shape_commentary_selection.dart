@@ -139,6 +139,10 @@ String? resolvePageShapeCommentatorSelection({
     }
   }
 
+  if (resolved.isEmpty) {
+    return null;
+  }
+
   return encodePageShapeCommentatorsSelection(
     resolved,
     forceMultipleMode: true,

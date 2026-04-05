@@ -13,6 +13,7 @@ import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
 import 'package:otzaria/personal_notes/widgets/notes_search_header.dart';
 import 'package:otzaria/personal_notes/widgets/note_tile.dart';
 import 'package:otzaria/personal_notes/widgets/inline_note_editor.dart';
+import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/widgets/dialogs.dart';
@@ -20,6 +21,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 
 class PersonalNotesSidebar extends StatefulWidget {
   final String bookId;
+  final int? categoryId;
   final ValueChanged<int> onNavigateToLine;
   final bool isPdf;
   final List<int>? visibleLineIndices;
@@ -27,6 +29,7 @@ class PersonalNotesSidebar extends StatefulWidget {
   const PersonalNotesSidebar({
     super.key,
     required this.bookId,
+    this.categoryId,
     required this.onNavigateToLine,
     this.isPdf = false,
     this.visibleLineIndices,
@@ -41,12 +44,17 @@ class PersonalNotesSidebar extends StatefulWidget {
 }
 
 class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
+  final PersonalNoteDraftService _draftService = PersonalNoteDraftService();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<PersonalNotesBloc>().add(LoadPersonalNotes(widget.bookId));
+      context.read<PersonalNotesBloc>().add(
+            LoadPersonalNotes(widget.bookId, categoryId: widget.categoryId),
+          );
+      _restorePendingNewNoteDraftIfNeeded();
       final visibleLineIndices = widget.visibleLineIndices;
       if (visibleLineIndices != null) {
         context
@@ -59,9 +67,13 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
   @override
   void didUpdateWidget(covariant PersonalNotesSidebar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.bookId != widget.bookId) {
+    if (oldWidget.bookId != widget.bookId ||
+        oldWidget.categoryId != widget.categoryId) {
       context.read<PersonalNotesBloc>().add(const CancelCreatingPersonalNote());
-      context.read<PersonalNotesBloc>().add(LoadPersonalNotes(widget.bookId));
+      context.read<PersonalNotesBloc>().add(
+            LoadPersonalNotes(widget.bookId, categoryId: widget.categoryId),
+          );
+      _restorePendingNewNoteDraftIfNeeded();
     }
 
     if (!listEquals(oldWidget.visibleLineIndices, widget.visibleLineIndices) &&
@@ -70,6 +82,37 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
           .read<PersonalNotesBloc>()
           .add(UpdateVisibleLines(widget.visibleLineIndices!));
     }
+  }
+
+  Future<void> _restorePendingNewNoteDraftIfNeeded() async {
+    final bloc = context.read<PersonalNotesBloc>();
+    final draft = await _draftService.loadLatestNewNoteDraft(
+      bookId: widget.bookId,
+      categoryId: widget.categoryId,
+    );
+    if (!mounted || draft == null || draft.lineNumber == null) {
+      return;
+    }
+
+    final currentState = bloc.state;
+    final sameDraftAlreadyLoaded = currentState.isCreatingNewNote &&
+        currentState.newNoteLineNumber == draft.lineNumber &&
+        currentState.newNoteInitialContent == draft.content &&
+        currentState.newNoteInitialFormat == draft.contentFormat;
+    if (sameDraftAlreadyLoaded) {
+      return;
+    }
+
+    bloc.add(
+      StartCreatingPersonalNote(
+        bookId: widget.bookId,
+        lineNumber: draft.lineNumber!,
+        referenceText: draft.referenceText,
+        selectedText: currentState.newNoteSelectedText,
+        initialContent: draft.content,
+        initialFormat: draft.contentFormat,
+      ),
+    );
   }
 
   Future<void> _cancelNewNote({bool confirmIfDirty = true}) async {
@@ -120,7 +163,11 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            NotesSearchHeader(bookId: widget.bookId, isPdf: widget.isPdf),
+            NotesSearchHeader(
+              bookId: widget.bookId,
+              categoryId: widget.categoryId,
+              isPdf: widget.isPdf,
+            ),
             const Divider(height: 1),
             Expanded(
               child: hasTextBookBloc
@@ -217,6 +264,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
             onLinkTap: (url) => _handleNoteLinkTap(context, url),
             defaultExpanded: defaultExpanded,
             bookId: widget.bookId,
+            categoryId: widget.categoryId,
             linkableNotes: [
               ...state.locatedNotes,
               ...state.missingNotes,
@@ -387,8 +435,18 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
           ),
           const SizedBox(height: 8),
           InlineNoteEditor(
+            key: ValueKey(
+              'new-note-${state.newNoteLineNumber}-'
+              '${state.newNoteInitialFormat?.name}-'
+              '${state.newNoteInitialContent.hashCode}',
+            ),
             referenceText: state.newNoteReferenceText,
             bookId: widget.bookId,
+            categoryId: widget.categoryId,
+            initialContent: state.newNoteInitialContent ?? '',
+            initialFormat:
+                state.newNoteInitialFormat ?? PersonalNoteContentFormat.plain,
+            draftLineNumber: state.newNoteLineNumber,
             linkableNotes: [
               ...state.locatedNotes,
               ...state.missingNotes,
