@@ -19,12 +19,18 @@ class FullscreenHelper {
     // פעולות על מנהל החלונות
     // חשוב: להסתיר את ה-title bar לפני המעבר למסך מלא כדי למנוע הבהוב
     if (isFullscreen) {
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      await windowManager.setTitleBarStyle(
+        TitleBarStyle.hidden,
+        windowButtonVisibility: false,
+      );
       await windowManager.setFullScreen(true);
     } else {
       await windowManager.setFullScreen(false);
       // אנחנו משתמשים ב-CustomTitleBar ולכן תמיד רוצים להסתיר את הכותרת המקורית
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      await windowManager.setTitleBarStyle(
+        TitleBarStyle.hidden,
+        windowButtonVisibility: false,
+      );
     }
   }
 }
