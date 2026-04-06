@@ -75,9 +75,15 @@ Future<void> copySelectedTextForBook({
     );
   }
 
-  await CopyUtils.copyStyledToClipboard(
+  final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
     plainText: finalPlainText,
     htmlText: htmlContentToUse,
+    replaceHolyNames: settingsState.replaceHolyNames,
+  );
+
+  await CopyUtils.copyStyledToClipboard(
+    plainText: copyContent.plainText,
+    htmlText: copyContent.htmlText,
     fontFamily: fontFamily,
     fontSize: fontSize,
   );

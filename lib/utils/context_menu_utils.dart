@@ -115,8 +115,14 @@ class ContextMenuUtils {
         );
       }
 
-      final htmlText = CopyUtils.buildStyledHtml(
+      final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
+        plainText: finalText,
         htmlText: finalHtmlText,
+        replaceHolyNames: settingsState.replaceHolyNames,
+      );
+
+      final htmlText = CopyUtils.buildStyledHtml(
+        htmlText: copyContent.htmlText,
         fontFamily: settingsState.commentatorsFontFamily,
         fontSize: fontSize,
       );
@@ -124,7 +130,7 @@ class ContextMenuUtils {
       final clipboard = SystemClipboard.instance;
       if (clipboard != null) {
         final item = DataWriterItem();
-        item.add(Formats.plainText(finalText));
+        item.add(Formats.plainText(copyContent.plainText));
         item.add(Formats.htmlText(htmlText));
         await clipboard.write([item]);
         UiSnack.show('הפסקה הועתקה בהצלחה');
@@ -152,15 +158,19 @@ class ContextMenuUtils {
       final clipboard = SystemClipboard.instance;
       if (clipboard != null) {
         final settingsState = context.read<SettingsBloc>().state;
+        final finalPlainText = CopyUtils.applyCopyPreferences(
+          text: plainText,
+          replaceHolyNames: settingsState.replaceHolyNames,
+        );
 
         final htmlText = CopyUtils.buildStyledHtml(
-          htmlText: plainText,
+          htmlText: finalPlainText,
           fontFamily: settingsState.commentatorsFontFamily,
           fontSize: fontSize,
         );
 
         final item = DataWriterItem();
-        item.add(Formats.plainText(plainText));
+        item.add(Formats.plainText(finalPlainText));
         item.add(Formats.htmlText(htmlText));
 
         await clipboard.write([item]);
