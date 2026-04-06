@@ -28,7 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
-  sentry_flutter: ^9.16.1
+  sentry_flutter: ^9.16.0
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.1
@@ -45,7 +45,7 @@ dependencies:
   html: ^0.15.1
   pdfrx: ^2.2.24
   url_launcher: ^6.3.2
-  flutter_widget_from_html: ^0.17.2
+  flutter_widget_from_html: ^0.17.0
   scrollable_positioned_list: ^0.3.8
   fuzzywuzzy: ^1.1.6
   flutter_svg: ^2.2.4  
@@ -75,7 +75,7 @@ dependencies:
   search_engine:
     #path: ../search_engine
     git:
-      url: https://github.com/Sivan22/otzaria_search_engine
+      url: https://github.com/Y-PLONI/otzaria_search_engine
       ref: use-regex
   window_manager: ^0.5.1
   flutter_spinbox: ^0.13.1
@@ -157,7 +157,6 @@ flutter:
     - assets/icon/שמור וזכור שחור ריק.png
     - assets/icon/shamor_zachor_with_v.png
     - assets/icon/iconnew.png
-    - assets/icon/mount_sinai_tablets.svg
     - lib/migration/dao/sqflite/
     - assets/dictionary.json
     - assets/Acronyms.json
