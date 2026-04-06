@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -103,6 +104,68 @@ void main() {
         latestSelectedText: 'טקסט חדש',
       ),
       'טקסט חדש',
+    );
+  });
+
+  test('ניווט מקלדת בצורת הדף נופל חזרה למיקום הנראה ולא לתחילת הספר', () {
+    expect(
+      resolvePageShapeNavigationBaseIndex(
+        selectedIndex: null,
+        liveVisibleIndices: const [48, 49, 50],
+        stateVisibleIndices: const [47, 48, 49],
+      ),
+      48,
+    );
+
+    expect(
+      resolvePageShapeNavigationBaseIndex(
+        selectedIndex: 49,
+        liveVisibleIndices: const [48, 49, 50],
+        stateVisibleIndices: const [47, 48, 49],
+      ),
+      49,
+    );
+
+    expect(
+      resolvePageShapeNavigationBaseIndex(
+        selectedIndex: 12,
+        liveVisibleIndices: const [48, 49, 50],
+        stateVisibleIndices: const [47, 48, 49],
+      ),
+      48,
+    );
+  });
+
+  test('אירועי החזקה של מקש מוכרים לצורך גלילה רציפה', () {
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(
+        KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.arrowDown,
+          logicalKey: LogicalKeyboardKey.arrowDown,
+          timeStamp: Duration.zero,
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(
+        KeyRepeatEvent(
+          physicalKey: PhysicalKeyboardKey.arrowDown,
+          logicalKey: LogicalKeyboardKey.arrowDown,
+          timeStamp: Duration.zero,
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      shouldHandlePageShapeNavigationKeyEvent(
+        KeyUpEvent(
+          physicalKey: PhysicalKeyboardKey.arrowDown,
+          logicalKey: LogicalKeyboardKey.arrowDown,
+          timeStamp: Duration.zero,
+        ),
+      ),
+      isFalse,
     );
   });
 }
