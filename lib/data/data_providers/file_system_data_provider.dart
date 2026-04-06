@@ -184,11 +184,6 @@ class FileSystemData {
     return _providerManager.fileSystemProvider.getPersonalBooksPath();
   }
 
-  /// Ensures the personal books folder exists
-  Future<void> ensurePersonalFolderExists() async {
-    await _providerManager.fileSystemProvider.ensurePersonalFolderExists();
-  }
-
   /// Retrieves the complete library structure from the file system.
   ///
   /// Reads the library from the configured path and combines it with metadata
