@@ -26,8 +26,7 @@ class BookDao {
   /// Gets minimal book data, optionally within an ongoing transaction.
   /// Used by [DatabaseLibraryProvider] to load books and categories atomically.
   /// Must be called synchronously inside a [withTransaction] block.
-  List<Map<String, dynamic>> getAllBooksMinimal(
-      sqlite3.Database db) {
+  List<Map<String, dynamic>> getAllBooksMinimal(sqlite3.Database db) {
     return db.select('''
       SELECT id, title, categoryId, orderIndex, fileType, filePath,
              heShortDesc
@@ -35,6 +34,30 @@ class BookDao {
       WHERE COALESCE(fileType, '') NOT IN ('link', 'url')
       ORDER BY orderIndex, title
     ''').toMapList();
+  }
+
+  /// Loads authors for all local books in one query to keep catalog build fast.
+  Map<int, String> getBookAuthorsMap(sqlite3.Database db) {
+    final rows = db.select('''
+      SELECT author_rows.bookId,
+             GROUP_CONCAT(author_rows.name, ', ') AS author
+      FROM (
+        SELECT ba.bookId AS bookId,
+               a.name AS name
+        FROM book_author ba
+        JOIN author a ON a.id = ba.authorId
+        JOIN book b ON b.id = ba.bookId
+        WHERE COALESCE(b.fileType, '') NOT IN ('link', 'url')
+        ORDER BY ba.bookId, a.name
+      ) AS author_rows
+      GROUP BY author_rows.bookId
+    ''').toMapList();
+
+    return {
+      for (final row in rows)
+        if ((row['author'] as String?)?.isNotEmpty == true)
+          row['bookId'] as int: row['author'] as String,
+    };
   }
 
   /// Gets all local books (excluding external catalog books).
@@ -472,4 +495,3 @@ class BookDao {
         .toList();
   }
 }
-
