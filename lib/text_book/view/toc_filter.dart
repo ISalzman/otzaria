@@ -1,6 +1,5 @@
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/search/search_query_builder.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/search/utils/find_match_utils.dart';
 
 /// מחזירה עץ תוכן עניינים מסונן לפי טקסט החיפוש.
 ///
@@ -20,8 +19,7 @@ List<TocEntry> filterTocEntriesForSearch(
 bool shouldExpandInSearch(bool? expandedFlag) => expandedFlag ?? true;
 
 String _normalizeQuery(String rawQuery) {
-  final sanitized = SearchQueryBuilder.sanitizeQuery(rawQuery).trim();
-  return utils.removeVolwels(sanitized);
+  return normalizeFindQuery(rawQuery);
 }
 
 bool _isBookTitle(
@@ -42,8 +40,12 @@ bool _matchesEntryOrDescendants(
   required bool isFirstEntry,
 }) {
   final isBookTitle = _isBookTitle(entry, depth, index, isFirstEntry);
-  final entryText = utils.removeVolwels(entry.text);
-  final selfMatches = !isBookTitle && entryText.contains(query);
+  final entryText = normalizeFindText(entry.text);
+  final selfMatches = !isBookTitle &&
+      findNormalizedTextMatches(
+        normalizedQuery: query,
+        normalizedPrimaryText: entryText,
+      );
   if (selfMatches) return true;
 
   for (int i = 0; i < entry.children.length; i++) {
@@ -74,8 +76,12 @@ List<TocEntry> _buildFilteredEntries(
   for (int i = 0; i < entries.length; i++) {
     final entry = entries[i];
     final isBookTitle = _isBookTitle(entry, depth, i, isFirstEntry);
-    final entryText = utils.removeVolwels(entry.text);
-    final selfMatches = !isBookTitle && entryText.contains(query);
+    final entryText = normalizeFindText(entry.text);
+    final selfMatches = !isBookTitle &&
+        findNormalizedTextMatches(
+          normalizedQuery: query,
+          normalizedPrimaryText: entryText,
+        );
     final hasMatchingDescendant = entry.children.asMap().entries.any((entry) {
       final childIndex = entry.key;
       final child = entry.value;
@@ -138,23 +144,17 @@ List<TocEntry> _sortEntriesByRelevance(
 }
 
 int _matchRank(TocEntry entry, String query) {
-  final entryText = _normalizeQuery(entry.text);
-  final fullText = _normalizeQuery(entry.fullText);
-
-  if (entryText == query) return 0;
-  if (fullText == query) return 1;
-  if (entryText.startsWith(query)) return 2;
-  if (fullText.startsWith(query)) return 3;
-  if (entryText.contains(query)) return 4;
-  if (fullText.contains(query)) return 5;
-  return 6;
+  return findNormalizedTextMatchRank(
+    normalizedQuery: query,
+    normalizedPrimaryText: _normalizeQuery(entry.text),
+    normalizedSecondaryText: _normalizeQuery(entry.fullText),
+  );
 }
 
 int _matchLengthDelta(TocEntry entry, String query) {
-  final entryTextLength = _normalizeQuery(entry.text).length;
-  final fullTextLength = _normalizeQuery(entry.fullText).length;
-  final bestLength = entryTextLength < fullTextLength
-      ? entryTextLength
-      : fullTextLength;
-  return (bestLength - query.length).abs();
+  return findNormalizedTextMatchLengthDelta(
+    normalizedQuery: query,
+    normalizedPrimaryText: _normalizeQuery(entry.text),
+    normalizedSecondaryText: _normalizeQuery(entry.fullText),
+  );
 }
