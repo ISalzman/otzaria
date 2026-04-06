@@ -11,7 +11,9 @@ List<TocEntry> filterTocEntriesForSearch(
 ) {
   final normalizedQuery = _normalizeQuery(rawQuery);
   if (normalizedQuery.isEmpty) return [];
-  return _buildFilteredEntries(entries, normalizedQuery);
+
+  final filtered = _buildFilteredEntries(entries, normalizedQuery);
+  return _sortEntriesByRelevance(filtered, normalizedQuery);
 }
 
 /// קובע אם צומת צריך להיות פתוח כברירת מחדל במצב חיפוש.
@@ -105,4 +107,54 @@ List<TocEntry> _buildFilteredEntries(
   }
 
   return result;
+}
+
+List<TocEntry> _sortEntriesByRelevance(
+  List<TocEntry> entries,
+  String query,
+) {
+  final sorted = List<TocEntry>.from(entries)
+    ..sort((a, b) {
+      final rankCompare = _matchRank(a, query).compareTo(_matchRank(b, query));
+      if (rankCompare != 0) return rankCompare;
+
+      final lengthCompare =
+          _matchLengthDelta(a, query).compareTo(_matchLengthDelta(b, query));
+      if (lengthCompare != 0) return lengthCompare;
+
+      final levelCompare = a.level.compareTo(b.level);
+      if (levelCompare != 0) return levelCompare;
+
+      return a.index.compareTo(b.index);
+    });
+
+  for (final entry in sorted) {
+    if (entry.children.isNotEmpty) {
+      entry.children = _sortEntriesByRelevance(entry.children, query);
+    }
+  }
+
+  return sorted;
+}
+
+int _matchRank(TocEntry entry, String query) {
+  final entryText = _normalizeQuery(entry.text);
+  final fullText = _normalizeQuery(entry.fullText);
+
+  if (entryText == query) return 0;
+  if (fullText == query) return 1;
+  if (entryText.startsWith(query)) return 2;
+  if (fullText.startsWith(query)) return 3;
+  if (entryText.contains(query)) return 4;
+  if (fullText.contains(query)) return 5;
+  return 6;
+}
+
+int _matchLengthDelta(TocEntry entry, String query) {
+  final entryTextLength = _normalizeQuery(entry.text).length;
+  final fullTextLength = _normalizeQuery(entry.fullText).length;
+  final bestLength = entryTextLength < fullTextLength
+      ? entryTextLength
+      : fullTextLength;
+  return (bestLength - query.length).abs();
 }
