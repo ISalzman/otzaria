@@ -520,9 +520,15 @@ class _CombinedViewState extends State<CombinedView> {
       );
     }
 
+    final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
+      plainText: finalText,
+      htmlText: finalHtmlText,
+      replaceHolyNames: settingsState.replaceHolyNames,
+    );
+
     final item = DataWriterItem();
-    item.add(Formats.plainText(finalText));
-    item.add(Formats.htmlText(_formatTextAsHtml(finalHtmlText)));
+    item.add(Formats.plainText(copyContent.plainText));
+    item.add(Formats.htmlText(_formatTextAsHtml(copyContent.htmlText)));
 
     await SystemClipboard.instance?.write([item]);
   }
@@ -567,6 +573,11 @@ class _CombinedViewState extends State<CombinedView> {
         currentPath: currentPath,
       );
     }
+
+    finalText = CopyUtils.applyCopyPreferences(
+      text: finalText,
+      replaceHolyNames: settingsState.replaceHolyNames,
+    );
 
     final combinedHtml = _formatTextAsHtml(finalText);
 

@@ -1,9 +1,63 @@
 import 'package:flutter/foundation.dart';
+import 'package:html/dom.dart' as html_dom;
+import 'package:html/parser.dart' as html_parser;
 import 'package:otzaria/models/books.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/utils/text_manipulation.dart' as text_utils;
 
 class CopyUtils {
+  /// מחיל העדפות תצוגה על טקסט שמיועד להעתקה.
+  static String applyCopyPreferences({
+    required String text,
+    required bool replaceHolyNames,
+  }) {
+    if (text.isEmpty || !replaceHolyNames) {
+      return text;
+    }
+
+    return text_utils.replaceHolyNames(text);
+  }
+
+  /// מחיל העדפות העתקה על plain text ועל HTML יחד,
+  /// ושומר על עקביות ביניהם גם אם ה-HTML מפוצל ע"י תגיות inline.
+  static ({String plainText, String htmlText}) applyCopyPreferencesForClipboard({
+    required String plainText,
+    required String htmlText,
+    required bool replaceHolyNames,
+  }) {
+    final processedPlainText = applyCopyPreferences(
+      text: plainText,
+      replaceHolyNames: replaceHolyNames,
+    );
+
+    if (!replaceHolyNames || htmlText.isEmpty) {
+      return (plainText: processedPlainText, htmlText: htmlText);
+    }
+
+    final processedHtmlText = _applyCopyPreferencesToHtml(
+      htmlText: htmlText,
+      replaceHolyNames: replaceHolyNames,
+    );
+
+    final normalizedPlainText = _normalizeCopiedText(processedPlainText);
+    final normalizedHtmlText = _normalizeCopiedText(
+      _extractVisibleTextFromHtml(processedHtmlText),
+    );
+
+    if (normalizedHtmlText != normalizedPlainText) {
+      return (
+        plainText: processedPlainText,
+        htmlText: processedPlainText,
+      );
+    }
+
+    return (
+      plainText: processedPlainText,
+      htmlText: processedHtmlText,
+    );
+  }
+
   /// מחלץ את שם הספר
   static String extractBookName(TextBook book) => book.title.trim();
 
@@ -219,5 +273,51 @@ class CopyUtils {
   static String _cleanHtml(String s) {
     final noTags = s.replaceAll(RegExp(r'<[^>]*>'), '');
     return noTags.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  static String _applyCopyPreferencesToHtml({
+    required String htmlText,
+    required bool replaceHolyNames,
+  }) {
+    if (htmlText.isEmpty || !replaceHolyNames) {
+      return htmlText;
+    }
+
+    final fragment = html_parser.parseFragment(htmlText);
+    _replaceHolyNamesInTextNodes(fragment.nodes, replaceHolyNames);
+    final container = html_dom.Element.tag('div')..nodes.addAll(fragment.nodes);
+    return container.innerHtml;
+  }
+
+  static void _replaceHolyNamesInTextNodes(
+    List<html_dom.Node> nodes,
+    bool replaceHolyNames,
+  ) {
+    for (final node in nodes) {
+      if (node.nodeType == html_dom.Node.TEXT_NODE) {
+        final currentText = node.text;
+        if (currentText != null && currentText.isNotEmpty) {
+          node.text = applyCopyPreferences(
+            text: currentText,
+            replaceHolyNames: replaceHolyNames,
+          );
+        }
+        continue;
+      }
+
+      _replaceHolyNamesInTextNodes(node.nodes, replaceHolyNames);
+    }
+  }
+
+  static String _extractVisibleTextFromHtml(String htmlText) {
+    if (htmlText.isEmpty) {
+      return '';
+    }
+
+    return html_parser.parseFragment(htmlText).text ?? '';
+  }
+
+  static String _normalizeCopiedText(String text) {
+    return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }
