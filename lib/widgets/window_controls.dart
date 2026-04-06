@@ -35,7 +35,10 @@ class _WindowControlsState extends State<WindowControls> with WindowListener {
     if (!settingsBloc.state.isFullscreen) {
       settingsBloc.add(const UpdateIsFullscreen(true));
     }
-    await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    await windowManager.setTitleBarStyle(
+      TitleBarStyle.hidden,
+      windowButtonVisibility: false,
+    );
   }
 
   @override
@@ -45,14 +48,20 @@ class _WindowControlsState extends State<WindowControls> with WindowListener {
     if (settingsBloc.state.isFullscreen) {
       settingsBloc.add(const UpdateIsFullscreen(false));
     }
-    await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+    await windowManager.setTitleBarStyle(
+      TitleBarStyle.hidden,
+      windowButtonVisibility: false,
+    );
   }
 
   Future<void> _restoreFullscreenStatus() async {
     if (!mounted) return;
     final settingsState = context.read<SettingsBloc>().state;
     if (settingsState.isFullscreen) {
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      await windowManager.setTitleBarStyle(
+        TitleBarStyle.hidden,
+        windowButtonVisibility: false,
+      );
     }
     await windowManager.setFullScreen(settingsState.isFullscreen);
   }

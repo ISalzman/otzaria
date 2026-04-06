@@ -42,8 +42,8 @@ const double _kAppBarControlsWidth = 125.0;
 const double _kAppBarControlsWidthRightAligned = 105.0;
 const int _kActionButtonsCount = 1; // settings בלבד
 const double _kActionButtonWidth = 56.0;
-const double _kWindowCaptionButtonsWidth = 138.0;
 const double _kWindowCaptionButtonWidth = 46.0;
+const int _kWindowCaptionButtonsCount = 3; // מסך מלא + מזער + סגור
 
 /// סגנון משותף לכפתורי האייקון בשורת הכותרת
 final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
@@ -195,13 +195,26 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                                     onPressed: () => windowManager.close(),
                                   ),
                                 if (!settingsState.isFullscreen)
-                                  SizedBox(
-                                    width: _kWindowCaptionButtonsWidth,
-                                    height: 50,
-                                    child: WindowCaption(
-                                      brightness: Theme.of(context).brightness,
-                                      backgroundColor: Colors.transparent,
-                                    ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _CaptionActionButton(
+                                        brightness:
+                                            Theme.of(context).brightness,
+                                        tooltip: 'מזער',
+                                        icon: FluentIcons.subtract_24_regular,
+                                        onPressed: () async {
+                                          await windowManager.minimize();
+                                        },
+                                      ),
+                                      _CaptionActionButton(
+                                        brightness:
+                                            Theme.of(context).brightness,
+                                        tooltip: 'סגור',
+                                        icon: FluentIcons.dismiss_24_regular,
+                                        onPressed: () => windowManager.close(),
+                                      ),
+                                    ],
                                   ),
                               ],
                             ),
@@ -368,7 +381,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           bool showWindowControls = !kIsWeb &&
               (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
           double windowControlsWidth = showWindowControls
-              ? _kWindowCaptionButtonsWidth + _kWindowCaptionButtonWidth
+              ? _kWindowCaptionButtonsCount * _kWindowCaptionButtonWidth
               : 0.0;
           double actionButtonsWidth = _kAppBarControlsWidth;
           double extraButtonsWidth = _kActionButtonsCount * _kActionButtonWidth;

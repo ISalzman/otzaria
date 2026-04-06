@@ -358,6 +358,7 @@ Future<void> initialize() async {
     WindowOptions windowOptions = const WindowOptions(
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: false,
     );
 
     // Add window listener for proper close handling
