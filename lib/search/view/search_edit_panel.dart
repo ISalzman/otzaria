@@ -149,16 +149,14 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
   }
 
   Widget _buildCategoryAndOptions(BuildContext context, SearchState state) {
-    final categoryTree = ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 280),
-      child: CategoryTreeSelector(
-        selectedFacets: _selectedCategoryFacets,
-        onSelectionChanged: (selection) {
-          setState(() {
-            _selectedCategoryFacets = selection;
-          });
-        },
-      ),
+    final categoryTree = SearchScopeSelector(
+      selectedFacets: _selectedCategoryFacets,
+      shrinkWrapManualSelector: true,
+      onSelectionChanged: (selection) {
+        setState(() {
+          _selectedCategoryFacets = selection;
+        });
+      },
     );
 
     if (!state.isAdvancedSearchEnabled) {
