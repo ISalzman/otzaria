@@ -82,6 +82,7 @@ class CopyUtils {
       final Map<int, String> lastByLevel = {};
       for (final entry in toc) {
         if (entry.index <= currentIndex) {
+          if (entry.level <= 1) continue; // רמה 1 = שם הספר, כבר מכוסה ע"י bookName
           final clean = _cleanHtml(entry.text);
           if (clean.isNotEmpty) {
             lastByLevel[entry.level] = clean;
@@ -130,7 +131,7 @@ class CopyUtils {
     if (copyWithHeaders == 'book_name') {
       header = bookName;
     } else if (copyWithHeaders == 'book_and_path') {
-      header = currentPath.isNotEmpty ? currentPath : bookName;
+      header = currentPath.isNotEmpty ? '$bookName, $currentPath' : bookName;
     } else {
       return originalText;
     }
@@ -227,17 +228,26 @@ class CopyUtils {
 
     // סריקה מהמיקום הנוכחי אחורה עד להתחלה
     for (int i = currentIndex; i >= 0; i--) {
-      // אם כבר מצאנו את כל הרמות הראשיות, אפשר לעצור לטובת יעילות
-      if (lastHeaderByLevel.containsKey(1) &&
-          lastHeaderByLevel.containsKey(2) &&
-          lastHeaderByLevel.containsKey(3)) {
-        break;
+      // עוצרים רק כשיש שרשרת רציפה מרמה 2 עד הרמה העמוקה שנמצאה
+      if (lastHeaderByLevel.isNotEmpty) {
+        final maxLevel = lastHeaderByLevel.keys.reduce(
+          (a, b) => a > b ? a : b,
+        );
+        bool hasContiguousChain = true;
+        for (int lvl = 2; lvl <= maxLevel; lvl++) {
+          if (!lastHeaderByLevel.containsKey(lvl)) {
+            hasContiguousChain = false;
+            break;
+          }
+        }
+        if (hasContiguousChain) break;
       }
 
       final line = content[i];
       for (final match in hTag.allMatches(line)) {
         try {
           final level = int.parse(match.group(1)!);
+          if (level <= 1) continue; // רמה 1 = שם הספר, כבר מכוסה ע"י bookName
           final text = _cleanHtml(match.group(2)!);
 
           // שומרים רק את הכותרת הראשונה שנמצאה עבור כל רמה (כי אנחנו הולכים אחורה)
