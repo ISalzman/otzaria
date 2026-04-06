@@ -753,7 +753,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     );
 
     final item = DataWriterItem();
-    item.add(Formats.plainText(copyContent.plainText));
+    item.add(Formats.plainText(copyContent.plainText.trimRight()));
     item.add(Formats.htmlText(_formatTextAsHtml(copyContent.htmlText)));
 
     await SystemClipboard.instance?.write([item]);

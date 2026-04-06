@@ -527,7 +527,7 @@ class _CombinedViewState extends State<CombinedView> {
     );
 
     final item = DataWriterItem();
-    item.add(Formats.plainText(copyContent.plainText));
+    item.add(Formats.plainText(copyContent.plainText.trimRight()));
     item.add(Formats.htmlText(_formatTextAsHtml(copyContent.htmlText)));
 
     await SystemClipboard.instance?.write([item]);
@@ -582,7 +582,7 @@ class _CombinedViewState extends State<CombinedView> {
     final combinedHtml = _formatTextAsHtml(finalText);
 
     final item = DataWriterItem();
-    item.add(Formats.plainText(finalText));
+    item.add(Formats.plainText(finalText.trimRight()));
     item.add(Formats.htmlText(combinedHtml));
 
     await SystemClipboard.instance?.write([item]);
