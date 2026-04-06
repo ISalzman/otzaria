@@ -99,10 +99,9 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
     // כשהפילטר ריק (אין מפרשים נבחרים) — עדיין מחזירים קישורי REFERENCE
     final hasCommentaryFilter =
         targetBookTitles != null && targetBookTitles.isNotEmpty;
-    final targetBookPlaceholders =
-        hasCommentaryFilter
-            ? List.filled(targetBookTitles.length, '?').join(', ')
-            : '';
+    final targetBookPlaceholders = hasCommentaryFilter
+        ? List.filled(targetBookTitles.length, '?').join(', ')
+        : '';
     if (hasCommentaryFilter) {
       parameters.addAll(targetBookTitles);
     }
@@ -833,7 +832,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     final hasTalmudBavliDirectory = await _bundledTalmudBavliDirectoryExists();
 
-    // OPTIMIZATION: Load minimal book data (8 columns, no JOINs) instead of
+    // OPTIMIZATION: Load minimal book data first, then load authors in one
+    // batch query inside the same transaction to avoid per-book DB work.
     // full book data with relations (25+ columns + 4 junction table queries).
     // Both queries run inside a single transaction to prevent BackgroundSync
     // from locking the DB between them (which caused 17s delays).
@@ -841,11 +841,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     late final List<Map<String, dynamic>> allDbBooks;
     late final List<Map<String, dynamic>> allCatRows;
+    late final Map<int, String> authorsByBookId;
 
     final db = await repository.database.database;
     withTransaction(db, () {
       allDbBooks = repository.database.bookDao.getAllBooksMinimal(db);
       allCatRows = repository.database.categoryDao.getAllCategoryRows(db);
+      authorsByBookId = repository.database.bookDao.getBookAuthorsMap(db);
     });
 
     debugPrint(
@@ -901,6 +903,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         rootCategory,
         booksByCategory,
         categoriesByParent,
+        authorsByBookId,
         library,
         metadata,
       );
@@ -1141,6 +1144,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     db_models.Category dbCategory,
     Map<int, List<Map<String, dynamic>>> booksByCategory,
     Map<int?, List<db_models.Category>> categoriesByParent,
+    Map<int, String> authorsByBookId,
     Category parent,
     Map<String, Map<String, dynamic>> metadata,
   ) {
@@ -1163,7 +1167,12 @@ class DatabaseLibraryProvider implements LibraryProvider {
         return orderA.compareTo(orderB);
       });
     for (final dbBook in dbBooks) {
-      final book = _convertMinimalBookMapToBook(dbBook, category, metadata);
+      final book = _convertMinimalBookMapToBook(
+        dbBook,
+        category,
+        metadata,
+        authorFromDatabase: authorsByBookId[dbBook['id'] as int? ?? 0],
+      );
       if (book == null) continue;
       category.books.add(book);
 
@@ -1188,6 +1197,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         child,
         booksByCategory,
         categoriesByParent,
+        authorsByBookId,
         category,
         metadata,
       );
@@ -1199,13 +1209,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   /// Converts a minimal book map (from getAllBooksMinimal) to the app's Book model.
   /// Uses only the columns available: id, title, categoryId, orderIndex,
-  /// fileType, filePath, heShortDesc.
-  /// Falls back to metadata for author/pubDate/pubPlace/topics.
+  /// fileType, filePath, heShortDesc, author.
+  /// Falls back to metadata when the minimal row does not include a field.
   Book? _convertMinimalBookMapToBook(
     Map<String, dynamic> bookMap,
     Category category,
-    Map<String, Map<String, dynamic>> metadata,
-  ) {
+    Map<String, Map<String, dynamic>> metadata, {
+    String? authorFromDatabase,
+  }) {
     final title = bookMap['title'] as String;
     final id = bookMap['id'] as int? ?? 0;
     final filePath = bookMap['filePath'] as String?;
@@ -1242,8 +1253,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           .join(', ');
     }
 
-    // Use metadata for author/pubDate/pubPlace
-    final author = bookMeta?['author'] as String?;
+    final author = authorFromDatabase ?? (bookMeta?['author'] as String?);
     final pubDate = bookMeta?['pubDate'] as String?;
     final pubPlace = bookMeta?['pubPlace'] as String?;
     final metaHeShortDesc = heShortDesc ?? bookMeta?['heShortDesc'] as String?;
