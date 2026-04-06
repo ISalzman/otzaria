@@ -463,35 +463,6 @@ class FileSystemLibraryProvider implements LibraryProvider {
     return '$_libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}אישי';
   }
 
-  /// Ensures the personal books folder exists
-  Future<void> ensurePersonalFolderExists() async {
-    final personalPath = getPersonalBooksPath();
-    final personalDir = Directory(personalPath);
-
-    if (!await personalDir.exists()) {
-      await personalDir.create(recursive: true);
-      debugPrint('📁 Created personal books folder: $personalPath');
-
-      final readmePath = '$personalPath${Platform.pathSeparator}קרא אותי.txt';
-      final readmeFile = File(readmePath);
-      await readmeFile.writeAsString('''
-תיקייה זו מיועדת לספרים אישיים
-
-ספרים שנמצאים בתיקייה זו:
-• לא יועברו למסד הנתונים
-• לא יסונכרנו עם השרת
-• נשארים תמיד כקבצים
-• ניתנים לעריכה ישירה
-
-איך להוסיף ספר אישי:
-1. העתק קובץ TXT או DOCX לתיקייה זו
-2. או השתמש בכפתור "הוסף ספר אישי" בתוכנה
-
-הספרים יופיעו בספרייה עם סימון מיוחד (א)
-''', encoding: utf8);
-    }
-  }
-
   /// Saves text content to a book file
   Future<void> saveBookText(String title, String content) async {
     final map = await keyToPath;
