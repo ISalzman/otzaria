@@ -171,6 +171,7 @@ export type OtzariaMethod =
   | 'app.getInfo'
   | 'app.getTheme'
   | 'app.getLocale'
+  | 'app.getUserEmail'
   | 'library.findBooks'
   | 'library.getBookMetadata'
   | 'library.listRecentBooks'
