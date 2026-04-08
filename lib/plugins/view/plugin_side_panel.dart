@@ -79,6 +79,12 @@ class PluginSidePanel extends StatelessWidget {
                     tooltip: 'טען תיקיית תוסף',
                     onPressed: () => _loadDevPlugin(context),
                   ),
+                if (showDevTools)
+                  IconButton(
+                    icon: const Icon(FluentIcons.arrow_sync_24_regular),
+                    tooltip: 'רענן תוספים',
+                    onPressed: () => context.read<PluginSystemBloc>().add(RefreshPlugins()),
+                  ),
               ],
             ),
           ),
