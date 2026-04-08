@@ -61,10 +61,13 @@ export interface BootPayload {
     textDirection: 'ltr' | 'rtl';
   };
   theme: ThemePayload;
-  /** Permission strings listed in the plugin manifest.
-   *  Note: this reflects the manifest at install time and may include
-   *  revoked permissions. Listen to `plugin.permissions_changed` to track
-   *  runtime grant/revoke changes. */
+  /** Currently granted permissions at boot time.
+   *  For a fresh runtime snapshot, call `app.getGrantedPermissions()` or
+   *  listen to `plugin.permissions_changed`. */
+  permissions: string[];
+}
+
+export interface PermissionSnapshot {
   permissions: string[];
 }
 
@@ -122,6 +125,23 @@ export interface ReaderState {
   currentBookId: string | null;
   currentIndex: number;
   openTabs: Array<{ bookId: string; book: string; index: number }>;
+}
+
+export interface ReaderRefState {
+  currentBook: string | null;
+  currentBookId: string | null;
+  currentIndex: number;
+  currentRef: string | null;
+}
+
+export interface ReaderSelection {
+  text: string;
+  start: number | null;
+  end: number | null;
+  currentRef: string | null;
+  currentBook: string;
+  currentBookId: string;
+  currentIndex: number;
 }
 
 export type PublishedDataType =
@@ -187,6 +207,7 @@ export type OtzariaMethod =
   | 'app.getTheme'
   | 'app.getLocale'
   | 'app.getUserEmail'
+  | 'app.getGrantedPermissions'
   | 'library.findBooks'
   | 'library.getBookMetadata'
   | 'library.listRecentBooks'
@@ -196,6 +217,8 @@ export type OtzariaMethod =
   | 'reader.openBook'
   | 'reader.openBookAtRef'
   | 'reader.getCurrentState'
+  | 'reader.getCurrentRef'
+  | 'reader.getSelection'
   | 'navigation.goTo'
   | 'notes.list'
   | 'notes.getBookNotesSummary'

@@ -57,6 +57,16 @@ const { data } = await Otzaria.call('app.getUserEmail');
 // { email: "user@example.com" } או { email: "" }
 ```
 
+### `app.getGrantedPermissions`
+מחזיר snapshot עדכני של ההרשאות המאושרות בפועל עבור התוסף.
+
+```javascript
+const { data } = await Otzaria.call('app.getGrantedPermissions');
+// { permissions: ["app.info.read", "reader.open"] }
+```
+
+הערה: בשדה `permissions` של `plugin.boot` מתקבל snapshot בזמן העלייה בלבד. אם אתם צריכים מצב עדכני אחרי שהמשתמש שינה הרשאות, השתמשו ב-API הזה או האזינו ל-`plugin.permissions_changed`.
+
 ---
 
 ## library.* - גישה לספרייה
@@ -187,6 +197,39 @@ const { data } = await Otzaria.call('reader.getCurrentState');
 //     { bookId: "בראשית", book: "בראשית", index: 42 },
 //     { bookId: "שמות", book: "שמות", index: 0 }
 //   ]
+// }
+```
+
+### `reader.getCurrentRef`
+**הרשאה:** `reader.open`
+
+מחזיר את ה-reference הנוכחי של הטאב הפעיל, יחד עם הספר וה-index. אם עדיין אין reference אמין, `currentRef` יהיה `null`.
+
+```javascript
+const { data } = await Otzaria.call('reader.getCurrentRef');
+// {
+//   currentBook: "בראשית",
+//   currentBookId: "בראשית",
+//   currentIndex: 42,
+//   currentRef: "בראשית פרק ג"
+// }
+```
+
+### `reader.getSelection`
+**הרשאה:** `reader.open`
+
+מחזיר את הבחירה הנוכחית בטאב טקסט פעיל. אם אין בחירה פעילה, או שהטאב הפעיל אינו טאב טקסט, הערך יהיה `null`.
+
+```javascript
+const { data } = await Otzaria.call('reader.getSelection');
+// {
+//   text: "ויאמר אלהים",
+//   start: 120,
+//   end: 131,
+//   currentRef: "בראשית פרק א",
+//   currentBook: "בראשית",
+//   currentBookId: "בראשית",
+//   currentIndex: 42
 // }
 ```
 
