@@ -57,11 +57,15 @@ class PluginDevWatchService {
       final changedPath = event.path;
       final basename = p.basename(changedPath);
       
-      if (basename == '.DS_Store' || 
-          basename == 'Thumbs.db' || 
-          basename.endsWith('.swp') || 
-          basename.endsWith('.tmp') || 
-          basename.endsWith('~')) {
+      if (basename == '.DS_Store' ||
+          basename == 'Thumbs.db' ||
+          basename.endsWith('.swp') ||
+          basename.endsWith('.tmp') ||
+          basename.endsWith('~') ||
+          basename.endsWith('.ts') ||
+          basename.endsWith('.tsx') ||
+          basename.endsWith('.scss') ||
+          basename.endsWith('.sass')) {
         return;
       }
 
