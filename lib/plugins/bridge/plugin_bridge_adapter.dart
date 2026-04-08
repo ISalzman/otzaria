@@ -207,6 +207,11 @@ class PluginBridgeAdapter {
         return _dependencies.themePayloadBuilder();
       case 'getLocale':
         return {'locale': 'he-IL', 'textDirection': 'rtl'};
+      case 'getUserEmail':
+        final email = Settings.getValue<String>(
+                SettingsRepository.keyErrorReportSenderEmail) ??
+            '';
+        return {'email': email.trim()};
       default:
         throw Exception("Unknown action in app: $action");
     }
