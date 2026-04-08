@@ -93,7 +93,9 @@ my-plugin/
     "toolTab": {
       "title": "שם הטאב",
       "order": 200,
-      "defaultPinned": true
+      "defaultPinned": true,
+      "iconCodepoint": 983685,
+      "iconVariant": "regular"
     },
     "publishedDataTypes": []
   }
@@ -126,7 +128,13 @@ my-plugin/
 | `contributes.toolTab.title` | שם התוסף | כותרת הטאב |
 | `contributes.toolTab.order` | `900` | סדר הופעה בטאבים (מספר נמוך = קודם) |
 | `contributes.toolTab.defaultPinned` | `true` | האם להצמיד אוטומטית בהתקנה |
+| `contributes.toolTab.iconCodepoint` | `null` | codepoint עשרוני של אייקון Fluent שיוצג בטאב |
+| `contributes.toolTab.iconVariant` | `"regular"` | וריאנט האייקון: `regular` או `filled` |
 | `contributes.publishedDataTypes` | `[]` | סוגי נתונים שהתוסף מפרסם |
+
+אם מגדירים `iconVariant`, חייבים להגדיר גם `iconCodepoint`.
+
+הערה: `iconCodepoint` הוא הערך העשרוני של אייקון Fluent. לדוגמה, `calendar_24_regular` הוא `983685`, ו-`calendar_24_filled` הוא `983704`.
 
 ---
 

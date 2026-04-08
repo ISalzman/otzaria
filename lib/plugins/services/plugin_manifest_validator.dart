@@ -58,10 +58,27 @@ class PluginManifestValidator {
       if (!pluginValidPermissions.contains(perm)) {
         final hint = apiCallToPermissionHint[perm];
         if (hint != null) {
-          throw Exception(
-              'הרשאה לא חוקית: "$perm". האם התכוונת ל-"$hint"?');
+          throw Exception('הרשאה לא חוקית: "$perm". האם התכוונת ל-"$hint"?');
         }
         throw Exception('הרשאה לא חוקית שנדרשת על ידי התוסף: $perm');
+      }
+    }
+
+    if (manifest.toolTabIconVariant != null &&
+        manifest.toolTabIconCodepoint == null) {
+      throw Exception(
+          'toolTab.iconVariant הוגדר ללא toolTab.iconCodepoint תואם');
+    }
+
+    if (manifest.toolTabIconCodepoint != null) {
+      if (manifest.toolTabIconCodepoint! < 0) {
+        throw Exception('toolTab.iconCodepoint חייב להיות מספר חיובי');
+      }
+
+      final variant = manifest.toolTabIconVariant;
+      if (variant != null &&
+          !PluginManifest.supportedToolTabIconVariants.contains(variant)) {
+        throw Exception('toolTab.iconVariant חייב להיות regular או filled');
       }
     }
 

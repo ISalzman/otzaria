@@ -5,9 +5,9 @@ import 'package:archive/archive_io.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
-import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
 
 class PluginOverwriteException implements Exception {
   final String pluginName;
@@ -63,21 +63,6 @@ class PluginInstallerService {
       final manifestJson = jsonDecode(await manifestFile.readAsString());
       final manifest = PluginManifest.fromJson(manifestJson);
 
-      if (manifest.schemaVersion != 1) {
-        throw Exception(
-            'גרסת סכמה ${manifest.schemaVersion} של התוסף אינה נתמכת במערכת זו');
-      }
-
-      if (!RegExp(r'^[a-z0-9_.-]+$').hasMatch(manifest.id)) {
-        throw Exception(
-            'מזהה התוסף אינו תקין. מותר להשתמש רק באותיות קטנות באנגלית, מספרים, נקודות, קווים תחתונים ומינוסים.');
-      }
-
-      if (!RegExp(r'^\d+\.\d+\.\d+(?:\+.*)?$').hasMatch(manifest.version)) {
-        throw Exception(
-            'גרסת התוסף במניפסט אינה חוקית. נדרש פורמט SemVer חוקיות (לדוגמה 1.0.0).');
-      }
-
       bool isOverwrite = false;
       final existingPlugin = await _repository.getPlugin(manifest.id);
       if (existingPlugin != null) {
@@ -93,37 +78,11 @@ class PluginInstallerService {
       }
 
       final packageInfo = await PackageInfo.fromPlatform();
-      final appVersion = packageInfo.version;
-      if (_compareVersionsStrict(appVersion, manifest.minAppVersion) < 0) {
-        throw Exception(
-            'התוסף דורש אוצריא בגרסה ${manifest.minAppVersion} לפחות, אך מותקנת $appVersion');
-      }
-      if (manifest.maxAppVersion != null &&
-          _compareVersionsStrict(appVersion, manifest.maxAppVersion!) > 0) {
-        throw Exception(
-            'התוסף מיועד לאוצריא עד גרסה ${manifest.maxAppVersion} בלבד, אך מותקנת $appVersion');
-      }
-
-      for (final perm in manifest.permissions) {
-        if (!pluginValidPermissions.contains(perm)) {
-          final hint = apiCallToPermissionHint[perm];
-          if (hint != null) {
-            throw Exception(
-                'הרשאה לא חוקית: "$perm". האם התכוונת ל-"$hint"?');
-          }
-          throw Exception('הרשאה לא חוקית שנדרשת על ידי התוסף: $perm');
-        }
-      }
-
-      final entrypointPath =
-          p.normalize(p.join(tempDir.path, manifest.entrypoint));
-      if (!p.isWithin(tempDir.path, entrypointPath)) {
-        throw Exception(
-            'נתיב קובץ הכניסה ${manifest.entrypoint} חורג מגבולות חבילת התוסף');
-      }
-      if (!File(entrypointPath).existsSync()) {
-        throw Exception('קובץ הכניסה ${manifest.entrypoint} לא נמצא בחבילה');
-      }
+      await PluginManifestValidator.validateManifest(
+        manifest: manifest,
+        directoryPath: tempDir.path,
+        currentAppVersion: packageInfo.version,
+      );
 
       return PreparedInstall(manifest, tempDir.path, isOverwrite);
     } catch (e) {
