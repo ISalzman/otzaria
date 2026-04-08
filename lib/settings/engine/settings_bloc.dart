@@ -53,6 +53,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateEnableHtmlLinks>(_onUpdateEnableHtmlLinks);
     on<UpdatePersonalNotesCollapsedByDefault>(
         _onUpdatePersonalNotesCollapsedByDefault);
+    on<UpdateCompactMenuMode>(_onUpdateCompactMenuMode);
     on<UpdateProtectedModeEnabled>(_onUpdateProtectedModeEnabled);
     on<UpdateProtectedModePassword>(_onUpdateProtectedModePassword);
   }
@@ -109,6 +110,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       enableHtmlLinks: settings['enableHtmlLinks'] ?? true,
       personalNotesCollapsedByDefault:
           settings['personalNotesCollapsedByDefault'] ?? true,
+      compactMenuMode: settings['compactMenuMode'] ?? false,
       protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
     ));
   }
@@ -169,6 +171,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         .updatePersonalNotesCollapsedByDefault(event.collapsedByDefault);
     emit(state.copyWith(
         personalNotesCollapsedByDefault: event.collapsedByDefault));
+  }
+
+  Future<void> _onUpdateCompactMenuMode(
+    UpdateCompactMenuMode event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateCompactMenuMode(event.compactMenuMode);
+    emit(state.copyWith(compactMenuMode: event.compactMenuMode));
   }
 
   Future<void> _onUpdateProtectedModeEnabled(

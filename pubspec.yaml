@@ -156,6 +156,7 @@ flutter:
     - assets/icon/שמור וזכור שחור ריק.png
     - assets/icon/shamor_zachor_with_v.png
     - assets/icon/iconnew.png
+    - assets/icon/mount_sinai_tablets.svg
     - lib/migration/dao/sqflite/
     - assets/dictionary.json
     - assets/Acronyms.json

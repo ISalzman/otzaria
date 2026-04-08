@@ -271,6 +271,7 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   Future<void> _initializeCalendar() async {
     final settings = await _settingsRepository.loadSettings();
+    if (isClosed) return;
     final calendarTypeString = settings['calendarType'] as String;
     final calendarType = _stringToCalendarType(calendarTypeString);
     final selectedCity = settings['selectedCity'] as String;
@@ -312,6 +313,7 @@ class CalendarCubit extends Cubit<CalendarState> {
       events = [];
     }
 
+    if (isClosed) return;
     emit(state.copyWith(
       calendarType: calendarType,
       selectedCity: selectedCity,
@@ -329,10 +331,14 @@ class CalendarCubit extends Cubit<CalendarState> {
           ? DateTime.fromMillisecondsSinceEpoch(googleCalendarLastSyncRaw)
           : null,
     ));
+    if (isClosed) return;
     _updateTimesForDate(state.selectedGregorianDate, selectedCity);
     await _rescheduleNotifications();
+    if (isClosed) return;
     await _rescheduleZmanAlerts();
+    if (isClosed) return;
     await _refreshGoogleConnectionStatus();
+    if (isClosed) return;
     if (googleCalendarEnabled) {
       await syncGoogleCalendar(interactive: false);
     }

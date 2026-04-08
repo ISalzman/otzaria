@@ -6,10 +6,12 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
-import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
-import 'package:otzaria/tools/calendar/ulits/calendar_widget.dart';
+import 'package:otzaria/tools/calendar/calendar_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -23,9 +25,12 @@ void main() {
 
   group('CalendarWidget focus refresh', () {
     late CalendarCubit calendarCubit;
+    late SettingsBloc settingsBloc;
     late FocusNode outsideFocusNode;
 
     setUp(() {
+      settingsBloc = SettingsBloc(repository: SettingsRepository())
+        ..add(LoadSettings());
       calendarCubit = CalendarCubit(
         notificationService: _FakeNotificationService(),
         googleCalendarService: _FakeGoogleCalendarService(),
@@ -35,6 +40,7 @@ void main() {
 
     tearDown(() {
       outsideFocusNode.dispose();
+      settingsBloc.close();
       calendarCubit.close();
     });
 
@@ -45,8 +51,11 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: BlocProvider.value(
-              value: calendarCubit,
+            body: MultiBlocProvider(
+              providers: [
+                BlocProvider.value(value: settingsBloc),
+                BlocProvider.value(value: calendarCubit),
+              ],
               child: Column(
                 children: [
                   Expanded(
@@ -96,6 +105,43 @@ void main() {
 
       final dateAfterRefocus = calendarCubit.state.selectedGregorianDate;
       expect(dateAfterRefocus, isNot(dateWithoutCalendarFocus));
+    });
+
+    testWidgets('invalid shortcut does not bind to key A', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MultiBlocProvider(
+              providers: [
+                BlocProvider.value(value: settingsBloc),
+                BlocProvider.value(value: calendarCubit),
+              ],
+              child: const CalendarWidget(),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final shiftedDate =
+          calendarCubit.state.selectedGregorianDate.add(const Duration(days: 5));
+      calendarCubit.jumpToDate(shiftedDate);
+      await tester.pumpAndSettle();
+
+      await Settings.setValue<String>(
+        'key-shortcut-calendar-today',
+        'not-a-shortcut',
+      );
+      settingsBloc.add(LoadSettings());
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyA);
+      await tester.pump();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyA);
+      await tester.pump();
+
+      expect(calendarCubit.state.selectedGregorianDate, shiftedDate);
     });
   });
 }
