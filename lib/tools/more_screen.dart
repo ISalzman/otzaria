@@ -114,6 +114,7 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   bool _isPanelOpen = false;
   bool _showMobileMenu = true;
   InstalledPlugin? _transientPlugin;
+  bool _didInitFromBloc = false;
   // מונע rebuild מרובה של הטאבים כאשר הזהות המלאה של הלשוניות לא השתנתה
   String _lastDescriptorsSignature = '';
 
@@ -321,6 +322,18 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
     super.initState();
     FocusRepository().registerMoreScreenFocusRequester(requestActiveTabFocus);
     _applyTabState([], notify: false);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didInitFromBloc) {
+      _didInitFromBloc = true;
+      final state = context.read<PluginSystemBloc>().state;
+      if (state is PluginSystemLoaded) {
+        _applyTabState(state.pinnedPlugins, notify: false);
+      }
+    }
   }
 
   void resetToCalendar() {
