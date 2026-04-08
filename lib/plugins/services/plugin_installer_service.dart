@@ -106,6 +106,11 @@ class PluginInstallerService {
 
       for (final perm in manifest.permissions) {
         if (!pluginValidPermissions.contains(perm)) {
+          final hint = apiCallToPermissionHint[perm];
+          if (hint != null) {
+            throw Exception(
+                'הרשאה לא חוקית: "$perm". האם התכוונת ל-"$hint"?');
+          }
           throw Exception('הרשאה לא חוקית שנדרשת על ידי התוסף: $perm');
         }
       }

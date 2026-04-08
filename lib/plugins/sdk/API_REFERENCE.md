@@ -17,7 +17,7 @@ if (response.success) {
 
 ## app.* - מידע על האפליקציה
 
-**הרשאה נדרשת:** `app.info.read` (למעט `getUserEmail`)
+**הרשאה נדרשת:** `app.info.read` (למעט `app.getUserEmail` שמצריכה `app.user_email.read` - ראה למטה)
 
 ### `app.getInfo`
 מחזיר מידע על גרסת האפליקציה והפלטפורמה.
@@ -58,6 +58,8 @@ const { data } = await Otzaria.call('app.getUserEmail');
 ```
 
 ### `app.getGrantedPermissions`
+**הרשאה:** `app.info.read`
+
 מחזיר snapshot עדכני של ההרשאות המאושרות בפועל עבור התוסף.
 
 ```javascript

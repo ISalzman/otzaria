@@ -1,3 +1,12 @@
+/// מיפוי משמות שיטות API לשמות ההרשאות הנדרשות - לשימוש בהודעות שגיאה מועילות
+const Map<String, String> apiCallToPermissionHint = {
+  'app.getUserEmail': 'app.user_email.read',
+  'app.getInfo': 'app.info.read',
+  'app.getTheme': 'app.info.read',
+  'app.getLocale': 'app.info.read',
+  'app.getGrantedPermissions': 'app.info.read',
+};
+
 const pluginValidPermissions = <String>[
   'app.info.read',
   'app.user_email.read',
