@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:kosher_dart/kosher_dart.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
@@ -606,13 +607,7 @@ class PluginBridgeAdapter {
         // dailyTimes contains all halachic times (shekia, tzet haochavim, etc.)
         return calendarState.dailyTimes;
       case 'getJewishDate':
-        final jd = calendarState.selectedJewishDate;
-        return {
-          'year': jd.getJewishYear(),
-          'month': jd.getJewishMonth(),
-          'day': jd.getJewishDayOfMonth(),
-          'gregorian': calendarState.selectedGregorianDate.toIso8601String(),
-        };
+        return _buildJewishDatePayload(calendarState);
       case 'getEvents':
         final date = args['date'] != null
             ? DateTime.tryParse(args['date'] as String) ??
@@ -697,6 +692,79 @@ class PluginBridgeAdapter {
   // ----------------------------------------------------------------
   // Helpers
   // ----------------------------------------------------------------
+
+  Map<String, dynamic> _buildJewishDatePayload(CalendarState calendarState) {
+    final selectedDate = calendarState.selectedGregorianDate;
+    final jewishCalendar = JewishCalendar.fromDateTime(selectedDate)
+      ..inIsrael = calendarState.inIsrael;
+    final formatter = HebrewDateFormatter()..hebrewFormat = true;
+
+    return {
+      'year': jewishCalendar.getJewishYear(),
+      'month': jewishCalendar.getJewishMonth(),
+      'day': jewishCalendar.getJewishDayOfMonth(),
+      'gregorian': selectedDate.toIso8601String(),
+      'monthName': formatter.formatMonth(jewishCalendar),
+      'isLeapYear': jewishCalendar.isJewishLeapYear(),
+      'isShabbat': jewishCalendar.getDayOfWeek() == 7,
+      'holidays': _buildHolidayPayloads(jewishCalendar, formatter),
+    };
+  }
+
+  List<Map<String, String>> _buildHolidayPayloads(
+    JewishCalendar jewishCalendar,
+    HebrewDateFormatter formatter,
+  ) {
+    final holidays = <Map<String, String>>[];
+    final seenLabels = <String>{};
+
+    void addHoliday(String label, String kind) {
+      final normalizedLabel = label.trim();
+      if (normalizedLabel.isEmpty || !seenLabels.add(normalizedLabel)) {
+        return;
+      }
+      holidays.add({'text': normalizedLabel, 'kind': kind});
+    }
+
+    final yomTovLabel = formatter.formatYomTov(jewishCalendar);
+    if (yomTovLabel.isNotEmpty) {
+      for (final label in yomTovLabel.split(',')) {
+        addHoliday(label, _holidayKindForLabel(label, jewishCalendar));
+      }
+    }
+
+    if (jewishCalendar.isErevRoshChodesh()) {
+      addHoliday(formatter.formatErevRoshChodesh(jewishCalendar), 'special');
+    }
+
+    if (jewishCalendar.isRoshChodesh()) {
+      addHoliday(
+        formatter.formatRoshChodesh(jewishCalendar),
+        'roshChodesh',
+      );
+    }
+
+    return holidays;
+  }
+
+  String _holidayKindForLabel(String label, JewishCalendar jewishCalendar) {
+    final normalizedLabel = label.trim();
+    if (normalizedLabel.contains('ראש חודש') ||
+        normalizedLabel.contains('ר"ח')) {
+      return 'roshChodesh';
+    }
+
+    if (jewishCalendar.isTaanis() &&
+        jewishCalendar.getYomTovIndex() != JewishCalendar.YOM_KIPPUR) {
+      return 'taanit';
+    }
+
+    if (jewishCalendar.isYomTovAssurBemelacha()) {
+      return 'yomTov';
+    }
+
+    return 'special';
+  }
 
   String? _currentBookId() {
     return _dependencies.tabsBloc.state.currentTab?.title;

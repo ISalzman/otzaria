@@ -86,12 +86,27 @@ export interface TocEntry {
   level: number;
 }
 
+export type JewishHolidayKind =
+  | 'yomTov'
+  | 'roshChodesh'
+  | 'taanit'
+  | 'special';
+
+export interface JewishHoliday {
+  text: string;
+  kind: JewishHolidayKind;
+}
+
 export interface JewishDate {
   year: number;
   month: number;
   day: number;
   /** ISO 8601 Gregorian equivalent */
   gregorian: string;
+  monthName: string;
+  isLeapYear: boolean;
+  isShabbat: boolean;
+  holidays: JewishHoliday[];
 }
 
 export interface CalendarEvent {
@@ -157,8 +172,8 @@ export interface OtzariaEventMap {
   'workspace.changed': { workspaceId: string };
   /** A whitelisted app setting changed. */
   'settings.changed': { key: string; newValue: unknown };
-  /** A single permission was granted or revoked by the user. */
-  'plugin.permissions_changed': { pluginId: string; permission: string; granted: boolean };
+  /** Permissions snapshot changed (list of all currently granted permissions). */
+  'plugin.permissions_changed': { permissions: string[] };
 }
 
 export type NavigationTarget = 'library' | 'reading' | 'more' | 'settings';
@@ -200,6 +215,7 @@ export type OtzariaMethod =
   | 'settings.getMany'
   | 'calendar.getSelectedDate'
   | 'calendar.getDailyTimes'
+  | 'calendar.getHalachicTimes'
   | 'calendar.getJewishDate'
   | 'calendar.getEvents'
   | 'publishedData.upsert'

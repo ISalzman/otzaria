@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 
 class PluginManifestValidator {
   static Future<void> validateManifest({
@@ -10,7 +11,8 @@ class PluginManifestValidator {
     bool skipAppVersionValidation = false,
   }) async {
     if (manifest.schemaVersion != 1) {
-      throw Exception('גרסת סכמה ${manifest.schemaVersion} של התוסף אינה נתמכת');
+      throw Exception(
+          'גרסת סכמה ${manifest.schemaVersion} של התוסף אינה נתמכת');
     }
 
     if (!RegExp(r'^[a-z0-9_.-]+$').hasMatch(manifest.id)) {
@@ -18,10 +20,9 @@ class PluginManifestValidator {
     }
 
     if (!RegExp(r'^\d+\.\d+\.\d+(?:\+.*)?$').hasMatch(manifest.version)) {
-      throw Exception('גרסת התוסף במניפסט אינה חוקית. נדרש פורמט SemVer חוקיות.');
+      throw Exception(
+          'גרסת התוסף במניפסט אינה חוקית. נדרש פורמט SemVer חוקיות.');
     }
-
-
 
     int compareVersionsStrict(String v1, String v2) {
       final parts1 = v1.split('+')[0].split('.').map(int.parse).toList();
@@ -37,50 +38,33 @@ class PluginManifestValidator {
 
     if (!skipAppVersionValidation) {
       if (currentAppVersion == null) {
-        throw Exception('currentAppVersion is required when skipAppVersionValidation is false');
+        throw Exception(
+            'currentAppVersion is required when skipAppVersionValidation is false');
       }
-      if (compareVersionsStrict(currentAppVersion, manifest.minAppVersion) < 0) {
-        throw Exception('התוסף דורש אוצריא בגרסה ${manifest.minAppVersion} לפחות, אך מותקנת $currentAppVersion');
+      if (compareVersionsStrict(currentAppVersion, manifest.minAppVersion) <
+          0) {
+        throw Exception(
+            'התוסף דורש אוצריא בגרסה ${manifest.minAppVersion} לפחות, אך מותקנת $currentAppVersion');
       }
       if (manifest.maxAppVersion != null &&
-          compareVersionsStrict(currentAppVersion, manifest.maxAppVersion!) > 0) {
-        throw Exception('התוסף מיועד לאוצריא עד גרסה ${manifest.maxAppVersion} בלבד, אך מותקנת $currentAppVersion');
+          compareVersionsStrict(currentAppVersion, manifest.maxAppVersion!) >
+              0) {
+        throw Exception(
+            'התוסף מיועד לאוצריא עד גרסה ${manifest.maxAppVersion} בלבד, אך מותקנת $currentAppVersion');
       }
     }
 
-    const validPermissions = [
-      'app.info.read',
-      'library.books.read',
-      'library.content.read',
-      'search.fulltext.read',
-      'reader.open',
-      'navigation.write',
-      'notes.read',
-      'notes.write',
-      'calendar.read',
-      'settings.read',
-      'ui.feedback',
-      'plugin.storage.read',
-      'plugin.storage.write',
-      'published_data.write',
-      'network.access',
-      'events.subscribe:navigation.changed',
-      'events.subscribe:reader.current_book_changed',
-      'events.subscribe:theme.changed',
-      'events.subscribe:settings.changed',
-      'events.subscribe:calendar.date_changed',
-      'events.subscribe:workspace.changed',
-      'events.subscribe:plugin.permissions_changed'
-    ];
     for (final perm in manifest.permissions) {
-      if (!validPermissions.contains(perm)) {
+      if (!pluginValidPermissions.contains(perm)) {
         throw Exception('הרשאה לא חוקית שנדרשת על ידי התוסף: $perm');
       }
     }
 
-    final entrypointPath = p.normalize(p.join(directoryPath, manifest.entrypoint));
+    final entrypointPath =
+        p.normalize(p.join(directoryPath, manifest.entrypoint));
     if (!p.isWithin(directoryPath, entrypointPath)) {
-      throw Exception('נתיב קובץ הכניסה ${manifest.entrypoint} חורג מגבולות תיקיית התוסף');
+      throw Exception(
+          'נתיב קובץ הכניסה ${manifest.entrypoint} חורג מגבולות תיקיית התוסף');
     }
     if (!File(entrypointPath).existsSync()) {
       throw Exception('קובץ הכניסה ${manifest.entrypoint} לא נמצא בתיקייה');
