@@ -14,8 +14,10 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/utils/book_open_coordinator.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -24,6 +26,7 @@ import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
+import 'package:otzaria/utils/ref_helper.dart';
 
 // ===================================================================
 // Spec-compliant allowlist for settings.get/getMany
@@ -213,6 +216,10 @@ class PluginBridgeAdapter {
                 SettingsRepository.keyErrorReportSenderEmail) ??
             '';
         return {'email': email.trim()};
+      case 'getGrantedPermissions':
+        return {
+          'permissions': await _getGrantedPermissions(),
+        };
       default:
         throw Exception("Unknown action in app: $action");
     }
@@ -392,6 +399,18 @@ class PluginBridgeAdapter {
               : (currentTab is PdfBookTab ? currentTab.pageNumber : 0),
           'openTabs': openTabs,
         };
+      case 'getCurrentRef':
+        final currentTab = _dependencies.tabsBloc.state.currentTab;
+        return {
+          'currentBook': currentTab?.title,
+          'currentBookId': currentTab?.title,
+          'currentIndex': _currentTabIndex(currentTab),
+          'currentRef': await _resolveCurrentRef(currentTab),
+        };
+      case 'getSelection':
+        final currentTab = _dependencies.tabsBloc.state.currentTab;
+        final currentRef = await _resolveCurrentRef(currentTab);
+        return _buildCurrentSelection(currentTab, currentRef);
       default:
         throw Exception('Unknown action in reader: $action');
     }
@@ -607,7 +626,11 @@ class PluginBridgeAdapter {
         // dailyTimes contains all halachic times (shekia, tzet haochavim, etc.)
         return calendarState.dailyTimes;
       case 'getJewishDate':
-        return _buildJewishDatePayload(calendarState);
+        final dateArg = args['date'] != null
+            ? DateTime.tryParse(args['date'] as String)
+            : null;
+        final targetDate = dateArg ?? calendarState.selectedGregorianDate;
+        return _buildJewishDatePayload(targetDate, calendarState.inIsrael);
       case 'getEvents':
         final date = args['date'] != null
             ? DateTime.tryParse(args['date'] as String) ??
@@ -693,17 +716,16 @@ class PluginBridgeAdapter {
   // Helpers
   // ----------------------------------------------------------------
 
-  Map<String, dynamic> _buildJewishDatePayload(CalendarState calendarState) {
-    final selectedDate = calendarState.selectedGregorianDate;
-    final jewishCalendar = JewishCalendar.fromDateTime(selectedDate)
-      ..inIsrael = calendarState.inIsrael;
+  Map<String, dynamic> _buildJewishDatePayload(DateTime date, bool inIsrael) {
+    final jewishCalendar = JewishCalendar.fromDateTime(date)
+      ..inIsrael = inIsrael;
     final formatter = HebrewDateFormatter()..hebrewFormat = true;
 
     return {
       'year': jewishCalendar.getJewishYear(),
       'month': jewishCalendar.getJewishMonth(),
       'day': jewishCalendar.getJewishDayOfMonth(),
-      'gregorian': selectedDate.toIso8601String(),
+      'gregorian': date.toIso8601String(),
       'monthName': formatter.formatMonth(jewishCalendar),
       'isLeapYear': jewishCalendar.isJewishLeapYear(),
       'isShabbat': jewishCalendar.getDayOfWeek() == 7,
@@ -728,8 +750,25 @@ class PluginBridgeAdapter {
 
     final yomTovLabel = formatter.formatYomTov(jewishCalendar);
     if (yomTovLabel.isNotEmpty) {
-      for (final label in yomTovLabel.split(',')) {
-        addHoliday(label, _holidayKindForLabel(label, jewishCalendar));
+      final month = jewishCalendar.getJewishMonth();
+      final day = jewishCalendar.getJewishDayOfMonth();
+      final idx = jewishCalendar.getYomTovIndex();
+
+      // לימים טובים של פסח יש שמות ספציפיים שהספרייה לא מבדילה ביניהם
+      if (idx == JewishCalendar.PESACH) {
+        if (month == 1 && day == 21) {
+          addHoliday('שביעי של פסח', 'yomTov');
+        } else if (month == 1 && day == 22) {
+          addHoliday('אחרון של פסח', 'yomTov');
+        } else if (month == 1 && day == 16) {
+          addHoliday('פסח שני', 'yomTov');
+        } else {
+          addHoliday(yomTovLabel, _holidayKindForLabel(yomTovLabel, jewishCalendar));
+        }
+      } else {
+        for (final label in yomTovLabel.split(',')) {
+          addHoliday(label, _holidayKindForLabel(label, jewishCalendar));
+        }
       }
     }
 
@@ -764,6 +803,98 @@ class PluginBridgeAdapter {
     }
 
     return 'special';
+  }
+
+  Future<List<String>> _getGrantedPermissions() async {
+    final permissions = await _pluginRepo.getPluginPermissions(plugin.pluginId);
+    final grantedPermissions = permissions
+        .where((permission) => permission.granted)
+        .map((permission) => permission.permission)
+        .toList()
+      ..sort();
+    return grantedPermissions;
+  }
+
+  int _currentTabIndex(OpenedTab? currentTab) {
+    if (currentTab is TextBookTab) {
+      return currentTab.index;
+    }
+
+    if (currentTab is PdfBookTab) {
+      return currentTab.pageNumber;
+    }
+
+    return 0;
+  }
+
+  Future<String?> _resolveCurrentRef(OpenedTab? currentTab) async {
+    if (currentTab is TextBookTab) {
+      final notifierTitle = currentTab.currentTitle.value.trim();
+      if (notifierTitle.isNotEmpty) {
+        return notifierTitle;
+      }
+
+      final state = currentTab.bloc.state;
+      if (state is TextBookLoaded) {
+        final stateTitle = state.currentTitle?.trim() ?? '';
+        if (stateTitle.isNotEmpty) {
+          return stateTitle;
+        }
+
+        try {
+          final ref = await refFromIndex(
+            currentTab.index,
+            Future.value(state.tableOfContents),
+          );
+          final normalizedRef = ref.trim();
+          return normalizedRef.isEmpty ? null : normalizedRef;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      return null;
+    }
+
+    if (currentTab is PdfBookTab) {
+      final currentTitle = currentTab.currentTitle.value.trim();
+      if (currentTitle.isNotEmpty) {
+        return currentTitle;
+      }
+
+      return currentTab.pageNumber > 0 ? 'עמוד ${currentTab.pageNumber}' : null;
+    }
+
+    return null;
+  }
+
+  Map<String, dynamic>? _buildCurrentSelection(
+    OpenedTab? currentTab,
+    String? currentRef,
+  ) {
+    if (currentTab is! TextBookTab) {
+      return null;
+    }
+
+    final state = currentTab.bloc.state;
+    if (state is! TextBookLoaded) {
+      return null;
+    }
+
+    final selectedText = state.selectedTextForNote;
+    if (selectedText == null || selectedText.trim().isEmpty) {
+      return null;
+    }
+
+    return {
+      'text': selectedText,
+      'start': state.selectedTextStart,
+      'end': state.selectedTextEnd,
+      'currentRef': currentRef,
+      'currentBook': currentTab.title,
+      'currentBookId': currentTab.title,
+      'currentIndex': currentTab.index,
+    };
   }
 
   String? _currentBookId() {
