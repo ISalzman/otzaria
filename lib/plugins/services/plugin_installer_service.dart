@@ -5,6 +5,7 @@ import 'package:archive/archive_io.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 
@@ -103,32 +104,8 @@ class PluginInstallerService {
             'התוסף מיועד לאוצריא עד גרסה ${manifest.maxAppVersion} בלבד, אך מותקנת $appVersion');
       }
 
-      const validPermissions = [
-        'app.info.read',
-        'library.books.read',
-        'library.content.read',
-        'search.fulltext.read',
-        'reader.open',
-        'navigation.write',
-        'notes.read',
-        'notes.write',
-        'calendar.read',
-        'settings.read',
-        'ui.feedback',
-        'plugin.storage.read',
-        'plugin.storage.write',
-        'published_data.write',
-        'network.access',
-        'events.subscribe:navigation.changed',
-        'events.subscribe:reader.current_book_changed',
-        'events.subscribe:theme.changed',
-        'events.subscribe:settings.changed',
-        'events.subscribe:calendar.date_changed',
-        'events.subscribe:workspace.changed',
-        'events.subscribe:plugin.permissions_changed'
-      ];
       for (final perm in manifest.permissions) {
-        if (!validPermissions.contains(perm)) {
+        if (!pluginValidPermissions.contains(perm)) {
           throw Exception('הרשאה לא חוקית שנדרשת על ידי התוסף: $perm');
         }
       }

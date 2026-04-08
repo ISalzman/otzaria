@@ -100,6 +100,9 @@ class PluginBridgeHandler {
   String? _getRequiredPermission(String domain, String action) {
     switch (domain) {
       case 'app':
+        if (action == 'getUserEmail') {
+          return 'app.user_email.read';
+        }
         return 'app.info.read';
       case 'library':
         if (action == 'getBookContent' || action == 'getBookToc') {
