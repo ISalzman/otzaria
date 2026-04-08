@@ -64,6 +64,7 @@ class SettingsRepository {
   static const String keyEnableHtmlLinks = 'key-enable-html-links';
   static const String keyPersonalNotesCollapsedByDefault =
       'key-personal-notes-collapsed';
+  static const String keyCompactMenuMode = 'key-compact-menu-mode';
 
   // Protected Mode Settings
   static const String keyProtectedModeEnabled = 'key-protected-mode-enabled';
@@ -250,6 +251,10 @@ class SettingsRepository {
       'personalNotesCollapsedByDefault': _settings.getValue<bool>(
         keyPersonalNotesCollapsedByDefault,
         defaultValue: true,
+      ),
+      'compactMenuMode': _settings.getValue<bool>(
+        keyCompactMenuMode,
+        defaultValue: false,
       ),
 
       // Protected Mode
@@ -465,6 +470,10 @@ class SettingsRepository {
 
   Future<void> updatePersonalNotesCollapsedByDefault(bool value) async {
     await _settings.setValue(keyPersonalNotesCollapsedByDefault, value);
+  }
+
+  Future<void> updateCompactMenuMode(bool value) async {
+    await _settings.setValue(keyCompactMenuMode, value);
   }
 
   // Protected Mode
