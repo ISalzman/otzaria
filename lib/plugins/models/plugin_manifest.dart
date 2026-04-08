@@ -1,4 +1,11 @@
 class PluginManifest {
+  static const String toolTabIconVariantRegular = 'regular';
+  static const String toolTabIconVariantFilled = 'filled';
+  static const Set<String> supportedToolTabIconVariants = {
+    toolTabIconVariantRegular,
+    toolTabIconVariantFilled,
+  };
+
   final int schemaVersion;
   final String id;
   final String name;
@@ -17,6 +24,8 @@ class PluginManifest {
   final String toolTabTitle;
   final int toolTabOrder;
   final bool defaultPinned;
+  final int? toolTabIconCodepoint;
+  final String? toolTabIconVariant;
   final List<String> publishedDataTypes;
 
   PluginManifest({
@@ -38,14 +47,30 @@ class PluginManifest {
     required this.toolTabTitle,
     required this.toolTabOrder,
     required this.defaultPinned,
+    this.toolTabIconCodepoint,
+    this.toolTabIconVariant,
     required this.publishedDataTypes,
   });
+
+  String? get toolTabIconFontFamily {
+    if (toolTabIconCodepoint == null) {
+      return null;
+    }
+
+    switch (toolTabIconVariant ?? toolTabIconVariantRegular) {
+      case toolTabIconVariantFilled:
+        return 'FluentSystemIcons-Filled';
+      case toolTabIconVariantRegular:
+      default:
+        return 'FluentSystemIcons-Regular';
+    }
+  }
 
   factory PluginManifest.fromJson(Map<String, dynamic> json) {
     final network = json['network'] as Map<String, dynamic>? ?? {};
     final contributes = json['contributes'] as Map<String, dynamic>? ?? {};
     final toolTab = contributes['toolTab'] as Map<String, dynamic>? ?? {};
-    
+
     return PluginManifest(
       schemaVersion: json['schemaVersion'] as int? ?? 1,
       id: json['id'] as String,
@@ -59,13 +84,24 @@ class PluginManifest {
       minAppVersion: json['minAppVersion'] as String? ?? '0.0.0',
       maxAppVersion: json['maxAppVersion'] as String?,
       sdkVersion: json['sdkVersion'] as String? ?? '1.x',
-      permissions: (json['permissions'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+      permissions: (json['permissions'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
       networkEnabled: network['enabled'] as bool? ?? false,
-      networkAllowlist: (network['allowlist'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+      networkAllowlist: (network['allowlist'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
       toolTabTitle: toolTab['title'] as String? ?? json['name'] as String,
       toolTabOrder: toolTab['order'] as int? ?? 900,
       defaultPinned: toolTab['defaultPinned'] as bool? ?? true,
-      publishedDataTypes: (contributes['publishedDataTypes'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+      toolTabIconCodepoint: toolTab['iconCodepoint'] as int?,
+      toolTabIconVariant: toolTab['iconVariant'] as String?,
+      publishedDataTypes: (contributes['publishedDataTypes'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
     );
   }
 
@@ -93,6 +129,9 @@ class PluginManifest {
           'title': toolTabTitle,
           'order': toolTabOrder,
           'defaultPinned': defaultPinned,
+          if (toolTabIconCodepoint != null)
+            'iconCodepoint': toolTabIconCodepoint,
+          if (toolTabIconVariant != null) 'iconVariant': toolTabIconVariant,
         },
         'publishedDataTypes': publishedDataTypes,
       }

@@ -70,5 +70,45 @@ void main() {
       expect(preparedInstall.manifest.permissions, ['app.user_email.read']);
       await Directory(preparedInstall.tempDirPath).delete(recursive: true);
     });
+
+    test('prepareInstall rejects unsupported toolTab icon variant', () async {
+      final archivePath = p.join(tempDir.path, 'plugin_invalid_icon.zip');
+      final archive = Archive()
+        ..addFile(
+          ArchiveFile.string(
+            'manifest.json',
+            jsonEncode({
+              'schemaVersion': 1,
+              'id': 'test.invalid.icon.variant',
+              'version': '1.0.0',
+              'name': 'Invalid Icon Variant',
+              'entrypoint': 'index.html',
+              'contributes': {
+                'toolTab': {
+                  'title': 'Bad Icon',
+                  'iconCodepoint': 983685,
+                  'iconVariant': 'light',
+                },
+              },
+            }),
+          ),
+        )
+        ..addFile(ArchiveFile.string('index.html', '<html></html>'));
+
+      final zipData = ZipEncoder().encode(archive);
+      expect(zipData, isNotNull);
+      File(archivePath).writeAsBytesSync(zipData);
+
+      expect(
+        () => installer.prepareInstall(archivePath),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('toolTab.iconVariant חייב להיות regular או filled'),
+          ),
+        ),
+      );
+    });
   });
 }

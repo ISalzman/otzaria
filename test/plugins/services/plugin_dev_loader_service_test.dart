@@ -10,9 +10,10 @@ import 'package:path/path.dart' as p;
 import 'package:mockito/mockito.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-class FakePluginRegistryRepository extends Mock implements PluginRegistryRepository {
+class FakePluginRegistryRepository extends Mock
+    implements PluginRegistryRepository {
   InstalledPlugin? savedPlugin;
-  
+
   InstalledPlugin? mockExistingPlugin;
   List<PluginPermissionGrant> mockExistingGrants = [];
   Map<String, bool> recordedGrants = {};
@@ -21,12 +22,13 @@ class FakePluginRegistryRepository extends Mock implements PluginRegistryReposit
   Future<void> saveDevelopmentPlugin(InstalledPlugin plugin) async {
     savedPlugin = plugin;
   }
-  
+
   @override
   Future<InstalledPlugin?> getPlugin(String id) async => mockExistingPlugin;
 
   @override
-  Future<bool?> getPermission(String id, String perm) async => recordedGrants[perm];
+  Future<bool?> getPermission(String id, String perm) async =>
+      recordedGrants[perm];
 
   @override
   Future<void> setPermission(String id, String perm, bool granted) async {
@@ -34,14 +36,20 @@ class FakePluginRegistryRepository extends Mock implements PluginRegistryReposit
   }
 
   @override
-  Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async => mockExistingGrants;
+  Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async =>
+      mockExistingGrants;
 
   // Dummy implementations for the rest
-  @override Future<List<InstalledPlugin>> getAllPlugins() async => [];
-  @override Future<List<InstalledPlugin>> getDevelopmentPlugins() async => [];
-  @override Future<void> savePlugin(InstalledPlugin plugin) async {}
-  @override Future<void> detachDevelopmentPlugin(String pluginId) async {}
-  @override Future<void> updatePinState(String id, bool pinned) async {}
+  @override
+  Future<List<InstalledPlugin>> getAllPlugins() async => [];
+  @override
+  Future<List<InstalledPlugin>> getDevelopmentPlugins() async => [];
+  @override
+  Future<void> savePlugin(InstalledPlugin plugin) async {}
+  @override
+  Future<void> detachDevelopmentPlugin(String pluginId) async {}
+  @override
+  Future<void> updatePinState(String id, bool pinned) async {}
 }
 
 void main() {
@@ -63,7 +71,7 @@ void main() {
       tempDir = Directory.systemTemp.createTempSync('otzaria_plugin_test_');
       fakeRepo = FakePluginRegistryRepository();
       devLoader = PluginDevLoaderService(repository: fakeRepo);
-      
+
       final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
       manifestFile.writeAsStringSync(jsonEncode({
         'schemaVersion': 1,
@@ -73,7 +81,7 @@ void main() {
         'entrypoint': 'index.html',
         'permissions': ['app.info.read'] // valid permission
       }));
-      
+
       final entrypointFile = File(p.join(tempDir.path, 'index.html'));
       entrypointFile.createSync();
     });
@@ -84,7 +92,8 @@ void main() {
       }
     });
 
-    test('loadDevelopmentPlugin parses directory and saves via repository', () async {
+    test('loadDevelopmentPlugin parses directory and saves via repository',
+        () async {
       await devLoader.loadDevelopmentPlugin(tempDir.path);
       expect(fakeRepo.savedPlugin, isNotNull);
       expect(fakeRepo.savedPlugin!.pluginId, 'test.dev.repo.plugin');
@@ -93,7 +102,9 @@ void main() {
       expect(fakeRepo.savedPlugin!.devRootPath, tempDir.path);
       expect(fakeRepo.savedPlugin!.isDevelopment, isTrue);
       // Ensure the validator rules were passed seamlessly via the loader
-      expect(fakeRepo.savedPlugin!.manifest.permissions.contains('app.info.read'), isTrue);
+      expect(
+          fakeRepo.savedPlugin!.manifest.permissions.contains('app.info.read'),
+          isTrue);
     });
 
     test('loadDevelopmentPlugin throws exception on invalid schema', () async {
@@ -108,19 +119,24 @@ void main() {
 
       expect(
         () => devLoader.loadDevelopmentPlugin(tempDir.path),
-        throwsA(isA<Exception>().having((e) => e.toString(), 'message', contains('אינה נתמכת'))),
+        throwsA(isA<Exception>()
+            .having((e) => e.toString(), 'message', contains('אינה נתמכת'))),
       );
     });
 
-    test('loadDevelopmentPlugin throws exception on missing entrypoint', () async {
-      File(p.join(tempDir.path, 'index.html')).deleteSync(); // missing entrypoint
+    test('loadDevelopmentPlugin throws exception on missing entrypoint',
+        () async {
+      File(p.join(tempDir.path, 'index.html'))
+          .deleteSync(); // missing entrypoint
       expect(
         () => devLoader.loadDevelopmentPlugin(tempDir.path),
-        throwsA(isA<Exception>().having((e) => e.toString(), 'message', contains('לא נמצא בתיקייה'))),
+        throwsA(isA<Exception>().having(
+            (e) => e.toString(), 'message', contains('לא נמצא בתיקייה'))),
       );
     });
 
-    test('loadDevelopmentPlugin throws exception on duplicate packaged plugin', () async {
+    test('loadDevelopmentPlugin throws exception on duplicate packaged plugin',
+        () async {
       // Create a mocked packaged plugin with same ID
       fakeRepo.mockExistingPlugin = InstalledPlugin(
         pluginId: 'test.dev.repo.plugin',
@@ -156,11 +172,13 @@ void main() {
 
       expect(
         () => devLoader.loadDevelopmentPlugin(tempDir.path),
-        throwsA(isA<Exception>().having((e) => e.toString(), 'message', contains('כבר קיים תוסף מותקן (רגיל) עם אותו מזהה.'))),
+        throwsA(isA<Exception>().having((e) => e.toString(), 'message',
+            contains('כבר קיים תוסף מותקן (רגיל) עם אותו מזהה.'))),
       );
     });
 
-    test('loadDevelopmentPlugin throws exception on invalid permission', () async {
+    test('loadDevelopmentPlugin throws exception on invalid permission',
+        () async {
       final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
       manifestFile.writeAsStringSync(jsonEncode({
         'schemaVersion': 1,
@@ -173,11 +191,42 @@ void main() {
 
       expect(
         () => devLoader.loadDevelopmentPlugin(tempDir.path),
-        throwsA(isA<Exception>().having((e) => e.toString(), 'message', contains('הרשאה לא חוקית'))),
+        throwsA(isA<Exception>().having(
+            (e) => e.toString(), 'message', contains('הרשאה לא חוקית'))),
       );
     });
 
-    test('loadDevelopmentPlugin preserves existing grants and clears removed permissions', () async {
+    test(
+        'loadDevelopmentPlugin throws exception when iconVariant is set without iconCodepoint',
+        () async {
+      final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
+      manifestFile.writeAsStringSync(jsonEncode({
+        'schemaVersion': 1,
+        'id': 'test.icon.variant.without.codepoint',
+        'version': '1.0.0',
+        'name': 'Bad Icon Variant',
+        'entrypoint': 'index.html',
+        'contributes': {
+          'toolTab': {'title': 'Bad Icon', 'iconVariant': 'filled'}
+        }
+      }));
+
+      expect(
+        () => devLoader.loadDevelopmentPlugin(tempDir.path),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains(
+                'toolTab.iconVariant הוגדר ללא toolTab.iconCodepoint תואם'),
+          ),
+        ),
+      );
+    });
+
+    test(
+        'loadDevelopmentPlugin preserves existing grants and clears removed permissions',
+        () async {
       // Setup: existing plugin had two permissions – app.info.read (granted), network.request (denied)
       fakeRepo.mockExistingPlugin = InstalledPlugin(
         pluginId: 'test.grants.plugin',
@@ -188,17 +237,23 @@ void main() {
         enabled: true,
         pinned: true,
         manifest: PluginManifest(
-          schemaVersion: 1,
-          id: 'test.grants.plugin',
-          version: '1.0.0',
-          minAppVersion: '1.0.0',
-          name: 'Grants Plugin',
-          entrypoint: 'dummy.html',
-          defaultPinned: true,
-          permissions: ['app.info.read', 'network.request'],
-          description: '', author: '', homepage: '', sdkVersion: '', networkEnabled: false,
-          networkAllowlist: [], toolTabTitle: '', toolTabOrder: 1, publishedDataTypes: []
-        ),
+            schemaVersion: 1,
+            id: 'test.grants.plugin',
+            version: '1.0.0',
+            minAppVersion: '1.0.0',
+            name: 'Grants Plugin',
+            entrypoint: 'dummy.html',
+            defaultPinned: true,
+            permissions: ['app.info.read', 'network.request'],
+            description: '',
+            author: '',
+            homepage: '',
+            sdkVersion: '',
+            networkEnabled: false,
+            networkAllowlist: [],
+            toolTabTitle: '',
+            toolTabOrder: 1,
+            publishedDataTypes: []),
         installedAt: DateTime.now(),
         updatedAt: DateTime.now(),
         sourceType: 'development',
@@ -239,7 +294,8 @@ void main() {
       expect(
         fakeRepo.recordedGrants['app.info.read'],
         true,
-        reason: 'app.info.read כבר היה קיים ב-recordedGrants – לא אמור להיות נכתב מחדש',
+        reason:
+            'app.info.read כבר היה קיים ב-recordedGrants – לא אמור להיות נכתב מחדש',
       );
     });
   });

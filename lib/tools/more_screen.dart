@@ -77,11 +77,24 @@ class PluginToolDescriptor extends ToolDescriptor {
 
   @override
   Widget buildTab(BuildContext context) {
+    Widget? iconWidget;
+    final codepoint = plugin.manifest.toolTabIconCodepoint;
+    final fontFamily = plugin.manifest.toolTabIconFontFamily;
+    if (codepoint != null && fontFamily != null) {
+      iconWidget = Icon(
+        IconData(
+          codepoint,
+          fontFamily: fontFamily,
+          fontPackage: 'fluentui_system_icons',
+        ),
+        size: 20,
+      );
+    }
     return SizedBox(
       width: 100,
       child: Tab(
         text: label,
-        icon: null, // ללא אייקון — גם לתוספים זמניים
+        icon: iconWidget,
       ),
     );
   }
@@ -129,7 +142,7 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   String _descriptorSignature(List<ToolDescriptor> descriptors) {
     return descriptors.map((d) {
       if (d is PluginToolDescriptor) {
-        return '${d.toolId}|${d.label}|${d.order}|${d.plugin.pinned}|${d.plugin.updatedAt.millisecondsSinceEpoch}';
+        return '${d.toolId}|${d.label}|${d.order}|${d.plugin.pinned}|${d.plugin.manifest.toolTabIconCodepoint}|${d.plugin.manifest.toolTabIconVariant}|${d.plugin.updatedAt.millisecondsSinceEpoch}';
       }
       return '${d.toolId}|${d.label}|${d.order}';
     }).join('::');
