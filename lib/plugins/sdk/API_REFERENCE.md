@@ -384,6 +384,215 @@ const { data } = await Otzaria.call('ui.showWarning', {
 
 ---
 
+## feedback.* - משוב ומיילים
+
+### `feedback.sendEmail`
+**הרשאה:** `feedback.send_email`
+
+שליחת משוב או דיווח למייל מותאם אישית (לא למייל דיווח השגיאות הראשי).
+
+```javascript
+const { data } = await Otzaria.call('feedback.sendEmail', {
+  to: 'custom@example.com',
+  subject: 'נושא המייל',
+  body: 'תוכן המייל',
+  includeSystemInfo: true  // אופציונלי, ברירת מחדל: false
+});
+// true
+```
+
+**פרמטרים:**
+- `to` (חובה) - כתובת המייל של הנמען
+- `subject` (חובה) - נושא המייל
+- `body` (חובה) - תוכן המייל
+- `includeSystemInfo` (אופציונלי) - אם `true`, מוסיף מידע מערכת (גרסה, פלטפורמה, שם התוסף) בסוף המייל
+
+**שימושים אפשריים:**
+- תוסף לשאלות ותשובות שרוצה לשלוח שאלות למייל ספציפי
+- תוסף לסקרים/משוב שרוצה לאסוף תגובות
+- תוסף לבקשות תכונות או דיווח באגים למפתח התוסף
+
+---
+
+## history.* - היסטוריית קריאה
+
+### `history.list`
+**הרשאה:** `history.read`
+
+קבלת רשימת הספרים שנקראו לאחרונה (ללא חיפושים).
+
+```javascript
+const { data } = await Otzaria.call('history.list', {
+  limit: 50  // אופציונלי, ברירת מחדל: 50
+});
+// [
+//   { bookId: "בראשית", title: "בראשית", ref: "פרק א", index: 0, workspaceName: "לימוד יומי" },
+//   { bookId: "שמות", title: "שמות", ref: "פרק ב", index: 42, workspaceName: null },
+//   ...
+// ]
+```
+
+### `history.listSearches`
+**הרשאה:** `history.read`
+
+קבלת רשימת החיפושים האחרונים (ללא ספרים).
+
+```javascript
+const { data } = await Otzaria.call('history.listSearches', {
+  limit: 50  // אופציונלי, ברירת מחדל: 50
+});
+// [
+//   { query: "ואהבת לרעך כמוך", ref: "...", workspaceName: "לימוד יומי" },
+//   ...
+// ]
+```
+
+### `history.clear`
+**הרשאה:** `history.write`
+
+ניקוי כל ההיסטוריה (ספרים וחיפושים).
+
+```javascript
+const { data } = await Otzaria.call('history.clear');
+// true
+```
+
+### `history.remove`
+**הרשאה:** `history.write`
+
+מחיקת פריט ספציפי מההיסטוריה.
+
+```javascript
+const { data } = await Otzaria.call('history.remove', {
+  bookId: 'בראשית',
+  index: 0  // אופציונלי, אם לא מצוין - מוחק את הפריט הראשון עם bookId זה
+});
+// true או false
+```
+
+**שימושים אפשריים:**
+- תוסף לניתוח דפוסי קריאה
+- תוסף להמלצות על ספרים
+- תוסף לסטטיסטיקות לימוד
+- תוסף לניהול היסטוריה מתקדם
+
+---
+
+## notifications.* - התראות
+
+### `notifications.showInApp`
+**הרשאה:** `notifications.send`
+
+הצגת התראה בתוך האפליקציה (UiSnack).
+
+```javascript
+const { data } = await Otzaria.call('notifications.showInApp', {
+  message: 'הפעולה בוצעה בהצלחה',
+  type: 'info'  // 'info' | 'success' | 'error', ברירת מחדל: 'info'
+});
+// true
+```
+
+**סוגי התראות:**
+- `info` - הודעה רגילה (כחול)
+- `success` - הודעת הצלחה (ירוק)
+- `error` - הודעת שגיאה (אדום)
+
+### `notifications.sendSystem`
+**הרשאה:** `notifications.system`
+
+שליחת התראה מיידית למערכת ההפעלה.
+
+```javascript
+const { data } = await Otzaria.call('notifications.sendSystem', {
+  title: 'כותרת ההתראה',
+  body: 'תוכן ההתראה',
+  id: 12345  // אופציונלי, מזהה ייחודי להתראה
+});
+// { id: 12345 }
+```
+
+**הערות:**
+- אם לא מצוין `id`, המערכת תיצור מזהה אוטומטי
+- ההתראה תופיע במרכז ההתראות של מערכת ההפעלה
+- דורש הרשאות מערכת (המשתמש יתבקש לאשר בפעם הראשונה)
+
+### `notifications.scheduleSystem`
+**הרשאה:** `notifications.system`
+
+תזמון התראה למערכת ההפעלה לזמן עתידי.
+
+```javascript
+const { data } = await Otzaria.call('notifications.scheduleSystem', {
+  title: 'תזכורת',
+  body: 'זמן התפילה',
+  scheduledTime: '2026-04-10T10:00:00Z',  // ISO 8601 format
+  id: 12346  // אופציונלי
+});
+// { id: 12346 }
+```
+
+**הערות:**
+- `scheduledTime` חייב להיות בפורמט ISO 8601
+- הזמן חייב להיות בעתיד
+- ההתראה תישלח אוטומטית בזמן שנקבע
+
+### `notifications.cancel`
+**הרשאה:** `notifications.system`
+
+ביטול התראה ספציפית.
+
+```javascript
+const { data } = await Otzaria.call('notifications.cancel', {
+  id: 12345
+});
+// true
+```
+
+### `notifications.cancelAll`
+**הרשאה:** `notifications.system`
+
+ביטול כל ההתראות של התוסף.
+
+```javascript
+const { data } = await Otzaria.call('notifications.cancelAll');
+// true
+```
+
+### `notifications.checkPermissions`
+**הרשאה:** `notifications.system`
+
+בדיקת מצב הרשאות ההתראות.
+
+```javascript
+const { data } = await Otzaria.call('notifications.checkPermissions');
+// { granted: true, initialized: true }
+```
+
+**שדות בתשובה:**
+- `granted` - האם המשתמש אישר הרשאות התראות
+- `initialized` - האם שירות ההתראות מאותחל
+
+### `notifications.requestPermissions`
+**הרשאה:** `notifications.system`
+
+בקשת הרשאות התראות מהמשתמש.
+
+```javascript
+const { data } = await Otzaria.call('notifications.requestPermissions');
+// { granted: true }
+```
+
+**הערה:** פעולה זו תציג דיאלוג למשתמש בפעם הראשונה.
+
+**שימושים אפשריים:**
+- תוסף לתזכורות לימוד
+- תוסף לזמני תפילה
+- תוסף לאירועי לוח שנה
+- תוסף להתראות על עדכונים
+
+---
+
 ## storage.* - אחסון נתונים
 
 ### `storage.get`
@@ -617,15 +826,17 @@ Otzaria.on('event.name', (data) => {
 
 ### אירועים זמינים:
 
-- `plugin.boot` - נורה פעם אחת בטעינת התוסף
-- `plugin.ready` - נורה אחרי boot
-- `theme.changed` - שינוי בערכת הצבעים
-- `navigation.changed` - מעבר בין מסכים ראשיים
-- `reader.current_book_changed` - שינוי הספר הפעיל
-- `calendar.date_changed` - שינוי התאריך בלוח השנה
-- `workspace.changed` - שינוי סביבת העבודה
-- `settings.changed` - שינוי הגדרה
-- `plugin.permissions_changed` - שינוי הרשאות (מחזיר `{ permissions: string[] }` - רשימת כל ההרשאות המאושרות)
+**הרשאה נדרשת:** כל אירוע מצריך הרשאה מתאימה מסוג `events.subscribe:<event_name>`
+
+- `plugin.boot` - נורה פעם אחת בטעינת התוסף (ללא הרשאה)
+- `plugin.ready` - נורה אחרי boot (ללא הרשאה)
+- `theme.changed` - שינוי בערכת הצבעים (הרשאה: `events.subscribe:theme.changed`)
+- `navigation.changed` - מעבר בין מסכים ראשיים (הרשאה: `events.subscribe:navigation.changed`)
+- `reader.current_book_changed` - שינוי הספר הפעיל (הרשאה: `events.subscribe:reader.current_book_changed`)
+- `calendar.date_changed` - שינוי התאריך בלוח השנה (הרשאה: `events.subscribe:calendar.date_changed`)
+- `workspace.changed` - שינוי סביבת העבודה (הרשאה: `events.subscribe:workspace.changed`)
+- `settings.changed` - שינוי הגדרה (הרשאה: `events.subscribe:settings.changed`)
+- `plugin.permissions_changed` - שינוי הרשאות (מחזיר `{ permissions: string[] }` - רשימת כל ההרשאות המאושרות) (הרשאה: `events.subscribe:plugin.permissions_changed`)
 
 ---
 
@@ -654,10 +865,111 @@ Otzaria.on('plugin.boot', async (payload) => {
   books.forEach(book => {
     console.log(book.title);
   });
+  
+  // בדיקת הרשאות התראות
+  const { data: perms } = await Otzaria.call('notifications.checkPermissions');
+  if (!perms.granted) {
+    await Otzaria.call('notifications.requestPermissions');
+  }
+  
+  // שליחת התראה בתוך האפליקציה
+  await Otzaria.call('notifications.showInApp', {
+    message: 'התוסף נטען בהצלחה',
+    type: 'success'
+  });
 });
 
 // האזנה לשינוי ערכת צבעים
 Otzaria.on('theme.changed', (theme) => {
   document.body.style.background = theme.colorScheme.surface;
 });
+
+// האזנה לשינוי ספר
+Otzaria.on('reader.current_book_changed', async (data) => {
+  console.log('ספר חדש נפתח:', data.book);
+  
+  // קבלת היסטוריה
+  const { data: history } = await Otzaria.call('history.list', { limit: 10 });
+  console.log('ספרים אחרונים:', history);
+});
+
+// דוגמה לשליחת משוב
+async function sendFeedback(message) {
+  try {
+    await Otzaria.call('feedback.sendEmail', {
+      to: 'feedback@example.com',
+      subject: 'משוב על התוסף',
+      body: message,
+      includeSystemInfo: true
+    });
+    
+    await Otzaria.call('notifications.showInApp', {
+      message: 'המשוב נשלח בהצלחה',
+      type: 'success'
+    });
+  } catch (error) {
+    await Otzaria.call('notifications.showInApp', {
+      message: 'שגיאה בשליחת המשוב',
+      type: 'error'
+    });
+  }
+}
+
+// דוגמה לתזמון התראה
+async function scheduleReminder(title, body, dateTime) {
+  const { data } = await Otzaria.call('notifications.scheduleSystem', {
+    title: title,
+    body: body,
+    scheduledTime: dateTime.toISOString()
+  });
+  
+  console.log('התראה תוזמנה עם ID:', data.id);
+  
+  // שמירת ה-ID לביטול עתידי
+  await Otzaria.call('storage.set', {
+    key: 'reminder_id',
+    value: data.id
+  });
+}
+```
+
+---
+
+## רשימת הרשאות מלאה
+
+הרשאות שתוסף יכול לבקש ב-`manifest.json`:
+
+```json
+{
+  "permissions": [
+    "app.info.read",
+    "app.user_email.read",
+    "library.books.read",
+    "library.content.read",
+    "search.fulltext.read",
+    "reader.open",
+    "navigation.write",
+    "notes.read",
+    "notes.write",
+    "calendar.read",
+    "settings.read",
+    "ui.feedback",
+    "plugin.storage.read",
+    "plugin.storage.write",
+    "published_data.write",
+    "network.access",
+    "feedback.send_email",
+    "history.read",
+    "history.write",
+    "notifications.send",
+    "notifications.system",
+    "events.subscribe:navigation.changed",
+    "events.subscribe:reader.current_book_changed",
+    "events.subscribe:theme.changed",
+    "events.subscribe:settings.changed",
+    "events.subscribe:calendar.date_changed",
+    "events.subscribe:workspace.changed",
+    "events.subscribe:plugin.permissions_changed"
+  ]
+}
 ```
