@@ -1,0 +1,67 @@
+// lib/widgets/tool_result_card_shell.dart
+//
+// מעטפת משותפת לכרטיסי תוצאה במסכי כלים.
+
+import 'package:flutter/material.dart';
+import 'package:otzaria/theme/theme_exports.dart';
+
+class ToolResultCardShell extends StatelessWidget {
+  final Widget child;
+  final bool isFocused;
+  final VoidCallback? onTap;
+  final bool enableSelection;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry margin;
+
+  const ToolResultCardShell({
+    super.key,
+    required this.child,
+    this.isFocused = false,
+    this.onTap,
+    this.enableSelection = true,
+    this.padding = const EdgeInsets.symmetric(
+      horizontal: AppTokens.spaceMD,
+      vertical: AppTokens.spaceSM,
+    ),
+    this.margin = const EdgeInsets.only(bottom: 4),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final borderColor = isFocused
+        ? cs.primary.withValues(alpha: 0.75)
+        : cs.outlineVariant.withValues(alpha: 0.22);
+    final borderWidth = isFocused ? 1.5 : 1.0;
+
+    return Container(
+      margin: margin,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+        border: Border.all(color: borderColor, width: borderWidth),
+      ),
+      child: Material(
+        color: AppSurfaces.card(context),
+        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+          hoverColor: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+          focusColor: Colors.transparent,
+          child: enableSelection
+              ? SelectionArea(
+                  child: Padding(
+                    padding: padding,
+                    child: child,
+                  ),
+                )
+              : Padding(
+                  padding: padding,
+                  child: child,
+                ),
+        ),
+      ),
+    );
+  }
+}
