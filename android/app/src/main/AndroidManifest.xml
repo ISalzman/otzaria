@@ -6,10 +6,8 @@
     <!-- Notification permissions -->
     <!-- POST_NOTIFICATIONS: Required for Android 13+ to show notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- SCHEDULE_EXACT_ALARM: Required for Android 12+ to schedule exact alarms -->
+    <!-- SCHEDULE_EXACT_ALARM: Required for Android 12+ to schedule exact alarms for calendar reminders -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- USE_EXACT_ALARM: Alternative permission for exact alarms -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <!-- WAKE_LOCK: Allows the app to wake up the device for notifications -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- RECEIVE_BOOT_COMPLETED: Allows rescheduling notifications after device reboot -->

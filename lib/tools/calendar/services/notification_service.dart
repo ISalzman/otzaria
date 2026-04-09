@@ -347,15 +347,25 @@ class NotificationService {
     );
 
     try {
+      // Use exact alarm if permission granted, otherwise fall back to inexact
+      final canScheduleExact = Platform.isAndroid
+          ? await flutterLocalNotificationsPlugin
+                  .resolvePlatformSpecificImplementation<
+                      AndroidFlutterLocalNotificationsPlugin>()
+                  ?.canScheduleExactNotifications() ??
+              false
+          : true;
+
       await flutterLocalNotificationsPlugin.zonedSchedule(
         id: id,
         title: title,
         body: body,
         scheduledDate: tz.TZDateTime.from(scheduleTime, tz.local),
         notificationDetails: notificationDetails,
-        // dateInterpretation removed: not present in latest API
         matchDateTimeComponents: null,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: canScheduleExact
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
       );
     } catch (e) {
       if (kDebugMode) {
