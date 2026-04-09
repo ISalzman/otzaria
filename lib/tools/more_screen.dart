@@ -22,6 +22,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/view/plugin_side_panel.dart';
 import 'package:otzaria/plugins/view/plugin_tab_page.dart';
+import 'package:otzaria/plugins/view/plugin_install_screen.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 
 abstract class ToolDescriptor {
@@ -629,29 +630,17 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
             }
           });
         } else if (state is PluginSystemInstallRequiresPermissions) {
-          final permList = state.manifest.permissions.isEmpty
-              ? 'אין הרשאות מיוחדות נדרשות'
-              : state.manifest.permissions.join('\n');
-          showWarningDialog(
-            context: context,
-            title: 'אישור התקנת תוסף',
-            content:
-                'התוסף "${state.manifest.name}" מבקש גישה למשאבי מערכת.\n\nהרשאות נדרשות:\n$permList',
-            subtitle: 'האם ברצונך לאשר הרשאות אלו ולהתקין את התוסף?',
-            cancelText: 'ביטול',
-            confirmText: 'התקן וקבל',
-          ).then((value) {
-            if (!context.mounted) return;
-            if (value == true) {
-              context
-                  .read<PluginSystemBloc>()
-                  .add(ConfirmPluginInstall(state.tempDirPath, state.manifest));
-            } else {
-              context
-                  .read<PluginSystemBloc>()
-                  .add(CancelPluginInstall(state.tempDirPath));
-            }
-          });
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => BlocProvider.value(
+                value: context.read<PluginSystemBloc>(),
+                child: PluginInstallScreen(
+                  manifest: state.manifest,
+                  tempDirPath: state.tempDirPath,
+                ),
+              ),
+            ),
+          );
         }
       },
       child: Theme(
