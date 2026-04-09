@@ -133,6 +133,18 @@ class PluginBridgeHandler {
         return 'calendar.read';
       case 'publishedData':
         return 'published_data.write';
+      case 'feedback':
+        return 'feedback.send_email';
+      case 'history':
+        if (action == 'clear' || action == 'remove') {
+          return 'history.write';
+        }
+        return 'history.read';
+      case 'notifications':
+        if (action == 'showInApp') {
+          return 'notifications.send';
+        }
+        return 'notifications.system';
       default:
         return null;
     }

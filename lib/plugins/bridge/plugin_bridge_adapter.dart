@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
@@ -20,10 +22,12 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
+import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
+import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/utils/ref_helper.dart';
@@ -157,13 +161,16 @@ class PluginBridgeAdapter {
   final InstalledPlugin plugin;
   final PluginRegistryRepository _pluginRepo;
   final PluginBridgeDependencies _dependencies;
+  final NotificationService _notificationService;
 
   PluginBridgeAdapter(
     this.plugin, {
     required PluginBridgeDependencies dependencies,
     PluginRegistryRepository? pluginRepository,
+    NotificationService? notificationService,
   })  : _dependencies = dependencies,
-        _pluginRepo = pluginRepository ?? PluginRegistryRepository();
+        _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
+        _notificationService = notificationService ?? NotificationService();
 
   Future<dynamic> execute(
       String domain, String action, Map<String, dynamic> args) async {
@@ -190,6 +197,12 @@ class PluginBridgeAdapter {
         return await _handleCalendar(action, args);
       case 'publishedData':
         return await _handlePublishedData(action, args);
+      case 'feedback':
+        return await _handleFeedback(action, args);
+      case 'history':
+        return await _handleHistory(action, args);
+      case 'notifications':
+        return await _handleNotifications(action, args);
       default:
         throw Exception("Unknown domain: $domain");
     }
@@ -713,6 +726,376 @@ class PluginBridgeAdapter {
   }
 
   // ----------------------------------------------------------------
+  // feedback.*
+  // ----------------------------------------------------------------
+  Future<dynamic> _handleFeedback(
+      String action, Map<String, dynamic> args) async {
+    switch (action) {
+      case 'sendEmail':
+        final to = args['to'] as String?;
+        final subject = args['subject'] as String?;
+        final body = args['body'] as String?;
+        final includeSystemInfo = args['includeSystemInfo'] as bool? ?? false;
+
+        if (to == null || subject == null || body == null) {
+          throw Exception('to, subject, body required');
+        }
+
+        String finalBody = body;
+        if (includeSystemInfo) {
+          final packageInfo = await PackageInfo.fromPlatform();
+          finalBody += '\n\n---\n';
+          finalBody += 'גרסה: ${packageInfo.version}\n';
+          finalBody += 'פלטפורמה: ${Platform.operatingSystem}\n';
+          finalBody += 'תוסף: ${plugin.name} (${plugin.pluginId})\n';
+        }
+
+        final emailUri = Uri(
+          scheme: 'mailto',
+          path: to,
+          query: _encodeQueryParameters({
+            'subject': subject,
+            'body': finalBody,
+          }),
+        );
+
+        try {
+          final launched =
+              await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+          if (!launched) {
+            throw Exception('Failed to launch email client');
+          }
+          return true;
+        } catch (e) {
+          throw Exception('Failed to open email client: $e');
+        }
+
+      default:
+        throw Exception('Unknown action in feedback: $action');
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // history.*
+  // ----------------------------------------------------------------
+  Future<dynamic> _handleHistory(
+      String action, Map<String, dynamic> args) async {
+    switch (action) {
+      case 'list':
+        final limit = args['limit'] as int? ?? 50;
+        final historyState = _dependencies.historyBloc.state;
+        if (historyState is! HistoryLoaded) return [];
+
+        return historyState.history
+            .where((b) => !b.isSearch)
+            .take(limit)
+            .map((b) => {
+                  'bookId': b.book.title,
+                  'title': b.book.title,
+                  'ref': b.ref,
+                  'index': b.index,
+                  'workspaceName': b.workspaceName,
+                })
+            .toList();
+
+      case 'listSearches':
+        final limit = args['limit'] as int? ?? 50;
+        final historyState = _dependencies.historyBloc.state;
+        if (historyState is! HistoryLoaded) return [];
+
+        return historyState.history
+            .where((b) => b.isSearch)
+            .take(limit)
+            .map((b) => {
+                  'query': b.book.title,
+                  'ref': b.ref,
+                  'workspaceName': b.workspaceName,
+                })
+            .toList();
+
+      case 'clear':
+        _dependencies.historyBloc.add(ClearHistory());
+        return true;
+
+      case 'remove':
+        final bookId = args['bookId'] as String?;
+        final index = args['index'] as int?;
+        if (bookId == null) throw Exception('bookId required');
+
+        final historyState = _dependencies.historyBloc.state;
+        if (historyState is! HistoryLoaded) return false;
+
+        final historyList = historyState.history;
+        int? indexToRemove;
+
+        for (int i = 0; i < historyList.length; i++) {
+          final item = historyList[i];
+          if (item.book.title == bookId &&
+              (index == null || item.index == index)) {
+            indexToRemove = i;
+            break;
+          }
+        }
+
+        if (indexToRemove != null) {
+          _dependencies.historyBloc.add(RemoveHistory(indexToRemove));
+          return true;
+        }
+        return false;
+
+      default:
+        throw Exception('Unknown action in history: $action');
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // notifications.*
+  // ----------------------------------------------------------------
+  Future<dynamic> _handleNotifications(
+      String action, Map<String, dynamic> args) async {
+    switch (action) {
+      case 'showInApp':
+        // התראה בתוך האפליקציה (UiSnack)
+        final message = args['message'] as String?;
+        final type = args['type'] as String? ?? 'info';
+
+        if (message == null || message.isEmpty) {
+          throw Exception('message required');
+        }
+
+        switch (type) {
+          case 'success':
+            UiSnack.showSuccess(message);
+            break;
+          case 'error':
+            UiSnack.showError(message);
+            break;
+          case 'info':
+          default:
+            UiSnack.show(message);
+            break;
+        }
+        return true;
+
+      case 'sendSystem':
+        // התראה למערכת ההפעלה
+        final title = args['title'] as String?;
+        final body = args['body'] as String?;
+        final id = args['id'] as int?;
+
+        if (title == null || body == null) {
+          throw Exception('title and body required');
+        }
+
+        // בדיקה אם השירות מאותחל
+        if (!_notificationService.isInitialized) {
+          throw Exception('Notification service not initialized');
+        }
+
+        // בדיקה אם יש הרשאות
+        if (!_notificationService.hasPermissions) {
+          throw Exception('Notification permissions not granted');
+        }
+
+        // שליחת התראה מיידית
+        final notificationId = id ?? DateTime.now().millisecondsSinceEpoch;
+
+        await _notificationService.flutterLocalNotificationsPlugin.show(
+          id: notificationId,
+          title: title,
+          body: body,
+          notificationDetails: _buildNotificationDetails(),
+        );
+
+        // שמירת ה-ID לעקוב אחרי התראות התוסף
+        await _trackNotificationId(notificationId);
+
+        return {'id': notificationId};
+
+      case 'scheduleSystem':
+        // תזמון התראה למערכת ההפעלה
+        final title = args['title'] as String?;
+        final body = args['body'] as String?;
+        final scheduledTime = args['scheduledTime'] as String?;
+        final id = args['id'] as int?;
+
+        if (title == null || body == null || scheduledTime == null) {
+          throw Exception('title, body, and scheduledTime required');
+        }
+
+        final dateTime = DateTime.tryParse(scheduledTime);
+        if (dateTime == null) {
+          throw Exception('Invalid scheduledTime format. Use ISO 8601.');
+        }
+
+        if (dateTime.isBefore(DateTime.now())) {
+          throw Exception('scheduledTime must be in the future');
+        }
+
+        if (!_notificationService.isInitialized) {
+          throw Exception('Notification service not initialized');
+        }
+
+        if (!_notificationService.hasPermissions) {
+          throw Exception('Notification permissions not granted');
+        }
+
+        final notificationId = id ?? DateTime.now().millisecondsSinceEpoch;
+
+        await _notificationService.scheduleNotification(
+          id: notificationId,
+          title: title,
+          body: body,
+          eventDate: dateTime,
+          reminderMinutes: 0,
+        );
+
+        // שמירת ה-ID לעקוב אחרי התראות התוסף
+        await _trackNotificationId(notificationId);
+
+        return {'id': notificationId};
+
+      case 'cancel':
+        // ביטול התראה
+        final id = args['id'] as int?;
+        if (id == null) throw Exception('id required');
+
+        if (!_notificationService.isInitialized) {
+          throw Exception('Notification service not initialized');
+        }
+
+        await _notificationService.cancelNotification(id);
+        await _untrackNotificationId(id);
+        return true;
+
+      case 'cancelAll':
+        // ביטול כל ההתראות של התוסף
+        if (!_notificationService.isInitialized) {
+          throw Exception('Notification service not initialized');
+        }
+
+        final notificationIds = await _getTrackedNotificationIds();
+        for (final id in notificationIds) {
+          await _notificationService.cancelNotification(id);
+        }
+        await _clearTrackedNotificationIds();
+        return true;
+
+      case 'checkPermissions':
+        // בדיקת הרשאות התראות
+        if (!_notificationService.isInitialized) {
+          return {'granted': false, 'initialized': false};
+        }
+
+        final hasPermissions = await _notificationService.checkPermissions();
+        return {
+          'granted': hasPermissions,
+          'initialized': _notificationService.isInitialized
+        };
+
+      case 'requestPermissions':
+        // בקשת הרשאות התראות
+        if (!_notificationService.isInitialized) {
+          throw Exception('Notification service not initialized');
+        }
+
+        final granted = await _notificationService.requestPermissions();
+        return {'granted': granted};
+
+      default:
+        throw Exception('Unknown action in notifications: $action');
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // Helpers
+  // ----------------------------------------------------------------
+
+  /// Encode query parameters for mailto URL
+  String? _encodeQueryParameters(Map<String, String> params) {
+    return params.entries
+        .map((e) =>
+            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+  }
+
+  /// Build notification details for all platforms
+  NotificationDetails _buildNotificationDetails() {
+    const androidDetails = AndroidNotificationDetails(
+      'plugin_channel',
+      'התראות תוספים',
+      channelDescription: 'התראות מתוספי אוצריא',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const iOSDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const windowsDetails = WindowsNotificationDetails();
+
+    return const NotificationDetails(
+      android: androidDetails,
+      iOS: iOSDetails,
+      macOS: iOSDetails,
+      linux: LinuxNotificationDetails(),
+      windows: windowsDetails,
+    );
+  }
+
+  /// Track notification ID for this plugin (internal namespace)
+  Future<void> _trackNotificationId(int id) async {
+    final ids = await _getTrackedNotificationIds();
+    if (!ids.contains(id)) {
+      ids.add(id);
+      await _pluginRepo.setKV(
+        plugin.pluginId,
+        '_internal',
+        'notification_ids',
+        jsonEncode(ids),
+      );
+    }
+  }
+
+  /// Untrack notification ID
+  Future<void> _untrackNotificationId(int id) async {
+    final ids = await _getTrackedNotificationIds();
+    if (ids.remove(id)) {
+      await _pluginRepo.setKV(
+        plugin.pluginId,
+        '_internal',
+        'notification_ids',
+        jsonEncode(ids),
+      );
+    }
+  }
+
+  /// Get all tracked notification IDs for this plugin
+  Future<List<int>> _getTrackedNotificationIds() async {
+    final value = await _pluginRepo.getKV(
+        plugin.pluginId, '_internal', 'notification_ids');
+    if (value == null) return [];
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is List) {
+        return decoded.cast<int>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// Clear all tracked notification IDs
+  Future<void> _clearTrackedNotificationIds() async {
+    await _pluginRepo.removeKV(
+        plugin.pluginId, '_internal', 'notification_ids');
+  }
+
+  // ----------------------------------------------------------------
   // Helpers
   // ----------------------------------------------------------------
 
@@ -763,7 +1146,8 @@ class PluginBridgeAdapter {
         } else if (month == 1 && day == 16) {
           addHoliday('פסח שני', 'yomTov');
         } else {
-          addHoliday(yomTovLabel, _holidayKindForLabel(yomTovLabel, jewishCalendar));
+          addHoliday(
+              yomTovLabel, _holidayKindForLabel(yomTovLabel, jewishCalendar));
         }
       } else {
         for (final label in yomTovLabel.split(',')) {

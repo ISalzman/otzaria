@@ -243,7 +243,19 @@ export type OtzariaMethod =
   | 'calendar.getEvents'
   | 'publishedData.upsert'
   | 'publishedData.remove'
-  | 'publishedData.listOwn';
+  | 'publishedData.listOwn'
+  | 'feedback.sendEmail'
+  | 'history.list'
+  | 'history.listSearches'
+  | 'history.clear'
+  | 'history.remove'
+  | 'notifications.showInApp'
+  | 'notifications.sendSystem'
+  | 'notifications.scheduleSystem'
+  | 'notifications.cancel'
+  | 'notifications.cancelAll'
+  | 'notifications.checkPermissions'
+  | 'notifications.requestPermissions';
 
 // ---------------------------------------------------------------------------
 // The global Otzaria object
