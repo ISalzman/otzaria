@@ -22,10 +22,15 @@ class InstallPluginRequested extends PluginSystemEvent {
 class ConfirmPluginInstall extends PluginSystemEvent {
   final String tempDirPath;
   final PluginManifest manifest;
-  const ConfirmPluginInstall(this.tempDirPath, this.manifest);
+
+  /// מיפוי הרשאה → האם הוענקה. הרשאות עם ערך false יישמרו כחסומות.
+  final Map<String, bool> grantedPermissions;
+
+  const ConfirmPluginInstall(
+      this.tempDirPath, this.manifest, this.grantedPermissions);
 
   @override
-  List<Object?> get props => [tempDirPath, manifest];
+  List<Object?> get props => [tempDirPath, manifest, grantedPermissions];
 }
 
 class CancelPluginInstall extends PluginSystemEvent {

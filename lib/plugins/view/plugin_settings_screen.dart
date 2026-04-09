@@ -5,6 +5,7 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
+import 'package:otzaria/plugins/models/plugin_permission_labels.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/settings/settings_card.dart';
@@ -82,15 +83,33 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                   title: 'ניהול הרשאות',
                   subtitle: 'אפשר או חסום הרשאות ספציפיות כפי שנדרש במניפסט',
                   children: currentPlugin.manifest.permissions.map((p) {
+                    final info = getPermissionInfo(p);
+                    final isGranted = _permissions[p] ?? true;
                     return SwitchListTile(
-                      title: Text(p),
-                      value: _permissions[p] ?? true,
+                      secondary: Icon(
+                        isGranted
+                            ? FluentIcons.shield_checkmark_24_regular
+                            : FluentIcons.shield_error_24_regular,
+                        color: isGranted
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.error,
+                      ),
+                      title: Text(
+                        info.label,
+                        textDirection: TextDirection.rtl,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      subtitle: Text(
+                        info.description,
+                        textDirection: TextDirection.rtl,
+                      ),
+                      value: isGranted,
                       onChanged: (val) async {
                         context.read<PluginSystemBloc>().add(
                            SetPluginPermissionRequested(
-                             pluginId: currentPlugin.pluginId, 
-                             permission: p, 
-                             granted: val
+                             pluginId: currentPlugin.pluginId,
+                             permission: p,
+                             granted: val,
                            )
                         );
                         setState(() {
