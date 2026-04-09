@@ -225,89 +225,84 @@ class _BookCardWidgetState extends State<BookCardWidget> {
               .colorScheme
               .surfaceContainerHighest
               .withValues(alpha: 0.35),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                widget.bookName,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface,
-                                    ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                textDirection: TextDirection.rtl,
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                textDirection: TextDirection.rtl,
-                                children: [
-                                  _BookMetaChip(
-                                    icon: FluentIcons.folder_24_regular,
-                                    text: widget.bookDetails.categoryPath ??
-                                        widget.categoryName,
-                                    backgroundColor: Theme.of(context)
-                                        .colorScheme
-                                        .secondaryContainer,
-                                    foregroundColor: Theme.of(context)
-                                        .colorScheme
-                                        .onSecondaryContainer,
-                                    maxWidth: constraints.maxWidth,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              widget.bookName,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color:
+                                        Theme.of(context).colorScheme.onSurface,
                                   ),
-                                  if (_isCompleted)
-                                    _BookMetaChip(
-                                      icon: FluentIcons
-                                          .checkmark_circle_24_regular,
-                                      text: 'הושלם',
-                                      backgroundColor:
-                                          Theme.of(context).colorScheme.primary,
-                                      foregroundColor: Theme.of(context)
-                                          .colorScheme
-                                          .onPrimary,
-                                      maxWidth: constraints.maxWidth,
-                                    ),
-                                ],
-                              ),
-                            ],
-                          );
-                        },
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textDirection: TextDirection.rtl,
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _BookMetaChip(
+                                  icon: FluentIcons.folder_24_regular,
+                                  text: widget.bookDetails.categoryPath ??
+                                      widget.categoryName,
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .secondaryContainer,
+                                  foregroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .onSecondaryContainer,
+                                ),
+                                if (_isCompleted)
+                                  _BookMetaChip(
+                                    icon:
+                                        FluentIcons.checkmark_circle_24_regular,
+                                    text: 'הושלם',
+                                    backgroundColor:
+                                        Theme.of(context).colorScheme.primary,
+                                    foregroundColor:
+                                        Theme.of(context).colorScheme.onPrimary,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    if (widget.onDelete != null) ...[
-                      const SizedBox(width: 8),
-                      ToolbarActionButton(
-                        tooltip: 'הסר ספר',
-                        icon: FluentIcons.delete_24_regular,
-                        emphasis: ToolbarActionButtonEmphasis.subtle,
-                        onPressed: widget.onDelete!,
-                      ),
+                      if (widget.onDelete != null) ...[
+                        const SizedBox(width: 8),
+                        ToolbarActionButton(
+                          tooltip: 'הסר ספר',
+                          icon: FluentIcons.delete_24_regular,
+                          emphasis: ToolbarActionButtonEmphasis.subtle,
+                          onPressed: widget.onDelete!,
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // Progress / Completion info - מחזורים מרובים
-                _buildCyclesProgressInfo(context),
-              ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Progress / Completion info - מחזורים מרובים
+                  _buildCyclesProgressInfo(context),
+                  const SizedBox(height: 12),
+                ],
+              ),
             ),
           ),
         ),
@@ -408,6 +403,8 @@ class _BookCardWidgetState extends State<BookCardWidget> {
                     color: cs.onSurface,
                   ),
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -434,9 +431,11 @@ class _BookCardWidgetState extends State<BookCardWidget> {
             getCycleName(cycleNumber),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.bold,
-                  fontSize: 11,
+                  fontSize: 10,
                 ),
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           ClipRRect(
@@ -499,9 +498,37 @@ class _BookCardWidgetState extends State<BookCardWidget> {
                         .withValues(alpha: 0.7)),
                 overflow: TextOverflow.ellipsis),
           ),
+          const SizedBox(width: 8),
+          if (learnProgress > 0)
+            Flexible(
+              child: Text(
+                _getProgressStatusText(),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w500),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
         ]),
       ],
     );
+  }
+
+  String _getProgressStatusText() {
+    try {
+      if (_progressProvider == null) {
+        return 'לימוד פעיל';
+      }
+      final summary = _progressProvider!.getBookProgressSummarySync(
+        widget.topLevelCategoryKey,
+        widget.bookName,
+        widget.bookDetails,
+      );
+      return summary.statusText;
+    } catch (e, st) {
+      _logger.warning('getBookProgressSummarySync failed', e, st);
+      return 'לימוד פעיל';
+    }
   }
 }
 
@@ -511,46 +538,41 @@ class _BookMetaChip extends StatelessWidget {
   final String text;
   final Color backgroundColor;
   final Color foregroundColor;
-  final double maxWidth;
 
   const _BookMetaChip({
     required this.icon,
     required this.text,
     required this.backgroundColor,
     required this.foregroundColor,
-    required this.maxWidth,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxWidth),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: foregroundColor),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                text,
-                textDirection: TextDirection.rtl,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: foregroundColor,
-                  fontWeight: FontWeight.w500,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: foregroundColor),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              text,
+              textDirection: TextDirection.rtl,
+              style: TextStyle(
+                fontSize: 11,
+                color: foregroundColor,
+                fontWeight: FontWeight.w500,
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

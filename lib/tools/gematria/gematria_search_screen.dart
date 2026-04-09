@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/models/books.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/tools/gematria/gematria_search.dart';
-import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/tools/gematria/models/gematria_search_result.dart';
+import 'package:otzaria/tools/gematria/widgets/gematria_result_card.dart';
+import 'package:otzaria/tools/gematria/widgets/gematria_settings_panel.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/app_top_bar.dart';
+import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/otzaria_search_field.dart';
+import 'package:otzaria/widgets/tool_empty_state.dart';
+import 'package:otzaria/widgets/tool_ui_helpers.dart';
 
 class GematriaSearchScreen extends StatefulWidget {
   const GematriaSearchScreen({super.key});
@@ -19,11 +27,13 @@ class GematriaSearchScreen extends StatefulWidget {
 
 class GematriaSearchScreenState extends State<GematriaSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   List<GematriaSearchResult> _searchResults = [];
   bool _isSearching = false;
   int? _lastGematriaValue; // ערך הגימטריה האחרון שחיפשנו
   bool _hasMoreResults = false; // האם יש יותר תוצאות מהמקסימום
   bool _hasSearched = false; // האם בוצע חיפוש בפועל
+  bool _showingSettings = false;
 
   // סדר ספרי התנ"ך
   static const List<String> _tanachOrder = [
@@ -51,15 +61,48 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(() {
-      setState(() {});
-    });
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _searchFocusNode.requestFocus());
+  }
+
+  void requestKeyboardFocus() {
+    if (!mounted || !_searchFocusNode.canRequestFocus) return;
+    _searchFocusNode.requestFocus();
+  }
+
+  void closeTransientPanels() {
+    if (!_showingSettings) return;
+    setState(() => _showingSettings = false);
+    _rerunSearchIfNeeded();
+  }
+
+  @override
+  void deactivate() {
+    if (_showingSettings) {
+      _showingSettings = false;
+    }
+    super.deactivate();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _toggleSettings() {
+    final wasVisible = _showingSettings;
+    setState(() => _showingSettings = !_showingSettings);
+    if (wasVisible) {
+      _rerunSearchIfNeeded();
+    }
+  }
+
+  void _rerunSearchIfNeeded() {
+    if (_searchController.text.trim().isNotEmpty && _hasSearched) {
+      _performSearch();
+    }
   }
 
   Future<void> _performSearch() async {
@@ -238,8 +281,8 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
             return aOrder.compareTo(bOrder);
           }
           // אם אותו ספר, מיין לפי מספר השורה
-          final aResult = a.data as SearchResult;
-          final bResult = b.data as SearchResult;
+          final aResult = a.data;
+          final bResult = b.data;
           return aResult.line.compareTo(bResult.line);
         });
 
@@ -250,22 +293,97 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
         _isSearching = false;
         _searchResults = [];
       });
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('שגיאה בחיפוש: $e')));
-      }
+      UiSnack.showError('שגיאה בחיפוש: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
+    final searchShortcutSetting = context.select(
+      (SettingsBloc bloc) =>
+          bloc.state.shortcuts['key-shortcut-search-current-window'] ??
+          ShortcutValidator
+              .defaultShortcuts['key-shortcut-search-current-window'] ??
+          'ctrl+f',
+    );
+
+    return CallbackShortcuts(
+      bindings: {
+        ShortcutHelper.activatorFromShortcut(searchShortcutSetting) ??
+            const SingleActivator(LogicalKeyboardKey.keyF,
+                control: true): () {
+          _searchFocusNode.requestFocus();
+        },
+      },
+      child: Column(
         children: [
-          _buildSearchBar(),
-          if (_lastGematriaValue != null) _buildStatusBar(),
-          Expanded(child: _buildResultsList()),
+          BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, settingsState) => AppTopBar(
+              center: OtzariaSearchField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                hintText: 'חפש גימטריה...',
+                autofocus: true,
+                onSubmitted: (_) => _performSearch(),
+                onClear: () => setState(() {
+                  _searchResults = [];
+                  _lastGematriaValue = null;
+                  _hasSearched = false;
+                }),
+                leading: IconButton(
+                  icon: const Icon(FluentIcons.search_24_regular),
+                  onPressed: _performSearch,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              trailingItems: [
+                AppTopBarItem(
+                  widget: ToolbarActionButton(
+                    compact: settingsState.compactMenuMode,
+                    tooltip: 'הגדרות גימטריה',
+                    icon: FluentIcons.settings_24_regular,
+                    selected: _showingSettings,
+                    onPressed: _toggleSettings,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 800;
+                final panel = GematriaSettingsPanel(
+                  isVisible: _showingSettings,
+                  onToggle: _toggleSettings,
+                );
+                final resultsContent = ToolPanelWrapper(
+                  child: Column(
+                    children: [
+                      if (_lastGematriaValue != null) _buildStatusBar(),
+                      Expanded(child: _buildResultsList()),
+                    ],
+                  ),
+                );
+
+                if (isNarrow) {
+                  return Stack(
+                    children: [
+                      Positioned.fill(child: resultsContent),
+                      panel.buildNarrowOverlay(context),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: resultsContent),
+                    panel,
+                  ],
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -307,126 +425,22 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
     );
   }
 
-  void showSettingsDialog() {
-    // ההמתנה לסגירת הדיאלוג
-    showGematriaSettingsDialog(context).then((_) {
-      // ווידוא שה-widget עדיין mounted
-      if (!mounted) {
-        return;
-      }
-
-      // רצה בצע חיפוש מחדש אם יש טקסט חיפוש ובוצע חיפוש לפחות פעם אחת
-      if (_searchController.text.trim().isNotEmpty && _hasSearched) {
-        _performSearch();
-      }
-    });
-  }
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8.0, 16.0, 8.0, 8.0),
-      child: Row(
-        children: [
-          const SizedBox(width: 8),
-          Expanded(
-            child: RtlTextField(
-              controller: _searchController,
-              textAlign: TextAlign.right,
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                hintText: 'חפש גימטריה...',
-                labelText: 'לחיפוש, הכנס אותיות או מספר של ערך החיפוש',
-                prefixIcon: IconButton(
-                  icon: const Icon(FluentIcons.search_24_regular),
-                  onPressed: _performSearch,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        tooltip: 'נקה',
-                        icon: const Icon(FluentIcons.dismiss_24_regular),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchResults = [];
-                            _lastGematriaValue = null;
-                            _hasSearched = false;
-                          });
-                        },
-                      )
-                    : null,
-              ),
-              onSubmitted: (_) => _performSearch(),
-              textInputAction: TextInputAction.search,
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(FluentIcons.settings_24_regular),
-            tooltip: 'הגדרות',
-            onPressed: showSettingsDialog,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildResultsList() {
     if (_isSearching) {
       return const Center(child: CircularProgressIndicator());
     }
 
     if (_searchResults.isEmpty && _hasSearched) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.search_24_regular,
-              size: 64,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'לא נמצאו תוצאות',
-              style: TextStyle(
-                fontSize: 18,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ],
-        ),
+      return const ToolEmptyState(
+        icon: FluentIcons.search_24_regular,
+        message: 'לא נמצאו תוצאות',
       );
     }
 
     if (_searchResults.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.calculator_24_regular,
-              size: 64,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'הזן ערך לחיפוש גימטריה',
-              style: TextStyle(
-                fontSize: 18,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ],
-        ),
+      return const ToolEmptyState(
+        icon: FluentIcons.calculator_24_regular,
+        message: 'הזן ערך לחיפוש גימטריה',
       );
     }
 
@@ -434,179 +448,11 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
       padding: const EdgeInsets.all(16),
       itemCount: _searchResults.length,
       itemBuilder: (context, index) {
-        return _buildResultCard(index + 1, _searchResults[index]);
+        return GematriaResultCard(
+          number: index + 1,
+          result: _searchResults[index],
+        );
       },
     );
   }
-
-  Widget _buildResultCard(int number, GematriaSearchResult result) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-          width: 1,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: () {
-          final book = TextBook(title: result.bookTitle);
-          final index = result.data.line - 1;
-          final searchQuery = result.preview;
-          openBook(context, book, index, searchQuery, ignoreHistory: true);
-        },
-        borderRadius: BorderRadius.circular(12),
-        hoverColor: Theme.of(context)
-            .colorScheme
-            .primaryContainer
-            .withValues(alpha: 0.3),
-        splashColor: Theme.of(context)
-            .colorScheme
-            .primaryContainer
-            .withValues(alpha: 0.4),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // מספר התוצאה
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: Text(
-                    '$number',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              // תוכן התוצאה
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // נתיב (כותרות) - אם קיים, אחרת שם הקובץ
-                    BlocBuilder<SettingsBloc, SettingsState>(
-                      builder: (context, settingsState) {
-                        String displayPath = result.internalPath.isNotEmpty
-                            ? result.internalPath
-                            : result.bookTitle;
-                        if (settingsState.replaceHolyNames) {
-                          displayPath = utils.replaceHolyNames(displayPath);
-                        }
-                        return Text(
-                          displayPath,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                          textAlign: TextAlign.right,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    // המילים שנמצאו עם הקשר
-                    if (result.preview.isNotEmpty)
-                      BlocBuilder<SettingsBloc, SettingsState>(
-                        builder: (context, settingsState) {
-                          String displayText = result.preview;
-                          if (settingsState.replaceHolyNames) {
-                            displayText = utils.replaceHolyNames(displayText);
-                          }
-
-                          // הוספת הקשר אם קיים
-                          final searchResult = result.data as SearchResult;
-                          String contextBefore = searchResult.contextBefore;
-                          String contextAfter = searchResult.contextAfter;
-
-                          if (settingsState.replaceHolyNames) {
-                            contextBefore =
-                                utils.replaceHolyNames(contextBefore);
-                            contextAfter = utils.replaceHolyNames(contextAfter);
-                          }
-
-                          return RichText(
-                            textAlign: TextAlign.right,
-                            text: TextSpan(
-                              style: TextStyle(
-                                fontSize: settingsState.fontSize,
-                                fontFamily: settingsState.fontFamily,
-                                color: Theme.of(context).colorScheme.onSurface,
-                                height: 1.5,
-                              ),
-                              children: [
-                                // הקשר לפני - אפור וחלש
-                                if (contextBefore.isNotEmpty)
-                                  TextSpan(
-                                    text: '$contextBefore ',
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.4),
-                                      fontWeight: FontWeight.w300,
-                                    ),
-                                  ),
-                                // הטקסט המרכזי - בולט
-                                TextSpan(
-                                  text: displayText,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: settingsState.fontSize + 2,
-                                  ),
-                                ),
-                                // הקשר אחרי - אפור וחלש
-                                if (contextAfter.isNotEmpty)
-                                  TextSpan(
-                                    text: ' $contextAfter',
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.4),
-                                      fontWeight: FontWeight.w300,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class GematriaSearchResult {
-  final String bookTitle;
-  final String internalPath;
-  final String preview;
-  final dynamic data; // מידע נוסף שתרצה לשמור
-
-  GematriaSearchResult({
-    required this.bookTitle,
-    required this.internalPath,
-    this.preview = '',
-    this.data,
-  });
 }

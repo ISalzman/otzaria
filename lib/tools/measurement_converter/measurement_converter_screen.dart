@@ -118,6 +118,11 @@ class _MeasurementConverterScreenState
     }
   }
 
+  void requestKeyboardFocus() {
+    if (!_screenFocusNode.canRequestFocus) return;
+    _screenFocusNode.requestFocus();
+  }
+
   @override
   void dispose() {
     _inputController.dispose();
@@ -1072,9 +1077,9 @@ class _MeasurementConverterScreenState
 
     return Container(
       decoration: BoxDecoration(
-        color: AppSurfaces.solidPanelBackground(context),
+        color: cs.surface,
         borderRadius: BorderRadius.circular(AppTokens.radiusMD),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+        border: Border.all(color: cs.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1087,14 +1092,14 @@ class _MeasurementConverterScreenState
             ),
             child: Row(
               children: [
-                Icon(icon, size: 18, color: cs.primary),
-                const SizedBox(width: AppTokens.spaceXS),
+                Icon(icon, size: 16, color: cs.primary),
+                const SizedBox(width: 6),
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: AppTokens.fontSM,
+                    fontSize: AppTokens.fontMD,
                     fontWeight: FontWeight.w600,
-                    color: cs.onSurface,
+                    color: cs.primary,
                   ),
                 ),
               ],
@@ -1151,23 +1156,23 @@ class _MeasurementConverterScreenState
       },
       child: AnimatedContainer(
         duration: AppTokens.animFast,
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.spaceSM, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? cs.secondaryContainer : Colors.transparent,
+          color: isSelected ? cs.secondaryContainer : cs.surface,
           borderRadius: BorderRadius.circular(AppTokens.radiusSM),
           border: Border.all(
             color: isSelected
                 ? cs.secondary
-                : cs.outlineVariant.withValues(alpha: 0.7),
+                : cs.outline.withValues(alpha: 0.25),
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
         child: Text(
           unit,
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: AppTokens.fontSM,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             color: isSelected ? cs.onSecondaryContainer : cs.onSurface,
           ),
         ),
