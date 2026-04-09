@@ -24,15 +24,19 @@ class MoreScreen extends StatefulWidget {
 class MoreScreenState extends State<MoreScreen>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   static const int _calendarFocusRetryCount = 6;
+  static const int _shamorZachorFocusRetryCount = 6;
   late final TabController _tabController;
   final GlobalKey<CalendarWidgetState> _calendarKey =
       GlobalKey<CalendarWidgetState>();
+  final ShamorZachorFocusController _shamorZachorFocusController =
+      ShamorZachorFocusController();
   final GlobalKey<GematriaSearchScreenState> _gematriaKey =
       GlobalKey<GematriaSearchScreenState>();
   late final List<Widget> _pages;
   late final List<Widget> _tabWidgets;
 
-  void _requestCalendarFocus({int remainingAttempts = _calendarFocusRetryCount}) {
+  void _requestCalendarFocus(
+      {int remainingAttempts = _calendarFocusRetryCount}) {
     if (!mounted) {
       return;
     }
@@ -60,19 +64,55 @@ class MoreScreenState extends State<MoreScreen>
     });
   }
 
-  /// מבקש פוקוס ללשונית הפעילה אם היא לוח השנה.
+  void _requestShamorZachorFocus(
+      {int remainingAttempts = _shamorZachorFocusRetryCount}) {
+    if (!mounted) {
+      return;
+    }
+
+    if (_shamorZachorFocusController.isAttached) {
+      _shamorZachorFocusController.requestKeyboardFocus();
+      return;
+    }
+
+    if (remainingAttempts <= 0) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      Future<void>.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) {
+          _requestShamorZachorFocus(
+            remainingAttempts: remainingAttempts - 1,
+          );
+        }
+      });
+    });
+  }
+
+  /// מבקש פוקוס ללשונית הפעילה אם היא אחד הכלים התלויים בפוקוס מקלדת.
   ///
-  /// המתודה מנסה שוב לזמן קצר אם לוח השנה עדיין לא חובר לעץ בזמן
+  /// המתודה מנסה שוב לזמן קצר אם הווידג'ט הרלוונטי עדיין לא חובר לעץ בזמן
   /// הקריאה, למשל בזמן אנימציית מעבר בין מסכים.
   void requestActiveTabFocus() {
-    if (_tabController.index == 0) {
-      _requestCalendarFocus();
+    switch (_tabController.index) {
+      case 0:
+        _requestCalendarFocus();
+      case 1:
+        _requestShamorZachorFocus();
     }
   }
 
   void _handleTabChange() {
-    if (_tabController.index == 0) {
-      _requestCalendarFocus();
+    switch (_tabController.index) {
+      case 0:
+        _requestCalendarFocus();
+      case 1:
+        _requestShamorZachorFocus();
     }
   }
 
@@ -136,6 +176,7 @@ class MoreScreenState extends State<MoreScreen>
         builder: (context, _) => CalendarWidget(key: _calendarKey),
       ),
       ShamorZachorWidget(
+        focusController: _shamorZachorFocusController,
         onTitleChanged: (_) {},
       ),
       const MeasurementConverterScreen(),
@@ -175,7 +216,8 @@ class MoreScreenState extends State<MoreScreen>
         context.select((NavigationBloc bloc) => bloc.state.currentScreen) ==
             Screen.more;
 
-    if (isMoreScreenActive && _tabController.index == 0) {
+    if (isMoreScreenActive &&
+        (_tabController.index == 0 || _tabController.index == 1)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           requestActiveTabFocus();
