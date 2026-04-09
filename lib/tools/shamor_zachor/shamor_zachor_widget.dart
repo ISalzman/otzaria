@@ -8,6 +8,27 @@ import 'providers/shamor_zachor_progress_provider.dart';
 import 'screens/shamor_zachor_main_screen.dart';
 import 'screens/book_detail_screen.dart';
 
+/// בקר פוקוס חיצוני למסכי שמור וזכור.
+class ShamorZachorFocusController {
+  VoidCallback? _requestKeyboardFocus;
+
+  bool get isAttached => _requestKeyboardFocus != null;
+
+  void requestKeyboardFocus() {
+    _requestKeyboardFocus?.call();
+  }
+
+  void bind(VoidCallback callback) {
+    _requestKeyboardFocus = callback;
+  }
+
+  void unbind(VoidCallback callback) {
+    if (_requestKeyboardFocus == callback) {
+      _requestKeyboardFocus = null;
+    }
+  }
+}
+
 /// Main widget for Shamor Zachor functionality
 /// This is the only public API exposed by the package
 class ShamorZachorWidget extends StatefulWidget {
@@ -17,10 +38,14 @@ class ShamorZachorWidget extends StatefulWidget {
   /// Callback when the screen changes, providing the new title
   final ValueChanged<String>? onTitleChanged;
 
+  /// בקר חיצוני להחזרת פוקוס למסך הראשי של הכלי.
+  final ShamorZachorFocusController? focusController;
+
   const ShamorZachorWidget({
     super.key,
     this.config = ShamorZachorConfig.defaultConfig,
     this.onTitleChanged,
+    this.focusController,
   });
 
   @override
@@ -35,11 +60,27 @@ class _ShamorZachorWidgetState extends State<ShamorZachorWidget>
   bool get wantKeepAlive => true;
 
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  final ShamorZachorFocusController _mainScreenFocusController =
+      ShamorZachorFocusController();
+
+  void _requestKeyboardFocus() {
+    _mainScreenFocusController.requestKeyboardFocus();
+  }
 
   @override
   void initState() {
     super.initState();
     _logger.info('Initializing ShamorZachorWidget');
+    widget.focusController?.bind(_requestKeyboardFocus);
+  }
+
+  @override
+  void didUpdateWidget(covariant ShamorZachorWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusController != widget.focusController) {
+      oldWidget.focusController?.unbind(_requestKeyboardFocus);
+      widget.focusController?.bind(_requestKeyboardFocus);
+    }
   }
 
   @override
@@ -110,7 +151,9 @@ class _ShamorZachorWidgetState extends State<ShamorZachorWidget>
     switch (settings.name) {
       case '/':
         return MaterialPageRoute(
-          builder: (context) => const ShamorZachorMainScreen(),
+          builder: (context) => ShamorZachorMainScreen(
+            focusController: _mainScreenFocusController,
+          ),
           settings: settings,
         );
 
@@ -141,6 +184,7 @@ class _ShamorZachorWidgetState extends State<ShamorZachorWidget>
 
   @override
   void dispose() {
+    widget.focusController?.unbind(_requestKeyboardFocus);
     _logger.fine('Disposing ShamorZachorWidget');
     super.dispose();
   }

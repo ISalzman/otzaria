@@ -6,7 +6,7 @@ import '../models/progress_model.dart';
 import '../models/book_model.dart';
 import '../models/error_model.dart';
 import '../services/progress_service.dart';
-import '../utils/message_utils.dart';
+import 'package:otzaria/core/ui_snack.dart';
 
 /// Events emitted when significant progress milestones are reached
 enum CompletionEventType {
@@ -114,6 +114,16 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     if (_isLoading || hasData || _error != null) {
       return;
     }
+    await _loadInitialProgress();
+  }
+
+  /// מנסה לטעון מחדש את נתוני ההתקדמות גם לאחר כשל קודם.
+  Future<void> retry() async {
+    if (_isLoading) {
+      return;
+    }
+
+    _error = null;
     await _loadInitialProgress();
   }
 

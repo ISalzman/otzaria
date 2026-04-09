@@ -13,6 +13,9 @@ import '../widgets/hebrew_utils.dart';
 import '../widgets/completion_animation_overlay.dart';
 import '../widgets/error_boundary.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
+import 'package:otzaria/widgets/tool_empty_state.dart';
 
 /// Screen for displaying and managing progress for a specific book
 class BookDetailScreen extends StatefulWidget {
@@ -97,25 +100,12 @@ class _BookDetailScreenState extends State<BookDetailScreen>
   }
 
   Future<bool> _showWarningDialog() async {
-    final result = await showDialog<bool>(
+    final result = await showWarningDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("אזהרה"),
-          content:
-              const Text("פעולה זו תשנה את כל הסימונים בעמודה זו. האם להמשיך?"),
-          actions: <Widget>[
-            TextButton(
-              child: const Text("לא"),
-              onPressed: () => Navigator.of(context).pop(false),
-            ),
-            TextButton(
-              child: const Text("כן"),
-              onPressed: () => Navigator.of(context).pop(true),
-            ),
-          ],
-        );
-      },
+      title: 'אזהרה',
+      content: 'פעולה זו תשנה את כל הסימונים בעמודה זו. האם להמשיך?',
+      cancelText: 'לא',
+      confirmText: 'כן',
     );
     return result ?? false;
   }
@@ -265,12 +255,16 @@ class _BookDetailScreenState extends State<BookDetailScreen>
               }
 
               if (dataProvider.error != null) {
+                final cs = Theme.of(context).colorScheme;
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(FluentIcons.error_circle_24_regular,
-                          size: 64, color: Colors.red),
+                      Icon(
+                        FluentIcons.error_circle_24_regular,
+                        size: 64,
+                        color: cs.error,
+                      ),
                       const SizedBox(height: 16),
                       Text(
                         dataProvider.error!.userFriendlyMessage,
@@ -287,9 +281,9 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                       ],
                       const SizedBox(height: 16),
                       if (dataProvider.error!.isRecoverable)
-                        ElevatedButton(
+                        RecommendedActionButton(
+                          text: 'נסה שוב',
                           onPressed: () => dataProvider.retry(),
-                          child: const Text('נסה שוב'),
                         ),
                     ],
                   ),
@@ -306,24 +300,9 @@ class _BookDetailScreenState extends State<BookDetailScreen>
               if (bookDetails == null) {
                 _logger.warning(
                     'BookDetails not found for ${widget.bookName} in category ${widget.topLevelCategoryKey}');
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(FluentIcons.book_24_regular,
-                          size: 64, color: Colors.grey),
-                      const SizedBox(height: 16),
-                      Text(
-                        'פרטי הספר "${widget.bookName}" לא נמצאו',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'קטגוריה: ${widget.topLevelCategoryKey}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
+                return ToolEmptyState(
+                  icon: FluentIcons.book_24_regular,
+                  message: 'פרטי הספר "${widget.bookName}" לא נמצאו',
                 );
               }
 
@@ -343,7 +322,10 @@ class _BookDetailScreenState extends State<BookDetailScreen>
     final learnableItems = bookDetails.learnableItems;
 
     if (learnableItems.isEmpty) {
-      return const Center(child: Text('אין פריטים ללימוד בספר זה'));
+      return const ToolEmptyState(
+        icon: FluentIcons.book_24_regular,
+        message: 'אין פריטים ללימוד בספר זה',
+      );
     }
 
     final hasNested = bookDetails.sections != null &&
@@ -416,6 +398,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                 return Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Checkbox(
                         visualDensity: VisualDensity.compact,
