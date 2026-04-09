@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/focus_repository.dart';
 
+import 'package:otzaria/widgets/otzaria_search_field.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
@@ -13,13 +16,11 @@ import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor_dialog.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_export_dialog.dart';
-import 'package:otzaria/widgets/dialogs.dart';
+import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
-import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'package:otzaria/widgets/navigation_tree_tile.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -27,6 +28,14 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:kosher_dart/kosher_dart.dart';
+import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
+import 'package:otzaria/widgets/app_top_bar.dart';
+import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/adaptive_side_pane.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 
 class PersonalNotesManagerScreen extends StatefulWidget {
   const PersonalNotesManagerScreen({super.key});
@@ -50,6 +59,9 @@ class _PersonalNotesManagerScreenState
   final Map<String, bool> _expansionState = {};
   bool _isNavigationVisible = true;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final FocusNode _windowFocusNode = FocusNode(skipTraversal: true);
+  final ScrollController _contentScrollController = ScrollController();
   String _searchQuery = '';
   double _navigationWidth = 250.0;
 
@@ -88,9 +100,7 @@ class _PersonalNotesManagerScreenState
           _isLoadingBooks = false;
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('שגיאה בטעינת רשימת ההערות: $e')),
-        );
+        UiSnack.showError('שגיאה בטעינת רשימת ההערות: $e');
       }
     }
   }
@@ -101,9 +111,59 @@ class _PersonalNotesManagerScreenState
     });
   }
 
+  void requestKeyboardFocus() {
+    if (!mounted || !_windowFocusNode.canRequestFocus) return;
+    requestFocusIfNeeded(_windowFocusNode);
+  }
+
+  void _focusSearchField() {
+    if (!mounted || !_searchFocusNode.canRequestFocus) return;
+    requestFocusIfNeeded(_searchFocusNode);
+  }
+
+  KeyEventResult _handleWindowKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (FocusManager.instance.primaryFocus != _windowFocusNode) {
+      return KeyEventResult.ignored;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.space ||
+        event.logicalKey == LogicalKeyboardKey.pageDown) {
+      _scrollContent(forward: true);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.pageUp) {
+      _scrollContent(forward: false);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _scrollContent({required bool forward}) {
+    if (!_contentScrollController.hasClients) return;
+    final position = _contentScrollController.position;
+    final delta = (position.viewportDimension * 0.85) * (forward ? 1 : -1);
+    final target =
+        (position.pixels + delta).clamp(0.0, position.maxScrollExtent);
+    _contentScrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
+  }
+
+  String _formatHebrewDate(DateTime date) {
+    final hebrewCalendar = JewishCalendar.fromDateTime(date);
+    final formatter = HebrewDateFormatter()..hebrewFormat = true;
+    return formatter.format(hebrewCalendar);
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
+    _windowFocusNode.dispose();
+    _contentScrollController.dispose();
     super.dispose();
   }
 
@@ -132,127 +192,162 @@ class _PersonalNotesManagerScreenState
       );
     }
 
-    return BlocListener<PersonalNotesBloc, PersonalNotesState>(
-      listener: (context, state) {
-        // Store the state for each book and trigger rebuild
-        if (state.bookId != null) {
-          setState(() {
-            _bookStates[state.bookId!] = state;
-          });
-
-          // If this is a new book (not in _books list), refresh the books list
-          final bookExists = _books.any((book) => book.bookId == state.bookId);
-          if (!bookExists &&
-              (state.locatedNotes.isNotEmpty ||
-                  state.missingNotes.isNotEmpty)) {
-            _loadBooks();
-          }
-        }
+    final searchShortcutSetting = context.select(
+      (SettingsBloc bloc) =>
+          bloc.state.shortcuts['key-shortcut-search-current-window'] ??
+          ShortcutValidator
+              .defaultShortcuts['key-shortcut-search-current-window'] ??
+          'ctrl+f',
+    );
+    return CallbackShortcuts(
+      bindings: {
+        ShortcutHelper.activatorFromShortcut(searchShortcutSetting) ??
+            const SingleActivator(LogicalKeyboardKey.keyF, control: true): () {
+          _focusSearchField();
+        },
       },
-      child: Column(
-        children: [
-          // שורת כלים עליונה לכל רוחב העמוד
-          _buildTopBar(),
-          Divider(height: 1, color: Colors.grey.withValues(alpha: 0.3)),
-          // תוכן העמוד
-          Expanded(
-            child: Row(
-              children: [
-                // Right sidebar navigation - גובה מלא
-                if (_isNavigationVisible) ...[
-                  SizedBox(
-                    width: _navigationWidth,
-                    child: _buildNotesTree(),
-                  ),
-                  // Resizable divider
-                  ResizableDragHandle(
-                    isVertical: true,
-                    onDragDelta: (delta) {
+      child: Focus(
+        focusNode: _windowFocusNode,
+        autofocus: true,
+        onKeyEvent: _handleWindowKeyEvent,
+        child: BlocListener<PersonalNotesBloc, PersonalNotesState>(
+          listener: (context, state) {
+            // Store the state for each book and trigger rebuild
+            if (state.bookId != null) {
+              setState(() {
+                _bookStates[state.bookId!] = state;
+              });
+
+              // If this is a new book (not in _books list), refresh the books list
+              final bookExists =
+                  _books.any((book) => book.bookId == state.bookId);
+              if (!bookExists &&
+                  (state.locatedNotes.isNotEmpty ||
+                      state.missingNotes.isNotEmpty)) {
+                _loadBooks();
+              }
+            }
+          },
+          child: Column(
+            children: [
+              // שורת כלים עליונה לכל רוחב העמוד
+              _buildTopBar(),
+              // תוכן העמוד
+              Expanded(
+                child: PrimaryScrollController(
+                  controller: _contentScrollController,
+                  child: AdaptiveSidePane(
+                    isOpen: _isNavigationVisible,
+                    alignment: AlignmentDirectional
+                        .centerEnd, // ימין בעברית (RTL) - סרגל ניווט
+                    mainContent: _buildAllNotesList(),
+                    paneWidth: _navigationWidth,
+                    minMainContentWidth: 320,
+                    onClose: () => setState(() => _isNavigationVisible = false),
+                    onOpen: () => setState(() => _isNavigationVisible = true),
+                    isResizable: true,
+                    minPaneWidth: 150,
+                    maxPaneWidth: 500,
+                    onPaneWidthChanged: (nextWidth) {
                       setState(() {
-                        _navigationWidth =
-                            (_navigationWidth - delta).clamp(150.0, 500.0);
+                        _navigationWidth = nextWidth;
                       });
                     },
+                    paneContent: _buildNotesTree(),
+                    wrapPaneInFloatingPanel: true,
+                    narrowPaneBuilder: (context, paneContent) => Material(
+                      color: AppSurfaces.solidPanelBackground(context),
+                      child: SafeArea(child: paneContent),
+                    ),
                   ),
-                ],
-                // Main content area
-                Expanded(
-                  child: _buildAllNotesList(),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildTopBar() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Row(
-        children: [
-          // לחצן סגירה/פתיחה של חלונית הניווט
-          IconButton(
-            tooltip: _isNavigationVisible ? 'הסתר ניווט' : 'הצג ניווט',
-            onPressed: () {
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      builder: (context, settingsState) {
+        final isCompact = settingsState.compactMenuMode;
+        return AppTopBar(
+          leadingItems: [
+            AppTopBarItem(
+              widget: IconButton(
+                tooltip: _isNavigationVisible ? 'הסתר ניווט' : 'הצג ניווט',
+                onPressed: () {
+                  setState(() {
+                    _isNavigationVisible = !_isNavigationVisible;
+                  });
+                },
+                icon: AnimatedSwitcher(
+                  duration: AppTokens.animFast,
+                  transitionBuilder: (child, animation) => RotationTransition(
+                    turns:
+                        Tween<double>(begin: 0.5, end: 0.0).animate(animation),
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: Icon(
+                    _isNavigationVisible
+                        ? FluentIcons.panel_right_contract_24_regular
+                        : FluentIcons.panel_right_24_regular,
+                    key: ValueKey(_isNavigationVisible),
+                    size: 24,
+                  ),
+                ),
+                visualDensity: VisualDensity.standard,
+                splashRadius: 22,
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
+              ),
+            ),
+          ],
+          center: OtzariaSearchField(
+            controller: _searchController,
+            focusNode: _searchFocusNode,
+            hintText: 'חפש בהערות...',
+            onSubmitted: (_) => requestKeyboardFocus(),
+            onChanged: (value) {
               setState(() {
-                _isNavigationVisible = !_isNavigationVisible;
+                _searchQuery = value;
               });
             },
-            icon: const Icon(FluentIcons.navigation_24_regular),
+            onClear: () {
+              setState(() {
+                _searchQuery = '';
+              });
+            },
           ),
-          const SizedBox(width: 8),
-          // חלונית חיפוש באמצע
-          Expanded(
-            child: RtlTextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'חפש בהערות...',
-                prefixIcon: const Icon(FluentIcons.search_24_regular),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(FluentIcons.dismiss_24_regular),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchQuery = '';
-                          });
-                        },
-                      )
-                    : null,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
+          trailingItems: [
+            AppTopBarItem(
+              widget: ToolbarActionButton(
+                compact: isCompact,
+                tooltip: 'רענן',
+                icon: FluentIcons.arrow_clockwise_24_regular,
+                onPressed: _loadBooks,
               ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                });
-              },
             ),
-          ),
-          const SizedBox(width: 8),
-          // לחצן ריענון
-          IconButton(
-            tooltip: 'רענן',
-            onPressed: _loadBooks,
-            icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'ייצוא הערות',
-            onPressed: _exportNotes,
-            icon: const Icon(FluentIcons.arrow_download_24_regular),
-          ),
-          IconButton(
-            tooltip: 'ייבוא הערות',
-            onPressed: _importNotes,
-            icon: const Icon(FluentIcons.arrow_upload_24_regular),
-          ),
-        ],
-      ),
+            AppTopBarItem(
+              widget: ToolbarActionButton(
+                compact: isCompact,
+                tooltip: 'ייצוא הערות',
+                icon: FluentIcons.arrow_download_24_regular,
+                onPressed: _exportNotes,
+              ),
+            ),
+            AppTopBarItem(
+              widget: ToolbarActionButton(
+                compact: isCompact,
+                tooltip: 'ייבוא הערות',
+                icon: FluentIcons.arrow_upload_24_regular,
+                onPressed: _importNotes,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -735,29 +830,14 @@ class _PersonalNotesManagerScreenState
               ),
             LayoutBuilder(
               builder: (context, constraints) {
-                // Calculate how many cards can fit based on available width
-                // Each card needs minimum 400px, plus 12px spacing between cards
-                const minCardWidth = 400.0;
+                const minCardWidth = 280.0;
+                const maxCardsPerRow = 3;
                 const spacing = 12.0;
                 final availableWidth = constraints.maxWidth;
-
-                // Calculate maximum number of cards that can fit
-                // Formula: (width + spacing) / (cardWidth + spacing)
                 int crossAxisCount =
                     ((availableWidth + spacing) / (minCardWidth + spacing))
                         .floor();
-
-                // Ensure at least 1 card per row
-                if (crossAxisCount < 1) crossAxisCount = 1;
-
-                // Calculate actual card width based on available space
-                final actualCardWidth =
-                    (availableWidth - (spacing * (crossAxisCount - 1))) /
-                        crossAxisCount;
-
-                // Adjust aspect ratio based on actual card width
-                // Target height is around 150px (lower = more rectangular), so aspectRatio = width / 150
-                final aspectRatio = actualCardWidth / 150.0;
+                crossAxisCount = crossAxisCount.clamp(1, maxCardsPerRow);
 
                 return GridView.builder(
                   shrinkWrap: true,
@@ -766,7 +846,7 @@ class _PersonalNotesManagerScreenState
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: spacing,
                     mainAxisSpacing: spacing,
-                    childAspectRatio: aspectRatio,
+                    mainAxisExtent: 170,
                   ),
                   itemCount: group.notes.length,
                   itemBuilder: (context, noteIndex) {
@@ -783,141 +863,114 @@ class _PersonalNotesManagerScreenState
   }
 
   Widget _buildNoteCard(PersonalNote note, bool isMissing) {
-    return GestureDetector(
-      onTap: isMissing ? () => _repositionMissing(note) : null,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        clipBehavior: Clip.hardEdge,
-        decoration: BoxDecoration(
-          color: Theme.of(context)
-              .colorScheme
-              .surfaceContainerHighest
-              .withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 2,
-              offset: const Offset(1, 1),
-            ),
-          ],
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-            width: 1,
-          ),
-        ),
-        child: Stack(
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        isMissing ? 'הערה ללא מיקום' : note.title,
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+    final cs = Theme.of(context).colorScheme;
+    final cardColor = AppSurfaces.card(context);
+    final hebrewDate = _formatHebrewDate(note.updatedAt);
+
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: cardColor,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+      ),
+      child: InkWell(
+        onTap: isMissing ? () => _repositionMissing(note) : null,
+        borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+        hoverColor: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      isMissing ? 'הערה ללא מיקום' : note.title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface,
+                          ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textDirection: TextDirection.rtl,
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                note.contentPlain,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      height: 1.45,
+                    ),
+                textDirection: TextDirection.rtl,
+              ),
+              const Spacer(),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        IconButton(
-                          tooltip: 'עריכה',
-                          icon:
-                              const Icon(FluentIcons.edit_24_regular, size: 18),
-                          onPressed: () => _editNote(note),
-                          padding: const EdgeInsets.all(8),
-                          constraints: const BoxConstraints(
-                            minWidth: 36,
-                            minHeight: 36,
-                          ),
+                        _InfoChip(
+                          icon: FluentIcons.calendar_24_regular,
+                          text: hebrewDate,
+                          backgroundColor: cs.secondaryContainer,
+                          foregroundColor: cs.onSecondaryContainer,
                         ),
-                        if (isMissing) ...[
-                          IconButton(
-                            tooltip: 'מיקום מחדש',
-                            icon: const Icon(FluentIcons.location_24_regular,
-                                size: 18),
-                            onPressed: () => _repositionMissing(note),
-                            padding: const EdgeInsets.all(8),
-                            constraints: const BoxConstraints(
-                              minWidth: 36,
-                              minHeight: 36,
-                            ),
+                        if (isMissing && note.lastKnownLineNumber != null)
+                          _InfoChip(
+                            icon: FluentIcons.location_24_regular,
+                            text: 'שורה קודמת: ${note.lastKnownLineNumber}',
+                            backgroundColor: cs.surfaceContainerHighest,
+                            foregroundColor: cs.onSurfaceVariant,
                           ),
-                        ],
-                        IconButton(
-                          tooltip: 'פתח ספר בשורה',
-                          icon: const Icon(FluentIcons.book_open_24_regular,
-                              size: 18),
-                          onPressed:
-                              isMissing ? null : () => _openNoteInBook(note),
-                          padding: const EdgeInsets.all(8),
-                          constraints: const BoxConstraints(
-                            minWidth: 36,
-                            minHeight: 36,
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'מחיקה',
-                          icon: const Icon(FluentIcons.delete_24_regular,
-                              size: 18),
-                          onPressed: () => _deleteNote(note),
-                          padding: const EdgeInsets.all(8),
-                          constraints: const BoxConstraints(
-                            minWidth: 36,
-                            minHeight: 36,
-                          ),
-                        ),
                       ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: Text(
-                    note.contentPlain,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.black87,
+                  ),
+                  const SizedBox(width: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      ToolbarActionButton(
+                        tooltip: 'עריכה',
+                        icon: FluentIcons.edit_24_regular,
+                        onPressed: () => _editNote(note),
+                      ),
+                      if (isMissing)
+                        ToolbarActionButton(
+                          tooltip: 'מיקום מחדש',
+                          icon: FluentIcons.location_24_regular,
+                          onPressed: () => _repositionMissing(note),
                         ),
+                      if (!isMissing)
+                        ToolbarActionButton(
+                          tooltip: 'פתח ספר בשורה',
+                          icon: FluentIcons.book_open_24_regular,
+                          onPressed: () => _openNoteInBook(note),
+                        ),
+                      ToolbarActionButton(
+                        tooltip: 'מחיקה',
+                        icon: FluentIcons.delete_24_regular,
+                        onPressed: () => _deleteNote(note),
+                      ),
+                    ],
                   ),
-                ),
-                if (isMissing && note.lastKnownLineNumber != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: Text(
-                      'שורה קודמת: ${note.lastKnownLineNumber}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.black54,
-                          ),
-                    ),
-                  ),
-              ],
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              child: Text(
-                _formatDate(note.updatedAt),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.black54,
-                      fontSize: 12,
-                    ),
+                ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1056,11 +1109,51 @@ class _PersonalNotesManagerScreenState
       }
     });
   }
+}
 
-  String _formatDate(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/'
-        '${date.month.toString().padLeft(2, '0')}/'
-        '${date.year}';
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color backgroundColor;
+  final Color foregroundColor;
+
+  const _InfoChip({
+    required this.icon,
+    required this.text,
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: foregroundColor),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.rtl,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: foregroundColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
