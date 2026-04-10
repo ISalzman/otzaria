@@ -61,9 +61,9 @@ class App extends StatelessWidget {
           locale: const Locale("he", "IL"),
           title: 'אוצריא',
           theme: AppThemeData.light(lightColorScheme,
-              compactMenus: state.compactMenuMode),
+              compactMenuMode: state.compactMenuMode),
           darkTheme: AppThemeData.dark(state.darkSeedColor,
-              compactMenus: state.compactMenuMode),
+              compactMenuMode: state.compactMenuMode),
           themeMode: state.followSystemTheme
               ? ThemeMode.system
               : (state.isDarkMode ? ThemeMode.dark : ThemeMode.light),

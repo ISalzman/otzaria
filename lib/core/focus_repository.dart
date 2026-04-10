@@ -21,6 +21,7 @@ class FocusRepository {
 
   // FocusNode לתוכן הספר הנוכחי - מנוהל על ידי TextBookViewerBloc
   FocusNode? _currentBookContentFocusNode;
+  VoidCallback? _moreScreenFocusRequester;
 
   FocusTarget _currentFocusTarget = FocusTarget.none;
   FocusTarget get currentFocusTarget => _currentFocusTarget;
@@ -65,6 +66,20 @@ class FocusRepository {
       _currentBookContentFocusNode!.requestFocus();
       _currentFocusTarget = FocusTarget.bookContent;
     }
+  }
+
+  void registerMoreScreenFocusRequester(VoidCallback requester) {
+    _moreScreenFocusRequester = requester;
+  }
+
+  void unregisterMoreScreenFocusRequester(VoidCallback requester) {
+    if (_moreScreenFocusRequester == requester) {
+      _moreScreenFocusRequester = null;
+    }
+  }
+
+  void requestMoreScreenFocus() {
+    _moreScreenFocusRequester?.call();
   }
 
   void dispose() {

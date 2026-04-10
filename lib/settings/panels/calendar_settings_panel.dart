@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
-import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/otzaria_search_field.dart';
-import 'package:otzaria/widgets/dialogs.dart';
+import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
-import 'package:otzaria/theme/app_theme.dart';
+import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/app_menu.dart';
 
 /// טאב הגדרות לוח שנה
 class CalendarSettingsTab extends StatefulWidget {
@@ -18,7 +19,14 @@ class CalendarSettingsTab extends StatefulWidget {
 }
 
 class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
-  bool _showCitySearch = false;
+  final List<String> _cityNames =
+      cityCoordinates.values.expand((cities) => cities.keys).toList()
+        ..sort();
+
+  @override
+  void initState() {
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,81 +36,54 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
             context.watch<SettingsBloc>().state.isOfflineMode;
         // [הוסר] SingleChildScrollView — ToolsSettingsTab גולל את כולם
         return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ── לוח שנה: סוג לוח + עיר באותו מקטע ──
-              SettingsCard(
-                title: 'לוח שנה',
-                children: [
-                  // סוג לוח
-                  SegmentedSettingsTile<CalendarType>(
-                    icon: FluentIcons.calendar_24_regular,
-                    title: 'סוג לוח',
-                    subtitle: state.calendarType == CalendarType.hebrew
-                        ? 'לוח עברי בלבד'
-                        : state.calendarType == CalendarType.gregorian
-                            ? 'לוח לועזי בלבד'
-                            : 'לוח עברי ולועזי ביחד',
-                    options: const [
-                      SegmentOption(
-                          value: CalendarType.hebrew, label: 'לוח עברי'),
-                      SegmentOption(
-                          value: CalendarType.combined, label: 'לוח משולב'),
-                      SegmentOption(
-                          value: CalendarType.gregorian, label: 'לוח לועזי'),
-                    ],
-                    currentValue: state.calendarType,
-                    onChanged: (value) {
-                      context.read<CalendarCubit>().changeCalendarType(value);
-                    },
-                  ),
-                  // עיר
-                  ListTile(
-                    leading: const Icon(FluentIcons.location_24_regular),
-                    title: const Text('עיר נבחרת', style: kSettingsTitleStyle),
-                    subtitle:
-                        Text(state.selectedCity, style: kSettingsSubtitleStyle),
-                    trailing: ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _showCitySearch = !_showCitySearch;
-                        });
-                      },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('שנה'),
-                          const SizedBox(width: 8),
-                          Icon(
-                            _showCitySearch
-                                ? FluentIcons.chevron_up_24_regular
-                                : FluentIcons.chevron_down_24_regular,
-                            size: 20,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    child: _showCitySearch
-                        ? Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: _CitySearchWidget(
-                              currentCity: state.selectedCity,
-                              onCitySelected: (city) {
-                                context.read<CalendarCubit>().changeCity(city);
-                                setState(() => _showCitySearch = false);
-                              },
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              ),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── לוח שנה: סוג לוח + עיר באותו מקטע ──
+            SettingsCard(
+              title: 'לוח שנה',
+              children: [
+                // סוג לוח
+                SegmentedSettingsTile<CalendarType>(
+                  icon: FluentIcons.calendar_24_regular,
+                  title: 'סוג לוח שנה',
+                  subtitle: state.calendarType == CalendarType.hebrew
+                      ? 'יוצג לוח השנה היהודי בלבד'
+                      : state.calendarType == CalendarType.gregorian
+                          ? 'יוצג לוח השנה הלועזי בלבד'
+                          : 'יוצגו תאריכים מהלוח העברי והלועזי יחד',
+                  options: const [
+                    SegmentOption(value: CalendarType.hebrew, label: 'עברי'),
+                    SegmentOption(value: CalendarType.combined, label: 'משולב'),
+                    SegmentOption(value: CalendarType.gregorian, label: 'לועזי'),
+                  ],
+                  currentValue: state.calendarType,
+                  onChanged: (value) {
+                    context.read<CalendarCubit>().changeCalendarType(value);
+                  },
+                ),
+                // עיר
+                _buildResponsiveDropdownTile<String>(
+                  icon: FluentIcons.location_24_regular,
+                  title: 'עיר נבחרת',
+                  subtitle: 'בחירת עיר לחישובי זמני היום והלוח',
+                  value: state.selectedCity,
+                  minFieldWidth: 220,
+                  maxFieldWidth: 320,
+                  enableSearch: true,
+                  entries: _cityNames
+                      .map(
+                        (city) => AppMenuEntry<String>(value: city, label: city),
+                      )
+                      .toList(),
+                  onSelected: (city) {
+                    if (city == null || city == state.selectedCity) return;
+                    context.read<CalendarCubit>().changeCity(city);
+                  },
+                ),
+              ],
+            ),
 
-              kSettingsCardSpacing,
+            kSettingsCardSpacing,
 
               // ── אירועים ותזכורות: התראות + Google Calendar ──
               SettingsCard(
@@ -134,28 +115,26 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                         },
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: DropdownButtonFormField<int>(
-                        decoration: const InputDecoration(
-                          labelText: 'זמן תזכורת לפני האירוע',
-                          border: OutlineInputBorder(),
-                        ),
-                        initialValue: state.calendarNotificationTime,
-                        items: const [
-                          DropdownMenuItem(value: 60, child: Text('שעה')),
-                          DropdownMenuItem(value: 720, child: Text('12 שעות')),
-                          DropdownMenuItem(value: 1440, child: Text('יום')),
-                          DropdownMenuItem(value: 2880, child: Text('יומיים')),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            context
-                                .read<CalendarCubit>()
-                                .changeCalendarNotificationTime(value);
-                          }
-                        },
-                      ),
+                    _buildResponsiveDropdownTile<int>(
+                      icon: FluentIcons.alert_snooze_24_regular,
+                      title: 'זמן תזכורת לפני האירוע',
+                      subtitle: 'כמה זמן לפני תחילת האירוע תופיע התראה',
+                      value: state.calendarNotificationTime,
+                      minFieldWidth: 180,
+                      maxFieldWidth: 240,
+                      entries: const [
+                        AppMenuEntry(value: 60, label: 'שעה'),
+                        AppMenuEntry(value: 720, label: '12 שעות'),
+                        AppMenuEntry(value: 1440, label: 'יום'),
+                        AppMenuEntry(value: 2880, label: 'יומיים'),
+                      ],
+                      onSelected: (value) {
+                        if (value != null) {
+                          context
+                              .read<CalendarCubit>()
+                              .changeCalendarNotificationTime(value);
+                        }
+                      },
                     ),
                   ],
 
@@ -202,13 +181,14 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                                               .getAvailableCalendars();
                                           if (!context.mounted) return;
                                           final selected =
-                                              await showMultiSelectionDialog<
+                                              await _showCalendarMultiSelectionDialog<
                                                   String>(
                                             context: context,
                                             title: 'בחר לוחות שנה',
                                             items: calendars
                                                 .map((cal) =>
-                                                    MultiSelectionItem<String>(
+                                                    _CalendarMultiSelectionItem<
+                                                        String>(
                                                       label: cal.name,
                                                       value: cal.id,
                                                       subtitle: cal.isPrimary
@@ -247,7 +227,10 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: ElevatedButton.icon(
+                                  child: NeutralActionButton(
+                                    text:
+                                        'לוחות שנה (${state.googleCalendarSelectedIds.length})',
+                                    icon: FluentIcons.calendar_24_regular,
                                     onPressed: () async {
                                       final cubit =
                                           context.read<CalendarCubit>();
@@ -255,21 +238,19 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                                           await cubit.getAvailableCalendars();
                                       if (!context.mounted) return;
                                       if (calendars.isEmpty) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(const SnackBar(
-                                          content: Text(
-                                              'לא נמצאו לוחות שנה. נסה להתחבר מחדש.'),
-                                        ));
+                                        UiSnack.show(
+                                            'לא נמצאו לוחות שנה. נסה להתחבר מחדש.');
                                         return;
                                       }
                                       final selected =
-                                          await showMultiSelectionDialog<
+                                          await _showCalendarMultiSelectionDialog<
                                               String>(
                                         context: context,
                                         title: 'בחר לוחות שנה',
                                         items: calendars
                                             .map((cal) =>
-                                                MultiSelectionItem<String>(
+                                                _CalendarMultiSelectionItem<
+                                                    String>(
                                                   label: cal.name,
                                                   value: cal.id,
                                                   subtitle: cal.isPrimary
@@ -290,30 +271,16 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                                             interactive: false);
                                       }
                                     },
-                                    icon: const Icon(
-                                        FluentIcons.calendar_24_regular),
-                                    label: Text(
-                                        'לוחות שנה (${state.googleCalendarSelectedIds.length})'),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                ElevatedButton.icon(
-                                  onPressed: state.googleCalendarSyncInProgress
-                                      ? null
-                                      : () => context
-                                          .read<CalendarCubit>()
-                                          .syncGoogleCalendar(
-                                              interactive: true),
-                                  icon: state.googleCalendarSyncInProgress
-                                      ? const SizedBox(
-                                          width: 14,
-                                          height: 14,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2))
-                                      : const Icon(
-                                          FluentIcons.arrow_sync_24_regular,
-                                          size: 16),
-                                  label: const Text('סנכרן'),
+                                RecommendedActionButton(
+                                  text: 'סנכרן',
+                                  icon: FluentIcons.arrow_sync_24_regular,
+                                  isLoading: state.googleCalendarSyncInProgress,
+                                  onPressed: () => context
+                                      .read<CalendarCubit>()
+                                      .syncGoogleCalendar(interactive: true),
                                 ),
                                 const SizedBox(width: 8),
                                 TextButton(
@@ -358,118 +325,264 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   ],
                 ],
               ),
-            ],
+          ],
         );
       },
     );
   }
+
+  Widget _buildResponsiveDropdownTile<T>({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required T? value,
+    required List<AppMenuEntry<T>> entries,
+    required ValueChanged<T?> onSelected,
+    bool enableSearch = false,
+    double minFieldWidth = 220,
+    double maxFieldWidth = 320,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 620;
+          final fieldWidth = isCompact
+              ? constraints.maxWidth
+              : constraints.maxWidth.clamp(minFieldWidth, maxFieldWidth);
+
+          final info = Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: kSettingsTitleStyle),
+                      const SizedBox(height: 4),
+                      Text(subtitle, style: kSettingsSubtitleStyle),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          final field = SizedBox(
+            width: fieldWidth,
+            child: AppDropdownField<T>(
+              value: value,
+              enableSearch: enableSearch,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              entries: entries,
+              onSelected: onSelected,
+            ),
+          );
+
+          if (isCompact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [info]),
+                const SizedBox(height: 12),
+                field,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              info,
+              const SizedBox(width: 16),
+              Flexible(
+                  child: Align(alignment: Alignment.centerLeft, child: field)),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
-/// Widget לחיפוש ובחירת עיר
-class _CitySearchWidget extends StatefulWidget {
-  final String currentCity;
-  final ValueChanged<String> onCitySelected;
+Future<List<T>?> _showCalendarMultiSelectionDialog<T>({
+  required BuildContext context,
+  required String title,
+  required List<_CalendarMultiSelectionItem<T>> items,
+  List<T> initialSelectedValues = const [],
+  String searchHint = 'חיפוש...',
+  String? emptyMessage,
+  bool barrierDismissible = true,
+}) {
+  return showDialog<List<T>>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    builder: (context) => _CalendarMultiSelectionDialog<T>(
+      title: title,
+      items: items,
+      initialSelectedValues: initialSelectedValues,
+      searchHint: searchHint,
+      emptyMessage: emptyMessage,
+    ),
+  );
+}
 
-  const _CitySearchWidget({
-    required this.currentCity,
-    required this.onCitySelected,
+class _CalendarMultiSelectionDialog<T> extends StatefulWidget {
+  final String title;
+  final List<_CalendarMultiSelectionItem<T>> items;
+  final List<T> initialSelectedValues;
+  final String searchHint;
+  final String? emptyMessage;
+
+  const _CalendarMultiSelectionDialog({
+    required this.title,
+    required this.items,
+    this.initialSelectedValues = const [],
+    this.searchHint = 'חיפוש...',
+    this.emptyMessage,
   });
 
   @override
-  State<_CitySearchWidget> createState() => _CitySearchWidgetState();
+  State<_CalendarMultiSelectionDialog<T>> createState() =>
+      _CalendarMultiSelectionDialogState<T>();
 }
 
-class _CitySearchWidgetState extends State<_CitySearchWidget> {
+class _CalendarMultiSelectionDialogState<T>
+    extends State<_CalendarMultiSelectionDialog<T>> {
+  late List<_CalendarMultiSelectionItem<T>> filteredItems;
+  late Set<T> selectedValues;
   final TextEditingController _searchController = TextEditingController();
-  late Map<String, Map<String, Map<String, dynamic>>> _filteredCities;
 
   @override
   void initState() {
     super.initState();
-    _filteredCities = cityCoordinates;
-    _searchController.addListener(_filterCities);
+    filteredItems = widget.items;
+    selectedValues = Set.from(widget.initialSelectedValues);
+    _searchController.addListener(_filterItems);
   }
 
   @override
   void dispose() {
-    _searchController.removeListener(_filterCities);
     _searchController.dispose();
     super.dispose();
   }
 
-  void _filterCities() {
+  void _filterItems() {
     final query = _searchController.text.toLowerCase();
     setState(() {
       if (query.isEmpty) {
-        _filteredCities = cityCoordinates;
+        filteredItems = widget.items;
       } else {
-        _filteredCities = {};
-        cityCoordinates.forEach((country, cities) {
-          final matchingCities = Map.fromEntries(cities.entries.where(
-              (cityEntry) => cityEntry.key.toLowerCase().contains(query)));
-          if (matchingCities.isNotEmpty) {
-            _filteredCities[country] = matchingCities;
-          }
-        });
+        filteredItems = widget.items.where((item) {
+          return item.label.toLowerCase().contains(query) ||
+              item.searchValue.toLowerCase().contains(query);
+        }).toList();
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> items = [];
-    _filteredCities.forEach((country, cities) {
-      items.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-          child: Text(
-            country,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-              fontSize: AppTokens.fontLG,
-            ),
-          ),
-        ),
-      );
-      cities.forEach((city, data) {
-        items.add(
-          ListTile(
-            title: Text(city),
-            onTap: () => widget.onCitySelected(city),
-            dense: true,
-          ),
-        );
-      });
-      items.add(const Divider());
-    });
-    if (items.isNotEmpty) items.removeLast();
+    final cs = Theme.of(context).colorScheme;
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(AppTokens.radiusSM),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: OtzariaSearchField(
+    return AlertDialog(
+      backgroundColor: cs.surfaceContainerHigh,
+      title: Text(widget.title, textDirection: TextDirection.rtl),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: Column(
+          children: [
+            OtzariaSearchField(
               controller: _searchController,
-              hintText: 'הקלד שם עיר...',
+              hintText: widget.searchHint,
               autofocus: true,
             ),
-          ),
-          const Divider(height: 1),
-          SizedBox(
-            height: 300,
-            child: _filteredCities.isEmpty
-                ? const Center(child: Text('לא נמצאו ערים'))
-                : ListView(children: items),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Expanded(
+              child: widget.items.isEmpty
+                  ? Center(
+                      child: Text(
+                        widget.emptyMessage ?? 'לא נמצאו פריטים',
+                        style: TextStyle(color: cs.onSurfaceVariant),
+                        textDirection: TextDirection.rtl,
+                      ),
+                    )
+                  : filteredItems.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'לא נמצאו תוצאות',
+                            textDirection: TextDirection.rtl,
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: filteredItems.length,
+                          itemBuilder: (context, index) {
+                            final item = filteredItems[index];
+                            final isSelected =
+                                selectedValues.contains(item.value);
+
+                            return CheckboxListTile(
+                              title: Text(
+                                item.label,
+                                textDirection: TextDirection.rtl,
+                              ),
+                              subtitle: item.subtitle != null
+                                  ? Text(
+                                      item.subtitle!,
+                                      textDirection: TextDirection.rtl,
+                                    )
+                                  : null,
+                              value: isSelected,
+                              onChanged: (value) {
+                                setState(() {
+                                  if (value == true) {
+                                    selectedValues.add(item.value);
+                                  } else {
+                                    selectedValues.remove(item.value);
+                                  }
+                                });
+                              },
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
       ),
+      actions: [
+        NeutralActionButton(
+          text: 'ביטול',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        RecommendedActionButton(
+          text: 'אישור',
+          onPressed: selectedValues.isEmpty
+              ? () {}
+              : () => Navigator.of(context).pop(selectedValues.toList()),
+          isLoading: false,
+        ),
+      ],
     );
   }
+}
+
+class _CalendarMultiSelectionItem<T> {
+  final String label;
+  final String searchValue;
+  final T value;
+  final String? subtitle;
+
+  const _CalendarMultiSelectionItem({
+    required this.label,
+    required this.value,
+    String? searchValue,
+    this.subtitle,
+  }) : searchValue = searchValue ?? label;
 }

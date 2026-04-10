@@ -38,6 +38,7 @@ class AppContextMenuEntry {
   final bool isDivider;
   final bool isDestructive;
   final VoidCallback? onTap;
+  final Widget? trailing;
 
   /// תת-פריטים לתפריט משנה
   final List<AppContextMenuEntry>? children;
@@ -48,6 +49,7 @@ class AppContextMenuEntry {
     this.enabled = true,
     this.isDestructive = false,
     this.onTap,
+    this.trailing,
     this.children,
   }) : isDivider = false;
 
@@ -58,6 +60,7 @@ class AppContextMenuEntry {
         isDivider = true,
         isDestructive = false,
         onTap = null,
+        trailing = null,
         children = null;
 }
 
@@ -609,6 +612,7 @@ class AppContextMenuRegion extends StatelessWidget {
         metrics,
         label: entry.label ?? '',
         icon: entry.icon,
+        trailing: entry.trailing,
         isDestructive: entry.isDestructive,
       ),
     );
@@ -625,6 +629,7 @@ class AppContextMenuRegion extends StatelessWidget {
               leadingIcon: child.icon != null
                   ? Icon(child.icon, size: metrics.iconSize)
                   : null,
+              trailingIcon: child.trailing,
               style: buildAppSubmenuItemStyle(context, metrics),
               onPressed: child.enabled ? child.onTap : null,
               child: Text(

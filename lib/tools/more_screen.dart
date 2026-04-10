@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/personal_notes/view/personal_notes_screen.dart';
@@ -87,6 +88,7 @@ class MoreScreenState extends State<MoreScreen>
   @override
   void initState() {
     super.initState();
+    FocusRepository().registerMoreScreenFocusRequester(requestActiveTabFocus);
     _pages = [
       BlocBuilder<CalendarCubit, CalendarState>(
         builder: (context, _) => CalendarWidget(key: _calendarKey),
@@ -184,6 +186,7 @@ class MoreScreenState extends State<MoreScreen>
 
   @override
   void dispose() {
+    FocusRepository().unregisterMoreScreenFocusRequester(requestActiveTabFocus);
     _contentFocusNode.dispose();
     _contentScrollController.dispose();
     super.dispose();
@@ -308,7 +311,9 @@ class MoreScreenState extends State<MoreScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (int index = 0; index < _tabs.length; index++) ...[
+                          for (int index = 0;
+                              index < _tabs.length;
+                              index++) ...[
                             _DesktopTopNavItem(
                               icon: _tabs[index].icon,
                               iconFilled: _tabs[index].iconFilled,

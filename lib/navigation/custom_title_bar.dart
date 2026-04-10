@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter_context_menu/flutter_context_menu.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -18,6 +17,7 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/scrollable_tab_bar.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/history/history_dialog.dart';
+import 'package:otzaria/widgets/app_menu.dart';
 import 'package:otzaria/bookmarks/bookmarks_dialog.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:otzaria/utils/fullscreen_helper.dart';
@@ -42,8 +42,8 @@ const double _kAppBarControlsWidth = 125.0;
 const double _kAppBarControlsWidthRightAligned = 105.0;
 const int _kActionButtonsCount = 1; // settings בלבד
 const double _kActionButtonWidth = 56.0;
+const double _kWindowCaptionButtonsWidth = 138.0;
 const double _kWindowCaptionButtonWidth = 46.0;
-const int _kWindowCaptionButtonsCount = 3; // מסך מלא + מזער + סגור
 
 /// סגנון משותף לכפתורי האייקון בשורת הכותרת
 final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
@@ -195,26 +195,13 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                                     onPressed: () => windowManager.close(),
                                   ),
                                 if (!settingsState.isFullscreen)
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _CaptionActionButton(
-                                        brightness:
-                                            Theme.of(context).brightness,
-                                        tooltip: 'מזער',
-                                        icon: FluentIcons.subtract_24_regular,
-                                        onPressed: () async {
-                                          await windowManager.minimize();
-                                        },
-                                      ),
-                                      _CaptionActionButton(
-                                        brightness:
-                                            Theme.of(context).brightness,
-                                        tooltip: 'סגור',
-                                        icon: FluentIcons.dismiss_24_regular,
-                                        onPressed: () => windowManager.close(),
-                                      ),
-                                    ],
+                                  SizedBox(
+                                    width: _kWindowCaptionButtonsWidth,
+                                    height: 50,
+                                    child: WindowCaption(
+                                      brightness: Theme.of(context).brightness,
+                                      backgroundColor: Colors.transparent,
+                                    ),
                                   ),
                               ],
                             ),
@@ -313,18 +300,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0),
-              child: IconButton(
-                icon: const Icon(FluentIcons.settings_24_regular, size: 18),
-                tooltip: 'הגדרות ספרייה',
-                onPressed: () => showLibrarySettingsDialog(context),
-                style: _kIconButtonStyle.copyWith(
-                  foregroundColor: WidgetStatePropertyAll(
-                      Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
-              ),
-            ),
           ],
         );
       },
@@ -381,7 +356,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           bool showWindowControls = !kIsWeb &&
               (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
           double windowControlsWidth = showWindowControls
-              ? _kWindowCaptionButtonsCount * _kWindowCaptionButtonWidth
+              ? _kWindowCaptionButtonsWidth + _kWindowCaptionButtonWidth
               : 0.0;
           double actionButtonsWidth = _kAppBarControlsWidth;
           double extraButtonsWidth = _kActionButtonsCount * _kActionButtonWidth;
@@ -718,76 +693,9 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           closeTab(tab, context);
         }
       },
-      child: ContextMenuRegion(
-        contextMenu: ContextMenu<Object>(
-          // ... תפריט ההקשר נשאר בדיוק כפי שהיה ...
-          maxHeight: 400,
-          entries: <ContextMenuEntry<Object>>[
-            MenuItem<Object>(
-              label: Text(tab.isPinned ? 'בטל הצמדת כרטיסיה' : 'הצמד כרטיסיה'),
-              onSelected: (_) =>
-                  context.read<TabsBloc>().add(TogglePinTab(tab)),
-            ),
-            MenuItem<Object>(
-                label: const Text('סגור'),
-                onSelected: (_) => closeTab(tab, context)),
-            MenuItem<Object>(
-                label: const Text('סגור הכל'),
-                onSelected: (_) => closeAllTabs(state, context)),
-            MenuItem<Object>(
-              label: const Text('סגור את האחרים'),
-              onSelected: (_) => closeAllTabsButCurrent(state, context),
-            ),
-            MenuItem<Object>(
-              label: const Text('שיכפול'),
-              onSelected: (_) => context.read<TabsBloc>().add(CloneTab(tab)),
-            ),
-            const MenuDivider(),
-            if (tab is! CombinedTab)
-              if (state.tabs.length > 1)
-                MenuItem<Object>.submenu(
-                  label: const Text('הצג לצד'),
-                  items: state.tabs
-                      .where((t) => t != tab && t is! CombinedTab)
-                      .map((otherTab) => MenuItem<Object>(
-                            label: Text(otherTab.title),
-                            onSelected: (_) {
-                              context.read<TabsBloc>().add(
-                                    EnableSideBySideMode(
-                                      rightTab: tab,
-                                      leftTab: otherTab,
-                                    ),
-                                  );
-                            },
-                          ))
-                      .toList(),
-                )
-              else
-                MenuItem<Object>(
-                  label: const Text('הצג לצד'),
-                  enabled: false,
-                  onSelected: (_) {},
-                ),
-            if (tab is CombinedTab) ...[
-              MenuItem<Object>(
-                label: const Text('החלף צדדים'),
-                onSelected: (_) =>
-                    context.read<TabsBloc>().add(const SwapSideBySideTabs()),
-              ),
-              MenuItem<Object>(
-                label: const Text('חזרה לתצוגה רגילה'),
-                onSelected: (_) =>
-                    context.read<TabsBloc>().add(const DisableSideBySideMode()),
-              ),
-            ],
-            const MenuDivider(),
-            MenuItem<Object>.submenu(
-              label: const Text('כרטיסיות פתוחות '),
-              items: _getMenuItems(state.tabs, context),
-            ),
-            _buildMoveToWorkspaceMenuItem(context, tab)
-          ],
-        ),
+      child: AppContextMenuRegion(
+        menuBuilder: (menuCtx) =>
+            _buildTabContextMenuEntries(menuCtx, tab, state),
         child: Draggable<OpenedTab>(
           axis: Axis.horizontal,
           data: tab,
@@ -853,7 +761,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   }
 
   /// בונה פריט תפריט להעברת טאב לשולחן עבודה אחר
-  ContextMenuEntry<Object> _buildMoveToWorkspaceMenuItem(
+  AppContextMenuEntry _buildMoveToWorkspaceMenuEntry(
       BuildContext context, OpenedTab tab) {
     final workspaceState = context.read<WorkspaceBloc>().state;
 
@@ -864,20 +772,19 @@ class _CustomTitleBarState extends State<CustomTitleBar>
 
     // אם אין שולחנות עבודה אחרים, מציג פריט מושבת
     if (otherWorkspaces.isEmpty) {
-      return MenuItem<Object>(
-        label: const Text('העבר לשולחן עבודה'),
+      return AppContextMenuEntry(
+        label: 'העבר לשולחן עבודה',
         enabled: false,
-        onSelected: (_) {},
       );
     }
 
     // בונה תת-תפריט עם כל שולחנות העבודה האחרים
-    return MenuItem<Object>.submenu(
-      label: const Text('העבר לשולחן עבודה'),
-      items: otherWorkspaces.map((workspace) {
-        return MenuItem<Object>(
-          label: Text(workspace.name),
-          onSelected: (_) {
+    return AppContextMenuEntry(
+      label: 'העבר לשולחן עבודה',
+      children: otherWorkspaces.map((workspace) {
+        return AppContextMenuEntry(
+          label: workspace.name,
+          onTap: () {
             _moveTabToWorkspace(context, tab, workspace.id);
           },
         );
@@ -918,24 +825,101 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     UiSnack.show('הכרטיסיה הועברה לשולחן העבודה "${targetWorkspace.name}"');
   }
 
-  List<ContextMenuEntry<Object>> _getMenuItems(
-    List<OpenedTab> tabs,
-    BuildContext context,
+  List<AppContextMenuEntry> _buildTabContextMenuEntries(
+    BuildContext menuCtx,
+    OpenedTab tab,
+    TabsState state,
   ) {
+    final entries = <AppContextMenuEntry>[
+      AppContextMenuEntry(
+        label: tab.isPinned ? 'בטל הצמדת כרטיסיה' : 'הצמד כרטיסיה',
+        onTap: () => context.read<TabsBloc>().add(TogglePinTab(tab)),
+      ),
+      AppContextMenuEntry(
+        label: 'סגור',
+        onTap: () => closeTab(tab, context),
+      ),
+      AppContextMenuEntry(
+        label: 'סגור הכל',
+        onTap: () => closeAllTabs(state, context),
+      ),
+      AppContextMenuEntry(
+        label: 'סגור את האחרים',
+        onTap: () => closeAllTabsButCurrent(state, context),
+      ),
+      AppContextMenuEntry(
+        label: 'שיכפול',
+        onTap: () => context.read<TabsBloc>().add(CloneTab(tab)),
+      ),
+      const AppContextMenuEntry.divider(),
+    ];
+
+    // הצג לצד
+    if (tab is! CombinedTab) {
+      if (state.tabs.length > 1) {
+        final otherTabs = state.tabs
+            .where((t) => t != tab && t is! CombinedTab)
+            .map((otherTab) => AppContextMenuEntry(
+                  label: otherTab.title,
+                  onTap: () {
+                    context.read<TabsBloc>().add(
+                          EnableSideBySideMode(
+                            rightTab: tab,
+                            leftTab: otherTab,
+                          ),
+                        );
+                  },
+                ))
+            .toList();
+        entries.add(AppContextMenuEntry(
+          label: 'הצג לצד',
+          children: otherTabs,
+        ));
+      } else {
+        entries.add(AppContextMenuEntry(
+          label: 'הצג לצד',
+          enabled: false,
+        ));
+      }
+    }
+
+    // אפשרויות CombinedTab
+    if (tab is CombinedTab) {
+      entries.addAll([
+        AppContextMenuEntry(
+          label: 'החלף צדדים',
+          onTap: () => context.read<TabsBloc>().add(const SwapSideBySideTabs()),
+        ),
+        AppContextMenuEntry(
+          label: 'חזרה לתצוגה רגילה',
+          onTap: () =>
+              context.read<TabsBloc>().add(const DisableSideBySideMode()),
+        ),
+      ]);
+    }
+
+    entries.addAll([
+      const AppContextMenuEntry.divider(),
+      AppContextMenuEntry(
+        label: 'כרטיסיות פתוחות',
+        children: _getOpenTabsMenuEntries(state.tabs),
+      ),
+      _buildMoveToWorkspaceMenuEntry(context, tab),
+    ]);
+
+    return entries;
+  }
+
+  List<AppContextMenuEntry> _getOpenTabsMenuEntries(List<OpenedTab> tabs) {
     final sortedTabs = [...tabs]..sort((a, b) => a.title.compareTo(b.title));
 
     return sortedTabs.map((tab) {
-      return MenuItem<Object>(
-        // חשוב: נותן רוחב מינימלי כדי שהשורה לא תהיה "חבילה" ממורכזת
-        constraints: const BoxConstraints(minWidth: 280, minHeight: 32),
-
-        // חשוב: label פשוט, בלי Row
-        label: Text(
-          tab.title,
-          overflow: TextOverflow.ellipsis,
-        ),
-
-        // חשוב: ה-X מגיע כ-trailing, ואז החבילה ממקמת אותו בקצה
+      return AppContextMenuEntry(
+        label: tab.title,
+        onTap: () {
+          final index = tabs.indexOf(tab);
+          context.read<TabsBloc>().add(SetCurrentTab(index));
+        },
         trailing: IconButton(
           tooltip: 'סגור',
           visualDensity: VisualDensity.compact,
@@ -943,15 +927,11 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           icon: const Icon(FluentIcons.dismiss_24_regular, size: 14),
           onPressed: () {
-            Navigator.of(context).maybePop(); // סוגר את התפריט
+            Navigator.of(context).maybePop();
             closeTab(tab, context);
           },
+          splashRadius: 16,
         ),
-
-        onSelected: (_) {
-          final index = tabs.indexOf(tab); // אינדקס לפי הרשימה המקורית
-          context.read<TabsBloc>().add(SetCurrentTab(index));
-        },
       );
     }).toList();
   }
