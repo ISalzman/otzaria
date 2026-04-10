@@ -73,8 +73,7 @@ void _openDafYomiBookInCategory(BuildContext context, String tractate,
     }
 
     if (book == null) {
-      UiSnack.showError('לא נמצאה קטגוריה: $categoryName',
-          backgroundColor: Theme.of(context).colorScheme.error);
+      UiSnack.showError('לא נמצאה קטגוריה: $categoryName');
       return;
     } else {
       // נמצא ספר, נמשיך עם הפתיחה
@@ -114,8 +113,7 @@ void _openDafYomiBookInCategory(BuildContext context, String tractate,
     final availableBooks =
         allBooksInCategory.map((b) => b.title).take(5).join(', ');
     UiSnack.showError(
-        'לא נמצא ספר: $tractate ב$categoryName\nספרים זמינים: $availableBooks...',
-        backgroundColor: Theme.of(context).colorScheme.error);
+        'לא נמצא ספר: $tractate ב$categoryName\nספרים זמינים: $availableBooks...');
   }
 }
 

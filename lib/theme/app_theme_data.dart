@@ -1,6 +1,89 @@
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_colors.dart';
+import 'package:otzaria/theme/app_theme.dart';
+
+// ── AppThemeData ──────────────────────────────────────────────────────────────
+// Factory ליצירת ThemeData לאפליקציה
+// ─────────────────────────────────────────────────────────────────────────────
+
+class AppThemeData {
+  AppThemeData._();
+
+  // ── Light Theme ──
+
+  static ThemeData light(ColorScheme colorScheme, {bool compactMenus = false}) {
+    return ThemeData(
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+      fontFamily: 'Roboto',
+      colorScheme: colorScheme,
+      textTheme: const TextTheme(
+        bodyMedium: TextStyle(fontSize: 18.0, fontFamily: 'candara'),
+      ),
+    ).copyWith(
+      dialogTheme: DialogThemeData(
+        barrierColor: AppColors.dialogBarrier,
+        backgroundColor: colorScheme.surface,
+      ),
+      extensions: [AppMenuMetrics.create(compactMenus: compactMenus)],
+    );
+  }
+
+  // ── Dark Theme ──
+
+  static ThemeData dark(Color darkSeedColor, {bool compactMenus = false}) {
+    return ThemeData.dark(useMaterial3: true).copyWith(
+      scaffoldBackgroundColor: AppColors.darkScaffold,
+      canvasColor: AppColors.darkScaffold,
+      cardColor: AppColors.darkCard,
+      colorScheme: ColorScheme.dark(
+        surface: AppColors.darkScaffold,
+        surfaceContainer: AppColors.darkCard,
+        onSurface: AppColors.darkOnSurface,
+        primary: darkSeedColor,
+        onPrimary: Colors.white,
+        secondary: darkSeedColor.withValues(alpha: 0.7),
+        onSecondary: Colors.white,
+        outline: AppColors.darkOutline,
+      ),
+      textTheme: ThemeData.dark()
+          .textTheme
+          .apply(
+            fontFamily: 'Roboto',
+            bodyColor: AppColors.darkOnSurface,
+            displayColor: AppColors.darkOnSurface,
+          )
+          .copyWith(
+            bodyMedium: const TextStyle(
+              fontSize: 18.0,
+              fontFamily: 'candara',
+              color: AppColors.darkOnSurface,
+            ),
+          ),
+      cardTheme: CardThemeData(
+        color: AppColors.darkCard,
+        elevation: AppTokens.elevation2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radiusMD),
+          side: const BorderSide(
+            color: AppColors.darkOutline,
+            width: 1,
+          ),
+        ),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.darkAppBar,
+        foregroundColor: AppColors.darkOnSurface,
+      ),
+      dialogTheme: const DialogThemeData(
+        barrierColor: AppColors.dialogBarrier,
+        backgroundColor: AppColors.darkAppBar,
+      ),
+      extensions: [AppMenuMetrics.create(compactMenus: compactMenus)],
+    );
+  }
+}
 
 /// עזרי דחיסות ותזוזות עבור תפריטים
 class AppMenuMetrics extends ThemeExtension<AppMenuMetrics> {

@@ -120,6 +120,26 @@ class DesignSettingsTab extends StatelessWidget {
               SettingsCard(
                 title: 'כרטיסיות הספרים',
                 children: [
+                  if (!(Platform.isAndroid || Platform.isIOS))
+                    SwitchSettingsTile(
+                      leading: const Icon(FluentIcons.list_24_regular),
+                      title: const Text(
+                        'תפריטים קומפקטיים',
+                        style: kSettingsTitleStyle,
+                      ),
+                      subtitle: Text(
+                        state.compactMenuMode
+                            ? 'התפריטים יוצגו בצפיפות עבודה בסגנון Chrome'
+                            : 'התפריטים יוצגו במרווח נוח ובגרסה הרגילה',
+                        style: kSettingsSubtitleStyle,
+                      ),
+                      value: state.compactMenuMode,
+                      onChanged: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateCompactMenuMode(value));
+                      },
+                    ),
                   SwitchSettingsTile(
                     leading: const Icon(FluentIcons.tab_24_regular),
                     title: const Text('הצגת כרטיסיות בימין',
