@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/app_menu.dart';
 
 /// רכיב שמציג כפתורי פעולה עם יכולת הסתרה במסכים צרים
 /// כשחלק מהכפתורים נסתרים, מוצג כפתור "..." שפותח תפריט
@@ -187,11 +189,12 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
     return Builder(
       key: ValueKey(uniqueKey),
       builder: (context) {
-        return PopupMenuButton<ActionButtonData>(
+        final menuMetrics = Theme.of(context).extension<AppMenuMetrics>() ??
+            AppMenuMetrics.create(compactMenus: false);
+        return AppPopupMenuButton<ActionButtonData>(
           icon: const Icon(FluentIcons.more_vertical_24_regular),
           tooltip: 'עוד פעולות',
-          // הוספת offset כדי למקם את התפריט מתחת לכפתור
-          offset: const Offset(0, 40.0),
+          position: PopupMenuPosition.under,
           onSelected: (action) {
             action.onPressed?.call();
           },
@@ -200,56 +203,41 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
               // אם יש submenuItems, נבנה תת-תפריט
               if (action.submenuItems != null &&
                   action.submenuItems!.isNotEmpty) {
-                return PopupMenuItem<ActionButtonData>(
-                  enabled: false,
-                  padding: EdgeInsets.zero,
-                  child: SubmenuButton(
-                    menuChildren: action.submenuItems!.map((subAction) {
-                      return MenuItemButton(
-                        leadingIcon: subAction.icon != null
-                            ? Icon(subAction.icon, size: 20)
-                            : null,
-                        onPressed: () {
-                          Navigator.of(context).pop(); // סוגר את התפריט הראשי
-                          subAction.onPressed?.call();
-                        },
-                        child: Text(subAction.tooltip ?? ''),
-                      );
-                    }).toList(),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (action.icon != null) ...[
-                            Icon(action.icon),
-                            const SizedBox(width: 8),
-                          ],
-                          Expanded(child: Text(action.tooltip ?? '')),
-                          const Icon(FluentIcons.arrow_left_24_regular,
-                              size: 16),
-                        ],
+                return buildAppSubmenuPopupMenuItem<ActionButtonData>(
+                  context: context,
+                  metrics: menuMetrics,
+                  label: action.tooltip ?? '',
+                  icon: action.icon,
+                  menuChildren: action.submenuItems!.map((subAction) {
+                    return MenuItemButton(
+                      leadingIcon: subAction.icon != null
+                          ? Icon(subAction.icon, size: menuMetrics.iconSize)
+                          : null,
+                      style: buildAppSubmenuItemStyle(context, menuMetrics),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        subAction.onPressed?.call();
+                      },
+                      child: Text(
+                        subAction.tooltip ?? '',
+                        textDirection: TextDirection.rtl,
                       ),
-                    ),
-                  ),
+                    );
+                  }).toList(),
                 );
               }
 
               // פריט רגיל ללא submenu
-              return PopupMenuItem<ActionButtonData>(
-                value: action,
-                enabled: action.onPressed != null,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (action.icon != null) ...[
-                      Icon(action.icon),
-                      const SizedBox(width: 8),
-                    ],
-                    Text(action.tooltip ?? ''),
-                  ],
+              return buildAppPopupMenuItem<ActionButtonData>(
+                context,
+                AppMenuEntry<ActionButtonData>(
+                  value: action,
+                  label: action.tooltip ?? '',
+                  icon: action.icon,
+                  enabled: action.onPressed != null,
                 ),
+                menuMetrics,
+                null,
               );
             }).toList();
           },
