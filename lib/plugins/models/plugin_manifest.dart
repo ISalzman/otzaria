@@ -28,6 +28,9 @@ class PluginManifest {
   final String? toolTabIconVariant;
   final List<String> publishedDataTypes;
 
+  /// מקורות מסד נתונים שהתוסף מצהיר עליהם (מהשדה contributes.databaseSources)
+  final List<Map<String, dynamic>> databaseSources;
+
   PluginManifest({
     required this.schemaVersion,
     required this.id,
@@ -50,6 +53,7 @@ class PluginManifest {
     this.toolTabIconCodepoint,
     this.toolTabIconVariant,
     required this.publishedDataTypes,
+    this.databaseSources = const [],
   });
 
   String? get toolTabIconFontFamily {
@@ -102,6 +106,11 @@ class PluginManifest {
               ?.map((e) => e as String)
               .toList() ??
           [],
+      databaseSources:
+          (contributes['databaseSources'] as List<dynamic>?)
+                  ?.map((e) => Map<String, dynamic>.from(e as Map))
+                  .toList() ??
+              [],
     );
   }
 
@@ -134,6 +143,7 @@ class PluginManifest {
           if (toolTabIconVariant != null) 'iconVariant': toolTabIconVariant,
         },
         'publishedDataTypes': publishedDataTypes,
+        'databaseSources': databaseSources,
       }
     };
   }

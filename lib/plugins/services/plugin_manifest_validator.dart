@@ -64,6 +64,34 @@ class PluginManifestValidator {
       }
     }
 
+    if (manifest.databaseSources.isNotEmpty &&
+        !manifest.permissions.contains('database.read')) {
+      throw Exception(
+          'התוסף מצהיר על contributes.databaseSources אך לא מבקש את ההרשאה database.read');
+    }
+
+    for (final source in manifest.databaseSources) {
+      final id = source['id'];
+      final label = source['label'];
+      final required = source['required'];
+
+      if (id is! String || id.isEmpty) {
+        throw Exception(
+            'כל ערך ב-contributes.databaseSources חייב לכלול id מסוג string');
+      }
+      if (!RegExp(r'^[a-z0-9_.-]+$').hasMatch(id)) {
+        throw Exception('מזהה מקור מסד נתונים אינו תקין: "$id"');
+      }
+      if (label != null && label is! String) {
+        throw Exception(
+            'השדה label ב-contributes.databaseSources חייב להיות string');
+      }
+      if (required != null && required is! bool) {
+        throw Exception(
+            'השדה required ב-contributes.databaseSources חייב להיות bool');
+      }
+    }
+
     if (manifest.toolTabIconVariant != null &&
         manifest.toolTabIconCodepoint == null) {
       throw Exception(

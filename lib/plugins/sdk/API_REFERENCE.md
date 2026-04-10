@@ -814,6 +814,225 @@ const { data } = await Otzaria.call('publishedData.listOwn');
 
 ---
 
+## database.* - גישה למסד נתונים SQLite
+
+**הרשאה נדרשת:** `database.read`
+
+API זה מאפשר לתוסף לקרוא נתונים ממסדי נתונים SQLite מקומיים שהאפליקציה רשמה ואישרה.  
+התוסף **אינו** יכול לשלוח SQL חופשי — הוא שולח בקשה דקלרטיבית, והמארח מתרגם אותה ל-SQL פרמטרי לאחר אימות מול policy.
+
+**הצהרה במניפסט:**
+
+```json
+{
+  "permissions": ["database.read"],
+  "contributes": {
+    "databaseSources": [
+      {
+        "id": "talmud_synopsis",
+        "label": "עדי נוסח בבלי",
+        "required": true
+      }
+    ]
+  }
+}
+```
+
+---
+
+### `database.listSources`
+
+מחזיר את המקורות שהוצהרו במניפסט, יחד עם מצב הזמינות שלהם.
+
+```javascript
+const { data } = await Otzaria.call('database.listSources');
+// {
+//   sources: [
+//     { id: "talmud_synopsis", label: "עדי נוסח בבלי", available: true }
+//   ]
+// }
+```
+
+---
+
+### `database.describeSource`
+
+מחזיר את ה-schema החשוף לתוסף — רק הטבלאות והעמודות שמותרות על פי ה-policy.
+
+```javascript
+const { data } = await Otzaria.call('database.describeSource', {
+  sourceId: 'talmud_synopsis'
+});
+// {
+//   source: { id: "talmud_synopsis", label: "עדי נוסח בבלי" },
+//   schema: {
+//     tables: [
+//       { name: "line_alignments", columns: ["id", "page_id", "reference", "sequence_number"] },
+//       { name: "line_readings",   columns: ["alignment_id", "id", "text", "witness_id"] },
+//       ...
+//     ]
+//   },
+//   limits: { maxLimit: 5000, maxBatchQueries: 5 }
+// }
+```
+
+---
+
+### `database.query`
+
+ביצוע שאילתה דקלרטיבית.
+
+**פרמטרים:**
+
+| שדה | סוג | חובה | תיאור |
+|-----|-----|------|--------|
+| `sourceId` | `string` | ✓ | מזהה המקור |
+| `from` | `{ table, alias? }` | ✓ | טבלת הבסיס |
+| `select` | `SelectItem[]` | ✓ | עמודות לבחירה |
+| `joins` | `Join[]` | — | חיבורי טבלאות |
+| `where` | `WhereCondition` | — | תנאי סינון |
+| `orderBy` | `OrderBy[]` | — | מיון |
+| `limit` | `number` | — | מקסימום שורות (ברירת מחדל: maxLimit) |
+| `offset` | `number` | — | דילוג שורות |
+| `rowFormat` | `'array' \| 'object'` | — | פורמט תשובה (ברירת מחדל: `'array'`) |
+
+**דוגמה — קריאת עדי נוסח לדף:**
+
+```javascript
+const { data } = await Otzaria.call('database.query', {
+  sourceId: 'talmud_synopsis',
+  from: { table: 'tractates', alias: 't' },
+  select: [
+    { expr: 'la.id',              as: 'alignment_id' },
+    { expr: 'la.sequence_number', as: 'sequence_number' },
+    { expr: 'la.reference',       as: 'reference' },
+    { expr: 'w.name',             as: 'witness_name' },
+    { expr: 'lr.text',            as: 'text' }
+  ],
+  joins: [
+    {
+      type: 'inner', table: 'pages', alias: 'p',
+      on: [{ left: 'p.tractate_id', op: '=', right: 't.id' }]
+    },
+    {
+      type: 'inner', table: 'line_alignments', alias: 'la',
+      on: [{ left: 'la.page_id', op: '=', right: 'p.id' }]
+    },
+    {
+      type: 'inner', table: 'line_readings', alias: 'lr',
+      on: [{ left: 'lr.alignment_id', op: '=', right: 'la.id' }]
+    },
+    {
+      type: 'inner', table: 'witnesses', alias: 'w',
+      on: [{ left: 'w.id', op: '=', right: 'lr.witness_id' }]
+    }
+  ],
+  where: {
+    op: 'and',
+    conditions: [
+      { op: '=', left: 't.name', value: 'מסכת ברכות' },
+      { op: '=', left: 'p.name', value: 'ב' }
+    ]
+  },
+  orderBy: [
+    { expr: 'la.sequence_number', direction: 'asc' },
+    { expr: 'w.name',             direction: 'asc' }
+  ],
+  limit: 2000,
+  rowFormat: 'array'
+});
+// {
+//   meta: { sourceId: "talmud_synopsis", rowCount: 240, limit: 2000, offset: 0, hasMore: false, elapsedMs: 12 },
+//   columns: [
+//     { name: "alignment_id" }, { name: "sequence_number" },
+//     { name: "reference" }, { name: "witness_name" }, { name: "text" }
+//   ],
+//   rows: [
+//     [1, 1, "ע\"א 1 - 14", "כ\"י מינכן 95", "..."],
+//     ...
+//   ]
+// }
+```
+
+**פורמט `object`:**
+
+```javascript
+const { data } = await Otzaria.call('database.query', {
+  ...spec,
+  rowFormat: 'object'
+});
+// rows: [
+//   { alignment_id: 1, sequence_number: 1, reference: "ע\"א 1 - 14", ... },
+//   ...
+// ]
+```
+
+**אופרטורי `where` תמיכה:**
+
+| אופרטור | דוגמה |
+|---------|-------|
+| `=` `!=` `>` `>=` `<` `<=` | `{ op: '=', left: 'p.name', value: 'ב' }` |
+| `like` | `{ op: 'like', left: 'w.name', value: '%כ"י%' }` |
+| `in` | `{ op: 'in', left: 'p.id', value: [1, 2, 3] }` |
+| `between` | `{ op: 'between', left: 'la.sequence_number', value: [1, 50] }` |
+| `isNull` / `isNotNull` | `{ op: 'isNull', left: 'lr.text' }` |
+| `and` / `or` | `{ op: 'and', conditions: [...] }` |
+
+---
+
+### `database.batchQuery`
+
+ביצוע מספר שאילתות ב-RPC roundtrip אחד — יעיל כשיש תלויות בין שאילתות שצריך לפתור ברצף.
+
+```javascript
+const { data } = await Otzaria.call('database.batchQuery', {
+  queries: [
+    {
+      sourceId: 'talmud_synopsis',
+      from: { table: 'tractates', alias: 't' },
+      select: [{ expr: 't.id', as: 'id' }],
+      where: { op: '=', left: 't.name', value: 'מסכת ברכות' },
+      limit: 1
+    },
+    {
+      sourceId: 'talmud_synopsis',
+      from: { table: 'witnesses', alias: 'w' },
+      select: [
+        { expr: 'w.id',   as: 'id' },
+        { expr: 'w.name', as: 'name' }
+      ],
+      limit: 100
+    }
+  ]
+});
+// { results: [ <תוצאה 1>, <תוצאה 2> ] }
+```
+
+**הגבלות:**
+- מקסימום 5 שאילתות ל-batch (ניתן לבדוק ב-`database.describeSource`)
+- כל שאילתה עוברת ולידציה נפרדת מול ה-policy
+- אין תמיכה ב-references בין תוצאות (כל שאילתה עצמאית)
+
+---
+
+**קודי שגיאה:**
+
+| קוד | משמעות |
+|-----|--------|
+| `permission_denied` | חסרה הרשאת `database.read` (קוד גנרי של ה-RPC bridge) |
+| `database.source_not_found` | המקור לא הוצהר במניפסט |
+| `database.source_unavailable` | קובץ ה-DB לא קיים או לא רשום |
+| `database.table_not_allowed` | טבלה לא מורשית |
+| `database.column_not_allowed` | עמודה לא מורשית |
+| `database.join_not_allowed` | join לא מורשה על פי ה-policy |
+| `database.query_too_large` | חריגה ממגבלת limit, joins, columns, או batch |
+| `database.invalid_spec` | בקשה לא תקינה (שדה חסר, ערך לא חוקי, alias כפול) |
+| `error.timeout` | השאילתה חרגה מ-30 שניות (מגבלת ה-RPC הכללית) |
+
+> **הערה על timeout:** בגרסה נוכחית, שאילתות ש-sqlite3 מריץ באופן סינכרוני אינן ניתנות להפרעה. timeout נאכף על ידי מגבלת ה-RPC הכללית (30 שניות) שמחזירה `error.timeout`.
+
+---
+
 ## אירועים (Events)
 
 ניתן להאזין לאירועים מהאפליקציה:
@@ -963,6 +1182,7 @@ async function scheduleReminder(title, body, dateTime) {
     "history.write",
     "notifications.send",
     "notifications.system",
+    "database.read",
     "events.subscribe:navigation.changed",
     "events.subscribe:reader.current_book_changed",
     "events.subscribe:theme.changed",

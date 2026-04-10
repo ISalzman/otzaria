@@ -31,6 +31,7 @@ import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/utils/ref_helper.dart';
+import 'package:otzaria/plugins/database/plugin_database_service.dart';
 
 // ===================================================================
 // Spec-compliant allowlist for settings.get/getMany
@@ -162,15 +163,18 @@ class PluginBridgeAdapter {
   final PluginRegistryRepository _pluginRepo;
   final PluginBridgeDependencies _dependencies;
   final NotificationService _notificationService;
+  final PluginDatabaseService _databaseService;
 
   PluginBridgeAdapter(
     this.plugin, {
     required PluginBridgeDependencies dependencies,
     PluginRegistryRepository? pluginRepository,
     NotificationService? notificationService,
+    PluginDatabaseService? databaseService,
   })  : _dependencies = dependencies,
         _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
-        _notificationService = notificationService ?? NotificationService();
+        _notificationService = notificationService ?? NotificationService(),
+        _databaseService = databaseService ?? PluginDatabaseService();
 
   Future<dynamic> execute(
       String domain, String action, Map<String, dynamic> args) async {
@@ -203,6 +207,8 @@ class PluginBridgeAdapter {
         return await _handleHistory(action, args);
       case 'notifications':
         return await _handleNotifications(action, args);
+      case 'database':
+        return _handleDatabase(action, args);
       default:
         throw Exception("Unknown domain: $domain");
     }
@@ -1287,5 +1293,40 @@ class PluginBridgeAdapter {
 
   String? _currentWorkspaceId() {
     return _dependencies.workspaceBloc.state.activeWorkspaceId;
+  }
+
+  // ----------------------------------------------------------------
+  // database.*
+  // ----------------------------------------------------------------
+  dynamic _handleDatabase(String action, Map<String, dynamic> args) {
+    switch (action) {
+      case 'listSources':
+        final sources = _databaseService.listSourcesForPlugin(plugin);
+        return {'sources': sources};
+
+      case 'describeSource':
+        final sourceId = args['sourceId'] as String?;
+        if (sourceId == null) {
+          throw const PluginDatabaseException(
+              'database.invalid_spec', 'sourceId is required');
+        }
+        return _databaseService.describeSource(plugin, sourceId);
+
+      case 'query':
+        return _databaseService.query(plugin, args);
+
+      case 'batchQuery':
+        final queries = (args['queries'] as List<dynamic>?)
+            ?.cast<Map<String, dynamic>>();
+        if (queries == null) {
+          throw const PluginDatabaseException(
+              'database.invalid_spec', '"queries" list is required');
+        }
+        final results = _databaseService.batchQuery(plugin, queries);
+        return {'results': results};
+
+      default:
+        throw Exception('Unknown database action: $action');
+    }
   }
 }
