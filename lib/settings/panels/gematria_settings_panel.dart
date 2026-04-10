@@ -45,9 +45,7 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      child: Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SettingsCard(
@@ -183,7 +181,6 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
             ],
           ),
         ],
-      ),
     );
   }
 }

@@ -9,6 +9,7 @@ import 'package:otzaria/widgets/keyboard_navigator.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/layout_tokens.dart';
+import 'package:otzaria/widgets/tool_ui_helpers.dart';
 
 /// רוחב מקסימלי לתוכן ההגדרות — מרכוז על מסכים רחבים
 // kSettingsContentMaxWidth הוסר — משתמשים ב-LayoutConstraints.panelContentMaxWidth מ-layout_tokens.dart
@@ -405,30 +406,25 @@ class _SettingsContentPaneState extends State<_SettingsContentPane> {
   Widget build(BuildContext context) {
     return Focus(
       focusNode: widget.focusNode,
-      child: Container(
+      child: ColoredBox(
         color: widget.bgColor,
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-                maxWidth: LayoutConstraints.panelContentMaxWidth),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(
-                      top: 28, right: 16, left: 16, bottom: 4),
-                  child: Text(
-                    widget.label,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
+        child: ToolPanelWrapper(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(
+                    top: 28, right: 16, left: 16, bottom: 4),
+                child: Text(
+                  widget.label,
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
-                Expanded(child: widget.child),
-              ],
-            ),
+              ),
+              Expanded(child: widget.child),
+            ],
           ),
         ),
       ),
