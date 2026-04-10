@@ -202,6 +202,108 @@ export type NavigationTarget = 'library' | 'reading' | 'more' | 'settings';
 // All valid method strings
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Database types
+// ---------------------------------------------------------------------------
+
+export interface DatabaseSourceSummary {
+  id: string;
+  label: string;
+  available: boolean;
+}
+
+export interface DatabaseTableSchema {
+  name: string;
+  columns: string[];
+}
+
+export interface DatabaseSourceDescription {
+  source: { id: string; label: string };
+  schema: { tables: DatabaseTableSchema[] };
+  limits: { maxLimit: number; maxBatchQueries: number };
+}
+
+export interface DatabaseSelectItem {
+  expr: string;
+  as?: string;
+}
+
+export interface DatabaseJoinCondition {
+  left: string;
+  op: '=';
+  right: string;
+}
+
+export interface DatabaseJoin {
+  type: 'inner' | 'left';
+  table: string;
+  alias?: string;
+  on: DatabaseJoinCondition[];
+}
+
+export type DatabaseWhereOp =
+  | '=' | '!=' | '>' | '>=' | '<' | '<='
+  | 'in' | 'between' | 'like'
+  | 'isNull' | 'isNotNull';
+
+export interface DatabaseWhereLeaf {
+  op: DatabaseWhereOp;
+  left: string;
+  value?: unknown;
+}
+
+export interface DatabaseWhereNode {
+  op: 'and' | 'or';
+  conditions: DatabaseWhereCondition[];
+}
+
+export type DatabaseWhereCondition = DatabaseWhereLeaf | DatabaseWhereNode;
+
+export interface DatabaseOrderBy {
+  expr: string;
+  direction?: 'asc' | 'desc';
+}
+
+export interface DatabaseQuerySpec {
+  sourceId: string;
+  from: { table: string; alias?: string };
+  select: DatabaseSelectItem[];
+  joins?: DatabaseJoin[];
+  where?: DatabaseWhereCondition;
+  orderBy?: DatabaseOrderBy[];
+  limit?: number;
+  offset?: number;
+  rowFormat?: 'array' | 'object';
+}
+
+export interface DatabaseQueryMeta {
+  sourceId: string;
+  rowCount: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+  elapsedMs: number;
+}
+
+export interface DatabaseColumnMeta {
+  name: string;
+}
+
+export interface DatabaseQueryResult {
+  meta: DatabaseQueryMeta;
+  columns: DatabaseColumnMeta[];
+  /** array format: each row is an array of values in columns order */
+  rows: unknown[][] | Record<string, unknown>[];
+}
+
+export interface DatabaseBatchQuerySpec {
+  queries: DatabaseQuerySpec[];
+}
+
+export interface DatabaseBatchQueryResult {
+  results: DatabaseQueryResult[];
+}
+
 export type OtzariaMethod =
   | 'app.getInfo'
   | 'app.getTheme'
@@ -255,7 +357,11 @@ export type OtzariaMethod =
   | 'notifications.cancel'
   | 'notifications.cancelAll'
   | 'notifications.checkPermissions'
-  | 'notifications.requestPermissions';
+  | 'notifications.requestPermissions'
+  | 'database.listSources'
+  | 'database.describeSource'
+  | 'database.query'
+  | 'database.batchQuery';
 
 // ---------------------------------------------------------------------------
 // The global Otzaria object

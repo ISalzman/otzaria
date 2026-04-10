@@ -125,6 +125,12 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     description: 'מחיקה ועריכה של היסטוריית הקריאה',
   ),
 
+  // ===== מסד נתונים =====
+  'database.read': PluginPermissionInfo(
+    label: 'קריאת מסד נתונים',
+    description: 'קריאת נתונים ממקורות SQLite שהאפליקציה מאשרת לתוסף',
+  ),
+
   // ===== התראות =====
   'notifications.send': PluginPermissionInfo(
     label: 'הודעות מובנות',

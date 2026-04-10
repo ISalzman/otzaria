@@ -66,6 +66,7 @@ import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
+import 'package:otzaria/plugins/database/plugin_database_bootstrap.dart';
 import 'package:logging/logging.dart';
 import 'package:otzaria/widgets/restart_widget.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -417,6 +418,9 @@ Future<void> initialize() async {
     }
     // Continue without backup if it fails
   }
+
+  // Register SQLite sources for plugin database API
+  await initPluginDatabaseSources();
 
   // Initialize Notification Service
   try {

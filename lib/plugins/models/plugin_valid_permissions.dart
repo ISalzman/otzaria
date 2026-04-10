@@ -1,5 +1,11 @@
 /// מיפוי משמות שיטות API לשמות ההרשאות הנדרשות - לשימוש בהודעות שגיאה מועילות
 const Map<String, String> apiCallToPermissionHint = {
+  // database.*
+  'database.listSources': 'database.read',
+  'database.describeSource': 'database.read',
+  'database.query': 'database.read',
+  'database.batchQuery': 'database.read',
+
   // app.*
   'app.getUserEmail': 'app.user_email.read',
   'app.getInfo': 'app.info.read',
@@ -101,6 +107,10 @@ const pluginValidPermissions = <String>[
 
   /// מחיקה ועריכת היסטוריית קריאה
   'history.write',
+
+  // ===== מסד נתונים =====
+  /// קריאת נתונים ממקורות SQLite שהאפליקציה מאשרת לתוסף
+  'database.read',
 
   // ===== התראות =====
   /// הצגת התראות בתוך האפליקציה (UiSnack)

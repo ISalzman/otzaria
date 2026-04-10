@@ -6,6 +6,7 @@ import 'package:otzaria/plugins/models/plugin_rpc_response.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
+import 'package:otzaria/plugins/database/plugin_database_service.dart';
 
 class RateLimiter {
   int tokens = 50;
@@ -86,6 +87,8 @@ class PluginBridgeHandler {
           .execute(domain, action, request.payload)
           .timeout(const Duration(seconds: 30));
       return _successResp(result);
+    } on PluginDatabaseException catch (e) {
+      return _errorResp(e.code, e.message);
     } on TimeoutException {
       PluginSystemDatabase.instance
           .writeLog(plugin.pluginId, 'ERROR', 'RPC timeout: $domain.$action');
@@ -145,6 +148,8 @@ class PluginBridgeHandler {
           return 'notifications.send';
         }
         return 'notifications.system';
+      case 'database':
+        return 'database.read';
       default:
         return null;
     }
