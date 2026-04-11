@@ -186,6 +186,13 @@ export interface OtzariaEventMap {
   'navigation.changed': { screen: 'library' | 'reading' | 'more' | 'settings' };
   /** Active book in the reader changed. */
   'reader.current_book_changed': { book: string; index: number };
+  /** Current reading location changed (page, chapter, section). */
+  'reader.current_ref_changed': {
+    currentBook: string | null;
+    currentBookId: string | null;
+    currentIndex: number;
+    currentRef: string | null;
+  };
   /** Selected calendar date changed. */
   'calendar.date_changed': { date: string };
   /** Active workspace changed. */

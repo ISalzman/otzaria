@@ -30,8 +30,8 @@ import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
-import 'package:otzaria/utils/ref_helper.dart';
 import 'package:otzaria/plugins/database/plugin_database_service.dart';
+import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 
 // ===================================================================
 // Spec-compliant allowlist for settings.get/getMany
@@ -419,17 +419,21 @@ class PluginBridgeAdapter {
           'openTabs': openTabs,
         };
       case 'getCurrentRef':
-        final currentTab = _dependencies.tabsBloc.state.currentTab;
-        return {
-          'currentBook': currentTab?.title,
-          'currentBookId': currentTab?.title,
-          'currentIndex': _currentTabIndex(currentTab),
-          'currentRef': await _resolveCurrentRef(currentTab),
-        };
+        final snapshot = await resolveReaderLocation(
+            _dependencies.tabsBloc.state.currentTab);
+        if (snapshot == null) {
+          return {
+            'currentBook': null,
+            'currentBookId': null,
+            'currentIndex': 0,
+            'currentRef': null,
+          };
+        }
+        return snapshot.toJson();
       case 'getSelection':
         final currentTab = _dependencies.tabsBloc.state.currentTab;
-        final currentRef = await _resolveCurrentRef(currentTab);
-        return _buildCurrentSelection(currentTab, currentRef);
+        final snapshot = await resolveReaderLocation(currentTab);
+        return _buildCurrentSelection(currentTab, snapshot?.currentRef);
       default:
         throw Exception('Unknown action in reader: $action');
     }
@@ -1205,59 +1209,6 @@ class PluginBridgeAdapter {
     return grantedPermissions;
   }
 
-  int _currentTabIndex(OpenedTab? currentTab) {
-    if (currentTab is TextBookTab) {
-      return currentTab.index;
-    }
-
-    if (currentTab is PdfBookTab) {
-      return currentTab.pageNumber;
-    }
-
-    return 0;
-  }
-
-  Future<String?> _resolveCurrentRef(OpenedTab? currentTab) async {
-    if (currentTab is TextBookTab) {
-      final notifierTitle = currentTab.currentTitle.value.trim();
-      if (notifierTitle.isNotEmpty) {
-        return notifierTitle;
-      }
-
-      final state = currentTab.bloc.state;
-      if (state is TextBookLoaded) {
-        final stateTitle = state.currentTitle?.trim() ?? '';
-        if (stateTitle.isNotEmpty) {
-          return stateTitle;
-        }
-
-        try {
-          final ref = await refFromIndex(
-            currentTab.index,
-            Future.value(state.tableOfContents),
-          );
-          final normalizedRef = ref.trim();
-          return normalizedRef.isEmpty ? null : normalizedRef;
-        } catch (_) {
-          return null;
-        }
-      }
-
-      return null;
-    }
-
-    if (currentTab is PdfBookTab) {
-      final currentTitle = currentTab.currentTitle.value.trim();
-      if (currentTitle.isNotEmpty) {
-        return currentTitle;
-      }
-
-      return currentTab.pageNumber > 0 ? 'עמוד ${currentTab.pageNumber}' : null;
-    }
-
-    return null;
-  }
-
   Map<String, dynamic>? _buildCurrentSelection(
     OpenedTab? currentTab,
     String? currentRef,
@@ -1316,8 +1267,8 @@ class PluginBridgeAdapter {
         return _databaseService.query(plugin, args);
 
       case 'batchQuery':
-        final queries = (args['queries'] as List<dynamic>?)
-            ?.cast<Map<String, dynamic>>();
+        final queries =
+            (args['queries'] as List<dynamic>?)?.cast<Map<String, dynamic>>();
         if (queries == null) {
           throw const PluginDatabaseException(
               'database.invalid_spec', '"queries" list is required');

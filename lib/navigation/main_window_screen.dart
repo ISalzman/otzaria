@@ -52,6 +52,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart'
     show buildThemePayload;
+import 'package:otzaria/plugins/services/reader_location_tracker.dart';
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
@@ -70,6 +71,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   late final PageController pageController;
   late final CalendarCubit _calendarCubit;
   late final SettingsScreenController _settingsScreenController;
+  ReaderLocationTracker? _readerLocationTracker;
   Orientation? _previousOrientation;
   int _currentPageIndex = 0;
 
@@ -102,6 +104,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
   SettingsState? _prevSettingsState;
   // עוקב אחר מצב הלוח הקודם לצורך dispatch ספציפי
   CalendarState? _prevCalendarState;
+
+  bool _hasInitializedPageController = false;
 
   static const _navData = [
     (
@@ -168,15 +172,16 @@ class MainWindowScreenState extends State<MainWindowScreen>
     _calendarCubit = CalendarCubit();
     _settingsScreenController = SettingsScreenController();
     _lastScreen = context.read<NavigationBloc>().state.currentScreen;
-    final initialPage = _pageIndexForScreen(
-          context.read<NavigationBloc>().state.currentScreen,
-        ) ??
-        Screen.library.index;
-    _currentPageIndex = initialPage;
-    pageController = PageController(initialPage: initialPage);
 
     // הצגת פופאפ פרסומת אחרי 5 שניות
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // אתחול tracker למעקב אחרי מיקום הקריאה
+      if (mounted) {
+        _readerLocationTracker = ReaderLocationTracker(
+          tabsBloc: context.read<TabsBloc>(),
+        );
+      }
+
       AdPopupDialog.showIfNeeded(context);
 
       // רענון plugin calendar events עם scope אמיתי לאחר שה-context מוכן.
@@ -206,6 +211,20 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     // NOTE: Background sync is now triggered by LibraryBloc listener
     // (see MultiBlocListener) to avoid DB lock contention during library loading.
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // אתחול PageController פעם אחת עם initialPage הנכון
+    if (!_hasInitializedPageController) {
+      _hasInitializedPageController = true;
+      final initialScreen = context.read<NavigationBloc>().state.currentScreen;
+      _currentPageIndex =
+          _pageIndexForScreen(initialScreen) ?? Screen.library.index;
+      pageController = PageController(initialPage: _currentPageIndex);
+    }
   }
 
   /// Trigger FileSyncBloc to start syncing AFTER the library is loaded.
@@ -313,6 +332,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     appWindowListener?.onFullscreenChanged = null;
     _calendarCubit.close();
     _emptyLibraryBloc?.close();
+    _readerLocationTracker?.dispose();
     pageController.dispose();
     super.dispose();
   }

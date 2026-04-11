@@ -126,6 +126,9 @@ const pluginValidPermissions = <String>[
   /// הרשמה לאירועי שינוי ספר נוכחי
   'events.subscribe:reader.current_book_changed',
 
+  /// הרשמה לאירועי שינוי מיקום בקורא
+  'events.subscribe:reader.current_ref_changed',
+
   /// הרשמה לאירועי שינוי ערכת נושא
   'events.subscribe:theme.changed',
 

@@ -277,6 +277,52 @@ void main() {
       expect(response['currentRef'], 'פרק ב');
     });
 
+    test('reader.getCurrentRef returns null ref for pdf tab without title',
+        () async {
+      final currentTab = PdfBookTab(
+        book: PdfBook(title: 'מסילת ישרים', path: '/tmp/mesilat.pdf'),
+        pageNumber: 0,
+      );
+      tabsBloc.currentState = TabsState(tabs: [currentTab], currentTabIndex: 0);
+
+      final response = await adapter.execute('reader', 'getCurrentRef', {})
+          as Map<String, dynamic>;
+
+      expect(response['currentBook'], 'מסילת ישרים');
+      expect(response['currentBookId'], 'מסילת ישרים');
+      expect(response['currentIndex'], 0);
+      expect(response['currentRef'], isNull);
+    });
+
+    test('reader.getCurrentRef returns current reference for active text tab',
+        () async {
+      final currentTab = TextBookTab(
+        book: TextBook(title: 'בראשית'),
+        index: 42,
+      )..currentTitle.value = 'פרק ג';
+      tabsBloc.currentState = TabsState(tabs: [currentTab], currentTabIndex: 0);
+
+      final response = await adapter.execute('reader', 'getCurrentRef', {})
+          as Map<String, dynamic>;
+
+      expect(response['currentBook'], 'בראשית');
+      expect(response['currentBookId'], 'בראשית');
+      expect(response['currentIndex'], 42);
+      expect(response['currentRef'], 'פרק ג');
+    });
+
+    test('reader.getCurrentRef returns null when no tab is active', () async {
+      tabsBloc.currentState = TabsState.initial();
+
+      final response = await adapter.execute('reader', 'getCurrentRef', {})
+          as Map<String, dynamic>;
+
+      expect(response['currentBook'], isNull);
+      expect(response['currentBookId'], isNull);
+      expect(response['currentIndex'], 0);
+      expect(response['currentRef'], isNull);
+    });
+
     test(
         'reader.getSelection returns current text selection for active text tab',
         () async {
