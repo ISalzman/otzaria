@@ -28,7 +28,6 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
@@ -36,6 +35,7 @@ import 'package:otzaria/widgets/app_top_bar.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/adaptive_side_pane.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 
 class PersonalNotesManagerScreen extends StatefulWidget {
   const PersonalNotesManagerScreen({super.key});
@@ -150,12 +150,6 @@ class _PersonalNotesManagerScreenState
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
     );
-  }
-
-  String _formatHebrewDate(DateTime date) {
-    final hebrewCalendar = JewishCalendar.fromDateTime(date);
-    final formatter = HebrewDateFormatter()..hebrewFormat = true;
-    return formatter.format(hebrewCalendar);
   }
 
   @override
@@ -865,7 +859,7 @@ class _PersonalNotesManagerScreenState
   Widget _buildNoteCard(PersonalNote note, bool isMissing) {
     final cs = Theme.of(context).colorScheme;
     final cardColor = AppSurfaces.card(context);
-    final hebrewDate = _formatHebrewDate(note.updatedAt);
+    final hebrewDate = getHebrewDateFormattedAsString(note.updatedAt);
 
     return Card(
       elevation: 0,
