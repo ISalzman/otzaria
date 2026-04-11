@@ -1050,12 +1050,50 @@ Otzaria.on('event.name', (data) => {
 - `plugin.boot` - נורה פעם אחת בטעינת התוסף (ללא הרשאה)
 - `plugin.ready` - נורה אחרי boot (ללא הרשאה)
 - `theme.changed` - שינוי בערכת הצבעים (הרשאה: `events.subscribe:theme.changed`)
-- `navigation.changed` - מעבר בין מסכים ראשיים (הרשאה: `events.subscribe:navigation.changed`)
-- `reader.current_book_changed` - שינוי הספר הפעיל (הרשאה: `events.subscribe:reader.current_book_changed`)
+- `navigation.changed` - מעבר בין מסכים ראשיים בלבד (library ↔ reading ↔ more ↔ settings) (הרשאה: `events.subscribe:navigation.changed`)
+- `reader.current_book_changed` - שינוי הספר/טאב הפעיל בלבד (הרשאה: `events.subscribe:reader.current_book_changed`)
+- `reader.current_ref_changed` - שינוי מיקום הקריאה הנוכחי (דף, פרק, סעיף) - **זה האירוע למעקב אחרי מיקום!** (הרשאה: `events.subscribe:reader.current_ref_changed`)
 - `calendar.date_changed` - שינוי התאריך בלוח השנה (הרשאה: `events.subscribe:calendar.date_changed`)
 - `workspace.changed` - שינוי סביבת העבודה (הרשאה: `events.subscribe:workspace.changed`)
 - `settings.changed` - שינוי הגדרה (הרשאה: `events.subscribe:settings.changed`)
 - `plugin.permissions_changed` - שינוי הרשאות (מחזיר `{ permissions: string[] }` - רשימת כל ההרשאות המאושרות) (הרשאה: `events.subscribe:plugin.permissions_changed`)
+
+### הבדלים חשובים בין אירועי הקורא:
+
+**חשוב להבין את ההבדל:**
+
+- **`navigation.changed`** - נורה רק כאשר המשתמש עובר בין מסכים ראשיים (library → reading, reading → settings וכו'). **לא** נורה כאשר המשתמש מדפדף בתוך ספר.
+
+- **`reader.current_book_changed`** - נורה כאשר הספר או הטאב הפעיל משתנה (פתיחת ספר חדש, החלפת טאב). **לא** נורה כאשר המשתמש גולל או עובר לדף אחר באותו ספר.
+
+- **`reader.current_ref_changed`** - נורה כאשר **מיקום הקריאה הנוכחי משתנה**, כולל:
+  - גלילה לפרק אחר באותו ספר
+  - מעבר לדף אחר ב-PDF
+  - פתיחת ספר חדש (כי גם המיקום השתנה)
+  - החלפת טאב (אם המיקום החדש שונה)
+
+**דוגמה:** אם המשתמש קורא את מסכת ברכות ועובר מדף ג' לדף ד':
+- `navigation.changed` - לא יורה (נשאר במסך reading)
+- `reader.current_book_changed` - לא יורה (נשאר באותו ספר)
+- `reader.current_ref_changed` - **כן יורה** (המיקום השתנה)
+
+**לכן:** אם אתם רוצים לעקוב אחרי המיקום של המשתמש בזמן קריאה, השתמשו ב-`reader.current_ref_changed`!
+
+### דוגמת שימוש ב-`reader.current_ref_changed`:
+
+```javascript
+// מעקב אחרי מיקום הקריאה
+Otzaria.on('reader.current_ref_changed', (location) => {
+  console.log('מיקום חדש:', {
+    book: location.currentBook,
+    index: location.currentIndex,
+    ref: location.currentRef  // למשל: "ברכות, דף ד" או "בראשית פרק ב"
+  });
+  
+  // עדכון UI של התוסף
+  updateFollowDisplay(location);
+});
+```
 
 ---
 
@@ -1185,6 +1223,7 @@ async function scheduleReminder(title, body, dateTime) {
     "database.read",
     "events.subscribe:navigation.changed",
     "events.subscribe:reader.current_book_changed",
+    "events.subscribe:reader.current_ref_changed",
     "events.subscribe:theme.changed",
     "events.subscribe:settings.changed",
     "events.subscribe:calendar.date_changed",

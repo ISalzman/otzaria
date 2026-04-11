@@ -100,7 +100,8 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
   // ===== פרסום נתונים =====
   'published_data.write': PluginPermissionInfo(
     label: 'שיתוף נתונים עם האפליקציה',
-    description: 'פרסום נתונים מהתוסף לחלקים אחרים באפליקציה (כגון אירועי לוח שנה)',
+    description:
+        'פרסום נתונים מהתוסף לחלקים אחרים באפליקציה (כגון אירועי לוח שנה)',
   ),
 
   // ===== רשת =====
@@ -149,6 +150,10 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
   'events.subscribe:reader.current_book_changed': PluginPermissionInfo(
     label: 'אירועי פתיחת ספר',
     description: 'קבלת עדכון בכל פעם שנפתח ספר חדש בקורא',
+  ),
+  'events.subscribe:reader.current_ref_changed': PluginPermissionInfo(
+    label: 'אירועי שינוי מיקום',
+    description: 'קבלת עדכון בכל פעם שמיקום הקריאה משתנה (דף, פרק, סעיף)',
   ),
   'events.subscribe:theme.changed': PluginPermissionInfo(
     label: 'אירועי ערכת נושא',
