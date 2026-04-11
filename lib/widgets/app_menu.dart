@@ -33,6 +33,7 @@ class AppMenuEntry<T> {
 
 class AppContextMenuEntry {
   final String? label;
+  final Widget? labelWidget;
   final IconData? icon;
   final bool enabled;
   final bool isDivider;
@@ -45,6 +46,7 @@ class AppContextMenuEntry {
 
   const AppContextMenuEntry({
     required this.label,
+    this.labelWidget,
     this.icon,
     this.enabled = true,
     this.isDestructive = false,
@@ -55,6 +57,7 @@ class AppContextMenuEntry {
 
   const AppContextMenuEntry.divider()
       : label = null,
+        labelWidget = null,
         icon = null,
         enabled = false,
         isDivider = true,
@@ -276,6 +279,7 @@ Widget _buildAppMenuRowContent(
   BuildContext context,
   AppMenuMetrics metrics, {
   required String label,
+  Widget? labelWidget,
   IconData? icon,
   Widget? trailing,
   bool isSelected = false,
@@ -308,16 +312,23 @@ Widget _buildAppMenuRowContent(
           const SizedBox(width: 8),
         ],
         Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Roboto',
-              fontSize: metrics.fontSize,
-              fontWeight: isSelected ? FontWeight.w600 : metrics.itemFontWeight,
-              color: foregroundColor,
-            ),
-            overflow: TextOverflow.ellipsis,
+          child: Directionality(
             textDirection: TextDirection.rtl,
+            child: DefaultTextStyle.merge(
+              style: TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: metrics.fontSize,
+                fontWeight:
+                    isSelected ? FontWeight.w600 : metrics.itemFontWeight,
+                color: foregroundColor,
+              ),
+              child: labelWidget ??
+                  Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    textDirection: TextDirection.rtl,
+                  ),
+            ),
           ),
         ),
         // סימן ✓ לפריט נבחר (תמיד, בכל סוג תפריט)
@@ -531,16 +542,30 @@ class AppContextMenuRegion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
+    return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onPointerDown: (event) {
-        if (event.buttons == 2) {
-          // Secondary mouse button (right-click)
-          _showContextMenu(context, event.position);
+      onLongPressStart: (details) {
+        if (_supportsLongPressContextMenu) {
+          _showContextMenu(context, details.globalPosition);
         }
       },
-      child: child,
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (event) {
+          if (event.buttons == 2) {
+            _showContextMenu(context, event.position);
+          }
+        },
+        child: child,
+      ),
     );
+  }
+
+  bool get _supportsLongPressContextMenu {
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android || TargetPlatform.iOS => true,
+      _ => false,
+    };
   }
 
   Future<void> _showContextMenu(
@@ -567,7 +592,6 @@ class AppContextMenuRegion extends StatelessWidget {
     List<AppContextMenuEntry> entries,
     AppMenuMetrics metrics,
   ) {
-    // סינון: לא להתחיל/לסיים בהפרד, ולא שני מפרידים רצופים
     final normalized = _normalizeEntries(entries);
     return normalized.map((entry) {
       if (entry.isDivider) {
@@ -611,6 +635,7 @@ class AppContextMenuRegion extends StatelessWidget {
         context,
         metrics,
         label: entry.label ?? '',
+        labelWidget: entry.labelWidget,
         icon: entry.icon,
         trailing: entry.trailing,
         isDestructive: entry.isDestructive,
@@ -623,21 +648,27 @@ class AppContextMenuRegion extends StatelessWidget {
     AppContextMenuEntry entry,
     AppMenuMetrics metrics,
   ) {
-    final subChildren = entry.children!
-        .where((c) => !c.isDivider)
-        .map((child) => MenuItemButton(
-              leadingIcon: child.icon != null
-                  ? Icon(child.icon, size: metrics.iconSize)
-                  : null,
-              trailingIcon: child.trailing,
-              style: buildAppSubmenuItemStyle(context, metrics),
-              onPressed: child.enabled ? child.onTap : null,
-              child: Text(
-                child.label ?? '',
-                textDirection: TextDirection.rtl,
-              ),
-            ))
-        .toList();
+    final normalizedChildren = _normalizeEntries(entry.children!);
+    final hasEnabledChildren = normalizedChildren.any((child) => !child.isDivider);
+    if (!entry.enabled || !hasEnabledChildren) {
+      return PopupMenuItem<_ContextMenuAction>(
+        enabled: false,
+        height: metrics.itemHeight,
+        padding: EdgeInsets.zero,
+        child: _buildAppMenuRowContent(
+          context,
+          metrics,
+          label: entry.label ?? '',
+          labelWidget: entry.labelWidget,
+          icon: entry.icon,
+          trailing: entry.trailing,
+          isDestructive: entry.isDestructive,
+        ),
+      );
+    }
+
+    final subChildren =
+        _buildSubmenuChildren(context, normalizedChildren, metrics);
 
     return buildAppCustomPopupMenuItem<_ContextMenuAction>(
       context: context,
@@ -647,17 +678,106 @@ class AppContextMenuRegion extends StatelessWidget {
         menuChildren: subChildren,
         style: buildAppSubmenuItemStyle(context, metrics),
         menuStyle: const MenuStyle(
-          // פתיחה בצד — לא מעל התפריט הראשי
           alignment: AlignmentDirectional(-1.0, -1.0),
         ),
         child: _buildAppMenuRowContent(
           context,
           metrics,
           label: entry.label ?? '',
+          labelWidget: entry.labelWidget,
           icon: entry.icon,
+          trailing: entry.trailing,
+          isDestructive: entry.isDestructive,
         ),
       ),
     );
+  }
+
+  List<Widget> _buildSubmenuChildren(
+    BuildContext context,
+    List<AppContextMenuEntry> entries,
+    AppMenuMetrics metrics,
+  ) {
+    return entries.map((entry) {
+      if (entry.isDivider) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 4),
+          child: Divider(height: 1),
+        );
+      }
+
+      if (entry.children != null && entry.children!.isNotEmpty) {
+        final normalizedChildren = _normalizeEntries(entry.children!);
+        final hasEnabledChildren =
+            normalizedChildren.any((child) => !child.isDivider);
+        if (!entry.enabled || !hasEnabledChildren) {
+          return MenuItemButton(
+            leadingIcon: entry.icon != null
+                ? Icon(entry.icon, size: metrics.iconSize)
+                : null,
+            trailingIcon: entry.trailing,
+            style: buildAppSubmenuItemStyle(context, metrics),
+            onPressed: null,
+            child: Text(
+              entry.label ?? '',
+              textDirection: TextDirection.rtl,
+            ),
+          );
+        }
+
+        return SubmenuButton(
+          leadingIcon: entry.icon != null
+              ? Icon(entry.icon, size: metrics.iconSize)
+              : null,
+          trailingIcon: entry.trailing,
+          style: buildAppSubmenuItemStyle(context, metrics),
+          menuStyle: const MenuStyle(
+            alignment: AlignmentDirectional(-1.0, -1.0),
+          ),
+          menuChildren:
+              _buildSubmenuChildren(context, normalizedChildren, metrics),
+          child: DefaultTextStyle.merge(
+            style: TextStyle(
+              fontFamily: 'Roboto',
+              fontSize: metrics.fontSize,
+              fontWeight: metrics.itemFontWeight,
+            ),
+            child: Directionality(
+              textDirection: TextDirection.rtl,
+              child: entry.labelWidget ??
+                  Text(
+                    entry.label ?? '',
+                    textDirection: TextDirection.rtl,
+                  ),
+            ),
+          ),
+        );
+      }
+
+      return MenuItemButton(
+        leadingIcon: entry.icon != null
+            ? Icon(entry.icon, size: metrics.iconSize)
+            : null,
+        trailingIcon: entry.trailing,
+        style: buildAppSubmenuItemStyle(context, metrics),
+        onPressed: entry.enabled ? entry.onTap : null,
+        child: DefaultTextStyle.merge(
+          style: TextStyle(
+            fontFamily: 'Roboto',
+            fontSize: metrics.fontSize,
+            fontWeight: metrics.itemFontWeight,
+          ),
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: entry.labelWidget ??
+                Text(
+                  entry.label ?? '',
+                  textDirection: TextDirection.rtl,
+                ),
+          ),
+        ),
+      );
+    }).toList();
   }
 }
 

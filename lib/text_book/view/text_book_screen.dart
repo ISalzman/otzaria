@@ -47,6 +47,7 @@ import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provide
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/models/book_model.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/widgets/app_menu.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
@@ -1578,88 +1579,60 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             child: Icon(_getViewModeIcon(state)),
           );
 
-    return PopupMenuButton<String>(
+    final isSplit = !state.showPageShapeView && state.showSplitView;
+    final isBelow = !state.showPageShapeView && !state.showSplitView;
+    final isPage = state.showPageShapeView;
+
+    return AppPopupMenuButton<String>(
       key: key,
       tooltip: 'בחר סוג תצוגת מפרשים',
       icon: iconWidget,
       enabled: !widget.isInCombinedView,
-      position: PopupMenuPosition.under,
+      initialValue: state.showPageShapeView
+          ? _viewModePage
+          : (state.showSplitView ? _viewModeSplit : _viewModeBelow),
       onSelected: (value) async {
         final bloc = context.read<TextBookBloc>();
 
         // קביעת מצב היעד לפי הבחירה
-        final bool isPage = value == _viewModePage;
-        final bool isSplit = value == _viewModeSplit;
+        final bool isPageSelected = value == _viewModePage;
+        final bool isSplitSelected = value == _viewModeSplit;
 
         // עדכון תצוגת צורת הדף במידת הצורך
-        if (isPage != state.showPageShapeView) {
-          bloc.add(TogglePageShapeView(isPage));
+        if (isPageSelected != state.showPageShapeView) {
+          bloc.add(TogglePageShapeView(isPageSelected));
         }
 
         // עדכון תצוגת המפרשים במידת הצורך (רק במצבים שאינם 'צורת הדף')
-        if (!isPage && isSplit != state.showSplitView) {
-          bloc.add(ToggleSplitView(isSplit));
+        if (!isPageSelected && isSplitSelected != state.showSplitView) {
+          bloc.add(ToggleSplitView(isSplitSelected));
           await _savePerBookSettingsDirectly(context, state,
-              showSplitView: isSplit);
+              showSplitView: isSplitSelected);
         }
       },
-      itemBuilder: (context) {
-        final primaryColor = Theme.of(context).colorScheme.primary;
-        final isSplit = !state.showPageShapeView && state.showSplitView;
-        final isBelow = !state.showPageShapeView && !state.showSplitView;
-        final isPage = state.showPageShapeView;
-
-        PopupMenuItem<String> buildItem({
-          required String value,
-          required String text,
-          required Widget icon,
-          required bool isSelected,
-        }) {
-          final style = isSelected ? TextStyle(color: primaryColor) : null;
-          return PopupMenuItem<String>(
-            value: value,
-            child: Row(
-              children: [
-                icon,
-                const SizedBox(width: 12),
-                Text(text, style: style),
-                if (isSelected) ...[
-                  const Spacer(),
-                  Icon(FluentIcons.checkmark_24_regular,
-                      size: 16, color: primaryColor),
-                ],
-              ],
-            ),
-          );
-        }
-
-        return [
-          buildItem(
-            value: _viewModeSplit,
-            text: 'מפרשים בצד',
-            icon: Icon(FluentIcons.panel_left_24_regular,
-                color: isSplit ? primaryColor : null),
-            isSelected: isSplit,
-          ),
-          buildItem(
-            value: _viewModeBelow,
-            text: 'מפרשים מתחת',
-            icon: RotatedBox(
-              quarterTurns: 3,
-              child: Icon(FluentIcons.panel_left_24_regular,
-                  color: isBelow ? primaryColor : null),
-            ),
-            isSelected: isBelow,
-          ),
-          buildItem(
-            value: _viewModePage,
-            text: 'צורת הדף',
-            icon: Icon(FluentIcons.book_open_24_regular,
-                color: isPage ? primaryColor : null),
-            isSelected: isPage,
-          ),
-        ];
-      },
+      entries: [
+        AppMenuEntry(
+          value: _viewModeSplit,
+          label: 'מפרשים בצד',
+          icon: isSplit
+              ? FluentIcons.panel_left_24_filled
+              : FluentIcons.panel_left_24_regular,
+        ),
+        AppMenuEntry(
+          value: _viewModeBelow,
+          label: 'מפרשים מתחת',
+          icon: isBelow
+              ? FluentIcons.panel_left_24_filled
+              : FluentIcons.panel_left_24_regular,
+        ),
+        AppMenuEntry(
+          value: _viewModePage,
+          label: 'צורת הדף',
+          icon: isPage
+              ? FluentIcons.book_open_24_filled
+              : FluentIcons.book_open_24_regular,
+        ),
+      ],
     );
   }
 
