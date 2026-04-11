@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
@@ -136,9 +136,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
       selectedText: selectedText?.trim(),
     ));
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('ההערה נשמרה בהצלחה')),
-    );
+    UiSnack.showSuccess('ההערה נשמרה בהצלחה');
   }
 
   @override
@@ -481,9 +479,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
     if (uri.scheme != 'otzaria') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('קישור חיצוני: $url')),
-      );
+      UiSnack.show('קישור חיצוני: $url');
       return;
     }
 
@@ -496,9 +492,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
           widget.onNavigateToLine(line);
           return;
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('קישור לספר אחר: $bookId')),
-        );
+        UiSnack.show('קישור לספר אחר: $bookId');
         return;
       case 'note':
         final noteId = uri.queryParameters['id'];
@@ -587,7 +581,6 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
 
   void _reanchorToSelectedLineWith(
     PersonalNotesBloc bloc,
-    ScaffoldMessengerState messenger,
     PersonalNote note,
     int selectedLineNumber,
   ) {
@@ -598,9 +591,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
         lineNumber: selectedLineNumber,
       ),
     );
-    messenger.showSnackBar(
-      SnackBar(content: Text('ההערה שויכה לשורה $selectedLineNumber')),
-    );
+    UiSnack.show('ההערה שויכה לשורה $selectedLineNumber');
   }
 
   Future<void> _reanchorNote(
@@ -609,7 +600,6 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
     int? selectedLineNumber,
   ) async {
     final bloc = context.read<PersonalNotesBloc>();
-    final messenger = ScaffoldMessenger.of(context);
     if (selectedLineNumber != null) {
       final choice = await showSelectionDialog<String>(
         context: context,
@@ -629,7 +619,6 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
       if (choice == 'selected') {
         _reanchorToSelectedLineWith(
           bloc,
-          messenger,
           note,
           selectedLineNumber,
         );
@@ -654,12 +643,10 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar> {
 
     final newLine = result != null ? int.tryParse(result) : null;
     if (newLine != null) {
-      bloc.add(
-        RepositionPersonalNote(
-          bookId: widget.bookId,
-          noteId: note.id,
-          lineNumber: newLine,
-        ),
+      _reanchorToSelectedLineWith(
+        bloc,
+        note,
+        newLine,
       );
     }
   }

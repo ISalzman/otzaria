@@ -91,14 +91,12 @@ class HistoryView extends StatelessWidget {
               searchTab.spacingValues.clear();
               searchTab.spacingValues.addAll(item.spacingValues ?? {});
 
-              // Restore search scope facets if present
               if (item.searchScopeFacets != null &&
                   item.searchScopeFacets!.isNotEmpty) {
                 searchTab.searchBloc
                     .add(SetFacetsWithoutSearch(item.searchScopeFacets!));
               }
 
-              // Trigger search
               searchTab
                   .updateTitleFromAppliedQuery(searchTab.queryController.text);
               searchTab.searchBloc.add(UpdateSearchQuery(
@@ -149,7 +147,9 @@ class HistoryView extends StatelessWidget {
                   : allNames.join(', ');
               parts.add('חיפוש בקטגוריות: $displayed');
             }
-            if (item.workspaceName != null) parts.add(item.workspaceName!);
+            if (item.workspaceName != null) {
+              parts.add(item.workspaceName!);
+            }
             return parts.isEmpty ? null : parts.join(' | ');
           },
           subtitleTooltipBuilder: (item) {
@@ -163,9 +163,9 @@ class HistoryView extends StatelessWidget {
   }
 
   static List<String> _facetDisplayNames(List<String> facets) {
-    return facets.map((f) {
-      final segments = f.split('/').where((s) => s.isNotEmpty).toList();
-      return segments.isNotEmpty ? segments.last : f;
+    return facets.map((facet) {
+      final segments = facet.split('/').where((segment) => segment.isNotEmpty);
+      return segments.isNotEmpty ? segments.last : facet;
     }).toList();
   }
 }
