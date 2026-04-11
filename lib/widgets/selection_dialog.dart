@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/mixins/dialog_navigation_mixin.dart';
+import 'package:otzaria/widgets/otzaria_search_field.dart';
+import 'package:otzaria/widgets/tool_empty_state.dart';
 
 /// דיאלוג בחירה עם חיפוש
 class SelectionDialog<T> extends StatefulWidget {
@@ -21,19 +24,23 @@ class SelectionDialog<T> extends StatefulWidget {
   State<SelectionDialog<T>> createState() => _SelectionDialogState<T>();
 }
 
-class _SelectionDialogState<T> extends State<SelectionDialog<T>> {
+class _SelectionDialogState<T> extends State<SelectionDialog<T>>
+    with DialogNavigationMixin {
   late List<SelectionItem<T>> filteredItems;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
+    focusedButtonIndex = 0;
     filteredItems = widget.items;
     _searchController.addListener(_filterItems);
   }
 
   @override
   void dispose() {
+    _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -48,54 +55,76 @@ class _SelectionDialogState<T> extends State<SelectionDialog<T>> {
     });
   }
 
+  void _handleConfirm() {
+    if (_searchFocusNode.hasFocus) {
+      return;
+    }
+
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SizedBox(
-        width: 300,
-        height: 400,
-        child: Column(
-          children: [
-            RtlTextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: widget.searchHint,
-                prefixIcon: const Icon(FluentIcons.search_24_regular),
-                border: const OutlineInputBorder(),
+    return buildKeyboardNavigator(
+      onConfirm: _handleConfirm,
+      onCancel: () => Navigator.of(context).pop(),
+      textFieldFocusNode: _searchFocusNode,
+      child: AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+        title: Text(
+          widget.title,
+          textDirection: TextDirection.rtl,
+        ),
+        content: SizedBox(
+          width: 300,
+          height: 400,
+          child: Column(
+            children: [
+              OtzariaSearchField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                hintText: widget.searchHint,
+                autofocus: true,
               ),
-              autofocus: true,
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                itemCount: filteredItems.length,
-                itemBuilder: (context, index) {
-                  final item = filteredItems[index];
-                  final isSelected = item.value == widget.initialValue;
+              const SizedBox(height: 8),
+              Expanded(
+                child: filteredItems.isEmpty
+                    ? const ToolEmptyState(
+                        icon: FluentIcons.search_24_regular,
+                        message: 'לא נמצאו תוצאות',
+                      )
+                    : ListView.builder(
+                        itemCount: filteredItems.length,
+                        itemBuilder: (context, index) {
+                          final item = filteredItems[index];
+                          final isSelected = item.value == widget.initialValue;
 
-                  return ListTile(
-                    title: Text(item.label),
-                    selected: isSelected,
-                    trailing: isSelected
-                        ? const Icon(FluentIcons.checkmark_24_regular)
-                        : null,
-                    onTap: () {
-                      Navigator.of(context).pop(item.value);
-                    },
-                  );
-                },
+                          return ListTile(
+                            title: Text(
+                              item.label,
+                              textDirection: TextDirection.rtl,
+                            ),
+                            selected: isSelected,
+                            trailing: isSelected
+                                ? const Icon(FluentIcons.checkmark_24_regular)
+                                : null,
+                            onTap: () {
+                              Navigator.of(context).pop(item.value);
+                            },
+                          );
+                        },
+                      ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+        actions: [
+          NeutralActionButton(
+            text: 'ביטול',
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('ביטול'),
-        ),
-      ],
     );
   }
 }

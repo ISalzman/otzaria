@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:otzaria/widgets/otzaria_search_field.dart';
 
 class SearchPaneBase extends StatefulWidget {
   const SearchPaneBase({
@@ -17,6 +17,7 @@ class SearchPaneBase extends StatefulWidget {
     this.hintText,
     this.onAdvancedSearch,
     this.additionalActions,
+    this.collapsibleOnScroll = false,
     super.key,
   });
 
@@ -32,6 +33,7 @@ class SearchPaneBase extends StatefulWidget {
   final String? hintText;
   final VoidCallback? onAdvancedSearch;
   final List<Widget>? additionalActions;
+  final bool collapsibleOnScroll;
 
   @override
   State<SearchPaneBase> createState() => _SearchPaneBaseState();
@@ -39,6 +41,7 @@ class SearchPaneBase extends StatefulWidget {
 
 class _SearchPaneBaseState extends State<SearchPaneBase> {
   Timer? _debounceTimer;
+  bool _isCompact = false;
 
   void _debounce(VoidCallback action) {
     _debounceTimer?.cancel();
@@ -54,71 +57,91 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
     super.dispose();
   }
 
+  bool _onScrollNotification(ScrollNotification notification) {
+    if (!widget.collapsibleOnScroll) return false;
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      final offset = notification.metrics.pixels;
+
+      if (delta > 4 && !_isCompact) {
+        setState(() => _isCompact = true);
+      } else if ((delta < -4 || offset <= 0) && _isCompact) {
+        setState(() => _isCompact = false);
+      }
+    }
+
+    if (notification is UserScrollNotification &&
+        _isCompact &&
+        widget.focusNode.hasFocus) {
+      setState(() => _isCompact = false);
+    }
+
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final searchField = Padding(
+      key: const ValueKey('searchField'),
+      padding: const EdgeInsets.all(8.0),
+      child: OtzariaSearchField(
+        controller: widget.searchController,
+        focusNode: widget.focusNode,
+        autofocus: true,
+        hintText: widget.hintText ?? '',
+        onChanged: (value) =>
+            _debounce(() => widget.onSearchTextChanged?.call(value)),
+        onSubmitted: (_) => widget.focusNode.requestFocus(),
+        onClear: () {
+          widget.onSearchTextChanged?.call('');
+          widget.resetSearchCallback();
+          widget.focusNode.requestFocus();
+        },
+        isCompact: _isCompact,
+        onExpand: () => setState(() => _isCompact = false),
+        leading: const Icon(FluentIcons.search_24_regular),
+        trailingActions: [
+          if (widget.additionalActions != null) ...widget.additionalActions!,
+          if (widget.onAdvancedSearch != null)
+            OtzariaSearchAction.settings(onPressed: widget.onAdvancedSearch!),
+        ],
+      ),
+    );
+
+    final resultsArea = NotificationListener<ScrollNotification>(
+      onNotification: _onScrollNotification,
+      child: widget.isNoResults
+          ? const Center(
+              child: Text(
+                'אין תוצאות',
+                textDirection: TextDirection.rtl,
+              ),
+            )
+          : widget.resultsWidget,
+    );
+
+    final shouldShowToolbarRow = widget.resultToolbar != null ||
+        (!_isCompact && widget.resultCountString != null);
+
     return Column(
       children: [
         if (widget.progressWidget != null) widget.progressWidget!,
-        Padding(
-          key: const ValueKey('searchField'),
-          padding: const EdgeInsets.all(8.0),
-          child: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: widget.searchController,
-            builder: (context, value, _) {
-              return RtlTextField(
-                autofocus: true,
-                focusNode: widget.focusNode,
-                controller: widget.searchController,
-                textAlign: TextAlign.right,
-                onChanged: (value) =>
-                    _debounce(() => widget.onSearchTextChanged?.call(value)),
-                onSubmitted: (_) {
-                  widget.focusNode.requestFocus();
-                },
-                decoration: InputDecoration(
-                  hintText: widget.hintText,
-                  prefixIcon: const Icon(FluentIcons.search_24_regular),
-                  suffixIcon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.additionalActions != null)
-                        ...widget.additionalActions!,
-                      if (widget.onAdvancedSearch != null)
-                        IconButton(
-                          icon: const Icon(FluentIcons.settings_24_regular),
-                          tooltip: 'חיפוש מתקדם',
-                          onPressed: widget.onAdvancedSearch,
-                        ),
-                      if (value.text.isNotEmpty)
-                        IconButton(
-                          tooltip: 'נקה',
-                          onPressed: () {
-                            widget.searchController.clear();
-                            widget.onSearchTextChanged?.call('');
-                            widget.resetSearchCallback();
-                            widget.focusNode.requestFocus();
-                          },
-                          icon: const Icon(FluentIcons.dismiss_24_regular),
-                        ),
-                    ],
-                  ),
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                ),
-                textInputAction: TextInputAction.search,
-              );
-            },
-          ),
+        AnimatedAlign(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          alignment: _isCompact
+              ? AlignmentDirectional.centerEnd
+              : AlignmentDirectional.center,
+          child: searchField,
         ),
-        if (widget.resultToolbar != null || widget.resultCountString != null)
+        if (shouldShowToolbarRow)
           Padding(
             padding:
                 const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16.0),
             child: Row(
               children: [
-                if (widget.resultCountString != null)
+                if (!_isCompact && widget.resultCountString != null)
                   Expanded(
                     child: Align(
                       alignment: AlignmentDirectional.centerStart,
@@ -126,9 +149,9 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
                         widget.resultCountString!,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Theme.of(context).textTheme.bodySmall?.color ??
-                              Colors.grey[700],
+                          color: Theme.of(context).textTheme.bodySmall?.color,
                         ),
+                        textDirection: TextDirection.rtl,
                       ),
                     ),
                   )
@@ -142,9 +165,7 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
         Expanded(
           child: Material(
             color: Colors.transparent,
-            child: widget.isNoResults
-                ? const Center(child: Text('אין תוצאות'))
-                : widget.resultsWidget,
+            child: resultsArea,
           ),
         ),
       ],
