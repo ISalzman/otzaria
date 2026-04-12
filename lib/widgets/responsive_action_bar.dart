@@ -27,6 +27,9 @@ class ResponsiveActionBar extends StatefulWidget {
   /// האם כפתור "..." יהיה בצד ימין (ברירת מחדל: false - שמאל)
   final bool overflowOnRight;
 
+  /// היסט מיקום לתפריט ה-"..." ביחס לכפתור.
+  final Offset overflowMenuOffset;
+
   const ResponsiveActionBar({
     super.key,
     required this.actions,
@@ -34,6 +37,7 @@ class ResponsiveActionBar extends StatefulWidget {
     this.originalOrder,
     required this.maxVisibleButtons,
     this.overflowOnRight = false,
+    this.overflowMenuOffset = const Offset(0, 4),
   }) : assert(
           alwaysInMenu != null || originalOrder != null,
           'Either alwaysInMenu or originalOrder must be provided',
@@ -195,6 +199,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
           icon: const Icon(FluentIcons.more_vertical_24_regular),
           tooltip: 'עוד פעולות',
           position: PopupMenuPosition.under,
+          offset: widget.overflowMenuOffset,
           onSelected: (action) {
             action.onPressed?.call();
           },
