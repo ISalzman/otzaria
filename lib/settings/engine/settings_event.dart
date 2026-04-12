@@ -344,6 +344,15 @@ class UpdatePersonalNotesCollapsedByDefault extends SettingsEvent {
   List<Object?> get props => [collapsedByDefault];
 }
 
+class UpdateCompactMenuMode extends SettingsEvent {
+  final bool compactMenuMode;
+
+  const UpdateCompactMenuMode(this.compactMenuMode);
+
+  @override
+  List<Object?> get props => [compactMenuMode];
+}
+
 class UpdateProtectedModeEnabled extends SettingsEvent {
   final bool enabled;
 

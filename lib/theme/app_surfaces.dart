@@ -7,6 +7,18 @@ import 'package:flutter/material.dart';
 class AppSurfaces {
   AppSurfaces._();
 
+  /// צבע ברירת המחדל לכרטיסי תוכן באפליקציה.
+  ///
+  /// תואם לכרטיסי הגדרות ולכרטיסי תוצאות בכלים:
+  /// - מצב כהה: [ColorScheme.surfaceContainer]
+  /// - מצב בהיר: [ColorScheme.surface]
+  static Color card(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.brightness == Brightness.dark
+        ? theme.colorScheme.surfaceContainer
+        : theme.colorScheme.surface;
+  }
+
   /// רקע מסכי לוח — הגדרות, ספריה, כלים וכל מסך משני
   ///
   /// מחזיר:
@@ -26,5 +38,13 @@ class AppSurfaces {
     return isDark
         ? Colors.black
         : cs.surfaceContainerHighest.withValues(alpha: 0.28);
+  }
+
+  /// גרסה אטומה של רקע מסכי הלוח לשימוש בתוך חלוניות/כרטיסים
+  /// כך שצבע המסגרת או הרקע שמתחת לא ישפיעו על גוון התוכן.
+  static Color solidPanelBackground(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = panelBackground(context);
+    return Color.alphaBlend(color, theme.colorScheme.surface);
   }
 }

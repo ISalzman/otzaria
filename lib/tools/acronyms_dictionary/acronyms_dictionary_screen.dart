@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
+import 'package:otzaria/tools/acronyms_dictionary/widgets/acronym_result_card.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
+import 'package:otzaria/widgets/app_top_bar.dart';
+import 'package:otzaria/widgets/otzaria_search_field.dart';
+import 'package:otzaria/widgets/tool_empty_state.dart';
+import 'package:otzaria/widgets/tool_ui_helpers.dart';
 
 class AcronymsDictionaryScreen extends StatefulWidget {
   const AcronymsDictionaryScreen({super.key});
@@ -14,6 +23,7 @@ class AcronymsDictionaryScreen extends StatefulWidget {
 
 class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   final DictionaryLookupRepository _dictionaryRepository =
       DictionaryLookupRepository.instance;
   Map<String, List<String>> _dictionaryData = {};
@@ -24,12 +34,19 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
   void initState() {
     super.initState();
     _loadDictionary();
-    _searchController.addListener(_performSearch);
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _searchFocusNode.requestFocus());
+  }
+
+  void requestKeyboardFocus() {
+    if (!mounted || !_searchFocusNode.canRequestFocus) return;
+    _searchFocusNode.requestFocus();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -53,8 +70,8 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
     }
   }
 
-  void _performSearch() {
-    final query = _searchController.text.trim();
+  void _performSearch(String query) {
+    query = query.trim();
 
     if (query.isEmpty) {
       setState(() {
@@ -82,43 +99,37 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Column(
-      children: [
-        _buildSearchBar(),
-        Expanded(child: _buildResultsList()),
-      ],
+    final searchShortcutSetting = context.select(
+      (SettingsBloc bloc) =>
+          bloc.state.shortcuts['key-shortcut-search-current-window'] ??
+          ShortcutValidator
+              .defaultShortcuts['key-shortcut-search-current-window'] ??
+          'ctrl+f',
     );
-  }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8.0, 16.0, 8.0, 8.0),
-      child: Row(
+    return CallbackShortcuts(
+      bindings: {
+        ShortcutHelper.activatorFromShortcut(searchShortcutSetting) ??
+            const SingleActivator(LogicalKeyboardKey.keyF,
+                control: true): () {
+          _searchFocusNode.requestFocus();
+        },
+      },
+      child: Column(
         children: [
-          const SizedBox(width: 8),
-          Expanded(
-            child: RtlTextField(
+          AppTopBar(
+            center: OtzariaSearchField(
               controller: _searchController,
-              textAlign: TextAlign.right,
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                hintText: 'חפש ראשי תיבות...',
-                labelText: 'הזן ראשי תיבות או פירוש',
-                prefixIcon: Icon(
-                  FluentIcons.search_24_regular,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        tooltip: 'נקה',
-                        icon: const Icon(FluentIcons.dismiss_24_regular),
-                        onPressed: () {
-                          _searchController.clear();
-                        },
-                      )
-                    : null,
-              ),
-              textInputAction: TextInputAction.search,
+              focusNode: _searchFocusNode,
+              hintText: 'חפש ראשי תיבות...',
+              autofocus: true,
+              onChanged: _performSearch,
+              onClear: () => setState(() => _filteredResults = []),
+            ),
+          ),
+          Expanded(
+            child: ToolPanelWrapper(
+              child: _buildResultsList(),
             ),
           ),
         ],
@@ -128,60 +139,16 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
 
   Widget _buildResultsList() {
     if (_searchController.text.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.text_quote_24_regular,
-              size: 64,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'הזן ראשי תיבות לחיפוש במילון',
-              style: TextStyle(
-                fontSize: 18,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
-              ),
-            ),
-          ],
-        ),
+      return const ToolEmptyState(
+        icon: FluentIcons.text_quote_24_regular,
+        message: 'הזן ראשי תיבות לחיפוש במילון',
       );
     }
 
     if (_filteredResults.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.search_24_regular,
-              size: 64,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'לא נמצאו תוצאות',
-              style: TextStyle(
-                fontSize: 18,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
-              ),
-            ),
-          ],
-        ),
+      return const ToolEmptyState(
+        icon: FluentIcons.search_24_regular,
+        message: 'לא נמצאו תוצאות',
       );
     }
 
@@ -189,91 +156,12 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
       padding: const EdgeInsets.all(16),
       itemCount: _filteredResults.length,
       itemBuilder: (context, index) {
-        return _buildResultCard(_filteredResults[index]);
+        final entry = _filteredResults[index];
+        return AcronymResultCard(
+          acronym: entry.key,
+          meanings: entry.value,
+        );
       },
-    );
-  }
-
-  Widget _buildResultCard(MapEntry<String, List<String>> entry) {
-    final acronym = entry.key;
-    final meanings = entry.value;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-          width: 1,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'ראשי תיבות:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    acronym,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.right,
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Icon(
-                FluentIcons.arrow_right_24_regular,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'פירוש:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  ...meanings.asMap().entries.map((meaningEntry) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        meanings.length > 1
-                            ? '${meaningEntry.key + 1}. ${meaningEntry.value}'
-                            : meaningEntry.value,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.right,
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

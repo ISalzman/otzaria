@@ -73,9 +73,8 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
       if (text.trim().isEmpty) return null;
 
       final formattedQuery = _buildFormattedQuery(searchingTab);
-
-        final scopeFacets = searchingTab.searchBloc.state.searchScopeFacets;
-        final nonRootScopeFacets =
+      final scopeFacets = searchingTab.searchBloc.state.searchScopeFacets;
+      final nonRootScopeFacets =
           scopeFacets.where((facet) => facet != '/').toList();
 
       return Bookmark(

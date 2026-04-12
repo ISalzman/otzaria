@@ -9,7 +9,7 @@ import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
-import 'package:otzaria/tools/shamor_zachor/utils/message_utils.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 enum CalendarType { hebrew, gregorian, combined }
@@ -271,6 +271,7 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   Future<void> _initializeCalendar() async {
     final settings = await _settingsRepository.loadSettings();
+    if (isClosed) return;
     final calendarTypeString = settings['calendarType'] as String;
     final calendarType = _stringToCalendarType(calendarTypeString);
     final selectedCity = settings['selectedCity'] as String;
@@ -312,6 +313,7 @@ class CalendarCubit extends Cubit<CalendarState> {
       events = [];
     }
 
+    if (isClosed) return;
     emit(state.copyWith(
       calendarType: calendarType,
       selectedCity: selectedCity,
@@ -329,10 +331,14 @@ class CalendarCubit extends Cubit<CalendarState> {
           ? DateTime.fromMillisecondsSinceEpoch(googleCalendarLastSyncRaw)
           : null,
     ));
+    if (isClosed) return;
     _updateTimesForDate(state.selectedGregorianDate, selectedCity);
     await _rescheduleNotifications();
+    if (isClosed) return;
     await _rescheduleZmanAlerts();
+    if (isClosed) return;
     await _refreshGoogleConnectionStatus();
+    if (isClosed) return;
     if (googleCalendarEnabled) {
       await syncGoogleCalendar(interactive: false);
     }
@@ -396,7 +402,6 @@ class CalendarCubit extends Cubit<CalendarState> {
 
     if (!hasPermission) {
       String message;
-      String actionLabel = 'הבנתי';
 
       if (Platform.isMacOS) {
         message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
@@ -410,13 +415,7 @@ class CalendarCubit extends Cubit<CalendarState> {
             'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות';
       }
 
-      UiSnack.showWithAction(
-        message: message,
-        actionLabel: actionLabel,
-        onAction: () {},
-        backgroundColor: Colors.orange,
-        duration: const Duration(seconds: 10),
-      );
+      UiSnack.showWarning(message, duration: const Duration(seconds: 10));
       return;
     }
 
@@ -1458,16 +1457,9 @@ class CalendarCubit extends Cubit<CalendarState> {
         await _settingsRepository.updateCalendarNotificationsEnabled(false);
 
         // הצג הודעת שגיאה למשתמש עם הוראות מפורטות
-        UiSnack.showWithAction(
-          message: 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
-              'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
-          actionLabel: 'הבנתי',
-          onAction: () {
-            // אפשר להוסיף כאן פתיחת הגדרות האפליקציה בעתיד
-          },
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 8),
-        );
+        UiSnack.showWarning('לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+            'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
+            duration: const Duration(seconds: 8));
         return;
       }
     }

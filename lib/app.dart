@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:otzaria/theme/app_colors.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -31,13 +31,11 @@ class App extends StatelessWidget {
         brightness: brightness,
         dynamicSchemeVariant: DynamicSchemeVariant.monochrome,
       );
-    } else {
-      // For colored seeds, use default behavior
-      return ColorScheme.fromSeed(
-        seedColor: seedColor,
-        brightness: brightness,
-      );
     }
+    return ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: brightness,
+    );
   }
 
   @override
@@ -62,67 +60,10 @@ class App extends StatelessWidget {
           ],
           locale: const Locale("he", "IL"),
           title: 'אוצריא',
-          theme: ThemeData(
-            visualDensity: VisualDensity.adaptivePlatformDensity,
-            fontFamily: 'Roboto',
-            colorScheme: lightColorScheme,
-            textTheme: const TextTheme(
-              bodyMedium: TextStyle(fontSize: 18.0, fontFamily: 'candara'),
-            ),
-          ).copyWith(
-            dialogTheme: DialogThemeData(
-              barrierColor: AppColors.dialogBarrier,
-              backgroundColor: lightColorScheme.surface,
-            ),
-          ),
-          darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
-            scaffoldBackgroundColor: AppColors.darkScaffold,
-            canvasColor: AppColors.darkScaffold,
-            cardColor: AppColors.darkCard,
-            colorScheme: ColorScheme.dark(
-              surface: AppColors.darkScaffold,
-              surfaceContainer: AppColors.darkCard,
-              onSurface: AppColors.darkOnSurface,
-              primary: state.darkSeedColor,
-              onPrimary: Colors.white,
-              secondary: state.darkSeedColor.withValues(alpha: 0.7),
-              onSecondary: Colors.white,
-              outline: AppColors.darkOutline,
-            ),
-            textTheme: ThemeData.dark()
-                .textTheme
-                .apply(
-                  fontFamily: 'Roboto',
-                  bodyColor: AppColors.darkOnSurface,
-                  displayColor: AppColors.darkOnSurface,
-                )
-                .copyWith(
-                  bodyMedium: const TextStyle(
-                    fontSize: 18.0,
-                    fontFamily: 'candara',
-                    color: AppColors.darkOnSurface,
-                  ),
-                ),
-            cardTheme: CardThemeData(
-              color: AppColors.darkCard,
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(
-                  color: AppColors.darkOutline,
-                  width: 1,
-                ),
-              ),
-            ),
-            appBarTheme: const AppBarTheme(
-              backgroundColor: AppColors.darkAppBar,
-              foregroundColor: AppColors.darkOnSurface,
-            ),
-            dialogTheme: const DialogThemeData(
-              barrierColor: AppColors.dialogBarrier,
-              backgroundColor: AppColors.darkAppBar,
-            ),
-          ),
+          theme: AppThemeData.light(lightColorScheme,
+              compactMenuMode: state.compactMenuMode),
+          darkTheme: AppThemeData.dark(state.darkSeedColor,
+              compactMenuMode: state.compactMenuMode),
           themeMode: state.followSystemTheme
               ? ThemeMode.system
               : (state.isDarkMode ? ThemeMode.dark : ThemeMode.light),

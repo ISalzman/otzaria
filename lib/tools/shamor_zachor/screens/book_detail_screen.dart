@@ -13,6 +13,9 @@ import '../widgets/hebrew_utils.dart';
 import '../widgets/completion_animation_overlay.dart';
 import '../widgets/error_boundary.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
+import 'package:otzaria/widgets/tool_empty_state.dart';
 
 /// Screen for displaying and managing progress for a specific book
 class BookDetailScreen extends StatefulWidget {
@@ -97,25 +100,12 @@ class _BookDetailScreenState extends State<BookDetailScreen>
   }
 
   Future<bool> _showWarningDialog() async {
-    final result = await showDialog<bool>(
+    final result = await showWarningDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("אזהרה"),
-          content:
-              const Text("פעולה זו תשנה את כל הסימונים בעמודה זו. האם להמשיך?"),
-          actions: <Widget>[
-            TextButton(
-              child: const Text("לא"),
-              onPressed: () => Navigator.of(context).pop(false),
-            ),
-            TextButton(
-              child: const Text("כן"),
-              onPressed: () => Navigator.of(context).pop(true),
-            ),
-          ],
-        );
-      },
+      title: 'אזהרה',
+      content: 'פעולה זו תשנה את כל הסימונים בעמודה זו. האם להמשיך?',
+      cancelText: 'לא',
+      confirmText: 'כן',
     );
     return result ?? false;
   }
@@ -167,169 +157,95 @@ class _BookDetailScreenState extends State<BookDetailScreen>
     super.build(context);
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          leading: widget.onBack != null
-              ? IconButton(
-                  icon: const Icon(FluentIcons.arrow_left_24_regular),
-                  onPressed: widget.onBack,
-                  tooltip: 'חזרה',
-                )
-              : null,
-          title: Text(widget.bookName),
-          actions: [
-            Consumer<ShamorZachorProgressProvider>(
-              builder: (context, progressProvider, child) {
-                final dataProvider = context.read<ShamorZachorDataProvider>();
-                // Use provided bookDetails if available, otherwise fetch from provider
-                final bookDetails = widget.bookDetails ??
-                    dataProvider.getBookDetails(
-                      widget.topLevelCategoryKey,
-                      widget.bookName,
-                    );
+      child: ErrorBoundary(
+        child:
+            Consumer2<ShamorZachorDataProvider, ShamorZachorProgressProvider>(
+          builder: (context, dataProvider, progressProvider, child) {
+            final cs = Theme.of(context).colorScheme;
 
-                if (bookDetails == null) {
-                  _logger
-                      .warning('BookDetails not found for ${widget.bookName}');
-                  return const SizedBox.shrink();
-                }
+            if (dataProvider.isLoading || progressProvider.isLoading) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('טוען פרטי ספר...'),
+                  ],
+                ),
+              );
+            }
 
-                // חישוב אחוז ההשלמה
-                final learnableItems = bookDetails.learnableItems;
-                int totalChecks = 0;
-                int completedChecks = 0;
-
-                for (final item in learnableItems) {
-                  final progress = _getProgress(
-                    progressProvider,
-                    item.absoluteIndex,
-                  );
-                  totalChecks += 4; // 4 עמודות לכל פריט
-                  if (progress.learn) completedChecks++;
-                  if (progress.review1) completedChecks++;
-                  if (progress.review2) completedChecks++;
-                  if (progress.review3) completedChecks++;
-                }
-
-                final completionPercentage =
-                    totalChecks > 0 ? completedChecks / totalChecks : 0.0;
-
-                return Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        CircularProgressIndicator(
-                          value: completionPercentage,
-                          strokeWidth: 3,
-                          backgroundColor: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.2),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        if (completionPercentage >= 1.0)
-                          Icon(
-                            FluentIcons.checkmark_24_regular,
-                            size: 14,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                      ],
+            if (dataProvider.error != null) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      FluentIcons.error_circle_24_regular,
+                      size: 64,
+                      color: cs.error,
                     ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-        body: ErrorBoundary(
-          child:
-              Consumer2<ShamorZachorDataProvider, ShamorZachorProgressProvider>(
-            builder: (context, dataProvider, progressProvider, child) {
-              if (dataProvider.isLoading || progressProvider.isLoading) {
-                return const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('טוען פרטי ספר...'),
-                    ],
-                  ),
-                );
-              }
-
-              if (dataProvider.error != null) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(FluentIcons.error_circle_24_regular,
-                          size: 64, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text(
-                        dataProvider.error!.userFriendlyMessage,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      if (dataProvider.error!.suggestedAction != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          dataProvider.error!.suggestedAction!,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      if (dataProvider.error!.isRecoverable)
-                        ElevatedButton(
-                          onPressed: () => dataProvider.retry(),
-                          child: const Text('נסה שוב'),
-                        ),
-                    ],
-                  ),
-                );
-              }
-
-              // Use provided bookDetails if available, otherwise fetch from provider
-              final bookDetails = widget.bookDetails ??
-                  dataProvider.getBookDetails(
-                    widget.topLevelCategoryKey,
-                    widget.bookName,
-                  );
-
-              if (bookDetails == null) {
-                _logger.warning(
-                    'BookDetails not found for ${widget.bookName} in category ${widget.topLevelCategoryKey}');
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(FluentIcons.book_24_regular,
-                          size: 64, color: Colors.grey),
-                      const SizedBox(height: 16),
-                      Text(
-                        'פרטי הספר "${widget.bookName}" לא נמצאו',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
+                    const SizedBox(height: 16),
+                    Text(
+                      dataProvider.error!.userFriendlyMessage,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    if (dataProvider.error!.suggestedAction != null) ...[
                       const SizedBox(height: 8),
                       Text(
-                        'קטגוריה: ${widget.topLevelCategoryKey}',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        dataProvider.error!.suggestedAction!,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
-                  ),
-                );
-              }
+                    const SizedBox(height: 16),
+                    if (dataProvider.error!.isRecoverable)
+                      RecommendedActionButton(
+                        text: 'נסה שוב',
+                        onPressed: () => dataProvider.retry(),
+                      ),
+                  ],
+                ),
+              );
+            }
 
-              return _buildBookContent(context, bookDetails, progressProvider);
-            },
-          ),
+            final bookDetails = widget.bookDetails ??
+                dataProvider.getBookDetails(
+                  widget.topLevelCategoryKey,
+                  widget.bookName,
+                );
+
+            if (bookDetails == null) {
+              _logger.warning(
+                  'BookDetails not found for ${widget.bookName} in category ${widget.topLevelCategoryKey}');
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      FluentIcons.book_24_regular,
+                      size: 64,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'פרטי הספר "${widget.bookName}" לא נמצאו',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'קטגוריה: ${widget.topLevelCategoryKey}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return _buildBookContent(context, bookDetails, progressProvider);
+          },
         ),
       ),
     );
@@ -343,7 +259,10 @@ class _BookDetailScreenState extends State<BookDetailScreen>
     final learnableItems = bookDetails.learnableItems;
 
     if (learnableItems.isEmpty) {
-      return const Center(child: Text('אין פריטים ללימוד בספר זה'));
+      return const ToolEmptyState(
+        icon: FluentIcons.book_24_regular,
+        message: 'אין פריטים ללימוד בספר זה',
+      );
     }
 
     final hasNested = bookDetails.sections != null &&
@@ -354,20 +273,102 @@ class _BookDetailScreenState extends State<BookDetailScreen>
         ? _buildNestedItemsSliver(context, bookDetails, progressProvider)
         : _buildFlatItemsSliver(context, bookDetails, progressProvider);
 
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: _buildHeader(context, bookDetails, progressProvider),
+    final theme = Theme.of(context);
+    final completionPct =
+        _calculateCompletionPercentage(bookDetails, progressProvider);
+
+    return Column(
+      children: [
+        // ── כותרת הספר (נשארת גלויה בגלילה) ──────────────────────────────
+        Container(
+          color: theme.scaffoldBackgroundColor,
+          child: Row(
+            children: [
+              if (widget.onBack != null)
+                IconButton(
+                  icon: const Icon(FluentIcons.arrow_left_24_regular),
+                  onPressed: widget.onBack,
+                  tooltip: 'חזרה',
+                ),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: widget.onBack != null ? 0 : 16,
+                    top: 8,
+                    bottom: 8,
+                  ),
+                  child: Text(
+                    widget.bookName,
+                    style: theme.textTheme.titleLarge,
+                    textDirection: TextDirection.rtl,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        value: completionPct,
+                        strokeWidth: 3,
+                        backgroundColor: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.2),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          theme.colorScheme.primary,
+                        ),
+                      ),
+                      if (completionPct >= 1.0)
+                        Icon(
+                          FluentIcons.checkmark_24_regular,
+                          size: 14,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.all(12.0),
-          sliver: sliverList,
+        // ── שורת כותרות העמודות (נשארת גלויה בגלילה) ─────────────────────
+        _buildHeader(context, bookDetails, progressProvider),
+        // ── תוכן גלילה ────────────────────────────────────────────────────
+        Expanded(
+          child: CustomScrollView(
+            primary: false,
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.all(12.0),
+                sliver: sliverList,
+              ),
+            ],
+          ),
         ),
       ],
     );
+  }
+
+  double _calculateCompletionPercentage(
+    BookDetails bookDetails,
+    ShamorZachorProgressProvider progressProvider,
+  ) {
+    int totalChecks = 0;
+    int completedChecks = 0;
+
+    for (final item in bookDetails.learnableItems) {
+      final progress = _getProgress(progressProvider, item.absoluteIndex);
+      totalChecks += 4;
+      if (progress.learn) completedChecks++;
+      if (progress.review1) completedChecks++;
+      if (progress.review2) completedChecks++;
+      if (progress.review3) completedChecks++;
+    }
+
+    return totalChecks > 0 ? completedChecks / totalChecks : 0.0;
   }
 
   Widget _buildHeader(
@@ -391,8 +392,13 @@ class _BookDetailScreenState extends State<BookDetailScreen>
 
     return Container(
       padding: EdgeInsets.fromLTRB(
-          _gridHPad, 8, _gridHPad + _chevronReserve + _titleGutter, 8),
+        _gridHPad + 12,
+        8,
+        _gridHPad + _chevronReserve + _titleGutter + 12,
+        8,
+      ),
       decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
         border: Border(
           bottom: BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
         ),
@@ -416,6 +422,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                 return Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Checkbox(
                         visualDensity: VisualDensity.compact,

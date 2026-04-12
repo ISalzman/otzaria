@@ -7,6 +7,7 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/layout_tokens.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/core/ui_snack.dart';
 
 /// טאב הגדרות תצוגת ספרים
 /// ניתן להשתמש בו גם כתוכן בתוך דיאלוג וגם כטאב במסך הגדרות
@@ -643,11 +644,7 @@ class TextSettingsTab extends StatelessWidget {
 
     if (confirm == true && context.mounted) {
       await PerBookSettings.deleteAllSettings();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('כל ההגדרות המיוחדות נמחקו בהצלחה')),
-        );
-      }
+      UiSnack.show('כל ההגדרות המיוחדות נמחקו בהצלחה');
     }
   }
 }

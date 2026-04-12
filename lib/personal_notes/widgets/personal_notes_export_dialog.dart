@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/widgets/app_menu.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 enum NotesExportMode {
   all,
@@ -56,10 +59,14 @@ class _PersonalNotesExportDialogState extends State<PersonalNotesExportDialog> {
       result = notes.where((note) => note.bookId == _selectedBookId).toList();
       description = 'הערות לספר $_selectedBookId';
     } else if (_mode == NotesExportMode.byDateRange && _dateRange != null) {
+      final start = DateUtils.dateOnly(_dateRange!.start);
+      final endExclusive = DateUtils.dateOnly(
+        _dateRange!.end,
+      ).add(const Duration(days: 1));
       result = notes
           .where((note) =>
-              note.updatedAt.isAfter(_dateRange!.start) &&
-              note.updatedAt.isBefore(_dateRange!.end))
+              !note.updatedAt.isBefore(start) &&
+              note.updatedAt.isBefore(endExclusive))
           .toList();
       description =
           'הערות בתאריכים ${_dateRange!.start.toIso8601String()} - ${_dateRange!.end.toIso8601String()}';
@@ -105,15 +112,17 @@ class _PersonalNotesExportDialogState extends State<PersonalNotesExportDialog> {
             ),
             const SizedBox(height: 12),
             if (_mode == NotesExportMode.byBook)
-              DropdownButtonFormField<String>(
-                initialValue: _selectedBookId,
-                items: books
-                    .map((bookId) => DropdownMenuItem(
-                          value: bookId,
-                          child: Text(bookId),
-                        ))
+              AppDropdownField<String>(
+                value: _selectedBookId,
+                entries: books
+                    .map(
+                      (bookId) => AppMenuEntry(
+                        value: bookId,
+                        label: bookId,
+                      ),
+                    )
                     .toList(),
-                onChanged: (value) => setState(() => _selectedBookId = value),
+                onSelected: (value) => setState(() => _selectedBookId = value),
                 decoration: const InputDecoration(
                   labelText: 'בחר ספר',
                   border: OutlineInputBorder(),
@@ -125,7 +134,7 @@ class _PersonalNotesExportDialogState extends State<PersonalNotesExportDialog> {
                 title: Text(_dateRange == null
                     ? 'בחר טווח תאריכים'
                     : '${_dateRange!.start.toString().split(' ').first} - ${_dateRange!.end.toString().split(' ').first}'),
-                trailing: const Icon(Icons.date_range),
+                trailing: const Icon(FluentIcons.calendar_24_regular),
                 onTap: () async {
                   final picked = await showDateRangePicker(
                     context: context,
@@ -177,13 +186,13 @@ class _PersonalNotesExportDialogState extends State<PersonalNotesExportDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        NeutralActionButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('ביטול'),
+          text: 'ביטול',
         ),
-        FilledButton(
+        RecommendedActionButton(
           onPressed: _submit,
-          child: const Text('ייצא'),
+          text: 'ייצא',
         ),
       ],
     );

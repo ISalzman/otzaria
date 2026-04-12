@@ -4,6 +4,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_dropdown_tile.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_card.dart';
@@ -165,8 +166,9 @@ class ShortcutsSettingsTab extends StatelessWidget {
             title: 'תצוגת ספר',
             children: [
               _ShortcutTile(
-                settingKey: 'key-shortcut-search-in-book',
-                label: 'חיפוש בספר',
+                settingKey: ShortcutValidator.currentWindowSearchKey,
+                label: 'חיפוש בחלון הנוכחי',
+                subtitle: 'משמש לחיפוש מהיר במסכי תוכן וכלים תומכים',
                 defaultShortcut: 'ctrl+f',
                 icon: FluentIcons.search_24_regular,
                 allShortcuts: _shortcutsList,
@@ -239,6 +241,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
 class _ShortcutTile extends StatelessWidget {
   final String settingKey;
   final String label;
+  final String? subtitle;
   final String defaultShortcut;
   final IconData icon;
   final Map<String, String> allShortcuts;
@@ -246,6 +249,7 @@ class _ShortcutTile extends StatelessWidget {
   const _ShortcutTile({
     required this.settingKey,
     required this.label,
+    this.subtitle,
     required this.defaultShortcut,
     required this.icon,
     required this.allShortcuts,
@@ -258,6 +262,7 @@ class _ShortcutTile extends StatelessWidget {
       child: ShortcutDropDownTile(
         settingKey: settingKey,
         title: label,
+        subtitle: subtitle,
         selected: defaultShortcut,
         allShortcuts: allShortcuts,
         leading: Icon(icon),

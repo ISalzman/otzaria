@@ -2,6 +2,12 @@ import 'package:flutter/widgets.dart';
 
 enum FocusTarget { none, librarySearch, findRefSearch, bookContent }
 
+/// מבקש focus רק אם ה-[FocusNode] עדיין לא מחזיק בו.
+void requestFocusIfNeeded(FocusNode focusNode) {
+  if (focusNode.hasFocus) return;
+  focusNode.requestFocus();
+}
+
 class FocusRepository {
   static final FocusRepository _instance = FocusRepository._internal();
   factory FocusRepository() => _instance;
@@ -15,6 +21,7 @@ class FocusRepository {
 
   // FocusNode לתוכן הספר הנוכחי - מנוהל על ידי TextBookViewerBloc
   FocusNode? _currentBookContentFocusNode;
+  VoidCallback? _moreScreenFocusRequester;
 
   FocusTarget _currentFocusTarget = FocusTarget.none;
   FocusTarget get currentFocusTarget => _currentFocusTarget;
@@ -59,6 +66,20 @@ class FocusRepository {
       _currentBookContentFocusNode!.requestFocus();
       _currentFocusTarget = FocusTarget.bookContent;
     }
+  }
+
+  void registerMoreScreenFocusRequester(VoidCallback requester) {
+    _moreScreenFocusRequester = requester;
+  }
+
+  void unregisterMoreScreenFocusRequester(VoidCallback requester) {
+    if (_moreScreenFocusRequester == requester) {
+      _moreScreenFocusRequester = null;
+    }
+  }
+
+  void requestMoreScreenFocus() {
+    _moreScreenFocusRequester?.call();
   }
 
   void dispose() {

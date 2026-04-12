@@ -39,6 +39,7 @@ class SettingsState extends Equatable {
   final bool personalNotesCollapsedByDefault;
   final bool protectedModeEnabled;
   final bool autoSyncCatalogs;
+  final bool compactMenuMode;
   final bool? _softwareAndBookUpdatesEnabled;
 
   const SettingsState({
@@ -78,6 +79,7 @@ class SettingsState extends Equatable {
     required this.personalNotesCollapsedByDefault,
     required this.protectedModeEnabled,
     required this.autoSyncCatalogs,
+    this.compactMenuMode = false,
     bool? softwareAndBookUpdatesEnabled,
   }) : _softwareAndBookUpdatesEnabled = softwareAndBookUpdatesEnabled;
 
@@ -161,6 +163,7 @@ class SettingsState extends Equatable {
     bool? personalNotesCollapsedByDefault,
     bool? protectedModeEnabled,
     bool? autoSyncCatalogs,
+    bool? compactMenuMode,
     bool? softwareAndBookUpdatesEnabled,
   }) {
     return SettingsState(
@@ -204,6 +207,7 @@ class SettingsState extends Equatable {
           this.personalNotesCollapsedByDefault,
       protectedModeEnabled: protectedModeEnabled ?? this.protectedModeEnabled,
       autoSyncCatalogs: autoSyncCatalogs ?? this.autoSyncCatalogs,
+      compactMenuMode: compactMenuMode ?? this.compactMenuMode,
       softwareAndBookUpdatesEnabled:
           softwareAndBookUpdatesEnabled ?? this.softwareAndBookUpdatesEnabled,
     );
@@ -253,6 +257,7 @@ class SettingsState extends Equatable {
         personalNotesCollapsedByDefault,
         protectedModeEnabled,
         autoSyncCatalogs,
+        compactMenuMode,
         softwareAndBookUpdatesEnabled,
       ];
 }
