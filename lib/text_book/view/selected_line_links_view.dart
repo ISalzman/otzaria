@@ -291,6 +291,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           context: menuCtx,
           savedSelectedText: _savedSelectedText,
           fontSize: widget.fontSize,
+          link: link,
         ),
       ),
       child: ExpansionTile(

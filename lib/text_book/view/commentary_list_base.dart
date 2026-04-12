@@ -1159,6 +1159,7 @@ class _CollapsibleCommentaryGroupState
                       context: menuCtx,
                       savedSelectedText: selectedText,
                       fontSize: widget.fontSize,
+                      link: link,
                     ),
                   ),
                   child: child!,
