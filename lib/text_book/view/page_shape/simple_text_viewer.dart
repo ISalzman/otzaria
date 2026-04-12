@@ -291,7 +291,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final categoryId = widget.reportBook?.categoryId;
     final fileType = widget.reportBook?.fileType;
     return _removeNikudCache.putIfAbsent(
-      '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}|$categoryId|$fileType',
+      _removeNikudCacheKey(
+        title: targetTitle,
+        defaultRemoveNikud: settingsState.defaultRemoveNikud,
+        removeNikudFromTanach: settingsState.removeNikudFromTanach,
+        categoryId: categoryId,
+        fileType: fileType,
+      ),
       () => resolveRemoveNikudForBook(
         title: targetTitle,
         defaultRemoveNikud: settingsState.defaultRemoveNikud,
@@ -300,6 +306,16 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         fileType: fileType,
       ),
     );
+  }
+
+  String _removeNikudCacheKey({
+    required String title,
+    required bool defaultRemoveNikud,
+    required bool removeNikudFromTanach,
+    int? categoryId,
+    String? fileType,
+  }) {
+    return '$title|$defaultRemoveNikud|$removeNikudFromTanach|$categoryId|$fileType';
   }
 
   RenderSettings _selectionRenderSettings({
@@ -723,15 +739,28 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     final bool removeNikud;
     if (widget.reportBook != null) {
-      removeNikud = await resolveRemoveNikudForBook(
-        title: widget.reportBook!.title,
-        defaultRemoveNikud: settingsState.defaultRemoveNikud,
-        removeNikudFromTanach: settingsState.removeNikudFromTanach,
-        categoryId: widget.reportBook!.categoryId,
-        fileType: widget.reportBook!.fileType,
+      final targetTitle = widget.reportBook!.title;
+      final categoryId = widget.reportBook!.categoryId;
+      final fileType = widget.reportBook!.fileType;
+      removeNikud = await _removeNikudCache.putIfAbsent(
+        _removeNikudCacheKey(
+          title: targetTitle,
+          defaultRemoveNikud: settingsState.defaultRemoveNikud,
+          removeNikudFromTanach: settingsState.removeNikudFromTanach,
+          categoryId: categoryId,
+          fileType: fileType,
+        ),
+        () => resolveRemoveNikudForBook(
+          title: targetTitle,
+          defaultRemoveNikud: settingsState.defaultRemoveNikud,
+          removeNikudFromTanach: settingsState.removeNikudFromTanach,
+          categoryId: categoryId,
+          fileType: fileType,
+        ),
       );
     } else {
-      removeNikud = textBookState is TextBookLoaded && textBookState.removeNikud;
+      removeNikud =
+          textBookState is TextBookLoaded && textBookState.removeNikud;
     }
     final processedText = removeNikud ? utils.removeVolwels(text) : text;
 
@@ -1048,7 +1077,19 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                   : (targetTitle == null
                       ? Future.value(settingsState.defaultRemoveNikud)
                       : _removeNikudCache.putIfAbsent(
-                          '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}|${widget.isMainText ? state.book.categoryId : widget.reportBook?.categoryId}|${widget.isMainText ? state.book.fileType : widget.reportBook?.fileType}',
+                          _removeNikudCacheKey(
+                            title: targetTitle,
+                            defaultRemoveNikud:
+                                settingsState.defaultRemoveNikud,
+                            removeNikudFromTanach:
+                                settingsState.removeNikudFromTanach,
+                            categoryId: widget.isMainText
+                                ? state.book.categoryId
+                                : widget.reportBook?.categoryId,
+                            fileType: widget.isMainText
+                                ? state.book.fileType
+                                : widget.reportBook?.fileType,
+                          ),
                           () => resolveRemoveNikudForBook(
                             title: targetTitle,
                             defaultRemoveNikud:

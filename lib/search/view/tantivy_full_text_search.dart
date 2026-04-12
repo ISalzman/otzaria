@@ -640,9 +640,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             ),
           ),
           const Spacer(),
-          Expanded(
-            child: Container(),
-          ),
           // כפתור לאיפוס הסינון - חזרה לכל הקטגוריות
           IconButton(
             icon: Icon(
