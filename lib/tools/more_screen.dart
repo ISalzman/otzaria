@@ -511,46 +511,51 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
                     ColoredBox(
                       color: bgColor,
                       child: Padding(
-                        padding: const EdgeInsets.only(
-                          top: AppTokens.spaceXS,
-                          bottom: AppTokens.spaceXS,
-                          right: AppTokens.spaceMD,
-                          left: AppTokens.spaceMD,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppTokens.spaceXS,
                         ),
-                        child: Center(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(FluentIcons.puzzle_piece_24_regular),
-                                  onPressed: () =>
-                                      setState(() => _isPanelOpen = !_isPanelOpen),
-                                  tooltip: 'תוספים',
-                                ),
-                                const SizedBox(width: AppTokens.spaceXS),
-                                for (int index = 0; index < _descriptors.length; index++) ...[
-                                  _DesktopTopNavItem(
-                                    icon: _descriptors[index] is BuiltInToolDescriptor
-                                        ? (_descriptors[index] as BuiltInToolDescriptor).icon
-                                        : FluentIcons.puzzle_piece_24_regular,
-                                    iconFilled: _descriptors[index] is BuiltInToolDescriptor
-                                        ? (_descriptors[index] as BuiltInToolDescriptor).iconFilled
-                                        : FluentIcons.puzzle_piece_24_regular,
-                                    imageAsset: _descriptors[index] is BuiltInToolDescriptor
-                                        ? (_descriptors[index] as BuiltInToolDescriptor).imageIcon
-                                        : null,
-                                    label: _descriptors[index].label,
-                                    isSelected: _selectedToolId == _descriptors[index].toolId,
-                                    onTap: () => _changeTab(index),
+                        child: Row(
+                          children: [
+                            // מאזן שמאלי כדי שהטאבים יישארו ממורכזים
+                            const SizedBox(width: 48),
+                            Expanded(
+                              child: Center(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      for (int index = 0; index < _descriptors.length; index++) ...[
+                                        _DesktopTopNavItem(
+                                          icon: _descriptors[index] is BuiltInToolDescriptor
+                                              ? (_descriptors[index] as BuiltInToolDescriptor).icon
+                                              : FluentIcons.puzzle_piece_24_regular,
+                                          iconFilled: _descriptors[index] is BuiltInToolDescriptor
+                                              ? (_descriptors[index] as BuiltInToolDescriptor).iconFilled
+                                              : FluentIcons.puzzle_piece_24_regular,
+                                          imageAsset: _descriptors[index] is BuiltInToolDescriptor
+                                              ? (_descriptors[index] as BuiltInToolDescriptor).imageIcon
+                                              : null,
+                                          label: _descriptors[index].label,
+                                          isSelected: _selectedToolId == _descriptors[index].toolId,
+                                          onTap: () => _changeTab(index),
+                                        ),
+                                        if (index < _descriptors.length - 1)
+                                          const SizedBox(width: AppTokens.spaceXS),
+                                      ],
+                                    ],
                                   ),
-                                  if (index < _descriptors.length - 1)
-                                    const SizedBox(width: AppTokens.spaceXS),
-                                ],
-                              ],
+                                ),
+                              ),
                             ),
-                          ),
+                            // כפתור תוספים מוצמד לשמאל חזותי (סוף Row ב-RTL)
+                            IconButton(
+                              icon: const Icon(FluentIcons.puzzle_piece_24_regular),
+                              onPressed: () =>
+                                  setState(() => _isPanelOpen = !_isPanelOpen),
+                              tooltip: 'תוספים',
+                            ),
+                          ],
                         ),
                       ),
                     ),
