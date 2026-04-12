@@ -9,13 +9,25 @@ class PluginRuntimeDispatcher {
 
   final Map<String, InAppWebViewController> _controllers = {};
   final PluginRegistryRepository _repository = PluginRegistryRepository();
-  
+
+  // Cache in-memory למניעת שאילתות SQLite חוזרות במסלול החם
+  final Map<String, bool> _enabledCache = {};
+  final Map<String, Map<String, bool?>> _permissionCache = {};
+
   void registerController(String pluginId, InAppWebViewController controller) {
     _controllers[pluginId] = controller;
   }
-  
+
   void unregisterController(String pluginId) {
     _controllers.remove(pluginId);
+    _enabledCache.remove(pluginId);
+    _permissionCache.remove(pluginId);
+  }
+
+  /// מנקה את ה-cache של תוסף ספציפי - יש לקרוא כשמשתמש משנה enabled/permissions
+  void invalidatePlugin(String pluginId) {
+    _enabledCache.remove(pluginId);
+    _permissionCache.remove(pluginId);
   }
 
   final Map<String, Future<void> Function()> _reloadCallbacks = {};
@@ -44,12 +56,20 @@ class PluginRuntimeDispatcher {
       final controller = entry.value;
 
       try {
-        // בדוק שהתוסף מופעל לפני שליחת event
-        final isEnabled = await _repository.getIsEnabled(pluginId);
-        if (isEnabled == false) continue;
+        // בדוק שהתוסף מופעל - עם cache למניעת שאילתות SQLite חוזרות
+        final isEnabled = _enabledCache[pluginId] ??
+            await _repository.getIsEnabled(pluginId);
+        _enabledCache[pluginId] = isEnabled;
+        if (!isEnabled) continue;
 
-        final granted = await _repository.getPermission(pluginId, 'events.subscribe:$topic');
-        if (granted == true) {
+        // בדוק הרשאה - עם cache
+        _permissionCache[pluginId] ??= {};
+        final permKey = 'events.subscribe:$topic';
+        if (!_permissionCache[pluginId]!.containsKey(permKey)) {
+          _permissionCache[pluginId]![permKey] =
+              await _repository.getPermission(pluginId, permKey);
+        }
+        if (_permissionCache[pluginId]![permKey] == true) {
           await controller.evaluateJavascript(source: "window.dispatchEvent(new CustomEvent('$topic', { detail: $jsonPayload }));");
         }
       } catch (e) {
@@ -68,8 +88,10 @@ class PluginRuntimeDispatcher {
     final controller = _controllers[pluginId];
     if (controller == null) return;
     try {
-      final isEnabled = await _repository.getIsEnabled(pluginId);
-      if (isEnabled == false) return;
+      final isEnabled = _enabledCache[pluginId] ??
+          await _repository.getIsEnabled(pluginId);
+      _enabledCache[pluginId] = isEnabled;
+      if (!isEnabled) return;
       final jsonPayload = jsonEncode(payload);
       await controller.evaluateJavascript(
         source: "window.dispatchEvent(new CustomEvent('$topic', { detail: $jsonPayload }));",
