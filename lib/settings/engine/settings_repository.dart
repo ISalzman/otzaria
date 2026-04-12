@@ -40,6 +40,7 @@ class SettingsRepository {
   static const String keyLibraryViewMode = 'key-library-view-mode';
   static const String keyLibraryShowPreview = 'key-library-show-preview';
   static const String keyEnablePerBookSettings = 'key-enable-per-book-settings';
+  static const String keyPdfBookViewByDefault = 'key-pdf-book-view-by-default';
   static const String keyOfflineMode = 'key-offline-mode';
   static const String keyAutoSync = 'key-auto-sync';
   static const String keyAutoSyncCatalogs = 'key-auto-sync-catalogs';
@@ -223,6 +224,10 @@ class SettingsRepository {
       'shortcuts': await getShortcuts(),
       'enablePerBookSettings': _settings.getValue<bool>(
         keyEnablePerBookSettings,
+        defaultValue: false,
+      ),
+      'pdfBookViewByDefault': _settings.getValue<bool>(
+        keyPdfBookViewByDefault,
         defaultValue: false,
       ),
       'isOfflineMode': _settings.getValue<bool>(
@@ -446,6 +451,10 @@ class SettingsRepository {
 
   Future<void> updateEnablePerBookSettings(bool value) async {
     await _settings.setValue(keyEnablePerBookSettings, value);
+  }
+
+  Future<void> updatePdfBookViewByDefault(bool value) async {
+    await _settings.setValue(keyPdfBookViewByDefault, value);
   }
 
   Future<void> updateOfflineMode(bool value) async {
@@ -721,6 +730,7 @@ class SettingsRepository {
     await _settings.setValue(keyLibraryViewMode, 'grid');
     await _settings.setValue(keyLibraryShowPreview, true);
     await _settings.setValue(keyEnablePerBookSettings, false);
+    await _settings.setValue(keyPdfBookViewByDefault, false);
     await _settings.setValue(keySoftwareAndBookUpdatesEnabled, true);
     await _settings.setValue(keyErrorReportSenderEmail, '');
     await _settings.setValue(keyQueueErrorReportsWhenOffline, true);

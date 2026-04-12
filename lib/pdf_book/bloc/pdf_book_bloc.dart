@@ -10,6 +10,7 @@ import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/utils/ref_helper.dart';
@@ -54,6 +55,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     on<ZoomIn>(_onZoomIn);
     on<ZoomOut>(_onZoomOut);
     on<ResetZoom>(_onResetZoom);
+    on<SetLayoutMode>(_onSetLayoutMode);
     on<SetShowZoomBar>(_onSetShowZoomBar);
 
     // Left pane events
@@ -147,6 +149,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     final Map<int, List<String>> alternativeWords;
     final Map<String, String> spacingValues;
     final SearchMode searchMode;
+    final PdfLayoutMode layoutMode;
 
     if (current is PdfBookInitial) {
       book = current.book;
@@ -155,6 +158,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       alternativeWords = current.alternativeWords;
       spacingValues = current.spacingValues;
       searchMode = current.searchMode;
+      layoutMode = current.layoutMode;
     } else if (current is PdfBookLoading) {
       book = current.book;
       searchText = '';
@@ -162,6 +166,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       alternativeWords = const {};
       spacingValues = const {};
       searchMode = SearchMode.exact;
+      layoutMode = tab.savedLayoutMode ?? PdfLayoutMode.regularView;
     } else if (current is PdfBookLoaded) {
       // Already loaded, just update
       emit(current.copyWith(
@@ -194,6 +199,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       alternativeWords: alternativeWords,
       spacingValues: spacingValues,
       searchMode: searchMode,
+      layoutMode: layoutMode,
       isLoading: false, // Document is ready, so no longer loading
       loadSucceeded: true,
     ));
@@ -421,6 +427,32 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     add(const SavePerBookSettings());
   }
 
+  void _onSetLayoutMode(
+    SetLayoutMode event,
+    Emitter<PdfBookState> emit,
+  ) {
+    final current = state;
+
+    tab.savedLayoutMode = event.layoutMode;
+
+    if (current is PdfBookLoaded) {
+      if (current.layoutMode == event.layoutMode) return;
+      emit(current.copyWith(layoutMode: event.layoutMode));
+      add(const SavePerBookSettings());
+    } else if (current is PdfBookInitial) {
+      emit(PdfBookInitial(
+        book: current.book,
+        initialPageNumber: current.initialPageNumber,
+        searchText: current.searchText,
+        searchOptions: current.searchOptions,
+        alternativeWords: current.alternativeWords,
+        spacingValues: current.spacingValues,
+        searchMode: current.searchMode,
+        layoutMode: event.layoutMode,
+      ));
+    }
+  }
+
   void _onSetShowZoomBar(
     SetShowZoomBar event,
     Emitter<PdfBookState> emit,
@@ -612,9 +644,14 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
     // בדיקה אם הגדרות פר-ספר מופעלות
     final enablePerBookSettings =
-        Settings.getValue<bool>('key-enable-per-book-settings') ?? false;
+      Settings.getValue<bool>(SettingsRepository.keyEnablePerBookSettings) ??
+        false;
+    final pdfBookViewByDefault =
+      Settings.getValue<bool>(SettingsRepository.keyPdfBookViewByDefault) ??
+        false;
 
     double? zoomToApply;
+    PdfLayoutMode? layoutModeToApply;
 
     if (enablePerBookSettings) {
       // נסה לטעון הגדרות פר-ספר
@@ -622,12 +659,23 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       if (settings?.zoom != null) {
         zoomToApply = settings!.zoom;
       }
+      if (settings?.layoutMode != null) {
+        layoutModeToApply = settings!.layoutMode;
+      }
     }
+
+    layoutModeToApply ??= pdfBookViewByDefault
+        ? PdfLayoutMode.bookView
+        : PdfLayoutMode.regularView;
 
     // אם אין הגדרות פר-ספר, נסה לשחזר זום מהסשן (שנשמר ב-tab.savedZoom)
     if (zoomToApply == null && tab.savedZoom != null && tab.savedZoom != 1.0) {
       zoomToApply = tab.savedZoom;
     }
+
+    // החלת מצב תצוגה
+    tab.savedLayoutMode = layoutModeToApply;
+    emit(current.copyWith(layoutMode: layoutModeToApply));
 
     // אם יש זום להחיל, מחילים אותו
     if (zoomToApply != null) {
@@ -665,14 +713,23 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     if (current is! PdfBookLoaded) return;
 
     final enablePerBookSettings =
-        Settings.getValue<bool>('key-enable-per-book-settings') ?? false;
+      Settings.getValue<bool>(SettingsRepository.keyEnablePerBookSettings) ??
+        false;
     if (!enablePerBookSettings) return;
 
     if (!pdfController.isReady) return;
 
+    double? zoom;
+    try {
+      zoom = pdfController.value.zoom;
+    } catch (e) {
+      debugPrint('Warning: Could not get zoom from controller: $e');
+    }
+
     final settings = PdfBookPerBookSettings(
-      zoom: pdfController.value.zoom,
+      zoom: zoom,
       activeCommentators: List.from(tab.activeCommentators),
+      layoutMode: current.layoutMode,
     );
 
     await settings.save(current.book.title);
@@ -687,14 +744,15 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
     await PdfBookPerBookSettings.delete(current.book.title);
 
-    // Reset zoom to default
+    // Reset zoom and layout mode to default
     if (pdfController.isReady) {
       pdfController.setZoom(
         pdfController.centerPosition,
         1.0,
       );
       tab.savedZoom = 1.0;
-      emit(current.copyWith(zoom: 1.0));
+      tab.savedLayoutMode = PdfLayoutMode.regularView;
+      emit(current.copyWith(zoom: 1.0, layoutMode: PdfLayoutMode.regularView));
     }
   }
 

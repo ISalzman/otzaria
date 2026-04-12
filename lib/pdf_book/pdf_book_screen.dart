@@ -65,6 +65,8 @@ class PdfBookScreen extends StatefulWidget {
 class _PdfBookScreenState extends State<PdfBookScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   static const int _defaultPdfLineRange = 50;
+  static const double _bookViewGap = 3.0;
+  static const double _bookViewScale = 0.5;
   static const String _connectionTypeCommentary = 'COMMENTARY';
   static const String _connectionTypeTargum = 'TARGUM';
 
@@ -84,6 +86,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   // גלילה רציפה
   Timer? _scrollTimer;
   LogicalKeyboardKey? _currentScrollKey;
+  int? _scrollAnchorPage;
+  int? _lockedSpreadStartPage;
 
   // Local UI state that syncs with Bloc
   int _rightPaneInitialTabIndex = 0;
@@ -161,11 +165,22 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   @override
   void initState() {
     super.initState();
-    _initialPageNumber = widget.tab.pageNumber; // שמירת מספר העמוד ההתחלתי
+    _initialPageNumber = widget.tab.pageNumber;
     pdfController = PdfViewerController();
     widget.tab.pdfViewerController = pdfController;
 
-    // יצירת ה-Bloc עם המצב ההתחלתי
+    final settingsBloc = context.read<SettingsBloc>();
+    final initialGlobalLayoutMode = settingsBloc.state.pdfBookViewByDefault
+        ? PdfLayoutMode.bookView
+        : PdfLayoutMode.regularView;
+    final initialLayoutMode = settingsBloc.state.enablePerBookSettings
+        ? (widget.tab.savedLayoutMode ?? initialGlobalLayoutMode)
+        : initialGlobalLayoutMode;
+
+    if (!settingsBloc.state.enablePerBookSettings) {
+      widget.tab.savedLayoutMode = initialGlobalLayoutMode;
+    }
+
     _bloc = PdfBookBloc(
       tab: widget.tab,
       initialState: PdfBookInitial(
@@ -176,16 +191,34 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         alternativeWords: widget.tab.alternativeWords,
         spacingValues: widget.tab.spacingValues,
         searchMode: widget.tab.searchMode,
+        layoutMode: initialLayoutMode,
       ),
     );
+
+    _loadInitialLayoutMode();
 
     // PDF is always a file on the file system — use book.path directly
 
     // הגדרת ערכים התחלתיים מ-Settings
-    final settingsBloc = context.read<SettingsBloc>();
     _settingsSub = settingsBloc.stream.listen((state) {
       _bloc.add(pdf_events.UpdateSidebarWidth(state.sidebarWidth));
       _bloc.add(pdf_events.UpdateRightPaneWidth(state.commentaryPaneWidth));
+
+      if (!state.enablePerBookSettings) {
+        final desiredLayoutMode = state.pdfBookViewByDefault
+            ? PdfLayoutMode.bookView
+            : PdfLayoutMode.regularView;
+        final currentLayoutMode = switch (_bloc.state) {
+          PdfBookInitial initial => initial.layoutMode,
+          PdfBookLoaded loaded => loaded.layoutMode,
+          _ => null,
+        };
+
+        if (currentLayoutMode != desiredLayoutMode) {
+          _lockedSpreadStartPage = null;
+          _bloc.add(pdf_events.SetLayoutMode(desiredLayoutMode));
+        }
+      }
     });
 
     pdfController.addListener(_onPdfViewerControllerUpdate);
@@ -265,6 +298,31 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       }
     };
     widget.tab.showLeftPane.addListener(_showLeftPaneListener);
+  }
+
+  Future<void> _loadInitialLayoutMode() async {
+    final enablePerBookSettings =
+        Settings.getValue<bool>(SettingsRepository.keyEnablePerBookSettings) ??
+            false;
+    final pdfBookViewByDefault =
+        Settings.getValue<bool>(SettingsRepository.keyPdfBookViewByDefault) ??
+            false;
+
+    PdfLayoutMode layoutMode = pdfBookViewByDefault
+        ? PdfLayoutMode.bookView
+        : PdfLayoutMode.regularView;
+
+    if (enablePerBookSettings && widget.tab.savedLayoutMode == null) {
+      final settings = await PdfBookPerBookSettings.load(widget.tab.book.title);
+      if (settings?.layoutMode != null) {
+        layoutMode = settings!.layoutMode!;
+      }
+    }
+
+    if (mounted) {
+      widget.tab.savedLayoutMode = layoutMode;
+      _bloc.add(pdf_events.SetLayoutMode(layoutMode));
+    }
   }
 
   ({int startLine, int endLine})? _getCurrentPdfLinesRange() {
@@ -474,8 +532,86 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     ];
   }
 
-  PdfViewerParams _buildPdfViewerParams() {
+  PdfViewerParams _buildPdfViewerParams(PdfLayoutMode layoutMode) {
+    if (layoutMode == PdfLayoutMode.bookView) {
+      _lockedSpreadStartPage ??= _spreadStartPageFor(widget.tab.pageNumber);
+    }
+
     return PdfViewerParams(
+      layoutPages: layoutMode == PdfLayoutMode.bookView
+          ? (pages, params) {
+              final pageLayouts = <Rect>[];
+            const gap = _bookViewGap;
+            const scale = _bookViewScale;
+              double maxWidth = 0;
+              double totalHeight = 0;
+
+              if (pages.isNotEmpty) {
+                maxWidth = pages[0].width * scale * 2 + gap;
+              }
+
+              for (int i = 0; i < pages.length; i++) {
+                final currentPage = pages[i];
+                final scaledWidth = currentPage.width * scale;
+                final scaledHeight = currentPage.height * scale;
+
+                if (i == 0) {
+                  // עמוד 0 (שער) - לבדו
+                  pageLayouts.add(
+                    Rect.fromLTWH(0, totalHeight, scaledWidth, scaledHeight),
+                  );
+                  totalHeight += scaledHeight + params.margin;
+                } else {
+                  final pageIndex = i - 1;
+                  final isRightPage = pageIndex % 2 == 0;
+
+                  if (isRightPage) {
+                    final nextPage = i + 1 < pages.length ? pages[i + 1] : null;
+
+                    pageLayouts.add(
+                      Rect.fromLTWH(
+                        scaledWidth + gap,
+                        totalHeight,
+                        scaledWidth,
+                        scaledHeight,
+                      ),
+                    );
+
+                    if (nextPage != null) {
+                      final nextScaledWidth = nextPage.width * scale;
+                      final nextScaledHeight = nextPage.height * scale;
+
+                      pageLayouts.add(
+                        Rect.fromLTWH(0, totalHeight, nextScaledWidth, nextScaledHeight),
+                      );
+                      totalHeight +=
+                          max(scaledHeight, nextScaledHeight) + params.margin;
+                      i++;
+                    } else {
+                      totalHeight += scaledHeight + params.margin;
+                    }
+                  }
+                }
+              }
+
+              return PdfPageLayout(
+                pageLayouts: pageLayouts,
+                documentSize: Size(maxWidth, totalHeight),
+              );
+            }
+          : null,
+      normalizeMatrix: layoutMode == PdfLayoutMode.bookView
+          ? (matrix, viewSize, layout, controller) =>
+              _normalizeBookViewMatrix(
+                matrix: matrix,
+                viewSize: viewSize,
+                layout: layout,
+                controller: controller,
+              )
+          : null,
+      enableKeyboardNavigation: false,
+      scrollByArrowKey: 25.0,
+      scrollByMouseWheel: 0.2,
       onDocumentLoadFinished: (documentRef, succeeded) {
         if (!mounted) return;
         _bloc.add(pdf_events.SetLoadingState(
@@ -520,14 +656,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             child: const ColoredBox(color: Colors.transparent),
           ),
         ),
-        // פס גלילה אנכי עם track מלא
+        _buildBookViewViewportMask(size),
+        _buildBookViewStackDecoration(context, size),
+        _buildBookViewTurnButtons(context, size),
         PdfScrollbar(
           controller: widget.tab.pdfViewerController,
           orientation: ScrollbarOrientation.right,
           trackThickness: 16.0,
           thumbMinSize: 50.0,
+          scrollBoundsBuilder: _currentVerticalScrollbarBounds,
         ),
-        // פס גלילה אופקי דינמי
         PdfHorizontalScrollbar(
           controller: widget.tab.pdfViewerController,
           trackThickness: 10.0,
@@ -687,64 +825,390 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Widget _buildPdfViewerFromFile(String filePath) {
-    return Focus(
-      focusNode: _pdfViewFocusNode,
-      autofocus: false,
-      onKeyEvent: (FocusNode node, KeyEvent event) {
-        if (event is KeyDownEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-            _goNextPage();
-            return KeyEventResult.handled;
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-            _goPreviousPage();
-            return KeyEventResult.handled;
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-            _startContinuousScroll(LogicalKeyboardKey.arrowUp);
-            return KeyEventResult.handled;
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-            _startContinuousScroll(LogicalKeyboardKey.arrowDown);
-            return KeyEventResult.handled;
-          }
-        } else if (event is KeyRepeatEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-            _startContinuousScroll(LogicalKeyboardKey.arrowUp);
-            return KeyEventResult.handled;
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-            _startContinuousScroll(LogicalKeyboardKey.arrowDown);
-            return KeyEventResult.handled;
-          }
-        } else if (event is KeyUpEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
-              event.logicalKey == LogicalKeyboardKey.arrowDown) {
-            _stopContinuousScroll();
-            return KeyEventResult.handled;
-          }
+    return BlocBuilder<PdfBookBloc, PdfBookState>(
+      bloc: _bloc,
+      buildWhen: (prev, curr) {
+        PdfLayoutMode? layoutModeFor(PdfBookState state) {
+          if (state is PdfBookInitial) return state.layoutMode;
+          if (state is PdfBookLoaded) return state.layoutMode;
+          return null;
         }
-        return KeyEventResult.ignored;
+
+        return layoutModeFor(prev) != layoutModeFor(curr);
       },
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          _pdfViewFocusNode.requestFocus();
-        },
-        child: PdfViewer.file(
-          filePath,
-          controller: widget.tab.pdfViewerController,
-          passwordProvider: () => passwordDialog(context),
-          params: _buildPdfViewerParams(),
+      builder: (context, state) {
+        final layoutMode = switch (state) {
+          PdfBookInitial initial => initial.layoutMode,
+          PdfBookLoaded loaded => loaded.layoutMode,
+          _ => PdfLayoutMode.regularView,
+        };
+
+        return Focus(
+          focusNode: _pdfViewFocusNode,
+          autofocus: false,
+          onKeyEvent: (FocusNode node, KeyEvent event) {
+            if (event is KeyDownEvent) {
+              if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                _goNextPage();
+                return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                _goPreviousPage();
+                return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                _startContinuousScroll(LogicalKeyboardKey.arrowUp);
+                return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                _startContinuousScroll(LogicalKeyboardKey.arrowDown);
+                return KeyEventResult.handled;
+              }
+            } else if (event is KeyRepeatEvent) {
+              if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                _startContinuousScroll(LogicalKeyboardKey.arrowUp);
+                return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                _startContinuousScroll(LogicalKeyboardKey.arrowDown);
+                return KeyEventResult.handled;
+              }
+            } else if (event is KeyUpEvent) {
+              if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+                  event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                _stopContinuousScroll();
+                return KeyEventResult.handled;
+              }
+            }
+            return KeyEventResult.ignored;
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              _pdfViewFocusNode.requestFocus();
+            },
+            child: PdfViewer.file(
+              filePath,
+              controller: widget.tab.pdfViewerController,
+              passwordProvider: () => passwordDialog(context),
+              params: _buildPdfViewerParams(layoutMode),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ============ Book view spread helpers ============
+
+  bool _isBookViewModeActive() {
+    final state = _bloc.state;
+    return state is PdfBookLoaded &&
+      state.layoutMode == PdfLayoutMode.bookView;
+  }
+
+  int _spreadStartPageFor(int pageNumber) {
+    if (pageNumber <= 1) return 1;
+    return pageNumber.isEven ? pageNumber : pageNumber - 1;
+  }
+
+  Rect _spreadRectForPageLayout(PdfPageLayout layout, int spreadStartPage) {
+    final pageLayouts = layout.pageLayouts;
+    final rightPageRect = pageLayouts[spreadStartPage - 1];
+
+    if (spreadStartPage == 1) {
+      return Rect.fromLTWH(
+        0, rightPageRect.top, layout.documentSize.width, rightPageRect.height,
+      );
+    }
+    if (spreadStartPage >= pageLayouts.length) {
+      return rightPageRect;
+    }
+    return rightPageRect.expandToInclude(pageLayouts[spreadStartPage]);
+  }
+
+  Rect? _currentSpreadRect(PdfViewerController controller) {
+    if (!controller.isReady || !_isBookViewModeActive()) return null;
+    final currentPage = controller.pageNumber ?? widget.tab.pageNumber;
+    final spreadStartPage =
+        _lockedSpreadStartPage ?? _spreadStartPageFor(currentPage);
+    return _spreadRectForPageLayout(controller.layout, spreadStartPage);
+  }
+
+  Rect? _currentVerticalScrollbarBounds(PdfViewerController controller) {
+    return _currentSpreadRect(controller);
+  }
+
+  Rect? _currentSpreadViewportRect(PdfViewerController controller, Size viewportSize) {
+    final spreadRect = _currentSpreadRect(controller);
+    if (spreadRect == null) return null;
+    final viewportRect = MatrixUtils.transformRect(controller.value, spreadRect);
+    final clippedRect = viewportRect.intersect(Offset.zero & viewportSize);
+    if (clippedRect.width <= 0 || clippedRect.height <= 0) return null;
+    return clippedRect;
+  }
+
+  Widget _buildBookViewViewportMask(Size viewportSize) {
+    if (!_isBookViewModeActive()) return const SizedBox.shrink();
+    final spreadViewportRect =
+        _currentSpreadViewportRect(widget.tab.pdfViewerController, viewportSize);
+    if (spreadViewportRect == null) return const SizedBox.shrink();
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _BookViewViewportMaskPainter(spreadViewportRect),
         ),
       ),
     );
+  }
+
+  List<_VisibleBookPage> _currentSpreadPages(
+    PdfViewerController controller,
+    Size viewportSize,
+  ) {
+    if (!controller.isReady || !_isBookViewModeActive()) return const [];
+
+    final currentPage = controller.pageNumber ?? widget.tab.pageNumber;
+    final spreadStartPage =
+        _lockedSpreadStartPage ?? _spreadStartPageFor(currentPage);
+    final totalPages = controller.pageCount;
+    final pageNumbers = <int>[
+      spreadStartPage,
+      if (spreadStartPage > 1 && spreadStartPage < totalPages) spreadStartPage + 1,
+    ];
+
+    final viewportBounds = Offset.zero & viewportSize;
+    final pages = <_VisibleBookPage>[];
+
+    for (final pageNumber in pageNumbers) {
+      final pageRect = MatrixUtils.transformRect(
+        controller.value,
+        controller.layout.pageLayouts[pageNumber - 1],
+      );
+      if (!pageRect.overlaps(viewportBounds)) continue;
+
+      final isLeftPage = spreadStartPage == 1 || pageNumber == spreadStartPage + 1;
+      final outerStackPages = isLeftPage
+          ? totalPages - pageNumber
+          : pageNumber - 1;
+
+      pages.add(_VisibleBookPage(
+        pageNumber: pageNumber,
+        viewportRect: pageRect,
+        isLeftPage: isLeftPage,
+        outerStackPages: outerStackPages,
+      ));
+    }
+
+    return pages;
+  }
+
+  Widget _buildBookViewStackDecoration(BuildContext context, Size viewportSize) {
+    if (!_isBookViewModeActive()) return const SizedBox.shrink();
+
+    final visiblePages =
+        _currentSpreadPages(widget.tab.pdfViewerController, viewportSize);
+    if (visiblePages.isEmpty) return const SizedBox.shrink();
+
+    final colorScheme = Theme.of(context).colorScheme;
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _BookSpreadPainter(
+            pages: visiblePages,
+            pageEdgeColor: colorScheme.outlineVariant,
+            stackColor: colorScheme.surfaceContainerHighest,
+            stackShadowColor: colorScheme.shadow.withValues(alpha: 0.18),
+            spineColor: colorScheme.outline.withValues(alpha: 0.28),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookViewTurnButtons(BuildContext context, Size viewportSize) {
+    if (!_isBookViewModeActive() || !widget.tab.pdfViewerController.isReady) {
+      return const SizedBox.shrink();
+    }
+
+    final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
+    final totalPages = widget.tab.pdfViewerController.pageCount;
+    final canGoPrevious = currentPage > 1;
+    final canGoNext = currentPage < totalPages;
+    final buttonSize = min(72.0, max(48.0, viewportSize.shortestSide * 0.10));
+    final horizontalPadding = min(28.0, viewportSize.width * 0.018);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          if (canGoPrevious)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: EdgeInsets.only(right: horizontalPadding),
+                child: _BookViewTurnButton(
+                  icon: FluentIcons.chevron_left_24_regular,
+                  tooltip: 'הזוג הקודם',
+                  size: buttonSize,
+                  backgroundColor: colorScheme.surface.withValues(alpha: 0.78),
+                  iconColor: colorScheme.onSurface,
+                  borderColor: colorScheme.outline.withValues(alpha: 0.22),
+                  shadowColor: colorScheme.shadow.withValues(alpha: 0.16),
+                  onPressed: _goPreviousPage,
+                ),
+              ),
+            ),
+          if (canGoNext)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: EdgeInsets.only(left: horizontalPadding),
+                child: _BookViewTurnButton(
+                  icon: FluentIcons.chevron_right_24_regular,
+                  tooltip: 'הזוג הבא',
+                  size: buttonSize,
+                  backgroundColor: colorScheme.surface.withValues(alpha: 0.78),
+                  iconColor: colorScheme.onSurface,
+                  borderColor: colorScheme.outline.withValues(alpha: 0.22),
+                  shadowColor: colorScheme.shadow.withValues(alpha: 0.16),
+                  onPressed: _goNextPage,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  int _dominantPageForRect(Rect rect, List<Rect> pageLayouts, int fallbackPage) {
+    var bestPage = fallbackPage;
+    var bestArea = 0.0;
+    for (var i = 0; i < pageLayouts.length; i++) {
+      final intersection = rect.intersect(pageLayouts[i]);
+      final area = intersection.width <= 0 || intersection.height <= 0
+          ? 0.0
+          : intersection.width * intersection.height;
+      if (area > bestArea) {
+        bestArea = area;
+        bestPage = i + 1;
+      }
+    }
+    return bestPage;
+  }
+
+  Matrix4 _normalizeBookViewMatrix({
+    required Matrix4 matrix,
+    required Size viewSize,
+    required PdfPageLayout layout,
+    required PdfViewerController? controller,
+  }) {
+    if (controller == null || !controller.isReady) return matrix;
+
+    if (_scrollAnchorPage != null) {
+      final anchoredSpreadStartPage = _spreadStartPageFor(_scrollAnchorPage!);
+      _lockedSpreadStartPage = anchoredSpreadStartPage;
+      return _clampMatrixToSpread(
+        matrix: matrix,
+        viewSize: viewSize,
+        layout: layout,
+        controller: controller,
+        spreadStartPage: anchoredSpreadStartPage,
+      );
+    }
+
+    final currentPage = controller.pageNumber ?? widget.tab.pageNumber;
+    final candidateVisibleRect = matrix.calcVisibleRect(viewSize);
+
+    var spreadStartPage =
+        _lockedSpreadStartPage ?? _spreadStartPageFor(currentPage);
+    var spreadRect = _spreadRectForPageLayout(layout, spreadStartPage);
+
+    if (!candidateVisibleRect.overlaps(spreadRect)) {
+      final targetPage = _dominantPageForRect(
+        candidateVisibleRect,
+        layout.pageLayouts,
+        currentPage,
+      );
+      spreadStartPage = _spreadStartPageFor(targetPage);
+      spreadRect = _spreadRectForPageLayout(layout, spreadStartPage);
+    }
+
+    _lockedSpreadStartPage = spreadStartPage;
+
+    return _clampMatrixToSpread(
+      matrix: matrix,
+      viewSize: viewSize,
+      layout: layout,
+      controller: controller,
+      spreadStartPage: spreadStartPage,
+    );
+  }
+
+  Matrix4 _clampMatrixToSpread({
+    required Matrix4 matrix,
+    required Size viewSize,
+    required PdfPageLayout layout,
+    required PdfViewerController controller,
+    required int spreadStartPage,
+  }) {
+    final candidateVisibleRect = matrix.calcVisibleRect(viewSize);
+    final spreadRect = _spreadRectForPageLayout(layout, spreadStartPage);
+
+    final newZoom = matrix.zoom;
+    final halfWidth = viewSize.width / 2 / newZoom;
+    final halfHeight = viewSize.height / 2 / newZoom;
+
+    final minCenterX = spreadRect.left + halfWidth;
+    final maxCenterX = spreadRect.right - halfWidth;
+    final minCenterY = spreadRect.top + halfHeight;
+    final maxCenterY = spreadRect.bottom - halfHeight;
+
+    final targetCenterX = minCenterX <= maxCenterX
+        ? candidateVisibleRect.center.dx.clamp(minCenterX, maxCenterX).toDouble()
+        : spreadRect.center.dx;
+    final targetCenterY = minCenterY <= maxCenterY
+        ? candidateVisibleRect.center.dy.clamp(minCenterY, maxCenterY).toDouble()
+        : spreadRect.center.dy;
+
+    return controller.calcMatrixFor(
+      Offset(targetCenterX, targetCenterY),
+      zoom: newZoom,
+      viewSize: viewSize,
+    );
+  }
+
+  bool _wasMatrixClamped({
+    required Matrix4 original,
+    required Matrix4 clamped,
+    required Size viewSize,
+  }) {
+    final originalRect = original.calcVisibleRect(viewSize);
+    final clampedRect = clamped.calcVisibleRect(viewSize);
+
+    return (original.zoom - clamped.zoom).abs() > 0.001 ||
+        (originalRect.center.dx - clampedRect.center.dx).abs() > 0.1 ||
+        (originalRect.center.dy - clampedRect.center.dy).abs() > 0.1;
+  }
+
+  Future<void> _goToPageWithSpreadLock(int pageNumber) async {
+    if (!widget.tab.pdfViewerController.isReady) return;
+    final totalPages = widget.tab.pdfViewerController.pageCount;
+    final safePage = pageNumber.clamp(1, totalPages);
+
+    if (_isBookViewModeActive()) {
+      _lockedSpreadStartPage = _spreadStartPageFor(safePage);
+    }
+
+    await widget.tab.pdfViewerController.goToPage(pageNumber: safePage);
+
+    if (!_pdfViewFocusNode.hasFocus) {
+      _pdfViewFocusNode.requestFocus();
+    }
   }
 
   Future<void> _saveActiveCommentators() async {
     final settingsBloc = context.read<SettingsBloc>();
     if (!settingsBloc.state.enablePerBookSettings) return;
 
-    final existingSettings =
-        await PdfBookPerBookSettings.load(widget.tab.book.title);
     final settings = PdfBookPerBookSettings(
-      zoom: existingSettings?.zoom,
       activeCommentators: List.from(widget.tab.activeCommentators),
     );
     await settings.save(widget.tab.book.title);
@@ -1417,42 +1881,33 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   void _goNextPage() {
-    if (!widget.tab.pdfViewerController.isReady) {
-      return;
-    }
+    if (!widget.tab.pdfViewerController.isReady) return;
 
+    final isBookViewMode = _isBookViewModeActive();
     final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
     final totalPages = widget.tab.pdfViewerController.pageCount;
-    final nextPage = min(currentPage + 1, totalPages);
+    final pageStep = isBookViewMode ? 2 : 1;
+    final nextPage = min(currentPage + pageStep, totalPages);
 
-    widget.tab.pdfViewerController.goToPage(pageNumber: nextPage);
-
-    // משיכת פוקוס חזרה לאחר שינוי עמוד
-    if (!_pdfViewFocusNode.hasFocus) {
-      _pdfViewFocusNode.requestFocus();
-    }
+    _goToPageWithSpreadLock(nextPage);
   }
 
   void _goPreviousPage() {
-    if (!widget.tab.pdfViewerController.isReady) {
-      return;
-    }
+    if (!widget.tab.pdfViewerController.isReady) return;
 
+    final isBookViewMode = _isBookViewModeActive();
     final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
-    final prevPage = max(currentPage - 1, 1);
+    final pageStep = isBookViewMode ? 2 : 1;
+    final prevPage = max(currentPage - pageStep, 1);
 
-    widget.tab.pdfViewerController.goToPage(pageNumber: prevPage);
-
-    // משיכת פוקוס חזרה לאחר שינוי עמוד
-    if (!_pdfViewFocusNode.hasFocus) {
-      _pdfViewFocusNode.requestFocus();
-    }
+    _goToPageWithSpreadLock(prevPage);
   }
 
   void _startContinuousScroll(LogicalKeyboardKey key) {
     if (_scrollTimer != null) return;
 
     _currentScrollKey = key;
+    _captureScrollAnchor();
 
     if (key == LogicalKeyboardKey.arrowUp) {
       _scrollUpSimple();
@@ -1466,7 +1921,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         return;
       }
 
-      // שמירה אקטיבית על הפוקוס - מונע את ה"בריחה" של המקלדת
       if (!_pdfViewFocusNode.hasFocus) {
         _pdfViewFocusNode.requestFocus();
       }
@@ -1491,53 +1945,64 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _scrollTimer?.cancel();
     _scrollTimer = null;
     _currentScrollKey = null;
+    _scrollAnchorPage = null;
 
-    // למקרה שהפוקוס אבד בדיוק ברגע העצירה
     if (mounted && !_pdfViewFocusNode.hasFocus) {
       _pdfViewFocusNode.requestFocus();
     }
   }
 
-  void _scrollUpSimple() {
-    if (!widget.tab.pdfViewerController.isReady) {
-      return;
-    }
+  void _captureScrollAnchor() {
+    if (!widget.tab.pdfViewerController.isReady) return;
+    _scrollAnchorPage = widget.tab.pdfViewerController.pageNumber ?? 1;
+  }
+
+  void _applyVerticalScroll(double deltaY) {
+    if (!widget.tab.pdfViewerController.isReady) return;
 
     final currentMatrix = widget.tab.pdfViewerController.value;
     final currentTranslation = currentMatrix.getTranslation();
+    final candidateMatrix = currentMatrix.clone()
+      ..setTranslationRaw(
+        currentTranslation.x,
+        currentTranslation.y + deltaY,
+        currentTranslation.z,
+      );
 
-    const double scrollAmount = 100.0;
-    final newY = currentTranslation.y + scrollAmount;
+    if (!_isBookViewModeActive()) {
+      widget.tab.pdfViewerController.goTo(candidateMatrix);
+      return;
+    }
 
-    widget.tab.pdfViewerController.goTo(
-      currentMatrix.clone()
-        ..setTranslationRaw(
-          currentTranslation.x,
-          newY,
-          currentTranslation.z,
-        ),
+    final anchorPage =
+        _scrollAnchorPage ?? (widget.tab.pdfViewerController.pageNumber ?? 1);
+    final clampedMatrix = _clampMatrixToSpread(
+      matrix: candidateMatrix,
+      viewSize: widget.tab.pdfViewerController.viewSize,
+      layout: widget.tab.pdfViewerController.layout,
+      controller: widget.tab.pdfViewerController,
+      spreadStartPage: _spreadStartPageFor(anchorPage),
     );
+
+    widget.tab.pdfViewerController.goTo(clampedMatrix);
+
+    if (_wasMatrixClamped(
+      original: candidateMatrix,
+      clamped: clampedMatrix,
+      viewSize: widget.tab.pdfViewerController.viewSize,
+    )) {
+      _stopContinuousScroll();
+    }
+  }
+
+  void _scrollUpSimple() {
+    const double scrollAmount = 100.0;
+    _applyVerticalScroll(scrollAmount);
   }
 
   void _scrollDownSimple() {
-    if (!widget.tab.pdfViewerController.isReady) {
-      return;
-    }
-
-    final currentMatrix = widget.tab.pdfViewerController.value;
-    final currentTranslation = currentMatrix.getTranslation();
-
     const double scrollAmount = 100.0;
-    final newY = currentTranslation.y - scrollAmount;
-
-    widget.tab.pdfViewerController.goTo(
-      currentMatrix.clone()
-        ..setTranslationRaw(
-          currentTranslation.x,
-          newY,
-          currentTranslation.z,
-        ),
-    );
+    _applyVerticalScroll(-scrollAmount);
   }
 
   Future<void> navigateToUrl(Uri url) async {
@@ -1631,6 +2096,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: () => _handleTextButtonPress(context),
       ),
       ActionButtonData(
+        widget: BlocBuilder<PdfBookBloc, PdfBookState>(
+          bloc: _bloc,
+          builder: (context, state) {
+            if (state is! PdfBookLoaded) return const SizedBox.shrink();
+            return _buildLayoutModeDropdown(context, state);
+          },
+        ),
+        icon: FluentIcons.book_open_24_regular,
+        tooltip: 'מצב תצוגה',
+        onPressed: null,
+      ),
+      ActionButtonData(
         widget: IconButton(
           icon: const Icon(FluentIcons.zoom_in_24_regular),
           tooltip: 'הגדל את גודל הטקסט',
@@ -1665,39 +2142,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           widget: IconButton(
             icon: const Icon(FluentIcons.arrow_previous_24_filled),
             tooltip: 'תחילת הספר (CTRL + HOME)',
-            onPressed: () =>
-                widget.tab.pdfViewerController.goToPage(pageNumber: 1),
+            onPressed: () => _goToPageWithSpreadLock(1),
           ),
           icon: FluentIcons.arrow_previous_24_filled,
           tooltip: 'תחילת הספר (CTRL + HOME)',
-          onPressed: () =>
-              widget.tab.pdfViewerController.goToPage(pageNumber: 1),
+          onPressed: () => _goToPageWithSpreadLock(1),
         ),
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.chevron_left_24_regular),
             tooltip: 'הקודם',
-            onPressed: () {
-              if (widget.tab.pdfViewerController.isReady) {
-                final currentPage =
-                    widget.tab.pdfViewerController.pageNumber ?? 1;
-                widget.tab.pdfViewerController.goToPage(
-                  pageNumber: max(currentPage - 1, 1),
-                );
-              }
-            },
+            onPressed: _goPreviousPage,
           ),
           icon: FluentIcons.chevron_left_24_regular,
           tooltip: 'הקודם',
-          onPressed: () {
-            if (widget.tab.pdfViewerController.isReady) {
-              final currentPage =
-                  widget.tab.pdfViewerController.pageNumber ?? 1;
-              widget.tab.pdfViewerController.goToPage(
-                pageNumber: max(currentPage - 1, 1),
-              );
-            }
-          },
+          onPressed: _goPreviousPage,
         ),
         ActionButtonData(
           widget: PageNumberDisplay(controller: widget.tab.pdfViewerController),
@@ -1707,43 +2166,25 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ),
         ActionButtonData(
           widget: IconButton(
-            onPressed: () {
-              if (widget.tab.pdfViewerController.isReady) {
-                final currentPage =
-                    widget.tab.pdfViewerController.pageNumber ?? 1;
-                widget.tab.pdfViewerController.goToPage(
-                  pageNumber: min(currentPage + 1,
-                      widget.tab.pdfViewerController.pageCount),
-                );
-              }
-            },
+            onPressed: _goNextPage,
             icon: const Icon(FluentIcons.chevron_right_24_regular),
             tooltip: 'הבא',
           ),
           icon: FluentIcons.chevron_right_24_regular,
           tooltip: 'הבא',
-          onPressed: () {
-            if (widget.tab.pdfViewerController.isReady) {
-              final currentPage =
-                  widget.tab.pdfViewerController.pageNumber ?? 1;
-              widget.tab.pdfViewerController.goToPage(
-                pageNumber: min(
-                    currentPage + 1, widget.tab.pdfViewerController.pageCount),
-              );
-            }
-          },
+          onPressed: _goNextPage,
         ),
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.arrow_next_24_filled),
             tooltip: 'סוף הספר (CTRL + END)',
-            onPressed: () => widget.tab.pdfViewerController
-                .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
+            onPressed: () => _goToPageWithSpreadLock(
+                widget.tab.pdfViewerController.pageCount),
           ),
           icon: FluentIcons.arrow_next_24_filled,
           tooltip: 'סוף הספר (CTRL + END)',
-          onPressed: () => widget.tab.pdfViewerController
-              .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
+          onPressed: () => _goToPageWithSpreadLock(
+              widget.tab.pdfViewerController.pageCount),
         ),
       ],
     ];
@@ -1756,79 +2197,43 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           widget: IconButton(
             icon: const Icon(FluentIcons.arrow_previous_24_filled),
             tooltip: 'תחילת הספר (CTRL + HOME)',
-            onPressed: () =>
-                widget.tab.pdfViewerController.goToPage(pageNumber: 1),
+            onPressed: () => _goToPageWithSpreadLock(1),
           ),
           icon: FluentIcons.arrow_previous_24_filled,
           tooltip: 'תחילת הספר (CTRL + HOME)',
-          onPressed: () =>
-              widget.tab.pdfViewerController.goToPage(pageNumber: 1),
+          onPressed: () => _goToPageWithSpreadLock(1),
         ),
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.chevron_left_24_regular),
             tooltip: 'הקודם',
-            onPressed: () {
-              if (widget.tab.pdfViewerController.isReady) {
-                final currentPage =
-                    widget.tab.pdfViewerController.pageNumber ?? 1;
-                widget.tab.pdfViewerController.goToPage(
-                  pageNumber: max(currentPage - 1, 1),
-                );
-              }
-            },
+            onPressed: _goPreviousPage,
           ),
           icon: FluentIcons.chevron_left_24_regular,
           tooltip: 'הקודם',
-          onPressed: () {
-            if (widget.tab.pdfViewerController.isReady) {
-              final currentPage =
-                  widget.tab.pdfViewerController.pageNumber ?? 1;
-              widget.tab.pdfViewerController.goToPage(
-                pageNumber: max(currentPage - 1, 1),
-              );
-            }
-          },
+          onPressed: _goPreviousPage,
         ),
         ActionButtonData(
           widget: IconButton(
-            onPressed: () {
-              if (widget.tab.pdfViewerController.isReady) {
-                final currentPage =
-                    widget.tab.pdfViewerController.pageNumber ?? 1;
-                widget.tab.pdfViewerController.goToPage(
-                  pageNumber: min(currentPage + 1,
-                      widget.tab.pdfViewerController.pageCount),
-                );
-              }
-            },
+            onPressed: _goNextPage,
             icon: const Icon(FluentIcons.chevron_right_24_regular),
             tooltip: 'הבא',
           ),
           icon: FluentIcons.chevron_right_24_regular,
           tooltip: 'הבא',
-          onPressed: () {
-            if (widget.tab.pdfViewerController.isReady) {
-              final currentPage =
-                  widget.tab.pdfViewerController.pageNumber ?? 1;
-              widget.tab.pdfViewerController.goToPage(
-                pageNumber: min(
-                    currentPage + 1, widget.tab.pdfViewerController.pageCount),
-              );
-            }
-          },
+          onPressed: _goNextPage,
         ),
         ActionButtonData(
           widget: IconButton(
             icon: const Icon(FluentIcons.arrow_next_24_filled),
             tooltip: 'סוף הספר (CTRL + END)',
-            onPressed: () => widget.tab.pdfViewerController
-                .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
+            onPressed: () => _goToPageWithSpreadLock(
+                widget.tab.pdfViewerController.pageCount),
           ),
           icon: FluentIcons.arrow_next_24_filled,
           tooltip: 'סוף הספר (CTRL + END)',
-          onPressed: () => widget.tab.pdfViewerController
-              .goToPage(pageNumber: widget.tab.pdfViewerController.pageCount),
+          onPressed: () => _goToPageWithSpreadLock(
+              widget.tab.pdfViewerController.pageCount),
         ),
       ],
       ActionButtonData(
@@ -2207,6 +2612,298 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildLayoutModeDropdown(BuildContext context, PdfBookLoaded state) {
+    final isBookViewMode = state.layoutMode == PdfLayoutMode.bookView;
+
+    return PopupMenuButton<PdfLayoutMode>(
+      tooltip: 'בחר מצב תצוגה',
+      icon: Icon(
+        isBookViewMode
+            ? FluentIcons.book_open_24_regular
+            : FluentIcons.book_24_regular,
+      ),
+      position: PopupMenuPosition.under,
+      onSelected: (layoutMode) {
+        _lockedSpreadStartPage = null;
+
+        final settingsBloc = context.read<SettingsBloc>();
+        if (!settingsBloc.state.enablePerBookSettings) {
+          settingsBloc.add(
+            UpdatePdfBookViewByDefault(layoutMode == PdfLayoutMode.bookView),
+          );
+        }
+
+        _bloc.add(pdf_events.SetLayoutMode(layoutMode));
+      },
+      itemBuilder: (context) {
+        final primaryColor = Theme.of(context).colorScheme.primary;
+
+        PopupMenuItem<PdfLayoutMode> buildItem({
+          required PdfLayoutMode value,
+          required String text,
+          required IconData icon,
+          required bool isSelected,
+        }) {
+          final style = isSelected ? TextStyle(color: primaryColor) : null;
+          return PopupMenuItem<PdfLayoutMode>(
+            value: value,
+            child: Row(
+              children: [
+                Icon(icon, color: isSelected ? primaryColor : null),
+                const SizedBox(width: 12),
+                Text(text, style: style, textDirection: TextDirection.rtl),
+                if (isSelected) ...[
+                  const Spacer(),
+                  Icon(FluentIcons.checkmark_24_regular,
+                      size: 16, color: primaryColor),
+                ],
+              ],
+            ),
+          );
+        }
+
+        return [
+          buildItem(
+            value: PdfLayoutMode.regularView,
+            text: 'תצוגה רגילה',
+            icon: FluentIcons.book_24_regular,
+            isSelected: !isBookViewMode,
+          ),
+          buildItem(
+            value: PdfLayoutMode.bookView,
+            text: 'תצוגת ספר',
+            icon: FluentIcons.book_open_24_regular,
+            isSelected: isBookViewMode,
+          ),
+        ];
+      },
+    );
+  }
+}
+
+// ============================================================
+// Helper classes for book view spread visualization
+// ============================================================
+
+class _BookViewViewportMaskPainter extends CustomPainter {
+  final Rect spreadViewportRect;
+
+  const _BookViewViewportMaskPainter(this.spreadViewportRect);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.white;
+
+    if (spreadViewportRect.top > 0) {
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, spreadViewportRect.top),
+        paint,
+      );
+    }
+    if (spreadViewportRect.left > 0) {
+      canvas.drawRect(
+        Rect.fromLTWH(
+          0, spreadViewportRect.top,
+          spreadViewportRect.left, spreadViewportRect.height,
+        ),
+        paint,
+      );
+    }
+    if (spreadViewportRect.right < size.width) {
+      canvas.drawRect(
+        Rect.fromLTWH(
+          spreadViewportRect.right, spreadViewportRect.top,
+          size.width - spreadViewportRect.right, spreadViewportRect.height,
+        ),
+        paint,
+      );
+    }
+    if (spreadViewportRect.bottom < size.height) {
+      canvas.drawRect(
+        Rect.fromLTWH(
+          0, spreadViewportRect.bottom,
+          size.width, size.height - spreadViewportRect.bottom,
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BookViewViewportMaskPainter oldDelegate) =>
+      oldDelegate.spreadViewportRect != spreadViewportRect;
+}
+
+class _VisibleBookPage {
+  final int pageNumber;
+  final Rect viewportRect;
+  final bool isLeftPage;
+  final int outerStackPages;
+
+  const _VisibleBookPage({
+    required this.pageNumber,
+    required this.viewportRect,
+    required this.isLeftPage,
+    required this.outerStackPages,
+  });
+}
+
+class _BookSpreadPainter extends CustomPainter {
+  final List<_VisibleBookPage> pages;
+  final Color pageEdgeColor;
+  final Color stackColor;
+  final Color stackShadowColor;
+  final Color spineColor;
+
+  const _BookSpreadPainter({
+    required this.pages,
+    required this.pageEdgeColor,
+    required this.stackColor,
+    required this.stackShadowColor,
+    required this.spineColor,
+  });
+
+  static const double _layerOffsetX = 1.4;
+  static const double _layerOffsetY = 0.85;
+  static const double _pageEdgeInset = 1.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+
+    for (final page in pages) {
+      _paintOuterStack(canvas, page);
+    }
+
+    if (pages.length == 2) {
+      final spineX =
+          (pages[0].viewportRect.right + pages[1].viewportRect.left) / 2;
+      final top = min(pages[0].viewportRect.top, pages[1].viewportRect.top);
+      final bottom =
+          max(pages[0].viewportRect.bottom, pages[1].viewportRect.bottom);
+      final spinePaint = Paint()
+        ..color = spineColor
+        ..strokeWidth = 1.2;
+      canvas.drawLine(Offset(spineX, top), Offset(spineX, bottom), spinePaint);
+    }
+
+    canvas.restore();
+  }
+
+  void _paintOuterStack(Canvas canvas, _VisibleBookPage page) {
+    final layerCount = _stackLayerCount(page.outerStackPages);
+    if (layerCount == 0) return;
+
+    final rect = page.viewportRect;
+    final direction = page.isLeftPage ? -1.0 : 1.0;
+    final baseShadowPaint = Paint()
+      ..color = stackShadowColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    for (var i = layerCount; i >= 1; i--) {
+      final offsetX = direction * i * _layerOffsetX;
+      final offsetY = i * _layerOffsetY;
+      final outerX = page.isLeftPage ? rect.left + offsetX : rect.right + offsetX;
+      final sidePath = Path()
+        ..moveTo(
+          page.isLeftPage ? rect.left + _pageEdgeInset : rect.right - _pageEdgeInset,
+          rect.top,
+        )
+        ..lineTo(outerX, rect.top + offsetY)
+        ..lineTo(outerX, rect.bottom + offsetY)
+        ..lineTo(
+          page.isLeftPage ? rect.left + _pageEdgeInset : rect.right - _pageEdgeInset,
+          rect.bottom,
+        )
+        ..close();
+
+      final alphaFactor = 0.22 + ((layerCount - i) * 0.06);
+      final fillPaint = Paint()
+        ..color = stackColor.withValues(alpha: alphaFactor.clamp(0.0, 0.55))
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(sidePath, fillPaint);
+      canvas.drawPath(sidePath, baseShadowPaint);
+    }
+
+    final edgePaint = Paint()
+      ..color = pageEdgeColor.withValues(alpha: 0.38)
+      ..strokeWidth = 1.0;
+    final edgeX = page.isLeftPage ? rect.left : rect.right;
+    canvas.drawLine(
+        Offset(edgeX, rect.top), Offset(edgeX, rect.bottom), edgePaint);
+  }
+
+  int _stackLayerCount(int pagesCount) {
+    if (pagesCount <= 0) return 0;
+    return ((pagesCount / 36).ceil()).clamp(1, 10);
+  }
+
+  @override
+  bool shouldRepaint(_BookSpreadPainter oldDelegate) =>
+      oldDelegate.pages != pages ||
+      oldDelegate.pageEdgeColor != pageEdgeColor ||
+      oldDelegate.stackColor != stackColor ||
+      oldDelegate.stackShadowColor != stackShadowColor ||
+      oldDelegate.spineColor != spineColor;
+}
+
+class _BookViewTurnButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final double size;
+  final Color backgroundColor;
+  final Color iconColor;
+  final Color borderColor;
+  final Color shadowColor;
+  final VoidCallback onPressed;
+
+  const _BookViewTurnButton({
+    required this.icon,
+    required this.tooltip,
+    required this.size,
+    required this.backgroundColor,
+    required this.iconColor,
+    required this.borderColor,
+    required this.shadowColor,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final compactSize = size * 0.7;
+    return Container(
+      width: compactSize,
+      height: compactSize,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        shape: BoxShape.circle,
+        border: Border.all(color: borderColor, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 6,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(compactSize / 2),
+          child: Center(
+            child: Tooltip(
+              message: tooltip,
+              child: Icon(icon, color: iconColor, size: compactSize * 0.5),
+            ),
+          ),
+        ),
       ),
     );
   }

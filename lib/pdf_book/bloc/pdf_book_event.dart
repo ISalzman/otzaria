@@ -3,6 +3,7 @@ import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
 
 /// Base class for PDF book events
 sealed class PdfBookEvent extends Equatable {
@@ -132,6 +133,16 @@ class ZoomOut extends PdfBookEvent {
 /// Reset zoom to 1.0
 class ResetZoom extends PdfBookEvent {
   const ResetZoom();
+}
+
+/// Set layout mode directly
+class SetLayoutMode extends PdfBookEvent {
+  final PdfLayoutMode layoutMode;
+
+  const SetLayoutMode(this.layoutMode);
+
+  @override
+  List<Object?> get props => [layoutMode];
 }
 
 /// Show or hide the zoom bar

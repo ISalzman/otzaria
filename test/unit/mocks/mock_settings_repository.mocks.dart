@@ -357,6 +357,17 @@ class MockSettingsRepository extends _i1.Mock
       ) as _i3.Future<void>);
 
   @override
+  _i3.Future<void> updatePdfBookViewByDefault(bool? value) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updatePdfBookViewByDefault,
+          [value],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
   _i3.Future<void> updateOfflineMode(bool? value) => (super.noSuchMethod(
         Invocation.method(
           #updateOfflineMode,
@@ -403,6 +414,17 @@ class MockSettingsRepository extends _i1.Mock
       (super.noSuchMethod(
         Invocation.method(
           #updateCalendarNotificationSound,
+          [value],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> updateSoftwareAndBookUpdatesEnabled(bool? value) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateSoftwareAndBookUpdatesEnabled,
           [value],
         ),
         returnValue: _i3.Future<void>.value(),

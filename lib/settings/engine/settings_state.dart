@@ -33,6 +33,7 @@ class SettingsState extends Equatable {
   final bool libraryShowPreview;
   final Map<String, String> shortcuts;
   final bool enablePerBookSettings;
+  final bool pdfBookViewByDefault;
   final bool isOfflineMode;
   final bool alignTabsToRight;
   final bool enableHtmlLinks;
@@ -73,6 +74,7 @@ class SettingsState extends Equatable {
     required this.libraryShowPreview,
     required this.shortcuts,
     required this.enablePerBookSettings,
+    required this.pdfBookViewByDefault,
     required this.isOfflineMode,
     required this.alignTabsToRight,
     required this.enableHtmlLinks,
@@ -116,6 +118,7 @@ class SettingsState extends Equatable {
       libraryShowPreview: true,
       shortcuts: {},
       enablePerBookSettings: false,
+      pdfBookViewByDefault: false,
       isOfflineMode: false,
       alignTabsToRight: false,
       enableHtmlLinks: true,
@@ -157,6 +160,7 @@ class SettingsState extends Equatable {
     bool? libraryShowPreview,
     Map<String, String>? shortcuts,
     bool? enablePerBookSettings,
+    bool? pdfBookViewByDefault,
     bool? isOfflineMode,
     bool? alignTabsToRight,
     bool? enableHtmlLinks,
@@ -200,6 +204,8 @@ class SettingsState extends Equatable {
       shortcuts: shortcuts ?? this.shortcuts,
       enablePerBookSettings:
           enablePerBookSettings ?? this.enablePerBookSettings,
+        pdfBookViewByDefault:
+          pdfBookViewByDefault ?? this.pdfBookViewByDefault,
       isOfflineMode: isOfflineMode ?? this.isOfflineMode,
       alignTabsToRight: alignTabsToRight ?? this.alignTabsToRight,
       enableHtmlLinks: enableHtmlLinks ?? this.enableHtmlLinks,
@@ -251,6 +257,7 @@ class SettingsState extends Equatable {
         libraryShowPreview,
         shortcuts,
         enablePerBookSettings,
+        pdfBookViewByDefault,
         isOfflineMode,
         alignTabsToRight,
         enableHtmlLinks,
