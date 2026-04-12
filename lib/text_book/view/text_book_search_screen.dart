@@ -726,10 +726,17 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     }
 
     final List<InlineSpan> spans = [];
-    final searchTerms = query.trim().split(RegExp(r'\s+'));
+    final searchTerms =
+        query.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+
+    // לחיפוש של כמה מילים - pattern רצפי (כל המילים יחד לפי הסדר)
+    // לחיפוש של מילה אחת - חיפוש ישיר
+    final pattern = searchTerms.length == 1
+        ? RegExp.escape(searchTerms.first)
+        : searchTerms.map(RegExp.escape).join(r'\s+');
 
     final highlightRegex = RegExp(
-      searchTerms.map(RegExp.escape).join('|'),
+      pattern,
       caseSensitive: false,
     );
 
