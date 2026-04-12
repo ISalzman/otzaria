@@ -30,14 +30,38 @@ const { data } = await Otzaria.call('app.getInfo');
 ### `app.getTheme`
 מחזיר את ערכת הצבעים והטיפוגרפיה הנוכחית.
 
+> **חשוב:** אל תקרא ל-`app.getTheme` ידנית בטעינה — הנתונים כבר נכללים ב-`plugin.boot`.
+> השתמש ב-API הזה רק אם צריך לרענן את הנתונים לאחר שכבר עלה התוסף.
+> האזן לאירוע `theme.changed` כדי לקבל עדכונים בזמן אמת.
+
 ```javascript
 const { data } = await Otzaria.call('app.getTheme');
 // {
 //   mode: "light" | "dark",
-//   colorScheme: { primary: "#6750A4", onPrimary: "#FFFFFF", ... },
-//   typography: { fontFamily: "Frank Ruhl Libre", fontSize: 25, ... }
+//   colorScheme: {
+//     primary:                 "#6750A4",  // הצבע הראשי
+//     onPrimary:               "#FFFFFF",  // טקסט/אייקון מעל primary
+//     secondary:               "#625B71",  // הדגשות משניות
+//     onSecondary:             "#FFFFFF",  // טקסט/אייקון מעל secondary
+//     surface:                 "#FFFBFE",  // רקע כרטיסים וחלוניות
+//     onSurface:               "#1C1B1F",  // טקסט ראשי
+//     surfaceContainerHighest: "#E6E0E9",  // פופאוברים, דיאלוגים
+//     error:                   "#B3261E",  // שגיאות
+//     onError:                 "#FFFFFF",  // טקסט מעל error
+//     outline:                 "#79747E",  // מסגרות ומפרידים
+//   },
+//   typography: {
+//     fontFamily:             "Frank Ruhl Libre",
+//     fontSize:               25,    // לפי הגדרת המשתמש — אל תניח ערך קבוע!
+//     lineHeight:             1.5,
+//     commentatorsFontFamily: "Shofar",
+//     commentatorsFontSize:   22,
+//   }
 // }
 ```
+
+הצבעים הם **Material Design 3 Color Roles** בפורמט hex RGB (`#rrggbb`).
+ראה [DESIGN_GUIDE.md](DESIGN_GUIDE.md) להסבר מלא על השימוש בהם.
 
 ### `app.getLocale`
 מחזיר את השפה וכיוון הטקסט.
