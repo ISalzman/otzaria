@@ -558,6 +558,55 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     }
   }
 
+  /// Clear all progress for a specific book by ID
+  Future<void> clearBookProgressById(
+    int bookId, {
+    String? categoryName,
+    String? bookName,
+    BookDetails? bookDetails,
+  }) async {
+    try {
+      _progressById.remove(bookId);
+      _completionDatesById.remove(bookId);
+
+      await _progressService.saveProgressDataById(_progressById);
+      await _progressService.saveCompletionDatesById(_completionDatesById);
+
+      if (categoryName != null && bookName != null) {
+        _fullProgress[categoryName]?.remove(bookName);
+        if (_fullProgress[categoryName]?.isEmpty ?? false) {
+          _fullProgress.remove(categoryName);
+        }
+
+        _completionDates[categoryName]?.remove(bookName);
+        if (_completionDates[categoryName]?.isEmpty ?? false) {
+          _completionDates.remove(categoryName);
+        }
+
+        if (bookDetails != null) {
+          _invalidateSummaryCache(
+            categoryName,
+            bookName,
+            bookDetails.totalLearnableItems,
+          );
+        }
+      } else {
+        _clearSummaryCache();
+      }
+
+      notifyListeners();
+    } catch (e, stackTrace) {
+      _error = ShamorZachorError.fromException(
+        e,
+        stackTrace: stackTrace,
+        customMessage: 'Failed to clear book progress by ID',
+      );
+      _logger.severe(
+          'Error clearing progress by ID: ${_error!.message}', e, stackTrace);
+      notifyListeners();
+    }
+  }
+
   /// Get tristate selection state for a section and column
   bool? getSectionColumnState(
     String categoryName,
