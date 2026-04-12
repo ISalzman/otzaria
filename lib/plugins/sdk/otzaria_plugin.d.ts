@@ -201,6 +201,23 @@ export interface OtzariaEventMap {
   'settings.changed': { key: string; newValue: unknown };
   /** Permissions snapshot changed (list of all currently granted permissions). */
   'plugin.permissions_changed': { permissions: string[] };
+  /** User selected text in the reader. Requires permission: events.subscribe:reader.selection_changed */
+  'reader.selection_changed': {
+    text: string;
+    currentRef: string;
+    currentBook: string;
+    currentBookId: string;
+    currentIndex: number;
+  };
+  /** User clicked a plugin-registered context menu item. Sent only to the registering plugin. */
+  'reader.context_menu_item_clicked': {
+    itemId: string;
+    selectedText: string;
+    currentRef: string;
+    currentBook: string;
+    currentBookId: string;
+    currentIndex: number;
+  };
 }
 
 export type NavigationTarget = 'library' | 'reading' | 'more' | 'settings';
@@ -368,7 +385,13 @@ export type OtzariaMethod =
   | 'database.listSources'
   | 'database.describeSource'
   | 'database.query'
-  | 'database.batchQuery';
+  | 'database.batchQuery'
+  | 'reader.addContextMenuItem'
+  | 'reader.removeContextMenuItem'
+  | 'reader.setHighlight'
+  | 'reader.getHighlights'
+  | 'reader.clearHighlight'
+  | 'reader.clearAllHighlights';
 
 // ---------------------------------------------------------------------------
 // The global Otzaria object

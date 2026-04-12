@@ -481,6 +481,7 @@ class _CombinedViewState extends State<CombinedView> {
                     'currentRef': state.currentTitle ?? '',
                     'currentBook': state.book.title,
                     'currentBookId': state.book.title,
+                    'currentIndex': paragraphIndex,
                   },
                 ));
               },
@@ -788,19 +789,22 @@ class _CombinedViewState extends State<CombinedView> {
 
                 // מחשב את מספר השורה המדויק של הטקסט המודגש
                 // משתמש באותה לוגיקה כמו בדיווח שגיאות
-                final state = _textBookBloc.state;
+                final TextBookLoaded? loadedState =
+                    _textBookBloc.state is TextBookLoaded
+                        ? _textBookBloc.state as TextBookLoaded
+                        : null;
                 int? foundIndex;
                 var fixedPlain = plain;
 
-                if (state is TextBookLoaded) {
+                if (loadedState != null) {
                   final settingsState = context.read<SettingsBloc>().state;
                   // מקבל את השורה הראשונה הנראית
-                  final baseIndex = state.visibleIndices.isNotEmpty
-                      ? state.visibleIndices.first
+                  final baseIndex = loadedState.visibleIndices.isNotEmpty
+                      ? loadedState.visibleIndices.first
                       : 0;
 
                   final visibleLines =
-                      _buildRenderedVisibleLines(state, settingsState);
+                      _buildRenderedVisibleLines(loadedState, settingsState);
                   final visibleText = visibleLines.join('\n');
 
                   fixedPlain = restoreSelectedTextLineBreaks(
@@ -819,7 +823,7 @@ class _CombinedViewState extends State<CombinedView> {
                   }
 
                   // fallback: אם לא הצלחנו לחשב אינדקס, נשתמש בשורה שנבחרה (אם קיימת)
-                  foundIndex ??= state.selectedIndex;
+                  foundIndex ??= loadedState.selectedIndex;
                 }
 
                 if (mounted) {
@@ -827,6 +831,21 @@ class _CombinedViewState extends State<CombinedView> {
                   _savedSelectedIndex.value = foundIndex;
                   _currentSelectedIndex.value = foundIndex;
                   widget.onSelectedTextChanged?.call(fixedPlain);
+
+                  // שליחת event לפלאגינים עם ה-index המדויק
+                  final selectionText = fixedPlain?.trim() ?? '';
+                  if (selectionText.isNotEmpty && loadedState != null) {
+                    unawaited(PluginRuntimeDispatcher.instance.dispatchEvent(
+                      'reader.selection_changed',
+                      {
+                        'text': selectionText,
+                        'currentRef': loadedState.currentTitle ?? '',
+                        'currentBook': loadedState.book.title,
+                        'currentBookId': loadedState.book.title,
+                        'currentIndex': foundIndex ?? 0,
+                      },
+                    ));
+                  }
                 }
                 _prefetchDictionaryLookups(fixedPlain);
               },

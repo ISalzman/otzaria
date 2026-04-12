@@ -4,6 +4,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
+import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_dev_loader_service.dart';
 import 'package:otzaria/plugins/services/plugin_dev_watch_service.dart';
 import 'dart:async';
@@ -146,6 +147,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   Future<void> _onUninstallPluginRequested(
       UninstallPluginRequested event, Emitter<PluginSystemState> emit) async {
     try {
+      ContextMenuRegistry.instance.removeAll(event.pluginId);
       await _installerService.uninstallPlugin(event.pluginId);
       add(LoadPlugins());
     } catch (e) {
@@ -169,6 +171,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   Future<void> _onDisablePluginRequested(
       DisablePluginRequested event, Emitter<PluginSystemState> emit) async {
     try {
+      ContextMenuRegistry.instance.removeAll(event.pluginId);
       final plugin = await repository.getPlugin(event.pluginId);
       if (plugin != null) {
         await repository.savePlugin(plugin.copyWith(enabled: false));
@@ -214,6 +217,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   Future<void> _onDetachDevelopmentPluginRequested(
       DetachDevelopmentPluginRequested event, Emitter<PluginSystemState> emit) async {
     try {
+      ContextMenuRegistry.instance.removeAll(event.pluginId);
       await repository.detachDevelopmentPlugin(event.pluginId);
       devWatchService.stopWatcher(event.pluginId);
       add(LoadPlugins());
