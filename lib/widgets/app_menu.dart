@@ -477,9 +477,6 @@ PopupMenuEntry<T> buildAppSubmenuPopupMenuItem<T>({
     child: SubmenuButton(
       menuChildren: menuChildren,
       style: buildAppSubmenuItemStyle(context, metrics),
-      menuStyle: const MenuStyle(
-        alignment: AlignmentDirectional(-1.0, -1.0),
-      ),
       child: _buildAppMenuRowContent(
         context,
         metrics,
@@ -530,7 +527,7 @@ Future<T?> showAppMenu<T>({
 //   )
 // ═══════════════════════════════════════════════════════════════════════════
 
-class AppContextMenuRegion extends StatelessWidget {
+class AppContextMenuRegion extends StatefulWidget {
   final Widget child;
   final List<AppContextMenuEntry> Function(BuildContext) menuBuilder;
 
@@ -541,25 +538,12 @@ class AppContextMenuRegion extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onLongPressStart: (details) {
-        if (_supportsLongPressContextMenu) {
-          _showContextMenu(context, details.globalPosition);
-        }
-      },
-      child: Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (event) {
-          if (event.buttons == 2) {
-            _showContextMenu(context, event.position);
-          }
-        },
-        child: child,
-      ),
-    );
-  }
+  State<AppContextMenuRegion> createState() => _AppContextMenuRegionState();
+}
+
+class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
+  final MenuController _menuController = MenuController();
+  List<AppContextMenuEntry> _currentEntries = const [];
 
   bool get _supportsLongPressContextMenu {
     return switch (defaultTargetPlatform) {
@@ -568,40 +552,59 @@ class AppContextMenuRegion extends StatelessWidget {
     };
   }
 
-  Future<void> _showContextMenu(
-      BuildContext context, Offset globalPosition) async {
-    final entries = menuBuilder(context);
+  /// פותח את תפריט ההקשר במיקום הנקודה שהוקשה (בקואורדינטות מקומיות של ה-MenuAnchor).
+  void _openContextMenu(Offset localPosition) {
+    final entries = widget.menuBuilder(context);
     if (entries.isEmpty) return;
-
-    final metrics = Theme.of(context).extension<AppMenuMetrics>() ??
-        AppMenuMetrics.create(compactMenus: false);
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-
-    await showMenu<_ContextMenuAction>(
-      context: context,
-      position: RelativeRect.fromRect(
-        globalPosition & const Size(1, 1),
-        Offset.zero & overlay.size,
-      ),
-      items: _buildMenuItems(context, entries, metrics),
-    ).then((action) => action?.call());
+    setState(() => _currentEntries = entries);
+    // פתיחה לאחר ה-build הבא — כדי שהפריטים המעודכנים יהיו כבר מוכנים
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _menuController.open(position: localPosition);
+      }
+    });
   }
 
-  List<PopupMenuEntry<_ContextMenuAction>> _buildMenuItems(
+  MenuStyle? _menuStyle(BuildContext context, AppMenuMetrics metrics) {
+    return Theme.of(context).menuTheme.style;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = Theme.of(context).extension<AppMenuMetrics>() ??
+        AppMenuMetrics.create(compactMenus: false);
+
+    return MenuAnchor(
+      controller: _menuController,
+      style: _menuStyle(context, metrics),
+      menuChildren: _buildMenuChildren(context, _currentEntries, metrics),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onLongPressStart: (details) {
+          if (_supportsLongPressContextMenu) {
+            _openContextMenu(details.localPosition);
+          }
+        },
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (event) {
+            if (event.buttons == 2) {
+              _openContextMenu(event.localPosition);
+            }
+          },
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildMenuChildren(
     BuildContext context,
     List<AppContextMenuEntry> entries,
     AppMenuMetrics metrics,
   ) {
     final normalized = _normalizeEntries(entries);
-    return normalized.map((entry) {
-      if (entry.isDivider) {
-        return const PopupMenuDivider();
-      }
-      if (entry.children != null && entry.children!.isNotEmpty) {
-        return _buildSubmenuItem(context, entry, metrics);
-      }
-      return _buildMenuItem(context, entry, metrics);
-    }).toList();
+    return _buildSubmenuChildren(context, normalized, metrics);
   }
 
   List<AppContextMenuEntry> _normalizeEntries(
@@ -619,78 +622,6 @@ class AppContextMenuRegion extends StatelessWidget {
       result.removeLast();
     }
     return result;
-  }
-
-  PopupMenuEntry<_ContextMenuAction> _buildMenuItem(
-    BuildContext context,
-    AppContextMenuEntry entry,
-    AppMenuMetrics metrics,
-  ) {
-    return PopupMenuItem<_ContextMenuAction>(
-      value: entry.onTap,
-      enabled: entry.enabled,
-      height: metrics.itemHeight,
-      padding: EdgeInsets.zero,
-      child: _buildAppMenuRowContent(
-        context,
-        metrics,
-        label: entry.label ?? '',
-        labelWidget: entry.labelWidget,
-        icon: entry.icon,
-        trailing: entry.trailing,
-        isDestructive: entry.isDestructive,
-      ),
-    );
-  }
-
-  PopupMenuEntry<_ContextMenuAction> _buildSubmenuItem(
-    BuildContext context,
-    AppContextMenuEntry entry,
-    AppMenuMetrics metrics,
-  ) {
-    final normalizedChildren = _normalizeEntries(entry.children!);
-    final hasEnabledChildren = normalizedChildren.any((child) => !child.isDivider);
-    if (!entry.enabled || !hasEnabledChildren) {
-      return PopupMenuItem<_ContextMenuAction>(
-        enabled: false,
-        height: metrics.itemHeight,
-        padding: EdgeInsets.zero,
-        child: _buildAppMenuRowContent(
-          context,
-          metrics,
-          label: entry.label ?? '',
-          labelWidget: entry.labelWidget,
-          icon: entry.icon,
-          trailing: entry.trailing,
-          isDestructive: entry.isDestructive,
-        ),
-      );
-    }
-
-    final subChildren =
-        _buildSubmenuChildren(context, normalizedChildren, metrics);
-
-    return buildAppCustomPopupMenuItem<_ContextMenuAction>(
-      context: context,
-      metrics: metrics,
-      height: metrics.itemHeight,
-      child: SubmenuButton(
-        menuChildren: subChildren,
-        style: buildAppSubmenuItemStyle(context, metrics),
-        menuStyle: const MenuStyle(
-          alignment: AlignmentDirectional(-1.0, -1.0),
-        ),
-        child: _buildAppMenuRowContent(
-          context,
-          metrics,
-          label: entry.label ?? '',
-          labelWidget: entry.labelWidget,
-          icon: entry.icon,
-          trailing: entry.trailing,
-          isDestructive: entry.isDestructive,
-        ),
-      ),
-    );
   }
 
   List<Widget> _buildSubmenuChildren(
@@ -731,9 +662,7 @@ class AppContextMenuRegion extends StatelessWidget {
               : null,
           trailingIcon: entry.trailing,
           style: buildAppSubmenuItemStyle(context, metrics),
-          menuStyle: const MenuStyle(
-            alignment: AlignmentDirectional(-1.0, -1.0),
-          ),
+          menuStyle: _menuStyle(context, metrics),
           menuChildren:
               _buildSubmenuChildren(context, normalizedChildren, metrics),
           child: DefaultTextStyle.merge(
@@ -780,9 +709,6 @@ class AppContextMenuRegion extends StatelessWidget {
     }).toList();
   }
 }
-
-/// טיפוס פנימי — callback של פריט תפריט הקשר
-typedef _ContextMenuAction = VoidCallback?;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AppSelectionField — שדה-בחירה (trigger לתפריט נפתח)
