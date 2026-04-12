@@ -215,7 +215,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
                           : null,
                       style: buildAppSubmenuItemStyle(context, menuMetrics),
                       onPressed: () {
-                        Navigator.of(context).pop();
+                        Navigator.of(context).pop(); // סוגר את התפריט הראשי
                         subAction.onPressed?.call();
                       },
                       child: Text(

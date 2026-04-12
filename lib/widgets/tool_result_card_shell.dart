@@ -1,15 +1,11 @@
-// lib/widgets/tool_result_card_shell.dart
-//
-// מעטפת משותפת לכרטיסי תוצאה במסכי כלים.
-
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 
+/// מעטפת משותפת לכרטיסי תוצאה במסכי כלים.
 class ToolResultCardShell extends StatelessWidget {
   final Widget child;
   final bool isFocused;
   final VoidCallback? onTap;
-  final bool enableSelection;
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry margin;
 
@@ -18,7 +14,6 @@ class ToolResultCardShell extends StatelessWidget {
     required this.child,
     this.isFocused = false,
     this.onTap,
-    this.enableSelection = true,
     this.padding = const EdgeInsets.symmetric(
       horizontal: AppTokens.spaceMD,
       vertical: AppTokens.spaceSM,
@@ -49,17 +44,12 @@ class ToolResultCardShell extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppTokens.radiusMD),
           hoverColor: cs.surfaceContainerHighest.withValues(alpha: 0.35),
           focusColor: Colors.transparent,
-          child: enableSelection
-              ? SelectionArea(
-                  child: Padding(
-                    padding: padding,
-                    child: child,
-                  ),
-                )
-              : Padding(
-                  padding: padding,
-                  child: child,
-                ),
+          child: SelectionArea(
+            child: Padding(
+              padding: padding,
+              child: child,
+            ),
+          ),
         ),
       ),
     );

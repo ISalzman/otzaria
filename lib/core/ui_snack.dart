@@ -3,8 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 /// מפתח גלובלי לניווט - חובה לחבר ל-MaterialApp
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -17,7 +17,7 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 // טוקנים פנימיים
 // ─────────────────────────────────────────────────────────────────────────────
 abstract class _ToastTokens {
-  /// פינות בצורה עגולה כמו שורת הcognition
+  /// פינות בצורת גלולה — כמו שורת החיפוש
   static const double radius = 28.0;
 
   static const double padH = AppTokens.spaceMD; // 16
@@ -27,9 +27,8 @@ abstract class _ToastTokens {
   static const double fontAction = AppTokens.fontMD; // 14
 
   static const double maxWidth = 500;
-  static const double minWidth = 320;
 
-  /// שקיפות רקע — מספיק שקוף כדי לראות את הרקע, מספיק שלם לקריאות
+  /// שקיפות רקע — מספיק שקוף כדי לראות את הרקע, מספיק אטום לקריאות
   static const double bgAlpha = 0.88;
 
   /// blur לאפקט זכוכית
@@ -85,7 +84,7 @@ class UiSnack {
         message: message,
         variant: _SnackVariant.warning,
         icon: FluentIcons.warning_24_regular,
-        duration: duration ?? const Duration(seconds: 5),
+        duration: duration ?? const Duration(seconds: 3),
         enableHaptic: true,
       );
 
@@ -113,8 +112,7 @@ class UiSnack {
       );
 
   /// הודעה צפה (תאימות לאחור)
-  static void showFloating(String message,
-          {Duration? duration}) =>
+  static void showFloating(String message, {Duration? duration}) =>
       show(message, duration: duration ?? const Duration(seconds: 4));
 
   /// הודעה עם משך זמן מותאם (תאימות לאחור)
@@ -226,7 +224,7 @@ class UiSnack {
   static const String formattedTextCopied = 'הטקסט המעוצב הועתק ללוח';
   static const String copyError = 'שגיאה בהעתקה';
   static const String formattedCopyError = 'שגיאה בהעתקה מעוצבת';
-  static const String sectionNotFound = 'Section not found';
+  static const String sectionNotFound = 'הדף לא נמצא בתוכן העניינים';
   static const String bookNotFound = 'הספר איננו קיים';
   static const String noteCreated = 'ההערה נוצרה והוצבה בסרגל';
   static const String savedSuccessfully = 'השינויים נשמרו בהצלחה';
@@ -308,7 +306,7 @@ class _SnackToastState extends State<_SnackToast>
     super.dispose();
   }
 
-  /// צבעים לפי variant — נגזרים על צבעי המערכת (ColorScheme)
+  /// צבעים לפי variant — נשענים על צבעי המערכת (ColorScheme)
   ({Color bg, Color fg, Color action}) _colors(ColorScheme cs) =>
       switch (widget.variant) {
         _SnackVariant.error => (
@@ -318,7 +316,7 @@ class _SnackToastState extends State<_SnackToast>
           ),
         _SnackVariant.warning => (
             bg: cs.tertiaryContainer,
-            fg: cs.onSurface,
+            fg: cs.onSurface, // שחור במצב בהיר, לבן במצב כהה
             action: cs.tertiary,
           ),
         _SnackVariant.standard => (
@@ -333,12 +331,13 @@ class _SnackToastState extends State<_SnackToast>
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final c = _colors(cs);
+    final messageMaxLines = widget.variant == _SnackVariant.warning ? 4 : 2;
 
-    // רקע שקוף-למחצה — מספיק שקוף כדי לראות את הרקע, מספיק עלום לקריאות
+    // רקע שקוף-למחצה — מספיק אטום לקריאות, מספיק שקוף לאפקט עמוק
     final bgColor = c.bg.withValues(alpha: _ToastTokens.bgAlpha);
 
     return Positioned(
-      // מיקום מסרים — מרחק מעל תחתית המסך
+      // מיקום מקורי — מרחף מעל תחתית המסך
       bottom: 64,
       left: 20,
       right: 20,
@@ -359,88 +358,84 @@ class _SnackToastState extends State<_SnackToast>
             child: ConstrainedBox(
               constraints: const BoxConstraints(
                 maxWidth: _ToastTokens.maxWidth,
-                minWidth: _ToastTokens.minWidth,
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(_ToastTokens.radius),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(
-                    sigmaX: _ToastTokens.blurSigma,
-                    sigmaY: _ToastTokens.blurSigma,
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: bgColor,
-                        borderRadius:
-                            BorderRadius.circular(_ToastTokens.radius),
-                        boxShadow: [
-                          BoxShadow(
-                            color: cs.shadow
-                                .withValues(alpha: isDark ? 0.35 : 0.12),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                            spreadRadius: -2,
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: _ToastTokens.padH,
-                        vertical: _ToastTokens.padV,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (widget.icon != null) ...[
-                            Icon(widget.icon, color: c.fg, size: 20),
-                            const SizedBox(width: AppTokens.spaceSM),
-                          ],
-                          Expanded(
-                            child: Text(
-                              widget.message,
-                              style: TextStyle(
-                                color: c.fg,
-                                fontSize: _ToastTokens.fontMessage,
-                                fontWeight: FontWeight.w400,
-                                height: 1.4,
-                              ),
-                              textDirection: TextDirection.rtl,
+              child: IntrinsicWidth(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(_ToastTokens.radius),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: _ToastTokens.blurSigma,
+                      sigmaY: _ToastTokens.blurSigma,
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius:
+                              BorderRadius.circular(_ToastTokens.radius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: cs.shadow
+                                  .withValues(alpha: isDark ? 0.35 : 0.12),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                              spreadRadius: -2,
                             ),
-                          ),
-                          if (widget.actionLabel != null &&
-                              widget.onAction != null) ...[
-                            const SizedBox(width: AppTokens.spaceSM),
-                            TextButton(
-                              onPressed: () {
-                                widget.onAction!();
-                                _close();
-                              },
-                              style: TextButton.styleFrom(
-                                foregroundColor: c.action,
-                                textStyle: const TextStyle(
-                                  fontSize: _ToastTokens.fontAction,
-                                  fontWeight: FontWeight.w700,
+                          ],
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: _ToastTokens.padH,
+                          vertical: _ToastTokens.padV,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (widget.icon != null) ...[
+                              Icon(widget.icon, color: c.fg, size: 20),
+                              const SizedBox(width: AppTokens.spaceSM),
+                            ],
+                            Flexible(
+                              child: Text(
+                                widget.message,
+                                style: TextStyle(
+                                  color: c.fg,
+                                  fontSize: _ToastTokens.fontMessage,
+                                  fontWeight: FontWeight.w400,
+                                  height: 1.4,
                                 ),
-                                minimumSize: Size.zero,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: AppTokens.spaceSM, vertical: 4),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                textDirection: TextDirection.rtl,
+                                maxLines: messageMaxLines,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              child: Text(widget.actionLabel!),
                             ),
+                            if (widget.actionLabel != null &&
+                                widget.onAction != null) ...[
+                              const SizedBox(width: AppTokens.spaceSM),
+                              TextButton(
+                                onPressed: () {
+                                  widget.onAction!();
+                                  _close();
+                                },
+                                style: TextButton.styleFrom(
+                                  foregroundColor: c.action,
+                                  textStyle: const TextStyle(
+                                    fontSize: _ToastTokens.fontAction,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  minimumSize: Size.zero,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppTokens.spaceSM,
+                                    vertical: 4,
+                                  ),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(widget.actionLabel!),
+                              ),
+                            ],
                           ],
-                          // כפתור סגירה
-                          IconButton(
-                            onPressed: _close,
-                            icon: Icon(FluentIcons.dismiss_24_regular,
-                                color: c.fg, size: 18),
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                                minWidth: 32, minHeight: 32),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),

@@ -52,24 +52,12 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           context.read<NavigationBloc>().add(const CheckLibrary());
 
           if (extractionResult.successfullyExtracted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                    'הקובץ "${extractionResult.extractedFileName}" חולץ בהצלחה!'),
-                backgroundColor: Theme.of(context).colorScheme.primary,
-              ),
-            );
+            UiSnack.show('הקובץ "${extractionResult.extractedFileName}" חולץ בהצלחה!');
           }
         }
       },
       onError: (errorMessage) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        UiSnack.showError(errorMessage);
       },
     );
   }

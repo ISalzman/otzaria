@@ -9,7 +9,7 @@ import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
-import 'package:otzaria/tools/shamor_zachor/utils/message_utils.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 enum CalendarType { hebrew, gregorian, combined }
@@ -402,7 +402,6 @@ class CalendarCubit extends Cubit<CalendarState> {
 
     if (!hasPermission) {
       String message;
-      String actionLabel = 'הבנתי';
 
       if (Platform.isMacOS) {
         message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
@@ -416,13 +415,7 @@ class CalendarCubit extends Cubit<CalendarState> {
             'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות';
       }
 
-      UiSnack.showWithAction(
-        message: message,
-        actionLabel: actionLabel,
-        onAction: () {},
-        backgroundColor: Colors.orange,
-        duration: const Duration(seconds: 10),
-      );
+      UiSnack.showWarning(message, duration: const Duration(seconds: 10));
       return;
     }
 
@@ -1464,16 +1457,9 @@ class CalendarCubit extends Cubit<CalendarState> {
         await _settingsRepository.updateCalendarNotificationsEnabled(false);
 
         // הצג הודעת שגיאה למשתמש עם הוראות מפורטות
-        UiSnack.showWithAction(
-          message: 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
-              'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
-          actionLabel: 'הבנתי',
-          onAction: () {
-            // אפשר להוסיף כאן פתיחת הגדרות האפליקציה בעתיד
-          },
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 8),
-        );
+        UiSnack.showWarning('לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+            'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
+            duration: const Duration(seconds: 8));
         return;
       }
     }

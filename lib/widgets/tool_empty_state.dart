@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 
-/// ווידג'ט מצב ריק גנרי לכלים
-///
-/// מציג אייקון והודעה במרכז המסך כשאין תוכן להצגה.
+/// מצב ריק סטנדרטי למסכי כלים.
 class ToolEmptyState extends StatelessWidget {
   final IconData icon;
   final String message;
@@ -18,38 +17,40 @@ class ToolEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 64,
-              color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+          Icon(
+            icon,
+            size: 64,
+            color: cs.onSurface.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: AppTokens.spaceMD),
+          Text(
+            message,
+            style: TextStyle(
+              fontSize: AppTokens.fontXL,
+              color: cs.onSurface.withValues(alpha: 0.6),
             ),
-            const SizedBox(height: 16),
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.center,
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 8),
             Text(
-              message,
+              subtitle!,
               textDirection: TextDirection.rtl,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.7),
                   ),
             ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                subtitle!,
-                textDirection: TextDirection.rtl,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.7),
-                    ),
-              ),
-            ],
           ],
+        ],
         ),
       ),
     );
