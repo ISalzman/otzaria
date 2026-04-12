@@ -7,6 +7,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -111,7 +112,10 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                   Container(
                     clipBehavior: Clip.none,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
+                      color: (navState.currentScreen == Screen.reading ||
+                              navState.currentScreen == Screen.search)
+                          ? Theme.of(context).colorScheme.surface
+                          : AppSurfaces.solidPanelBackground(context),
                       border: (navState.currentScreen == Screen.reading ||
                               navState.currentScreen == Screen.search)
                           ? null
