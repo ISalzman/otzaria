@@ -263,7 +263,7 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
           childAspectRatio: 1.5,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
-          mainAxisExtent: 180,
+          mainAxisExtent: 192,
         ),
         itemCount: books.length,
         itemBuilder: (context, index) {
