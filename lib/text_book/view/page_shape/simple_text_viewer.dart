@@ -288,12 +288,16 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       return Future.value(settingsState.defaultRemoveNikud);
     }
 
+    final categoryId = widget.reportBook?.categoryId;
+    final fileType = widget.reportBook?.fileType;
     return _removeNikudCache.putIfAbsent(
-      '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}',
+      '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}|$categoryId|$fileType',
       () => resolveRemoveNikudForBook(
         title: targetTitle,
         defaultRemoveNikud: settingsState.defaultRemoveNikud,
         removeNikudFromTanach: settingsState.removeNikudFromTanach,
+        categoryId: categoryId,
+        fileType: fileType,
       ),
     );
   }
@@ -717,8 +721,24 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final settingsState = context.read<SettingsBloc>().state;
     final textBookState = context.read<TextBookBloc>().state;
 
-    String finalText = text;
-    String finalHtmlText = text;
+    final bool removeNikud;
+    if (widget.reportBook != null) {
+      removeNikud = await resolveRemoveNikudForBook(
+        title: widget.reportBook!.title,
+        defaultRemoveNikud: settingsState.defaultRemoveNikud,
+        removeNikudFromTanach: settingsState.removeNikudFromTanach,
+        categoryId: widget.reportBook!.categoryId,
+        fileType: widget.reportBook!.fileType,
+      );
+    } else {
+      removeNikud = textBookState is TextBookLoaded && textBookState.removeNikud;
+    }
+    final processedText = removeNikud ? utils.removeVolwels(text) : text;
+
+    final plainText = utils.stripHtmlIfNeeded(processedText);
+
+    String finalText = plainText;
+    String finalHtmlText = processedText;
 
     if (settingsState.copyWithHeaders != 'none' &&
         textBookState is TextBookLoaded) {
@@ -732,7 +752,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       );
 
       finalText = CopyUtils.formatTextWithHeaders(
-        originalText: text,
+        originalText: plainText,
         copyWithHeaders: settingsState.copyWithHeaders,
         copyHeaderFormat: settingsState.copyHeaderFormat,
         bookName: bookName,
@@ -740,7 +760,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       );
 
       finalHtmlText = CopyUtils.formatTextWithHeaders(
-        originalText: text,
+        originalText: processedText,
         copyWithHeaders: settingsState.copyWithHeaders,
         copyHeaderFormat: settingsState.copyHeaderFormat,
         bookName: bookName,
@@ -1028,7 +1048,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                   : (targetTitle == null
                       ? Future.value(settingsState.defaultRemoveNikud)
                       : _removeNikudCache.putIfAbsent(
-                          '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}',
+                          '$targetTitle|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}|${widget.isMainText ? state.book.categoryId : widget.reportBook?.categoryId}|${widget.isMainText ? state.book.fileType : widget.reportBook?.fileType}',
                           () => resolveRemoveNikudForBook(
                             title: targetTitle,
                             defaultRemoveNikud:
@@ -1037,9 +1057,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                                 settingsState.removeNikudFromTanach,
                             categoryId: widget.isMainText
                                 ? state.book.categoryId
-                                : null,
-                            fileType:
-                                widget.isMainText ? state.book.fileType : null,
+                                : widget.reportBook?.categoryId,
+                            fileType: widget.isMainText
+                                ? state.book.fileType
+                                : widget.reportBook?.fileType,
                           ),
                         ));
 

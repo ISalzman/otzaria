@@ -12,6 +12,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/copy_utils.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/widgets/app_menu.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 
@@ -100,10 +101,20 @@ class ContextMenuUtils {
         return;
       }
 
-      final plainText = utils.stripHtmlIfNeeded(content);
+      final removeNikud = await resolveRemoveNikudForBook(
+        title: utils.getTitleFromPath(link.path2),
+        defaultRemoveNikud: settingsState.defaultRemoveNikud,
+        removeNikudFromTanach: settingsState.removeNikudFromTanach,
+        categoryId: link.targetCategoryId,
+        fileType: link.targetFileType,
+      );
+
+      final processedContent =
+          removeNikud ? utils.removeVolwels(content) : content;
+      final plainText = utils.stripHtmlIfNeeded(processedContent);
 
       String finalText = plainText;
-      String finalHtmlText = content;
+      String finalHtmlText = processedContent;
 
       if (settingsState.copyWithHeaders != 'none') {
         final targetBook = _targetBookFromLink(link);
@@ -122,7 +133,7 @@ class ContextMenuUtils {
         );
 
         finalHtmlText = CopyUtils.formatTextWithHeaders(
-          originalText: content,
+          originalText: processedContent,
           copyWithHeaders: settingsState.copyWithHeaders,
           copyHeaderFormat: settingsState.copyHeaderFormat,
           bookName: bookName,
