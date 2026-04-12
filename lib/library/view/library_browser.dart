@@ -13,11 +13,13 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/file_sync/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/file_sync_event.dart';
 import 'package:otzaria/file_sync/file_sync_repository.dart';
 import 'package:otzaria/file_sync/file_sync_state.dart';
 import 'package:otzaria/library/view/library_daf_yomi.dart';
+import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/widgets/filter_chips_widget.dart';
 import 'package:otzaria/navigation/main_window_screen.dart';
 import 'package:otzaria/library/view/grid_items.dart';
@@ -811,6 +813,27 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
+  Future<void> _refreshWithPersonalFolders() async {
+    try {
+      final sqliteProvider = SqliteDataProvider.instance;
+      if (!sqliteProvider.isInitialized) {
+        await sqliteProvider.initialize();
+      }
+
+      final repository = sqliteProvider.repository;
+      if (repository != null) {
+        final syncService = await FileSyncService.getInstance(repository);
+        await syncService?.syncFiles();
+      }
+    } catch (_) {
+      // גם אם סריקת התיקיות נכשלה, עדיין נרענן את הספרייה.
+    }
+
+    if (mounted) {
+      context.read<LibraryBloc>().add(RefreshLibrary());
+    }
+  }
+
   List<ActionButtonData> _buildOriginalOrderActions(
     BuildContext context,
     LibraryState state,
@@ -847,11 +870,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           compact: compact,
           tooltip: 'טעינה מחדש',
           icon: FluentIcons.arrow_clockwise_24_regular,
-          onPressed: () => context.read<LibraryBloc>().add(RefreshLibrary()),
+          onPressed: _refreshWithPersonalFolders,
         ),
         icon: FluentIcons.arrow_clockwise_24_regular,
         tooltip: 'טעינה מחדש',
-        onPressed: () => context.read<LibraryBloc>().add(RefreshLibrary()),
+        onPressed: _refreshWithPersonalFolders,
       ),
     ];
   }
@@ -892,11 +915,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           compact: compact,
           tooltip: 'טעינה מחדש',
           icon: FluentIcons.arrow_clockwise_24_regular,
-          onPressed: () => context.read<LibraryBloc>().add(RefreshLibrary()),
+          onPressed: _refreshWithPersonalFolders,
         ),
         icon: FluentIcons.arrow_clockwise_24_regular,
         tooltip: 'טעינה מחדש',
-        onPressed: () => context.read<LibraryBloc>().add(RefreshLibrary()),
+        onPressed: _refreshWithPersonalFolders,
       ),
     ];
   }
