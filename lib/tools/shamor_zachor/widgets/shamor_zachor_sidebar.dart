@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:provider/provider.dart';
-import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/widgets/thin_divider.dart';
 import 'package:otzaria/widgets/navigation_tree_tile.dart';
 import '../providers/shamor_zachor_data_provider.dart';
@@ -12,13 +10,11 @@ class ShamorZachorSidebar extends StatefulWidget {
   final Function(
           String categoryName, BookCategory category, String topLevelName)
       onCategorySelected;
-  final Function(String searchQuery)? onSearchChanged;
   final String? selectedCategoryName;
 
   const ShamorZachorSidebar({
     super.key,
     required this.onCategorySelected,
-    this.onSearchChanged,
     this.selectedCategoryName,
   });
 
@@ -27,23 +23,7 @@ class ShamorZachorSidebar extends StatefulWidget {
 }
 
 class _ShamorZachorSidebarState extends State<ShamorZachorSidebar> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
   final Map<String, bool> _expansionState = {};
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _onSearchChanged(String value) {
-    setState(() {
-      _searchQuery = value;
-    });
-    // Notify parent about search query change
-    widget.onSearchChanged?.call(value);
-  }
 
   void _toggleCategory(String categoryPath) {
     setState(() {
@@ -53,72 +33,32 @@ class _ShamorZachorSidebarState extends State<ShamorZachorSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Theme.of(context).colorScheme.surface,
-      child: Column(
-        children: [
-          // Search Field
-          _buildSearchField(),
-          const ThinDivider(),
-          // Content Tree
-          Expanded(
-            child: Consumer<ShamorZachorDataProvider>(
-              builder: (context, dataProvider, child) {
-                if (dataProvider.isLoading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (dataProvider.error != null) {
-                  return Center(
-                    child: Text(
-                      'שגיאה בטעינת נתונים',
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
-                  );
-                }
+    return Column(
+      children: [
+        const ThinDivider(),
+        // Content Tree
+        Expanded(
+          child: Consumer<ShamorZachorDataProvider>(
+            builder: (context, dataProvider, child) {
+              if (dataProvider.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (dataProvider.error != null) {
+                return Center(
+                  child: Text(
+                    'שגיאה בטעינת נתונים',
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                );
+              }
 
-                // Always show category tree, search results will be shown in main area
-                return _buildCategoryTree(dataProvider);
-              },
-            ),
+              // Always show category tree, search results will be shown in main area
+              return _buildCategoryTree(dataProvider);
+            },
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchField() {
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-      alignment: Alignment.center,
-      child: RtlTextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'חפש...',
-          prefixIcon: const Icon(FluentIcons.search_24_regular),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  onPressed: () {
-                    _searchController.clear();
-                    _onSearchChanged('');
-                  },
-                  icon: const Icon(FluentIcons.dismiss_24_regular),
-                )
-              : null,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Theme.of(context)
-              .colorScheme
-              .surfaceContainerHighest
-              .withAlpha(100),
         ),
-        onChanged: _onSearchChanged,
-      ),
+      ],
     );
   }
 

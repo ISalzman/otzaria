@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/utils/color_utils.dart';
 import '../../unit/mocks/mock_settings_wrapper.mocks.dart';
@@ -439,6 +440,61 @@ void main() {
 
       // Verify that setValue was never called for any defaults (since they already exist)
       verifyNever(mockSettingsWrapper.setValue(any, any));
+    });
+
+    test('getShortcuts migrates legacy search key to current window search key',
+        () async {
+      const legacyValue = 'ctrl+shift+f';
+
+      when(mockSettingsWrapper.getValue('shortcuts', defaultValue: {}))
+          .thenReturn({
+        ShortcutValidator.legacySearchInBookKey: legacyValue,
+      });
+      when(mockSettingsWrapper.getValue<String?>(
+        ShortcutValidator.legacySearchInBookKey,
+        defaultValue: legacyValue,
+      )).thenReturn(legacyValue);
+
+      final shortcuts = await repository.getShortcuts();
+
+      expect(
+        shortcuts[ShortcutValidator.currentWindowSearchKey],
+        legacyValue,
+      );
+    });
+
+    test('updateShortcut removes legacy search key when saving canonical key',
+        () async {
+      when(mockSettingsWrapper.getValue('shortcuts', defaultValue: {}))
+          .thenReturn({
+        ShortcutValidator.legacySearchInBookKey: 'ctrl+alt+f',
+      });
+
+      await repository.updateShortcut(
+        ShortcutValidator.currentWindowSearchKey,
+        'ctrl+shift+f',
+      );
+
+      verify(mockSettingsWrapper.setValue(
+        ShortcutValidator.currentWindowSearchKey,
+        'ctrl+shift+f',
+      )).called(1);
+      verify(mockSettingsWrapper.remove(
+        ShortcutValidator.legacySearchInBookKey,
+      )).called(1);
+
+      final captured = verify(mockSettingsWrapper.setValue(
+        'shortcuts',
+        captureAny,
+      )).captured.single as Map<String, String>;
+      expect(
+        captured[ShortcutValidator.currentWindowSearchKey],
+        'ctrl+shift+f',
+      );
+      expect(
+        captured.containsKey(ShortcutValidator.legacySearchInBookKey),
+        isFalse,
+      );
     });
   });
 }

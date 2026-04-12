@@ -4,6 +4,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/direct_error_report.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -912,6 +913,9 @@ class _TabbedReportDialogState extends State<TabbedReportDialog>
             ),
             TabBar(
               controller: _tabController,
+              dividerColor: Colors.transparent,
+              dividerHeight: 0,
+              splashBorderRadius: BorderRadius.circular(AppTokens.radiusMD),
               tabs: const [
                 Tab(text: 'שליחת דיווח'),
                 Tab(text: 'דיווח דרך קו אוצריא'),

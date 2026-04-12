@@ -1,24 +1,29 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
 import '../providers/shamor_zachor_data_provider.dart';
 import '../providers/shamor_zachor_progress_provider.dart';
 import '../models/book_model.dart';
 import 'book_card_widget.dart'; // Using the rich card
+import 'package:otzaria/widgets/tool_empty_state.dart';
 
 class CategoryBooksGrid extends StatefulWidget {
   final String? categoryName;
   final String? topLevelName;
   final BookCategory? category;
+  final List<BookSearchResult>? searchResults;
   final Function(String, String, BookDetails) onBookSelected;
+  final String selectedFilter;
 
   const CategoryBooksGrid({
     super.key,
     this.categoryName,
     this.topLevelName,
     this.category,
+    this.searchResults,
     required this.onBookSelected,
+    this.selectedFilter = 'all',
   });
 
   @override
@@ -28,73 +33,19 @@ class CategoryBooksGrid extends StatefulWidget {
 class _CategoryBooksGridState extends State<CategoryBooksGrid> {
   static final Logger _logger = Logger('CategoryBooksGrid');
 
-  // Using simplified filter enum/string from user request
-  // User wanted "Like it was before" -> "Segmented Button".
-  String _selectedFilter = 'all'; // all, in_progress, completed
-
   @override
   Widget build(BuildContext context) {
     if (widget.category == null &&
+        widget.searchResults == null &&
         widget.categoryName != 'custom_books_virtual') {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(FluentIcons.library_24_regular,
-                size: 64, color: Colors.grey.withAlpha(100)),
-            const SizedBox(height: 16),
-            Text('בחר קטגוריה כדי לצפות בספרים',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(color: Colors.grey)),
-          ],
-        ),
+      return ToolEmptyState(
+        icon: FluentIcons.library_24_regular,
+        message: 'בחר קטגוריה כדי לצפות בספרים',
       );
     }
 
     return Column(
       children: [
-        // Header with Segmented Button (Like Tracking Screen)
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Segmented Button
-              Align(
-                alignment: Alignment.center,
-                child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment<String>(
-                      value: 'all',
-                      label: Text('הכל'),
-                      icon: Icon(FluentIcons.library_24_regular),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'in_progress',
-                      label: Text('בתהליך'),
-                      icon: Icon(FluentIcons.hourglass_24_regular),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'completed',
-                      label: Text('הושלם'),
-                      icon: Icon(FluentIcons.checkmark_circle_24_regular),
-                    ),
-                  ],
-                  selected: {_selectedFilter},
-                  onSelectionChanged: (Set<String> newSelection) {
-                    setState(() {
-                      _selectedFilter = newSelection.first;
-                    });
-                  },
-                  showSelectedIcon: false,
-                ),
-              ),
-            ],
-          ),
-        ),
-
         // Grid Content
         Expanded(
           child:
@@ -103,6 +54,29 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
               // Debug log
               _logger.fine(
                   'CategoryBooksGrid builder called for category: ${widget.categoryName}');
+
+              if (widget.searchResults != null) {
+                final searchBooks = widget.searchResults!
+                    .map(
+                      (result) => {
+                        'name': result.bookName,
+                        'details': result.bookDetails,
+                        'category': result.topLevelCategoryName,
+                        'categoryPath': result.bookDetails.categoryPath ??
+                            result.categoryName,
+                      },
+                    )
+                    .toList(growable: false);
+                final filteredBooks =
+                    _filterBooks(searchBooks, progressProvider);
+
+                if (filteredBooks.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                return _buildBooksGrid(filteredBooks, progressProvider,
+                    shrinkWrap: false);
+              }
 
               if (widget.category != null) {
                 final effectiveTopLevelName =
@@ -198,8 +172,10 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(
-        child: Text('אין ספרים להצגה', style: TextStyle(color: Colors.grey)));
+    return const ToolEmptyState(
+      icon: FluentIcons.book_24_regular,
+      message: 'אין ספרים להצגה',
+    );
   }
 
   Widget _buildSectionHeader(String title) {
@@ -243,10 +219,10 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
             category, name, details);
       }
 
-      if (_selectedFilter == 'in_progress') {
+      if (widget.selectedFilter == 'in_progress') {
         return isInProgress && !isCompleted;
       }
-      if (_selectedFilter == 'completed') {
+      if (widget.selectedFilter == 'completed') {
         return isCompleted;
       }
       return true;
@@ -256,45 +232,39 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
   Widget _buildBooksGrid(List<Map<String, dynamic>> books,
       ShamorZachorProgressProvider progressProvider,
       {bool shrinkWrap = false}) {
-    return GridView.builder(
-      padding: shrinkWrap ? EdgeInsets.zero : const EdgeInsets.all(16),
-      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
-      shrinkWrap: shrinkWrap,
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 350,
-        childAspectRatio: 1.5,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        mainAxisExtent: 180,
+    return FocusTraversalGroup(
+      policy: ReadingOrderTraversalPolicy(),
+      child: GridView.builder(
+        padding: shrinkWrap ? EdgeInsets.zero : const EdgeInsets.all(16),
+        physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+        shrinkWrap: shrinkWrap,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 350,
+          childAspectRatio: 1.5,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          mainAxisExtent: 180,
+        ),
+        itemCount: books.length,
+        itemBuilder: (context, index) {
+          final book = books[index];
+          final name = book['name'] as String;
+          final details = book['details'] as BookDetails;
+          final category = book['category'] as String;
+          final categoryPath = book['categoryPath'] as String?;
+
+          return BookCardWidget(
+            key: ValueKey('${details.id ?? 'no-id'}::$category::$name'),
+            topLevelCategoryKey: category,
+            categoryName: categoryPath ?? widget.categoryName ?? '',
+            bookName: name,
+            bookDetails: details,
+            onTap: () {
+              widget.onBookSelected(category, name, details);
+            },
+          );
+        },
       ),
-      itemCount: books.length,
-      itemBuilder: (context, index) {
-        final book = books[index];
-        final name = book['name'] as String;
-        final details = book['details'] as BookDetails;
-        final category = book['category'] as String;
-
-        // השתמש ב-ID אם קיים, אחרת חזור לשיטה הישנה
-        final progressData = details.id != null
-            ? progressProvider.getProgressForBookById(details.id!)
-            : progressProvider.getProgressForBook(category, name);
-        final completionDate = details.id != null
-            ? progressProvider.getCompletionDateSyncById(details.id!)
-            : progressProvider.getCompletionDateSync(category, name);
-        final categoryPath = book['categoryPath'] as String?;
-
-        return BookCardWidget(
-          topLevelCategoryKey: category,
-          categoryName: categoryPath ?? widget.categoryName ?? '',
-          bookName: name,
-          bookDetails: details,
-          bookProgressData: progressData,
-          completionDate: completionDate,
-          onTap: () {
-            widget.onBookSelected(category, name, details);
-          },
-        );
-      },
     );
   }
 

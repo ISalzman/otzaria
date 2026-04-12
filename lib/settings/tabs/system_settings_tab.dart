@@ -700,7 +700,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       if (exists) {
         UiSnack.showWithAction(
           message: 'הגיבוי נשמר! גודל: ${(size / 1024).toStringAsFixed(1)} KB',
-          actionLabel: 'פתח תיקייה',
+          actionLabel: 'פתח מיקום קובץ',
           onAction: () async {
             final dir = file.parent;
             if (Platform.isWindows) {
@@ -712,7 +712,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             }
           },
           icon: Icons.check_circle_outline_rounded,
-          iconColor: Theme.of(context).colorScheme.primary,
         );
       }
     } catch (e) {

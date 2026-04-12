@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:flutter_context_menu/flutter_context_menu.dart' as ctx;
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/widgets/app_menu.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
@@ -280,15 +280,15 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           identifier: keyStr,
         ) as bool?;
     final isExpanded = _expanded[keyStr] ?? restoredExpanded ?? false;
-    return ctx.ContextMenuRegion(
-      contextMenu: ContextMenuUtils.buildCommentaryContextMenu(
-        context: context,
+    return AppContextMenuRegion(
+      menuBuilder: (menuCtx) => ContextMenuUtils.buildCommentaryContextMenu(
+        context: menuCtx,
         link: link,
         openBookCallback: widget.openBookCallback,
         fontSize: widget.fontSize,
         savedSelectedText: _savedSelectedText,
         onCopySelected: () => ContextMenuUtils.copyFormattedText(
-          context: context,
+          context: menuCtx,
           savedSelectedText: _savedSelectedText,
           fontSize: widget.fontSize,
         ),

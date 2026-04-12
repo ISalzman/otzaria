@@ -7,7 +7,7 @@ import 'package:otzaria/workspaces/bloc/workspace_state.dart';
 import 'package:otzaria/workspaces/workspace.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
-import 'package:otzaria/daf_yomi/calendar.dart';
+import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
@@ -291,8 +291,7 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
               onPressed: () {
                 // Remove the workspace
                 if (isActive) {
-                  UiSnack.showError('לא ניתן למחוק שולחן עבודה פעיל',
-                      backgroundColor: Theme.of(context).colorScheme.error);
+                  UiSnack.showError('לא ניתן למחוק שולחן עבודה פעיל');
                   return;
                 }
                 context

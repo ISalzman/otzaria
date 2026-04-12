@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/shortcuts/custom_shortcut_dialog.dart';
+import 'package:otzaria/widgets/app_menu.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 
-/// Custom DropDownSettingsTile that filters out shortcuts already in use
+/// שדה בחירת קיצור דרך שמסנן קיצורים שכבר נמצאים בשימוש.
 class ShortcutDropDownTile extends StatefulWidget {
   final String settingKey;
   final String title;
+  final String? subtitle;
   final String selected;
   final Widget? leading;
   final Map<String, String> allShortcuts;
@@ -17,6 +20,7 @@ class ShortcutDropDownTile extends StatefulWidget {
     super.key,
     required this.settingKey,
     required this.title,
+    this.subtitle,
     required this.selected,
     required this.allShortcuts,
     this.leading,
@@ -31,15 +35,15 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
   Widget build(BuildContext context) {
     // Get current value for this setting
     final currentValue =
-        Settings.getValue<String>(widget.settingKey) ?? widget.selected;
+        ShortcutValidator.getShortcutValue(widget.settingKey) ?? widget.selected;
 
     // Get all shortcuts that are in use by OTHER settings
     final usedShortcuts = <String>{};
     for (final key in ShortcutValidator.shortcutKeys) {
-      if (key != widget.settingKey) {
+      if (key != widget.settingKey &&
+          !ShortcutValidator.canShareShortcut(widget.settingKey, key)) {
         // Don't include current setting
-        final value = Settings.getValue<String>(key) ??
-            ShortcutValidator.defaultShortcuts[key];
+        final value = ShortcutValidator.getShortcutValue(key);
         if (value != null && value.isNotEmpty) {
           usedShortcuts.add(value);
         }
@@ -66,69 +70,133 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
           currentValue.toUpperCase().replaceAll('+', ' + ');
     }
 
-    return DropDownSettingsTile<String>(
-      key: ValueKey('${widget.settingKey}_$currentValue'),
-      settingKey: widget.settingKey,
-      title: widget.title,
-      selected: widget.selected,
-      values: availableShortcuts,
-      leading: widget.leading,
-      onChange: (newValue) async {
-        if (!mounted) return;
-
-        final scaffoldMessenger = ScaffoldMessenger.of(context);
-        final settingsBloc = context.read<SettingsBloc>();
-        String? finalValue = newValue;
-
-        // אם בחרו בהתאמה אישית, פתח את הדיאלוג
-        if (newValue == '__custom__') {
-          if (!mounted) return;
-
-          final customShortcut = await showDialog<String>(
-            context: context,
-            builder: (context) => CustomShortcutDialog(
-              initialShortcut: currentValue,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 620;
+          final field = SizedBox(
+            width: isCompact ? double.infinity : 220,
+            child: AppDropdownField<String>(
+              key: ValueKey('${widget.settingKey}_$currentValue'),
+              value: currentValue,
+              entries: availableShortcuts.entries
+                  .map(
+                    (entry) => AppMenuEntry<String>(
+                      value: entry.key,
+                      label: entry.value,
+                    ),
+                  )
+                  .toList(),
+              onSelected: _handleSelection,
             ),
           );
 
-          if (customShortcut != null && customShortcut.isNotEmpty) {
-            // שמירת הקיצור המותאם אישית
-            await Settings.setValue<String>(widget.settingKey, customShortcut);
-            finalValue = customShortcut;
-          } else {
-            // המשתמש ביטל, אל תמשיך
-            finalValue = null;
-          }
-        }
-
-        if (finalValue == null || !mounted) return;
-
-        // עדכון ה-BLoC
-        settingsBloc.add(UpdateShortcut(widget.settingKey, finalValue));
-
-        // בדיקת קונפליקטים
-        final conflicts = ShortcutValidator.checkConflicts();
-        if (conflicts.isNotEmpty && conflicts.containsKey(finalValue)) {
-          final conflictingKeys = conflicts[finalValue]!;
-          final conflictingNames = conflictingKeys
-              .where((k) => k != widget.settingKey)
-              .map((k) => ShortcutValidator.shortcutNames[k] ?? k)
-              .join(', ');
-
-          if (conflictingNames.isNotEmpty) {
-            scaffoldMessenger.showSnackBar(
-              SnackBar(
-                content: Text(
-                  'אזהרה: קיצור זה כבר בשימוש עבור: $conflictingNames',
-                  textDirection: TextDirection.rtl,
+          final titleSection = Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.leading != null) ...[
+                  widget.leading!,
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.title,
+                        style: kSettingsTitleStyle,
+                        textDirection: TextDirection.rtl,
+                      ),
+                      if (widget.subtitle != null &&
+                          widget.subtitle!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.subtitle!,
+                          style: kSettingsSubtitleStyle,
+                          textDirection: TextDirection.rtl,
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-                backgroundColor: Colors.orange,
-                duration: const Duration(seconds: 3),
-              ),
+              ],
+            ),
+          );
+
+          if (isCompact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [titleSection]),
+                const SizedBox(height: 12),
+                field,
+              ],
             );
           }
-        }
-      },
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              titleSection,
+              const SizedBox(width: 16),
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: field,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
+  }
+
+  Future<void> _handleSelection(String? newValue) async {
+    if (newValue == null || !mounted) return;
+
+    final currentValue =
+        ShortcutValidator.getShortcutValue(widget.settingKey) ?? widget.selected;
+    final settingsBloc = context.read<SettingsBloc>();
+    String? finalValue = newValue;
+
+    if (newValue == '__custom__') {
+      final customShortcut = await showDialog<String>(
+        context: context,
+        builder: (context) => CustomShortcutDialog(
+          initialShortcut: currentValue,
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (customShortcut != null && customShortcut.isNotEmpty) {
+        finalValue = customShortcut;
+      } else {
+        finalValue = null;
+      }
+    }
+
+    if (finalValue == null || !mounted) return;
+
+    settingsBloc.add(UpdateShortcut(widget.settingKey, finalValue));
+
+    final conflicts = ShortcutValidator.checkConflicts();
+    if (conflicts.isNotEmpty && conflicts.containsKey(finalValue)) {
+      final conflictingKeys = conflicts[finalValue]!;
+      final conflictingNames = conflictingKeys
+          .where((k) => k != widget.settingKey)
+          .map((k) => ShortcutValidator.shortcutNames[k] ?? k)
+          .join(', ');
+
+      if (conflictingNames.isNotEmpty) {
+        UiSnack.showWarning(
+          'אזהרה: קיצור זה כבר בשימוש עבור: $conflictingNames',
+          duration: const Duration(seconds: 3),
+        );
+      }
+    }
   }
 }

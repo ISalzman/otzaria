@@ -1969,9 +1969,7 @@ class CalendarWidgetState extends State<CalendarWidget> {
                           // נסה לפרש את הטקסט שהוזן
                           dateToJump = _parseInputDate(context, value);
                           if (dateToJump == null) {
-                            UiSnack.showError('לא הצלחנו לפרש את התאריך.',
-                                backgroundColor:
-                                    Theme.of(context).colorScheme.error);
+                            UiSnack.showError('לא הצלחנו לפרש את התאריך.');
                             return;
                           }
                         } else {
@@ -2026,9 +2024,7 @@ class CalendarWidgetState extends State<CalendarWidget> {
                           _parseInputDate(context, dateController.text);
 
                       if (dateToJump == null) {
-                        UiSnack.showError('לא הצלחנו לפרש את התאריך.',
-                            backgroundColor:
-                                Theme.of(context).colorScheme.error);
+                        UiSnack.showError('לא הצלחנו לפרש את התאריך.');
                         return;
                       }
                     } else {
@@ -2177,9 +2173,7 @@ class CalendarWidgetState extends State<CalendarWidget> {
                         ),
                         onSubmitted: (_) {
                           if (titleController.text.isEmpty) {
-                            UiSnack.showError('יש למלא כותרת לאירוע.',
-                                backgroundColor:
-                                    Theme.of(context).colorScheme.error);
+                            UiSnack.showError('יש למלא כותרת לאירוע.');
                             return;
                           }
 
@@ -2408,8 +2402,7 @@ class CalendarWidgetState extends State<CalendarWidget> {
                 ElevatedButton(
                   onPressed: () {
                     if (titleController.text.isEmpty) {
-                      UiSnack.showError('יש למלא כותרת לאירוע.',
-                          backgroundColor: Theme.of(context).colorScheme.error);
+                      UiSnack.showError('יש למלא כותרת לאירוע.');
                       return;
                     }
 
