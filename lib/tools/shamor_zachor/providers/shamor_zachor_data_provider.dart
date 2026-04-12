@@ -487,6 +487,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
   Future<void> removeCustomBook({
     required String categoryName,
     required String bookName,
+    int? bookId,
     int? categoryId,
   }) async {
     final repository = _sqliteDataProvider?.repository;
@@ -496,11 +497,14 @@ class ShamorZachorDataProvider with ChangeNotifier {
     }
 
     try {
-      final existing = categoryId != null
-          ? await repository.getBookByTitleAndCategory(bookName, categoryId)
-          : await repository.getBookByTitle(bookName);
+      final existing = bookId != null
+          ? await repository.getBook(bookId)
+          : categoryId != null
+              ? await repository.getBookByTitleAndCategory(bookName, categoryId)
+              : await repository.getBookByTitle(bookName);
       if (existing == null) {
-        _logger.warning("Book '$bookName' not found in database");
+        _logger.warning(
+            "Book '$bookName'${bookId != null ? ' (ID: $bookId)' : ''} not found in database");
         return;
       }
 
