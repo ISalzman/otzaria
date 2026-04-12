@@ -21,6 +21,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/view/plugin_side_panel.dart';
 import 'package:otzaria/plugins/view/plugin_tab_page.dart';
+import 'package:otzaria/widgets/context_overlay_panel.dart';
 import 'package:otzaria/plugins/view/plugin_install_screen.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 
@@ -489,12 +490,6 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_isPanelOpen)
-              PluginSidePanel(
-                onPluginSelected: (plugin) {
-                  _openPluginTransiently(plugin);
-                },
-              ),
             Expanded(
               child: Listener(
                 onPointerSignal: (event) {
@@ -559,23 +554,37 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
                       ),
                     ),
                     Expanded(
-                      child: ClipRect(
-                        child: PrimaryScrollController(
-                          controller: _contentScrollController,
-                          child: Focus(
-                            focusNode: _contentFocusNode,
-                            child: ColoredBox(
-                              color: bgColor,
-                              child: _pages.isEmpty
-                                  ? const SizedBox()
-                                  : IndexedStack(
-                                      sizing: StackFit.expand,
-                                      index: safeIndex,
-                                      children: _pages,
-                                    ),
+                      child: Stack(
+                        children: [
+                          ClipRect(
+                            child: PrimaryScrollController(
+                              controller: _contentScrollController,
+                              child: Focus(
+                                focusNode: _contentFocusNode,
+                                child: ColoredBox(
+                                  color: bgColor,
+                                  child: _pages.isEmpty
+                                      ? const SizedBox()
+                                      : IndexedStack(
+                                          sizing: StackFit.expand,
+                                          index: safeIndex,
+                                          children: _pages,
+                                        ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                          ContextOverlayPanel(
+                            isOpen: _isPanelOpen,
+                            onClose: () => setState(() => _isPanelOpen = false),
+                            width: 300,
+                            child: PluginSidePanel(
+                              onPluginSelected: (plugin) {
+                                _openPluginTransiently(plugin);
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

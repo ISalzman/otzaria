@@ -48,8 +48,16 @@ class PluginSystemDatabase {
   }
 
   void _migrateToV2(Database db) {
-    db.execute('ALTER TABLE plugin_installation ADD COLUMN source_type TEXT NOT NULL DEFAULT "packaged"');
-    db.execute('ALTER TABLE plugin_installation ADD COLUMN dev_root_path TEXT');
+    final existingColumns = db
+        .select('PRAGMA table_info(plugin_installation)')
+        .map((r) => r['name'] as String)
+        .toSet();
+    if (!existingColumns.contains('source_type')) {
+      db.execute('ALTER TABLE plugin_installation ADD COLUMN source_type TEXT NOT NULL DEFAULT "packaged"');
+    }
+    if (!existingColumns.contains('dev_root_path')) {
+      db.execute('ALTER TABLE plugin_installation ADD COLUMN dev_root_path TEXT');
+    }
   }
 
   void _createSchemaV1(Database db) {

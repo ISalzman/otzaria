@@ -45,18 +45,7 @@ class PluginSidePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 280,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        border: Border(
-          left: BorderSide(
-            color: Theme.of(context).dividerColor,
-            width: 1.0,
-          ),
-        ),
-      ),
-      child: Column(
+    return Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -195,7 +184,6 @@ class PluginSidePanel extends StatelessWidget {
             ),
           ),
         ],
-      ),
     );
   }
 }
