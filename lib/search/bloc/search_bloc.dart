@@ -96,6 +96,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
 
     try {
+      // התחל לבנות את עץ ה-facets המלא במקביל כבר מתחילת החיפוש.
+      unawaited(_refreshFacetCountsForAllBooks(event, requestId));
+
       // שימוש ב-streaming לתוצאות מהירות יותר
       final stream = _repository.searchTextsStream(
         SearchQueryBuilder.sanitizeQuery(query),
@@ -135,7 +138,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
             results: List.from(allResults),
             totalResults: allResults.length,
             isLoading: true, // עדיין טוען
-            facetCounts: shouldPreserveFacetCounts
+            facetCounts: shouldPreserveFacetCounts || state.facetCounts.isNotEmpty
                 ? state.facetCounts
                 : partialFacetCounts,
           ));
@@ -159,9 +162,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         totalResults: allResults.length,
         isLoading: false,
       ));
-
-      // הפעל רענון ספירות facets במקביל
-      unawaited(_refreshFacetCountsForAllBooks(event, requestId));
 
       // ספירה כוללת (אם צריך - אבל בעצם allResults.length כבר נותן את זה)
       final totalResults = await TantivyDataProvider.instance.countTexts(
