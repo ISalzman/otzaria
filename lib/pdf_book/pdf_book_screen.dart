@@ -784,11 +784,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (!mounted) return;
     setState(() {
       _commentatorGroups = [
-        CommentatorGroup(title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
+        CommentatorGroup(
+            title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
         CommentatorGroup(title: 'חז"ל', commentators: eras['חז"ל'] ?? const []),
-        CommentatorGroup(title: 'ראשונים', commentators: eras['ראשונים'] ?? const []),
-        CommentatorGroup(title: 'אחרונים', commentators: eras['אחרונים'] ?? const []),
-        CommentatorGroup(title: 'מחברי זמננו', commentators: eras['מחברי זמננו'] ?? const []),
+        CommentatorGroup(
+            title: 'ראשונים', commentators: eras['ראשונים'] ?? const []),
+        CommentatorGroup(
+            title: 'אחרונים', commentators: eras['אחרונים'] ?? const []),
+        CommentatorGroup(
+            title: 'מחברי זמננו',
+            commentators: eras['מחברי זמננו'] ?? const []),
         CommentatorGroup(title: 'שאר מפרשים', commentators: others),
       ];
     });
@@ -797,8 +802,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Future<void> _loadPdfHeadingsAndLinks() async {
     try {
       // טעינת headings מה-DB
-      final headings =
-          await PdfHeadings.loadFromDatabase(
+      final headings = await PdfHeadings.loadFromDatabase(
         widget.tab.book.title,
         categoryId: widget.tab.book.categoryId,
       );
@@ -1609,6 +1613,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return [
       ResponsiveActionBar(
         key: ValueKey('pdf_actions_$screenWidth'),
+        overflowMenuOffset: const Offset(0, 8),
         actions: _buildDisplayOrderPdfActions(context),
         alwaysInMenu: _buildAlwaysInMenuPdfActions(context),
         maxVisibleButtons: maxButtons,

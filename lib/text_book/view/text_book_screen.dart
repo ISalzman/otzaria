@@ -877,6 +877,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                       actions: [
                         ResponsiveActionBar(
                           key: ValueKey('loading_actions_$screenWidth'),
+                          overflowMenuOffset: const Offset(0, 8),
                           actions: [
                             // NOTE: PDF button intentionally omitted during loading
                             ActionButtonData(
@@ -903,13 +904,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                             ),
                             ActionButtonData(
                               widget: IconButton(
-                                icon: const Icon(
-                                    FluentIcons.text_clear_formatting_24_regular),
+                                icon: const Icon(FluentIcons
+                                    .text_clear_formatting_24_regular),
                                 tooltip: 'הסתר פיסוק',
                                 onPressed: null,
                               ),
-                              icon: FluentIcons
-                                  .text_clear_formatting_24_regular,
+                              icon:
+                                  FluentIcons.text_clear_formatting_24_regular,
                               tooltip: 'הסתר פיסוק',
                               onPressed: null,
                             ),
@@ -1262,6 +1263,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       Consumer<ShamorZachorDataProvider>(
         builder: (context, _, __) => ResponsiveActionBar(
           key: ValueKey('responsive_actions_$screenWidth'),
+          overflowMenuOffset: const Offset(0, 8),
           actions: _buildDisplayOrderActions(context, state),
           alwaysInMenu: _buildAlwaysInMenuActions(context, state),
           maxVisibleButtons: maxButtons,
