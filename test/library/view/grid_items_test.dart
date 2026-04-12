@@ -37,14 +37,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(Tooltip), findsOneWidget);
+    final tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+    expect(tooltip.preferBelow, isFalse);
+    expect(tooltip.verticalOffset, 18);
   });
 
   testWidgets('מציג tooltip כשהנתיב או הנושאים נחתכים גם אם הכותרת קצרה',
       (tester) async {
+    const topics = 'נתיב ארוך מאוד מאוד שנחתך בתצוגת הספריה ומחייב tooltip';
     final book = PdfBook(
       title: 'א',
       path: r'C:\library\folder\book.pdf',
-      topics: 'נתיב ארוך מאוד מאוד שנחתך בתצוגת הספריה ומחייב tooltip',
+      topics: topics,
       categoryPath: 'קטגוריה ראשית, קטגוריה משנית, נתיב מלא ארוך',
     );
 
@@ -53,7 +57,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip(r'C:\library\folder\book.pdf'), findsOneWidget);
+    expect(find.byTooltip(topics), findsOneWidget);
     expect(find.byTooltip('א'), findsNothing);
   });
 }
