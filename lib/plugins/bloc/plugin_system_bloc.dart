@@ -162,6 +162,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       final plugin = await repository.getPlugin(event.pluginId);
       if (plugin != null) {
         await repository.savePlugin(plugin.copyWith(enabled: true));
+        PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);
         add(LoadPlugins());
       }
     } catch (e) {
@@ -176,6 +177,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       final plugin = await repository.getPlugin(event.pluginId);
       if (plugin != null) {
         await repository.savePlugin(plugin.copyWith(enabled: false));
+        PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);
         add(LoadPlugins());
       }
     } catch (e) {
@@ -189,6 +191,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     try {
       await repository.setPermission(
           event.pluginId, event.permission, event.granted);
+      PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);
       final permissions = await repository.getPluginPermissions(event.pluginId);
       final grantedPermissions = permissions
           .where((permission) => permission.granted)
