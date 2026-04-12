@@ -641,6 +641,22 @@ class ProgressService {
     }
   }
 
+  /// Save all completion dates by book ID
+  Future<void> saveCompletionDatesById(CompletionDatesByIdMap dates) async {
+    try {
+      final prefs = await _getPrefs();
+      final jsonString =
+          json.encode(dates.map((k, v) => MapEntry(k.toString(), v)));
+      await prefs.setString('${_keyPrefix}completion_dates_by_id', jsonString);
+    } catch (e, stackTrace) {
+      throw ShamorZachorError.fromException(
+        e,
+        stackTrace: stackTrace,
+        customMessage: 'Failed to save completion dates by ID',
+      );
+    }
+  }
+
   List<String> _categoryCandidates(String categoryName) {
     final trimmed = categoryName.trim();
     final candidates = <String>{trimmed};
@@ -798,8 +814,8 @@ class ProgressService {
       await saveProgressDataById(newProgress);
       await prefs.setString(
           '${_keyPrefix}completion_dates_by_id',
-          json.encode(newCompletionDates
-              .map((k, v) => MapEntry(k.toString(), v))));
+          json.encode(
+              newCompletionDates.map((k, v) => MapEntry(k.toString(), v))));
 
       // Mark migration as completed
       await prefs.setBool('${_keyPrefix}migration_completed', true);

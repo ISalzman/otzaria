@@ -31,7 +31,7 @@ RenderSettings buildSelectedLinkRenderSettings({
     fontSize: settingsState.commentatorsFontSize,
     fontFamily: settingsState.commentatorsFontFamily,
     lineHeight: settingsState.lineHeight,
-    justifyText: false,
+    justifyText: true,
   );
 }
 
@@ -291,6 +291,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           context: menuCtx,
           savedSelectedText: _savedSelectedText,
           fontSize: widget.fontSize,
+          link: link,
         ),
       ),
       child: ExpansionTile(

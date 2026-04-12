@@ -55,6 +55,9 @@ class WindowPersistence {
       if (isMaximized) {
         await windowManager.maximize();
       }
+    } catch (_) {
+      // SharedPreferences or window manager may fail on first launch;
+      // silently continue with default window dimensions.
     } finally {
       _isRestoring = false;
     }

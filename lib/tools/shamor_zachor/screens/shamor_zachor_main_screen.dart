@@ -270,6 +270,50 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
     );
   }
 
+  BookCategory? _findCategoryByName(
+      BookCategory category, String categoryName) {
+    if (category.name == categoryName) {
+      return category;
+    }
+
+    for (final subCategory
+        in category.subcategories ?? const <BookCategory>[]) {
+      final match = _findCategoryByName(subCategory, categoryName);
+      if (match != null) {
+        return match;
+      }
+    }
+
+    return null;
+  }
+
+  BookCategory? _resolveSelectedCategory(
+      ShamorZachorDataProvider dataProvider) {
+    final selectedCategoryName = _selectedCategoryName;
+    final selectedTopLevelName = _selectedTopLevelName;
+
+    if (selectedCategoryName == null || selectedTopLevelName == null) {
+      return _selectedCategoryObject;
+    }
+
+    if (selectedTopLevelName == 'all_books_virtual' ||
+        selectedTopLevelName == 'search_results') {
+      return _selectedCategoryObject;
+    }
+
+    final topLevelCategory = dataProvider.allBookData[selectedTopLevelName];
+    if (topLevelCategory == null) {
+      return _selectedCategoryObject;
+    }
+
+    if (selectedCategoryName == selectedTopLevelName) {
+      return topLevelCategory;
+    }
+
+    return _findCategoryByName(topLevelCategory, selectedCategoryName) ??
+        _selectedCategoryObject;
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -334,7 +378,8 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
               }
 
               // Default Selection Logic: 'All Books'
-              BookCategory? currentCategoryObject = _selectedCategoryObject;
+              BookCategory? currentCategoryObject =
+                  _resolveSelectedCategory(dataProvider);
               String? currentCategoryName = _selectedCategoryName;
               String? currentTopLevelName = _selectedTopLevelName;
 

@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
@@ -151,13 +152,23 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         return;
       }
 
-      // בדיקה אם יש ID לספר
-      if (state.book.id == null) {
+      // בדיקה אם יש ID לספר - אם לא, נחפש לפי כותרת
+      int? bookId = state.book.id;
+      if (bookId == null) {
+        final dbProvider = SqliteDataProvider.instance;
+        if (dbProvider.isInitialized && dbProvider.repository != null) {
+          final dbBook = state.book.categoryId != null
+              ? await dbProvider.repository!
+                  .getBookByTitleAndCategory(bookTitle, state.book.categoryId!)
+              : await dbProvider.repository!.getBookByTitle(bookTitle);
+          bookId = dbBook?.id;
+        }
+      }
+
+      if (bookId == null) {
         UiSnack.showError('הספר לא נמצא במסד הנתונים');
         return;
       }
-
-      final bookId = state.book.id!;
 
       // חיפוש הספר לפי ID ב-shamor zachor
       final result = dataProvider.getBookById(bookId);
@@ -180,30 +191,25 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       String currentRef =
           await refFromIndex(currentIndex, state.book.tableOfContents);
 
-      // אם הכותרת היא רק שם הספר (H1), נחפש את H2 הבאה
-      if (currentRef == state.book.title || currentRef.split(',').length == 1) {
-        debugPrint('Current ref is H1 (book title), looking for next H2...');
+      // אם הכותרת זהה לשם הספר, סימן שאנחנו לפני כל פרק - נחפש את ה-H2 הראשונה
+      if (currentRef == state.book.title || currentRef.isEmpty) {
+        debugPrint('Current ref is book title, looking for first H2...');
         final toc = await state.book.tableOfContents;
 
-        // חיפוש הכותרת הבאה שגדולה מהאינדקס הנוכחי
         for (final entry in toc) {
-          if (entry.index > currentIndex) {
+          if (entry.index >= currentIndex) {
             currentRef = entry.text;
-            debugPrint('Found next H2: $currentRef');
+            debugPrint('Found first H2: $currentRef');
             break;
           }
-          // חיפוש גם בכותרות המשנה
           for (final child in entry.children) {
-            if (child.index > currentIndex) {
+            if (child.index >= currentIndex) {
               currentRef = '${entry.text}, ${child.text}';
-              debugPrint('Found next H2 child: $currentRef');
+              debugPrint('Found first H2 child: $currentRef');
               break;
             }
           }
-          if (currentRef !=
-              await refFromIndex(currentIndex, state.book.tableOfContents)) {
-            break;
-          }
+          if (currentRef != state.book.title && currentRef.isNotEmpty) break;
         }
       }
 
@@ -453,6 +459,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   @override
   void initState() {
     super.initState();
+
+    // טעינת נתוני שמור וזכור ברקע כדי שהמצב יהיה נכון בפתיחת ספר
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      context.read<ShamorZachorDataProvider>().ensureLoaded().then((_) {
+        if (mounted) {
+          context.read<ShamorZachorProgressProvider>().ensureLoaded();
+        }
+      });
+    });
 
     // רישום ה-FocusNode ב-FocusRepository
     _focusRepository = context.read<FocusRepository>();
@@ -1017,7 +1036,18 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 if (state is TextBookLoaded) {
                   // בקשת focus אוטומטית כשהספר נטען
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted && !_bookContentFocusNode.hasFocus) {
+                    if (!mounted) {
+                      return;
+                    }
+
+                    if (state.showPageShapeView) {
+                      if (_bookContentFocusNode.hasFocus) {
+                        _bookContentFocusNode.unfocus();
+                      }
+                      return;
+                    }
+
+                    if (!_bookContentFocusNode.hasFocus) {
                       _bookContentFocusNode.requestFocus();
                     }
                   });
@@ -1229,11 +1259,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
 
     return [
-      ResponsiveActionBar(
-        key: ValueKey('responsive_actions_$screenWidth'),
-        actions: _buildDisplayOrderActions(context, state),
-        alwaysInMenu: _buildAlwaysInMenuActions(context, state),
-        maxVisibleButtons: maxButtons,
+      Consumer<ShamorZachorDataProvider>(
+        builder: (context, _, __) => ResponsiveActionBar(
+          key: ValueKey('responsive_actions_$screenWidth'),
+          actions: _buildDisplayOrderActions(context, state),
+          alwaysInMenu: _buildAlwaysInMenuActions(context, state),
+          maxVisibleButtons: maxButtons,
+        ),
       ),
     ];
   }
@@ -1451,7 +1483,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             ? FluentIcons.checkmark_circle_24_regular
             : FluentIcons.add_circle_24_regular,
         tooltip: _isBookTrackedInShamorZachor(state.book.title)
-            ? 'סמן כנלמד בשמור וזכור'
+            ? 'סמן קטע פתוח כנלמד בשמור וזכור'
             : 'הוסף למעקב לימוד בשמור וזכור',
         onPressed: () {
           if (_isBookTrackedInShamorZachor(state.book.title)) {
@@ -1911,16 +1943,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildShamorZachorButton(BuildContext context, TextBookLoaded state) {
-    // Always show button - either for marking progress or for adding to tracking
     final isTracked = _isBookTrackedInShamorZachor(state.book.title);
-
     return IconButton(
       onPressed: () {
         if (isTracked) {
-          // Book is already tracked - mark progress
           _markShamorZachorProgress(state.book.title);
         } else {
-          // Book is not tracked - add to tracking
           _addBookToShamorZachorTracking(state.book);
         }
       },
@@ -1931,8 +1959,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               height: 24,
             )
           : const Icon(FluentIcons.add_circle_24_regular, size: 24),
-      tooltip:
-          isTracked ? 'סמן כנלמד בשמור וזכור' : 'הוסף למעקב לימוד בשמור וזכור',
+      tooltip: isTracked
+          ? 'סמן קטע פתוח כנלמד בשמור וזכור'
+          : 'הוסף למעקב לימוד בשמור וזכור',
     );
   }
 

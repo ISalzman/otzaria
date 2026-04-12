@@ -210,12 +210,12 @@ class DesignSettingsTab extends StatelessWidget {
                     },
                   ),
                   SwitchSettingsTile(
-                    title: const Text('הסתרת הערות אישיות',
+                    title: const Text('פתיחת הערות אישיות במצב סגור',
                         style: kSettingsTitleStyle),
                     subtitle: Text(
                         state.personalNotesCollapsedByDefault
-                            ? 'רשימות ההערות ייפתחו במצב סגור'
-                            : 'רשימות ההערות ייפתחו במצב פתוח',
+                        ? 'רשימות ההערות יוצגו כשהן סגורות'
+                        : 'רשימות ההערות יוצגו כשהן פתוחות',
                         style: kSettingsSubtitleStyle),
                     value: state.personalNotesCollapsedByDefault,
                     onChanged: (value) {

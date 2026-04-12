@@ -3,8 +3,16 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
+import 'package:otzaria/migration/core/models/author.dart';
+import 'package:otzaria/migration/core/models/book.dart' as migration_models;
+import 'package:otzaria/migration/core/models/category.dart'
+    as migration_models;
+import 'package:otzaria/migration/dao/daos/database.dart';
+import 'package:otzaria/migration/dao/repository/seforim_repository.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:path/path.dart' as path;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -289,6 +297,127 @@ void main() {
         expect(rows.first['heTitle'], 'פרקים');
       } finally {
         db.close();
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('buildLibraryCatalog שומר מחבר מה-DB וחיפוש הספריה מוצא לפי מחבר',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('otzaria_db_minimal_books');
+      final dbPath =
+          path.join(tempDir.path, DatabaseConstants.databaseFileName);
+      final database = MyDatabase.withPath(dbPath);
+      final repository = SeforimRepository(database);
+      final provider = DatabaseLibraryProvider.instance;
+        final previousLibraryPath =
+          Settings.getValue<String>(SettingsRepository.keyLibraryPath);
+      final previousFolderName =
+          Settings.getValue<String>(SettingsRepository.keyLibraryFolderName);
+      final previousEffectiveDbPath =
+          Settings.getValue<String>(SettingsRepository.keyDbEffectivePath);
+
+      try {
+        await provider.sqliteProvider.dispose();
+        provider.clearCache();
+        await repository.ensureInitialized();
+
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryPath,
+          tempDir.path,
+        );
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryFolderName,
+          '',
+        );
+        await Settings.setValue<String>(
+          SettingsRepository.keyDbEffectivePath,
+          '',
+        );
+
+        final sourceId = await repository.insertSource('local-test', -10);
+        final categoryId = await repository.insertCategory(
+          const migration_models.Category(
+            title: 'הלכה',
+            parentId: null,
+            level: 0,
+          ),
+        );
+
+        await repository.insertBook(
+          migration_models.Book(
+            id: 1,
+            categoryId: categoryId,
+            sourceId: sourceId,
+            title: 'ספר בדיקה',
+            authors: const [Author(name: 'רש"י')],
+            filePath: path.join(tempDir.path, 'book.txt'),
+            fileType: 'txt',
+          ),
+        );
+
+        final db = await database.database;
+        db.execute('BEGIN');
+        try {
+          for (var index = 2; index <= 1200; index++) {
+            db.execute(
+              '''
+              INSERT INTO book (
+                id, categoryId, sourceId, title, orderIndex, totalLines, filePath, fileType
+              ) VALUES (?, ?, ?, ?, ?, 0, ?, 'txt')
+              ''',
+              [
+                index,
+                categoryId,
+                sourceId,
+                'ספר $index',
+                index,
+                path.join(tempDir.path, 'book_$index.txt'),
+              ],
+            );
+          }
+          db.execute('COMMIT');
+        } catch (_) {
+          db.execute('ROLLBACK');
+          rethrow;
+        }
+
+        await provider.initialize();
+        final library = await provider.buildLibraryCatalog({}, tempDir.path);
+        final books = library.subCategories.single.books;
+        final targetBook =
+            books.firstWhere((book) => book.title == 'ספר בדיקה');
+
+        expect(library.subCategories, hasLength(1));
+        expect(books, hasLength(1200));
+        expect(targetBook.author, 'רש"י');
+
+        final repositoryForSearch = DataRepository()
+          ..library = Future.value(library);
+        final results = await repositoryForSearch.findBooks(
+          'רש"י',
+          library.subCategories.single,
+          sortByRatio: false,
+        );
+
+        expect(results, hasLength(1));
+        expect(results.single.title, 'ספר בדיקה');
+      } finally {
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryPath,
+          previousLibraryPath ?? '',
+        );
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryFolderName,
+          previousFolderName ?? '',
+        );
+        await Settings.setValue<String>(
+          SettingsRepository.keyDbEffectivePath,
+          previousEffectiveDbPath ?? '',
+        );
+        await provider.sqliteProvider.dispose();
+        provider.clearCache();
+        database.close();
         await tempDir.delete(recursive: true);
       }
     });

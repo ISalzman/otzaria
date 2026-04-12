@@ -280,7 +280,7 @@ class _BookCardWidgetState extends State<BookCardWidget> {
                                         Theme.of(context).colorScheme.primary,
                                     foregroundColor:
                                         Theme.of(context).colorScheme.onPrimary,
-                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -382,10 +382,10 @@ class _BookCardWidgetState extends State<BookCardWidget> {
 
     if (isCompleted) {
       return Container(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -393,13 +393,13 @@ class _BookCardWidgetState extends State<BookCardWidget> {
             Icon(
               FluentIcons.checkmark_24_regular,
               color: cs.onSurface,
-              size: 20,
+              size: 16,
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 1),
             Text(
               getCycleName(cycleNumber),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 9,
+                    fontSize: 8,
                     color: cs.onSurface,
                   ),
               textAlign: TextAlign.center,
@@ -416,10 +416,10 @@ class _BookCardWidgetState extends State<BookCardWidget> {
     final progressPercentage = (progress * 100).round();
 
     return Container(
-      padding: const EdgeInsets.all(6),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(
           color: cs.outline.withValues(alpha: 0.3),
         ),
@@ -431,28 +431,30 @@ class _BookCardWidgetState extends State<BookCardWidget> {
             getCycleName(cycleNumber),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.bold,
-                  fontSize: 10,
+                  fontSize: 9,
                 ),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 1),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              minHeight: 5,
+              minHeight: 3,
               value: progress,
               backgroundColor: cs.onSurface.withValues(alpha: 0.08),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 1),
           Text(
             '$progressPercentage% • $completedItems/$totalItems',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 10,
+                  fontSize: 8,
                   color: cs.onSurface.withValues(alpha: 0.7),
                 ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

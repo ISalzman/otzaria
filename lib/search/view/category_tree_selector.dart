@@ -4,8 +4,218 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/library/models/library.dart';
+import 'package:otzaria/models/books.dart';
+import 'package:otzaria/search/search_scope_preferences.dart';
+import 'package:otzaria/search/utils/facet_helper.dart';
+import 'package:otzaria/search/utils/find_match_utils.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
+
+class SearchScopeSelector extends StatefulWidget {
+  final Set<String> selectedFacets;
+  final ValueChanged<Set<String>> onSelectionChanged;
+  final bool shrinkWrapManualSelector;
+
+  const SearchScopeSelector({
+    super.key,
+    required this.selectedFacets,
+    required this.onSelectionChanged,
+    this.shrinkWrapManualSelector = false,
+  });
+
+  @override
+  State<SearchScopeSelector> createState() => _SearchScopeSelectorState();
+}
+
+class _SearchScopeSelectorState extends State<SearchScopeSelector> {
+  bool _isLoaded = false;
+  bool _searchAllCategories = true;
+  Set<String> _manualSelectedFacets = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  @override
+  void didUpdateWidget(covariant SearchScopeSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameFacets(oldWidget.selectedFacets, widget.selectedFacets)) {
+      _applyExternalSelection(widget.selectedFacets);
+    }
+  }
+
+  Future<void> _initialize() async {
+    final persisted = SearchScopePreferences.load();
+    final explicitSelection = widget.selectedFacets;
+
+    final hasExplicitManualSelection =
+        explicitSelection.isNotEmpty && !explicitSelection.contains('/');
+    final isExplicitAllSelection = explicitSelection.contains('/');
+
+    _searchAllCategories = hasExplicitManualSelection
+        ? false
+        : isExplicitAllSelection
+            ? true
+            : persisted.searchAllCategories;
+    _manualSelectedFacets = hasExplicitManualSelection
+        ? Set<String>.from(explicitSelection)
+        : persisted.manualFacets;
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoaded = true;
+    });
+
+    widget.onSelectionChanged(_activeSelection);
+  }
+
+  void _applyExternalSelection(Set<String> selection) {
+    if (!_isLoaded) {
+      return;
+    }
+
+    final hasExplicitManualSelection =
+        selection.isNotEmpty && !selection.contains('/');
+
+    setState(() {
+      if (hasExplicitManualSelection) {
+        _searchAllCategories = false;
+        _manualSelectedFacets = Set<String>.from(selection);
+      } else if (selection.contains('/')) {
+        _searchAllCategories = true;
+      } else {
+        _searchAllCategories = false;
+        _manualSelectedFacets = {};
+      }
+    });
+  }
+
+  bool _sameFacets(Set<String> a, Set<String> b) {
+    return a.length == b.length && a.containsAll(b);
+  }
+
+  Set<String> get _activeSelection =>
+      _searchAllCategories || _manualSelectedFacets.isEmpty
+        ? {'/'}
+        : Set<String>.from(_manualSelectedFacets);
+
+  void _setSearchAllCategories(bool value) {
+    setState(() {
+      _searchAllCategories = value;
+    });
+    SearchScopePreferences.save(
+      searchAllCategories: _searchAllCategories,
+      manualFacets: _manualSelectedFacets,
+    );
+    widget.onSelectionChanged(_activeSelection);
+  }
+
+  void _onManualSelectionChanged(Set<String> selection) {
+    setState(() {
+      _manualSelectedFacets = Set<String>.from(selection);
+    });
+    SearchScopePreferences.save(
+      searchAllCategories: _searchAllCategories,
+      manualFacets: _manualSelectedFacets,
+    );
+    if (!_searchAllCategories) {
+      widget.onSelectionChanged(_activeSelection);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isLoaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final manualCount = _manualSelectedFacets.length;
+    final helperText = _searchAllCategories
+        ? 'מופעל כברירת מחדל. כבה כדי לבחור קטגוריות או ספרים ידנית.'
+        : manualCount == 0
+        ? 'אפשר לחפש בעץ ולבחור קטגוריות או ספרים. עד שתיבחר בחירה ידנית, החיפוש יישאר בכל הקטגוריות.'
+            : 'נשמרו $manualCount פריטים לבחירה הידנית הכללית.';
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: colorScheme.outline.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                FluentIcons.globe_24_regular,
+                size: 20,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'חיפוש בכל הקטגוריות',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurface,
+                      ),
+                      textDirection: TextDirection.rtl,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      helperText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      textDirection: TextDirection.rtl,
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: _searchAllCategories,
+                onChanged: _setSearchAllCategories,
+              ),
+            ],
+          ),
+        ),
+        if (!_searchAllCategories) ...[
+          const SizedBox(height: 12),
+          if (widget.shrinkWrapManualSelector)
+            CategoryTreeSelector(
+              selectedFacets: _manualSelectedFacets,
+              onSelectionChanged: _onManualSelectionChanged,
+              shrinkWrap: true,
+            )
+          else
+            Flexible(
+              child: CategoryTreeSelector(
+                selectedFacets: _manualSelectedFacets,
+                onSelectionChanged: _onManualSelectionChanged,
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
 
 /// וידג'ט לבחירת קטגוריות לחיפוש עם עץ היררכי מתקפל
 /// מאפשר בחירת קטגוריות ותת-קטגוריות לפני ביצוע חיפוש
@@ -16,10 +226,13 @@ class CategoryTreeSelector extends StatefulWidget {
   /// קריאה חוזרת כשהבחירה משתנה
   final ValueChanged<Set<String>> onSelectionChanged;
 
+  final bool shrinkWrap;
+
   const CategoryTreeSelector({
     super.key,
     required this.selectedFacets,
     required this.onSelectionChanged,
+    this.shrinkWrap = false,
   });
 
   @override
@@ -27,12 +240,29 @@ class CategoryTreeSelector extends StatefulWidget {
 }
 
 class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
+  static const int _minSearchQueryLength = 2;
+
   final Map<String, bool> _expansionState = {};
+  final TextEditingController _searchController = TextEditingController();
 
   // מאוחסן בבנייה כדי להיות זמין בפונקציות ה-toggle
   Library? _library;
+  List<_ScopeNode> _rootNodes = const [];
+  Map<String, _ScopeNode> _nodesByFacet = const {};
 
   bool get _isAllSelected => widget.selectedFacets.contains('/');
+
+  String get _normalizedSearchQuery =>
+      normalizeFindQuery(_searchController.text);
+
+  bool get _hasActiveSearch =>
+      _normalizedSearchQuery.length >= _minSearchQueryLength;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   // --- לוגיקת בחירה ---
 
@@ -193,30 +423,27 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
         }
 
         _library = libraryState.library!;
+        _rebuildScopeTree(_library!);
         final topCategories = _library!.subCategories.toList()
           ..sort((a, b) => SearchCatalogueOrderHelper.topCategoryOrder(a)
               .compareTo(SearchCatalogueOrderHelper.topCategoryOrder(b)));
+        final searchResults = _hasActiveSearch
+            ? _buildScopeSearchResults(_normalizedSearchQuery)
+            : const <_ScopeSearchResultItem>[];
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context),
-            const SizedBox(height: 4),
-            Flexible(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .outline
-                        .withValues(alpha: 0.3),
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SingleChildScrollView(
+        final treeBody = Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color:
+                  Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: _hasActiveSearch
+                ? _buildSearchResultsView(context, searchResults)
+                : SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -225,9 +452,24 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                       ],
                     ),
                   ),
-                ),
-              ),
-            ),
+          ),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHeader(context),
+            const SizedBox(height: 8),
+            _buildSearchField(context),
+            const SizedBox(height: 8),
+            if (widget.shrinkWrap)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: treeBody,
+              )
+            else
+              Flexible(child: treeBody),
           ],
         );
       },
@@ -261,7 +503,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
             child: NeutralActionButton(
               text: 'איפוס',
               icon: FluentIcons.arrow_reset_24_regular,
-              onPressed: () => _toggleAll(true),
+              onPressed: () => _toggleAll(false),
             ),
           ),
         Checkbox(
@@ -283,6 +525,485 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
         ),
       ],
     );
+  }
+
+  Widget _buildSearchField(BuildContext context) {
+    return RtlTextField(
+      controller: _searchController,
+      decoration: InputDecoration(
+        hintText: 'איתור קטגוריה או ספר...',
+        prefixIcon: const Icon(FluentIcons.search_24_regular),
+        suffixIcon: _searchController.text.isEmpty
+            ? null
+            : IconButton(
+                onPressed: () {
+                  setState(_searchController.clear);
+                },
+                icon: const Icon(FluentIcons.dismiss_24_regular),
+              ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        isDense: true,
+      ),
+      onChanged: (_) => setState(() {}),
+    );
+  }
+
+  Widget _buildSearchResultsView(
+    BuildContext context,
+    List<_ScopeSearchResultItem> results,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (_normalizedSearchQuery.length < _minSearchQueryLength) {
+      return Center(
+        child: Text(
+          'הקלד לפחות $_minSearchQueryLength תווים כדי לחפש.',
+          style: TextStyle(color: colorScheme.onSurfaceVariant),
+          textDirection: TextDirection.rtl,
+        ),
+      );
+    }
+
+    if (results.isEmpty) {
+      return Center(
+        child: Text(
+          'לא נמצאו קטגוריות או ספרים תואמים.',
+          style: TextStyle(color: colorScheme.onSurfaceVariant),
+          textDirection: TextDirection.rtl,
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'נמצאו ${results.length} תוצאות',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  textDirection: TextDirection.rtl,
+                ),
+              ),
+              SizedBox(
+                height: 30,
+                child: RecommendedActionButton(
+                  text: 'בחר הכל',
+                  icon: FluentIcons.checkbox_checked_24_regular,
+                  onPressed: () => _selectAllSearchResults(results),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 30,
+                child: NeutralActionButton(
+                  text: 'נקה',
+                  icon: FluentIcons.eraser_24_regular,
+                  onPressed: () => _clearSearchResultsSelection(results),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView.builder(
+            itemCount: results.length,
+            itemBuilder: (context, index) {
+              final item = results[index];
+              final isSelected = _isFacetCovered(item.facet);
+              return InkWell(
+                onTap: () => _toggleFacet(item.facet, !isSelected),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? colorScheme.primaryContainer.withValues(alpha: 0.25)
+                        : null,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: colorScheme.outline.withValues(alpha: 0.15),
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: isSelected,
+                        onChanged: (_) => _toggleFacet(item.facet, !isSelected),
+                      ),
+                      const SizedBox(width: 4),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Icon(
+                          item.isBook
+                              ? FluentIcons.book_24_regular
+                              : FluentIcons.folder_24_regular,
+                          size: 18,
+                          color: item.isBook
+                              ? colorScheme.onSurfaceVariant
+                              : colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.title,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: item.isBook
+                                    ? FontWeight.w500
+                                    : FontWeight.w700,
+                                color: colorScheme.onSurface,
+                              ),
+                              textDirection: TextDirection.rtl,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (item.subtitle.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                item.subtitle,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                textDirection: TextDirection.rtl,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _selectAllSearchResults(List<_ScopeSearchResultItem> results) {
+    var selection = Set<String>.from(widget.selectedFacets);
+    for (final result in results) {
+      selection = _selectFacet(result.facet, selection);
+    }
+    widget.onSelectionChanged(selection);
+  }
+
+  void _clearSearchResultsSelection(List<_ScopeSearchResultItem> results) {
+    var selection = Set<String>.from(widget.selectedFacets);
+    for (final result in results) {
+      selection = _deselectFacet(result.facet, selection);
+    }
+    widget.onSelectionChanged(selection);
+  }
+
+  void _rebuildScopeTree(Library library) {
+    final nodesByFacet = <String, _ScopeNode>{};
+
+    _ScopeNode buildCategoryNode(Category category) {
+      final sortedCategories = category.subCategories.toList()
+        ..sort((a, b) => SearchCatalogueOrderHelper.normalizeOrder(a.order)
+            .compareTo(SearchCatalogueOrderHelper.normalizeOrder(b.order)));
+      final sortedBooks = category.books.toList()
+        ..sort((a, b) => SearchCatalogueOrderHelper.normalizeOrder(a.order)
+            .compareTo(SearchCatalogueOrderHelper.normalizeOrder(b.order)));
+
+      final children = <_ScopeNode>[
+        for (final subCategory in sortedCategories)
+          buildCategoryNode(subCategory),
+        for (final book in sortedBooks)
+          _BookScopeNode(
+            book: book,
+            facet: FacetHelper.buildBookFacet(
+              FacetHelper.resolveCategoryPath(book),
+              book.title,
+            ),
+          ),
+      ];
+
+      final node = _CategoryScopeNode(category: category, children: children);
+      nodesByFacet[node.facet] = node;
+      for (final child in children) {
+        nodesByFacet[child.facet] = child;
+      }
+      return node;
+    }
+
+    _rootNodes = [
+      for (final category in library.subCategories) buildCategoryNode(category)
+    ];
+    _nodesByFacet = nodesByFacet;
+  }
+
+  List<_ScopeSearchResultItem> _buildScopeSearchResults(
+      String normalizedQuery) {
+    if (normalizedQuery.isEmpty) {
+      return const [];
+    }
+
+    final results = <_ScopeSearchResultItem>[];
+
+    void visit(_ScopeNode node) {
+      final normalizedTitle = normalizeFindText(node.title);
+      final normalizedSubtitle = normalizeFindText(node.subtitle);
+      final matches = findNormalizedTextMatches(
+        normalizedQuery: normalizedQuery,
+        normalizedPrimaryText: normalizedTitle,
+        normalizedSecondaryText: normalizedSubtitle,
+      );
+
+      if (matches) {
+        results.add(
+          _ScopeSearchResultItem(
+            facet: node.facet,
+            title: node.title,
+            subtitle: node.subtitle,
+            isBook: node.isBook,
+            score: findNormalizedTextMatchRank(
+              normalizedQuery: normalizedQuery,
+              normalizedPrimaryText: normalizedTitle,
+              normalizedSecondaryText: normalizedSubtitle,
+            ),
+            lengthDelta: findNormalizedTextMatchLengthDelta(
+              normalizedQuery: normalizedQuery,
+              normalizedPrimaryText: normalizedTitle,
+              normalizedSecondaryText: normalizedSubtitle,
+            ),
+          ),
+        );
+      }
+
+      for (final child in node.children) {
+        visit(child);
+      }
+    }
+
+    for (final node in _rootNodes) {
+      visit(node);
+    }
+
+    results.sort((a, b) {
+      final scoreCompare = a.score.compareTo(b.score);
+      if (scoreCompare != 0) {
+        return scoreCompare;
+      }
+
+      final lengthDeltaCompare = a.lengthDelta.compareTo(b.lengthDelta);
+      if (lengthDeltaCompare != 0) {
+        return lengthDeltaCompare;
+      }
+
+      if (a.isBook != b.isBook) {
+        return a.isBook ? 1 : -1;
+      }
+
+      return a.title.compareTo(b.title);
+    });
+
+    return results;
+  }
+
+  bool _isFacetCovered(String facet) {
+    if (_isAllSelected) {
+      return true;
+    }
+
+    if (widget.selectedFacets.contains(facet)) {
+      return true;
+    }
+
+    for (final selected in widget.selectedFacets) {
+      if (selected == '/' || selected == facet) {
+        continue;
+      }
+      if (facet.startsWith('$selected/')) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  void _toggleFacet(String facet, bool select) {
+    final nextSelection = select
+        ? _selectFacet(facet, Set<String>.from(widget.selectedFacets))
+        : _deselectFacet(facet, Set<String>.from(widget.selectedFacets));
+    widget.onSelectionChanged(nextSelection);
+  }
+
+  Set<String> _selectFacet(String facet, Set<String> selection) {
+    selection.remove('/');
+
+    for (final selected in selection.toList()) {
+      if (facet == selected || facet.startsWith('$selected/')) {
+        selection.remove(selected);
+      }
+    }
+
+    for (final selected in selection.toList()) {
+      if (selected.startsWith('$facet/')) {
+        selection.remove(selected);
+      }
+    }
+
+    selection.add(facet);
+    return _consolidateSelection(selection);
+  }
+
+  Set<String> _deselectFacet(String facet, Set<String> selection) {
+    if (selection.remove(facet)) {
+      return _consolidateSelection(selection);
+    }
+
+    final coveringFacet = _findCoveringFacet(facet, selection);
+    if (coveringFacet == null) {
+      return selection;
+    }
+
+    final excludedNode = _nodesByFacet[facet];
+    if (excludedNode == null) {
+      selection.remove(coveringFacet);
+      return _consolidateSelection(selection);
+    }
+
+    if (coveringFacet == '/') {
+      _explodeExcludingNode(excludedNode, selection, _rootNodes, '/');
+      return _consolidateSelection(selection);
+    }
+
+    final coveringNode = _nodesByFacet[coveringFacet];
+    if (coveringNode == null) {
+      selection.remove(coveringFacet);
+      return _consolidateSelection(selection);
+    }
+
+    _explodeExcludingNode(
+      excludedNode,
+      selection,
+      coveringNode.children,
+      coveringFacet,
+    );
+    return _consolidateSelection(selection);
+  }
+
+  String? _findCoveringFacet(String facet, Set<String> selection) {
+    String? bestMatch;
+    for (final selected in selection) {
+      if (selected == '/') {
+        bestMatch = '/';
+        continue;
+      }
+
+      if (facet.startsWith('$selected/')) {
+        if (bestMatch == null || selected.length > bestMatch.length) {
+          bestMatch = selected;
+        }
+      }
+    }
+    return bestMatch;
+  }
+
+  void _explodeExcludingNode(
+    _ScopeNode excludedNode,
+    Set<String> selection,
+    List<_ScopeNode> siblings,
+    String coveringFacet,
+  ) {
+    selection.remove(coveringFacet);
+
+    for (final child in siblings) {
+      if (child.facet == excludedNode.facet) {
+        continue;
+      }
+
+      if (_isAncestorFacet(child.facet, excludedNode.facet)) {
+        _explodeExcludingNode(
+          excludedNode,
+          selection,
+          child.children,
+          child.facet,
+        );
+      } else {
+        selection.add(child.facet);
+      }
+    }
+  }
+
+  bool _isAncestorFacet(String ancestor, String facet) {
+    return facet == ancestor || facet.startsWith('$ancestor/');
+  }
+
+  Set<String> _consolidateSelection(Set<String> selection) {
+    if (selection.contains('/')) {
+      return {'/'};
+    }
+
+    final result = Set<String>.from(selection);
+    final allCovered = _rootNodes.isNotEmpty &&
+        _rootNodes.every((node) => _consolidateNode(node, result));
+
+    if (allCovered) {
+      return {'/'};
+    }
+
+    return result;
+  }
+
+  bool _consolidateNode(_ScopeNode node, Set<String> selection) {
+    if (selection.contains(node.facet)) {
+      return true;
+    }
+
+    for (final selected in selection) {
+      if (selected != '/' && node.facet.startsWith('$selected/')) {
+        return true;
+      }
+    }
+
+    if (node.children.isEmpty) {
+      return false;
+    }
+
+    final allChildrenCovered =
+        node.children.every((child) => _consolidateNode(child, selection));
+    if (!allChildrenCovered) {
+      return false;
+    }
+
+    for (final child in node.children) {
+      selection.remove(child.facet);
+      _removeNodeDescendants(child, selection);
+    }
+    selection.add(node.facet);
+    return true;
+  }
+
+  void _removeNodeDescendants(_ScopeNode node, Set<String> selection) {
+    for (final child in node.children) {
+      selection.remove(child.facet);
+      _removeNodeDescendants(child, selection);
+    }
   }
 
   Widget _buildCategoryNode(
@@ -407,4 +1128,69 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
       for (final sub in sorted) _buildCategoryNode(context, sub, level),
     ];
   }
+}
+
+abstract class _ScopeNode {
+  final String facet;
+  final String title;
+  final String subtitle;
+  final List<_ScopeNode> children;
+
+  const _ScopeNode({
+    required this.facet,
+    required this.title,
+    required this.subtitle,
+    required this.children,
+  });
+
+  bool get isBook;
+}
+
+class _CategoryScopeNode extends _ScopeNode {
+  _CategoryScopeNode({
+    required Category category,
+    required super.children,
+  }) : super(
+          facet: category.path,
+          title: category.title,
+          subtitle: category.path == '/' ? '' : category.path.substring(1),
+        );
+
+  @override
+  bool get isBook => false;
+}
+
+class _BookScopeNode extends _ScopeNode {
+  _BookScopeNode({required Book book, required super.facet})
+      : super(
+          title: book.title,
+          subtitle: [
+            if ((FacetHelper.resolveCategoryPath(book) ?? '').isNotEmpty)
+              (FacetHelper.resolveCategoryPath(book) ?? '')
+                  .replaceFirst('/', ''),
+            if ((book.author ?? '').trim().isNotEmpty) book.author!.trim(),
+          ].join(' • '),
+          children: const [],
+        );
+
+  @override
+  bool get isBook => true;
+}
+
+class _ScopeSearchResultItem {
+  final String facet;
+  final String title;
+  final String subtitle;
+  final bool isBook;
+  final int score;
+  final int lengthDelta;
+
+  const _ScopeSearchResultItem({
+    required this.facet,
+    required this.title,
+    required this.subtitle,
+    required this.isBook,
+    required this.score,
+    required this.lengthDelta,
+  });
 }

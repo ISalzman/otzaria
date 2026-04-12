@@ -72,6 +72,11 @@ class _SearchDialogState extends State<SearchDialog> {
       _searchTab = SearchingTab("חיפוש", lastTyping);
     }
 
+    final initialScopeFacets = _searchTab.searchBloc.state.searchScopeFacets;
+    if (initialScopeFacets.isNotEmpty) {
+      _selectedCategoryFacets = initialScopeFacets.toSet();
+    }
+
     // הגדרת מצב החיפוש האחרון
     final searchMode = lastMode == 'advanced'
         ? SearchMode.advanced
@@ -496,8 +501,7 @@ class _SearchDialogState extends State<SearchDialog> {
                                                         .primary,
                                                 padding:
                                                     const EdgeInsets.all(6),
-                                                minimumSize:
-                                                    const Size(32, 32),
+                                                minimumSize: const Size(32, 32),
                                                 tapTargetSize:
                                                     MaterialTapTargetSize
                                                         .shrinkWrap,
@@ -543,11 +547,10 @@ class _SearchDialogState extends State<SearchDialog> {
                                         return const SizedBox.shrink();
                                       }
                                       return Padding(
-                                        padding: const EdgeInsets.only(
-                                            right: 16.0),
+                                        padding:
+                                            const EdgeInsets.only(right: 16.0),
                                         child: Center(
-                                          child: FuzzyDistance(
-                                              tab: _searchTab),
+                                          child: FuzzyDistance(tab: _searchTab),
                                         ),
                                       );
                                     },
@@ -588,10 +591,13 @@ class _SearchDialogState extends State<SearchDialog> {
                                               _advancedControlsHasFocus,
                                         );
 
-                                        final categoryTree = CategoryTreeSelector(
-                                          selectedFacets: _selectedCategoryFacets,
+                                        final categoryTree =
+                                            SearchScopeSelector(
+                                          selectedFacets:
+                                              _selectedCategoryFacets,
                                           onSelectionChanged: (s) => setState(
-                                              () => _selectedCategoryFacets = s),
+                                              () =>
+                                                  _selectedCategoryFacets = s),
                                         );
 
                                         if (isWide) {
@@ -645,7 +651,7 @@ class _SearchDialogState extends State<SearchDialog> {
                                     );
                                   } else if (showTree) {
                                     // מדויק/מקורב: עץ קטגוריות ממלא הכל
-                                    return CategoryTreeSelector(
+                                    return SearchScopeSelector(
                                       selectedFacets: _selectedCategoryFacets,
                                       onSelectionChanged: (s) => setState(
                                           () => _selectedCategoryFacets = s),

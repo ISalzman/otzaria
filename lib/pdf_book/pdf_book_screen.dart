@@ -46,6 +46,7 @@ import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/pdf_headings.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
@@ -86,6 +87,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   // Local UI state that syncs with Bloc
   int _rightPaneInitialTabIndex = 0;
+
+  // קבוצות מפרשים לסדר בתפריט
+  List<CommentatorGroup> _commentatorGroups = [];
 
   // Named listeners for proper cleanup
   late final VoidCallback _leftPaneTabControllerListener;
@@ -365,6 +369,50 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _openCommentaryPane();
   }
 
+  List<AppContextMenuEntry> _buildGroupedCommentatorEntries(
+      List<String> relevantCommentators) {
+    final items = <AppContextMenuEntry>[];
+
+    AppContextMenuEntry buildItem(String commentator) => AppContextMenuEntry(
+          label: commentator,
+          icon: widget.tab.activeCommentators.contains(commentator)
+              ? FluentIcons.checkmark_24_regular
+              : null,
+          onTap: () => _toggleCommentator(commentator),
+        );
+
+    if (_commentatorGroups.isNotEmpty) {
+      final allGrouped =
+          _commentatorGroups.expand((group) => group.commentators).toSet();
+
+      for (final group in _commentatorGroups) {
+        final groupItems = group.commentators
+            .where((commentator) => relevantCommentators.contains(commentator))
+            .toList();
+        if (groupItems.isNotEmpty) {
+          if (items.isNotEmpty) {
+            items.add(const AppContextMenuEntry.divider());
+          }
+          items.addAll(groupItems.map(buildItem));
+        }
+      }
+
+      final ungrouped = relevantCommentators
+          .where((commentator) => !allGrouped.contains(commentator))
+          .toList();
+      if (ungrouped.isNotEmpty) {
+        if (items.isNotEmpty) {
+          items.add(const AppContextMenuEntry.divider());
+        }
+        items.addAll(ungrouped.map(buildItem));
+      }
+    } else {
+      items.addAll(relevantCommentators.map(buildItem));
+    }
+
+    return items;
+  }
+
   List<AppContextMenuEntry> _buildPdfContextMenuEntries(
       BuildContext menuContext) {
     final (commentators: relevantCommentators, links: relevantLinks) =
@@ -380,13 +428,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onTap: () => _toggleAllCommentators(relevantCommentators),
       ),
       if (relevantCommentators.isNotEmpty) const AppContextMenuEntry.divider(),
-      ...relevantCommentators.map((c) => AppContextMenuEntry(
-            label: c,
-            icon: widget.tab.activeCommentators.contains(c)
-                ? FluentIcons.checkmark_24_regular
-                : null,
-            onTap: () => _toggleCommentator(c),
-          )),
+      ..._buildGroupedCommentatorEntries(relevantCommentators),
     ];
 
     final linkChildren = relevantLinks
@@ -719,6 +761,39 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
   }
 
+  Future<void> _loadCommentatorGroups() async {
+    final commentatorsSet = <String>{};
+    for (final link in widget.tab.links) {
+      if (link.connectionType == 'COMMENTARY' ||
+          link.connectionType == 'TARGUM') {
+        commentatorsSet.add(utils.getTitleFromPath(link.path2));
+      }
+    }
+    final eras = await utils.splitByEra(commentatorsSet.toList());
+    final known = <String>{
+      ...?eras['תורה שבכתב'],
+      ...?eras['חז"ל'],
+      ...?eras['ראשונים'],
+      ...?eras['אחרונים'],
+      ...?eras['מחברי זמננו'],
+    };
+    final others = (eras['מפרשים נוספים'] ?? [])
+        .toSet()
+        .union(commentatorsSet.where((c) => !known.contains(c)).toSet())
+        .toList();
+    if (!mounted) return;
+    setState(() {
+      _commentatorGroups = [
+        CommentatorGroup(title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
+        CommentatorGroup(title: 'חז"ל', commentators: eras['חז"ל'] ?? const []),
+        CommentatorGroup(title: 'ראשונים', commentators: eras['ראשונים'] ?? const []),
+        CommentatorGroup(title: 'אחרונים', commentators: eras['אחרונים'] ?? const []),
+        CommentatorGroup(title: 'מחברי זמננו', commentators: eras['מחברי זמננו'] ?? const []),
+        CommentatorGroup(title: 'שאר מפרשים', commentators: others),
+      ];
+    });
+  }
+
   Future<void> _loadPdfHeadingsAndLinks() async {
     try {
       // טעינת headings מה-DB
@@ -741,6 +816,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           final loadedLinks = await textBook.links
             ..sort((a, b) => a.index1.compareTo(b.index1));
           widget.tab.links = loadedLinks;
+          await _loadCommentatorGroups();
         }
       }
 
