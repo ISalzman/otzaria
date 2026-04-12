@@ -126,6 +126,8 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
       title: title,
       initialTopics: widget.bookTopics ?? '',
       type: PdfBook,
+      fileType: 'pdf',
+      filePath: widget.pdfFilePath,
     );
 
     if (!mounted) return;

@@ -301,7 +301,7 @@ class IndexingRepository {
     final title = book.title;
     final topics = _buildTopicsPath(book);
     final isPdf = book is PdfBook;
-    final filePath = isPdf ? book.path : '';
+    final filePath = buildIndexedBookFilePath(book);
     final catalogueOrder =
         catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF;
 
@@ -335,6 +335,14 @@ class IndexingRepository {
     return (BigInt.from(catalogueOrder + 1) << 32) + BigInt.from(ordinal + 1);
   }
 
+  static int catalogueOrderFromDocumentId(BigInt documentId) {
+    final encodedCatalogueOrder = (documentId >> 32).toInt();
+    if (encodedCatalogueOrder <= 0) {
+      return -1;
+    }
+    return encodedCatalogueOrder - 1;
+  }
+
   @visibleForTesting
   static String buildCatalogueOrderSignature(Library library) {
     final orderedKeys = SearchCatalogueOrderHelper.buildOrderedKeys(
@@ -344,7 +352,6 @@ class IndexingRepository {
     return sha1.convert(utf8.encode(orderedKeys.join('\n'))).toString();
   }
 
-  @visibleForTesting
   static String catalogueOrderKey(Book book) {
     if (book.externalLibraryId != null && book.externalLibraryId!.isNotEmpty) {
       return 'ext:${book.externalLibraryId}';
@@ -358,6 +365,13 @@ class IndexingRepository {
     final fileTypeKey = book.fileType ?? book.runtimeType.toString();
     final pathKey = book is FileBook ? book.path : (book.filePath ?? '');
     return '${book.title}|$categoryKey|$fileTypeKey|$pathKey';
+  }
+
+  static String buildIndexedBookFilePath(Book book) {
+    if (book is PdfBook) {
+      return book.path;
+    }
+    return catalogueOrderKey(book);
   }
 
   String _buildTopicsPath(Book book) {

@@ -102,8 +102,8 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
 
   Set<String> get _activeSelection =>
       _searchAllCategories || _manualSelectedFacets.isEmpty
-        ? {'/'}
-        : Set<String>.from(_manualSelectedFacets);
+          ? {'/'}
+          : Set<String>.from(_manualSelectedFacets);
 
   void _setSearchAllCategories(bool value) {
     setState(() {
@@ -140,7 +140,7 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
     final helperText = _searchAllCategories
         ? 'מופעל כברירת מחדל. כבה כדי לבחור קטגוריות או ספרים ידנית.'
         : manualCount == 0
-        ? 'אפשר לחפש בעץ ולבחור קטגוריות או ספרים. עד שתיבחר בחירה ידנית, החיפוש יישאר בכל הקטגוריות.'
+            ? 'אפשר לחפש בעץ ולבחור קטגוריות או ספרים. עד שתיבחר בחירה ידנית, החיפוש יישאר בכל הקטגוריות.'
             : 'נשמרו $manualCount פריטים לבחירה הידנית הכללית.';
 
     return Column(
@@ -737,7 +737,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
             book: book,
             facet: FacetHelper.buildBookFacet(
               FacetHelper.resolveCategoryPath(book),
-              book.title,
+              book,
             ),
           ),
       ];
