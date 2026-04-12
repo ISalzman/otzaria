@@ -64,17 +64,21 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
       final delta = notification.scrollDelta ?? 0;
       final offset = notification.metrics.pixels;
 
+      // גלילה למטה > 4dp: כווץ
       if (delta > 4 && !_isCompact) {
         setState(() => _isCompact = true);
-      } else if ((delta < -4 || offset <= 0) && _isCompact) {
+      }
+      // גלילה למעלה או חזרה לראש: פתח
+      else if ((delta < -4 || offset <= 0) && _isCompact) {
         setState(() => _isCompact = false);
       }
     }
 
-    if (notification is UserScrollNotification &&
-        _isCompact &&
-        widget.focusNode.hasFocus) {
-      setState(() => _isCompact = false);
+    // פוקוס בשדה — תמיד פתוח
+    if (notification is UserScrollNotification && _isCompact) {
+      if (widget.focusNode.hasFocus) {
+        setState(() => _isCompact = false);
+      }
     }
 
     return false;

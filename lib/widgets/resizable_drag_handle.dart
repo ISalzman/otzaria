@@ -53,7 +53,6 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
   @override
   Widget build(BuildContext context) {
     final isEnabled = widget.onDragDelta != null;
-
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final dividerColor = theme.dividerColor.withValues(alpha: 0.55);
@@ -105,9 +104,9 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
           builder: (context, blend, _) {
             final highlightColor = cs.primary.withValues(alpha: 0.10 * blend);
             final thickness = lerpDouble(2.0, 4.0, blend) ?? 2.0;
-            final gripLength = lerpDouble(
-                    widget.hitSize * 0.55, widget.hitSize * 0.8, blend) ??
-                widget.hitSize * 0.55;
+            final gripLength =
+                lerpDouble(widget.hitSize * 0.55, widget.hitSize * 0.8, blend) ??
+                    widget.hitSize * 0.55;
             final showGrip = widget.showDivider || blend > 0;
             final lineColor = showGrip
                 ? (Color.lerp(dividerColor, activeColor, blend) ?? dividerColor)
