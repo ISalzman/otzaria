@@ -382,6 +382,111 @@ class IndexingRepository {
     return '$topics/$bookKey';
   }
 
+  /// Indexes a specific list of books (e.g. newly added personal books).
+  ///
+  /// מבצע אינדוקס ומחזיר true אם הסתיים בהצלחה, false אם בוטל
+  Future<bool> indexBooks(
+    List<Book> books,
+    Library library, {
+    void Function()? onActualIndexingStarted,
+    required void Function(int processed, int total) onProgress,
+  }) async {
+    if (books.isEmpty) return true;
+
+    _tantivyDataProvider.isIndexing.value = true;
+    final isolateService =
+        _isolateService ?? await IndexingIsolateService.create();
+    _activeIsolateService = isolateService;
+
+    // בנה מפת סדר קטלוג מהספרייה הטרייה שהועברה כפרמטר
+    // חשוב: משתמשים בספרייה המלאה כדי שהסדר הגלובלי יהיה נכון לכל הספרים
+    final catalogueOrderByBookKey = SearchCatalogueOrderHelper.buildKeyOrderMap(
+      library,
+      keyOf: (book) => catalogueOrderKey(book as Book),
+    );
+
+    final totalBooks = books.length;
+    int processedBooks = 0;
+    int actuallyIndexed = 0;
+    int errors = 0;
+    bool cancelled = false;
+    var didStartActualIndexing = false;
+
+    try {
+      // לא קוראים ל-ensureIndexStateMatchesCatalogue כאן בכוונה:
+      // indexBooks מוסיף ספרים חדשים לאינדקס קיים תקין.
+      // ניהול חתימת הקטלוג ואיפוס מלא הם אחריות indexAllBooks שרץ בסטארטאפ.
+      for (final book in books) {
+        if (!_tantivyDataProvider.isIndexing.value) {
+          cancelled = true;
+          break;
+        }
+
+        try {
+          final indexedBookKey = catalogueOrderKey(book);
+          if (book is TextBook) {
+            if (!_tantivyDataProvider.booksDone.contains(indexedBookKey)) {
+              debugPrint('📖 מאנדקס ספר טקסט חדש: ${book.title}');
+              await _indexTextBook(
+                book,
+                isolateService,
+                catalogueOrderByBookKey: catalogueOrderByBookKey,
+                onActualIndexingStarted: () {
+                  if (didStartActualIndexing) return;
+                  didStartActualIndexing = true;
+                  onActualIndexingStarted?.call();
+                },
+              );
+              _tantivyDataProvider.booksDone.add(indexedBookKey);
+              actuallyIndexed++;
+            }
+          } else if (book is PdfBook) {
+            if (!_tantivyDataProvider.booksDone.contains(indexedBookKey)) {
+              debugPrint('📄 מאנדקס PDF חדש: ${book.title}');
+              await _indexPdfBook(
+                book,
+                isolateService,
+                catalogueOrderByBookKey: catalogueOrderByBookKey,
+                onActualIndexingStarted: () {
+                  if (didStartActualIndexing) return;
+                  didStartActualIndexing = true;
+                  onActualIndexingStarted?.call();
+                },
+              );
+              _tantivyDataProvider.booksDone.add(indexedBookKey);
+              actuallyIndexed++;
+            }
+          }
+
+          processedBooks++;
+          onProgress(processedBooks, totalBooks);
+        } catch (e) {
+          debugPrint('❌ שגיאה באינדוקס של ${book.title}: $e');
+          errors++;
+          processedBooks++;
+          onProgress(processedBooks, totalBooks);
+        }
+
+        await Future.delayed(Duration.zero);
+      }
+
+      if (!cancelled) {
+        debugPrint(
+            '✅ אינדוקס ספרים ספציפיים הושלם! (מאונדקסים: $actuallyIndexed, שגיאות: $errors)');
+        final index = await _tantivyDataProvider.engine;
+        await index.commit();
+        saveIndexedBooks();
+      }
+    } finally {
+      _activeIsolateService = null;
+      if (!identical(isolateService, _isolateService)) {
+        await isolateService.dispose();
+      }
+      _tantivyDataProvider.isIndexing.value = false;
+    }
+    return !cancelled;
+  }
+
   /// Cancels the ongoing indexing process.
   void cancelIndexing() {
     _tantivyDataProvider.isIndexing.value = false;
