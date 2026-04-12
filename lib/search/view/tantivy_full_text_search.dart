@@ -575,43 +575,77 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
 
   /// באנר שמראה באילו קטגוריות מתבצע החיפוש
   Widget _buildFacetFilterBanner(BuildContext context, SearchState state) {
+    final cs = Theme.of(context).colorScheme;
     // חילוץ שמות הקטגוריות מטווח החיפוש המקורי
     final facetNames = state.searchScopeFacets.map((facet) {
       // facet בפורמט "/תנ"ך" או "/תנ"ך/ראשונים" - ניקח את החלק האחרון
       final parts = facet.split('/').where((p) => p.isNotEmpty).toList();
       return parts.isNotEmpty ? parts.last : facet;
     }).toList();
+    final tooltipMessage = 'חיפוש בקטגוריות: ${facetNames.join(', ')}';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
-      color:
-          Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+      color: cs.primaryContainer.withValues(alpha: 0.4),
       child: Row(
         children: [
           Icon(
             FluentIcons.filter_24_regular,
             size: 16,
-            color: Theme.of(context).colorScheme.primary,
+            color: cs.primary,
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'חיפוש בקטגוריות: ${facetNames.join(', ')}',
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.primary,
+          Text(
+            'החיפוש הוגבל לקטגוריות מסוימות',
+            style: TextStyle(
+              fontSize: 13,
+              color: cs.primary,
+              fontWeight: FontWeight.w500,
+            ),
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(width: 6),
+          Tooltip(
+            message: tooltipMessage,
+            waitDuration: const Duration(milliseconds: 250),
+            showDuration: const Duration(seconds: 4),
+            preferBelow: false,
+            verticalOffset: 18,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            constraints: const BoxConstraints(maxWidth: 360),
+            textStyle: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: cs.onSurface,
+            ),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.55),
               ),
-              textDirection: TextDirection.rtl,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              boxShadow: [
+                BoxShadow(
+                  color: cs.shadow.withValues(alpha: 0.16),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(
+              FluentIcons.info_24_regular,
+              size: 16,
+              color: cs.primary,
             ),
           ),
+          const Spacer(),
           // כפתור לאיפוס הסינון - חזרה לכל הקטגוריות
           IconButton(
             icon: Icon(
               FluentIcons.dismiss_24_regular,
               size: 16,
-              color: Theme.of(context).colorScheme.primary,
+              color: cs.primary,
             ),
             tooltip: 'חפש בכל הקטגוריות',
             onPressed: _resetSearchScope,

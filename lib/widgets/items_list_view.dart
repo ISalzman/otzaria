@@ -40,6 +40,64 @@ class _ItemsListViewState extends State<ItemsListView> {
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
 
+  Widget _buildSubtitle(
+    BuildContext context,
+    String centerText,
+    String? centerTooltip,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+
+    final subtitle = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Text(
+        centerText,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 14,
+          color: cs.onSurface.withValues(alpha: 0.6),
+        ),
+        textDirection: TextDirection.rtl,
+      ),
+    );
+
+    final tooltipMessage = centerTooltip?.trim();
+    if (tooltipMessage == null || tooltipMessage.isEmpty) {
+      return subtitle;
+    }
+
+    return Tooltip(
+      message: tooltipMessage,
+      waitDuration: const Duration(milliseconds: 250),
+      showDuration: const Duration(seconds: 4),
+      preferBelow: false,
+      verticalOffset: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      constraints: const BoxConstraints(maxWidth: 360),
+      textStyle: TextStyle(
+        fontSize: 13,
+        height: 1.4,
+        color: cs.onSurface,
+      ),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.55),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.16),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: subtitle,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -133,23 +191,10 @@ class _ItemsListViewState extends State<ItemsListView> {
                               ),
                             ),
                             if (centerText != null)
-                              Tooltip(
-                                message: centerTooltip ?? '',
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16.0),
-                                  child: Text(
-                                    centerText,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.6),
-                                    ),
-                                    textDirection: TextDirection.rtl,
-                                  ),
-                                ),
+                              _buildSubtitle(
+                                context,
+                                centerText,
+                                centerTooltip,
                               ),
                             IconButton(
                               icon: const Icon(FluentIcons.delete_24_regular),

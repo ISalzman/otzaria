@@ -490,8 +490,14 @@ class _CombinedViewState extends State<CombinedView> {
     final settingsState = context.read<SettingsBloc>().state;
     final textBookState = context.read<TextBookBloc>().state;
 
-    String finalText = text;
-    String finalHtmlText = text;
+    final removeNikud =
+        textBookState is TextBookLoaded && textBookState.removeNikud;
+    final processedText = removeNikud ? utils.removeVolwels(text) : text;
+
+    final plainText = utils.stripHtmlIfNeeded(processedText);
+
+    String finalText = plainText;
+    String finalHtmlText = processedText;
 
     // אם צריך להוסיף כותרות
     if (settingsState.copyWithHeaders != 'none' &&
@@ -504,7 +510,7 @@ class _CombinedViewState extends State<CombinedView> {
       );
 
       finalText = CopyUtils.formatTextWithHeaders(
-        originalText: text,
+        originalText: plainText,
         copyWithHeaders: settingsState.copyWithHeaders,
         copyHeaderFormat: settingsState.copyHeaderFormat,
         bookName: bookName,
@@ -512,7 +518,7 @@ class _CombinedViewState extends State<CombinedView> {
       );
 
       finalHtmlText = CopyUtils.formatTextWithHeaders(
-        originalText: text,
+        originalText: processedText,
         copyWithHeaders: settingsState.copyWithHeaders,
         copyHeaderFormat: settingsState.copyHeaderFormat,
         bookName: bookName,
