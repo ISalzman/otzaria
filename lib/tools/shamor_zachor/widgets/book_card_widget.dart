@@ -280,7 +280,7 @@ class _BookCardWidgetState extends State<BookCardWidget> {
                                         Theme.of(context).colorScheme.primary,
                                     foregroundColor:
                                         Theme.of(context).colorScheme.onPrimary,
-                                  ),
+                                ),
                               ],
                             ),
                           ],
