@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 import '../providers/shamor_zachor_data_provider.dart';
 import '../providers/shamor_zachor_progress_provider.dart';
 import '../models/book_model.dart';
@@ -32,7 +34,21 @@ class CategoryBooksGrid extends StatefulWidget {
 
 class _CategoryBooksGridState extends State<CategoryBooksGrid> {
   static final Logger _logger = Logger('CategoryBooksGrid');
+  final Set<String> _locallyRemovedBookKeys = <String>{};
 
+  String _bookLocalKey(String category, String bookName, BookDetails details) {
+    if (details.id != null) {
+      return 'id:${details.id}';
+    }
+
+    return '$category::$bookName';
+  }
+
+  bool _isBookLocallyRemoved(
+      String category, String bookName, BookDetails details) {
+    return _locallyRemovedBookKeys
+        .contains(_bookLocalKey(category, bookName, details));
+  }
   @override
   Widget build(BuildContext context) {
     if (widget.category == null &&
@@ -204,6 +220,10 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
       final details = book['details'] as BookDetails;
       final category = book['category'] as String;
 
+      if (_isBookLocallyRemoved(category, name, details)) {
+        return false;
+      }
+
       // Use ID-based functions if available, otherwise fall back to name-based
       final bool isCompleted;
       final bool isInProgress;
@@ -243,7 +263,7 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
           childAspectRatio: 1.5,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
-          mainAxisExtent: 180,
+          mainAxisExtent: 192,
         ),
         itemCount: books.length,
         itemBuilder: (context, index) {
@@ -253,19 +273,78 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
           final category = book['category'] as String;
           final categoryPath = book['categoryPath'] as String?;
 
-          return BookCardWidget(
-            key: ValueKey('${details.id ?? 'no-id'}::$category::$name'),
-            topLevelCategoryKey: category,
-            categoryName: categoryPath ?? widget.categoryName ?? '',
-            bookName: name,
-            bookDetails: details,
-            onTap: () {
-              widget.onBookSelected(category, name, details);
-            },
-          );
-        },
+        return BookCardWidget(
+          key: ValueKey('${details.id ?? 'no-id'}::$category::$name'),
+          topLevelCategoryKey: category,
+          categoryName: categoryPath ?? widget.categoryName ?? '',
+          bookName: name,
+          bookDetails: details,
+          onTap: () {
+            widget.onBookSelected(category, name, details);
+          },
+          onDelete: details.isCustom
+              ? () => _confirmRemoveBook(context, name, details)
+              : null,
+        );
+      },
       ),
     );
+  }
+
+  Future<void> _confirmRemoveBook(
+      BuildContext context, String bookName, BookDetails details) async {
+    final progressProvider = context.read<ShamorZachorProgressProvider>();
+    final dataProvider = context.read<ShamorZachorDataProvider>();
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: 'הסרת ספר משמור וזכור',
+      content: 'האם להסיר את "$bookName" משמור וזכור?',
+      subtitle: 'ההתקדמות השמורה תימחק ולא ניתן לשחזר אותה',
+      cancelText: 'ביטול',
+      confirmText: 'הסר',
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      final topLevelCategory =
+          details.categoryPath ?? widget.categoryName ?? '';
+      final localBookKey = _bookLocalKey(topLevelCategory, bookName, details);
+
+      setState(() {
+        _locallyRemovedBookKeys.add(localBookKey);
+      });
+
+      if (details.id != null) {
+        await progressProvider.clearBookProgressById(
+          details.id!,
+          categoryName: topLevelCategory,
+          bookName: bookName,
+          bookDetails: details,
+        );
+      }
+
+      await dataProvider.removeCustomBook(
+        categoryName: topLevelCategory,
+        bookName: bookName,
+        bookId: details.id,
+      );
+      if (context.mounted) {
+        UiSnack.show('הספר "$bookName" הוסר משמור וזכור');
+      }
+    } catch (e) {
+      final topLevelCategory =
+          details.categoryPath ?? widget.categoryName ?? '';
+      final localBookKey = _bookLocalKey(topLevelCategory, bookName, details);
+      if (mounted) {
+        setState(() {
+          _locallyRemovedBookKeys.remove(localBookKey);
+        });
+      }
+      if (context.mounted) {
+        UiSnack.showError('שגיאה בהסרת הספר: $e');
+      }
+    }
   }
 
   List<Map<String, dynamic>> _getAllBooksRecursive(

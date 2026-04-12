@@ -1,3 +1,4 @@
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/copy_utils.dart';
@@ -41,6 +42,8 @@ Future<void> copySelectedTextForBook({
   required SettingsState settingsState,
   required String fontFamily,
   required double fontSize,
+  TextBook? headerBookOverride,
+  List<String>? headerContentOverride,
 }) async {
   var htmlContentToUse = resolveHtmlTextForSelection(
     plainText: plainText,
@@ -50,12 +53,13 @@ Future<void> copySelectedTextForBook({
 
   var finalPlainText = plainText;
   if (settingsState.copyWithHeaders != 'none') {
-    final bookName = CopyUtils.extractBookName(textBookState.book);
+    final headerBook = headerBookOverride ?? textBookState.book;
+    final bookName = CopyUtils.extractBookName(headerBook);
     final currentIndex = selectedIndex ?? 0;
     final currentPath = await CopyUtils.extractCurrentPath(
-      textBookState.book,
+      headerBook,
       currentIndex,
-      bookContent: textBookState.content,
+      bookContent: headerContentOverride ?? sourceContent,
     );
 
     finalPlainText = CopyUtils.formatTextWithHeaders(
@@ -75,9 +79,15 @@ Future<void> copySelectedTextForBook({
     );
   }
 
-  await CopyUtils.copyStyledToClipboard(
+  final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
     plainText: finalPlainText,
     htmlText: htmlContentToUse,
+    replaceHolyNames: settingsState.replaceHolyNames,
+  );
+
+  await CopyUtils.copyStyledToClipboard(
+    plainText: copyContent.plainText,
+    htmlText: copyContent.htmlText,
     fontFamily: fontFamily,
     fontSize: fontSize,
   );

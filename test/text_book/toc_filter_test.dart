@@ -56,4 +56,19 @@ void main() {
     expect(shouldExpandInSearch(true), isTrue);
     expect(shouldExpandInSearch(false), isFalse);
   });
+
+  test('search results prefer more relevant exact entries first', () {
+    final root = _entry(text: 'ספר', index: 0, level: 1);
+    final commentaryMatch =
+        _entry(text: 'מאירי על שבת דף ע', index: 2, level: 2, parent: root);
+    final exactMatch = _entry(text: 'שבת דף ע', index: 1, level: 2, parent: root);
+    root.children = [commentaryMatch, exactMatch];
+
+    final filtered = filterTocEntriesForSearch([root], 'שבת דף ע');
+
+    expect(filtered.single.children.map((entry) => entry.text).toList(), [
+      'שבת דף ע',
+      'מאירי על שבת דף ע',
+    ]);
+  });
 }

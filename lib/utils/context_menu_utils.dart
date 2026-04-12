@@ -7,13 +7,24 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/copy_utils.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/widgets/app_menu.dart';
+import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 
 /// פונקציות עזר לתפריטי הקשר במפרשים
 class ContextMenuUtils {
+  static TextBook _targetBookFromLink(Link link) {
+    return TextBook(
+      title: utils.getTitleFromPath(link.path2),
+      categoryId: link.targetCategoryId,
+      fileType: link.targetFileType,
+    );
+  }
+
   /// בניית רשימת פריטי תפריט הקשר למפרש ספציפי.
   ///
   /// מחזיר [List<AppContextMenuEntry>] לשימוש עם [AppContextMenuRegion].
@@ -95,8 +106,12 @@ class ContextMenuUtils {
       String finalHtmlText = content;
 
       if (settingsState.copyWithHeaders != 'none') {
-        final bookName = utils.getTitleFromPath(link.path2);
-        final currentPath = await link.displayReference;
+        final targetBook = _targetBookFromLink(link);
+        final bookName = CopyUtils.extractBookName(targetBook);
+        final currentPath = await CopyUtils.extractCurrentPath(
+          targetBook,
+          link.index2 - 1,
+        );
 
         finalText = CopyUtils.formatTextWithHeaders(
           originalText: plainText,
@@ -115,8 +130,14 @@ class ContextMenuUtils {
         );
       }
 
-      final htmlText = CopyUtils.buildStyledHtml(
+      final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
+        plainText: finalText,
         htmlText: finalHtmlText,
+        replaceHolyNames: settingsState.replaceHolyNames,
+      );
+
+      final htmlText = CopyUtils.buildStyledHtml(
+        htmlText: copyContent.htmlText,
         fontFamily: settingsState.commentatorsFontFamily,
         fontSize: fontSize,
       );
@@ -124,7 +145,7 @@ class ContextMenuUtils {
       final clipboard = SystemClipboard.instance;
       if (clipboard != null) {
         final item = DataWriterItem();
-        item.add(Formats.plainText(finalText));
+        item.add(Formats.plainText(copyContent.plainText));
         item.add(Formats.htmlText(htmlText));
         await clipboard.write([item]);
         UiSnack.show('הפסקה הועתקה בהצלחה');
@@ -140,6 +161,7 @@ class ContextMenuUtils {
     required BuildContext context,
     required String? savedSelectedText,
     required double fontSize,
+    Link? link,
   }) async {
     final plainText = savedSelectedText;
 
@@ -152,15 +174,36 @@ class ContextMenuUtils {
       final clipboard = SystemClipboard.instance;
       if (clipboard != null) {
         final settingsState = context.read<SettingsBloc>().state;
+        if (link != null && settingsState.copyWithHeaders != 'none') {
+          final textBookState = context.read<TextBookBloc>().state;
+          if (textBookState is! TextBookLoaded) return;
+
+          await copySelectedTextForBook(
+            plainText: plainText,
+            selectedIndex: link.index2 - 1,
+            sourceContent: [plainText],
+            textBookState: textBookState,
+            settingsState: settingsState,
+            fontFamily: settingsState.commentatorsFontFamily,
+            fontSize: fontSize,
+            headerBookOverride: _targetBookFromLink(link),
+          );
+          return;
+        }
+
+        final finalPlainText = CopyUtils.applyCopyPreferences(
+          text: plainText,
+          replaceHolyNames: settingsState.replaceHolyNames,
+        );
 
         final htmlText = CopyUtils.buildStyledHtml(
-          htmlText: plainText,
+          htmlText: finalPlainText,
           fontFamily: settingsState.commentatorsFontFamily,
           fontSize: fontSize,
         );
 
         final item = DataWriterItem();
-        item.add(Formats.plainText(plainText));
+        item.add(Formats.plainText(finalPlainText));
         item.add(Formats.htmlText(htmlText));
 
         await clipboard.write([item]);

@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -33,6 +32,42 @@ import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
+
+/// מחזירה האם אירוע המקלדת צריך להניע גלילה רציפה בצורת הדף.
+bool shouldHandlePageShapeNavigationKeyEvent(KeyEvent event) {
+  return event is KeyDownEvent || event is KeyRepeatEvent;
+}
+
+/// קובעת מאיזה אינדקס יתחיל ניווט המקלדת בצורת הדף.
+int resolvePageShapeNavigationBaseIndex({
+  required int? selectedIndex,
+  required List<int> liveVisibleIndices,
+  required List<int> stateVisibleIndices,
+}) {
+  final sortedLiveVisibleIndices = List<int>.from(liveVisibleIndices)..sort();
+  final sortedStateVisibleIndices = List<int>.from(stateVisibleIndices)..sort();
+
+  if (selectedIndex != null) {
+    if (sortedLiveVisibleIndices.isEmpty && sortedStateVisibleIndices.isEmpty) {
+      return selectedIndex;
+    }
+
+    if (sortedLiveVisibleIndices.contains(selectedIndex) ||
+        sortedStateVisibleIndices.contains(selectedIndex)) {
+      return selectedIndex;
+    }
+  }
+
+  if (sortedLiveVisibleIndices.isNotEmpty) {
+    return sortedLiveVisibleIndices.first;
+  }
+
+  if (sortedStateVisibleIndices.isNotEmpty) {
+    return sortedStateVisibleIndices.first;
+  }
+
+  return selectedIndex ?? 0;
+}
 
 /// תצוגת טקסט פשוטה - משמשת גם לטקסט המרכזי וגם למפרשים
 class SimpleTextViewer extends StatefulWidget {
@@ -79,7 +114,9 @@ class SimpleTextViewer extends StatefulWidget {
 class _SimpleTextViewerState extends State<SimpleTextViewer> {
   late final ItemScrollController _scrollController;
   late final ItemPositionsListener _positionsListener;
-  late final FocusNode _focusNode;
+  FocusNode? _keyboardFocusNode;
+  bool _shouldPreserveKeyboardFocus = false;
+  bool _pendingKeyboardFocusRestore = false;
   String? _savedSelectedText;
   int? _savedSelectedIndex;
   int _initialScrollRestoreAttempts = 0;
@@ -87,22 +124,80 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   final DictionaryLookupRepository _dictionaryLookupRepository =
       DictionaryLookupRepository.instance;
 
+  bool _isTextInputFocused() {
+    final primaryFocus = FocusManager.instance.primaryFocus;
+    final focusContext = primaryFocus?.context;
+    return focusContext?.widget is EditableText ||
+        focusContext?.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  void _ensureKeyboardFocusAfterLoss(String reason) {
+    if (!widget.isMainText ||
+        !_shouldPreserveKeyboardFocus ||
+        _pendingKeyboardFocusRestore ||
+        _isTextInputFocused()) {
+      return;
+    }
+
+    _pendingKeyboardFocusRestore = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pendingKeyboardFocusRestore = false;
+      if (!mounted || _isTextInputFocused()) {
+        return;
+      }
+      _requestKeyboardFocus(reason);
+    });
+  }
+
+  FocusNode get _resolvedKeyboardFocusNode {
+    return _keyboardFocusNode ??= FocusNode(
+      debugLabel: 'PageShapeContentFocus',
+    )..addListener(() {
+        if (!(_keyboardFocusNode?.hasFocus ?? false)) {
+          _ensureKeyboardFocusAfterLoss('focus-node-lost');
+        }
+      });
+  }
+
+  void _requestKeyboardFocus(String reason) {
+    final focusNode = _resolvedKeyboardFocusNode;
+    if (!widget.isMainText || !focusNode.canRequestFocus) {
+      return;
+    }
+
+    _shouldPreserveKeyboardFocus = true;
+    focusNode.requestFocus();
+  }
+
+  void _requestKeyboardFocusAfterFrame(String reason) {
+    if (!widget.isMainText) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _requestKeyboardFocus(reason);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _scrollController = widget.scrollController ?? ItemScrollController();
     _positionsListener =
         widget.positionsListener ?? ItemPositionsListener.create();
-    _focusNode = FocusNode();
+    _resolvedKeyboardFocusNode;
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
       _scheduleInitialScrollRestore();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _focusNode.requestFocus();
+        if (!mounted) {
+          return;
         }
+        _requestKeyboardFocus('initial-post-frame');
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -119,8 +214,25 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   @override
   void dispose() {
-    _focusNode.dispose();
+    _keyboardFocusNode?.dispose();
     super.dispose();
+  }
+
+  @override
+  void reassemble() {
+    final shouldRestoreFocus =
+        widget.isMainText && (_keyboardFocusNode?.hasFocus ?? false);
+    _keyboardFocusNode?.dispose();
+    _keyboardFocusNode = null;
+    super.reassemble();
+    if (shouldRestoreFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _requestKeyboardFocus('hot-reload-reassemble');
+      });
+    }
   }
 
   void _scheduleInitialScrollRestore() {
@@ -295,50 +407,64 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
   }
 
-  /// טיפול באירועי מקלדת - חיצים לניווט
-  bool _handleKeyEvent(KeyEvent event) {
-    if (event is! KeyDownEvent) return false;
-    if (!widget.isMainText) return false; // רק בטקסט המרכזי
+  bool _handleNavigationLogicalKey(
+    LogicalKeyboardKey logicalKey, {
+    required bool isControlPressed,
+    required String source,
+  }) {
+    if (!widget.isMainText) {
+      return false;
+    }
 
     final state = context.read<TextBookBloc>().state;
-    if (state is! TextBookLoaded) return false;
+    if (state is! TextBookLoaded) {
+      return false;
+    }
 
-    // חיצים למעלה ולמטה
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      final currentIndex = state.selectedIndex ?? 0;
+    final liveVisibleIndices = _positionsListener.itemPositions.value
+        .map((position) => position.index)
+        .toList();
+    final currentIndex = resolvePageShapeNavigationBaseIndex(
+      selectedIndex: state.selectedIndex,
+      liveVisibleIndices: liveVisibleIndices,
+      stateVisibleIndices: state.visibleIndices,
+    );
+
+    if (logicalKey == LogicalKeyboardKey.arrowDown) {
       final nextIndex = (currentIndex + 1).clamp(0, widget.content.length - 1);
-      if (nextIndex != currentIndex) {
-        context.read<TextBookBloc>().add(UpdateSelectedIndex(nextIndex));
-        if (_scrollController.isAttached) {
-          _scrollController.scrollTo(
-            index: nextIndex,
-            duration: const Duration(milliseconds: 200),
-            alignment: 0.5,
-          );
-        }
+      if (nextIndex == currentIndex) {
+        return true;
       }
+      context.read<TextBookBloc>().add(UpdateSelectedIndex(nextIndex));
+      if (_scrollController.isAttached) {
+        _scrollController.scrollTo(
+          index: nextIndex,
+          duration: const Duration(milliseconds: 200),
+          alignment: 0.5,
+        );
+      }
+      _requestKeyboardFocusAfterFrame('navigation-arrow-down');
       return true;
     }
 
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      final currentIndex = state.selectedIndex ?? 0;
+    if (logicalKey == LogicalKeyboardKey.arrowUp) {
       final prevIndex = (currentIndex - 1).clamp(0, widget.content.length - 1);
-      if (prevIndex != currentIndex) {
-        context.read<TextBookBloc>().add(UpdateSelectedIndex(prevIndex));
-        if (_scrollController.isAttached) {
-          _scrollController.scrollTo(
-            index: prevIndex,
-            duration: const Duration(milliseconds: 200),
-            alignment: 0.5,
-          );
-        }
+      if (prevIndex == currentIndex) {
+        return true;
       }
+      context.read<TextBookBloc>().add(UpdateSelectedIndex(prevIndex));
+      if (_scrollController.isAttached) {
+        _scrollController.scrollTo(
+          index: prevIndex,
+          duration: const Duration(milliseconds: 200),
+          alignment: 0.5,
+        );
+      }
+      _requestKeyboardFocusAfterFrame('navigation-arrow-up');
       return true;
     }
 
-    // Page Down
-    if (event.logicalKey == LogicalKeyboardKey.pageDown) {
-      final currentIndex = state.selectedIndex ?? 0;
+    if (logicalKey == LogicalKeyboardKey.pageDown) {
       final nextIndex = (currentIndex + 10).clamp(0, widget.content.length - 1);
       context.read<TextBookBloc>().add(UpdateSelectedIndex(nextIndex));
       if (_scrollController.isAttached) {
@@ -348,12 +474,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           alignment: 0.5,
         );
       }
+      _requestKeyboardFocusAfterFrame('navigation-page-down');
       return true;
     }
 
-    // Page Up
-    if (event.logicalKey == LogicalKeyboardKey.pageUp) {
-      final currentIndex = state.selectedIndex ?? 0;
+    if (logicalKey == LogicalKeyboardKey.pageUp) {
       final prevIndex = (currentIndex - 10).clamp(0, widget.content.length - 1);
       context.read<TextBookBloc>().add(UpdateSelectedIndex(prevIndex));
       if (_scrollController.isAttached) {
@@ -363,12 +488,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           alignment: 0.5,
         );
       }
+      _requestKeyboardFocusAfterFrame('navigation-page-up');
       return true;
     }
 
-    // Home - תחילת הספר
-    if (event.logicalKey == LogicalKeyboardKey.home &&
-        HardwareKeyboard.instance.isControlPressed) {
+    if (logicalKey == LogicalKeyboardKey.home && isControlPressed) {
       context.read<TextBookBloc>().add(const UpdateSelectedIndex(0));
       if (_scrollController.isAttached) {
         _scrollController.scrollTo(
@@ -376,12 +500,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           duration: const Duration(milliseconds: 300),
         );
       }
+      _requestKeyboardFocusAfterFrame('navigation-home');
       return true;
     }
 
-    // End - סוף הספר
-    if (event.logicalKey == LogicalKeyboardKey.end &&
-        HardwareKeyboard.instance.isControlPressed) {
+    if (logicalKey == LogicalKeyboardKey.end && isControlPressed) {
       final lastIndex = widget.content.length - 1;
       context.read<TextBookBloc>().add(UpdateSelectedIndex(lastIndex));
       if (_scrollController.isAttached) {
@@ -390,6 +513,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           duration: const Duration(milliseconds: 300),
         );
       }
+      _requestKeyboardFocusAfterFrame('navigation-end');
       return true;
     }
 
@@ -598,11 +722,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     if (settingsState.copyWithHeaders != 'none' &&
         textBookState is TextBookLoaded) {
-      final bookName = CopyUtils.extractBookName(textBookState.book);
+      final headerBook = widget.reportBook ?? textBookState.book;
+      final bookName = CopyUtils.extractBookName(headerBook);
       final currentPath = await CopyUtils.extractCurrentPath(
-        textBookState.book,
+        headerBook,
         index,
-        bookContent: textBookState.content,
+        bookContent:
+            widget.reportBook != null ? widget.content : textBookState.content,
       );
 
       finalText = CopyUtils.formatTextWithHeaders(
@@ -622,9 +748,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       );
     }
 
+    final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
+      plainText: finalText,
+      htmlText: finalHtmlText,
+      replaceHolyNames: settingsState.replaceHolyNames,
+    );
+
     final item = DataWriterItem();
-    item.add(Formats.plainText(finalText));
-    item.add(Formats.htmlText(_formatTextAsHtml(finalHtmlText)));
+    item.add(Formats.plainText(copyContent.plainText.trimRight()));
+    item.add(Formats.htmlText(_formatTextAsHtml(copyContent.htmlText)));
 
     await SystemClipboard.instance?.write([item]);
   }
@@ -661,6 +793,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         settingsState: settingsState,
         fontFamily: widget.fontFamily ?? settingsState.fontFamily,
         fontSize: widget.fontSize,
+        headerBookOverride: widget.reportBook,
+        headerContentOverride:
+            widget.reportBook != null ? widget.content : null,
       );
     } catch (e) {
       if (mounted) {
@@ -671,89 +806,108 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   @override
   Widget build(BuildContext context) {
-    return KeyboardListener(
-      focusNode: _focusNode,
-      autofocus: widget.isMainText,
-      onKeyEvent: (event) {
-        if (_handleKeyEvent(event)) {
-          // האירוע טופל
-        }
-      },
-      child: Column(
-        children: [
-          // כותרת אופציונלית
-          if (widget.title != null)
-            Container(
-              padding: const EdgeInsets.all(12.0),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withAlpha(128),
-                border: Border(
-                  bottom: BorderSide(
-                    color: Theme.of(context).dividerColor,
-                    width: 0.5,
-                  ),
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  widget.title!,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
+    return Column(
+      children: [
+        // כותרת אופציונלית
+        if (widget.title != null)
+          Container(
+            padding: const EdgeInsets.all(12.0),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface.withAlpha(128),
+              border: Border(
+                bottom: BorderSide(
+                  color: Theme.of(context).dividerColor,
+                  width: 0.5,
                 ),
               ),
             ),
-          // תוכן
-          Expanded(
-            child: BlocBuilder<TextBookBloc, TextBookState>(
-              builder: (context, state) {
-                if (state is! TextBookLoaded) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+            child: Center(
+              child: Text(
+                widget.title!,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        // תוכן
+        Expanded(
+          child: BlocBuilder<TextBookBloc, TextBookState>(
+            builder: (context, state) {
+              if (state is! TextBookLoaded) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-                return BlocBuilder<PersonalNotesBloc, PersonalNotesState>(
-                  builder: (context, notesState) {
-                    final noteMap = <int, List<PersonalNote>>{};
-                    if (notesState.bookId == state.book.title) {
-                      for (final note in notesState.locatedNotes) {
-                        final line = note.lineNumber;
-                        if (line == null) continue;
-                        noteMap.putIfAbsent(line, () => []).add(note);
-                      }
+              return BlocBuilder<PersonalNotesBloc, PersonalNotesState>(
+                builder: (context, notesState) {
+                  final noteMap = <int, List<PersonalNote>>{};
+                  if (notesState.bookId == state.book.title) {
+                    for (final note in notesState.locatedNotes) {
+                      final line = note.lineNumber;
+                      if (line == null) continue;
+                      noteMap.putIfAbsent(line, () => []).add(note);
                     }
+                  }
 
-                    return SelectionArea(
-                      // ביטול תפריט ברירת המחדל של Flutter - נשתמש רק ב-ContextMenuRegion
-                      contextMenuBuilder: (context, selectableRegionState) =>
-                          const SizedBox.shrink(),
-                      onSelectionChanged: (selection) {
-                        _handleSelectionChange(selection?.plainText);
+                  return SelectionArea(
+                    // ביטול תפריט ברירת המחדל של Flutter - נשתמש רק ב-ContextMenuRegion
+                    contextMenuBuilder: (context, selectableRegionState) =>
+                        const SizedBox.shrink(),
+                    onSelectionChanged: (selection) {
+                      _handleSelectionChange(selection?.plainText);
+                      _requestKeyboardFocus('selection-changed');
+                    },
+                    child: Actions(
+                      actions: {
+                        _CopyTextIntent: CallbackAction<_CopyTextIntent>(
+                          onInvoke: (_) {
+                            _copyFormattedText();
+                            return null;
+                          },
+                        ),
+                        CopySelectionTextIntent:
+                            CallbackAction<CopySelectionTextIntent>(
+                          onInvoke: (_) {
+                            _copyFormattedText();
+                            return null;
+                          },
+                        ),
                       },
-                      child: Actions(
-                        actions: {
-                          _CopyTextIntent:
-                              CallbackAction<_CopyTextIntent>(
-                            onInvoke: (_) {
-                              _copyFormattedText();
-                              return null;
-                            },
-                          ),
-                          CopySelectionTextIntent:
-                              CallbackAction<CopySelectionTextIntent>(
-                            onInvoke: (_) {
-                              _copyFormattedText();
-                              return null;
-                            },
-                          ),
+                      child: Shortcuts(
+                        shortcuts: {
+                          LogicalKeySet(LogicalKeyboardKey.control,
+                              LogicalKeyboardKey.keyC): const _CopyTextIntent(),
+                          LogicalKeySet(LogicalKeyboardKey.meta,
+                              LogicalKeyboardKey.keyC): const _CopyTextIntent(),
                         },
-                        child: Shortcuts(
-                          shortcuts: {
-                            LogicalKeySet(LogicalKeyboardKey.control,
-                                LogicalKeyboardKey.keyC): const _CopyTextIntent(),
-                            LogicalKeySet(LogicalKeyboardKey.meta,
-                                LogicalKeyboardKey.keyC): const _CopyTextIntent(),
+                        child: Focus(
+                          focusNode: _resolvedKeyboardFocusNode,
+                          autofocus: widget.isMainText,
+                          canRequestFocus: widget.isMainText,
+                          onFocusChange: (hasFocus) {
+                            if (!hasFocus) {
+                              _ensureKeyboardFocusAfterLoss(
+                                'focus-widget-lost',
+                              );
+                            }
+                          },
+                          onKeyEvent: (_, event) {
+                            if (!shouldHandlePageShapeNavigationKeyEvent(
+                                event)) {
+                              return KeyEventResult.ignored;
+                            }
+
+                            final handled = _handleNavigationLogicalKey(
+                              event.logicalKey,
+                              isControlPressed:
+                                  HardwareKeyboard.instance.isControlPressed,
+                              source: 'content-focus',
+                            );
+                            return handled
+                                ? KeyEventResult.handled
+                                : KeyEventResult.ignored;
                           },
                           child: widget.useInternalScroll
                               ? ScrollablePositionedList.builder(
@@ -761,27 +915,27 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                                   itemPositionsListener: _positionsListener,
                                   itemCount: widget.content.length,
                                   padding: const EdgeInsets.all(4),
-                                  itemBuilder: (context, index) =>
-                                      _buildLine(index, state, context, noteMap),
+                                  itemBuilder: (context, index) => _buildLine(
+                                      index, state, context, noteMap),
                                 )
                               : ListView.builder(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
                                   itemCount: widget.content.length,
                                   padding: const EdgeInsets.all(4),
-                                  itemBuilder: (context, index) =>
-                                      _buildLine(index, state, context, noteMap),
+                                  itemBuilder: (context, index) => _buildLine(
+                                      index, state, context, noteMap),
                                 ),
                         ),
                       ),
-                    );
-                  },
-                );
-              },
-            ),
+                    ),
+                  );
+                },
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -817,6 +971,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       behavior: HitTestBehavior.translucent,
       onTap: widget.isMainText
           ? () {
+              _requestKeyboardFocus('line-tap-$index');
               // איפוס הטקסט השמור
               setState(() {
                 _savedSelectedText = null;
