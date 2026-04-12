@@ -58,6 +58,7 @@ void main() {
         'libraryViewMode': 'grid',
         'libraryShowPreview': true,
         'enablePerBookSettings': true,
+        'pdfBookViewByDefault': false,
         'shortcuts': <String, String>{},
         'isOfflineMode': false,
         'autoSyncCatalogs': true,
@@ -111,6 +112,8 @@ void main() {
             shortcuts: const {},
             enablePerBookSettings:
                 mockSettings['enablePerBookSettings'] as bool,
+            pdfBookViewByDefault:
+              mockSettings['pdfBookViewByDefault'] as bool? ?? false,
             isOfflineMode: mockSettings['isOfflineMode'] as bool? ?? false,
             autoSyncCatalogs:
                 mockSettings['autoSyncCatalogs'] as bool? ?? false,
@@ -301,7 +304,7 @@ void main() {
       blocTest<SettingsBloc, SettingsState>(
         'emits updated state when UpdateSoftwareAndBookUpdatesEnabled is added',
         build: () {
-          when(mockRepository.updateSoftwareAndBookUpdatesEnabled(false))
+              when(mockRepository.updateSoftwareAndBookUpdatesEnabled(false))
               .thenAnswer((_) async {});
           return settingsBloc;
         },

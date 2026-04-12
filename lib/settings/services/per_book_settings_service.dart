@@ -282,19 +282,42 @@ class TextBookPerBookSettings {
   }
 }
 
+/// מצב תצוגת PDF
+enum PdfLayoutMode {
+  regularView, // תצוגה רגילה
+  bookView, // תצוגת ספר
+}
+
 /// הגדרות פר-ספר לספרי PDF
 class PdfBookPerBookSettings {
+  static final Map<String, Future<void>> _pendingWrites = {};
+
   final double? zoom;
   final List<String>? activeCommentators;
+  final PdfLayoutMode? layoutMode;
 
   PdfBookPerBookSettings({
     this.zoom,
     this.activeCommentators,
+    this.layoutMode,
   });
+
+  PdfBookPerBookSettings copyWith({
+    double? zoom,
+    List<String>? activeCommentators,
+    PdfLayoutMode? layoutMode,
+  }) {
+    return PdfBookPerBookSettings(
+      zoom: zoom ?? this.zoom,
+      activeCommentators: activeCommentators ?? this.activeCommentators,
+      layoutMode: layoutMode ?? this.layoutMode,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         if (zoom != null) 'zoom': zoom,
         if (activeCommentators != null) 'activeCommentators': activeCommentators,
+        if (layoutMode != null) 'layoutMode': layoutMode!.name,
       };
 
   factory PdfBookPerBookSettings.fromJson(Map<String, dynamic> json) {
@@ -302,12 +325,39 @@ class PdfBookPerBookSettings {
       zoom: json['zoom'] as double?,
       activeCommentators: (json['activeCommentators'] as List<dynamic>?)
           ?.cast<String>(),
+      layoutMode: json['layoutMode'] != null
+          ? PdfLayoutMode.values.firstWhere(
+              (e) => e.name == json['layoutMode'],
+              orElse: () => PdfLayoutMode.regularView,
+            )
+          : null,
     );
   }
 
   /// שמירת הגדרות
   Future<void> save(String bookName) async {
-    await PerBookSettings.saveSettings(bookName, toJson());
+    final previousWrite = _pendingWrites[bookName] ?? Future.value();
+    final currentWrite = previousWrite.then((_) async {
+      final existingSettings = await PdfBookPerBookSettings.load(bookName);
+      final settingsToSave = existingSettings?.copyWith(
+            zoom: zoom,
+            activeCommentators: activeCommentators,
+            layoutMode: layoutMode,
+          ) ??
+          this;
+
+      await PerBookSettings.saveSettings(bookName, settingsToSave.toJson());
+    });
+
+    _pendingWrites[bookName] = currentWrite;
+
+    try {
+      await currentWrite;
+    } finally {
+      if (identical(_pendingWrites[bookName], currentWrite)) {
+        _pendingWrites.remove(bookName);
+      }
+    }
   }
 
   /// טעינת הגדרות
@@ -319,6 +369,19 @@ class PdfBookPerBookSettings {
 
   /// מחיקת הגדרות
   static Future<void> delete(String bookName) async {
-    await PerBookSettings.deleteSettings(bookName);
+    final previousWrite = _pendingWrites[bookName] ?? Future.value();
+    final deleteWrite = previousWrite.then((_) async {
+      await PerBookSettings.deleteSettings(bookName);
+    });
+
+    _pendingWrites[bookName] = deleteWrite;
+
+    try {
+      await deleteWrite;
+    } finally {
+      if (identical(_pendingWrites[bookName], deleteWrite)) {
+        _pendingWrites.remove(bookName);
+      }
+    }
   }
 }
