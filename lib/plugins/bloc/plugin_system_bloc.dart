@@ -8,6 +8,7 @@ import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_dev_loader_service.dart';
 import 'package:otzaria/plugins/services/plugin_dev_watch_service.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
 class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
@@ -209,7 +210,9 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       await devLoader.loadDevelopmentPlugin(event.directoryPath);
       add(LoadPlugins());
       UiSnack.showSuccess('תוסף פיתוח נטען בהצלחה');
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[PluginDevLoader] Failed to load plugin from "${event.directoryPath}": $e');
+      debugPrint('$stackTrace');
       UiSnack.showError('שגיאה בטעינת תוסף פתוח: ${e.toString()}');
     }
   }
