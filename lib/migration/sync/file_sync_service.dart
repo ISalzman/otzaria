@@ -11,6 +11,7 @@ import '../../settings/services/custom_folders/custom_folder.dart';
 import '../../settings/engine/settings_repository.dart';
 import '../generator/generator.dart';
 import '../shared/link_processor.dart';
+import '../core/models/category.dart';
 import '../../utils/file_hidden_utils.dart';
 
 /// Result of a file sync operation
@@ -192,6 +193,88 @@ class FileSyncService {
 
     debugPrint('[FileSyncService] deleteFolderFromDatabase END');
     _log.info('Folder deleted from DB');
+  }
+
+  String _normalizeFolderPath(String folderPath) {
+    final normalized = path.normalize(folderPath);
+    return Platform.isWindows ? normalized.toLowerCase() : normalized;
+  }
+
+  bool _isPathInsideFolder(String bookPath, String folderPath) {
+    final normalizedBookPath = _normalizeFolderPath(bookPath);
+    final normalizedFolderPath = _normalizeFolderPath(folderPath);
+
+    if (normalizedBookPath == normalizedFolderPath) {
+      return true;
+    }
+
+    final folderWithSeparator =
+        normalizedFolderPath.endsWith(path.separator)
+            ? normalizedFolderPath
+            : '$normalizedFolderPath${path.separator}';
+    return normalizedBookPath.startsWith(folderWithSeparator);
+  }
+
+  Future<bool> _categoryBelongsToAnyConfiguredFolder(
+    int categoryId,
+    List<CustomFolder> customFolders,
+  ) async {
+    final descendantIds = await _repository.getDescendantCategoryIds(categoryId);
+
+    for (final descendantId in descendantIds) {
+      final books = await _repository.getBooksByCategory(descendantId);
+      for (final book in books) {
+        final bookPath = book.filePath;
+        if (bookPath == null || bookPath.isEmpty) {
+          continue;
+        }
+        if (customFolders.any((folder) => _isPathInsideFolder(bookPath, folder.path))) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /// מוחק מה-DB תיקיות אישיות ישנות שכבר לא מוגדרות בהגדרות.
+  Future<void> pruneRemovedCustomFoldersFromDatabase(
+    List<CustomFolder> customFolders,
+  ) async {
+    final rootCategories = await _repository.getRootCategories();
+    final personalCategory = rootCategories
+        .where((category) => category.title == 'ספרים אישיים')
+        .firstOrNull;
+    if (personalCategory == null) {
+      return;
+    }
+
+    final personalSubCategories =
+        await _repository.getCategoryChildren(personalCategory.id);
+
+    final staleFolderCategories = <Category>[];
+    for (final category in personalSubCategories) {
+      final belongsToConfiguredFolder =
+          await _categoryBelongsToAnyConfiguredFolder(category.id, customFolders);
+      if (!belongsToConfiguredFolder) {
+        staleFolderCategories.add(category);
+      }
+    }
+
+    if (staleFolderCategories.isEmpty) {
+      return;
+    }
+
+    for (final staleCategory in staleFolderCategories) {
+      _log.info(
+        'Removing stale custom folder from DB: ${staleCategory.title} (${staleCategory.id})',
+      );
+      await _deleteCategoryRecursive(staleCategory.id);
+    }
+
+    await _cleanupEmptyParentCategories(personalCategory.id);
+    await _repository.deleteOrphanedTocTexts();
+    await _repository.deleteOrphanedLineToc();
   }
 
   /// Internal method to scan a single path and import files
@@ -388,6 +471,8 @@ class FileSyncService {
       final customFoldersJson =
           Settings.getValue<String>(SettingsRepository.keyCustomFolders);
       final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
+
+      await pruneRemovedCustomFoldersFromDatabase(customFolders);
 
       if (customFolders.isNotEmpty) {
         _log.info('Found ${customFolders.length} custom folders to sync');

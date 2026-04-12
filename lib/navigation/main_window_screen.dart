@@ -495,6 +495,16 @@ class MainWindowScreenState extends State<MainWindowScreen>
               _tryStartDeferredStartupWork();
             },
           ),
+          BlocListener<LibraryBloc, LibraryState>(
+            listenWhen: (previous, current) =>
+                current.newBooksToIndex != null &&
+                current.newBooksToIndex!.isNotEmpty,
+            listener: (context, state) {
+              context
+                  .read<IndexingBloc>()
+                  .add(IndexSpecificBooks(state.newBooksToIndex!, state.library!));
+            },
+          ),
           BlocListener<IndexingBloc, IndexingState>(
             listenWhen: (previous, current) =>
                 (previous is IndexingInProgress) !=
