@@ -49,6 +49,9 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/migration/file_to_db_migrator.dart';
 import 'package:otzaria/file_sync/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/file_sync_repository.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
+import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -63,6 +66,7 @@ import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
+import 'package:otzaria/plugins/database/plugin_database_bootstrap.dart';
 import 'package:logging/logging.dart';
 import 'package:otzaria/widgets/restart_widget.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -314,6 +318,11 @@ Future<void> _runAppBootstrap() async {
                   ),
                 ),
               ),
+              BlocProvider<PluginSystemBloc>(
+                create: (context) => PluginSystemBloc(
+                  repository: PluginRegistryRepository(),
+                )..add(LoadPlugins()),
+              ),
             ],
             child: const App(),
           ),
@@ -409,6 +418,9 @@ Future<void> initialize() async {
     }
     // Continue without backup if it fails
   }
+
+  // Register SQLite sources for plugin database API
+  await initPluginDatabaseSources();
 
   // Initialize Notification Service
   try {
