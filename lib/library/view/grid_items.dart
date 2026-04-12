@@ -76,6 +76,15 @@ Decoration _libraryTooltipDecoration(BuildContext context) {
   );
 }
 
+TextStyle _libraryTooltipTextStyle(BuildContext context) {
+  final theme = Theme.of(context);
+  return (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
+    color: theme.colorScheme.onSurface,
+    fontSize: 14,
+    height: 1.3,
+  );
+}
+
 class LibraryOverflowTooltipText extends StatelessWidget {
   final String text;
   final TextStyle? style;
@@ -127,10 +136,13 @@ class LibraryOverflowTooltipText extends StatelessWidget {
         return Tooltip(
           message: text,
           waitDuration: const Duration(milliseconds: 300),
+          preferBelow: false,
+          verticalOffset: 18,
           textAlign: TextAlign.right,
+          textStyle: _libraryTooltipTextStyle(context),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           margin: const EdgeInsets.all(12),
-          constraints: const BoxConstraints(maxWidth: 320),
+          constraints: const BoxConstraints(maxWidth: 260),
           decoration: _libraryTooltipDecoration(context),
           child: child,
         );
@@ -955,7 +967,8 @@ Widget _buildBookSourceSection(Book book) {
 Future<Map<String, dynamic>> _getBookSourceInfo(Book book) async {
   try {
     final bookDetails = await BookDetailsService().getBookDetails(book);
-    final bookSource = bookDetails['╫¬╫ש╫º╫ש╫ש╫¬ ╫פ╫₧╫º╫ץ╫¿'] ?? '╫£╫נ ╫á╫₧╫ª╫נ ╫₧╫º╫ץ╫¿';
+    final bookSource =
+        bookDetails['╫¬╫ש╫º╫ש╫ש╫¬ ╫פ╫₧╫º╫ץ╫¿'] ?? '╫£╫נ ╫á╫₧╫ª╫נ ╫₧╫º╫ץ╫¿';
     final displayInfo = getSourceDisplayInfo(bookSource);
 
     return {

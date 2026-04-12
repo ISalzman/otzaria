@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/migration/dao/repository/seforim_repository.dart';
+import 'package:otzaria/models/books.dart';
 
 class BookFacet {
   BookFacet._();
@@ -13,10 +14,29 @@ class BookFacet {
   }
 
   static String buildFacetPath(
-      {required String title, required String topics}) {
-    final cleanTitle = title.trim();
+      {required String title,
+      required String topics,
+      String? externalLibraryId,
+      int? bookId,
+      String? categoryPath,
+      String? fileType,
+      String? filePath}) {
     final topicsPath = topicsToPath(topics);
-    return topicsPath.isEmpty ? '/$cleanTitle' : '$topicsPath/$cleanTitle';
+
+    // בניית מפתח ייחודי לספר (אותה לוגיקה כמו IndexingRepository.catalogueOrderKey)
+    String bookKey;
+    if (externalLibraryId != null && externalLibraryId.isNotEmpty) {
+      bookKey = 'ext:$externalLibraryId';
+    } else if (bookId != null) {
+      bookKey = 'id:$bookId';
+    } else {
+      final categoryKey = categoryPath ?? '';
+      final fileTypeKey = fileType ?? '';
+      final pathKey = filePath ?? '';
+      bookKey = '$title|$categoryKey|$fileTypeKey|$pathKey';
+    }
+
+    return topicsPath.isEmpty ? '/$bookKey' : '$topicsPath/$bookKey';
   }
 
   static Future<String> resolveTopics({
@@ -24,6 +44,10 @@ class BookFacet {
     required String initialTopics,
     required Type? type,
     String? categoryPath,
+    String? externalLibraryId,
+    int? bookId,
+    String? fileType,
+    String? filePath,
   }) async {
     final t = initialTopics.trim();
     if (t.isNotEmpty) return t;
@@ -31,11 +55,27 @@ class BookFacet {
     try {
       // Try to find in library first
       final library = await DataRepository.instance.library;
-      final book = library.findBookByTitle(title, type);
+      final book = findMatchingBook(
+        library.getAllBooks(),
+        title: title,
+        type: type,
+        categoryPath: categoryPath,
+        externalLibraryId: externalLibraryId,
+        bookId: bookId,
+        fileType: fileType,
+        filePath: filePath,
+      );
       if (book != null && book.topics.isNotEmpty) {
         debugPrint(
             '📚 BookFacet: Found book in library with topics: ${book.topics}');
         return book.topics;
+      }
+
+      final normalizedCategoryTopics = _categoryPathToTopics(categoryPath);
+      if (normalizedCategoryTopics.isNotEmpty) {
+        debugPrint(
+            '📚 BookFacet: Falling back to normalized category path: $normalizedCategoryTopics');
+        return normalizedCategoryTopics;
       }
 
       // Fallback: try to get from database directly
@@ -45,7 +85,9 @@ class BookFacet {
         if (repository != null) {
           debugPrint('📚 BookFacet: Searching in DB for title: $title');
 
-          final dbBook = await repository.getBookByTitle(title);
+          final dbBook = bookId != null
+              ? await repository.getBook(bookId)
+              : await repository.getBookByTitle(title);
           if (dbBook != null) {
             // Try topics first
             final topics = dbBook.topics.map((t) => t.name).join(', ');
@@ -81,6 +123,82 @@ class BookFacet {
     }
   }
 
+  /// מחזיר את הספר המתאים ביותר מתוך אוסף מועמדים עבור בניית facet.
+  @visibleForTesting
+  static Book? findMatchingBook(
+    Iterable<Book> books, {
+    required String title,
+    required Type? type,
+    String? categoryPath,
+    String? externalLibraryId,
+    int? bookId,
+    String? fileType,
+    String? filePath,
+  }) {
+    final candidates = books.where((book) {
+      if (type != null && book.runtimeType != type) return false;
+      return book.title == title;
+    }).toList();
+
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    final normalizedFilePath = _normalizeText(filePath);
+    final normalizedCategoryPath = _normalizeText(categoryPath);
+    final normalizedFileType = _normalizeText(fileType);
+
+    Book? matchWhere(bool Function(Book book) predicate) {
+      for (final book in candidates) {
+        if (predicate(book)) {
+          return book;
+        }
+      }
+      return null;
+    }
+
+    final byExternalId = matchWhere((book) =>
+        _normalizeText(book.externalLibraryId) ==
+            _normalizeText(externalLibraryId) &&
+        _normalizeText(externalLibraryId).isNotEmpty);
+    if (byExternalId != null) return byExternalId;
+
+    final byBookId = matchWhere((book) => bookId != null && book.id == bookId);
+    if (byBookId != null) return byBookId;
+
+    final byFilePath = matchWhere(
+      (book) =>
+          normalizedFilePath.isNotEmpty &&
+          _normalizeText(_bookFilePath(book)) == normalizedFilePath,
+    );
+    if (byFilePath != null) return byFilePath;
+
+    final byCategoryAndType = matchWhere(
+      (book) =>
+          normalizedCategoryPath.isNotEmpty &&
+          normalizedFileType.isNotEmpty &&
+          _normalizeText(book.categoryPath) == normalizedCategoryPath &&
+          _normalizeText(book.fileType) == normalizedFileType,
+    );
+    if (byCategoryAndType != null) return byCategoryAndType;
+
+    final byCategory = matchWhere(
+      (book) =>
+          normalizedCategoryPath.isNotEmpty &&
+          _normalizeText(book.categoryPath) == normalizedCategoryPath,
+    );
+    if (byCategory != null) return byCategory;
+
+    final byFileType = matchWhere(
+      (book) =>
+          normalizedFileType.isNotEmpty &&
+          _normalizeText(book.fileType) == normalizedFileType,
+    );
+    if (byFileType != null) return byFileType;
+
+    return candidates.first;
+  }
+
   static Future<String> _buildCategoryPath(
       SeforimRepository repository, int categoryId) async {
     try {
@@ -101,4 +219,20 @@ class BookFacet {
       return '';
     }
   }
+
+  static String _bookFilePath(Book book) {
+    if (book is FileBook) {
+      return book.path;
+    }
+    return book.filePath ?? '';
+  }
+
+  static String _categoryPathToTopics(String? categoryPath) {
+    final raw = (categoryPath ?? '').trim();
+    if (raw.isEmpty) return '';
+    if (!raw.startsWith('/')) return raw;
+    return raw.split('/').where((part) => part.isNotEmpty).join(', ');
+  }
+
+  static String _normalizeText(String? value) => value?.trim() ?? '';
 }

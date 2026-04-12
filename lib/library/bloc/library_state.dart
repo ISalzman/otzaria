@@ -11,6 +11,8 @@ class LibraryState extends Equatable {
   final String? searchQuery;
   final List<String>? selectedTopics;
   final Book? previewBook;
+  /// ספרים חדשים שנמצאו ברענון ודורשים אינדוקס. מתאפס אחרי כל copyWith.
+  final List<Book>? newBooksToIndex;
 
   const LibraryState({
     this.library,
@@ -21,6 +23,7 @@ class LibraryState extends Equatable {
     this.searchQuery,
     this.selectedTopics,
     this.previewBook,
+    this.newBooksToIndex,
   });
 
   factory LibraryState.initial() {
@@ -190,6 +193,7 @@ class LibraryState extends Equatable {
     String? searchQuery,
     List<String>? selectedTopics,
     Book? previewBook,
+    List<Book>? newBooksToIndex,
   }) {
     return LibraryState(
       library: library ?? this.library,
@@ -200,6 +204,7 @@ class LibraryState extends Equatable {
       searchQuery: searchQuery ?? this.searchQuery,
       selectedTopics: selectedTopics ?? this.selectedTopics,
       previewBook: previewBook ?? this.previewBook,
+      newBooksToIndex: newBooksToIndex, // null = אין ספרים לאינדוקס
     );
   }
 
@@ -213,5 +218,6 @@ class LibraryState extends Equatable {
         searchQuery,
         selectedTopics,
         previewBook,
+        newBooksToIndex,
       ];
 }

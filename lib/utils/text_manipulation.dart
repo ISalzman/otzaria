@@ -7,9 +7,15 @@ import 'package:otzaria/search/utils/regex_patterns.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 
-
 String stripHtmlIfNeeded(String text) {
-  return text.replaceAll(SearchRegexPatterns.htmlStripper, '');
+  // Replace whitespace HTML entities with actual spaces before stripping,
+  // otherwise adjacent words get merged (e.g. "לאמר&nbsp;&nbsp;שירה" → "לאמרשירה")
+  final withSpaces = text
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&thinsp;', ' ')
+      .replaceAll('&ensp;', ' ')
+      .replaceAll('&emsp;', ' ');
+  return withSpaces.replaceAll(SearchRegexPatterns.htmlStripper, '');
 }
 
 String truncate(String text, int length) {
@@ -249,7 +255,8 @@ String highLight(
       .where((s) => s.isNotEmpty)
       .toList();
 
-  final searchTerms = <String>[];
+  // בניית קבוצת patterns לכל מילה בנפרד (כולל חלופות לכל מיקום)
+  final patternGroups = <List<String>>[];
   for (int i = 0; i < originalWords.length; i++) {
     final word = originalWords[i];
     final wordKey = '${word}_$i';
@@ -258,10 +265,11 @@ String highLight(
     final wordOptions = searchOptions[wordKey] ?? {};
     final hasFullPartialSpelling = wordOptions['כתיב מלא/חסר'] == true;
 
+    final wordTerms = <String>[];
     if (hasFullPartialSpelling) {
-      searchTerms.addAll(generateFullPartialSpellingVariations(word));
+      wordTerms.addAll(generateFullPartialSpellingVariations(word));
     } else {
-      searchTerms.add(word);
+      wordTerms.add(word);
     }
 
     // הוספת מילים חילופיות אם יש
@@ -269,29 +277,45 @@ String highLight(
     if (alternatives != null && alternatives.isNotEmpty) {
       if (hasFullPartialSpelling) {
         for (final alt in alternatives) {
-          searchTerms.addAll(generateFullPartialSpellingVariations(alt));
+          wordTerms.addAll(generateFullPartialSpellingVariations(alt));
         }
       } else {
-        searchTerms.addAll(alternatives);
+        wordTerms.addAll(alternatives);
       }
     }
+
+    // המרת כל term ל-pattern regex עם תמיכה בניקוד
+    final wordPatterns = wordTerms.map((term) {
+      final cleanTerm = removeVolwels(term);
+      return cleanTerm.split('').map((char) {
+        if (RegExp(r'[א-ת]').hasMatch(char)) {
+          return '${RegExp.escape(char)}[\u0591-\u05C7]*';
+        }
+        return RegExp.escape(char);
+      }).join();
+    }).toList();
+
+    patternGroups.add(wordPatterns);
   }
 
-  if (searchTerms.isEmpty) return data;
+  if (patternGroups.isEmpty) return data;
 
-  // יצירת regex שמתעלם מניקוד עבור כל מונח חיפוש
-  final patterns = searchTerms.map((term) {
-    final cleanTerm = removeVolwels(term);
-    return cleanTerm.split('').map((char) {
-      if (RegExp(r'[א-ת]').hasMatch(char)) {
-        return '${RegExp.escape(char)}[\u0591-\u05C7]*';
-      }
-      return RegExp.escape(char);
-    }).join();
-  }).toList();
-
-  // איחוד כל התבניות ל-regex אחד גדול
-  final combinedPattern = patterns.join('|');
+  // בניית ה-pattern המשולב:
+  // - מילה אחת: OR פשוט בין החלופות
+  // - כמה מילים: pattern רצפי - כל מילה חייבת להופיע לפי הסדר
+  //   ובין מילים: רווח לבן, ניקוד, או תגי HTML (למניעת החמצה בגלל HTML בטקסט)
+  String combinedPattern;
+  if (patternGroups.length == 1) {
+    final patterns = patternGroups.first;
+    combinedPattern =
+        patterns.length == 1 ? patterns.first : '(?:${patterns.join('|')})';
+  } else {
+    const wordSeparator = r'(?:\s|[\u0591-\u05C7]|<[^>]*>)+';
+    final wordPatternStrings = patternGroups.map((group) {
+      return group.length == 1 ? group.first : '(?:${group.join('|')})';
+    }).toList();
+    combinedPattern = wordPatternStrings.join(wordSeparator);
+  }
   final regex = RegExp(combinedPattern, caseSensitive: false);
   final matches = regex.allMatches(data).toList();
 

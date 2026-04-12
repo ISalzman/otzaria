@@ -11,7 +11,7 @@ import 'package:otzaria/core/app_paths.dart';
 /// This provider handles the search operations for both text-based and PDF books,
 /// maintaining an index for full-text search capabilities.
 class TantivyDataProvider {
-  static const int currentIndexStateVersion = 3;
+  static const int currentIndexStateVersion = 4;
   static const String _booksDoneKey = 'key-books-done';
   static const String _indexStateVersionKey = 'key-index-state-version';
   static const String _catalogueOrderSignatureKey =
@@ -379,6 +379,7 @@ class TantivyDataProvider {
               .search(
                   regexTerms: ['a'],
                   limit: 10,
+                  offset: 0,
                   slop: 0,
                   maxExpansions: 10,
                   facets: ["/"],
@@ -519,9 +520,37 @@ class TantivyDataProvider {
         }
       }
     }
+
     indexDirectory.createSync(recursive: true);
 
     debugPrint('✅ Index reset completed');
+  }
+
+  Future<Map<String, int>> countByBook(
+    String query,
+    List<String> facets, {
+    bool fuzzy = false,
+    int distance = 2,
+    Map<String, String>? customSpacing,
+    Map<int, List<String>>? alternativeWords,
+    Map<String, Map<String, bool>>? searchOptions,
+  }) async {
+    final index = await engine;
+
+    final params = SearchQueryBuilder.prepareQueryParams(
+        query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
+    final List<String> regexTerms = params['regexTerms'] as List<String>;
+    final int effectiveSlop = params['effectiveSlop'] as int;
+    final int maxExpansions = params['maxExpansions'] as int;
+
+    final results = await index.countByBook(
+      regexTerms: regexTerms,
+      facets: facets,
+      slop: effectiveSlop,
+      maxExpansions: maxExpansions,
+    );
+
+    return Map<String, int>.from(results);
   }
 
   /// Performs an asynchronous stream-based search operation across indexed texts.

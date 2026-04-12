@@ -1,3 +1,4 @@
+import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/book_facet.dart';
 
@@ -20,12 +21,19 @@ class FacetHelper {
     return null;
   }
 
-  /// Builds a book facet path from category path and title
-  static String buildBookFacet(String? categoryPath, String title) {
+  /// Builds a book facet path from category path and book
+  /// Uses catalogueOrderKey for uniqueness instead of title
+  static String buildBookFacet(String? categoryPath, Book book) {
+    final bookKey = _buildBookKey(book);
     if (categoryPath == null || categoryPath.isEmpty || categoryPath == '/') {
-      return '/$title';
+      return '/$bookKey';
     }
-    return '$categoryPath/$title';
+    return '$categoryPath/$bookKey';
+  }
+
+  /// Builds a unique key for a book (same logic as IndexingRepository.catalogueOrderKey)
+  static String _buildBookKey(Book book) {
+    return IndexingRepository.catalogueOrderKey(book);
   }
 
   /// Increments a facet count in the given map
@@ -55,7 +63,7 @@ class FacetHelper {
   /// Builds facet counts from search results and library books
   static Map<String, int> buildFacetCountsFromResults(
     List<dynamic> results,
-    Map<String, Book> bookByTitle,
+    Map<int, Book> bookByCatalogueOrder,
   ) {
     final counts = <String, int>{};
     if (results.isEmpty) {
@@ -63,21 +71,51 @@ class FacetHelper {
     }
 
     for (final result in results) {
-      final title = result.title;
-      final book = bookByTitle[title];
-      final categoryPath = book != null ? resolveCategoryPath(book) : null;
-      final bookFacet = buildBookFacet(categoryPath, title);
+      final catalogueOrder =
+          IndexingRepository.catalogueOrderFromDocumentId(result.id as BigInt);
+      final book = bookByCatalogueOrder[catalogueOrder];
+      if (book == null) continue;
 
-      incrementFacet(counts, bookFacet);
-      incrementFacet(counts, '/$title');
-
-      if (categoryPath != null && categoryPath.isNotEmpty) {
-        incrementFacetWithAncestors(counts, categoryPath);
-      } else {
-        incrementFacet(counts, '/');
-      }
+      _incrementBookAndAncestors(counts, book);
     }
 
     return counts;
+  }
+
+  /// Builds facet counts from a per-book count map returned by the search engine.
+  static Map<String, int> buildFacetCountsFromBookCounts(
+    Map<String, int> bookCounts,
+    Map<String, Book> bookByIndexedFilePath,
+  ) {
+    final counts = <String, int>{};
+
+    for (final entry in bookCounts.entries) {
+      final count = entry.value;
+      if (count <= 0) continue;
+
+      final book = bookByIndexedFilePath[entry.key];
+      if (book == null) continue;
+
+      _incrementBookAndAncestors(counts, book, delta: count);
+    }
+
+    return counts;
+  }
+
+  static void _incrementBookAndAncestors(
+    Map<String, int> counts,
+    Book book, {
+    int delta = 1,
+  }) {
+    final categoryPath = resolveCategoryPath(book);
+    final bookFacet = buildBookFacet(categoryPath, book);
+
+    incrementFacet(counts, bookFacet, delta);
+
+    if (categoryPath != null && categoryPath.isNotEmpty) {
+      incrementFacetWithAncestors(counts, categoryPath, delta);
+    } else {
+      incrementFacet(counts, '/', delta);
+    }
   }
 }

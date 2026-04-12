@@ -154,12 +154,24 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         initialTopics: state.book.topics,
         type: TextBook,
         categoryPath: state.book.categoryPath,
+        externalLibraryId: state.book.externalLibraryId,
+        bookId: state.book.id,
+        fileType: state.book.fileType,
+        filePath: state.book.filePath,
       );
 
       if (!mounted) return;
 
       debugPrint('📚 TextBookSearch: final topics = "$topics"');
-      _bookPath = BookFacet.buildFacetPath(title: bookTitle, topics: topics);
+      _bookPath = BookFacet.buildFacetPath(
+        title: bookTitle,
+        topics: topics,
+        bookId: state.book.id,
+        externalLibraryId: state.book.externalLibraryId,
+        categoryPath: state.book.categoryPath,
+        fileType: state.book.fileType,
+        filePath: state.book.filePath,
+      );
       debugPrint('📚 TextBookSearch: _bookPath = $_bookPath');
       if (searchTextController.text.isNotEmpty) {
         _runInitialSearch();
@@ -726,10 +738,17 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     }
 
     final List<InlineSpan> spans = [];
-    final searchTerms = query.trim().split(RegExp(r'\s+'));
+    final searchTerms =
+        query.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+
+    // לחיפוש של כמה מילים - pattern רצפי (כל המילים יחד לפי הסדר)
+    // לחיפוש של מילה אחת - חיפוש ישיר
+    final pattern = searchTerms.length == 1
+        ? RegExp.escape(searchTerms.first)
+        : searchTerms.map(RegExp.escape).join(r'\s+');
 
     final highlightRegex = RegExp(
-      searchTerms.map(RegExp.escape).join('|'),
+      pattern,
       caseSensitive: false,
     );
 

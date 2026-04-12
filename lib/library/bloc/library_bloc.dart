@@ -5,10 +5,14 @@ import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/migration/sync/file_sync_service.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/utils/zip_extractor_service.dart';
 
 class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
@@ -33,6 +37,9 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   ) async {
     emit(state.copyWith(isLoading: true));
     try {
+      await _pruneRemovedCustomFoldersIfNeeded();
+      DataRepository.instance.library = FileSystemData.instance.getLibrary();
+      DataRepository.instance.invalidateExternalBooksCache();
       Library library = await _repository.library;
 
       emit(state.copyWith(
@@ -61,9 +68,18 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   ) async {
     emit(state.copyWith(isLoading: true));
     try {
+      await _pruneRemovedCustomFoldersIfNeeded();
+
       // שמירת המיקום הנוכחי בספרייה
       final currentCategoryPath =
           _getCurrentCategoryPath(state.currentCategory);
+
+      // צלם את מפתחות הספרים לפני הרענון לצורך זיהוי ספרים חדשים
+      final keysBeforeRefresh = state.library
+              ?.getAllBooks()
+              .map((b) => IndexingRepository.catalogueOrderKey(b))
+              .toSet() ??
+          <String>{};
 
       final libraryPath =
           Settings.getValue<String>(SettingsRepository.keyLibraryPath);
@@ -85,6 +101,13 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
             name: 'LibraryBloc', error: e);
       }
 
+      // זיהוי ספרים חדשים שנוספו ברענון
+      final newBooksToIndex = library
+          .getAllBooks()
+          .where((b) =>
+              !keysBeforeRefresh.contains(IndexingRepository.catalogueOrderKey(b)))
+          .toList();
+
       // חזרה לאותה תיקייה שהיתה פתוחה קודם
       final targetCategory = _findCategoryByPath(library, currentCategoryPath);
 
@@ -92,6 +115,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         library: library,
         currentCategory: targetCategory ?? library,
         isLoading: false,
+        newBooksToIndex: newBooksToIndex.isNotEmpty ? newBooksToIndex : null,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -99,6 +123,28 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         isLoading: false,
       ));
     }
+  }
+
+  Future<void> _pruneRemovedCustomFoldersIfNeeded() async {
+    final sqliteProvider = SqliteDataProvider.instance;
+    if (!sqliteProvider.isInitialized) {
+      await sqliteProvider.initialize();
+    }
+
+    final repository = sqliteProvider.repository;
+    if (repository == null) {
+      return;
+    }
+
+    final customFoldersJson =
+        Settings.getValue<String>(SettingsRepository.keyCustomFolders);
+    final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
+    final syncService = await FileSyncService.getInstance(repository);
+    if (syncService == null) {
+      return;
+    }
+
+    await syncService.pruneRemovedCustomFoldersFromDatabase(customFolders);
   }
 
   /// מחזיר את הנתיב של התיקייה הנוכחית
