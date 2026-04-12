@@ -38,7 +38,14 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 
 class PersonalNotesManagerScreen extends StatefulWidget {
-  const PersonalNotesManagerScreen({super.key});
+  const PersonalNotesManagerScreen({
+    super.key,
+    this.repository,
+    this.importExportService,
+  });
+
+  final PersonalNotesRepository? repository;
+  final PersonalNotesImportExportService? importExportService;
 
   @override
   State<PersonalNotesManagerScreen> createState() =>
@@ -47,9 +54,8 @@ class PersonalNotesManagerScreen extends StatefulWidget {
 
 class _PersonalNotesManagerScreenState
     extends State<PersonalNotesManagerScreen> {
-  final PersonalNotesRepository _repository = PersonalNotesRepository();
-  final PersonalNotesImportExportService _importExportService =
-      PersonalNotesImportExportService();
+  late final PersonalNotesRepository _repository;
+  late final PersonalNotesImportExportService _importExportService;
 
   List<BookNotesInfo> _books = [];
   String? _selectedFilter; // null = all notes
@@ -68,13 +74,23 @@ class _PersonalNotesManagerScreenState
   @override
   void initState() {
     super.initState();
+    _repository = widget.repository ?? PersonalNotesRepository();
+    _importExportService =
+        widget.importExportService ?? PersonalNotesImportExportService();
     _loadBooks();
   }
 
   Future<void> _loadBooks() async {
-    // איפוס שגיאות אם היו, אך ללא כניסה למצב טעינה מלא (ספינר)
-    // כדי לשמור על הממשק קיים גם בזמן ריענון
-    if (_booksError != null) {
+    // בריענון - לא מציגים ספינר אם כבר יש ספרים
+    // בטעינה ראשונה - נשאר במצב טעינה
+    final isRefresh = _books.isNotEmpty;
+
+    if (!isRefresh) {
+      setState(() {
+        _isLoadingBooks = true;
+        _booksError = null;
+      });
+    } else if (_booksError != null) {
       setState(() {
         _booksError = null;
       });
@@ -88,10 +104,7 @@ class _PersonalNotesManagerScreenState
         _isLoadingBooks = false;
         _booksError = null;
       });
-      // Load all books
-      for (final book in books) {
-        context.read<PersonalNotesBloc>().add(LoadPersonalNotes(book.bookId));
-      }
+      _scheduleNotesLoad(books);
     } catch (e) {
       if (!mounted) return;
       if (_books.isEmpty) {
@@ -103,6 +116,16 @@ class _PersonalNotesManagerScreenState
         UiSnack.showError('שגיאה בטעינת רשימת ההערות: $e');
       }
     }
+  }
+
+  void _scheduleNotesLoad(List<BookNotesInfo> books) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final bloc = context.read<PersonalNotesBloc>();
+      for (final book in books) {
+        bloc.add(LoadPersonalNotes(book.bookId));
+      }
+    });
   }
 
   void _onFilterChanged(String? filter) {
