@@ -1,15 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
+import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:flutter/foundation.dart';
 import 'package:search_engine/search_engine.dart';
 
@@ -85,12 +88,23 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     ));
 
     final booksToSearch = state.booksToSearch.map((e) => e.title).toList();
+    Map<int, Book>? bookByCatalogueOrder;
+
+    if (!shouldPreserveFacetCounts) {
+      final library = await DataRepository.instance.library;
+      bookByCatalogueOrder = _buildBooksByCatalogueOrder(library);
+    }
 
     try {
-      final results = await _repository.searchTexts(
+      // התחל לבנות את עץ ה-facets המלא במקביל כבר מתחילת החיפוש.
+      unawaited(_refreshFacetCountsForAllBooks(event, requestId));
+
+      // שימוש ב-streaming לתוצאות מהירות יותר
+      final stream = _repository.searchTextsStream(
         SearchQueryBuilder.sanitizeQuery(query),
         requestedFacets,
         state.numResults,
+        chunkSize: 50, // 50 תוצאות בכל chunk
         fuzzy: state.fuzzy,
         distance: state.distance,
         order: state.sortBy,
@@ -99,32 +113,57 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         searchOptions: event.searchOptions,
       );
 
-      // אם אין תוצאות ב-facets שנבחרו - לא עושים fallback אוטומטי ל-"/"
-      // המשתמש בחר קטגוריות ספציפיות ויש לכבד את הבחירה
+      final allResults = <SearchResult>[];
+      bool isFirstChunk = true;
+
+      await for (final chunk in stream) {
+        if (requestId != _searchRequestId) {
+          return; // החיפוש בוטל
+        }
+
+        allResults.addAll(chunk);
+
+        // עדכון ה-UI עם כל chunk
+        if (isFirstChunk) {
+          // Chunk ראשון - בנה ספירות חלקיות
+          isFirstChunk = false;
+          final partialFacetCounts = bookByCatalogueOrder == null
+              ? const <String, int>{}
+              : FacetHelper.buildFacetCountsFromResults(
+                  allResults,
+                  bookByCatalogueOrder,
+                );
+
+          emit(state.copyWith(
+            results: List.from(allResults),
+            totalResults: allResults.length,
+            isLoading: true, // עדיין טוען
+            facetCounts: shouldPreserveFacetCounts || state.facetCounts.isNotEmpty
+                ? state.facetCounts
+                : partialFacetCounts,
+          ));
+        } else {
+          // Chunks נוספים - רק עדכן תוצאות
+          emit(state.copyWith(
+            results: List.from(allResults),
+            totalResults: allResults.length,
+            isLoading: true, // עדיין טוען
+          ));
+        }
+      }
+
+      // סיום - כל התוצאות התקבלו
       if (requestId != _searchRequestId) {
         return;
       }
-      // בנה ספירות חלקיות מיידיות מהתוצאות שכבר יש - הרשימה הצדדית תופיע מיד
-      Map<String, int> partialFacetCounts = const {};
-      if (!shouldPreserveFacetCounts && results.isNotEmpty) {
-        final library = await DataRepository.instance.library;
-        final bookByTitle = <String, Book>{};
-        for (final book in library.getAllBooks()) {
-          bookByTitle.putIfAbsent(book.title, () => book);
-        }
-        partialFacetCounts = FacetHelper.buildFacetCountsFromResults(results, bookByTitle);
-      }
 
       emit(state.copyWith(
-        results: results,
-        totalResults: results.length,
+        results: allResults,
+        totalResults: allResults.length,
         isLoading: false,
-        facetCounts: shouldPreserveFacetCounts ? state.facetCounts : partialFacetCounts,
       ));
 
-      // הפעל את שניהם במקביל - אל תחכה ל-countTexts לפני שמתחילים facet refresh
-      unawaited(_refreshFacetCountsForAllBooks(event, requestId));
-
+      // ספירה כוללת (אם צריך - אבל בעצם allResults.length כבר נותן את זה)
       final totalResults = await TantivyDataProvider.instance.countTexts(
         SearchQueryBuilder.sanitizeQuery(query),
         booksToSearch,
@@ -142,10 +181,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       emit(state.copyWith(
         totalResults: totalResults,
       ));
-
-      // Prefetch disabled - too slow and causes duplicates
-      // _prefetchCommonFacetCounts(event.query, event.customSpacing,
-      //     event.alternativeWords, event.searchOptions);
     } catch (e) {
       emit(state.copyWith(
         results: [],
@@ -161,26 +196,17 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     if (query.isEmpty) return;
     if (requestId != _searchRequestId) return;
 
-    // קבל את כל הספרים מהספרייה כדי למפות title -> Book
+    // קבל את כל הספרים מהספרייה כדי למפות key -> Book
     final library = await DataRepository.instance.library;
-    final allBooks = library.getAllBooks();
-    final bookByTitle = <String, Book>{};
-    for (final book in allBooks) {
-      bookByTitle.putIfAbsent(book.title, () => book);
-    }
+    final bookByIndexedFilePath = _buildBooksByIndexedFilePath(library);
 
-    // עשה חיפוש גדול שמחזיר הרבה תוצאות (במקום לספור כל facet בנפרד)
-    // משתמש בטווח החיפוש המקורי (searchScopeFacets) ולא ב-currentFacets
-    // כדי שלחיצה על קטגוריה בעץ לא תצמצם את הספירות
-    const int kFacetAggregationLimit = 50000;
+    // סופר ברמת ספר במנוע עצמו, בלי למשוך עשרות אלפי snippets לדארט.
     final activeFacets = List<String>.from(state.searchScopeFacets);
-    final largeResults = await _repository.searchTexts(
+    final bookCounts = await TantivyDataProvider.instance.countByBook(
       SearchQueryBuilder.sanitizeQuery(query),
       activeFacets,
-      kFacetAggregationLimit,
       fuzzy: state.fuzzy,
       distance: state.distance,
-      order: ResultsOrder.relevance,
       customSpacing: event.customSpacing,
       alternativeWords: event.alternativeWords,
       searchOptions: event.searchOptions,
@@ -191,10 +217,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       return;
     }
 
-    // ספור את התוצאות לפי ספר באמצעות FacetHelper
-    final aggregated = FacetHelper.buildFacetCountsFromResults(
-      largeResults,
-      bookByTitle,
+    final aggregated = FacetHelper.buildFacetCountsFromBookCounts(
+      bookCounts,
+      bookByIndexedFilePath,
     );
 
     add(ReplaceFacetCounts(aggregated));
@@ -544,11 +569,11 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
     try {
       // מבקשים את כל התוצאות עד עכשיו + עוד numResults תוצאות
-      final newLimit = state.results.length + state.numResults;
-      final allResults = await _repository.searchTexts(
+      final nextResults = await _repository.searchTexts(
         SearchQueryBuilder.sanitizeQuery(state.searchQuery),
         state.currentFacets,
-        newLimit,
+        state.numResults,
+        offset: state.results.length,
         fuzzy: state.fuzzy,
         distance: state.distance,
         order: state.sortBy,
@@ -558,11 +583,40 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       );
 
       emit(state.copyWith(
-        results: allResults,
+        results: [...state.results, ...nextResults],
         isLoading: false,
       ));
     } catch (e) {
       emit(state.copyWith(isLoading: false));
     }
+  }
+
+  Map<int, Book> _buildBooksByCatalogueOrder(Library library) {
+    final orderByBookKey = SearchCatalogueOrderHelper.buildKeyOrderMap(
+      library,
+      keyOf: (book) => IndexingRepository.catalogueOrderKey(book as Book),
+    );
+    final booksByCatalogueOrder = <int, Book>{};
+
+    for (final book in library.getAllBooks()) {
+      final order = orderByBookKey[IndexingRepository.catalogueOrderKey(book)];
+      if (order == null) continue;
+      booksByCatalogueOrder.putIfAbsent(order, () => book);
+    }
+
+    return booksByCatalogueOrder;
+  }
+
+  Map<String, Book> _buildBooksByIndexedFilePath(Library library) {
+    final booksByIndexedFilePath = <String, Book>{};
+
+    for (final book in library.getAllBooks()) {
+      booksByIndexedFilePath.putIfAbsent(
+        IndexingRepository.buildIndexedBookFilePath(book),
+        () => book,
+      );
+    }
+
+    return booksByIndexedFilePath;
   }
 }
