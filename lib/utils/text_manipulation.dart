@@ -8,7 +8,14 @@ import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 
 String stripHtmlIfNeeded(String text) {
-  return text.replaceAll(SearchRegexPatterns.htmlStripper, '');
+  // Replace whitespace HTML entities with actual spaces before stripping,
+  // otherwise adjacent words get merged (e.g. "לאמר&nbsp;&nbsp;שירה" → "לאמרשירה")
+  final withSpaces = text
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&thinsp;', ' ')
+      .replaceAll('&ensp;', ' ')
+      .replaceAll('&emsp;', ' ');
+  return withSpaces.replaceAll(SearchRegexPatterns.htmlStripper, '');
 }
 
 String truncate(String text, int length) {
