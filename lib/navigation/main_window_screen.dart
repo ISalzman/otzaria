@@ -20,7 +20,6 @@ import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/tabs/reading_screen.dart';
 import 'package:otzaria/tools/more_screen.dart';
-import 'package:otzaria/navigation/about_dialog.dart';
 import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
 import 'dart:async';
 import 'package:otzaria/update/my_updat_widget.dart';
@@ -155,14 +154,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       label: 'הגדרות',
       shortcutKey: 'key-shortcut-open-settings',
       shortcutDefault: 'ctrl+comma',
-    ),
-    (
-      screen: Screen.about,
-      icon: FluentIcons.info_24_regular,
-      iconFilled: FluentIcons.info_24_regular,
-      label: 'אודות',
-      shortcutKey: null,
-      shortcutDefault: null,
     ),
   ];
 
@@ -382,15 +373,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
       for (final item in _navData)
         NavigationDestination(
           tooltip: '',
-          icon: item.shortcutKey == null
-              ? Icon(item.icon)
-              : Tooltip(
-                  preferBelow: false,
-                  message: (Settings.getValue<String>(item.shortcutKey!) ??
-                          item.shortcutDefault!)
-                      .toUpperCase(),
-                  child: Icon(item.icon),
-                ),
+          icon: Tooltip(
+            preferBelow: false,
+            message: (Settings.getValue<String>(item.shortcutKey) ??
+                    item.shortcutDefault)
+                .toUpperCase(),
+            child: Icon(item.icon),
+          ),
           selectedIcon: Icon(item.iconFilled),
           label: item.label,
         ),
@@ -500,9 +489,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 current.newBooksToIndex != null &&
                 current.newBooksToIndex!.isNotEmpty,
             listener: (context, state) {
-              context
-                  .read<IndexingBloc>()
-                  .add(IndexSpecificBooks(state.newBooksToIndex!, state.library!));
+              context.read<IndexingBloc>().add(
+                  IndexSpecificBooks(state.newBooksToIndex!, state.library!));
             },
           ),
           BlocListener<IndexingBloc, IndexingState>(
@@ -950,7 +938,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case Screen.settings:
         return 3;
       case Screen.find:
-      case Screen.about:
         return null;
     }
   }
@@ -1014,8 +1001,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
         return 4;
       case Screen.settings:
         return 5;
-      case Screen.about:
-        return 6;
     }
   }
 
@@ -1038,8 +1023,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final item = _navData[index];
     if (index == currentIndex &&
         item.screen != Screen.search &&
-        item.screen != Screen.find &&
-        item.screen != Screen.about) {
+        item.screen != Screen.find) {
       await _syncPageWithState();
       return;
     }
@@ -1048,11 +1032,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       _handleSearchTabOpen(context);
     } else if (item.screen == Screen.find) {
       _handleFindRefOpen(context);
-    } else if (item.screen == Screen.about) {
-      showDialog(
-        context: context,
-        builder: (context) => const AboutDialogWidget(),
-      );
     } else {
       context.read<NavigationBloc>().add(
             NavigateToScreen(item.screen),
@@ -1073,10 +1052,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
   ) {
     final item = _navData[index];
     final isSelected = _getActiveNavigationIndex(currentScreen) == index;
-    final tooltip = item.shortcutKey == null
-        ? null
-        : (Settings.getValue<String>(item.shortcutKey!) ??
-                item.shortcutDefault!)
+    final tooltip =
+        (Settings.getValue<String>(item.shortcutKey) ?? item.shortcutDefault)
             .toUpperCase();
 
     return NavRailItem(
