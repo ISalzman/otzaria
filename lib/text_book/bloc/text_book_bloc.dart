@@ -24,7 +24,6 @@ import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dar
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/migration/core/models/category.dart' as db;
-import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 
 List<Link> _mergeLinksByIdentity(
   List<Link> existing,
@@ -1192,25 +1191,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         selectedTextEnd: event.end,
       ));
 
-      // שליחת event לפלאגינים רק אם יש טקסט לא-ריק
-      final text = event.text;
-      if (text != null && text.trim().isNotEmpty) {
-        final bookId = currentState.book.title;
-        unawaited(PluginRuntimeDispatcher.instance.dispatchEvent(
-          'reader.selection_changed',
-          {
-            'text': text,
-            'start': event.start,
-            'end': event.end,
-            'currentRef': currentState.currentTitle,
-            'currentBook': bookId,
-            'currentBookId': bookId,
-            'currentIndex': currentState.visibleIndices.isNotEmpty
-                ? currentState.visibleIndices.first
-                : 0,
-          },
-        ));
-      }
     }
   }
 
