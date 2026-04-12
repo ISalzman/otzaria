@@ -20,7 +20,8 @@ import 'package:flutter/foundation.dart';
 class SearchRepository {
   Future<List<SearchResult>> searchTexts(
       String query, List<String> facets, int limit,
-      {ResultsOrder order = ResultsOrder.relevance,
+      {int offset = 0,
+      ResultsOrder order = ResultsOrder.relevance,
       bool fuzzy = false,
       int distance = 2,
       Map<String, String>? customSpacing,
@@ -53,6 +54,7 @@ class SearchRepository {
     debugPrint('   regexTerms: $regexTerms');
     debugPrint('   facets: $facets');
     debugPrint('   limit: $limit');
+    debugPrint('   offset: $offset');
     debugPrint('   slop: $effectiveSlop');
     debugPrint('   maxExpansions: $maxExpansions');
     debugPrint('🚀 Calling index.search...');
@@ -61,7 +63,7 @@ class SearchRepository {
         regexTerms: regexTerms,
         facets: facets,
         limit: limit,
-        offset: 0,
+        offset: offset,
         slop: effectiveSlop,
         maxExpansions: maxExpansions,
         order: order);
@@ -88,7 +90,8 @@ class SearchRepository {
   ///
   Stream<List<SearchResult>> searchTextsStream(
       String query, List<String> facets, int limit,
-      {int chunkSize = 50,
+      {int offset = 0,
+      int chunkSize = 50,
       ResultsOrder order = ResultsOrder.relevance,
       bool fuzzy = false,
       int distance = 2,
@@ -108,6 +111,7 @@ class SearchRepository {
     debugPrint('   regexTerms: $regexTerms');
     debugPrint('   facets: $facets');
     debugPrint('   limit: $limit');
+    debugPrint('   offset: $offset');
     debugPrint('   chunkSize: $chunkSize');
     debugPrint('   slop: $effectiveSlop');
     debugPrint('   maxExpansions: $maxExpansions');
@@ -116,7 +120,7 @@ class SearchRepository {
       regexTerms: regexTerms,
       facets: facets,
       limit: limit,
-      offset: 0,
+      offset: offset,
       slop: effectiveSlop,
       maxExpansions: maxExpansions,
       order: order,

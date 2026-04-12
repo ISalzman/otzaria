@@ -33,7 +33,7 @@ class SearchConfiguration {
     this.distance = 2,
     this.searchMode = SearchMode.advanced,
     this.sortBy = ResultsOrder.catalogue,
-    this.numResults = 1000, // הגדלה ל-1000 בזכות streaming
+    this.numResults = 100,
     this.currentFacets = const ["/"],
     this.searchScopeFacets = const ["/"],
 

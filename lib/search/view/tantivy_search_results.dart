@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
+import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
@@ -14,6 +15,7 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/widgets/custom_ui_components.dart';
 
 class TantivySearchResults extends StatefulWidget {
   final SearchingTab tab;
@@ -100,24 +102,60 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     }
 
     // תמיד נשתמש ב-ListView גם לתוצאה אחת - כך היא תופיע למעלה
-    // +1 לאינדיקטור טעינה אם עדיין טוען
+    final hasMoreResults = state.results.length < state.totalResults;
+    final showInlineLoadingIndicator =
+        state.isLoading && state.results.isNotEmpty && !hasMoreResults;
+    final showLoadMoreButton = hasMoreResults;
+
     return ListView.builder(
       key: PageStorageKey(widget.tab),
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: state.results.length + (state.isLoading ? 1 : 0),
+      itemCount: state.results.length +
+          ((showInlineLoadingIndicator || showLoadMoreButton) ? 1 : 0),
       itemBuilder: (context, index) {
-        // אם זה האיטם האחרון והוא אינדיקטור טעינה
+        // האיטם האחרון מציג אינדיקטור טעינה בזמן הזרמה,
+        // או כפתור pagination כשיש עוד תוצאות בשרת.
         if (index == state.results.length) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16.0),
+          if (showInlineLoadingIndicator) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: Center(
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 8),
+                    Text('טוען תוצאות...'),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final remainingResults = state.totalResults - state.results.length;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Center(
-              child: Column(
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 8),
-                  Text('טוען תוצאות נוספות...'),
-                ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: NeutralActionButton(
+                  text: state.isLoading
+                      ? 'טוען...'
+                      : 'טען תוצאות נוספות ($remainingResults)',
+                  onPressed: () {
+                    context.read<SearchBloc>().add(
+                          LoadMoreResults(
+                            customSpacing: widget.tab.spacingValues,
+                            alternativeWords: widget.tab.alternativeWords,
+                            searchOptions: widget.tab.searchOptions,
+                          ),
+                        );
+                  },
+                  isLoading: state.isLoading,
+                  icon: state.isLoading
+                      ? null
+                      : FluentIcons.arrow_download_24_regular,
+                ),
               ),
             ),
           );
