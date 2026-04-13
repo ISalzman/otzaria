@@ -15,6 +15,10 @@ class LoadContent extends TextBookEvent {
   final bool loadCommentators; // Whether to load commentators
   final bool
       forceCloseLeftPane; // Force close left pane (for side-by-side mode)
+  // When true and state is already loaded, keep current removeNikud (user's
+  // per-book toggle) instead of applying the new value from settings.
+  // Use this for font-only reloads where nikud settings did NOT change.
+  final bool preserveRemoveNikud;
 
   const LoadContent({
     required this.fontSize,
@@ -23,6 +27,7 @@ class LoadContent extends TextBookEvent {
     this.preserveState = false, // Default to false for backward compatibility
     this.loadCommentators = true, // Default to true for backward compatibility
     this.forceCloseLeftPane = false, // Default to false
+    this.preserveRemoveNikud = false, // Default to false for backward compatibility
   });
 
   @override
@@ -32,7 +37,8 @@ class LoadContent extends TextBookEvent {
         removeNikud,
         preserveState,
         loadCommentators,
-        forceCloseLeftPane
+        forceCloseLeftPane,
+        preserveRemoveNikud,
       ];
 }
 

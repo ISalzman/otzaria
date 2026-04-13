@@ -457,6 +457,180 @@ void main() {
       await subscription.cancel();
       await bloc.close();
     });
+
+    // ── בדיקות שמירת מצב ניקוד ונעיצה ב-preserveState reload ──
+
+    test(
+      'LoadContent(preserveRemoveNikud:true) שומר ניקוד שהמשתמש שינה ידנית',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc =
+            _createBloc(repository: repository, showPageShapeView: false);
+
+        // טעינה ראשונית עם removeNikud=false
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect((bloc.state as TextBookLoaded).removeNikud, isFalse);
+
+        // המשתמש מפעיל הסרת ניקוד ידנית
+        bloc.add(const ToggleNikud(true));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect((bloc.state as TextBookLoaded).removeNikud, isTrue);
+
+        // רענון בגין שינוי גופן בלבד – מצפה שמצב הניקוד יישמר
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false, // ערך Settings: false
+          preserveState: true,
+          preserveRemoveNikud: true, // שמור את מה שהמשתמש בחר
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(
+          (bloc.state as TextBookLoaded).removeNikud,
+          isTrue,
+          reason: 'שינוי גופן לא אמור לאפס את בחירת הניקוד של המשתמש',
+        );
+
+        await bloc.close();
+      },
+    );
+
+    test(
+      'LoadContent(preserveRemoveNikud:false) מחיל ניקוד חדש מה-Settings',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc =
+            _createBloc(repository: repository, showPageShapeView: false);
+
+        // טעינה ראשונית עם removeNikud=false
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        // המשתמש מפעיל הסרת ניקוד ידנית
+        bloc.add(const ToggleNikud(true));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect((bloc.state as TextBookLoaded).removeNikud, isTrue);
+
+        // רענון בגין שינוי הגדרות ניקוד גלובליות – מצפה להחיל ערך חדש
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false, // ערך Settings החדש: false
+          preserveState: true,
+          preserveRemoveNikud: false, // אל תשמר – החל ערך חדש
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(
+          (bloc.state as TextBookLoaded).removeNikud,
+          isFalse,
+          reason: 'שינוי הגדרות ניקוד גלובלי חייב להחיל את הערך החדש',
+        );
+
+        await bloc.close();
+      },
+    );
+
+    test(
+      'LoadContent(preserveState:true) תמיד שומר pinLeftPane ללא קשר לשינוי הגופן',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc =
+            _createBloc(repository: repository, showPageShapeView: false);
+
+        // Settings: pin-sidebar = false
+        await Settings.setValue<bool>('key-pin-sidebar', false);
+
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect((bloc.state as TextBookLoaded).pinLeftPane, isFalse);
+
+        // המשתמש נועץ את החלונית
+        bloc.add(const TogglePinLeftPane(true));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect((bloc.state as TextBookLoaded).pinLeftPane, isTrue);
+
+        // רענון בגין שינוי גופן – מצפה שהנעיצה תישמר
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          preserveState: true,
+          preserveRemoveNikud: true,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(
+          (bloc.state as TextBookLoaded).pinLeftPane,
+          isTrue,
+          reason: 'שינוי גופן לא אמור לבטל את נעיצת חלונית המפרשים',
+        );
+
+        await bloc.close();
+      },
+    );
+
+    test(
+      'LoadContent(preserveState:true) שומר pinLeftPane גם ברענון הגדרות ניקוד',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc =
+            _createBloc(repository: repository, showPageShapeView: false);
+
+        await Settings.setValue<bool>('key-pin-sidebar', false);
+
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        bloc.add(const TogglePinLeftPane(true));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect((bloc.state as TextBookLoaded).pinLeftPane, isTrue);
+
+        // רענון בגין שינוי הגדרות ניקוד – מצפה שהנעיצה תישמר גם כן
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          preserveState: true,
+          preserveRemoveNikud: false,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(
+          (bloc.state as TextBookLoaded).pinLeftPane,
+          isTrue,
+          reason: 'שינוי הגדרות ניקוד לא אמור לבטל את נעיצת חלונית המפרשים',
+        );
+
+        await bloc.close();
+      },
+    );
   });
 }
 

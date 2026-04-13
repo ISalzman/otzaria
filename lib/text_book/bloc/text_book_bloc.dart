@@ -365,6 +365,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     // שמירת מפרשים קיימים כדי לא לאבד אותם ב-preserveState reload
     List<String> existingAvailableCommentators = const [];
     List<CommentatorGroup> existingCommentatorGroups = const [];
+    bool? preservedRemoveNikud;
+    bool? preservedPinLeftPane;
 
     if (state is TextBookLoaded && event.preserveState) {
       // Preserve current state when reloading
@@ -381,6 +383,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       initialShowPageShapeView = currentState.showPageShapeView;
       existingAvailableCommentators = currentState.availableCommentators;
       existingCommentatorGroups = currentState.commentatorGroups;
+      preservedRemoveNikud = currentState.removeNikud;
+      preservedPinLeftPane = currentState.pinLeftPane;
     } else if (state is TextBookInitial) {
       // Normal initial load
       final initial = state as TextBookInitial;
@@ -548,10 +552,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         showPageShapeView: initialShowPageShapeView,
         activeCommentators: commentators,
         commentatorGroups: existingCommentatorGroups,
-        removeNikud: removeNikud,
+        removeNikud: (event.preserveRemoveNikud && preservedRemoveNikud != null)
+            ? preservedRemoveNikud
+            : removeNikud,
         isTanach: isTanach,
         visibleIndices: visibleIndices,
-        pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
+        pinLeftPane: preservedPinLeftPane ?? (Settings.getValue<bool>('key-pin-sidebar') ?? false),
         searchText: searchText,
         searchOptions: searchOptions,
         alternativeWords: alternativeWords,
