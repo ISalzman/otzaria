@@ -12,7 +12,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/services/safer_mode/password_verification_dialog.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
@@ -33,7 +32,6 @@ import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/widgets/error_report_sender_email_dialog.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/app_theme.dart';
-import 'package:otzaria/theme/layout_tokens.dart';
 
 /// טאב "אוצריא" — גרסאות, נתיב ספרייה, גיבוי, מצב סייפר, איפוס.
 class SystemSettingsTab extends StatefulWidget {
@@ -305,10 +303,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 // 3. דיווחי טעויות
                 _buildErrorReportsSection(context, state),
 
-                // 4. תורמים (כרטיסי זיכרון)
-                _buildMemorialSection(context),
-
-                // 5. מתקדם (גיבוי + מצב סייפר)
+                // 4. מתקדם (גיבוי + מצב סייפר)
                 _buildAdvancedSection(context, state),
 
                 // 6. איפוס
@@ -647,38 +642,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         shouldMove: shouldMove,
       ),
     );
-  }
-
-  // ════════════════════════════════════════════════════════════════════════════
-  //  3. תורמים
-  // ════════════════════════════════════════════════════════════════════════════
-
-  Widget _buildMemorialSection(BuildContext context) {
-    return SettingsCard(
-      title: 'תורמים',
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: _MemorialCardsGrid(
-            onDonationTap: () => _openDonationPage(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _openDonationPage() async {
-    final libraryPath =
-        Settings.getValue<String>(SettingsRepository.keyLibraryPath);
-    if (libraryPath == null || libraryPath.isEmpty) return;
-    final htmlFile = File(p.join(libraryPath, 'donate.html'));
-    if (!await htmlFile.exists()) {
-      final uri = Uri.parse('http://nedar.im/ezOd');
-      if (await canLaunchUrl(uri)) await launchUrl(uri);
-      return;
-    }
-    final uri = Uri.file(htmlFile.path);
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
   Future<void> _createBackup() async {
@@ -1181,135 +1144,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 // ══════════════════════════════════════════════════════════════════════════════
 //  כרטיסי זיכרון — עיצוב נקי ורספונסיבי למסכים, תואם M3
 // ══════════════════════════════════════════════════════════════════════════════
-
-class _MemorialCardsGrid extends StatelessWidget {
-  final VoidCallback onDonationTap;
-  const _MemorialCardsGrid({required this.onDonationTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < LayoutBreakpoints.compact) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _MemorialCard(
-              name: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
-              description: 'סכום משמעותי לפיתוח התוכנה',
-            ),
-            const SizedBox(height: 12),
-            _DonationMemorialCard(onTap: onDonationTap),
-            const SizedBox(height: 12),
-            _DonationMemorialCard(onTap: onDonationTap),
-          ],
-        );
-      }
-      return IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _MemorialCard(
-                name: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
-                description: 'סכום משמעותי לפיתוח התוכנה',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: _DonationMemorialCard(onTap: onDonationTap)),
-            const SizedBox(width: 12),
-            Expanded(child: _DonationMemorialCard(onTap: onDonationTap)),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-class _MemorialCard extends StatelessWidget {
-  final String name;
-  final String description;
-  const _MemorialCard({required this.name, required this.description});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      color: colorScheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.local_fire_department,
-                color: colorScheme.primary, size: 24),
-            const SizedBox(height: 6),
-            Text(name,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface)),
-            const SizedBox(height: 4),
-            Text(description,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 11, color: colorScheme.onSurfaceVariant)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DonationMemorialCard extends StatelessWidget {
-  final VoidCallback onTap;
-  const _DonationMemorialCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      color: colorScheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.local_fire_department,
-                color: colorScheme.primary.withValues(alpha: 0.6), size: 24),
-            const SizedBox(height: 6),
-            Text(
-              'מקום זה יכול להיות מונצח לע"נ יקירך',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onSurface),
-            ),
-            const SizedBox(height: 8),
-            RecommendedActionButton(
-              icon: FluentIcons.payment_24_regular,
-              text: 'נדרים+',
-              onPressed: onTap,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ── _BackupOptionTile ─────────────────────────────────────────────────────────
 
