@@ -46,6 +46,50 @@ void main() {
   });
 
   test(
+      'syncFiles לא מוחק תיקייה מותאמת חדשה עם ספר ברמת השורש',
+      () async {
+    final libraryPath = path.join(tempDir.path, 'library');
+    final customFolderPath = path.join(tempDir.path, 'היברו');
+    await Directory(libraryPath).create(recursive: true);
+    await Directory(path.join(libraryPath, 'אוצריא')).create(recursive: true);
+    await Directory(customFolderPath).create(recursive: true);
+    await File(path.join(customFolderPath, 'ספר חדש.txt')).writeAsString('תוכן');
+
+    await Settings.setValue<String>(
+      SettingsRepository.keyLibraryPath,
+      libraryPath,
+    );
+    await Settings.setValue<String>(
+      SettingsRepository.keyCustomFolders,
+      CustomFoldersManager.saveFolders([
+        CustomFolder(
+          path: customFolderPath,
+          addToDatabase: true,
+          addedAt: DateTime(2026, 4, 13),
+        ),
+      ]),
+    );
+
+    final service = await FileSyncService.getInstance(repository);
+    final result = await service!.syncFiles();
+
+    final personalCategory = (await repository.getRootCategories())
+        .where((category) => category.title == 'ספרים אישיים')
+        .firstOrNull;
+    expect(personalCategory, isNotNull);
+
+    final customCategory = await repository.getCategoryByTitleAndParent(
+      'היברו',
+      personalCategory!.id,
+    );
+    expect(customCategory, isNotNull);
+
+    final books = await repository.getBooksByCategory(customCategory!.id);
+    expect(books.map((book) => book.title), ['ספר חדש']);
+    expect(result.errors, isEmpty);
+  });
+
+  test(
       'pruneRemovedCustomFoldersFromDatabase משאיר תיקייה פעילה בלי filePath ומוחק ישנה',
       () async {
     final activeFolderPath = path.join(tempDir.path, 'active-folder');
