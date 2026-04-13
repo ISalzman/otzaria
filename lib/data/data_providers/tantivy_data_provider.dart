@@ -570,7 +570,9 @@ class TantivyDataProvider {
     yield results;
   }
 
-  /// ספירה מקבצת של תוצאות עבור מספר facets בבת אחת - לשיפור ביצועים
+  /// ספירה מקבצת של תוצאות עבור מספר facets בבת אחת - לשיפור ביצועים.
+  /// מקבץ facets לפי parent prefix ומשתמש ב-getFacetCounts כשיש כמה siblings,
+  /// כדי לחסוך קריאות FFI מיותרות.
   Future<Map<String, int>> countTextsForMultipleFacets(
       String query, List<String> books, List<String> facets,
       {bool fuzzy = false,
@@ -586,53 +588,73 @@ class TantivyDataProvider {
     final index = await engine;
     final results = <String, int>{};
 
-    // המרת החיפוש לפורמט המנוע החדש - בדיוק כמו ב-countTexts
     final params = SearchQueryBuilder.prepareQueryParams(
         query, fuzzy, distance, customSpacing, alternativeWords, searchOptions);
     final List<String> regexTerms = params['regexTerms'] as List<String>;
     final int effectiveSlop = params['effectiveSlop'] as int;
     final int maxExpansions = params['maxExpansions'] as int;
 
-    // ביצוע ספירה עבור כל facet - בזה אחר זה (לא במקביל כי זה לא עובד)
-    int processedCount = 0;
-    int zeroResultsCount = 0;
-
+    // קיבוץ facets לפי parent prefix כדי לחסוך קריאות FFI
+    final Map<String, List<String>> byParent = {};
     for (final facet in facets) {
-      try {
-        debugPrint(
-            '🔍 Counting facet: $facet (${processedCount + 1}/${facets.length})');
-        final facetStopwatch = Stopwatch()..start();
-        final count = await index.count(
+      final lastSlash = facet.lastIndexOf('/');
+      final parent = lastSlash > 0 ? facet.substring(0, lastSlash) : '/';
+      (byParent[parent] ??= []).add(facet);
+    }
+
+    for (final entry in byParent.entries) {
+      final parent = entry.key;
+      final siblings = entry.value;
+
+      if (siblings.length > 1) {
+        // כמה siblings מאותו parent - קריאה אחת ל-getFacetCounts מספיקה
+        try {
+          debugPrint(
+              '🔍 getFacetCounts: parent=$parent (${siblings.length} siblings)');
+          final facetCounts = await index.getFacetCounts(
             regexTerms: regexTerms,
-            facets: [facet],
+            facets: [parent],
+            facetPrefix: parent,
             slop: effectiveSlop,
-            maxExpansions: maxExpansions);
-        facetStopwatch.stop();
-        debugPrint(
-            '✅ Facet $facet: $count (${facetStopwatch.elapsedMilliseconds}ms)');
-        results[facet] = count;
-
-        processedCount++;
-        if (count == 0) {
-          zeroResultsCount++;
-        }
-
-        // אם יש יותר מדי facets עם 0 תוצאות, נפסיק מוקדם
-        if (allowEarlyStop &&
-            processedCount >= 10 &&
-            zeroResultsCount > processedCount * 0.8) {
-          debugPrint('⚠️ Too many zero results, stopping early');
-          // נמלא את השאר עם 0
-          for (int i = processedCount; i < facets.length; i++) {
-            results[facets[i]] = 0;
+            maxExpansions: maxExpansions,
+          );
+          final countMap = {
+            for (final fc in facetCounts) fc.path: fc.count.toInt(),
+          };
+          for (final sibling in siblings) {
+            results[sibling] = countMap[sibling] ?? 0;
           }
-          break;
+          debugPrint(
+              '✅ getFacetCounts: ${countMap.entries.where((e) => e.value > 0).length} non-zero');
+        } catch (e) {
+          debugPrint('⚠️ getFacetCounts failed for $parent, fallback: $e');
+          // fallback לקריאות count נפרדות
+          for (final facet in siblings) {
+            try {
+              results[facet] = await index.count(
+                  regexTerms: regexTerms,
+                  facets: [facet],
+                  slop: effectiveSlop,
+                  maxExpansions: maxExpansions);
+            } catch (e2) {
+              debugPrint('❌ count failed for $facet: $e2');
+              results[facet] = 0;
+            }
+          }
         }
-      } catch (e) {
-        debugPrint('❌ Error counting facet $facet: $e');
-        results[facet] = 0;
-        processedCount++;
-        zeroResultsCount++;
+      } else {
+        // sibling יחיד - count ישיר יעיל יותר
+        final facet = siblings[0];
+        try {
+          results[facet] = await index.count(
+              regexTerms: regexTerms,
+              facets: [facet],
+              slop: effectiveSlop,
+              maxExpansions: maxExpansions);
+        } catch (e) {
+          debugPrint('❌ count failed for $facet: $e');
+          results[facet] = 0;
+        }
       }
     }
 

@@ -11,6 +11,10 @@ class SearchState {
   final String searchQuery;
   final int totalResults;
 
+  /// רלוונטי רק במצב levenshtein: האם ייתכן שיש עוד תוצאות מעבר לנטענות.
+  /// מבודד מ-totalResults כדי שה-UI יציג מספר אמיתי ולא sentinel.
+  final bool hasMoreResults;
+
   // מידע על ספירות לכל facet - מתעדכן עם כל חיפוש
   final Map<String, int> facetCounts;
 
@@ -23,6 +27,7 @@ class SearchState {
     this.isLoading = false,
     this.searchQuery = '',
     this.totalResults = 0,
+    this.hasMoreResults = false,
     this.filterQuery,
     this.filteredBooks,
     this.facetCounts = const {},
@@ -35,6 +40,7 @@ class SearchState {
     bool? isLoading,
     String? searchQuery,
     int? totalResults,
+    bool? hasMoreResults,
     String? filterQuery,
     List<Book>? filteredBooks,
     Map<String, int>? facetCounts,
@@ -46,6 +52,7 @@ class SearchState {
       isLoading: isLoading ?? this.isLoading,
       searchQuery: searchQuery ?? this.searchQuery,
       totalResults: totalResults ?? this.totalResults,
+      hasMoreResults: hasMoreResults ?? this.hasMoreResults,
       filterQuery: filterQuery,
       filteredBooks: filteredBooks,
       facetCounts: facetCounts ?? this.facetCounts,

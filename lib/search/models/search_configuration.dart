@@ -2,9 +2,10 @@ import 'package:search_engine/search_engine.dart';
 
 /// מצבי החיפוש השונים
 enum SearchMode {
-  advanced, // חיפוש מתקדם
+  advanced, // חיפוש מתקדם (slop/word-distance)
   exact, // חיפוש מדוייק
-  fuzzy, // חיפוש מקורב
+  fuzzy, // חיפוש מקורב (slop/word-distance)
+  levenshtein, // תיקון שגיאות כתיב (Levenshtein/typo-tolerance)
 }
 
 /// מחלקה שמרכזת את כל הגדרות החיפוש במקום אחד

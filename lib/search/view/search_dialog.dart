@@ -78,11 +78,12 @@ class _SearchDialogState extends State<SearchDialog> {
     }
 
     // הגדרת מצב החיפוש האחרון
-    final searchMode = lastMode == 'advanced'
-        ? SearchMode.advanced
-        : lastMode == 'fuzzy'
-            ? SearchMode.fuzzy
-            : SearchMode.exact;
+    final searchMode = switch (lastMode) {
+      'fuzzy' => SearchMode.fuzzy,
+      'exact' => SearchMode.exact,
+      'levenshtein' => SearchMode.levenshtein,
+      _ => SearchMode.advanced,
+    };
     _searchTab.searchBloc.add(SetSearchMode(searchMode));
 
     // בדיקה אם האינדקס בתהליך בנייה
@@ -238,11 +239,12 @@ class _SearchDialogState extends State<SearchDialog> {
 
     // שמירת מצב החיפוש האחרון
     final currentMode = _searchTab.searchBloc.state.configuration.searchMode;
-    final modeString = currentMode == SearchMode.advanced
-        ? 'advanced'
-        : currentMode == SearchMode.fuzzy
-            ? 'fuzzy'
-            : 'exact';
+    final modeString = switch (currentMode) {
+      SearchMode.advanced => 'advanced',
+      SearchMode.exact => 'exact',
+      SearchMode.fuzzy => 'fuzzy',
+      SearchMode.levenshtein => 'levenshtein',
+    };
     Settings.setValue<String>('key-last-search-mode', modeString);
 
     if (widget.onSearch != null) {
@@ -444,6 +446,15 @@ class _SearchDialogState extends State<SearchDialog> {
                                   SearchMode.fuzzy,
                                   state.configuration.searchMode ==
                                       SearchMode.fuzzy,
+                                ),
+                                const SizedBox(height: 4),
+                                _buildNavButton(
+                                  context,
+                                  'שגיאות כתיב',
+                                  FluentIcons.text_grammar_wand_24_regular,
+                                  SearchMode.levenshtein,
+                                  state.configuration.searchMode ==
+                                      SearchMode.levenshtein,
                                 ),
                               ],
                             ),

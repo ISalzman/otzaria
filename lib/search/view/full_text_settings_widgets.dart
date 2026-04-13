@@ -32,6 +32,9 @@ class SearchModeToggle extends StatelessWidget {
           case SearchMode.fuzzy:
             currentIndex = 2;
             break;
+          case SearchMode.levenshtein:
+            currentIndex = 3;
+            break;
         }
 
         return Padding(
@@ -42,8 +45,13 @@ class SearchModeToggle extends StatelessWidget {
             inactiveBgColor: Colors.grey,
             inactiveFgColor: Colors.white,
             initialLabelIndex: currentIndex,
-            totalSwitches: 3,
-            labels: const ['חיפוש מתקדם', 'חיפוש מדוייק', 'חיפוש מקורב'],
+            totalSwitches: 4,
+            labels: const [
+              'חיפוש מתקדם',
+              'חיפוש מדוייק',
+              'חיפוש מקורב',
+              'תיקון שגיאות כתיב',
+            ],
             radiusStyle: true,
             onToggle: (index) {
               SearchMode newMode;
@@ -57,15 +65,19 @@ class SearchModeToggle extends StatelessWidget {
                 case 2:
                   newMode = SearchMode.fuzzy;
                   break;
+                case 3:
+                  newMode = SearchMode.levenshtein;
+                  break;
                 default:
                   newMode = SearchMode.advanced;
               }
               context.read<SearchBloc>().add(SetSearchMode(newMode));
-              final modeString = newMode == SearchMode.advanced
-                  ? 'advanced'
-                  : newMode == SearchMode.fuzzy
-                      ? 'fuzzy'
-                      : 'exact';
+              final modeString = switch (newMode) {
+                SearchMode.advanced => 'advanced',
+                SearchMode.exact => 'exact',
+                SearchMode.fuzzy => 'fuzzy',
+                SearchMode.levenshtein => 'levenshtein',
+              };
               Settings.setValue<String>('key-last-search-mode', modeString);
             },
           ),
@@ -110,16 +122,19 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
       builder: (context, state) {
         // בדיקה אם יש מרווחים מותאמים אישית
         final hasCustomSpacing = widget.tab.spacingValues.isNotEmpty;
-        final isEnabled = !state.fuzzy && !hasCustomSpacing;
+        final isLevenshtein = state.configuration.searchMode == SearchMode.levenshtein;
+        final isEnabled = !state.fuzzy && !hasCustomSpacing && !isLevenshtein;
 
         return SizedBox(
           width: 140,
           child: SpinBox(
             enabled: isEnabled,
             decoration: InputDecoration(
-              labelText: hasCustomSpacing
-                  ? 'מרווח בין מילים (מושבת)'
-                  : 'מרווח בין מילים',
+              labelText: isLevenshtein
+                  ? 'מרווח בין מילים (לא רלוונטי)'
+                  : hasCustomSpacing
+                      ? 'מרווח בין מילים (מושבת)'
+                      : 'מרווח בין מילים',
               labelStyle: TextStyle(
                 color: hasCustomSpacing ? Colors.grey : null,
               ),

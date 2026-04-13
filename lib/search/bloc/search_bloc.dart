@@ -58,6 +58,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         searchQuery: event.query,
         results: [],
         totalResults: 0,
+        hasMoreResults: false,
         facetCounts: const {},
       ));
       return;
@@ -68,6 +69,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         searchQuery: event.query,
         results: [],
         totalResults: 0,
+        hasMoreResults: false,
         isLoading: false,
         facetCounts: const {},
       ));
@@ -84,6 +86,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     emit(state.copyWith(
       searchQuery: query,
       isLoading: true,
+      hasMoreResults: false, // מאפס דגל levenshtein בכל תחילת חיפוש חדש
       facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
     ));
 
@@ -96,6 +99,28 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
 
     try {
+      // חיפוש Levenshtein (תיקון שגיאות כתיב) - מסלול נפרד לחלוטין.
+      // countByBook פועל עם regex/slop ולא מייצג את query הזה,
+      // לכן לא מפעילים facet refresh ולא streaming.
+      if (state.configuration.searchMode == SearchMode.levenshtein) {
+        final results = await _repository.searchTextsLevenshtein(
+          SearchQueryBuilder.sanitizeQuery(query),
+          requestedFacets,
+          state.numResults,
+          order: state.sortBy,
+        );
+
+        if (requestId != _searchRequestId) return;
+        emit(state.copyWith(
+          results: results,
+          totalResults: results.length, // המספר האמיתי של התוצאות שנטענו
+          hasMoreResults: results.length == state.numResults, // ייתכן שיש עוד
+          isLoading: false,
+          facetCounts: const {}, // מנקה counts ישנים ממצב/חיפוש קודם
+        ));
+        return;
+      }
+
       // התחל לבנות את עץ ה-facets המלא במקביל כבר מתחילת החיפוש.
       unawaited(_refreshFacetCountsForAllBooks(event, requestId));
 
@@ -276,6 +301,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Emitter<SearchState> emit,
   ) {
     // מעבר בין שלושת המצבים: מתקדם -> מדוייק -> מקורב -> מתקדם
+    // levenshtein נבחר ישירות מה-UI ולא נכנס ל-cycle הזה
     SearchMode newMode;
     switch (state.configuration.searchMode) {
       case SearchMode.advanced:
@@ -285,6 +311,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         newMode = SearchMode.fuzzy;
         break;
       case SearchMode.fuzzy:
+      case SearchMode.levenshtein:
         newMode = SearchMode.advanced;
         break;
     }
@@ -560,14 +587,40 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       return;
     }
 
-    // אם כבר הצגנו את כל התוצאות, אין מה לטעון
-    if (state.results.length >= state.totalResults) {
+    // תנאי עצירה לפי mode:
+    // levenshtein — לפי hasMoreResults (totalResults = מה שנטען בפועל)
+    // שאר המצבים — לפי totalResults שמייצג total אמיתי מה-engine
+    final canLoadMore = state.configuration.searchMode == SearchMode.levenshtein
+        ? state.hasMoreResults
+        : state.results.length < state.totalResults;
+
+    if (!canLoadMore) {
       return;
     }
 
     emit(state.copyWith(isLoading: true));
 
     try {
+      if (state.configuration.searchMode == SearchMode.levenshtein) {
+        // searchFuzzy תומך ב-offset — pagination אמיתי
+        final nextResults = await _repository.searchTextsLevenshtein(
+          SearchQueryBuilder.sanitizeQuery(state.searchQuery),
+          state.currentFacets,
+          state.numResults,
+          offset: state.results.length,
+          order: state.sortBy,
+        );
+
+        final allResults = [...state.results, ...nextResults];
+        emit(state.copyWith(
+          results: allResults,
+          totalResults: allResults.length, // המספר האמיתי שנטען
+          hasMoreResults: nextResults.length == state.numResults,
+          isLoading: false,
+        ));
+        return;
+      }
+
       // מבקשים את כל התוצאות עד עכשיו + עוד numResults תוצאות
       final nextResults = await _repository.searchTexts(
         SearchQueryBuilder.sanitizeQuery(state.searchQuery),
