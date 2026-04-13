@@ -274,11 +274,26 @@ class _CommentatorsSelectionPanelState
       children: [
         FilterChipsSelector<String>(
           items: [
-            'תורה שבכתב',
-            'חז"ל',
-            'ראשונים',
-            'אחרונים',
-            'מחברי זמננו',
+            if (CommentatorGroup.groupByTitle(widget.groups, 'תורה שבכתב')
+                .commentators
+                .isNotEmpty)
+              'תורה שבכתב',
+            if (CommentatorGroup.groupByTitle(widget.groups, 'חז"ל')
+                .commentators
+                .isNotEmpty)
+              'חז"ל',
+            if (CommentatorGroup.groupByTitle(widget.groups, 'ראשונים')
+                .commentators
+                .isNotEmpty)
+              'ראשונים',
+            if (CommentatorGroup.groupByTitle(widget.groups, 'אחרונים')
+                .commentators
+                .isNotEmpty)
+              'אחרונים',
+            if (CommentatorGroup.groupByTitle(widget.groups, 'מחברי זמננו')
+                .commentators
+                .isNotEmpty)
+              'מחברי זמננו',
             'על ${widget.bookTitle}',
           ],
           selectedItems: _selectedTopics,
