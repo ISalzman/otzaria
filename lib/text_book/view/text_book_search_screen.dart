@@ -249,15 +249,26 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       const rawLimit = 5000;
       const displayLimit = 1000;
 
-      final rawResults = await _searchRepository.searchTexts(
-        query,
-        [_bookPath!],
-        rawLimit,
-        searchOptions: _searchOptions,
-        alternativeWords: _alternativeWords,
-        customSpacing: _spacingValues,
-        fuzzy: _searchMode == SearchMode.fuzzy,
-      );
+      final List<SearchResult> rawResults;
+      if (_searchMode == SearchMode.levenshtein) {
+        // חיפוש Levenshtein בתוך הספר — ללא regex/slop, רק מילים נקיות
+        rawResults = await _searchRepository.searchTextsLevenshtein(
+          query,
+          [_bookPath!],
+          rawLimit,
+          order: ResultsOrder.catalogue,
+        );
+      } else {
+        rawResults = await _searchRepository.searchTexts(
+          query,
+          [_bookPath!],
+          rawLimit,
+          searchOptions: _searchOptions,
+          alternativeWords: _alternativeWords,
+          customSpacing: _spacingValues,
+          fuzzy: _searchMode == SearchMode.fuzzy,
+        );
+      }
 
       final expectedTitle = _bookTitle!.trim();
 

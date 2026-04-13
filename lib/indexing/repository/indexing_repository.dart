@@ -9,6 +9,7 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/indexing/services/indexing_isolate_service.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
+import 'package:search_engine/search_engine.dart';
 
 class IndexingRepository {
   final TantivyDataProvider _tantivyDataProvider;
@@ -164,6 +165,9 @@ class IndexingRepository {
         await index.commit();
         saveIndexedBooks();
         debugPrint('✅ אינדקס נשמר בהצלחה!');
+
+        // תחזוקת אינדקס: ממזג segments אם יש יותר מדי (רק אחרי full reindex)
+        await _optimizeIndexIfNeeded(index);
       }
     } finally {
       _activeIsolateService = null;
@@ -297,6 +301,10 @@ class IndexingRepository {
 
     onActualIndexingStarted?.call();
 
+    if (!_tantivyDataProvider.isIndexing.value) {
+      return;
+    }
+
     final index = await _tantivyDataProvider.engine;
     final title = book.title;
     final topics = _buildTopicsPath(book);
@@ -305,26 +313,25 @@ class IndexingRepository {
     final catalogueOrder =
         catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF;
 
-    // שימוש ב-upsertDocument במקום addDocument כדי לעדכן מסמכים קיימים
-    for (final document in documents) {
-      if (!_tantivyDataProvider.isIndexing.value) {
-        return;
-      }
-
-      await index.upsertDocument(
-        id: buildCatalogueDocumentId(
-          catalogueOrder: catalogueOrder,
-          ordinal: document.ordinal,
+    // בניית רשימת מסמכים בקריאת FFI אחת במקום loop של upsertDocument
+    final docs = [
+      for (final document in documents)
+        DocumentInput(
+          id: buildCatalogueDocumentId(
+            catalogueOrder: catalogueOrder,
+            ordinal: document.ordinal,
+          ),
+          title: title,
+          reference: document.reference,
+          topics: topics,
+          text: document.text,
+          segment: BigInt.from(document.segment),
+          isPdf: isPdf,
+          filePath: filePath,
         ),
-        title: title,
-        reference: document.reference,
-        topics: topics,
-        text: document.text,
-        segment: BigInt.from(document.segment),
-        isPdf: isPdf,
-        filePath: filePath,
-      );
-    }
+    ];
+
+    await index.upsertDocumentsBatch(docs: docs);
   }
 
   @visibleForTesting
@@ -511,5 +518,23 @@ class IndexingRepository {
   /// Checks if indexing is currently in progress.
   bool isIndexing() {
     return _tantivyDataProvider.isIndexing.value;
+  }
+
+  /// מבצע optimize לאינדקס אם מספר ה-segments עולה על threshold.
+  /// מיועד לשימוש אחרי full reindex בלבד, כי merge הוא תהליך כבד.
+  Future<void> _optimizeIndexIfNeeded(SearchEngine index) async {
+    try {
+      final segmentCount = await index.getSegmentCount();
+      debugPrint('📊 מספר segments באינדקס: $segmentCount');
+      if (segmentCount > 8) {
+        debugPrint('🔧 מריץ optimize אינדקס (segments=$segmentCount > 8)...');
+        await index.optimize();
+        debugPrint('✅ optimize הושלם בהצלחה!');
+      } else {
+        debugPrint('✅ מספר segments תקין ($segmentCount ≤ 8), אין צורך ב-optimize');
+      }
+    } catch (e) {
+      debugPrint('⚠️ שגיאה בתהליך optimize: $e');
+    }
   }
 }

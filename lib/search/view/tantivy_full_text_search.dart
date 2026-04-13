@@ -423,7 +423,10 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                         horizontal: 16.0,
                                       ),
                                       child: Text(
-                                        '${searchState.results.length}/${searchState.totalResults} תוצאות',
+                                        // levenshtein: totalResults = מה שנטען, אין total אמיתי
+                                        searchState.hasMoreResults
+                                            ? '${searchState.results.length}+ תוצאות'
+                                            : '${searchState.results.length}/${searchState.totalResults} תוצאות',
                                         style: TextStyle(
                                           fontSize: 14,
                                           color: Theme.of(context)

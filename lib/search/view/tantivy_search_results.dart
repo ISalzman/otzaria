@@ -102,7 +102,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     }
 
     // תמיד נשתמש ב-ListView גם לתוצאה אחת - כך היא תופיע למעלה
-    final hasMoreResults = state.results.length < state.totalResults;
+    // levenshtein: totalResults = מה שנטען בפועל, לכן בודקים hasMoreResults
+    final hasMoreResults =
+        state.configuration.searchMode == SearchMode.levenshtein
+            ? state.hasMoreResults
+            : state.results.length < state.totalResults;
     final showInlineLoadingIndicator =
         state.isLoading && state.results.isNotEmpty && !hasMoreResults;
     final showLoadMoreButton = hasMoreResults;
@@ -132,16 +136,19 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             );
           }
 
-          final remainingResults = state.totalResults - state.results.length;
+          // levenshtein: totalResults = נטענו בפועל, לכן אין ספירה מדויקת
+          final isLevenshtein =
+              state.configuration.searchMode == SearchMode.levenshtein;
+          final remainingText = isLevenshtein
+              ? 'טען תוצאות נוספות'
+              : 'טען תוצאות נוספות (${state.totalResults - state.results.length})';
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 260),
                 child: NeutralActionButton(
-                  text: state.isLoading
-                      ? 'טוען...'
-                      : 'טען תוצאות נוספות ($remainingResults)',
+                  text: state.isLoading ? 'טוען...' : remainingText,
                   onPressed: () {
                     context.read<SearchBloc>().add(
                           LoadMoreResults(
@@ -228,7 +235,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                       !hasAlternativeWords &&
                       !hasSpacingValues &&
                       !looksLikeRegex &&
-                      currentMode != SearchMode.fuzzy;
+                      currentMode != SearchMode.fuzzy &&
+                      currentMode != SearchMode.levenshtein;
 
                   final inBookMode =
                       shouldUseLegacyInBook ? SearchMode.exact : currentMode;
