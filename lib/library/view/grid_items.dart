@@ -370,6 +370,7 @@ class BookGridItem extends StatelessWidget {
                     book: book,
                     onBookDeleted: onBookDeleted,
                   ),
+                  const SizedBox(width: 6),
                   // ΓפאΓפא ╫ó╫₧╫ץ╫ף╫¬ ╫₧╫ף╫ש╫פ (╫נ╫ש╫ש╫º╫ץ╫ƒ ╫í╫ñ╫¿) ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
                   _BookGridMediaColumn(book: book, showTopics: showTopics),
                   const SizedBox(width: 18),
@@ -521,7 +522,7 @@ class _BookGridTextColumn extends StatelessWidget {
             LibraryOverflowTooltipText(
               text: book.title,
               maxLines: 2,
-              textAlign: TextAlign.right,
+              textAlign: TextAlign.justify,
               textDirection: TextDirection.rtl,
               style: titleStyle,
             ),
@@ -530,7 +531,7 @@ class _BookGridTextColumn extends StatelessWidget {
               LibraryOverflowTooltipText(
                 text: book.author!,
                 maxLines: authorMaxLines,
-                textAlign: TextAlign.right,
+                textAlign: TextAlign.justify,
                 textDirection: TextDirection.rtl,
                 style: authorStyle,
               ),
@@ -540,7 +541,7 @@ class _BookGridTextColumn extends StatelessWidget {
               LibraryOverflowTooltipText(
                 text: book.topics,
                 maxLines: topicsMaxLines,
-                textAlign: TextAlign.right,
+                textAlign: TextAlign.justify,
                 textDirection: TextDirection.rtl,
                 style: topicsStyle,
               ),
