@@ -252,10 +252,13 @@ class DatabaseGenerator {
     int categoryId, {
     bool isPersonal = false,
     bool insertContent = true,
+    String? sourceName,
   }) async {
     try {
       final filename = path.basename(bookPath);
       final title = path.basenameWithoutExtension(filename);
+      final sourceId =
+          await _resolveSourceIdFor(bookPath, sourceName: sourceName);
 
       // Extract file type from the file path
       final fileExtension = path.extension(bookPath).toLowerCase();
@@ -267,6 +270,10 @@ class DatabaseGenerator {
       final existingBook = await repository
           .checkBookExistsInCategoryWithFileType(title, categoryId, fileType);
       if (existingBook != null) {
+        if (existingBook.sourceId != sourceId) {
+          await repository.updateBookSourceId(existingBook.id, sourceId);
+        }
+
         if ((fileType == 'txt' || fileType == 'docx' || fileType == 'pdf') &&
             insertContent) {
           await repository.clearBookContent(existingBook.id);
@@ -369,7 +376,6 @@ class DatabaseGenerator {
         _log.warning('Failed to get stats for external file: $bookPath', e);
       }
 
-      final sourceId = await _resolveSourceIdFor(bookPath);
       final book = Book(
         id: currentBookId,
         categoryId: categoryId,
@@ -607,9 +613,8 @@ class DatabaseGenerator {
         }
       }
 
-      final lineHeRef = currentReference.isEmpty
-          ? null
-          : currentReference.join(', ').trim();
+      final lineHeRef =
+          currentReference.isEmpty ? null : currentReference.join(', ').trim();
 
       linesBatch.add(Line(
         id: 0, // auto-assigned by SQLite
@@ -756,12 +761,15 @@ class DatabaseGenerator {
   }
 
   /// Resolve a source id for a book file using the manifest mapping
-  Future<int> _resolveSourceIdFor(String filePath) async {
-    final sourceName = 'Personal';
-    final cached = _sourceNameToId[sourceName];
+  Future<int> _resolveSourceIdFor(
+    String filePath, {
+    String? sourceName,
+  }) async {
+    final resolvedSourceName = sourceName ?? 'Personal';
+    final cached = _sourceNameToId[resolvedSourceName];
     if (cached != null) return cached;
-    final id = await repository.insertSource(sourceName, -1);
-    _sourceNameToId[sourceName] = id;
+    final id = await repository.insertSource(resolvedSourceName, -1);
+    _sourceNameToId[resolvedSourceName] = id;
     return id;
   }
 

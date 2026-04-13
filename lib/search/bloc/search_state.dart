@@ -11,7 +11,7 @@ class SearchState {
   final String searchQuery;
   final int totalResults;
 
-  /// רלוונטי רק במצב levenshtein: האם ייתכן שיש עוד תוצאות מעבר לנטענות.
+  /// רלוונטי רק בחיפוש עם תיקון שגיאות כתיב: האם ייתכן שיש עוד תוצאות מעבר לנטענות.
   /// מבודד מ-totalResults כדי שה-UI יציג מספר אמיתי ולא sentinel.
   final bool hasMoreResults;
 
@@ -64,6 +64,7 @@ class SearchState {
   int get distance => configuration.distance;
   bool get fuzzy => configuration.fuzzy;
   bool get isAdvancedSearchEnabled => configuration.isAdvancedSearchEnabled;
+  bool get isTypoToleranceEnabled => configuration.isTypoToleranceEnabled;
   List<String> get currentFacets => configuration.currentFacets;
   List<String> get searchScopeFacets => configuration.searchScopeFacets;
   bool get hasNoSelectedFacets => searchScopeFacets.isEmpty;

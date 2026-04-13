@@ -15,6 +15,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/widgets/items_list_view.dart';
 
 class HistoryView extends StatelessWidget {
@@ -90,6 +91,12 @@ class HistoryView extends StatelessWidget {
               searchTab.alternativeWords.addAll(item.alternativeWords ?? {});
               searchTab.spacingValues.clear();
               searchTab.spacingValues.addAll(item.spacingValues ?? {});
+              searchTab.searchBloc.add(
+                SetSearchMode(
+                  item.searchMode ?? SearchMode.advanced,
+                  typoToleranceEnabled: item.typoToleranceEnabled,
+                ),
+              );
 
               if (item.searchScopeFacets != null &&
                   item.searchScopeFacets!.isNotEmpty) {

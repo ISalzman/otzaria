@@ -45,6 +45,7 @@ class TextBookSearchView extends StatefulWidget {
   final Map<int, List<String>> initialAlternativeWords;
   final Map<String, String> initialSpacingValues;
   final SearchMode initialSearchMode;
+  final bool initialTypoToleranceEnabled;
 
   const TextBookSearchView({
     super.key,
@@ -57,6 +58,7 @@ class TextBookSearchView extends StatefulWidget {
     this.initialAlternativeWords = const {},
     this.initialSpacingValues = const {},
     this.initialSearchMode = SearchMode.exact,
+    this.initialTypoToleranceEnabled = false,
   });
 
   @override
@@ -78,6 +80,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   Map<int, List<String>> _alternativeWords = {};
   Map<String, String> _spacingValues = {};
   SearchMode _searchMode = SearchMode.exact;
+  bool _typoToleranceEnabled = false;
   bool _searchWithNikud = false;
   bool _searchInCurrentSection = false;
   SectionBounds? _currentSectionBounds;
@@ -89,7 +92,11 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       _searchOptions.isEmpty &&
       _alternativeWords.isEmpty &&
       _spacingValues.isEmpty &&
+      !_typoToleranceEnabled &&
       _searchMode == SearchMode.exact;
+
+  bool get _usesTypoTolerance =>
+      _typoToleranceEnabled || _searchMode == SearchMode.levenshtein;
 
   static const int _maxResultSnippetChars = 220;
 
@@ -102,11 +109,16 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     _searchOptions = widget.initialSearchOptions;
     _alternativeWords = widget.initialAlternativeWords;
     _spacingValues = widget.initialSpacingValues;
-    _searchMode = widget.initialSearchMode;
+    _typoToleranceEnabled = widget.initialTypoToleranceEnabled ||
+        widget.initialSearchMode == SearchMode.levenshtein;
+    _searchMode = widget.initialSearchMode == SearchMode.levenshtein
+        ? SearchMode.advanced
+        : widget.initialSearchMode;
     _forceSearchEngine = _searchMode != SearchMode.exact ||
         _searchOptions.isNotEmpty ||
         _alternativeWords.isNotEmpty ||
-        _spacingValues.isNotEmpty;
+        _spacingValues.isNotEmpty ||
+        _typoToleranceEnabled;
 
     scrollControler = widget.scrollControler;
     widget.focusNode.requestFocus();
@@ -250,7 +262,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       const displayLimit = 1000;
 
       final List<SearchResult> rawResults;
-      if (_searchMode == SearchMode.levenshtein) {
+      if (_usesTypoTolerance) {
         // חיפוש Levenshtein בתוך הספר — ללא regex/slop, רק מילים נקיות
         rawResults = await _searchRepository.searchTextsLevenshtein(
           query,
@@ -575,6 +587,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             _alternativeWords = {};
             _spacingValues = {};
             _searchMode = SearchMode.exact;
+            _typoToleranceEnabled = false;
             _searchWithNikud = false;
             _searchInCurrentSection = false;
           });
@@ -630,7 +643,12 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           tempTab.searchOptions.addAll(_searchOptions);
           tempTab.alternativeWords.addAll(_alternativeWords);
           tempTab.spacingValues.addAll(_spacingValues);
-          tempTab.searchBloc.add(SetSearchMode(_searchMode));
+          tempTab.searchBloc.add(
+            SetSearchMode(
+              _searchMode,
+              typoToleranceEnabled: _usesTypoTolerance,
+            ),
+          );
 
           final bookTitle =
               (context.read<TextBookBloc>().state as TextBookLoaded).book.title;
@@ -641,7 +659,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
               existingTab: tempTab,
               bookTitle: bookTitle,
               onSearch: (query, searchOptions, alternativeWords, spacingValues,
-                  searchMode) {
+                  searchMode, typoToleranceEnabled) {
                 applyInBookSearchQuery(
                   controller: searchTextController,
                   query: query,
@@ -650,11 +668,18 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                   },
                 );
                 setState(() {
-                  _forceSearchEngine = true;
                   _searchOptions = searchOptions;
                   _alternativeWords = alternativeWords;
                   _spacingValues = spacingValues;
-                  _searchMode = searchMode;
+                  _searchMode = searchMode == SearchMode.levenshtein
+                      ? SearchMode.advanced
+                      : searchMode;
+                  _typoToleranceEnabled = typoToleranceEnabled;
+                  _forceSearchEngine = _searchMode != SearchMode.exact ||
+                      _searchOptions.isNotEmpty ||
+                      _alternativeWords.isNotEmpty ||
+                      _spacingValues.isNotEmpty ||
+                      _typoToleranceEnabled;
                 });
                 _searchTextUpdated();
               },

@@ -972,6 +972,24 @@ class SeforimRepository {
         [filePath, fileSize, lastModified, bookId]);
   }
 
+  Future<void> updateBookSourceId(int bookId, int sourceId) async {
+    _logger.fine('Updating book source: bookId=$bookId, sourceId=$sourceId');
+    final db = await _database.database;
+    db.execute(
+      'UPDATE book SET sourceId = ? WHERE id = ?',
+      [sourceId, bookId],
+    );
+  }
+
+  Future<bool> hasPersonalBooksWithSourceId(int sourceId) async {
+    final db = await _database.database;
+    final result = db.select(
+      'SELECT 1 FROM book WHERE isPersonal = 1 AND sourceId = ? LIMIT 1',
+      [sourceId],
+    );
+    return result.isNotEmpty;
+  }
+
   /// Gets an external book by its file path.
   Future<Book?> getExternalBookByFilePath(String filePath) async {
     return await _database.bookDao.getBookByFilePath(filePath);

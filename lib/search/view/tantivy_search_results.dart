@@ -31,6 +31,7 @@ class TantivySearchResults extends StatefulWidget {
 class _TantivySearchResultsState extends State<TantivySearchResults> {
   static const int _maxUnbrokenWordLength = 12;
   final ScrollController _scrollController = ScrollController();
+  final Map<String, List<InlineSpan>> _snippetCache = {};
 
   String _searchResultDedupeKey({
     required String title,
@@ -102,11 +103,10 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     }
 
     // תמיד נשתמש ב-ListView גם לתוצאה אחת - כך היא תופיע למעלה
-    // levenshtein: totalResults = מה שנטען בפועל, לכן בודקים hasMoreResults
-    final hasMoreResults =
-        state.configuration.searchMode == SearchMode.levenshtein
-            ? state.hasMoreResults
-            : state.results.length < state.totalResults;
+    // תיקון שגיאות כתיב: totalResults = מה שנטען בפועל, לכן בודקים hasMoreResults
+    final hasMoreResults = state.isTypoToleranceEnabled
+        ? state.hasMoreResults
+        : state.results.length < state.totalResults;
     final showInlineLoadingIndicator =
         state.isLoading && state.results.isNotEmpty && !hasMoreResults;
     final showLoadMoreButton = hasMoreResults;
@@ -136,9 +136,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             );
           }
 
-          // levenshtein: totalResults = נטענו בפועל, לכן אין ספירה מדויקת
-          final isLevenshtein =
-              state.configuration.searchMode == SearchMode.levenshtein;
+          // תיקון שגיאות כתיב: totalResults = נטענו בפועל, לכן אין ספירה מדויקת
+          final isLevenshtein = state.isTypoToleranceEnabled;
           final remainingText = isLevenshtein
               ? 'טען תוצאות נוספות'
               : 'טען תוצאות נוספות (${state.totalResults - state.results.length})';
@@ -170,6 +169,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         final result = state.results[index];
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
+            final colorScheme = Theme.of(context).colorScheme;
             String titleText = result.reference;
             String rawHtml = result.text;
             // Debug info removed for production
@@ -182,36 +182,57 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             final wrappedTitleText = _formatTitleForWrapping(titleText);
             final availableWidth = constrains.maxWidth - 100.0;
 
+            final snippetCacheKey = [
+              result.id,
+              result.segment,
+              rawHtml.hashCode,
+              state.searchQuery.hashCode,
+              state.isTypoToleranceEnabled,
+              widget.tab.searchOptionsChanged.value,
+              widget.tab.alternativeWordsChanged.value,
+              settingsState.fontSize,
+              settingsState.fontFamily,
+              settingsState.replaceHolyNames,
+              colorScheme.onSurface.toARGB32(),
+              availableWidth.round(),
+            ].join('|');
+
             // Create the snippet using the new robust function
             // שימוש בגופן וגודל של המשתמש מההגדרות
-            final snippetSpans = SnippetBuilder.createSnippetSpans(
-              fullHtml: rawHtml,
-              query: state.searchQuery,
-              defaultStyle: TextStyle(
-                fontSize: settingsState.fontSize,
-                fontFamily: settingsState.fontFamily,
-                color: Theme.of(context).colorScheme.onSurface,
-                height: 1.5,
-              ),
-              highlightStyle: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: settingsState.fontSize + 2,
-                fontFamily: settingsState.fontFamily,
-                color: const Color(0xFFD32F2F), // צבע אדום חזק למילות החיפוש
-              ),
-              availableWidth: availableWidth,
-              searchOptions: widget.tab.searchOptions,
-              alternativeWords: widget.tab.alternativeWords,
+            final snippetSpans = _snippetCache.putIfAbsent(
+              snippetCacheKey,
+              () {
+                if (_snippetCache.length > 300) {
+                  _snippetCache.clear();
+                }
+                return SnippetBuilder.createSnippetSpans(
+                  fullHtml: rawHtml,
+                  query: state.searchQuery,
+                  defaultStyle: TextStyle(
+                    fontSize: settingsState.fontSize,
+                    fontFamily: settingsState.fontFamily,
+                    color: colorScheme.onSurface,
+                    height: 1.5,
+                  ),
+                  highlightStyle: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: settingsState.fontSize + 2,
+                    fontFamily: settingsState.fontFamily,
+                    color: const Color(0xFFD32F2F),
+                  ),
+                  availableWidth: availableWidth,
+                  searchOptions: widget.tab.searchOptions,
+                  alternativeWords: widget.tab.alternativeWords,
+                  typoToleranceEnabled: state.isTypoToleranceEnabled,
+                );
+              },
             );
 
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .outline
-                      .withValues(alpha: 0.3),
+                  color: colorScheme.outline.withValues(alpha: 0.3),
                   width: 1,
                 ),
                 borderRadius: BorderRadius.circular(12),
@@ -234,6 +255,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                   final shouldUseLegacyInBook = !hasEnabledOptions &&
                       !hasAlternativeWords &&
                       !hasSpacingValues &&
+                      !state.isTypoToleranceEnabled &&
                       !looksLikeRegex &&
                       currentMode != SearchMode.fuzzy &&
                       currentMode != SearchMode.levenshtein;
@@ -260,6 +282,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                               alternativeWords: widget.tab.alternativeWords,
                               spacingValues: widget.tab.spacingValues,
                               searchMode: inBookMode,
+                              typoToleranceEnabled:
+                                  state.isTypoToleranceEnabled,
                               openLeftPane:
                                   (Settings.getValue<bool>('key-pin-sidebar') ??
                                           false) ||
@@ -289,6 +313,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                               alternativeWords: widget.tab.alternativeWords,
                               spacingValues: widget.tab.spacingValues,
                               searchMode: inBookMode,
+                              typoToleranceEnabled:
+                                  state.isTypoToleranceEnabled,
                               openLeftPane:
                                   (Settings.getValue<bool>('key-pin-sidebar') ??
                                           false) ||

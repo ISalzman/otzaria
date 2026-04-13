@@ -104,8 +104,8 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       // זיהוי ספרים חדשים שנוספו ברענון
       final newBooksToIndex = library
           .getAllBooks()
-          .where((b) =>
-              !keysBeforeRefresh.contains(IndexingRepository.catalogueOrderKey(b)))
+          .where((b) => !keysBeforeRefresh
+              .contains(IndexingRepository.catalogueOrderKey(b)))
           .toList();
 
       // חזרה לאותה תיקייה שהיתה פתוחה קודם
@@ -139,12 +139,13 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     final customFoldersJson =
         Settings.getValue<String>(SettingsRepository.keyCustomFolders);
     final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
+
     final syncService = await FileSyncService.getInstance(repository);
     if (syncService == null) {
       return;
     }
 
-    await syncService.pruneRemovedCustomFoldersFromDatabase(customFolders);
+    await syncService.refreshSourcesAndPruneRemovedCustomFolders(customFolders);
   }
 
   /// מחזיר את הנתיב של התיקייה הנוכחית
