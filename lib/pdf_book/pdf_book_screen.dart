@@ -45,6 +45,7 @@ import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
+import 'package:otzaria/widgets/reader_side_panel_shell.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/pdf_headings.dart';
@@ -1977,140 +1978,134 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             );
           },
         ),
-        child: Container(
-          color: Theme.of(context).colorScheme.surface,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-            child: Column(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    border: Border(
-                      bottom: BorderSide(
-                        color: Theme.of(context).dividerColor,
-                        width: 1,
-                      ),
+        child: ReaderSidePanelShell(
+          alignment: AlignmentDirectional.centerStart,
+          child: Column(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Theme.of(context).dividerColor,
+                      width: 1,
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TabBar(
-                          controller: _leftPaneTabController,
-                          tabs: const [
-                            Tab(text: 'ניווט'),
-                            Tab(text: 'חיפוש'),
-                            Tab(text: 'דפים'),
-                          ],
-                          labelColor: Theme.of(context).colorScheme.primary,
-                          unselectedLabelColor: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.6),
-                          indicatorColor: Theme.of(context).colorScheme.primary,
-                          dividerColor: Colors.transparent,
-                          overlayColor:
-                              WidgetStateProperty.all(Colors.transparent),
-                        ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TabBar(
+                        controller: _leftPaneTabController,
+                        tabs: const [
+                          Tab(text: 'ניווט'),
+                          Tab(text: 'חיפוש'),
+                          Tab(text: 'דפים'),
+                        ],
+                        labelColor: Theme.of(context).colorScheme.primary,
+                        unselectedLabelColor: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.6),
+                        indicatorColor: Theme.of(context).colorScheme.primary,
+                        dividerColor: Colors.transparent,
+                        overlayColor:
+                            WidgetStateProperty.all(Colors.transparent),
                       ),
-                      if (MediaQuery.of(context).size.width >= 600)
-                        ValueListenableBuilder(
-                          valueListenable: widget.tab.pinLeftPane,
-                          builder: (context, pinLeftPanel, child) => IconButton(
-                            onPressed:
-                                (Settings.getValue<bool>('key-pin-sidebar') ??
-                                        false)
-                                    ? null
-                                    : () {
-                                        widget.tab.pinLeftPane.value =
-                                            !widget.tab.pinLeftPane.value;
-                                      },
-                            icon: AnimatedRotation(
-                              turns: (pinLeftPanel ||
-                                      (Settings.getValue<bool>(
-                                              'key-pin-sidebar') ??
-                                          false))
-                                  ? -0.125
-                                  : 0.0,
-                              duration: const Duration(milliseconds: 200),
-                              child: Icon(
-                                (pinLeftPanel ||
-                                        (Settings.getValue<bool>(
-                                                'key-pin-sidebar') ??
-                                            false))
-                                    ? FluentIcons.pin_24_filled
-                                    : FluentIcons.pin_24_regular,
-                              ),
-                            ),
-                            color: (pinLeftPanel ||
+                    ),
+                    if (MediaQuery.of(context).size.width >= 600)
+                      ValueListenableBuilder(
+                        valueListenable: widget.tab.pinLeftPane,
+                        builder: (context, pinLeftPanel, child) => IconButton(
+                          onPressed:
+                              (Settings.getValue<bool>('key-pin-sidebar') ??
+                                      false)
+                                  ? null
+                                  : () {
+                                      widget.tab.pinLeftPane.value =
+                                          !widget.tab.pinLeftPane.value;
+                                    },
+                          icon: AnimatedRotation(
+                            turns: (pinLeftPanel ||
                                     (Settings.getValue<bool>(
                                             'key-pin-sidebar') ??
                                         false))
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
-                            isSelected: pinLeftPanel ||
-                                (Settings.getValue<bool>('key-pin-sidebar') ??
-                                    false),
+                                ? -0.125
+                                : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: Icon(
+                              (pinLeftPanel ||
+                                      (Settings.getValue<bool>(
+                                              'key-pin-sidebar') ??
+                                          false))
+                                  ? FluentIcons.pin_24_filled
+                                  : FluentIcons.pin_24_regular,
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _leftPaneTabController,
-                    children: [
-                      ValueListenableBuilder(
-                        valueListenable: widget.tab.outline,
-                        builder: (context, outline, child) => OutlineView(
-                          outline: outline,
-                          controller: widget.tab.pdfViewerController,
-                          focusNode: _navigationFieldFocusNode,
+                          color: (pinLeftPanel ||
+                                  (Settings.getValue<bool>('key-pin-sidebar') ??
+                                      false))
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                          isSelected: pinLeftPanel ||
+                              (Settings.getValue<bool>('key-pin-sidebar') ??
+                                  false),
                         ),
                       ),
-                      ValueListenableBuilder(
-                        valueListenable: widget.tab.documentRef,
-                        builder: (context, documentRef, child) {
-                          if (widget.tab.searchController.text.isNotEmpty) {
-                            _lastProcessedSearchSessionId = null;
-                          }
-                          return child!;
-                        },
-                        child: textSearcher != null
-                            ? PdfBookSearchView(
-                                textSearcher: textSearcher!,
-                                searchController: widget.tab.searchController,
-                                focusNode: _searchFieldFocusNode,
-                                outline: widget.tab.outline.value,
-                                bookTitle: widget.tab.book.title,
-                                bookTopics: widget.tab.book.topics,
-                                pdfFilePath: widget.tab.book.path,
-                                initialSearchText: widget.tab.searchText,
-                                initialSearchOptions: widget.tab.searchOptions,
-                                initialAlternativeWords:
-                                    widget.tab.alternativeWords,
-                                initialSpacingValues: widget.tab.spacingValues,
-                                initialSearchMode: widget.tab.searchMode,
-                                onSearchResultNavigated:
-                                    _ensureSearchTabIsActive,
-                              )
-                            : const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                      ),
-                      ValueListenableBuilder(
-                        valueListenable: widget.tab.documentRef,
-                        builder: (context, documentRef, child) => child!,
-                        child: ThumbnailsView(
-                            documentRef: widget.tab.documentRef.value,
-                            controller: widget.tab.pdfViewerController),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              Expanded(
+                child: TabBarView(
+                  controller: _leftPaneTabController,
+                  children: [
+                    ValueListenableBuilder(
+                      valueListenable: widget.tab.outline,
+                      builder: (context, outline, child) => OutlineView(
+                        outline: outline,
+                        controller: widget.tab.pdfViewerController,
+                        focusNode: _navigationFieldFocusNode,
+                      ),
+                    ),
+                    ValueListenableBuilder(
+                      valueListenable: widget.tab.documentRef,
+                      builder: (context, documentRef, child) {
+                        if (widget.tab.searchController.text.isNotEmpty) {
+                          _lastProcessedSearchSessionId = null;
+                        }
+                        return child!;
+                      },
+                      child: textSearcher != null
+                          ? PdfBookSearchView(
+                              textSearcher: textSearcher!,
+                              searchController: widget.tab.searchController,
+                              focusNode: _searchFieldFocusNode,
+                              outline: widget.tab.outline.value,
+                              bookTitle: widget.tab.book.title,
+                              bookTopics: widget.tab.book.topics,
+                              pdfFilePath: widget.tab.book.path,
+                              initialSearchText: widget.tab.searchText,
+                              initialSearchOptions: widget.tab.searchOptions,
+                              initialAlternativeWords:
+                                  widget.tab.alternativeWords,
+                              initialSpacingValues: widget.tab.spacingValues,
+                              initialSearchMode: widget.tab.searchMode,
+                              onSearchResultNavigated: _ensureSearchTabIsActive,
+                            )
+                          : const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                    ),
+                    ValueListenableBuilder(
+                      valueListenable: widget.tab.documentRef,
+                      builder: (context, documentRef, child) => child!,
+                      child: ThumbnailsView(
+                          documentRef: widget.tab.documentRef.value,
+                          controller: widget.tab.pdfViewerController),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -2863,8 +2858,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             child: SizedBox(
               width: showRightPane ? width : 0,
               child: showRightPane
-                  ? Container(
-                      color: Theme.of(context).colorScheme.surface,
+                  ? ReaderSidePanelShell(
+                      alignment: AlignmentDirectional.centerEnd,
                       child: PdfCommentaryPanel(
                         tab: widget.tab,
                         openBookCallback: (tab) {

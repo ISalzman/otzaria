@@ -43,6 +43,7 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/fullscreen_helper.dart';
 
 import 'package:otzaria/widgets/responsive_action_bar.dart';
+import 'package:otzaria/widgets/reader_side_panel_shell.dart';
 import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
@@ -2241,8 +2242,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         duration: const Duration(milliseconds: 300),
         child: SizedBox(
           width: state.showLeftPane ? width : 0,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(1, 0, 4, 0),
+          child: ReaderSidePanelShell(
+            alignment: AlignmentDirectional.centerStart,
             child: Column(
               children: [
                 SizedBox(
