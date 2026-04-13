@@ -536,11 +536,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       }
 
       // אם משפחת הגופן או הסרת ניקוד השתנו, טען מחדש את התוכן
-      if (state.fontFamily != previousFontFamily ||
-          shouldReloadForNikudSettingsChange(
-            previous: previousSettingsState,
-            current: state,
-          )) {
+      final isNikudSettingsChange = shouldReloadForNikudSettingsChange(
+        previous: previousSettingsState,
+        current: state,
+      );
+      if (state.fontFamily != previousFontFamily || isNikudSettingsChange) {
         previousFontFamily = state.fontFamily;
         previousSettingsState = state;
 
@@ -555,6 +555,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   removeNikud: state.defaultRemoveNikud,
                   forceCloseLeftPane: widget.isInCombinedView,
                   preserveState: true,
+                  // שמירת מצב הניקוד הנוכחי של המשתמש רק כשרק הגופן
+                  // השתנה - אם הגדרות הניקוד עצמן השתנו, יש להחיל את
+                  // הערך החדש
+                  preserveRemoveNikud: !isNikudSettingsChange,
                 ),
               );
         }
