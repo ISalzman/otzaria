@@ -69,8 +69,7 @@ class CalendarMainPanel extends StatelessWidget {
                         );
                       },
                       child: KeyedSubtree(
-                        key: ValueKey(
-                            '${state.calendarView}-${state.currentGregorianDate.month}-${state.currentGregorianDate.year}-${state.selectedGregorianDate.day}'),
+                        key: _buildGridKey(state),
                         child: _buildCalendarGrid(context, state),
                       ),
                     ),
@@ -82,6 +81,17 @@ class CalendarMainPanel extends StatelessWidget {
         );
       },
     );
+  }
+
+  Key _buildGridKey(CalendarState state) {
+    if (state.calendarView == CalendarView.week) {
+      final weekStart = state.selectedGregorianDate.subtract(
+          Duration(days: state.selectedGregorianDate.weekday % 7));
+      return ValueKey(
+          'week-${weekStart.year}-${weekStart.month}-${weekStart.day}');
+    }
+    return ValueKey(
+        '${state.calendarView}-${state.currentGregorianDate.month}-${state.currentGregorianDate.year}');
   }
 
   double _resolveMaxCalendarWidth(BoxConstraints constraints) {
