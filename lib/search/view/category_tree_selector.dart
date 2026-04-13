@@ -72,7 +72,12 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
       _isLoaded = true;
     });
 
-    widget.onSelectionChanged(_activeSelection);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      widget.onSelectionChanged(_activeSelection);
+    });
   }
 
   void _applyExternalSelection(Set<String> selection) {

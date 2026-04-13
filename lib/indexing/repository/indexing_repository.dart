@@ -166,8 +166,6 @@ class IndexingRepository {
         saveIndexedBooks();
         debugPrint('✅ אינדקס נשמר בהצלחה!');
 
-        // תחזוקת אינדקס: ממזג segments אם יש יותר מדי (רק אחרי full reindex)
-        await _optimizeIndexIfNeeded(index);
       }
     } finally {
       _activeIsolateService = null;
@@ -518,23 +516,5 @@ class IndexingRepository {
   /// Checks if indexing is currently in progress.
   bool isIndexing() {
     return _tantivyDataProvider.isIndexing.value;
-  }
-
-  /// מבצע optimize לאינדקס אם מספר ה-segments עולה על threshold.
-  /// מיועד לשימוש אחרי full reindex בלבד, כי merge הוא תהליך כבד.
-  Future<void> _optimizeIndexIfNeeded(SearchEngine index) async {
-    try {
-      final segmentCount = await index.getSegmentCount();
-      debugPrint('📊 מספר segments באינדקס: $segmentCount');
-      if (segmentCount > 8) {
-        debugPrint('🔧 מריץ optimize אינדקס (segments=$segmentCount > 8)...');
-        await index.optimize();
-        debugPrint('✅ optimize הושלם בהצלחה!');
-      } else {
-        debugPrint('✅ מספר segments תקין ($segmentCount ≤ 8), אין צורך ב-optimize');
-      }
-    } catch (e) {
-      debugPrint('⚠️ שגיאה בתהליך optimize: $e');
-    }
   }
 }

@@ -71,7 +71,50 @@ void main() {
       expect(emittedSelections, isNotEmpty);
       expect(emittedSelections.last, {'/'});
     });
+
+    testWidgets('האתחול לא מפעיל setState בזמן build אצל הווידג׳ט ההורה',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BlocProvider(
+              create: (_) => LibraryBloc(),
+              child: const _SearchScopeHost(),
+            ),
+          ),
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
   });
+}
+
+class _SearchScopeHost extends StatefulWidget {
+  const _SearchScopeHost();
+
+  @override
+  State<_SearchScopeHost> createState() => _SearchScopeHostState();
+}
+
+class _SearchScopeHostState extends State<_SearchScopeHost> {
+  Set<String> _selection = {'/'};
+
+  @override
+  Widget build(BuildContext context) {
+    return SearchScopeSelector(
+      selectedFacets: _selection,
+      onSelectionChanged: (selection) {
+        setState(() {
+          _selection = selection;
+        });
+      },
+    );
+  }
 }
 
 class _MemoryCacheProvider extends CacheProvider {
