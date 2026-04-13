@@ -28,6 +28,7 @@ class TextBookTab extends OpenedTab {
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
+  final bool typoToleranceEnabled;
 
   /// The bloc that manages the text book state and logic.
   late final TextBookBloc bloc;
@@ -66,6 +67,7 @@ class TextBookTab extends OpenedTab {
     this.alternativeWords = const {},
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
+    this.typoToleranceEnabled = false,
     this.commentators,
     bool openLeftPane = false,
     bool? splitedView,
@@ -100,6 +102,7 @@ class TextBookTab extends OpenedTab {
         alternativeWords: alternativeWords,
         spacingValues: spacingValues,
         searchMode: searchMode,
+        typoToleranceEnabled: typoToleranceEnabled,
         splitedView: effectiveSplitedView,
         showPageShapeView: effectiveShowPageShapeView,
       ),

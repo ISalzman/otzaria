@@ -37,6 +37,7 @@ class SearchDialog extends StatefulWidget {
     Map<int, List<String>> alternativeWords,
     Map<String, String> spacingValues,
     SearchMode searchMode,
+    bool typoToleranceEnabled,
   )? onSearch;
   final String? bookTitle;
 
@@ -59,32 +60,41 @@ class _SearchDialogState extends State<SearchDialog> {
   void initState() {
     super.initState();
 
-    // טעינת ההקלדה האחרונה מההגדרות (לא החיפוש בפועל)
-    final lastTyping =
-        Settings.getValue<String>('key-last-search-typing') ?? '';
-    final lastMode =
-        Settings.getValue<String>('key-last-search-mode') ?? 'advanced';
-
     // יצירת טאב עם ההקלדה האחרונה
     if (widget.existingTab != null) {
       _searchTab = widget.existingTab!;
     } else {
+      final lastTyping =
+          Settings.getValue<String>('key-last-search-typing') ?? '';
+      final lastMode =
+          Settings.getValue<String>('key-last-search-mode') ?? 'advanced';
+      final lastTypoTolerance =
+          Settings.getValue<bool>('key-last-search-typo-tolerance') ?? false;
+
       _searchTab = SearchingTab("חיפוש", lastTyping);
+
+      final searchMode = switch (lastMode) {
+        'fuzzy' => SearchMode.fuzzy,
+        'exact' => SearchMode.exact,
+        'levenshtein' => SearchMode.advanced,
+        _ => SearchMode.advanced,
+      };
+
+      final typoToleranceEnabled =
+          lastTypoTolerance || lastMode == 'levenshtein';
+
+      _searchTab.searchBloc.add(
+        SetSearchMode(
+          searchMode,
+          typoToleranceEnabled: typoToleranceEnabled,
+        ),
+      );
     }
 
     final initialScopeFacets = _searchTab.searchBloc.state.searchScopeFacets;
     if (initialScopeFacets.isNotEmpty) {
       _selectedCategoryFacets = initialScopeFacets.toSet();
     }
-
-    // הגדרת מצב החיפוש האחרון
-    final searchMode = switch (lastMode) {
-      'fuzzy' => SearchMode.fuzzy,
-      'exact' => SearchMode.exact,
-      'levenshtein' => SearchMode.levenshtein,
-      _ => SearchMode.advanced,
-    };
-    _searchTab.searchBloc.add(SetSearchMode(searchMode));
 
     // בדיקה אם האינדקס בתהליך בנייה
     final indexingState = context.read<IndexingBloc>().state;
@@ -238,14 +248,22 @@ class _SearchDialogState extends State<SearchDialog> {
     query = SearchQueryBuilder.sanitizeQuery(query);
 
     // שמירת מצב החיפוש האחרון
-    final currentMode = _searchTab.searchBloc.state.configuration.searchMode;
-    final modeString = switch (currentMode) {
+    final currentState = _searchTab.searchBloc.state;
+    final currentMode = currentState.configuration.searchMode;
+    final normalizedMode = currentMode == SearchMode.levenshtein
+        ? SearchMode.advanced
+        : currentMode;
+    final modeString = switch (normalizedMode) {
       SearchMode.advanced => 'advanced',
       SearchMode.exact => 'exact',
       SearchMode.fuzzy => 'fuzzy',
-      SearchMode.levenshtein => 'levenshtein',
+      SearchMode.levenshtein => 'advanced',
     };
     Settings.setValue<String>('key-last-search-mode', modeString);
+    Settings.setValue<bool>(
+      'key-last-search-typo-tolerance',
+      currentState.configuration.isTypoToleranceEnabled,
+    );
 
     if (widget.onSearch != null) {
       widget.onSearch!(
@@ -253,7 +271,8 @@ class _SearchDialogState extends State<SearchDialog> {
         _searchTab.searchOptions,
         _searchTab.alternativeWords,
         _searchTab.spacingValues,
-        currentMode,
+        normalizedMode,
+        currentState.configuration.isTypoToleranceEnabled,
       );
       Navigator.of(context).pop();
       return;
@@ -267,6 +286,12 @@ class _SearchDialogState extends State<SearchDialog> {
     newSearchTab.searchOptions.addAll(_searchTab.searchOptions);
     newSearchTab.alternativeWords.addAll(_searchTab.alternativeWords);
     newSearchTab.spacingValues.addAll(_searchTab.spacingValues);
+    newSearchTab.searchBloc.add(
+      SetSearchMode(
+        normalizedMode,
+        typoToleranceEnabled: currentState.configuration.isTypoToleranceEnabled,
+      ),
+    );
 
     // הוספה להיסטוריה
     context.read<HistoryBloc>().add(AddHistory(newSearchTab));
@@ -446,15 +471,6 @@ class _SearchDialogState extends State<SearchDialog> {
                                   SearchMode.fuzzy,
                                   state.configuration.searchMode ==
                                       SearchMode.fuzzy,
-                                ),
-                                const SizedBox(height: 4),
-                                _buildNavButton(
-                                  context,
-                                  'שגיאות כתיב',
-                                  FluentIcons.text_grammar_wand_24_regular,
-                                  SearchMode.levenshtein,
-                                  state.configuration.searchMode ==
-                                      SearchMode.levenshtein,
                                 ),
                               ],
                             ),

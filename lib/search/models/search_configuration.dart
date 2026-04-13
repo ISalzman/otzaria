@@ -5,7 +5,7 @@ enum SearchMode {
   advanced, // חיפוש מתקדם (slop/word-distance)
   exact, // חיפוש מדוייק
   fuzzy, // חיפוש מקורב (slop/word-distance)
-  levenshtein, // תיקון שגיאות כתיב (Levenshtein/typo-tolerance)
+  levenshtein, // מצב ישן לתאימות לאחור בלבד
 }
 
 /// מחלקה שמרכזת את כל הגדרות החיפוש במקום אחד
@@ -22,6 +22,9 @@ class SearchConfiguration {
   /// משמש לספירת facets ולבאנר חיווי
   final List<String> searchScopeFacets;
 
+  /// תיקון שגיאות כתיב הוא כעת אפשרות בתוך החיפוש המתקדם.
+  final bool typoToleranceEnabled;
+
   // הגדרות רגקס עתידיות (מוכנות להרחבה)
   final bool regexEnabled;
   final bool caseSensitive;
@@ -37,6 +40,7 @@ class SearchConfiguration {
     this.numResults = 100,
     this.currentFacets = const ["/"],
     this.searchScopeFacets = const ["/"],
+    this.typoToleranceEnabled = false,
 
     // ערכי ברירת מחדל לרגקס
     this.regexEnabled = false,
@@ -54,6 +58,7 @@ class SearchConfiguration {
     int? numResults,
     List<String>? currentFacets,
     List<String>? searchScopeFacets,
+    bool? typoToleranceEnabled,
     bool? regexEnabled,
     bool? caseSensitive,
     bool? multiline,
@@ -67,6 +72,7 @@ class SearchConfiguration {
       numResults: numResults ?? this.numResults,
       currentFacets: currentFacets ?? this.currentFacets,
       searchScopeFacets: searchScopeFacets ?? this.searchScopeFacets,
+      typoToleranceEnabled: typoToleranceEnabled ?? this.typoToleranceEnabled,
       regexEnabled: regexEnabled ?? this.regexEnabled,
       caseSensitive: caseSensitive ?? this.caseSensitive,
       multiline: multiline ?? this.multiline,
@@ -84,6 +90,7 @@ class SearchConfiguration {
       'numResults': numResults,
       'currentFacets': currentFacets,
       'searchScopeFacets': searchScopeFacets,
+      'typoToleranceEnabled': typoToleranceEnabled,
       'regexEnabled': regexEnabled,
       'caseSensitive': caseSensitive,
       'multiline': multiline,
@@ -94,13 +101,21 @@ class SearchConfiguration {
 
   /// יצירה ממפה
   factory SearchConfiguration.fromMap(Map<String, dynamic> map) {
+    final rawSearchMode = SearchMode.values[map['searchMode'] ?? 0];
+    final normalizedSearchMode = rawSearchMode == SearchMode.levenshtein
+        ? SearchMode.advanced
+        : rawSearchMode;
+    final typoToleranceEnabled =
+        map['typoToleranceEnabled'] ?? rawSearchMode == SearchMode.levenshtein;
+
     return SearchConfiguration(
       distance: map['distance'] ?? 2,
-      searchMode: SearchMode.values[map['searchMode'] ?? 0],
+      searchMode: normalizedSearchMode,
       sortBy: ResultsOrder.values[map['sortBy'] ?? 0],
       numResults: map['numResults'] ?? 100,
       currentFacets: List<String>.from(map['currentFacets'] ?? ["/"]),
       searchScopeFacets: List<String>.from(map['searchScopeFacets'] ?? ["/"]),
+      typoToleranceEnabled: typoToleranceEnabled,
       regexEnabled: map['regexEnabled'] ?? false,
       caseSensitive: map['caseSensitive'] ?? false,
       multiline: map['multiline'] ?? false,
@@ -124,7 +139,11 @@ class SearchConfiguration {
 
   // Getters לתאימות לאחור
   bool get fuzzy => searchMode == SearchMode.fuzzy;
-  bool get isAdvancedSearchEnabled => searchMode == SearchMode.advanced;
+  bool get isAdvancedSearchEnabled =>
+      searchMode == SearchMode.advanced || searchMode == SearchMode.levenshtein;
+  bool get isTypoToleranceEnabled =>
+      searchMode == SearchMode.levenshtein ||
+      (searchMode == SearchMode.advanced && typoToleranceEnabled);
 
   @override
   bool operator ==(Object other) {
@@ -136,6 +155,7 @@ class SearchConfiguration {
         other.numResults == numResults &&
         other.currentFacets.toString() == currentFacets.toString() &&
         other.searchScopeFacets.toString() == searchScopeFacets.toString() &&
+        other.typoToleranceEnabled == typoToleranceEnabled &&
         other.regexEnabled == regexEnabled &&
         other.caseSensitive == caseSensitive &&
         other.multiline == multiline &&
@@ -152,6 +172,7 @@ class SearchConfiguration {
       numResults,
       currentFacets,
       searchScopeFacets,
+      typoToleranceEnabled,
       regexEnabled,
       caseSensitive,
       multiline,
@@ -169,6 +190,7 @@ class SearchConfiguration {
         'numResults: $numResults, '
         'facets: $currentFacets, '
         'scope: $searchScopeFacets, '
+        'typoToleranceEnabled: $typoToleranceEnabled, '
         'regex: $regexEnabled, '
         'caseSensitive: $caseSensitive, '
         'multiline: $multiline, '

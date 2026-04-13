@@ -33,7 +33,7 @@ class SearchModeToggle extends StatelessWidget {
             currentIndex = 2;
             break;
           case SearchMode.levenshtein:
-            currentIndex = 3;
+            currentIndex = 0;
             break;
         }
 
@@ -45,12 +45,11 @@ class SearchModeToggle extends StatelessWidget {
             inactiveBgColor: Colors.grey,
             inactiveFgColor: Colors.white,
             initialLabelIndex: currentIndex,
-            totalSwitches: 4,
+            totalSwitches: 3,
             labels: const [
               'חיפוש מתקדם',
               'חיפוש מדוייק',
               'חיפוש מקורב',
-              'תיקון שגיאות כתיב',
             ],
             radiusStyle: true,
             onToggle: (index) {
@@ -65,20 +64,27 @@ class SearchModeToggle extends StatelessWidget {
                 case 2:
                   newMode = SearchMode.fuzzy;
                   break;
-                case 3:
-                  newMode = SearchMode.levenshtein;
-                  break;
                 default:
                   newMode = SearchMode.advanced;
               }
-              context.read<SearchBloc>().add(SetSearchMode(newMode));
+              context.read<SearchBloc>().add(
+                    SetSearchMode(
+                      newMode,
+                      typoToleranceEnabled:
+                          newMode == SearchMode.advanced ? null : false,
+                    ),
+                  );
               final modeString = switch (newMode) {
                 SearchMode.advanced => 'advanced',
                 SearchMode.exact => 'exact',
                 SearchMode.fuzzy => 'fuzzy',
-                SearchMode.levenshtein => 'levenshtein',
+                SearchMode.levenshtein => 'advanced',
               };
               Settings.setValue<String>('key-last-search-mode', modeString);
+              if (newMode != SearchMode.advanced) {
+                Settings.setValue<bool>(
+                    'key-last-search-typo-tolerance', false);
+              }
             },
           ),
         );
@@ -122,7 +128,7 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
       builder: (context, state) {
         // בדיקה אם יש מרווחים מותאמים אישית
         final hasCustomSpacing = widget.tab.spacingValues.isNotEmpty;
-        final isLevenshtein = state.configuration.searchMode == SearchMode.levenshtein;
+        final isLevenshtein = state.isTypoToleranceEnabled;
         final isEnabled = !state.fuzzy && !hasCustomSpacing && !isLevenshtein;
 
         return SizedBox(

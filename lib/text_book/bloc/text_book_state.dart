@@ -24,6 +24,7 @@ class TextBookInitial extends TextBookState {
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
+  final bool typoToleranceEnabled;
   final bool splitedView;
   final bool showPageShapeView;
 
@@ -34,6 +35,7 @@ class TextBookInitial extends TextBookState {
       this.alternativeWords = const {},
       this.spacingValues = const {},
       this.searchMode = SearchMode.exact,
+      this.typoToleranceEnabled = false,
       this.splitedView = true,
       this.showPageShapeView = false]);
 
@@ -48,6 +50,7 @@ class TextBookInitial extends TextBookState {
     this.alternativeWords = const {},
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
+    this.typoToleranceEnabled = false,
     bool? splitedView,
     this.showPageShapeView = false,
   }) : splitedView = splitedView ?? false; // ברירת מחדל: מפרשים מתחת
@@ -263,7 +266,8 @@ class TextBookLoaded extends TextBookState {
       removePunctuation: removePunctuation ?? this.removePunctuation,
       isTanach: isTanach ?? this.isTanach,
       visibleIndices: visibleIndices ?? this.visibleIndices,
-      selectedIndex: clearSelectedIndex ? null : (selectedIndex ?? this.selectedIndex),
+      selectedIndex:
+          clearSelectedIndex ? null : (selectedIndex ?? this.selectedIndex),
       pinLeftPane: pinLeftPane ?? this.pinLeftPane,
       searchText: searchText ?? this.searchText,
       searchOptions: searchOptions ?? this.searchOptions,
