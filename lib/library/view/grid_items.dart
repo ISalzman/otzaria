@@ -14,6 +14,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
+import 'package:otzaria/widgets/custom_ui_components.dart';
 
 // ΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפאΓפא
 //  ╫⌐╫ש╫á╫ץ╫ש╫ש╫¥:
@@ -592,38 +593,50 @@ class _BookGridActionColumn extends StatelessWidget {
               ),
             ),
           ),
-        if (book.categoryPath?.startsWith('╫í╫ñ╫¿╫ש╫¥ ╫נ╫ש╫⌐╫ש╫ש╫¥') == true)
-          SizedBox(
-            width: 28,
-            height: 28,
-            child: AppPopupMenuButton<String>(
-              icon: Icon(
-                FluentIcons.more_vertical_24_regular,
-                size: 15,
-                color: theme.colorScheme.secondary,
-              ),
-              tooltip: '╫נ╫ñ╫⌐╫¿╫ץ╫ש╫ץ╫¬',
-              position: PopupMenuPosition.under,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(
-                minWidth: 28,
-                minHeight: 28,
-              ),
-              onSelected: (value) {
-                if (value == 'delete') {
-                  _showDeleteBookDialog(context, book, onBookDeleted);
-                }
-              },
-              entries: const [
-                AppMenuEntry<String>(
-                  value: 'delete',
-                  label: '╫₧╫ק╫º ╫í╫ñ╫¿ ╫צ╫פ',
-                  icon: FluentIcons.delete_24_regular,
-                  isDestructive: true,
-                ),
-              ],
-            ),
+        FutureBuilder<String>(
+          future: FileSystemData.instance.getBookDataSource(
+            book.title,
+            categoryId: book.categoryId,
+            fileType: book.fileType,
           ),
+          builder: (context, snapshot) {
+            if (snapshot.data != 'DB') {
+              return const SizedBox.shrink();
+            }
+
+            return SizedBox(
+              width: 28,
+              height: 28,
+              child: AppPopupMenuButton<String>(
+                icon: Icon(
+                  FluentIcons.more_vertical_24_regular,
+                  size: 15,
+                  color: theme.colorScheme.secondary,
+                ),
+                tooltip: 'אפשרויות נוספות',
+                position: PopupMenuPosition.under,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 28,
+                  minHeight: 28,
+                ),
+                onSelected: (value) {
+                  if (value == 'delete') {
+                    _showDeleteBookDialog(context, book, onBookDeleted);
+                  }
+                },
+                entries: const [
+                  AppMenuEntry<String>(
+                    value: 'delete',
+                    label: 'מחק מה-DB',
+                    icon: FluentIcons.delete_24_regular,
+                    isDestructive: true,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ],
     );
   }
@@ -1010,41 +1023,23 @@ void _showCategoryInfoDialog(BuildContext context, Category category) {
   );
 }
 
-void _showDeleteBookDialog(
-    BuildContext context, Book book, VoidCallback? onBookDeleted) {
-  final errorColor = Theme.of(context).colorScheme.error;
-  showDialog(
+Future<void> _showDeleteBookDialog(
+    BuildContext context, Book book, VoidCallback? onBookDeleted) async {
+  final confirmed = await showWarningDialog(
     context: context,
-    builder: (BuildContext dialogContext) {
-      return AlertDialog(
-        title: const Text(
-          '╫₧╫ק╫ש╫º╫¬ ╫í╫ñ╫¿',
-          textAlign: TextAlign.right,
-        ),
-        content: Text(
-          '╫פ╫נ╫¥ ╫נ╫¬╫פ ╫ס╫ר╫ץ╫ק ╫⌐╫נ╫¬╫פ ╫¿╫ץ╫ª╫פ ╫£╫₧╫ק╫ץ╫º ╫נ╫¬ ╫פ╫í╫ñ╫¿ "${book.title}"?\n╫£╫נ ╫á╫ש╫¬╫ƒ ╫£╫⌐╫ק╫צ╫¿ ╫ñ╫ó╫ץ╫£╫פ ╫צ╫ץ!',
-          textAlign: TextAlign.right,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('╫ס╫ש╫ר╫ץ╫£'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(dialogContext).pop();
-              await _deleteBook(book);
-              onBookDeleted?.call();
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: errorColor,
-            ),
-            child: const Text('╫¢╫ƒ, ╫נ╫á╫ש ╫¿╫ץ╫ª╫פ ╫£╫₧╫ק╫ץ╫º'),
-          ),
-        ],
-      );
-    },
+    title: 'למחוק את הספר?',
+    content: 'הספר "${book.title}" יימחק ממסד הנתונים.',
+    subtitle: 'לא ניתן לשחזר ספר שנמחק.',
+    cancelText: 'ביטול',
+    confirmText: 'מחק',
   );
+
+  if (confirmed != true) {
+    return;
+  }
+
+  await _deleteBook(book);
+  onBookDeleted?.call();
 }
 
 Future<void> _deleteBook(Book book) async {
@@ -1052,6 +1047,7 @@ Future<void> _deleteBook(Book book) async {
     final success = await BookLocator.deleteBook(
       book.title,
       category: book.category,
+      categoryId: book.categoryId,
     );
 
     if (!success) {

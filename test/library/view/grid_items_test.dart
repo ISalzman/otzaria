@@ -1,13 +1,121 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/models/books.dart';
 
+class _FakeFileSystemData extends FileSystemData {
+  _FakeFileSystemData(this.source);
+
+  final String source;
+
+  @override
+  Future<String> getBookDataSource(
+    String title, {
+    int? categoryId,
+    String? fileType = 'txt',
+  }) async {
+    return source;
+  }
+}
+
+class _MemoryCacheProvider extends CacheProvider {
+  final Map<String, Object?> _values = {};
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  bool containsKey(String key) => _values.containsKey(key);
+
+  @override
+  Set getKeys() => _values.keys.toSet();
+
+  @override
+  bool? getBool(String key, {bool? defaultValue}) =>
+      _values[key] as bool? ?? defaultValue;
+
+  @override
+  double? getDouble(String key, {double? defaultValue}) =>
+      _values[key] as double? ?? defaultValue;
+
+  @override
+  int? getInt(String key, {int? defaultValue}) =>
+      _values[key] as int? ?? defaultValue;
+
+  @override
+  String? getString(String key, {String? defaultValue}) =>
+      _values[key] as String? ?? defaultValue;
+
+  @override
+  T? getValue<T>(String key, {T? defaultValue}) {
+    final value = _values[key];
+    if (value is T) {
+      return value;
+    }
+    return defaultValue;
+  }
+
+  @override
+  Future<void> remove(String key) async {
+    _values.remove(key);
+  }
+
+  @override
+  Future<void> removeAll() async {
+    _values.clear();
+  }
+
+  @override
+  Future<void> setBool(String key, bool? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setDouble(String key, double? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setInt(String key, int? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setObject<T>(String key, T? value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> setString(String key, String? value) async {
+    _values[key] = value;
+  }
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late FileSystemData originalFileSystemData;
+
+  setUpAll(() async {
+    await Settings.init(cacheProvider: _MemoryCacheProvider());
+    originalFileSystemData = FileSystemData.instance;
+  });
+
+  setUp(() {
+    FileSystemData.instance = _FakeFileSystemData('ק');
+  });
+
+  tearDown(() {
+    FileSystemData.instance = originalFileSystemData;
+  });
+
   Widget buildTestWidget({
     required Book book,
     bool showTopics = false,
-    double width = 140,
+    double width = 260,
   }) {
     return MaterialApp(
       home: Material(
@@ -33,7 +141,7 @@ void main() {
       categoryPath: 'קטגוריה/פנימית/ארוכה',
     );
 
-    await tester.pumpWidget(buildTestWidget(book: book, width: 100));
+    await tester.pumpWidget(buildTestWidget(book: book, width: 180));
     await tester.pumpAndSettle();
 
     expect(find.byType(Tooltip), findsOneWidget);
@@ -53,11 +161,39 @@ void main() {
     );
 
     await tester.pumpWidget(
-      buildTestWidget(book: book, showTopics: true, width: 150),
+      buildTestWidget(book: book, showTopics: true, width: 220),
     );
     await tester.pumpAndSettle();
 
     expect(find.byTooltip(topics), findsOneWidget);
     expect(find.byTooltip('א'), findsNothing);
+  });
+
+  testWidgets('מציג פעולת מחיקה עבור ספר שמקורו ב-DB', (tester) async {
+    FileSystemData.instance = _FakeFileSystemData('DB');
+
+    final book = TextBook(title: 'ספר DB לבדיקה', categoryId: 42);
+
+    await tester.pumpWidget(buildTestWidget(book: book));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byIcon(FluentIcons.more_vertical_24_regular),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('לא מציג פעולת מחיקה עבור ספר שמקורו בקבצים', (tester) async {
+    FileSystemData.instance = _FakeFileSystemData('ק');
+
+    final book = TextBook(title: 'ספר קבצים לבדיקה', categoryId: 7);
+
+    await tester.pumpWidget(buildTestWidget(book: book));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byIcon(FluentIcons.more_vertical_24_regular),
+      findsNothing,
+    );
   });
 }
