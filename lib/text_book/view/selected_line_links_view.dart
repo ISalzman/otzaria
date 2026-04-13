@@ -72,6 +72,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   String _lastSearchKey = '';
   final Set<String> _linksWithSearchResults = {}; // קישורים עם תוצאות חיפוש
   String? _savedSelectedText; // טקסט נבחר לתפריט הקשר
+  Link? _savedSelectedLink; // ה-link שממנו נבחר הטקסט
 
   @override
   void initState() {
@@ -291,7 +292,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           context: menuCtx,
           savedSelectedText: _savedSelectedText,
           fontSize: widget.fontSize,
-          link: link,
+          link: _savedSelectedLink,
         ),
       ),
       child: ExpansionTile(
@@ -411,24 +412,35 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
       );
     }
 
-    return GestureDetector(
-      onTap: () {
-        widget.openBookCallback(
-          TextBookTab(
-            book: TextBook(
-              title: utils.getTitleFromPath(link.path2),
-            ),
-            index: link.index2 - 1,
-            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                    false) ||
-                (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-          ),
-        );
+    return SelectionArea(
+      onSelectionChanged: (selection) {
+        if (selection != null && selection.plainText.isNotEmpty) {
+          _savedSelectedText = selection.plainText;
+          _savedSelectedLink = link;
+        } else if (selection == null) {
+          _savedSelectedText = null;
+          _savedSelectedLink = null;
+        }
       },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12.0),
-        child: _buildHighlightedText(content, link),
+      child: GestureDetector(
+        onTap: () {
+          widget.openBookCallback(
+            TextBookTab(
+              book: TextBook(
+                title: utils.getTitleFromPath(link.path2),
+              ),
+              index: link.index2 - 1,
+              openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
+                      false) ||
+                  (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
+            ),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12.0),
+          child: _buildHighlightedText(content, link),
+        ),
       ),
     );
   }
