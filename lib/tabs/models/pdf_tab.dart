@@ -35,6 +35,7 @@ class PdfBookTab extends OpenedTab {
   Map<int, List<String>> alternativeWords;
   Map<String, String> spacingValues;
   SearchMode searchMode;
+  bool typoToleranceEnabled;
 
   List<PdfPageTextRange>? pdfSearchMatches;
   int? pdfSearchCurrentMatchIndex;
@@ -78,6 +79,7 @@ class PdfBookTab extends OpenedTab {
     this.alternativeWords = const {},
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
+    this.typoToleranceEnabled = false,
     this.pdfSearchMatches,
     this.pdfSearchCurrentMatchIndex,
     bool isPinned = false,

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 
 void main() {
@@ -29,5 +30,27 @@ void main() {
     final restored = Bookmark.fromJson(json);
 
     expect(restored.searchScopeFacets, ['/root/a', '/root/b']);
+  });
+
+  test('Bookmark preserves search mode and typo tolerance in json roundtrip',
+      () {
+    final bookmark = Bookmark(
+      ref: 'query',
+      index: 0,
+      book: Bookmark.fromJson({
+        'ref': 'inner',
+        'index': 1,
+        'book': {'title': 'Book A', 'type': 'TextBook'}
+      }).book,
+      isSearch: true,
+      searchMode: SearchMode.fuzzy,
+      typoToleranceEnabled: true,
+    );
+
+    final json = bookmark.toJson();
+    final restored = Bookmark.fromJson(json);
+
+    expect(restored.searchMode, SearchMode.fuzzy);
+    expect(restored.typoToleranceEnabled, isTrue);
   });
 }

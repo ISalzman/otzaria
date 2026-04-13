@@ -25,6 +25,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     on<UpdateDistance>(_onUpdateDistance);
     on<ToggleSearchMode>(_onToggleSearchMode);
     on<SetSearchMode>(_onSetSearchMode);
+    on<SetTypoTolerance>(_onSetTypoTolerance);
     on<UpdateBooksToSearch>(_onUpdateBooksToSearch);
     on<AddFacet>(_onAddFacet);
     on<RemoveFacet>(_onRemoveFacet);
@@ -99,10 +100,10 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
 
     try {
-      // חיפוש Levenshtein (תיקון שגיאות כתיב) - מסלול נפרד לחלוטין.
+      // חיפוש עם תיקון שגיאות כתיב - מסלול נפרד לחלוטין.
       // countByBook פועל עם regex/slop ולא מייצג את query הזה,
       // לכן לא מפעילים facet refresh ולא streaming.
-      if (state.configuration.searchMode == SearchMode.levenshtein) {
+      if (state.isTypoToleranceEnabled) {
         final results = await _repository.searchTextsLevenshtein(
           SearchQueryBuilder.sanitizeQuery(query),
           requestedFacets,
@@ -163,9 +164,10 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
             results: List.from(allResults),
             totalResults: allResults.length,
             isLoading: true, // עדיין טוען
-            facetCounts: shouldPreserveFacetCounts || state.facetCounts.isNotEmpty
-                ? state.facetCounts
-                : partialFacetCounts,
+            facetCounts:
+                shouldPreserveFacetCounts || state.facetCounts.isNotEmpty
+                    ? state.facetCounts
+                    : partialFacetCounts,
           ));
         } else {
           // Chunks נוספים - רק עדכן תוצאות
@@ -325,8 +327,36 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     SetSearchMode event,
     Emitter<SearchState> emit,
   ) {
-    final newConfig =
-        state.configuration.copyWith(searchMode: event.searchMode);
+    final newConfig = event.searchMode == SearchMode.levenshtein
+        ? state.configuration.copyWith(
+            searchMode: SearchMode.advanced,
+            typoToleranceEnabled: true,
+          )
+        : state.configuration.copyWith(
+            searchMode: event.searchMode,
+            typoToleranceEnabled: event.typoToleranceEnabled,
+          );
+
+    if (newConfig == state.configuration) {
+      return;
+    }
+
+    emit(state.copyWith(configuration: newConfig));
+    add(UpdateSearchQuery(state.searchQuery));
+  }
+
+  void _onSetTypoTolerance(
+    SetTypoTolerance event,
+    Emitter<SearchState> emit,
+  ) {
+    final newConfig = state.configuration.copyWith(
+      typoToleranceEnabled: event.enabled,
+    );
+
+    if (newConfig == state.configuration) {
+      return;
+    }
+
     emit(state.copyWith(configuration: newConfig));
     add(UpdateSearchQuery(state.searchQuery));
   }
@@ -588,9 +618,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
 
     // תנאי עצירה לפי mode:
-    // levenshtein — לפי hasMoreResults (totalResults = מה שנטען בפועל)
+    // תיקון שגיאות כתיב — לפי hasMoreResults (totalResults = מה שנטען בפועל)
     // שאר המצבים — לפי totalResults שמייצג total אמיתי מה-engine
-    final canLoadMore = state.configuration.searchMode == SearchMode.levenshtein
+    final canLoadMore = state.isTypoToleranceEnabled
         ? state.hasMoreResults
         : state.results.length < state.totalResults;
 
@@ -601,7 +631,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     emit(state.copyWith(isLoading: true));
 
     try {
-      if (state.configuration.searchMode == SearchMode.levenshtein) {
+      if (state.isTypoToleranceEnabled) {
         // searchFuzzy תומך ב-offset — pagination אמיתי
         final nextResults = await _repository.searchTextsLevenshtein(
           SearchQueryBuilder.sanitizeQuery(state.searchQuery),

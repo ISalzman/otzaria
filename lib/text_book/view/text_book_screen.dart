@@ -2390,6 +2390,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       initialAlternativeWords: widget.tab.alternativeWords,
       initialSpacingValues: widget.tab.spacingValues,
       initialSearchMode: widget.tab.searchMode,
+      initialTypoToleranceEnabled: widget.tab.typoToleranceEnabled,
       closeLeftPaneCallback: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
     );

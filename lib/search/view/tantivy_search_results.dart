@@ -102,11 +102,10 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     }
 
     // תמיד נשתמש ב-ListView גם לתוצאה אחת - כך היא תופיע למעלה
-    // levenshtein: totalResults = מה שנטען בפועל, לכן בודקים hasMoreResults
-    final hasMoreResults =
-        state.configuration.searchMode == SearchMode.levenshtein
-            ? state.hasMoreResults
-            : state.results.length < state.totalResults;
+    // תיקון שגיאות כתיב: totalResults = מה שנטען בפועל, לכן בודקים hasMoreResults
+    final hasMoreResults = state.isTypoToleranceEnabled
+        ? state.hasMoreResults
+        : state.results.length < state.totalResults;
     final showInlineLoadingIndicator =
         state.isLoading && state.results.isNotEmpty && !hasMoreResults;
     final showLoadMoreButton = hasMoreResults;
@@ -136,9 +135,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             );
           }
 
-          // levenshtein: totalResults = נטענו בפועל, לכן אין ספירה מדויקת
-          final isLevenshtein =
-              state.configuration.searchMode == SearchMode.levenshtein;
+          // תיקון שגיאות כתיב: totalResults = נטענו בפועל, לכן אין ספירה מדויקת
+          final isLevenshtein = state.isTypoToleranceEnabled;
           final remainingText = isLevenshtein
               ? 'טען תוצאות נוספות'
               : 'טען תוצאות נוספות (${state.totalResults - state.results.length})';
@@ -234,6 +232,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                   final shouldUseLegacyInBook = !hasEnabledOptions &&
                       !hasAlternativeWords &&
                       !hasSpacingValues &&
+                      !state.isTypoToleranceEnabled &&
                       !looksLikeRegex &&
                       currentMode != SearchMode.fuzzy &&
                       currentMode != SearchMode.levenshtein;
@@ -260,6 +259,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                               alternativeWords: widget.tab.alternativeWords,
                               spacingValues: widget.tab.spacingValues,
                               searchMode: inBookMode,
+                              typoToleranceEnabled:
+                                  state.isTypoToleranceEnabled,
                               openLeftPane:
                                   (Settings.getValue<bool>('key-pin-sidebar') ??
                                           false) ||
@@ -289,6 +290,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                               alternativeWords: widget.tab.alternativeWords,
                               spacingValues: widget.tab.spacingValues,
                               searchMode: inBookMode,
+                              typoToleranceEnabled:
+                                  state.isTypoToleranceEnabled,
                               openLeftPane:
                                   (Settings.getValue<bool>('key-pin-sidebar') ??
                                           false) ||
