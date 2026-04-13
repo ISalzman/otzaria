@@ -34,13 +34,18 @@ Write-Host "Updated .gitignore"
 
 # Update pubspec.yaml (lines 13 and 39)
 $pubspecContent = Get-Content "pubspec.yaml"
+# Calculate versionCode from version (e.g., 0.9.88 -> 988)
+$versionParts = $newVersion.Split('.')
+$versionCode = ($versionParts[1] + $versionParts[2]).TrimStart('0')
+if ([string]::IsNullOrEmpty($versionCode)) { $versionCode = "1" }
+
 for ($i = 0; $i -lt $pubspecContent.Length; $i++) {
     if ($pubspecContent[$i] -match "^\s*version:\s*") {
-        $pubspecContent[$i] = "version: $newVersion"
+        $pubspecContent[$i] = "version: $newVersion+$versionCode"
     }
 }
 $pubspecContent | Set-Content "pubspec.yaml" -Encoding $Utf8NoBom
-Write-Host "Updated pubspec.yaml"
+Write-Host "Updated pubspec.yaml (version: $newVersion+$versionCode)"
 
 # Update installer/otzaria_full.iss (line 5)
 $fullIssContent = Get-Content "installer/otzaria_full.iss"
@@ -61,6 +66,43 @@ for ($i = 0; $i -lt $issContent.Length; $i++) {
 }
 $issContent | Set-Content "installer/otzaria.iss" -Encoding $Utf8Bom
 Write-Host "Updated installer/otzaria.iss"
+
+# Update android/local.properties (versionName and versionCode)
+$localPropertiesFile = "android/local.properties"
+if (Test-Path $localPropertiesFile) {
+    # Calculate versionCode from version (e.g., 0.9.88 -> 988)
+    $versionParts = $newVersion.Split('.')
+    $versionCode = ($versionParts[1] + $versionParts[2]).TrimStart('0')
+    if ([string]::IsNullOrEmpty($versionCode)) { $versionCode = "1" }
+    
+    $localPropsContent = Get-Content $localPropertiesFile
+    $versionNameFound = $false
+    $versionCodeFound = $false
+    
+    for ($i = 0; $i -lt $localPropsContent.Length; $i++) {
+        if ($localPropsContent[$i] -match "^flutter\.versionName=") {
+            $localPropsContent[$i] = "flutter.versionName=$newVersion"
+            $versionNameFound = $true
+        }
+        if ($localPropsContent[$i] -match "^flutter\.versionCode=") {
+            $localPropsContent[$i] = "flutter.versionCode=$versionCode"
+            $versionCodeFound = $true
+        }
+    }
+    
+    # Add missing properties if not found
+    if (-not $versionNameFound) {
+        $localPropsContent += "flutter.versionName=$newVersion"
+    }
+    if (-not $versionCodeFound) {
+        $localPropsContent += "flutter.versionCode=$versionCode"
+    }
+    
+    $localPropsContent | Set-Content $localPropertiesFile -Encoding $Utf8NoBom
+    Write-Host "Updated $localPropertiesFile (versionName=$newVersion, versionCode=$versionCode)"
+} else {
+    Write-Warning "File '$localPropertiesFile' not found! Skipping Android version update."
+}
 
 # Update assets/יומן שינויים.md (Add new version as first item)
 $changelogFile = "assets/יומן שינויים.md"
@@ -86,6 +128,6 @@ Write-Host "Version update completed successfully!"
 Write-Host "All files have been updated to version: $newVersion"
 
 # Git commit
-git add ".gitignore" "pubspec.yaml" "installer/otzaria_full.iss" "installer/otzaria.iss" $changelogFile $VersionFile
+git add ".gitignore" "pubspec.yaml" "installer/otzaria_full.iss" "installer/otzaria.iss" $changelogFile $VersionFile $localPropertiesFile
 git commit -m "$newVersion"
 Write-Host "Git commit created for version: $newVersion"
