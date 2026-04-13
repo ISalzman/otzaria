@@ -13,6 +13,7 @@ import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
+import 'package:otzaria/widgets/reader_side_panel_shell.dart';
 import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'package:otzaria/utils/context_menu_utils.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
@@ -290,53 +291,57 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                   if (_paneOpen)
                     SizedBox(
                       width: _leftPaneWidth,
-                      child: ValueListenableBuilder<String?>(
-                        valueListenable: _savedSelectedText,
-                        child: SelectionArea(
-                          key: _selectionKey,
-                          contextMenuBuilder: (context, selectableRegionState) {
-                            // מבטל את התפריט הרגיל של Flutter כי יש ContextMenuRegion
-                            return const SizedBox.shrink();
-                          },
-                          onSelectionChanged: (selection) {
-                            if (selection != null &&
-                                selection.plainText.isNotEmpty) {
-                              _savedSelectedText.value = selection.plainText;
-                            }
-                          },
-                          child: TabbedCommentaryPanel(
-                            fontSize: state.fontSize,
-                            openBookCallback: widget.openBookCallback,
-                            showSearch: true,
-                            onClosePane: _togglePane,
-                            initialTabIndex: _currentTabIndex,
-                            showSplitView: widget.showSplitView,
-                            onTabChanged: (index) {
-                              debugPrint(
-                                  'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}');
-                              setState(() {
-                                _currentTabIndex = index;
-                              });
-                              if (!widget.showSplitView) {
-                                debugPrint(
-                                    'DEBUG: Saving tab $index to combined settings');
-                                Settings.setValue<int>(
-                                    'key-sidebar-tab-index-combined', index);
-                              } else {
-                                debugPrint(
-                                    'DEBUG: NOT saving tab (split view mode)');
+                      child: ReaderSidePanelShell(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: ValueListenableBuilder<String?>(
+                          valueListenable: _savedSelectedText,
+                          child: SelectionArea(
+                            key: _selectionKey,
+                            contextMenuBuilder:
+                                (context, selectableRegionState) {
+                              // מבטל את התפריט הרגיל של Flutter כי יש ContextMenuRegion
+                              return const SizedBox.shrink();
+                            },
+                            onSelectionChanged: (selection) {
+                              if (selection != null &&
+                                  selection.plainText.isNotEmpty) {
+                                _savedSelectedText.value = selection.plainText;
                               }
                             },
+                            child: TabbedCommentaryPanel(
+                              fontSize: state.fontSize,
+                              openBookCallback: widget.openBookCallback,
+                              showSearch: true,
+                              onClosePane: _togglePane,
+                              initialTabIndex: _currentTabIndex,
+                              showSplitView: widget.showSplitView,
+                              onTabChanged: (index) {
+                                debugPrint(
+                                    'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}');
+                                setState(() {
+                                  _currentTabIndex = index;
+                                });
+                                if (!widget.showSplitView) {
+                                  debugPrint(
+                                      'DEBUG: Saving tab $index to combined settings');
+                                  Settings.setValue<int>(
+                                      'key-sidebar-tab-index-combined', index);
+                                } else {
+                                  debugPrint(
+                                      'DEBUG: NOT saving tab (split view mode)');
+                                }
+                              },
+                            ),
                           ),
+                          builder: (context, selectedText, child) {
+                            return AppContextMenuRegion(
+                              menuBuilder: (menuCtx) =>
+                                  _buildContextMenuEntries(
+                                      menuCtx, state, selectedText),
+                              child: child!,
+                            );
+                          },
                         ),
-                        builder: (context, selectedText, child) {
-                          return AppContextMenuRegion(
-                            menuBuilder: (menuCtx) =>
-                                _buildContextMenuEntries(
-                                    menuCtx, state, selectedText),
-                            child: child!,
-                          );
-                        },
                       ),
                     ),
                 ],
