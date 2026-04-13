@@ -19,6 +19,7 @@ class RecommendedActionButton extends StatelessWidget {
   final bool isLoading;
   final IconData? icon;
   final Widget? iconWidget;
+  final TextAlign textAlign;
 
   const RecommendedActionButton({
     super.key,
@@ -27,6 +28,7 @@ class RecommendedActionButton extends StatelessWidget {
     this.isLoading = false,
     this.icon,
     this.iconWidget,
+    this.textAlign = TextAlign.start,
   });
 
   @override
@@ -47,13 +49,43 @@ class RecommendedActionButton extends StatelessWidget {
                   strokeWidth: 2, color: cs.onPrimary)));
     }
     if (leading != null) {
+      if (textAlign == TextAlign.center) {
+        // מירכוז אמיתי: הטקסט ממורכז יחסית לרוחב הכפתור המלא,
+        // האייקון צף בצד ה-start (ימין ב-RTL)
+        return FilledButton(
+          onPressed: onPressed,
+          style: style,
+          child: Stack(
+            children: [
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: _BalancedText(
+                    text,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: leading,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
       return FilledButton.icon(
           onPressed: onPressed,
           style: style,
           icon: leading,
-          label: Text(text));
+          label: Text(text, textAlign: textAlign));
     }
-    return FilledButton(onPressed: onPressed, style: style, child: Text(text));
+    return FilledButton(
+        onPressed: onPressed,
+        style: style,
+        child: Text(text, textAlign: textAlign));
   }
 }
 
@@ -100,6 +132,86 @@ class NeutralActionButton extends StatelessWidget {
     }
     return FilledButton.tonal(
         onPressed: onPressed, style: style, child: Text(text));
+  }
+}
+
+// ── _BalancedText ─────────────────────────────────────────────────────────────
+
+/// מציג טקסט עם חלוקה מאוזנת בין שורות:
+/// בודק את כל נקודות השבירה האפשריות (בין מילים) ובוחר את זו
+/// שמביאה לשורות בעלות רוחב שווה ככל האפשר.
+class _BalancedText extends StatelessWidget {
+  final String text;
+  final TextAlign textAlign;
+
+  const _BalancedText(
+    this.text, {
+    this.textAlign = TextAlign.start,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveStyle =
+        DefaultTextStyle.of(context).style.copyWith(inherit: true);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+
+        // בדוק אם הטקסט נכנס בשורה אחת
+        final singleLinePainter = TextPainter(
+          text: TextSpan(text: text, style: effectiveStyle),
+          maxLines: 1,
+          textDirection: TextDirection.rtl,
+        )..layout(maxWidth: double.infinity);
+
+        if (singleLinePainter.width <= maxWidth) {
+          return Text(text,
+              textAlign: textAlign,
+              textDirection: TextDirection.rtl);
+        }
+
+        // מצא את נקודת השבירה שנותנת שורות שוות ביותר
+        final words = text.split(' ');
+        if (words.length <= 1) {
+          return Text(text,
+              textAlign: textAlign,
+              textDirection: TextDirection.rtl);
+        }
+
+        String bestText = text;
+        double bestDiff = double.infinity;
+
+        for (int i = 1; i < words.length; i++) {
+          final line1 = words.sublist(0, i).join(' ');
+          final line2 = words.sublist(i).join(' ');
+
+          final p1 = TextPainter(
+            text: TextSpan(text: line1, style: effectiveStyle),
+            maxLines: 1,
+            textDirection: TextDirection.rtl,
+          )..layout(maxWidth: double.infinity);
+
+          // אם שורה 1 רחבה מהמקום הפנוי — לא ניתן לשבור כאן
+          if (p1.width > maxWidth) continue;
+
+          final p2 = TextPainter(
+            text: TextSpan(text: line2, style: effectiveStyle),
+            maxLines: 1,
+            textDirection: TextDirection.rtl,
+          )..layout(maxWidth: double.infinity);
+
+          final diff = (p1.width - p2.width).abs();
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            bestText = '$line1\n$line2';
+          }
+        }
+
+        return Text(bestText,
+            textAlign: textAlign,
+            textDirection: TextDirection.rtl);
+      },
+    );
   }
 }
 

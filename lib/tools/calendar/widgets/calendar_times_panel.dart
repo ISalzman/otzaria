@@ -636,6 +636,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
     return RecommendedActionButton(
       text: text,
       iconWidget: iconWidget,
+      textAlign: TextAlign.center,
       onPressed: () async {
         final timeLabel = widget.state.dailyTimes['omerCounting'] ?? '--:--';
         if (timeLabel == '--:--') {
@@ -676,7 +677,7 @@ class _CityDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 220,
+      width: 180,
       child: AppDropdownField<String>(
         value: cityName,
         enableSearch: true,
