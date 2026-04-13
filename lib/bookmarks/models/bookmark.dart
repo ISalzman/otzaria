@@ -1,4 +1,5 @@
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 
 /// Represents a bookmark in the application.
 class Bookmark {
@@ -12,6 +13,8 @@ class Bookmark {
   final Map<String, String>? spacingValues;
   final String? workspaceName;
   final List<String>? searchScopeFacets;
+  final SearchMode? searchMode;
+  final bool typoToleranceEnabled;
 
   /// A stable key for history management, unique per book title.
   String get historyKey => isSearch ? ref : book.title;
@@ -27,6 +30,8 @@ class Bookmark {
     this.spacingValues,
     this.workspaceName,
     this.searchScopeFacets,
+    this.searchMode,
+    this.typoToleranceEnabled = false,
   });
 
   factory Bookmark.fromJson(Map<String, dynamic> json) {
@@ -63,6 +68,13 @@ class Bookmark {
       searchScopeFacets: json['searchScopeFacets'] != null
           ? List<String>.from(json['searchScopeFacets'] as List)
           : null,
+      searchMode: json['searchMode'] != null
+          ? SearchMode.values.firstWhere(
+              (mode) => mode.name == json['searchMode'],
+              orElse: () => SearchMode.advanced,
+            )
+          : null,
+      typoToleranceEnabled: json['typoToleranceEnabled'] as bool? ?? false,
     );
   }
 
@@ -79,6 +91,8 @@ class Bookmark {
       'spacingValues': spacingValues,
       'workspaceName': workspaceName,
       'searchScopeFacets': searchScopeFacets,
+      'searchMode': searchMode?.name,
+      'typoToleranceEnabled': typoToleranceEnabled,
     };
   }
 }

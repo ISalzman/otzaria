@@ -1,4 +1,5 @@
 import 'package:bloc_test/bloc_test.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -106,5 +107,68 @@ void main() {
     final decoration = dropdownContainer.decoration! as BoxDecoration;
     expect(decoration.color, theme.colorScheme.surfaceContainerHigh);
     expect(find.text('משה'), findsWidgets);
+  });
+
+  testWidgets('שחזור העדפה שמורה של שגיאות כתיב מדליק את האפשרות בדיאלוג',
+      (WidgetTester tester) async {
+    final historyBloc = MockHistoryBloc();
+    final indexingBloc = MockIndexingBloc();
+    final navigationBloc = MockNavigationBloc();
+
+    Settings.setValue<String>('key-last-search-mode', 'advanced');
+    Settings.setValue<bool>('key-last-search-typo-tolerance', true);
+
+    whenListen(
+      historyBloc,
+      const Stream<HistoryState>.empty(),
+      initialState: HistoryLoaded([]),
+    );
+    whenListen(
+      indexingBloc,
+      const Stream<IndexingState>.empty(),
+      initialState: IndexingInitial(),
+    );
+    whenListen(
+      navigationBloc,
+      const Stream<NavigationState>.empty(),
+      initialState: const NavigationState(currentScreen: Screen.search),
+    );
+
+    addTearDown(() async {
+      Settings.setValue<bool>('key-last-search-typo-tolerance', false);
+      await historyBloc.close();
+      await indexingBloc.close();
+      await navigationBloc.close();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<HistoryBloc>.value(value: historyBloc),
+            BlocProvider<IndexingBloc>.value(value: indexingBloc),
+            BlocProvider<NavigationBloc>.value(value: navigationBloc),
+          ],
+          child: const Scaffold(
+            body: SearchDialog(),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final typoToggle = find.ancestor(
+      of: find.text('שגיאות כתיב'),
+      matching: find.byType(InkWell),
+    );
+    expect(typoToggle, findsOneWidget);
+    expect(
+      find.descendant(
+        of: typoToggle,
+        matching: find.byIcon(FluentIcons.checkmark_24_regular),
+      ),
+      findsOneWidget,
+    );
   });
 }

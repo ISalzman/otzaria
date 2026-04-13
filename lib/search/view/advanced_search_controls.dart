@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/search/bloc/search_bloc.dart';
+import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
@@ -217,6 +221,8 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
             _buildInputColumn(isEnabled),
           ],
           const SizedBox(height: 16),
+          _buildTypoToleranceToggle(),
+          const SizedBox(height: 8),
           _buildCheckboxGrid(isEnabled, compactMode: true),
         ],
       );
@@ -238,9 +244,78 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         const SizedBox(width: 24),
         Expanded(
           flex: 3,
-          child: _buildCheckboxGrid(isEnabled, compactMode: false),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildTypoToleranceToggle(),
+              const SizedBox(height: 8),
+              _buildCheckboxGrid(isEnabled, compactMode: false),
+            ],
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTypoToleranceToggle() {
+    return BlocBuilder<SearchBloc, SearchState>(
+      bloc: widget.tab.searchBloc,
+      builder: (context, state) {
+        final isChecked = state.isTypoToleranceEnabled;
+        final colorScheme = Theme.of(context).colorScheme;
+
+        return InkWell(
+          onTap: () {
+            widget.tab.searchBloc.add(SetTypoTolerance(!isChecked));
+          },
+          borderRadius: BorderRadius.circular(4),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                textDirection: TextDirection.rtl,
+                children: [
+                  Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: isChecked
+                            ? colorScheme.primary
+                            : Colors.grey.shade600,
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(3),
+                      color: isChecked
+                          ? colorScheme.primary.withValues(alpha: 0.1)
+                          : Colors.transparent,
+                    ),
+                    child: isChecked
+                        ? Icon(
+                            FluentIcons.checkmark_24_regular,
+                            size: 14,
+                            color: colorScheme.primary,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'שגיאות כתיב',
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -474,37 +549,44 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                 }
               : null,
           borderRadius: BorderRadius.circular(4),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-            child: Row(
-              children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    border: Border.all(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                textDirection: TextDirection.rtl,
+                children: [
+                  Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: isEnabled && isChecked
+                            ? Theme.of(context).primaryColor
+                            : Colors.grey.shade600,
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(3),
                       color: isEnabled && isChecked
-                          ? Theme.of(context).primaryColor
-                          : Colors.grey.shade600,
-                      width: 2,
+                          ? Theme.of(context)
+                              .primaryColor
+                              .withValues(alpha: 0.1)
+                          : Colors.transparent,
                     ),
-                    borderRadius: BorderRadius.circular(3),
-                    color: isEnabled && isChecked
-                        ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-                        : Colors.transparent,
+                    child: isEnabled && isChecked
+                        ? Icon(
+                            FluentIcons.checkmark_24_regular,
+                            size: 14,
+                            color: Theme.of(context).primaryColor,
+                          )
+                        : null,
                   ),
-                  child: isEnabled && isChecked
-                      ? Icon(
-                          FluentIcons.checkmark_24_regular,
-                          size: 14,
-                          color: Theme.of(context).primaryColor,
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
+                  const SizedBox(width: 8),
+                  Text(
                     option,
+                    textDirection: TextDirection.rtl,
                     style: TextStyle(
                       fontSize: 14,
                       color: isEnabled
@@ -512,8 +594,8 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                           : Colors.grey.shade500,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

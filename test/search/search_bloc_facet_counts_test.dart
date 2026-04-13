@@ -2,10 +2,77 @@ import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 
 void main() {
   group('SearchBloc facet counts', () {
+    blocTest<SearchBloc, SearchState>(
+      'SetSearchMode עם levenshtein מנרמל לחיפוש מתקדם עם תיקון שגיאות כתיב',
+      build: SearchBloc.new,
+      act: (bloc) => bloc.add(SetSearchMode(SearchMode.levenshtein)),
+      expect: () => [
+        isA<SearchState>()
+            .having((state) => state.configuration.searchMode, 'searchMode',
+                SearchMode.advanced)
+            .having((state) => state.isTypoToleranceEnabled,
+                'isTypoToleranceEnabled', true),
+        isA<SearchState>()
+            .having((state) => state.configuration.searchMode, 'searchMode',
+                SearchMode.advanced)
+            .having((state) => state.isTypoToleranceEnabled,
+                'isTypoToleranceEnabled', true),
+      ],
+    );
+
+    blocTest<SearchBloc, SearchState>(
+      'SetTypoTolerance מדליק ומכבה תיקון שגיאות כתיב במצב מתקדם',
+      build: SearchBloc.new,
+      act: (bloc) {
+        bloc.add(SetTypoTolerance(true));
+        bloc.add(SetTypoTolerance(false));
+      },
+      expect: () => [
+        isA<SearchState>().having((state) => state.isTypoToleranceEnabled,
+            'isTypoToleranceEnabled', true),
+        isA<SearchState>()
+            .having((state) => state.searchQuery, 'searchQuery', ''),
+        isA<SearchState>().having((state) => state.isTypoToleranceEnabled,
+            'isTypoToleranceEnabled', false),
+        isA<SearchState>()
+            .having((state) => state.searchQuery, 'searchQuery', ''),
+      ],
+    );
+
+    blocTest<SearchBloc, SearchState>(
+      'SetSearchMode יכול לכבות typo tolerance באירוע יחיד',
+      build: SearchBloc.new,
+      seed: () => SearchState(
+        configuration: const SearchConfiguration(
+          searchMode: SearchMode.advanced,
+          typoToleranceEnabled: true,
+        ),
+      ),
+      act: (bloc) => bloc.add(
+        SetSearchMode(
+          SearchMode.exact,
+          typoToleranceEnabled: false,
+        ),
+      ),
+      expect: () => [
+        isA<SearchState>()
+            .having((state) => state.configuration.searchMode, 'searchMode',
+                SearchMode.exact)
+            .having((state) => state.isTypoToleranceEnabled,
+                'isTypoToleranceEnabled', false),
+        isA<SearchState>()
+            .having((state) => state.configuration.searchMode, 'searchMode',
+                SearchMode.exact)
+            .having((state) => state.isTypoToleranceEnabled,
+                'isTypoToleranceEnabled', false),
+      ],
+    );
+
     blocTest<SearchBloc, SearchState>(
       'UpdateFacetCounts ממזג עדכונים נקודתיים לקאש',
       build: SearchBloc.new,
@@ -99,8 +166,8 @@ void main() {
             .having((state) => state.searchQuery, 'searchQuery', '')
             .having((state) => state.currentFacets, 'currentFacets', [
           '/תנ"ך/ראשונים'
-        ]).having(
-            (state) => state.searchScopeFacets, 'searchScopeFacets', ['/תנ"ך']),
+        ]).having((state) => state.searchScopeFacets, 'searchScopeFacets',
+                ['/תנ"ך']),
       ],
     );
 
@@ -110,12 +177,10 @@ void main() {
       act: (bloc) => bloc.add(const SetFacetsWithoutSearch([])),
       expect: () => [
         isA<SearchState>()
-            .having((state) => state.currentFacets, 'currentFacets', [])
-            .having(
-                (state) => state.searchScopeFacets, 'searchScopeFacets', [])
-            .having(
-                (state) => state.hasNoSelectedFacets, 'hasNoSelectedFacets',
-                true),
+            .having((state) => state.currentFacets, 'currentFacets', []).having(
+                (state) => state.searchScopeFacets,
+                'searchScopeFacets',
+                []).having((state) => state.hasNoSelectedFacets, 'hasNoSelectedFacets', true),
       ],
     );
   });

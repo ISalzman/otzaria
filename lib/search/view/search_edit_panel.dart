@@ -77,7 +77,6 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
       ('מתקדם', SearchMode.advanced),
       ('מדויק', SearchMode.exact),
       ('מקורב', SearchMode.fuzzy),
-      ('תיקון שגיאות', SearchMode.levenshtein),
     ];
 
     return Wrap(
@@ -255,7 +254,7 @@ class _SearchEditPanelState extends State<SearchEditPanel> {
                   _buildSearchModeToggle(state),
                   if (widget.tab.spacingValues.isEmpty &&
                       !state.fuzzy &&
-                      state.configuration.searchMode != SearchMode.levenshtein)
+                      !state.isTypoToleranceEnabled)
                     _buildDistanceField(context, state),
                 ],
               ),

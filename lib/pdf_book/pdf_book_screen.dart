@@ -204,6 +204,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         alternativeWords: widget.tab.alternativeWords,
         spacingValues: widget.tab.spacingValues,
         searchMode: widget.tab.searchMode,
+        typoToleranceEnabled: widget.tab.typoToleranceEnabled,
         layoutMode: initialLayoutMode,
       ),
     );
@@ -2051,8 +2052,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                   false),
                         ),
                       ),
-                  ],
-                ),
+                    ],
+                  ),
               ),
               Expanded(
                 child: TabBarView(
@@ -2089,6 +2090,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                   widget.tab.alternativeWords,
                               initialSpacingValues: widget.tab.spacingValues,
                               initialSearchMode: widget.tab.searchMode,
+                              initialTypoToleranceEnabled:
+                                  widget.tab.typoToleranceEnabled,
                               onSearchResultNavigated: _ensureSearchTabIsActive,
                             )
                           : const Center(

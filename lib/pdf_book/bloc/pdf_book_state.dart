@@ -23,6 +23,7 @@ class PdfBookInitial extends PdfBookState {
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
+  final bool typoToleranceEnabled;
   final PdfLayoutMode layoutMode;
 
   const PdfBookInitial({
@@ -33,6 +34,7 @@ class PdfBookInitial extends PdfBookState {
     this.alternativeWords = const {},
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
+    this.typoToleranceEnabled = false,
     this.layoutMode = PdfLayoutMode.regularView,
   });
 

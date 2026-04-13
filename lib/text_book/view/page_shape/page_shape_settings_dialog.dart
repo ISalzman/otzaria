@@ -1067,6 +1067,7 @@ class _CommentatorPickerDialogState extends State<_CommentatorPickerDialog> {
               padding: const EdgeInsets.all(12.0),
               child: RtlTextField(
                 controller: _searchController,
+                autofocus: true,
                 decoration: InputDecoration(
                   hintText: "חיפוש מפרש...",
                   prefixIcon: const Icon(FluentIcons.search_24_regular),

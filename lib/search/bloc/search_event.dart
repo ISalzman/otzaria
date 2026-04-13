@@ -33,7 +33,13 @@ class ToggleSearchMode extends SearchEvent {}
 
 class SetSearchMode extends SearchEvent {
   final SearchMode searchMode;
-  SetSearchMode(this.searchMode);
+  final bool? typoToleranceEnabled;
+  SetSearchMode(this.searchMode, {this.typoToleranceEnabled});
+}
+
+class SetTypoTolerance extends SearchEvent {
+  final bool enabled;
+  SetTypoTolerance(this.enabled);
 }
 
 class UpdateBooksToSearch extends SearchEvent {
