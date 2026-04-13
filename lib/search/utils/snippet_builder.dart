@@ -4,6 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:otzaria/search/utils/regex_patterns.dart';
 
+class _SnippetMatchRange {
+  final int start;
+  final int end;
+
+  const _SnippetMatchRange(this.start, this.end);
+}
+
+class _ApproximateSnippetMatchCandidate {
+  final _SnippetMatchRange range;
+  final int distance;
+
+  const _ApproximateSnippetMatchCandidate({
+    required this.range,
+    required this.distance,
+  });
+}
+
 class SnippetBuilder {
   /// פונקציה לחישוב כמה תווים יכולים להיכנס בשורה אחת
   static int calculateCharsPerLine(double availableWidth, TextStyle textStyle) {
@@ -29,11 +46,11 @@ class SnippetBuilder {
     required double availableWidth,
     required Map<String, Map<String, bool>> searchOptions,
     required Map<int, List<String>> alternativeWords,
+    bool typoToleranceEnabled = false,
   }) {
     // 1. קבלת הטקסט הנקי מה-HTML
     var plainText =
         html_parser.parse(fullHtml).documentElement?.text.trim() ?? '';
-
 
     // 2. חילוץ מילות החיפוש כולל מילים חילופיות
     final originalWords = query
@@ -94,11 +111,19 @@ class SnippetBuilder {
     }
 
     // 3. מציאת כל ההתאמות של כל המילים בטקסט המקורי
-    final List<Match> allMatches = [];
-    for (final term in searchTerms) {
-      final regex = RegExp(_termToRegexPattern(term), caseSensitive: false);
-      allMatches.addAll(regex.allMatches(plainText));
-    }
+    final exactMatches = _collectExactMatches(plainText, searchTerms);
+    final allMatches = exactMatches.isNotEmpty
+        ? _mergeOverlappingRanges(exactMatches)
+        : (typoToleranceEnabled
+            ? _selectApproximateMatchesForSnippet(
+                _collectApproximateMatches(
+                  plainText,
+                  searchTerms,
+                  existingMatches: exactMatches,
+                ),
+                plainTextLength: plainText.length,
+              )
+            : const <_SnippetMatchRange>[]);
 
     if (allMatches.isEmpty) {
       return [
@@ -110,7 +135,6 @@ class SnippetBuilder {
     }
 
     // 4. מיון ההתאמות וקביעת הגבולות המוחלטים
-    allMatches.sort((a, b) => a.start.compareTo(b.start));
     final int absoluteFirstMatch = allMatches.first.start;
     final int absoluteLastMatch = allMatches.last.end;
     final int totalMatchesSpan = absoluteLastMatch - absoluteFirstMatch;
@@ -186,31 +210,229 @@ class SnippetBuilder {
     final snippetText = plainText.substring(snippetStart, snippetEnd);
 
     // 6. בדיקה נוספת - ספירת ההתאמות בקטע הסופי
-    int finalMatchCount = 0;
-    for (final term in searchTerms) {
-      final regex = RegExp(RegExp.escape(term), caseSensitive: false);
-      finalMatchCount += regex.allMatches(snippetText).length;
-    }
+    final snippetMatches = allMatches
+        .where(
+            (match) => match.start >= snippetStart && match.end <= snippetEnd)
+        .map((match) => _SnippetMatchRange(
+            match.start - snippetStart, match.end - snippetStart))
+        .toList();
+
+    final int finalMatchCount = snippetMatches.length;
 
     if (finalMatchCount < allMatches.length) {
       snippetStart = (absoluteFirstMatch - 100).clamp(0, plainText.length);
       snippetEnd = (absoluteLastMatch + 100).clamp(0, plainText.length);
       final expandedSnippet = plainText.substring(snippetStart, snippetEnd);
 
-      int expandedMatchCount = 0;
-      for (final term in searchTerms) {
-        final regex = RegExp(RegExp.escape(term), caseSensitive: false);
-        expandedMatchCount += regex.allMatches(expandedSnippet).length;
-      }
+      final expandedMatches = allMatches
+          .where(
+              (match) => match.start >= snippetStart && match.end <= snippetEnd)
+          .map((match) => _SnippetMatchRange(
+              match.start - snippetStart, match.end - snippetStart))
+          .toList();
 
-      if (expandedMatchCount >= allMatches.length) {
+      if (expandedMatches.length >= allMatches.length) {
         return _buildTextSpans(
-            expandedSnippet, searchTerms, defaultStyle, highlightStyle);
+            expandedSnippet, expandedMatches, defaultStyle, highlightStyle);
       }
     }
 
     return _buildTextSpans(
-        snippetText, searchTerms, defaultStyle, highlightStyle);
+        snippetText, snippetMatches, defaultStyle, highlightStyle);
+  }
+
+  static List<_SnippetMatchRange> _collectExactMatches(
+    String plainText,
+    List<String> searchTerms,
+  ) {
+    final matches = <_SnippetMatchRange>[];
+
+    for (final term in searchTerms) {
+      final regex = RegExp(_termToRegexPattern(term), caseSensitive: false);
+      matches.addAll(
+        regex
+            .allMatches(plainText)
+            .map((match) => _SnippetMatchRange(match.start, match.end)),
+      );
+    }
+
+    return matches;
+  }
+
+  static List<_ApproximateSnippetMatchCandidate> _collectApproximateMatches(
+    String plainText,
+    List<String> searchTerms, {
+    required List<_SnippetMatchRange> existingMatches,
+  }) {
+    final matches = <_ApproximateSnippetMatchCandidate>[];
+    final normalizedTerms = searchTerms
+        .map(_normalizeForApproximateComparison)
+        .where((term) => term.length >= 2)
+        .toSet();
+
+    if (normalizedTerms.isEmpty) {
+      return matches;
+    }
+
+    final tokenRegex = RegExp(r'[א-תA-Za-z0-9"״׳]+');
+    for (final tokenMatch in tokenRegex.allMatches(plainText)) {
+      if (_overlapsExistingMatch(
+          tokenMatch.start, tokenMatch.end, existingMatches)) {
+        continue;
+      }
+
+      final token = tokenMatch.group(0) ?? '';
+      final normalizedToken = _normalizeForApproximateComparison(token);
+      if (normalizedToken.length < 2) {
+        continue;
+      }
+
+      final distance = normalizedTerms
+          .map((term) => _editDistanceUpToOne(normalizedToken, term))
+          .whereType<int>()
+          .fold<int?>(null, (best, current) {
+        if (best == null || current < best) {
+          return current;
+        }
+        return best;
+      });
+
+      if (distance != null) {
+        matches.add(
+          _ApproximateSnippetMatchCandidate(
+            range: _SnippetMatchRange(tokenMatch.start, tokenMatch.end),
+            distance: distance,
+          ),
+        );
+      }
+    }
+
+    return matches;
+  }
+
+  static List<_SnippetMatchRange> _selectApproximateMatchesForSnippet(
+    List<_ApproximateSnippetMatchCandidate> candidates, {
+    required int plainTextLength,
+  }) {
+    if (candidates.isEmpty) {
+      return const [];
+    }
+
+    const clusterRadius = 90;
+    final center = plainTextLength / 2;
+
+    final sortedCandidates = [...candidates]..sort((left, right) {
+        final distanceCompare = left.distance.compareTo(right.distance);
+        if (distanceCompare != 0) {
+          return distanceCompare;
+        }
+
+        final leftCenter = (left.range.start + left.range.end) / 2;
+        final rightCenter = (right.range.start + right.range.end) / 2;
+        final centerCompare =
+            (leftCenter - center).abs().compareTo((rightCenter - center).abs());
+        if (centerCompare != 0) {
+          return centerCompare;
+        }
+
+        return left.range.start.compareTo(right.range.start);
+      });
+
+    final anchor = sortedCandidates.first;
+    final anchorCenter = (anchor.range.start + anchor.range.end) / 2;
+
+    final cluster = sortedCandidates
+        .where((candidate) {
+          final candidateCenter =
+              (candidate.range.start + candidate.range.end) / 2;
+          return (candidateCenter - anchorCenter).abs() <= clusterRadius;
+        })
+        .map((candidate) => candidate.range)
+        .toList();
+
+    return _mergeOverlappingRanges(cluster);
+  }
+
+  static List<_SnippetMatchRange> _mergeOverlappingRanges(
+    List<_SnippetMatchRange> ranges,
+  ) {
+    if (ranges.isEmpty) {
+      return const [];
+    }
+
+    final sorted = [...ranges]..sort((a, b) => a.start.compareTo(b.start));
+    final merged = <_SnippetMatchRange>[sorted.first];
+
+    for (final range in sorted.skip(1)) {
+      final previous = merged.last;
+      if (range.start <= previous.end) {
+        merged[merged.length - 1] =
+            _SnippetMatchRange(previous.start, max(previous.end, range.end));
+      } else {
+        merged.add(range);
+      }
+    }
+
+    return merged;
+  }
+
+  static bool _overlapsExistingMatch(
+    int start,
+    int end,
+    List<_SnippetMatchRange> existingMatches,
+  ) {
+    return existingMatches
+        .any((match) => start < match.end && end > match.start);
+  }
+
+  static String _normalizeForApproximateComparison(String text) {
+    return text
+        .replaceAll(RegExp(r'[\u0591-\u05C7]'), '')
+        .replaceAll(RegExp("[\"״׳' ]"), '')
+        .trim()
+        .toLowerCase();
+  }
+
+  static int? _editDistanceUpToOne(String left, String right) {
+    if (left == right) {
+      return 0;
+    }
+
+    final lengthDifference = (left.length - right.length).abs();
+    if (lengthDifference > 1) {
+      return null;
+    }
+
+    final shorter = left.length <= right.length ? left : right;
+    final longer = left.length <= right.length ? right : left;
+
+    int shortIndex = 0;
+    int longIndex = 0;
+    int edits = 0;
+
+    while (shortIndex < shorter.length && longIndex < longer.length) {
+      if (shorter[shortIndex] == longer[longIndex]) {
+        shortIndex++;
+        longIndex++;
+        continue;
+      }
+
+      edits++;
+      if (edits > 1) {
+        return null;
+      }
+
+      if (shorter.length == longer.length) {
+        shortIndex++;
+      }
+      longIndex++;
+    }
+
+    if (shortIndex < shorter.length || longIndex < longer.length) {
+      edits++;
+    }
+
+    return edits <= 1 ? edits : null;
   }
 
   /// בניית תבנית רגקס שמאפשרת מרכאות אופציונליות בין תווים (כדי למצוא רשב"י כשמחפשים רשבי)
@@ -221,19 +443,14 @@ class SnippetBuilder {
 
   static List<InlineSpan> _buildTextSpans(
     String text,
-    List<String> searchTerms,
+    List<_SnippetMatchRange> matches,
     TextStyle defaultStyle,
     TextStyle highlightStyle,
   ) {
     final List<InlineSpan> spans = [];
     int currentPosition = 0;
 
-    final highlightRegex = RegExp(
-      searchTerms.map(_termToRegexPattern).join('|'),
-      caseSensitive: false,
-    );
-
-    for (final match in highlightRegex.allMatches(text)) {
+    for (final match in matches) {
       if (match.start > currentPosition) {
         spans.add(TextSpan(
           text: text.substring(currentPosition, match.start),
@@ -241,7 +458,7 @@ class SnippetBuilder {
         ));
       }
       spans.add(TextSpan(
-        text: match.group(0),
+        text: text.substring(match.start, match.end),
         style: highlightStyle,
       ));
       currentPosition = match.end;
