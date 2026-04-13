@@ -112,18 +112,20 @@ class SnippetBuilder {
 
     // 3. מציאת כל ההתאמות של כל המילים בטקסט המקורי
     final exactMatches = _collectExactMatches(plainText, searchTerms);
-    final allMatches = exactMatches.isNotEmpty
-        ? _mergeOverlappingRanges(exactMatches)
-        : (typoToleranceEnabled
-            ? _selectApproximateMatchesForSnippet(
-                _collectApproximateMatches(
-                  plainText,
-                  searchTerms,
-                  existingMatches: exactMatches,
-                ),
-                plainTextLength: plainText.length,
-              )
-            : const <_SnippetMatchRange>[]);
+    final approxMatches = typoToleranceEnabled
+        ? _collectApproximateMatches(plainText, searchTerms,
+            existingMatches: exactMatches)
+        : const <_ApproximateSnippetMatchCandidate>[];
+
+    final selectedApprox = exactMatches.isNotEmpty
+        ? _selectApproximateMatchesNearExactMatches(approxMatches, exactMatches)
+        : _selectApproximateMatchesForSnippet(
+            approxMatches,
+            plainTextLength: plainText.length,
+          );
+
+    final allMatches =
+        _mergeOverlappingRanges([...exactMatches, ...selectedApprox]);
 
     if (allMatches.isEmpty) {
       return [
@@ -351,6 +353,30 @@ class SnippetBuilder {
         .toList();
 
     return _mergeOverlappingRanges(cluster);
+  }
+
+  static List<_SnippetMatchRange> _selectApproximateMatchesNearExactMatches(
+    List<_ApproximateSnippetMatchCandidate> candidates,
+    List<_SnippetMatchRange> exactMatches,
+  ) {
+    if (candidates.isEmpty || exactMatches.isEmpty) {
+      return const [];
+    }
+
+    const clusterRadius = 90;
+    final nearbyRanges = candidates
+        .where((candidate) {
+          final candidateCenter =
+              (candidate.range.start + candidate.range.end) / 2;
+          return exactMatches.any((exactMatch) {
+            final exactCenter = (exactMatch.start + exactMatch.end) / 2;
+            return (candidateCenter - exactCenter).abs() <= clusterRadius;
+          });
+        })
+        .map((candidate) => candidate.range)
+        .toList();
+
+    return _mergeOverlappingRanges(nearbyRanges);
   }
 
   static List<_SnippetMatchRange> _mergeOverlappingRanges(
