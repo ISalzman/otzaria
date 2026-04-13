@@ -12,11 +12,13 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
+import 'package:otzaria/search/utils/find_match_utils.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class AltTocSidebarView extends StatefulWidget {
@@ -41,6 +43,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   bool get wantKeepAlive => true;
 
   final ScrollController _sidebarScrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
   final Map<int, GlobalKey> _itemKeys = {};
   bool _isManuallyScrolling = false;
 
@@ -68,6 +71,9 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   // Debounce timer to prevent rapid updates during scrolling
   Timer? _debounceTimer;
 
+  // Caches the in-flight Future per structureId so every awaiter shares the same load
+  final Map<int, Future<void>> _loadingFutures = {};
+
   bool _isLoading = true;
 
   @override
@@ -80,7 +86,60 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   void dispose() {
     _debounceTimer?.cancel();
     _sidebarScrollController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _onSearchChanged(String query) async {
+    // Update UI immediately so the clear button and search mode appear without delay
+    setState(() {});
+
+    if (query.isNotEmpty) {
+      // Load all structures so search works across all of them
+      for (final structure in _structures) {
+        await _loadEntriesForStructure(structure.id);
+      }
+    }
+
+    // Refresh results after loads complete, guarded against disposal
+    if (mounted) setState(() {});
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() {});
+  }
+
+  List<AltTocEntry> _flattenEntries(int structureId) {
+    final result = <AltTocEntry>[];
+    void visit(AltTocEntry entry) {
+      result.add(entry);
+      final children = _structureChildren[structureId]?[entry.id] ?? [];
+      for (final child in children) {
+        visit(child);
+      }
+    }
+    for (final root in _structureRoots[structureId] ?? []) {
+      visit(root);
+    }
+    return result;
+  }
+
+  List<({int structureId, AltTocEntry entry})> _getMatchingEntries(
+      String rawQuery) {
+    final normalizedQuery = normalizeFindQuery(rawQuery);
+    if (normalizedQuery.isEmpty) return [];
+
+    final results = <({int structureId, AltTocEntry entry})>[];
+    for (final structure in _structures) {
+      for (final entry in _flattenEntries(structure.id)) {
+        final entryText = normalizeFindText(entry.text ?? '');
+        if (entryText.contains(normalizedQuery)) {
+          results.add((structureId: structure.id, entry: entry));
+        }
+      }
+    }
+    return results;
   }
 
   Future<void> _loadStructures() async {
@@ -111,10 +170,21 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
     }
   }
 
-  Future<void> _loadEntriesForStructure(int structureId) async {
-    // If already loaded, do nothing
-    if (_structureRoots.containsKey(structureId)) return;
+  Future<void> _loadEntriesForStructure(int structureId) {
+    // Already loaded — return immediately
+    if (_structureRoots.containsKey(structureId)) return Future.value();
 
+    // Load in-flight — return the same Future so every awaiter waits for it
+    if (_loadingFutures.containsKey(structureId)) {
+      return _loadingFutures[structureId]!;
+    }
+
+    final future = _doLoadEntries(structureId);
+    _loadingFutures[structureId] = future;
+    return future;
+  }
+
+  Future<void> _doLoadEntries(int structureId) async {
     try {
       final entries = await DatabaseLibraryProvider.instance
           .getAllAlternativeEntries(structureId);
@@ -129,6 +199,8 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
       }
     } catch (e) {
       debugPrint('Error loading entries for structure $structureId: $e');
+    } finally {
+      _loadingFutures.remove(structureId);
     }
   }
 
@@ -373,59 +445,161 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
       return const Center(child: Text('אין כותרות חלופיות זמינות'));
     }
 
-    return BlocListener<TextBookBloc, TextBookState>(
-      listenWhen: (previous, current) {
-        // Only trigger on visibleIndices changes, NOT selectedIndex
-        // This prevents interference with text selection
-        if (current is! TextBookLoaded) return false;
-        if (previous is! TextBookLoaded) return true;
+    final isSearching = _searchController.text.isNotEmpty;
 
-        final prevVisibleIndex = previous.visibleIndices.isNotEmpty
-            ? previous.visibleIndices.first
-            : -1;
-        final currVisibleIndex = current.visibleIndices.isNotEmpty
-            ? current.visibleIndices.first
-            : -1;
-
-        return prevVisibleIndex != currVisibleIndex;
-      },
-      listener: (context, state) {
-        if (state is TextBookLoaded && !context.read<TextBookBloc>().isClosed) {
-          if (!_isManuallyScrolling) {
-            // Use only visibleIndices, not selectedIndex
-            final index = state.visibleIndices.isNotEmpty
-                ? state.visibleIndices.first
-                : null;
-            if (index != null) {
-              // Debounce to prevent rapid updates during fast scrolling
-              _debounceTimer?.cancel();
-              _debounceTimer = Timer(const Duration(milliseconds: 300), () {
-                if (mounted) {
-                  _findAndHighlightEntry(index);
-                }
-              });
-            }
-          }
-        }
-      },
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          if (notification is ScrollStartNotification &&
-              notification.dragDetails != null) {
-            _isManuallyScrolling = true;
-          } else if (notification is ScrollEndNotification) {
-            _isManuallyScrolling = false;
-          }
-          return false;
-        },
-        child: ListView.builder(
-          controller: _sidebarScrollController,
-          itemCount: _structures.length,
-          itemBuilder: (context, index) {
-            return _buildStructureItem(_structures[index]);
-          },
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: RtlTextField(
+            controller: _searchController,
+            onChanged: _onSearchChanged,
+            decoration: InputDecoration(
+              hintText: 'איתור כותרת...',
+              prefixIcon: const Icon(FluentIcons.search_24_regular),
+              suffixIcon: isSearching
+                  ? IconButton(
+                      icon: const Icon(FluentIcons.dismiss_24_regular),
+                      onPressed: _clearSearch,
+                    )
+                  : null,
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+            ),
+          ),
         ),
-      ),
+        Expanded(
+          child: isSearching
+              ? _buildSearchResults()
+              : BlocListener<TextBookBloc, TextBookState>(
+                  listenWhen: (previous, current) {
+                    // Only trigger on visibleIndices changes, NOT selectedIndex
+                    // This prevents interference with text selection
+                    if (current is! TextBookLoaded) return false;
+                    if (previous is! TextBookLoaded) return true;
+
+                    final prevVisibleIndex = previous.visibleIndices.isNotEmpty
+                        ? previous.visibleIndices.first
+                        : -1;
+                    final currVisibleIndex = current.visibleIndices.isNotEmpty
+                        ? current.visibleIndices.first
+                        : -1;
+
+                    return prevVisibleIndex != currVisibleIndex;
+                  },
+                  listener: (context, state) {
+                    if (state is TextBookLoaded &&
+                        !context.read<TextBookBloc>().isClosed) {
+                      if (!_isManuallyScrolling) {
+                        // Use only visibleIndices, not selectedIndex
+                        final index = state.visibleIndices.isNotEmpty
+                            ? state.visibleIndices.first
+                            : null;
+                        if (index != null) {
+                          // Debounce to prevent rapid updates during fast scrolling
+                          _debounceTimer?.cancel();
+                          _debounceTimer =
+                              Timer(const Duration(milliseconds: 300), () {
+                            if (mounted) {
+                              _findAndHighlightEntry(index);
+                            }
+                          });
+                        }
+                      }
+                    }
+                  },
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (notification is ScrollStartNotification &&
+                          notification.dragDetails != null) {
+                        _isManuallyScrolling = true;
+                      } else if (notification is ScrollEndNotification) {
+                        _isManuallyScrolling = false;
+                      }
+                      return false;
+                    },
+                    child: ListView.builder(
+                      controller: _sidebarScrollController,
+                      itemCount: _structures.length,
+                      itemBuilder: (context, index) {
+                        return _buildStructureItem(_structures[index]);
+                      },
+                    ),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchResults() {
+    final matches = _getMatchingEntries(_searchController.text);
+
+    if (matches.isEmpty) {
+      return const Center(
+        child: Text(
+          'לא נמצאו תוצאות',
+          textDirection: TextDirection.rtl,
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: matches.length,
+      itemBuilder: (context, index) {
+        final (:structureId, :entry) = matches[index];
+        final isSelected = entry.id == _activeEntryId;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Theme.of(context)
+                    .colorScheme
+                    .primaryContainer
+                    .withValues(alpha: 0.3)
+                : null,
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: InkWell(
+            onTap: () => _handleEntryTap(structureId, entry),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    FluentIcons.text_bullet_list_24_regular,
+                    color: Theme.of(context).colorScheme.secondary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      entry.text ?? '',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

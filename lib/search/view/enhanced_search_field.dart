@@ -332,6 +332,8 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return MultiBlocListener(
       listeners: [
         BlocListener<NavigationBloc, NavigationState>(
@@ -401,6 +403,8 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                         _performSearch();
                       },
                       decoration: InputDecoration(
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHigh,
                         border: const OutlineInputBorder(),
                         hintText: "חפש כאן...",
                         labelText: "לחיפוש הקש אנטר או לחץ על סמל החיפוש",

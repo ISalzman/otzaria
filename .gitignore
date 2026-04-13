@@ -102,3 +102,6 @@ log.txt
 .codex-temp/
 .claude/
 .codex-review-3c0b17-snapshot/
+temp/
+.codex-appdata/
+.agent/

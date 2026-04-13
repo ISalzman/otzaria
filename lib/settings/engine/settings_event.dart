@@ -290,6 +290,15 @@ class UpdateEnablePerBookSettings extends SettingsEvent {
   List<Object?> get props => [enablePerBookSettings];
 }
 
+class UpdatePdfBookViewByDefault extends SettingsEvent {
+  final bool pdfBookViewByDefault;
+
+  const UpdatePdfBookViewByDefault(this.pdfBookViewByDefault);
+
+  @override
+  List<Object?> get props => [pdfBookViewByDefault];
+}
+
 class UpdateOfflineMode extends SettingsEvent {
   final bool isOfflineMode;
 
