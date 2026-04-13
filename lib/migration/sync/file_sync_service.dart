@@ -49,6 +49,7 @@ class FileSyncResult {
 /// to the database automatically. It runs in the background after app startup.
 class FileSyncService {
   static final _log = Logger('FileSyncService');
+  static const String _customFolderSourcePrefix = 'Personal::';
   static FileSyncService? _instance;
 
   final SeforimRepository _repository;
@@ -200,6 +201,59 @@ class FileSyncService {
     return Platform.isWindows ? normalized.toLowerCase() : normalized;
   }
 
+  String _buildCustomFolderSourceName(String folderPath) {
+    return '$_customFolderSourcePrefix${_normalizeFolderPath(folderPath)}';
+  }
+
+  String _buildCustomFoldersRefreshSignature(List<CustomFolder> customFolders) {
+    final normalizedPaths = customFolders
+        .map((folder) => _normalizeFolderPath(folder.path))
+        .toList()
+      ..sort();
+    return normalizedPaths.join('|');
+  }
+
+  Future<void> _storeCustomFoldersRefreshSignature(
+    List<CustomFolder> customFolders,
+  ) async {
+    await Settings.setValue(
+      SettingsRepository.keyCustomFoldersRefreshSignature,
+      _buildCustomFoldersRefreshSignature(customFolders),
+    );
+  }
+
+  Future<bool> _hasLegacyPersonalSourcesInDatabase() async {
+    final legacySource = await _repository.getSourceByName('Personal');
+    if (legacySource == null) {
+      return false;
+    }
+
+    return _repository.hasPersonalBooksWithSourceId(legacySource.id);
+  }
+
+  Future<bool> _needsCustomFolderSourceRefresh(
+    List<CustomFolder> customFolders,
+  ) async {
+    final currentSignature = _buildCustomFoldersRefreshSignature(customFolders);
+    final storedSignature = Settings.getValue<String>(
+      SettingsRepository.keyCustomFoldersRefreshSignature,
+    );
+    if (currentSignature != storedSignature) {
+      return true;
+    }
+
+    return _hasLegacyPersonalSourcesInDatabase();
+  }
+
+  String? _extractCustomFolderPathFromSourceName(String? sourceName) {
+    if (sourceName == null ||
+        !sourceName.startsWith(_customFolderSourcePrefix)) {
+      return null;
+    }
+
+    return sourceName.substring(_customFolderSourcePrefix.length);
+  }
+
   bool _isPathInsideFolder(String bookPath, String folderPath) {
     final normalizedBookPath = _normalizeFolderPath(bookPath);
     final normalizedFolderPath = _normalizeFolderPath(folderPath);
@@ -208,27 +262,100 @@ class FileSyncService {
       return true;
     }
 
-    final folderWithSeparator =
-        normalizedFolderPath.endsWith(path.separator)
-            ? normalizedFolderPath
-            : '$normalizedFolderPath${path.separator}';
+    final folderWithSeparator = normalizedFolderPath.endsWith(path.separator)
+        ? normalizedFolderPath
+        : '$normalizedFolderPath${path.separator}';
     return normalizedBookPath.startsWith(folderWithSeparator);
+  }
+
+  Future<int?> _findExistingCategoryId(List<String> categoryPath) async {
+    int? parentId;
+
+    for (final categoryTitle in categoryPath) {
+      final category = await _repository.getCategoryByTitleAndParent(
+          categoryTitle, parentId);
+      if (category == null) {
+        return null;
+      }
+      parentId = category.id;
+    }
+
+    return parentId;
+  }
+
+  Future<void> _refreshConfiguredCustomFolderSources(
+    List<CustomFolder> customFolders,
+  ) async {
+    for (final folder in customFolders) {
+      final folderDir = Directory(folder.path);
+      if (!await folderDir.exists()) {
+        continue;
+      }
+
+      final sourceName = _buildCustomFolderSourceName(folder.path);
+      final sourceId = await _repository.insertSource(sourceName, -1);
+      final filePaths = await _findNewFiles(folder.path);
+
+      for (final filePath in filePaths) {
+        final relativeCategories =
+            _parsePathToCategories(filePath, folder.path);
+        final categoryId = await _findExistingCategoryId([
+          'ספרים אישיים',
+          folder.name,
+          ...relativeCategories,
+        ]);
+        if (categoryId == null) {
+          continue;
+        }
+
+        final title = path.basenameWithoutExtension(filePath);
+        final fileType =
+            path.extension(filePath).replaceFirst('.', '').toLowerCase();
+        final existingBook =
+            await _repository.checkBookExistsInCategoryWithFileType(
+          title,
+          categoryId,
+          fileType,
+        );
+        if (existingBook == null || existingBook.sourceId == sourceId) {
+          continue;
+        }
+
+        await _repository.updateBookSourceId(existingBook.id, sourceId);
+      }
+    }
   }
 
   Future<bool> _categoryBelongsToAnyConfiguredFolder(
     int categoryId,
     List<CustomFolder> customFolders,
   ) async {
-    final descendantIds = await _repository.getDescendantCategoryIds(categoryId);
+    final descendantIds =
+        await _repository.getDescendantCategoryIds(categoryId);
+    final sourceNameCache = <int, String?>{};
 
     for (final descendantId in descendantIds) {
       final books = await _repository.getBooksByCategory(descendantId);
       for (final book in books) {
+        final sourceName = sourceNameCache.containsKey(book.sourceId)
+            ? sourceNameCache[book.sourceId]
+            : (sourceNameCache[book.sourceId] =
+                (await _repository.getSourceById(book.sourceId))?.name);
+        final sourceFolderPath =
+            _extractCustomFolderPathFromSourceName(sourceName);
+        if (sourceFolderPath != null &&
+            customFolders.any(
+              (folder) => _normalizeFolderPath(folder.path) == sourceFolderPath,
+            )) {
+          return true;
+        }
+
         final bookPath = book.filePath;
         if (bookPath == null || bookPath.isEmpty) {
           continue;
         }
-        if (customFolders.any((folder) => _isPathInsideFolder(bookPath, folder.path))) {
+        if (customFolders
+            .any((folder) => _isPathInsideFolder(bookPath, folder.path))) {
           return true;
         }
       }
@@ -255,7 +382,8 @@ class FileSyncService {
     final staleFolderCategories = <Category>[];
     for (final category in personalSubCategories) {
       final belongsToConfiguredFolder =
-          await _categoryBelongsToAnyConfiguredFolder(category.id, customFolders);
+          await _categoryBelongsToAnyConfiguredFolder(
+              category.id, customFolders);
       if (!belongsToConfiguredFolder) {
         staleFolderCategories.add(category);
       }
@@ -277,11 +405,22 @@ class FileSyncService {
     await _repository.deleteOrphanedLineToc();
   }
 
+  Future<void> refreshSourcesAndPruneRemovedCustomFolders(
+    List<CustomFolder> customFolders,
+  ) async {
+    if (await _needsCustomFolderSourceRefresh(customFolders)) {
+      await _refreshConfiguredCustomFolderSources(customFolders);
+      await _storeCustomFoldersRefreshSignature(customFolders);
+    }
+    await pruneRemovedCustomFoldersFromDatabase(customFolders);
+  }
+
   /// Internal method to scan a single path and import files
   Future<FileSyncResult> _scanAndImportPath(
       {required String rootPath,
       required List<String> categoryPrefix,
       required bool insertContent,
+      String? customSourceName,
       required DatabaseGenerator generator}) async {
     int addedBooks = 0;
     int updatedBooks = 0;
@@ -308,6 +447,7 @@ class FileSyncService {
           basePath: rootPath,
           categoryPrefix: categoryPrefix,
           insertContent: insertContent,
+          customSourceName: customSourceName,
           generator: generator,
         );
 
@@ -346,6 +486,7 @@ class FileSyncService {
     required String basePath,
     required List<String> categoryPrefix,
     required bool insertContent,
+    String? customSourceName,
     required DatabaseGenerator generator,
   }) async {
     final title = path.basenameWithoutExtension(filePath);
@@ -384,6 +525,9 @@ class FileSyncService {
       debugPrint(
           '[FileSyncService] Found existing book: title=$title, id=${existingBook.id}, filePath=${existingBook.filePath}, isFileBacked=${existingBook.isFileBacked}, totalLines=${existingBook.totalLines}');
 
+      final existingSourceName =
+          (await _repository.getSourceById(existingBook.sourceId))?.name;
+
       // Book exists - check if file has changed
       final file = File(filePath);
       final fileStat = await file.stat();
@@ -398,17 +542,23 @@ class FileSyncService {
       final expectedIsContentExternal = !effectiveInsertContent;
       final storageChanged =
           existingBook.isFileBacked != expectedIsContentExternal;
+      final sourceChanged = existingSourceName != customSourceName;
 
-      if (fileChanged || storageChanged) {
+      if (fileChanged || storageChanged || sourceChanged) {
         if (storageChanged) {
           debugPrint(
               '[FileSyncService] Storage preference changed for ${existingBook.title}: isFileBacked=${existingBook.isFileBacked} -> $expectedIsContentExternal');
+        }
+        if (sourceChanged) {
+          debugPrint(
+              '[FileSyncService] Source changed for ${existingBook.title}: $existingSourceName -> $customSourceName');
         }
         wasUpdated = true;
         await generator.createAndProcessBook(
           filePath,
           categoryId,
           insertContent: effectiveInsertContent,
+          sourceName: customSourceName,
         );
       }
     } else {
@@ -417,6 +567,7 @@ class FileSyncService {
         filePath,
         categoryId,
         insertContent: effectiveInsertContent,
+        sourceName: customSourceName,
       );
     }
 
@@ -472,8 +623,6 @@ class FileSyncService {
           Settings.getValue<String>(SettingsRepository.keyCustomFolders);
       final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
 
-      await pruneRemovedCustomFoldersFromDatabase(customFolders);
-
       if (customFolders.isNotEmpty) {
         _log.info('Found ${customFolders.length} custom folders to sync');
 
@@ -495,6 +644,7 @@ class FileSyncService {
               rootPath: folder.path,
               categoryPrefix: ['ספרים אישיים', folder.name],
               insertContent: folder.addToDatabase,
+              customSourceName: _buildCustomFolderSourceName(folder.path),
               generator: generator);
 
           addedBooks += result.addedBooks;
@@ -504,6 +654,10 @@ class FileSyncService {
           errors.addAll(result.errors);
         }
       }
+
+      await pruneRemovedCustomFoldersFromDatabase(customFolders);
+      await _storeCustomFoldersRefreshSignature(customFolders);
+
       // Scan links folder for JSON files only
       final linksPath = path.join(libraryPath, 'links');
       final linksDir = Directory(linksPath);

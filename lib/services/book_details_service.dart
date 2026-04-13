@@ -7,6 +7,7 @@ import 'package:otzaria/models/books.dart';
 /// שירות מרכזי להפקת פרטי ספר לתצוגה/דיווח מתוך DB.
 class BookDetailsService {
   static const String bookNotFoundText = 'לא ניתן למצוא את הספר';
+  static const String _customFolderSourcePrefix = 'Personal::';
 
   /// מחזיר פרטי ספר בפורמט אחיד:
   /// - שם הקובץ
@@ -56,7 +57,8 @@ class BookDetailsService {
       final repo = provider.repository;
       if (repo == null) return null;
       if (book.categoryId != null) {
-        return await repo.getBookByTitleAndCategory(book.title, book.categoryId!);
+        return await repo.getBookByTitleAndCategory(
+            book.title, book.categoryId!);
       }
       return await repo.getBookByTitle(book.title);
     } catch (_) {
@@ -71,7 +73,14 @@ class BookDetailsService {
       final repo = provider.repository;
       if (repo == null) return null;
       final source = await repo.getSourceById(dbBook.sourceId);
-      return source?.name.trim();
+      final sourceName = source?.name.trim();
+      if (sourceName == null || sourceName.isEmpty) {
+        return null;
+      }
+      if (sourceName.startsWith(_customFolderSourcePrefix)) {
+        return sourceName.substring(_customFolderSourcePrefix.length);
+      }
+      return sourceName;
     } catch (_) {
       return null;
     }
