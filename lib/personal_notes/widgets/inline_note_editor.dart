@@ -47,6 +47,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
   final ScrollController _scrollController = ScrollController();
   final PersonalNoteDraftService _draftService = PersonalNoteDraftService();
   Timer? _draftSaveTimer;
+  bool _isDone = false; // מונע שמירת טיוטה אחרי שמירה/ביטול
 
   @override
   void initState() {
@@ -92,6 +93,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
       UiSnack.showError('ההערה ריקה, לא נשמרה');
       return;
     }
+    _isDone = true;
     await _clearDraft();
     widget.onSave(result);
   }
@@ -105,6 +107,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
   }
 
   Future<void> _persistDraft() async {
+    if (_isDone) return;
     final result = _controller.buildResult();
     final normalizedInitialContent = _initialResult.content.trimRight();
     final normalizedCurrentContent = result.content.trimRight();
@@ -147,6 +150,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
   }
 
   Future<void> _handleCancel() async {
+    _isDone = true;
     await _clearDraft();
     widget.onCancel();
   }
