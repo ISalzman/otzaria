@@ -7,6 +7,7 @@ import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
 
 /// Represents a tab with a PDF book.
 ///
@@ -61,6 +62,9 @@ class PdfBookTab extends OpenedTab {
   /// Saved zoom level for restoration after rebuild
   double? savedZoom;
 
+  /// Saved layout mode for restoration after rebuild
+  PdfLayoutMode? savedLayoutMode;
+
   /// Creates a new instance of [PdfBookTab].
   ///
   /// The [book] parameter represents the PDF book, and the [pageNumber]
@@ -112,11 +116,26 @@ class PdfBookTab extends OpenedTab {
     final PdfBook restoredBook = json['book'] != null
         ? Book.fromJson(Map<String, dynamic>.from(json['book'])) as PdfBook
         : PdfBook(title: getTitleFromPath(json['path']), path: json['path']);
-    return PdfBookTab(
+
+    final int pageNumber = json['pageNumber'] ?? 1;
+
+    PdfLayoutMode? savedLayoutMode;
+    if (json['savedLayoutMode'] != null) {
+      savedLayoutMode = PdfLayoutMode.values.firstWhere(
+        (e) => e.name == json['savedLayoutMode'],
+        orElse: () => PdfLayoutMode.regularView,
+      );
+    }
+
+    final tab = PdfBookTab(
         book: restoredBook,
-        pageNumber: json['pageNumber'],
+        pageNumber: pageNumber,
         openLeftPane: shouldOpenLeftPane,
         isPinned: json['isPinned'] ?? false);
+
+    tab.savedLayoutMode = savedLayoutMode;
+
+    return tab;
   }
 
   /// Cleanup when the tab is disposed
@@ -153,7 +172,8 @@ class PdfBookTab extends OpenedTab {
       'book': book.toJson(),
       'pageNumber': currentPage,
       'isPinned': isPinned,
-      'type': 'PdfBookTab'
+      'type': 'PdfBookTab',
+      if (savedLayoutMode != null) 'savedLayoutMode': savedLayoutMode!.name,
     };
   }
 }

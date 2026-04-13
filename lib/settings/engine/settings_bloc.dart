@@ -44,6 +44,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<ResetShortcuts>(_onResetShortcuts);
     on<UpdateShortcut>(_onUpdateShortcut);
     on<UpdateEnablePerBookSettings>(_onUpdateEnablePerBookSettings);
+    on<UpdatePdfBookViewByDefault>(_onUpdatePdfBookViewByDefault);
     on<UpdateOfflineMode>(_onUpdateOfflineMode);
     on<UpdateAutoSyncCatalogs>(_onUpdateAutoSyncCatalogs);
     on<UpdateSoftwareAndBookUpdatesEnabled>(
@@ -102,6 +103,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         Map<String, String>.from(settings['shortcuts'] as Map),
       ),
       enablePerBookSettings: settings['enablePerBookSettings'],
+      pdfBookViewByDefault: settings['pdfBookViewByDefault'] ?? false,
       isOfflineMode: settings['isOfflineMode'] ?? false,
       autoSyncCatalogs: settings['autoSyncCatalogs'] ?? true,
       softwareAndBookUpdatesEnabled:
@@ -121,6 +123,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateEnablePerBookSettings(event.enablePerBookSettings);
     emit(state.copyWith(enablePerBookSettings: event.enablePerBookSettings));
+  }
+
+  Future<void> _onUpdatePdfBookViewByDefault(
+    UpdatePdfBookViewByDefault event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updatePdfBookViewByDefault(event.pdfBookViewByDefault);
+    emit(state.copyWith(pdfBookViewByDefault: event.pdfBookViewByDefault));
   }
 
   Future<void> _onUpdateOfflineMode(

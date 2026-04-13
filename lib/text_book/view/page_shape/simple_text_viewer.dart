@@ -112,6 +112,11 @@ class SimpleTextViewer extends StatefulWidget {
 }
 
 class _SimpleTextViewerState extends State<SimpleTextViewer> {
+  // דגל סטטי: מונע מהטקסט הראשי לדרוס העתקה שכבר בוצעה ע"י מפרש
+  static bool _commentaryCopyHandled = false;
+  // מצביע סטטי: רק הפרשן האחרון שנבחר בו טקסט מטפל ב-Ctrl+C
+  static _SimpleTextViewerState? _lastActiveCommentary;
+
   late final ItemScrollController _scrollController;
   late final ItemPositionsListener _positionsListener;
   FocusNode? _keyboardFocusNode;
@@ -189,6 +194,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         widget.positionsListener ?? ItemPositionsListener.create();
     _resolvedKeyboardFocusNode;
 
+    // מאזין גלובלי ל-Ctrl+C במפרשים (ללא צורך בפוקוס)
+    if (!widget.isMainText) {
+      HardwareKeyboard.instance.addHandler(_handleCommentaryCopyKeyEvent);
+    }
+
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
       _scheduleInitialScrollRestore();
@@ -212,8 +222,34 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
   }
 
+  bool _handleCommentaryCopyKeyEvent(KeyEvent event) {
+    // רק הפרשן שנבחר בו טקסט לאחרונה מטפל
+    if (_lastActiveCommentary != this) return false;
+    if (event is! KeyDownEvent) return false;
+    final isCtrlC = HardwareKeyboard.instance.isControlPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyC;
+    final isMetaC = HardwareKeyboard.instance.isMetaPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyC;
+    if ((isCtrlC || isMetaC) &&
+        _savedSelectedText != null &&
+        _savedSelectedText!.trim().isNotEmpty) {
+      _commentaryCopyHandled = true;
+      _copyFormattedText().whenComplete(() {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _commentaryCopyHandled = false;
+        });
+      });
+      return true;
+    }
+    return false;
+  }
+
   @override
   void dispose() {
+    if (!widget.isMainText) {
+      HardwareKeyboard.instance.removeHandler(_handleCommentaryCopyKeyEvent);
+      if (_lastActiveCommentary == this) _lastActiveCommentary = null;
+    }
     _keyboardFocusNode?.dispose();
     super.dispose();
   }
@@ -822,6 +858,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   /// העתקת טקסט מעוצב
   Future<void> _copyFormattedText() async {
+    // מפרש כבר טיפל בהעתקה - לא נדרוס
+    if (widget.isMainText && _commentaryCopyHandled) return;
+
     final plainText = _savedSelectedText;
 
     if (plainText == null || plainText.trim().isEmpty) {
@@ -907,6 +946,16 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                     onSelectionChanged: (selection) {
                       _handleSelectionChange(selection?.plainText);
                       _requestKeyboardFocus('selection-changed');
+                      if (!widget.isMainText) {
+                        if (selection != null &&
+                            selection.plainText.isNotEmpty) {
+                          _lastActiveCommentary = this;
+                        } else if (selection == null &&
+                            _lastActiveCommentary == this) {
+                          // בחירה בוטלה לחלוטין — מנקים כדי לא לאפשר העתקה "רפאים"
+                          _lastActiveCommentary = null;
+                        }
+                      }
                     },
                     child: Actions(
                       actions: {

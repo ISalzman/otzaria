@@ -538,7 +538,12 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
 
       await emitBatch(batch);
     } finally {
-      document?.dispose();
+      // Don't call document.dispose() explicitly - pdfrx's background page
+      // preloader (_loadPagesInLimitedTime) runs in a separate isolate and may
+      // still be executing FFI callbacks at this point. Calling dispose() while
+      // the worker is active causes a fatal "Callback invoked after it has been
+      // deleted" crash. Let the GC collect the document instead, which gives
+      // the worker time to finish naturally.
     }
   }
 

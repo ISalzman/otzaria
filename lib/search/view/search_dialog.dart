@@ -138,7 +138,7 @@ class _SearchDialogState extends State<SearchDialog> {
           margin: const EdgeInsets.only(top: 4),
           constraints: const BoxConstraints(maxHeight: 200),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color:

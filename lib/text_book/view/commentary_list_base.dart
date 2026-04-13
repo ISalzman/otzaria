@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/theme/app_fonts.dart';
@@ -84,7 +85,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   final ValueNotifier<String?> _savedSelectedText =
       ValueNotifier<String?>(null); // טקסט נבחר לתפריט הקשר
+  final ValueNotifier<Link?> _lastSelectedLink =
+      ValueNotifier<Link?>(null); // ה-link האחרון שנוגעו בו (לכותרות בהעתקה)
   bool _showCommentatorsFilter = false; // האם להציג את מסך בחירת המפרשים
+  final FocusNode _focusNode = FocusNode();
 
   String _getLinkKey(Link link) =>
       '${link.index1}_${link.path2}_${link.index2}';
@@ -190,9 +194,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
     _searchController.dispose();
     _savedSelectedText.dispose();
+    _lastSelectedLink.dispose();
     _searchQueryNotifier.dispose();
     _currentSearchIndexNotifier.dispose();
     _totalSearchResultsNotifier.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -408,6 +414,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       getLinkKey: _getLinkKey,
       indexesKey: indexesKey,
       savedSelectedTextListenable: _savedSelectedText,
+      lastSelectedLinkListenable: _lastSelectedLink,
       onExpansionChanged: (expanded) {
         _expansionStates[groupKey] = expanded;
         // בודק אם כל המפרשים פתוחים או סגורים ומעדכן את המצב הגלובלי
@@ -418,6 +425,15 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
             });
           }
         });
+      },
+      onLinkSelected: (link, text) {
+        _savedSelectedText.value = text;
+        _lastSelectedLink.value = link;
+        _focusNode.requestFocus();
+      },
+      onLinkSelectionCleared: () {
+        _savedSelectedText.value = null;
+        _lastSelectedLink.value = null;
       },
     );
   }
@@ -563,51 +579,75 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
                     final indexesKey = currentIndexes.join(',');
 
-                    return SelectionArea(
-                      onSelectionChanged: (selection) {
-                        if (selection != null &&
-                            selection.plainText.isNotEmpty) {
-                          _savedSelectedText.value = selection.plainText;
-                        }
+                    return Shortcuts(
+                      shortcuts: <ShortcutActivator, Intent>{
+                        LogicalKeySet(
+                          LogicalKeyboardKey.control,
+                          LogicalKeyboardKey.keyC,
+                        ): const _CopyCommentaryIntent(),
+                        LogicalKeySet(
+                          LogicalKeyboardKey.meta,
+                          LogicalKeyboardKey.keyC,
+                        ): const _CopyCommentaryIntent(),
                       },
-                      child: AppFutureBuilder<List<CommentaryGroup>>(
-                        future: _getCachedGroups(data),
-                        loadingWidget: _buildSkeletonLoading(),
-                        builder: (context, groups) {
-                          for (final group in groups) {
-                            final groupKey = group.bookTitle;
-                            _expansionStates.putIfAbsent(
-                                groupKey, () => _allExpanded);
-                          }
+                      child: Actions(
+                        actions: <Type, Action<Intent>>{
+                          _CopyCommentaryIntent:
+                              CallbackAction<_CopyCommentaryIntent>(
+                            onInvoke: (_) {
+                              ContextMenuUtils.copyFormattedText(
+                                context: context,
+                                savedSelectedText: _savedSelectedText.value,
+                                fontSize: widget.fontSize,
+                                link: _lastSelectedLink.value,
+                              );
+                              return null;
+                            },
+                          ),
+                        },
+                        child: Focus(
+                          focusNode: _focusNode,
+                          child: AppFutureBuilder<List<CommentaryGroup>>(
+                              future: _getCachedGroups(data),
+                              loadingWidget: _buildSkeletonLoading(),
+                              builder: (context, groups) {
+                                for (final group in groups) {
+                                  final groupKey = group.bookTitle;
+                                  _expansionStates.putIfAbsent(
+                                      groupKey, () => _allExpanded);
+                                }
 
-                          return ProgressiveScroll(
-                            scrollController: scrollController,
-                            maxSpeed: 10000.0,
-                            curve: 10.0,
-                            accelerationFactor: 5,
-                            child: ScrollablePositionedList.builder(
-                              itemScrollController: _itemScrollController,
-                              itemPositionsListener: _itemPositionsListener,
-                              initialScrollIndex:
-                                  _lastScrollIndex.clamp(0, groups.length - 1),
-                              key: PageStorageKey(
-                                  'commentary_${selectedCommentators.join(',')}_$_allExpanded'),
-                              physics: const ClampingScrollPhysics(),
-                              scrollOffsetController: scrollController,
-                              shrinkWrap: widget.shrinkWrap,
-                              itemCount: groups.length,
-                              itemBuilder: (context, groupIndex) {
-                                final group = groups[groupIndex];
-                                return _buildCommentaryGroupTile(
-                                  group: group,
-                                  state: state,
-                                  indexesKey: indexesKey,
+                                return ProgressiveScroll(
+                                  scrollController: scrollController,
+                                  maxSpeed: 10000.0,
+                                  curve: 10.0,
+                                  accelerationFactor: 5,
+                                  child: ScrollablePositionedList.builder(
+                                    itemScrollController: _itemScrollController,
+                                    itemPositionsListener:
+                                        _itemPositionsListener,
+                                    initialScrollIndex: _lastScrollIndex
+                                        .clamp(0, groups.length - 1),
+                                    key: PageStorageKey(
+                                        'commentary_${selectedCommentators.join(',')}_$_allExpanded'),
+                                    physics: const ClampingScrollPhysics(),
+                                    scrollOffsetController: scrollController,
+                                    shrinkWrap: widget.shrinkWrap,
+                                    itemCount: groups.length,
+                                    itemBuilder: (context, groupIndex) {
+                                      final group = groups[groupIndex];
+                                      return _buildCommentaryGroupTile(
+                                        group: group,
+                                        state: state,
+                                        indexesKey: indexesKey,
+                                      );
+                                    },
+                                  ),
                                 );
                               },
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        ),
                     );
                   },
                 );
@@ -972,7 +1012,10 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   final String Function(Link) getLinkKey;
   final String indexesKey;
   final ValueListenable<String?> savedSelectedTextListenable;
+  final ValueListenable<Link?> lastSelectedLinkListenable;
   final void Function(bool) onExpansionChanged;
+  final void Function(Link link, String text) onLinkSelected;
+  final VoidCallback onLinkSelectionCleared;
 
   const _CollapsibleCommentaryGroup({
     super.key,
@@ -991,7 +1034,10 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     required this.getLinkKey,
     required this.indexesKey,
     required this.savedSelectedTextListenable,
+    required this.lastSelectedLinkListenable,
     required this.onExpansionChanged,
+    required this.onLinkSelected,
+    required this.onLinkSelectionCleared,
   });
 
   @override
@@ -1074,7 +1120,15 @@ class _CollapsibleCommentaryGroupState
         // תוכן המפרשים - מוצג רק כשמורחב
         if (_isExpanded)
           ...widget.group.links.map((link) {
-            return ValueListenableBuilder<String?>(
+            return SelectionArea(
+              onSelectionChanged: (selection) {
+                if (selection != null && selection.plainText.isNotEmpty) {
+                  widget.onLinkSelected(link, selection.plainText);
+                } else if (selection == null) {
+                  widget.onLinkSelectionCleared();
+                }
+              },
+              child: ValueListenableBuilder<String?>(
               valueListenable: widget.savedSelectedTextListenable,
               child: Padding(
                 key: widget.itemKeys[widget.getLinkKey(link)],
@@ -1159,16 +1213,22 @@ class _CollapsibleCommentaryGroupState
                       context: menuCtx,
                       savedSelectedText: selectedText,
                       fontSize: widget.fontSize,
-                      link: link,
+                      // link מגיע ממקור הבחירה, לא מהפריט שעליו נפתח התפריט
+                      link: widget.lastSelectedLinkListenable.value,
                     ),
                   ),
                   child: child!,
                 );
               },
+            ),
             );
           }),
         const Divider(height: 1),
       ],
     );
   }
+}
+
+class _CopyCommentaryIntent extends Intent {
+  const _CopyCommentaryIntent();
 }

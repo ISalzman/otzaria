@@ -116,6 +116,35 @@ class DesignSettingsTab extends StatelessWidget {
 
               kSettingsCardSpacing,
 
+              SettingsCard(
+                title: 'תצוגת PDF',
+                children: [
+                  SwitchSettingsTile(
+                    leading: const Icon(FluentIcons.book_open_24_regular),
+                    title: const Text('תצוגת ספר בPDF',
+                        style: kSettingsTitleStyle),
+                    subtitle: Text(
+                      state.enablePerBookSettings
+                          ? state.pdfBookViewByDefault
+                              ? 'ספרי PDF ייפתחו בתצוגת ספר'
+                              : 'ספרי PDF ייפתחו בתצוגה רגילה'
+                          : state.pdfBookViewByDefault
+                              ? 'כל ספרי ה-PDF ייפתחו בתצוגת ספר'
+                              : 'כל ספרי ה-PDF ייפתחו בתצוגה רגילה',
+                      style: kSettingsSubtitleStyle,
+                    ),
+                    value: state.pdfBookViewByDefault,
+                    onChanged: (value) {
+                      context
+                          .read<SettingsBloc>()
+                          .add(UpdatePdfBookViewByDefault(value));
+                    },
+                  ),
+                ],
+              ),
+
+              kSettingsCardSpacing,
+
               // הגדרות טאבים
               SettingsCard(
                 title: 'כרטיסיות הספרים',
