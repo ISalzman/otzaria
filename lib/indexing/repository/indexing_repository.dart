@@ -164,8 +164,9 @@ class IndexingRepository {
         final index = await _tantivyDataProvider.engine;
         await index.commit();
         saveIndexedBooks();
+        debugPrint('⚙️ מבצע optimize לאינדקס...');
+        await optimizeIndexBestEffort(index.optimize);
         debugPrint('✅ אינדקס נשמר בהצלחה!');
-
       }
     } finally {
       _activeIsolateService = null;
@@ -330,6 +331,28 @@ class IndexingRepository {
     ];
 
     await index.upsertDocumentsBatch(docs: docs);
+  }
+
+  @visibleForTesting
+  static Future<bool> optimizeIndexBestEffort(
+    Future<void> Function() optimize, {
+    void Function(Object error, StackTrace stackTrace)? onFailure,
+  }) async {
+    try {
+      await optimize();
+      return true;
+    } catch (error, stackTrace) {
+      if (onFailure != null) {
+        onFailure(error, stackTrace);
+      } else {
+        debugPrint('⚠️ optimize נכשל אחרי commit; האינדקס כבר נשמר: $error');
+        debugPrintStack(
+          label: 'optimize failed after final commit',
+          stackTrace: stackTrace,
+        );
+      }
+      return false;
+    }
   }
 
   @visibleForTesting

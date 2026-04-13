@@ -360,7 +360,9 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
     }
 
     Pdfrx.getCacheDirectory ??= () => Directory.systemTemp.path;
-    await pdfrxFlutterInitialize(dismissPdfiumWasmWarnings: true);
+    // pdfrxFlutterInitialize calls WidgetsFlutterBinding.ensureInitialized() which is
+    // forbidden in background isolates. Instead, initialize PDFium directly via FFI.
+    await PdfrxEntryFunctions.instance.init();
     pdfrxInitialized = true;
   }
 
