@@ -655,6 +655,11 @@ class FileSyncService {
         }
       }
 
+      if (addedCategories > 0) {
+        _reportProgress(0.95, 'מעדכן היררכיית קטגוריות...');
+        await _repository.rebuildCategoryClosure();
+      }
+
       await pruneRemovedCustomFoldersFromDatabase(customFolders);
       await _storeCustomFoldersRefreshSignature(customFolders);
 
@@ -678,12 +683,6 @@ class FileSyncService {
         );
         addedLinks += linksResult.processedLinks;
         errors.addAll(linksResult.errors);
-      }
-
-      // Rebuild category closure if categories were added
-      if (addedCategories > 0) {
-        _reportProgress(0.95, 'מעדכן היררכיית קטגוריות...');
-        await _repository.rebuildCategoryClosure();
       }
 
       _reportProgress(1.0, 'הסנכרון הושלם');
