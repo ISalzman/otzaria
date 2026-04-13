@@ -64,7 +64,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   bool get wantKeepAlive => true;
 
   final FocusNode _firstSearchResultFocusNode = FocusNode();
-  int _depth = 0;
   final Set<String> _expandedCategories = {};
   bool _isSettingsPanelOpen = false;
   bool? _previewPanelOverrideVisible;
@@ -602,8 +601,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               _update(context, state, settingsState);
             },
             onClear: () {
-              _update(context, state, settingsState);
-              _refocusSearchBar();
+              _update(context, state, settingsState, restoreSearchFocus: true);
             },
           ),
         );
@@ -648,8 +646,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       onSelectionChanged: (list) {
         context.read<LibraryBloc>().add(SelectTopics(list));
-        _update(context, state, settingsState);
-        _refocusSearchBar();
+        _update(context, state, settingsState, restoreSearchFocus: true);
       },
       chipBuilder: (context, item, isSelected) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
@@ -933,7 +930,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         _expandedCategories.isNotEmpty) {
       setState(() => _expandedCategories.remove(_expandedCategories.last));
     } else if (state.currentCategory?.parent != null) {
-      setState(() => _depth = _depth > 0 ? _depth - 1 : 0);
       context.read<LibraryBloc>().add(NavigateUp());
       context.read<LibraryBloc>().add(const SearchBooks());
       _refocusSearchBar(selectAll: true);
@@ -946,13 +942,17 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     SettingsState settingsState,
   ) {
     setState(() {
-      _depth = 0;
       _expandedCategories.clear();
     });
     context.read<LibraryBloc>().add(LoadLibrary());
     context.read<FocusRepository>().librarySearchController.clear();
-    _update(context, state, settingsState);
-    _refocusSearchBar(selectAll: true);
+    _update(
+      context,
+      state,
+      settingsState,
+      restoreSearchFocus: true,
+      selectAllOnRestore: true,
+    );
   }
 
   // ── Content ───────────────────────────────────────────────────────────────
@@ -1024,49 +1024,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       );
     }
 
-    if (_depth != 0) {
-      items.add(
-        MyGridView(items: filteredBooks.map((b) => _buildBookItem(b)).toList()),
-      );
-      if (filteredBooks.length > 20) {
-        items.add(
-          Center(
-            child: TextButton(
-              onPressed: () => _showAllBooksDialog(filteredBooks),
-              child: Text('הצג עוד ${filteredBooks.length - 20} פריטים'),
-            ),
-          ),
-        );
-      }
-      for (final sub in filteredSubCategories) {
-        final subBooks = sub.books.toList()
-          ..sort((a, b) => a.order.compareTo(b.order));
-        final subCats = sub.subCategories.toList()
-          ..sort((a, b) => a.order.compareTo(b.order));
-        items.add(Center(child: HeaderItem(category: sub)));
-        final subItems = <Widget>[
-          ...subBooks.map((b) => _buildBookItem(b)),
-          ...subCats.map(
-            (c) => CategoryGridItem(
-              category: c,
-              onCategoryClickCallback: () => _openCategory(c),
-            ),
-          ),
-        ];
-        items.add(MyGridView(items: subItems));
-      }
-    } else {
-      final allItems = <Widget>[
-        ...filteredBooks.map((b) => _buildBookItem(b)),
-        ...filteredSubCategories.map(
-          (c) => CategoryGridItem(
-            category: c,
-            onCategoryClickCallback: () => _openCategory(c),
-          ),
+    final allItems = <Widget>[
+      ...filteredSubCategories.map(
+        (c) => CategoryGridItem(
+          category: c,
+          onCategoryClickCallback: () => _openCategory(c),
         ),
-      ];
-      items.add(MyGridView(items: allItems));
-    }
+      ),
+      ...filteredBooks.map((b) => _buildBookItem(b)),
+    ];
+    items.add(MyGridView(items: allItems));
     return items;
   }
 
@@ -1441,7 +1408,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   void _openCategory(Category category) {
-    setState(() => _depth++);
     context.read<LibraryBloc>().add(NavigateToCategory(category));
     final book = _getFirstDisplayedBook(category);
     if (book != null) {
@@ -1492,8 +1458,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   void _update(
     BuildContext context,
     LibraryState state,
-    SettingsState settingsState,
-  ) {
+    SettingsState settingsState, {
+    bool restoreSearchFocus = false,
+    bool selectAllOnRestore = false,
+  }) {
     final searchText =
         context.read<FocusRepository>().librarySearchController.text;
     context.read<LibraryBloc>().add(
@@ -1501,7 +1469,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         );
     _searchWithSettings(context, settingsState);
     setState(() {});
-    _refocusSearchBar();
+    if (restoreSearchFocus) {
+      _refocusSearchBar(selectAll: selectAllOnRestore);
+    }
   }
 
   void _searchWithSettings(BuildContext context, SettingsState s) {
