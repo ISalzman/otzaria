@@ -92,6 +92,32 @@ void main() {
       );
     });
   });
+
+  group('IndexingRepository.optimizeIndexBestEffort', () {
+    test('מחזיר true כש-optimize מצליח', () async {
+      var called = false;
+
+      final completed = await IndexingRepository.optimizeIndexBestEffort(() async {
+        called = true;
+      });
+
+      expect(called, isTrue);
+      expect(completed, isTrue);
+    });
+
+    test('מחזיר false ולא זורק כש-optimize נכשל אחרי commit', () async {
+      Object? reportedError;
+
+      final completed = await IndexingRepository.optimizeIndexBestEffort(() async {
+        throw StateError('maintenance failed');
+      }, onFailure: (error, _) {
+        reportedError = error;
+      });
+
+      expect(completed, isFalse);
+      expect(reportedError, isA<StateError>());
+    });
+  });
 }
 
 Library _buildLibrary({
