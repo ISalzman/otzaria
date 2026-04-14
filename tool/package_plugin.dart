@@ -8,7 +8,8 @@ import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
 
 void main(List<String> args) async {
   if (args.isEmpty) {
-    print('Usage: dart tool/package_plugin.dart <path_to_plugin_directory> [--force]');
+    print(
+        'Usage: dart tool/package_plugin.dart <path_to_plugin_directory> [--force]');
     exit(1);
   }
 
@@ -23,7 +24,8 @@ void main(List<String> args) async {
 
   final manifestFile = File(p.join(dir.path, 'manifest.json'));
   if (!manifestFile.existsSync()) {
-    print('Error: manifest.json not found in $dirPath. A valid plugin must have a manifest.json.');
+    print(
+        'Error: manifest.json not found in $dirPath. A valid plugin must have a manifest.json.');
     exit(1);
   }
 
@@ -40,7 +42,8 @@ void main(List<String> args) async {
   try {
     manifest = PluginManifest.fromJson(manifestJson);
   } catch (e) {
-    print('Error: Failed to parse manifest.json into PluginManifest structure: $e');
+    print(
+        'Error: Failed to parse manifest.json into PluginManifest structure: $e');
     exit(1);
   }
 
@@ -55,7 +58,8 @@ void main(List<String> args) async {
     exit(1);
   }
 
-  final outPath = p.join(dir.parent.path, '${manifest.id}-${manifest.version}.otzplugin');
+  final outPath =
+      p.join(dir.parent.path, '${manifest.id}-${manifest.version}.otzplugin');
   final outFile = File(outPath);
 
   if (outFile.existsSync() && !force) {
@@ -65,12 +69,22 @@ void main(List<String> args) async {
   }
 
   final encoder = ZipFileEncoder();
-  
+
   print('Packaging $dirPath into $outPath ...');
-  
+
   encoder.create(outPath);
-  encoder.addDirectory(dir, includeDirName: false);
-  encoder.close();
+
+  // Add files one by one to ensure all files are included correctly
+  final entities = dir.listSync(recursive: true);
+  for (final entity in entities) {
+    if (entity is File) {
+      final relativePath = p.relative(entity.path, from: dir.path);
+      print('  Adding: $relativePath');
+      encoder.addFileSync(entity, relativePath);
+    }
+  }
+
+  encoder.closeSync();
 
   print('Done! Packaged successfully into: $outPath');
 }
