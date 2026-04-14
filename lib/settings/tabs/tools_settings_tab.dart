@@ -18,6 +18,7 @@ class ToolsSettingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = SingleChildScrollView(
+      primary: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: const [

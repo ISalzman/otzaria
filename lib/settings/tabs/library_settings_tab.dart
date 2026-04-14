@@ -52,7 +52,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           context.read<NavigationBloc>().add(const CheckLibrary());
 
           if (extractionResult.successfullyExtracted) {
-            UiSnack.show('הקובץ "${extractionResult.extractedFileName}" חולץ בהצלחה!');
+            UiSnack.show(
+                'הקובץ "${extractionResult.extractedFileName}" חולץ בהצלחה!');
           }
         }
       },
@@ -154,7 +155,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             onPressed: () async {
               String? path = await FilePicker.platform.getDirectoryPath();
               if (path != null && context.mounted) {
-                await _showExtractionDialog(context, path, isLibraryPath: false);
+                await _showExtractionDialog(context, path,
+                    isLibraryPath: false);
                 if (mounted) setState(() {});
               }
             },
@@ -174,6 +176,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             : null;
 
         return SingleChildScrollView(
+          primary: true,
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
