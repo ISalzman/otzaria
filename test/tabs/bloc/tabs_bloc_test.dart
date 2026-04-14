@@ -25,10 +25,11 @@ void main() {
 
       bloc.add(AddTab(rightTab));
       bloc.add(AddTab(leftTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
 
       bloc.add(EnableSideBySideMode(rightTab: rightTab, leftTab: leftTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream
+          .firstWhere((s) => s.tabs.length == 1 && s.currentTab is CombinedTab);
 
       final currentState = bloc.state;
       expect(currentState.tabs, hasLength(1));
@@ -57,17 +58,18 @@ void main() {
 
       bloc.add(AddTab(rightTab));
       bloc.add(AddTab(leftTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
 
       bloc.add(EnableSideBySideMode(rightTab: rightTab, leftTab: leftTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream
+          .firstWhere((s) => s.tabs.length == 1 && s.currentTab is CombinedTab);
 
       final combinedTab = bloc.state.currentTab! as CombinedTab;
       final combinedRightTab = combinedTab.rightTab;
       final combinedLeftTab = combinedTab.leftTab;
 
       bloc.add(const DisableSideBySideMode());
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
 
       final restoredState = bloc.state;
       expect(restoredState.tabs, hasLength(2));
@@ -91,11 +93,14 @@ void main() {
 
       bloc.add(AddTab(firstTab));
       bloc.add(AddTab(secondTab));
-      await Future<void>.delayed(Duration.zero);
+      // After both AddTabs: tabs=[first,second], currentTabIndex=1
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
 
       final targetTab = _createTextTab('ספר א', index: 12, categoryId: 1);
       bloc.add(OpenOrFocusTab(targetTab, targetTitle: 'ספר א, פרק א'));
-      await Future<void>.delayed(Duration.zero);
+      // Focuses firstTab at index 0 — currentTabIndex changes from 1 to 0
+      await bloc.stream
+          .firstWhere((s) => s.tabs.length == 2 && s.currentTabIndex == 0);
 
       expect(bloc.state.tabs, hasLength(2));
       expect(bloc.state.currentTabIndex, 0);
@@ -109,11 +114,12 @@ void main() {
         ..currentTitle.value = 'פרק א';
 
       bloc.add(AddTab(existingTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
       final targetTab = _createTextTab('ספר א', index: 25, categoryId: 1);
       bloc.add(OpenOrFocusTab(targetTab, targetTitle: 'פרק ב'));
-      await Future<void>.delayed(Duration.zero);
+      // No existing tab matches 'פרק ב' — a new tab is added
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
 
       expect(bloc.state.tabs, hasLength(2));
       expect(bloc.state.currentTabIndex, 1);
@@ -129,14 +135,16 @@ void main() {
       )..currentTitle.value = 'שער ראשון';
 
       bloc.add(AddTab(existingTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
       final targetTab = PdfBookTab(
         book: PdfBook(title: 'ספר PDF', path: 'a.pdf'),
         pageNumber: 14,
       );
       bloc.add(OpenOrFocusTab(targetTab, targetTitle: 'ספר PDF, שער ראשון'));
-      await Future<void>.delayed(Duration.zero);
+      // Tab is already active at index 0 — state.currentTabIndex stays 0, no new emission.
+      // pumpEventQueue drains all microtasks to guarantee the handler has completed.
+      await pumpEventQueue();
 
       expect(bloc.state.tabs, hasLength(1));
       expect(bloc.state.currentTabIndex, 0);
@@ -154,11 +162,12 @@ void main() {
       );
 
       bloc.add(AddTab(combinedTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
       final targetTab = _createTextTab('ספר שמאל', index: 99, categoryId: 2);
       bloc.add(OpenOrFocusTab(targetTab, targetTitle: 'ספר שמאל, פרק ג'));
-      await Future<void>.delayed(Duration.zero);
+      // CombinedTab is already active at index 0 — no state change.
+      await pumpEventQueue();
 
       expect(bloc.state.tabs, hasLength(1));
       expect(bloc.state.currentTabIndex, 0);
@@ -172,11 +181,12 @@ void main() {
       final existingTab = _createTextTab('ספר א', index: 12, categoryId: 1);
 
       bloc.add(AddTab(existingTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
       final targetTab = _createTextTab('ספר א', index: 12, categoryId: 1);
       bloc.add(OpenOrFocusTab(targetTab));
-      await Future<void>.delayed(Duration.zero);
+      // Tab is already active at index 0 — no state change.
+      await pumpEventQueue();
 
       expect(bloc.state.tabs, hasLength(1));
       expect(bloc.state.currentTabIndex, 0);
@@ -192,14 +202,15 @@ void main() {
       )..currentTitle.value = 'פרק א';
 
       bloc.add(AddTab(existingTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
       final targetTab = TextBookTab(
         book: TextBook(title: 'ספר זהה'),
         index: 12,
       );
       bloc.add(OpenOrFocusTab(targetTab, targetTitle: 'ספר זהה, פרק א'));
-      await Future<void>.delayed(Duration.zero);
+      // No stable identity match — a new tab is added
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
 
       expect(bloc.state.tabs, hasLength(2));
       expect(bloc.state.currentTabIndex, 1);
@@ -219,7 +230,7 @@ void main() {
       );
 
       bloc.add(AddTab(existingTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
       final targetTab = TextBookTab(
         book: TextBook(
@@ -230,7 +241,8 @@ void main() {
         index: 0,
       );
       bloc.add(OpenOrFocusTab(targetTab));
-      await Future<void>.delayed(Duration.zero);
+      // Different book IDs — a new tab is added
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
 
       expect(bloc.state.tabs, hasLength(2));
       expect(bloc.state.currentTabIndex, 1);
@@ -246,14 +258,15 @@ void main() {
       );
 
       bloc.add(AddTab(existingTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
       final targetTab = PdfBookTab(
         book: PdfBook(title: 'ספר PDF', path: 'a.pdf'),
         pageNumber: 10,
       );
       bloc.add(OpenOrFocusTab(targetTab, targetTitle: 'ספר PDF, שער ראשון'));
-      await Future<void>.delayed(Duration.zero);
+      // Tab already active at index 0 — no state change.
+      await pumpEventQueue();
 
       expect(bloc.state.tabs, hasLength(1));
       expect(bloc.state.currentTabIndex, 0);
@@ -270,7 +283,7 @@ void main() {
       );
 
       bloc.add(AddTab(existingTab));
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
       final targetTab = TextBookTab(
         book: TextBook(title: 'ספר זהה'),
@@ -278,7 +291,8 @@ void main() {
         dedupeKey: 'search:text|ספר זהה|ספר זהה, פרק א|12',
       );
       bloc.add(OpenOrFocusTab(targetTab, targetTitle: 'ספר זהה, פרק א'));
-      await Future<void>.delayed(Duration.zero);
+      // dedupeKey matches, tab already active at index 0 — no state change.
+      await pumpEventQueue();
 
       expect(bloc.state.tabs, hasLength(1));
       expect(bloc.state.currentTabIndex, 0);
@@ -295,6 +309,7 @@ TextBookTab _createTextTab(String title, {int index = 0, int? categoryId}) {
   );
 }
 
+/// Closes the bloc and waits for deferred tab disposal (350 ms timers) to settle.
 Future<void> _closeBlocAndAllowDeferredDispose(TabsBloc bloc) async {
   await bloc.close();
   await Future<void>.delayed(const Duration(milliseconds: 400));
@@ -316,11 +331,11 @@ class _FakeTabsRepository extends TabsRepository {
   SideBySideMode? loadSideBySideMode() => _sideBySideMode;
 
   @override
-  void saveTabs(
+  Future<void> saveTabs(
     List<OpenedTab> tabs,
     int currentTabIndex, [
     SideBySideMode? sideBySideMode,
-  ]) {
+  ]) async {
     _tabsJson = tabs
         .map<Map<String, dynamic>>((tab) => tab.toJson())
         .toList(growable: false);

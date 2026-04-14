@@ -66,7 +66,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   final FocusNode _firstSearchResultFocusNode = FocusNode();
   final Set<String> _expandedCategories = {};
   bool _isSettingsPanelOpen = false;
-  bool? _previewPanelOverrideVisible;
   double? _previewPaneWidthOverride;
   late final ValueNotifier<double> _topBarTotalHeight;
 
@@ -107,8 +106,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   static int _normalizeOrder(int order) =>
       order >= 0 ? order : 1000 + order.abs();
 
-  bool _isPreviewPanelVisible(SettingsState s) =>
-      _previewPanelOverrideVisible ?? s.libraryShowPreview;
+  bool _isPreviewPanelVisible(SettingsState s) => s.libraryShowPreview;
 
   void _openSettingsPanel() => setState(() => _isSettingsPanelOpen = true);
 
@@ -119,23 +117,17 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   void _showPreviewPanel(SettingsState s) {
-    setState(() {
-      _previewPanelOverrideVisible = s.libraryShowPreview ? null : true;
-    });
+    context.read<SettingsBloc>().add(const UpdateLibraryShowPreview(true));
   }
 
   void _hidePreviewPanel(SettingsState s) {
-    setState(() {
-      _previewPanelOverrideVisible = s.libraryShowPreview ? false : null;
-    });
+    context.read<SettingsBloc>().add(const UpdateLibraryShowPreview(false));
   }
 
   void _togglePreviewPanel(SettingsState s) {
-    if (_isPreviewPanelVisible(s)) {
-      _hidePreviewPanel(s);
-    } else {
-      _showPreviewPanel(s);
-    }
+    context
+        .read<SettingsBloc>()
+        .add(UpdateLibraryShowPreview(!s.libraryShowPreview));
   }
 
   void _syncLibraryPanelController() {
@@ -156,7 +148,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     super.initState();
     _secondaryRowVisible = ValueNotifier<bool>(true);
     _topBarTotalHeight = ValueNotifier<double>(0);
-    _previewPanelOverrideVisible = null;
     context.read<LibraryBloc>().add(LoadLibrary());
     _syncLibraryPanelController();
     _fileSyncBloc = FileSyncBloc(
@@ -219,10 +210,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   // ── build ────────────────────────────────────────────────────────────────
 
   void closeTransientPanels() {
-    if (!_isSettingsPanelOpen && _previewPanelOverrideVisible == null) return;
+    if (!_isSettingsPanelOpen) return;
     setState(() {
       _isSettingsPanelOpen = false;
-      _previewPanelOverrideVisible = null;
     });
   }
 

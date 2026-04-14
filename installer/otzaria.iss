@@ -35,6 +35,7 @@ WizardStyle=modern
 DisableDirPage=no
 
 [InstallDelete]
+; ניקוי מסד הנתונים הישן של Isar שהוחלף על ידי hive_ce — מחיקה מכוונת בעת שדרוג.
 Type: filesandordirs; Name: "{app}\default.isar";
 
 [Dirs]

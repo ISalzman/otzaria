@@ -1,5 +1,6 @@
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/utils/hive_utils.dart';
 
 /// Represents a bookmark in the application.
 class Bookmark {
@@ -39,21 +40,20 @@ class Bookmark {
     return Bookmark(
       ref: json['ref'] as String,
       index: json['index'] as int,
-      book: Book.fromJson(json['book'] as Map<String, dynamic>),
+      book: Book.fromJson(castMap(json['book'])),
       commentatorsToShow:
           (rawCommentators ?? []).map((e) => e.toString()).toList(),
       isSearch: json['isSearch'] ?? false,
       searchOptions: json['searchOptions'] != null
-          ? (json['searchOptions'] as Map<String, dynamic>).map(
+          ? castMap(json['searchOptions']).map(
               (key, value) => MapEntry(
                 key,
-                (value as Map<String, dynamic>)
-                    .map((k, v) => MapEntry(k, v as bool)),
+                (castMap(value)).map((k, v) => MapEntry(k, v as bool)),
               ),
             )
           : null,
       alternativeWords: json['alternativeWords'] != null
-          ? (json['alternativeWords'] as Map<String, dynamic>).map(
+          ? castMap(json['alternativeWords']).map(
               (key, value) => MapEntry(
                 int.parse(key),
                 (value as List<dynamic>).map((e) => e.toString()).toList(),
@@ -61,7 +61,7 @@ class Bookmark {
             )
           : null,
       spacingValues: json['spacingValues'] != null
-          ? (json['spacingValues'] as Map<String, dynamic>)
+          ? castMap(json['spacingValues'])
               .map((key, value) => MapEntry(key, value.toString()))
           : null,
       workspaceName: json['workspaceName'] as String?,

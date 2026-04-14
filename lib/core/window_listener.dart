@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:window_manager/window_manager.dart';
 import '../migration/dao/daos/database.dart';
+import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -36,10 +38,41 @@ class AppWindowListener extends WindowListener {
       print('Window close requested');
     }
 
+    // Step 1: Non-critical cleanup — errors here must not block Hive.close().
     try {
-      // ביצוע פעולות הניקוי
       MyDatabase().close();
       SqliteDataProvider.instance.dispose();
+    } catch (e) {
+      if (kDebugMode) print('Non-critical cleanup error: $e');
+    }
+
+    // Step 2: Flush pending in-memory writes to Hive.
+    // A flush failure must NOT prevent Hive.close() — closing Hive without
+    // flushing first is safe, but skipping Hive.close() would corrupt the DB.
+    Object? flushFailure;
+    try {
+      await PreCloseRegistry.runAll();
+    } on PreCloseFlushFailure catch (e) {
+      flushFailure = e;
+      if (kDebugMode) print('Flush failed at exit: $e');
+    }
+
+    // Step 3: Storage close, error reporting, and window destruction.
+    try {
+      await Hive.close();
+
+      if (flushFailure != null) {
+        // Report BEFORE Sentry.close() so the event can still be sent.
+        try {
+          await Sentry.captureException(
+            flushFailure,
+            stackTrace: StackTrace.current,
+          );
+        } catch (_) {
+          // Sentry reporting is best-effort; never block the close path.
+        }
+      }
+
       await Sentry.close();
 
       if (!kIsWeb &&
