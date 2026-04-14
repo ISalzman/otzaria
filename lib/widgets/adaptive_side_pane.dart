@@ -25,10 +25,12 @@ class AdaptiveSidePane extends StatefulWidget {
   final double minPaneWidth;
   final double? maxPaneWidth;
   final ValueChanged<double>? onPaneWidthChanged;
-  final Widget Function(BuildContext context, Widget paneContent, double paneWidth)?
+  final VoidCallback? onPaneResizeEnd;
+  final Widget Function(
+          BuildContext context, Widget paneContent, double paneWidth)?
       widePaneBuilder;
   final Widget Function(BuildContext context, Widget paneContent)?
-     narrowPaneBuilder;
+      narrowPaneBuilder;
   final bool autoHandleResponsiveVisibility;
 
   const AdaptiveSidePane({
@@ -47,6 +49,7 @@ class AdaptiveSidePane extends StatefulWidget {
     this.minPaneWidth = 220,
     this.maxPaneWidth,
     this.onPaneWidthChanged,
+    this.onPaneResizeEnd,
     this.widePaneBuilder,
     this.narrowPaneBuilder,
     this.autoHandleResponsiveVisibility = true,
@@ -163,6 +166,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
               );
               widget.onPaneWidthChanged?.call(nextWidth.toDouble());
             },
+            onDragEnd: widget.onPaneResizeEnd,
           ),
         ),
       ],
@@ -190,8 +194,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         final paneOnRight = _isPaneOnRight(context);
         final wideOccupiedWidth =
             widget.paneWidth + _kWideOuterSideGap + _kWideInnerSideGap;
-        final hasRoomForSideBySide =
-            constraints.maxWidth >= (wideOccupiedWidth + widget.minMainContentWidth);
+        final hasRoomForSideBySide = constraints.maxWidth >=
+            (wideOccupiedWidth + widget.minMainContentWidth);
 
         if (widget.autoHandleResponsiveVisibility) {
           _handleResponsiveAutoClose(hasRoomForSideBySide);
@@ -199,7 +203,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
 
         if (hasRoomForSideBySide) {
           final widePaneContent = widget.widePaneBuilder != null
-              ? widget.widePaneBuilder!(context, widget.paneContent, widget.paneWidth)
+              ? widget.widePaneBuilder!(
+                  context, widget.paneContent, widget.paneWidth)
               : widget.paneContent;
 
           final widePane = SizedBox(
@@ -223,18 +228,17 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                 child: OverflowBox(
                   maxWidth: wideOccupiedWidth,
                   minWidth: 0,
-                  alignment:
-                      paneOnRight ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment: paneOnRight
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
                   child: Padding(
                     padding: EdgeInsetsDirectional.only(
                       top: _kWideTopGap,
                       bottom: _kWideBottomGap,
-                      start: paneOnRight
-                          ? _kWideInnerSideGap
-                          : _kWideOuterSideGap,
-                      end: paneOnRight
-                          ? _kWideOuterSideGap
-                          : _kWideInnerSideGap,
+                      start:
+                          paneOnRight ? _kWideInnerSideGap : _kWideOuterSideGap,
+                      end:
+                          paneOnRight ? _kWideOuterSideGap : _kWideInnerSideGap,
                     ),
                     child: SizedBox(
                       width: widget.paneWidth,
@@ -282,7 +286,10 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                 child: GestureDetector(
                   onTap: widget.onClose,
                   child: ColoredBox(
-                    color: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.30),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .scrim
+                        .withValues(alpha: 0.30),
                   ),
                 ),
               ),
