@@ -653,7 +653,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
           showDialog(
             context: context,
-            builder: (context) => SearchDialog(
+            builder: (dialogContext) => SearchDialog(
               existingTab: tempTab,
               bookTitle: bookTitle,
               onSearch: (query, searchOptions, alternativeWords, spacingValues,

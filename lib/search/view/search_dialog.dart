@@ -502,6 +502,7 @@ class _SearchDialogState extends State<SearchDialog> {
                                               tab: _searchTab,
                                             ),
                                             showInlineSearchButton: false,
+                                            onSubmit: _performSearch,
                                           ),
                                         ),
                                         // כפתור חיפוש
