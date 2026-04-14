@@ -32,6 +32,7 @@ import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/widgets/error_report_sender_email_dialog.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// טאב "אוצריא" — גרסאות, נתיב ספרייה, גיבוי, מצב סייפר, איפוס.
 class SystemSettingsTab extends StatefulWidget {
@@ -1099,7 +1100,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           content: SizedBox(
             width: 600,
             height: 400,
-            child: Markdown(data: changelog),
+            child: Markdown(
+              data: changelog,
+              onTapLink: (text, href, title) {
+                if (href != null) launchUrl(Uri.parse(href));
+              },
+            ),
           ),
           actions: [
             TextButton(
@@ -1129,7 +1135,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           content: SizedBox(
             width: 600,
             height: 400,
-            child: Markdown(data: changelog),
+            child: Markdown(
+              data: changelog,
+              onTapLink: (text, href, title) {
+                if (href != null) launchUrl(Uri.parse(href));
+              },
+            ),
           ),
           actions: [
             TextButton(
