@@ -955,7 +955,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Rect? _currentVerticalScrollbarBounds(PdfViewerController controller) {
-    return _currentSpreadRect(controller);
+    if (!controller.isReady) return null;
+    if (_isBookViewModeActive()) {
+      return _currentSpreadRect(controller);
+    }
+    // תצוגה רגילה - החזר את גבולות המסמך המלא
+    final layout = controller.layout;
+    final pageLayouts = layout.pageLayouts;
+    if (pageLayouts.isEmpty) return null;
+    return Rect.fromLTRB(
+      0,
+      pageLayouts.first.top,
+      layout.documentSize.width,
+      pageLayouts.last.bottom,
+    );
   }
 
   Rect? _currentSpreadViewportRect(
