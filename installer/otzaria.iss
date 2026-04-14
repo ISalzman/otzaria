@@ -120,7 +120,7 @@ function GetDefaultInstallDir(Param: String): String;
 begin
   Result := FindPreviousInstallDir();
   if Result = '' then
-    Result := ExpandConstant('{autopf}\Otzaria');
+    Result := ExpandConstant('{autopf}\אוצריא');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
