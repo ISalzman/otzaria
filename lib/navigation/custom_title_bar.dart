@@ -241,29 +241,31 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           const DragToMoveArea(
             child: SizedBox.expand(),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(FluentIcons.history_24_regular, size: 18),
-                tooltip: 'הצג היסטוריה (${historyShortcut.toUpperCase()})',
-                onPressed: () => _showHistoryDialog(context),
-                style: _kIconButtonStyle,
-              ),
-              IconButton(
-                icon: const Icon(FluentIcons.bookmark_24_regular, size: 18),
-                tooltip: 'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
-                onPressed: () => _showBookmarksDialog(context),
-                style: _kIconButtonStyle,
-              ),
-              IconButton(
-                icon: const Icon(FluentIcons.add_square_24_regular, size: 18),
-                tooltip:
-                    'החלף שולחן עבודה (${workspaceShortcut.toUpperCase()})',
-                onPressed: () => _showSaveWorkspaceDialog(context),
-                style: _kIconButtonStyle,
-              ),
-            ],
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(FluentIcons.history_24_regular, size: 18),
+                  tooltip: 'הצג היסטוריה (${historyShortcut.toUpperCase()})',
+                  onPressed: () => _showHistoryDialog(context),
+                  style: _kIconButtonStyle,
+                ),
+                IconButton(
+                  icon: const Icon(FluentIcons.bookmark_24_regular, size: 18),
+                  tooltip: 'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
+                  onPressed: () => _showBookmarksDialog(context),
+                  style: _kIconButtonStyle,
+                ),
+                IconButton(
+                  icon: const Icon(FluentIcons.add_square_24_regular, size: 18),
+                  tooltip:
+                      'החלף שולחן עבודה (${workspaceShortcut.toUpperCase()})',
+                  onPressed: () => _showSaveWorkspaceDialog(context),
+                  style: _kIconButtonStyle,
+                ),
+              ],
+            ),
           ),
         ],
       ),
