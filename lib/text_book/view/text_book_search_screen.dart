@@ -552,8 +552,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 10),
                       child: RichText(
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.justify,
                         text: TextSpan(
                           style: TextStyle(
@@ -892,7 +890,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     bestMatch ??= firstMatch;
 
     final len = text.length;
-    var start = (bestMatch!.start - (maxChars ~/ 2)).clamp(0, len);
+    var start = (bestMatch!.start - (maxChars ~/ 3)).clamp(0, len);
     var end = (start + maxChars).clamp(0, len);
 
     // If we're at the end and didn't get enough chars, shift the window left.
