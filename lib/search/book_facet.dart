@@ -13,6 +13,19 @@ class BookFacet {
     return '/${t.replaceAll(', ', '/')}';
   }
 
+  static String resolveFacetCategoryPath({
+    String? categoryPath,
+    String? topics,
+  }) {
+    final normalizedCategoryPath = _normalizeCategoryPath(categoryPath);
+    if (normalizedCategoryPath.isNotEmpty) {
+      return normalizedCategoryPath;
+    }
+
+    final topicsPath = topicsToPath(topics ?? '');
+    return _normalizeCategoryPath(topicsPath);
+  }
+
   static String buildFacetPath(
       {required String title,
       required String topics,
@@ -21,7 +34,10 @@ class BookFacet {
       String? categoryPath,
       String? fileType,
       String? filePath}) {
-    final topicsPath = topicsToPath(topics);
+    final categoryFacetPath = resolveFacetCategoryPath(
+      categoryPath: categoryPath,
+      topics: topics,
+    );
 
     // בניית מפתח ייחודי לספר (אותה לוגיקה כמו IndexingRepository.catalogueOrderKey)
     String bookKey;
@@ -36,7 +52,9 @@ class BookFacet {
       bookKey = '$title|$categoryKey|$fileTypeKey|$pathKey';
     }
 
-    return topicsPath.isEmpty ? '/$bookKey' : '$topicsPath/$bookKey';
+    return categoryFacetPath.isEmpty
+        ? '/$bookKey'
+        : '$categoryFacetPath/$bookKey';
   }
 
   static Future<String> resolveTopics({
@@ -232,6 +250,18 @@ class BookFacet {
     if (raw.isEmpty) return '';
     if (!raw.startsWith('/')) return raw;
     return raw.split('/').where((part) => part.isNotEmpty).join(', ');
+  }
+
+  static String _normalizeCategoryPath(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return '';
+
+    final separatorPattern = RegExp(r'\s*(?:/|,)\s*');
+    final parts =
+        raw.split(separatorPattern).where((part) => part.isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+
+    return '/${parts.join('/')}';
   }
 
   static String _normalizeText(String? value) => value?.trim() ?? '';
