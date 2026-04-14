@@ -14,7 +14,7 @@ import 'package:flutter_single_instance/flutter_single_instance.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:otzaria/app.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
@@ -463,12 +463,12 @@ void createDirectoryIfNotExists(String path) {
 }
 
 Future<void> initHive() async {
-  Hive.defaultDirectory = (await getApplicationSupportDirectory()).path;
-  Hive.box(name: 'tabs', maxSizeMiB: 100);
-  Hive.box(name: 'workspaces', maxSizeMiB: 100);
-  Hive.box(name: 'history', maxSizeMiB: 100);
-  Hive.box(name: 'bookmarks', maxSizeMiB: 100);
-  Hive.box(name: 'error_reports_queue', maxSizeMiB: 20);
+  Hive.init((await getApplicationSupportDirectory()).path);
+  await Hive.openBox<dynamic>('tabs');
+  await Hive.openBox<dynamic>('workspaces');
+  await Hive.openBox<dynamic>('history');
+  await Hive.openBox<dynamic>('bookmarks');
+  await Hive.openBox<dynamic>('error_reports_queue');
 }
 
 Future<void> loadCerts() async {

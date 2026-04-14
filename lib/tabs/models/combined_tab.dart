@@ -1,4 +1,5 @@
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/utils/hive_utils.dart';
 
 /// Represents a combined tab that displays two books side-by-side.
 ///
@@ -46,8 +47,8 @@ class CombinedTab extends OpenedTab {
   /// Creates a new instance of [CombinedTab] from a JSON map.
   factory CombinedTab.fromJson(Map<String, dynamic> json) {
     return CombinedTab(
-      rightTab: OpenedTab.fromJson(json['rightTab']),
-      leftTab: OpenedTab.fromJson(json['leftTab']),
+      rightTab: OpenedTab.fromJson(castMap(json['rightTab'])),
+      leftTab: OpenedTab.fromJson(castMap(json['leftTab'])),
       splitRatio: (json['splitRatio'] as num?)?.toDouble() ?? 0.5,
       isPinned: json['isPinned'] ?? false,
     );

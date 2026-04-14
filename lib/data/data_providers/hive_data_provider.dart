@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -12,10 +12,9 @@ class HiveCache extends CacheProvider {
   Future<void> init() async {
     if (!kIsWeb) {
       final defaultDirectory = await getApplicationSupportDirectory();
-      _preferences = Hive.box(
-        name: keyName,
-        directory: defaultDirectory.path,
-        maxSizeMiB: 100,
+      _preferences = await Hive.openBox<dynamic>(
+        keyName,
+        path: defaultDirectory.path,
       );
     }
   }
@@ -44,27 +43,27 @@ class HiveCache extends CacheProvider {
 
   @override
   Future<void> setBool(String key, bool? value) async {
-    _preferences?.put(key, value);
+    await _preferences?.put(key, value);
   }
 
   @override
-  Future setDouble(String key, double? value) async {
-    _preferences?.put(key, value);
+  Future<void> setDouble(String key, double? value) async {
+    await _preferences?.put(key, value);
   }
 
   @override
   Future<void> setInt(String key, int? value) async {
-    _preferences?.put(key, value);
+    await _preferences?.put(key, value);
   }
 
   @override
   Future<void> setString(String key, String? value) async {
-    _preferences?.put(key, value);
+    await _preferences?.put(key, value);
   }
 
   @override
   Future<void> setObject<T>(String key, T? value) async {
-    _preferences?.put(key, value);
+    await _preferences?.put(key, value);
   }
 
   @override
@@ -80,14 +79,14 @@ class HiveCache extends CacheProvider {
   @override
   Future<void> remove(String key) async {
     if (containsKey(key)) {
-      _preferences?.delete(key);
+      await _preferences?.delete(key);
     }
   }
 
   @override
   Future<void> removeAll() async {
     final keys = getKeys();
-    _preferences?.deleteAll(keys.where((element) => true) as Iterable<String>);
+    await _preferences?.deleteAll(keys.cast<String>());
   }
 
   @override

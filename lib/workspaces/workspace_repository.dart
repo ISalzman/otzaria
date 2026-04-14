@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:developer' as developer;
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
+import 'package:otzaria/utils/hive_utils.dart';
 import 'package:otzaria/workspaces/workspace.dart';
 
 /// Repository for persisting and loading workspaces.
@@ -14,7 +16,7 @@ class WorkspaceRepository {
   static const String _legacyCurrentWorkspaceKey = 'key-current-workspace';
 
   Box _getBox() {
-    return Hive.box(name: _boxName);
+    return Hive.box(_boxName);
   }
 
   /// Loads all workspaces and returns tuple of (workspaces, activeWorkspaceId).
@@ -26,7 +28,7 @@ class WorkspaceRepository {
       final rawWorkspaces = box.get(_workspacesKey, defaultValue: []) as List;
 
       final workspaces = rawWorkspaces
-          .map((e) => Workspace.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map((e) => Workspace.fromJson(castMap(e)))
           .toList();
 
       // Try new ID-based key first
@@ -39,7 +41,7 @@ class WorkspaceRepository {
         if (legacyIndex >= 0 && legacyIndex < workspaces.length) {
           currentId = workspaces[legacyIndex].id;
           // Save migrated ID
-          box.put(_currentWorkspaceIdKey, currentId);
+          unawaited(box.put(_currentWorkspaceIdKey, currentId));
         }
       }
 
@@ -56,21 +58,22 @@ class WorkspaceRepository {
         stackTrace: stackTrace,
         name: 'WorkspaceRepository',
       );
-      _getBox().put(_workspacesKey, []);
+      // Do NOT overwrite persisted data — leave raw data intact
       return (<Workspace>[], null);
     }
   }
 
   /// Saves workspaces and the active workspace ID.
-  void saveWorkspaces(List<Workspace> workspaces, String? currentWorkspaceId) {
+  Future<void> saveWorkspaces(
+      List<Workspace> workspaces, String? currentWorkspaceId) async {
     try {
       final box = _getBox();
-      box.put(
+      await box.put(
         _workspacesKey,
         workspaces.map((workspace) => workspace.toJson()).toList(),
       );
       if (currentWorkspaceId != null) {
-        box.put(_currentWorkspaceIdKey, currentWorkspaceId);
+        await box.put(_currentWorkspaceIdKey, currentWorkspaceId);
       }
     } catch (e, stackTrace) {
       developer.log(

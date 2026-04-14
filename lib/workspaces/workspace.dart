@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/utils/hive_utils.dart';
 
 /// Represents a workspace in the application.
 ///
@@ -20,10 +21,13 @@ class Workspace extends Equatable {
     this.activeTabIndex = 0,
   }) : id = id ?? _generateId();
 
-  /// Generates a unique ID using timestamp and random component
+  static int _idCounter = 0;
+
+  /// Generates a unique ID using monotonic counter + microsecond timestamp.
+  /// The counter guarantees uniqueness even when called multiple times within
+  /// the same microsecond (e.g. in tests or fast programmatic creation).
   static String _generateId() {
-    final now = DateTime.now();
-    return '${now.millisecondsSinceEpoch}-${now.microsecond}';
+    return '${DateTime.now().microsecondsSinceEpoch}-${_idCounter++}';
   }
 
   /// Creates a copy of this workspace with the given fields replaced.
@@ -45,7 +49,7 @@ class Workspace extends Equatable {
       id: json['id'] as String?,
       name: json['name'] as String,
       tabs: (json['tabs'] as List?)
-              ?.map((tab) => OpenedTab.fromJson(tab as Map<String, dynamic>))
+              ?.map((tab) => OpenedTab.fromJson(castMap(tab)))
               .toList() ??
           [],
       activeTabIndex: json['currentTab'] as int? ?? 0,

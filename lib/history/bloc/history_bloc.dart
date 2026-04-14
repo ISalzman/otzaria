@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
+import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
@@ -19,6 +21,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
   String? _currentWorkspaceName;
   Timer? _debounce;
   final Map<String, Bookmark> _pendingSnapshots = {};
+  late final Future<void> Function() _preCloseCallback;
 
   HistoryBloc(this._repository) : super(HistoryInitial()) {
     on<LoadHistory>(_onLoadHistory);
@@ -30,16 +33,29 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     on<CaptureStateForHistory>(_onCaptureStateForHistory);
     on<FlushHistory>(_onFlushHistory);
 
+    _preCloseCallback = _flushPendingSnapshots;
+    PreCloseRegistry.register(_preCloseCallback);
     add(LoadHistory());
   }
 
-  @override
-  Future<void> close() {
+  /// שומר את כל ה-snapshots הממתינים לפני סגירת האפליקציה.
+  Future<void> _flushPendingSnapshots() async {
     _debounce?.cancel();
     if (_pendingSnapshots.isNotEmpty) {
       final snapshots = _pendingSnapshots.values.toList();
       _pendingSnapshots.clear();
-      _updateAndSaveHistory(snapshots);
+      await _updateAndSaveHistory(snapshots);
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    PreCloseRegistry.unregister(_preCloseCallback);
+    _debounce?.cancel();
+    try {
+      await _flushPendingSnapshots();
+    } catch (e) {
+      debugPrint('HistoryBloc.close: failed to flush pending snapshots: $e');
     }
     return super.close();
   }
@@ -262,11 +278,14 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     });
   }
 
-  void _onFlushHistory(FlushHistory event, Emitter<HistoryState> emit) {
+  Future<void> _onFlushHistory(
+      FlushHistory event, Emitter<HistoryState> emit) async {
     _debounce?.cancel();
     if (_pendingSnapshots.isNotEmpty) {
-      add(BulkAddHistory(List.from(_pendingSnapshots.values)));
+      final snapshots = _pendingSnapshots.values.toList();
       _pendingSnapshots.clear();
+      final updatedHistory = await _updateAndSaveHistory(snapshots);
+      emit(HistoryLoaded(updatedHistory));
     }
   }
 

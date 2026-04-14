@@ -1,3 +1,4 @@
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_event.dart';
 import 'package:otzaria/workspaces/bloc/workspace_state.dart';
@@ -33,17 +34,18 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     this.onWorkspaceTabsChanged,
   })  : _repository = repository,
         super(WorkspaceState.initial()) {
-    on<LoadWorkspaces>(_onLoadWorkspaces);
-    on<AddWorkspace>(_onAddWorkspace);
-    on<RemoveWorkspace>(_onRemoveWorkspace);
-    on<SwitchToWorkspace>(_onSwitchToWorkspace);
-    on<RenameWorkspace>(_onRenameWorkspace);
-    on<ClearWorkspaces>(_onClearWorkspaces);
-    on<UpdateCurrentWorkspaceTabs>(_onUpdateCurrentWorkspaceTabs);
-    on<MoveTabToWorkspace>(_onMoveTabToWorkspace);
+    on<LoadWorkspaces>(_onLoadWorkspaces, transformer: sequential());
+    on<AddWorkspace>(_onAddWorkspace, transformer: sequential());
+    on<RemoveWorkspace>(_onRemoveWorkspace, transformer: sequential());
+    on<SwitchToWorkspace>(_onSwitchToWorkspace, transformer: sequential());
+    on<RenameWorkspace>(_onRenameWorkspace, transformer: sequential());
+    on<ClearWorkspaces>(_onClearWorkspaces, transformer: sequential());
+    on<UpdateCurrentWorkspaceTabs>(_onUpdateCurrentWorkspaceTabs, transformer: sequential());
+    on<MoveTabToWorkspace>(_onMoveTabToWorkspace, transformer: sequential());
   }
 
-  void _onLoadWorkspaces(LoadWorkspaces event, Emitter<WorkspaceState> emit) {
+  Future<void> _onLoadWorkspaces(
+      LoadWorkspaces event, Emitter<WorkspaceState> emit) async {
     emit(state.copyWith(isLoading: true));
     try {
       final (workspaces, activeId) = _repository.loadWorkspaces();
@@ -60,7 +62,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         );
         finalWorkspaces.add(defaultWorkspace);
         finalActiveId = defaultWorkspace.id;
-        _repository.saveWorkspaces(finalWorkspaces, finalActiveId);
+        await _repository.saveWorkspaces(finalWorkspaces, finalActiveId);
       }
 
       // Ensure the active ID exists in the list
@@ -82,7 +84,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     }
   }
 
-  void _onAddWorkspace(AddWorkspace event, Emitter<WorkspaceState> emit) {
+  Future<void> _onAddWorkspace(
+      AddWorkspace event, Emitter<WorkspaceState> emit) async {
     try {
       final newWorkspace = Workspace(
         name: event.name,
@@ -92,7 +95,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
 
       final updatedWorkspaces = [...state.workspaces, newWorkspace];
 
-      _repository.saveWorkspaces(updatedWorkspaces, state.activeWorkspaceId);
+      await _repository.saveWorkspaces(
+          updatedWorkspaces, state.activeWorkspaceId);
 
       emit(state.copyWith(workspaces: updatedWorkspaces));
     } catch (e) {
@@ -100,7 +104,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     }
   }
 
-  void _onRemoveWorkspace(RemoveWorkspace event, Emitter<WorkspaceState> emit) {
+  Future<void> _onRemoveWorkspace(
+      RemoveWorkspace event, Emitter<WorkspaceState> emit) async {
     try {
       // Can't remove the active workspace
       if (state.activeWorkspaceId == event.workspaceId) {
@@ -111,7 +116,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       final updatedWorkspaces =
           state.workspaces.where((w) => w.id != event.workspaceId).toList();
 
-      _repository.saveWorkspaces(updatedWorkspaces, state.activeWorkspaceId);
+      await _repository.saveWorkspaces(
+          updatedWorkspaces, state.activeWorkspaceId);
 
       emit(state.copyWith(workspaces: updatedWorkspaces));
     } catch (e) {
@@ -119,8 +125,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     }
   }
 
-  void _onSwitchToWorkspace(
-      SwitchToWorkspace event, Emitter<WorkspaceState> emit) {
+  Future<void> _onSwitchToWorkspace(
+      SwitchToWorkspace event, Emitter<WorkspaceState> emit) async {
     try {
       // 1. Save current tabs to the currently active workspace
       final currentId = state.activeWorkspaceId;
@@ -138,16 +144,13 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       final targetWorkspace =
           updatedWorkspaces.firstWhere((w) => w.id == event.targetWorkspaceId);
 
-      // 3. Save to repository
-      _repository.saveWorkspaces(updatedWorkspaces, event.targetWorkspaceId);
-
-      // 4. Emit new state
+      // 3. Emit new state (UI updates immediately, not blocked by disk I/O)
       emit(state.copyWith(
         workspaces: updatedWorkspaces,
         activeWorkspaceId: event.targetWorkspaceId,
       ));
 
-      // 5. Notify UI to update TabsBloc
+      // 4. Notify UI to update TabsBloc
       if (onWorkspaceTabsChanged != null) {
         int newCurrentTab = 0;
         if (targetWorkspace.tabs.isNotEmpty) {
@@ -159,12 +162,17 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         onWorkspaceTabsChanged!(
             _cloneTabs(targetWorkspace.tabs), newCurrentTab);
       }
+
+      // 5. Save to repository
+      await _repository.saveWorkspaces(
+          updatedWorkspaces, event.targetWorkspaceId);
     } catch (e) {
       emit(state.copyWith(error: 'Failed to switch workspace: $e'));
     }
   }
 
-  void _onRenameWorkspace(RenameWorkspace event, Emitter<WorkspaceState> emit) {
+  Future<void> _onRenameWorkspace(
+      RenameWorkspace event, Emitter<WorkspaceState> emit) async {
     try {
       final updatedWorkspaces = state.workspaces.map((w) {
         if (w.id == event.workspaceId) {
@@ -173,7 +181,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         return w;
       }).toList();
 
-      _repository.saveWorkspaces(updatedWorkspaces, state.activeWorkspaceId);
+      await _repository.saveWorkspaces(
+          updatedWorkspaces, state.activeWorkspaceId);
 
       emit(state.copyWith(workspaces: updatedWorkspaces));
     } catch (e) {
@@ -181,7 +190,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     }
   }
 
-  void _onClearWorkspaces(ClearWorkspaces event, Emitter<WorkspaceState> emit) {
+  Future<void> _onClearWorkspaces(
+      ClearWorkspaces event, Emitter<WorkspaceState> emit) async {
     try {
       final defaultWorkspace = Workspace(
         name: "ברירת מחדל",
@@ -189,7 +199,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         activeTabIndex: event.currentTabIndex,
       );
 
-      _repository.saveWorkspaces([defaultWorkspace], defaultWorkspace.id);
+      await _repository.saveWorkspaces([defaultWorkspace], defaultWorkspace.id);
 
       emit(state.copyWith(
         workspaces: [defaultWorkspace],
@@ -200,8 +210,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     }
   }
 
-  void _onUpdateCurrentWorkspaceTabs(
-      UpdateCurrentWorkspaceTabs event, Emitter<WorkspaceState> emit) {
+  Future<void> _onUpdateCurrentWorkspaceTabs(
+      UpdateCurrentWorkspaceTabs event, Emitter<WorkspaceState> emit) async {
     try {
       final currentId = state.activeWorkspaceId;
       if (currentId == null) return;
@@ -216,15 +226,15 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         return w;
       }).toList();
 
-      _repository.saveWorkspaces(updatedWorkspaces, currentId);
+      await _repository.saveWorkspaces(updatedWorkspaces, currentId);
       emit(state.copyWith(workspaces: updatedWorkspaces));
     } catch (e) {
       emit(state.copyWith(error: 'Failed to update workspace tabs: $e'));
     }
   }
 
-  void _onMoveTabToWorkspace(
-      MoveTabToWorkspace event, Emitter<WorkspaceState> emit) {
+  Future<void> _onMoveTabToWorkspace(
+      MoveTabToWorkspace event, Emitter<WorkspaceState> emit) async {
     try {
       final currentId = state.activeWorkspaceId;
       if (currentId == null) return;
@@ -248,7 +258,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         return w;
       }).toList();
 
-      _repository.saveWorkspaces(updatedWorkspaces, currentId);
+      await _repository.saveWorkspaces(updatedWorkspaces, currentId);
       emit(state.copyWith(workspaces: updatedWorkspaces));
     } catch (e) {
       emit(state.copyWith(error: 'Failed to move tab to workspace: $e'));

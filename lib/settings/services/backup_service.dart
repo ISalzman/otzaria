@@ -575,7 +575,7 @@ class BackupService {
         (currentWorkspace >= 0 && currentWorkspace < workspaces.length)
             ? workspaces[currentWorkspace].id
             : (workspaces.isNotEmpty ? workspaces.first.id : null);
-    repo.saveWorkspaces(workspaces, currentId);
+    await repo.saveWorkspaces(workspaces, currentId);
   }
 
   /// Restore Shamor Zachor data - restores ALL backed up keys

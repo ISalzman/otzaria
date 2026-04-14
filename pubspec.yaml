@@ -38,9 +38,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   flutter_settings_screens: ^0.3.4
-  hive: ^4.0.0-dev.2
-  isar_flutter_libs: ^4.0.0-dev.14
-  isar: ^4.0.0-dev.14
+  hive_ce: ^2.19.3
   path_provider: ^2.1.5
   html: ^0.15.1
   pdfrx: ^2.2.24
@@ -98,8 +96,6 @@ dependency_overrides:
   #  it forces the version of the intl package to be 0.19.0 across all dependencies, even if some packages specify a different compatible version.
   matcher: ^0.12.18
   analyzer: any
-  isar: 4.0.0-dev.14
-  isar_flutter_libs: 4.0.0-dev.14
 
 flutter_launcher_icons:
   android: true

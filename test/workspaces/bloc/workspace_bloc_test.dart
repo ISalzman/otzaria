@@ -32,7 +32,8 @@ void main() {
         },
       )..add(LoadWorkspaces());
 
-      await Future<void>.delayed(Duration.zero);
+      // Wait for LoadWorkspaces to complete (isLoading transitions false→true→false)
+      await bloc.stream.firstWhere((s) => !s.isLoading);
 
       final liveTab = _createTextTab('ספר חי');
       bloc.add(
@@ -43,7 +44,9 @@ void main() {
         ),
       );
 
-      await Future<void>.delayed(Duration.zero);
+      // Wait for workspace switch to complete (activeWorkspaceId changes)
+      await bloc.stream
+          .firstWhere((s) => s.activeWorkspaceId == secondWorkspace.id);
 
       final savedWorkspace =
           bloc.state.workspaces.firstWhere((w) => w.id == firstWorkspace.id);
@@ -73,7 +76,7 @@ void main() {
         },
       )..add(LoadWorkspaces());
 
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => !s.isLoading);
 
       bloc.add(
         SwitchToWorkspace(
@@ -83,7 +86,8 @@ void main() {
         ),
       );
 
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream
+          .firstWhere((s) => s.activeWorkspaceId == targetWorkspace.id);
 
       expect(callbackTabs, isNotNull);
       expect(callbackTabs, hasLength(1));
@@ -117,7 +121,8 @@ class _FakeWorkspaceRepository extends WorkspaceRepository {
       (List<Workspace>.from(_workspaces), _activeWorkspaceId);
 
   @override
-  void saveWorkspaces(List<Workspace> workspaces, String? currentWorkspaceId) {
+  Future<void> saveWorkspaces(
+      List<Workspace> workspaces, String? currentWorkspaceId) async {
     _workspaces = List<Workspace>.from(workspaces);
     _activeWorkspaceId = currentWorkspaceId;
   }

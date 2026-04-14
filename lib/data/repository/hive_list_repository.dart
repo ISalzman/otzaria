@@ -1,4 +1,6 @@
-import 'package:hive/hive.dart';
+import 'package:flutter/foundation.dart';
+import 'package:hive_ce/hive.dart';
+import 'package:otzaria/utils/hive_utils.dart';
 
 /// Generic repository for managing lists of objects in Hive.
 /// T must have `fromJson(Map<String, dynamic>)` and `toJson()` methods.
@@ -15,28 +17,30 @@ class HiveListRepository<T> {
     required this.toJson,
   });
 
-  Box<dynamic> get _box => Hive.box(name: boxName);
+  Box<dynamic> get _box => Hive.box(boxName);
 
   /// Load the list from Hive
   Future<List<T>> load() async {
     try {
       final List<dynamic> raw =
           _box.get(key, defaultValue: []) as List<dynamic>;
-      return raw.map((e) => fromJson(Map<String, dynamic>.from(e))).toList();
+      return raw.map((e) => fromJson(castMap(e))).toList();
     } catch (e) {
-      _box.put(key, []);
+      debugPrint('⚠️ HiveListRepository.load($boxName/$key) failed: $e');
+      // Do NOT overwrite persisted data — return empty so the UI is functional
+      // but the raw data on disk stays intact for the next attempt / fix.
       return [];
     }
   }
 
   /// Save the list to Hive
   Future<void> save(List<T> items) async {
-    _box.put(key, items.map(toJson).toList());
+    await _box.put(key, items.map(toJson).toList());
   }
 
   /// Clear the list
   Future<void> clear() async {
-    _box.put(key, []);
+    await _box.put(key, []);
   }
 
   /// Add an item at the beginning of the list

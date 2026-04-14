@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:search_engine/search_engine.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -37,6 +37,9 @@ class TantivyDataProvider {
   static final Set<String> _ongoingCounts = {};
   int _storedIndexStateVersion = 0;
   String? _catalogueOrderSignature;
+
+  Box? _hiveBox;
+  String? _hiveBoxDirectory;
 
   /// Clear global cache when starting new search
   static void clearGlobalCache() {
@@ -165,108 +168,146 @@ class TantivyDataProvider {
     }
   }
 
+  /// פותח את box ה-Hive בנתיב הנתון. אם כבר פתוח באותו נתיב — מחזיר אותו.
+  /// אם פתוח בנתיב אחר — סוגר קודם ופותח מחדש.
+  Future<Box> _openBox(String directory) async {
+    if (_hiveBox != null && _hiveBox!.isOpen && _hiveBoxDirectory == directory) {
+      return _hiveBox!;
+    }
+    if (_hiveBox != null && _hiveBox!.isOpen) {
+      await _hiveBox!.close();
+    }
+    _hiveBox = await Hive.openBox('books_indexed', path: directory);
+    _hiveBoxDirectory = directory;
+    return _hiveBox!;
+  }
+
+  Future<void> _closeBox() async {
+    if (_hiveBox != null && _hiveBox!.isOpen) {
+      await _hiveBox!.close();
+    }
+    _hiveBox = null;
+    _hiveBoxDirectory = null;
+  }
+
   Future<void> _loadBooksDone() async {
     try {
       final lockPath = await AppPaths.getTantivyLockPath();
-      booksDone = _readBooksDoneFromBox(lockPath);
+      booksDone = await _readBooksDoneFromBox(lockPath);
 
-      // Hive caches open boxes by name only (ignoring directory), so we must
-      // close the current box before opening the legacy one at a different path.
+      // One-time migration: if the current path is empty, try the legacy path.
+      // Close the current box first — migrateBooksDone opens Hive boxes directly
+      // and a simultaneous open of the same box name at a different path would
+      // conflict.
       if (booksDone.isEmpty) {
+        await _closeBox();
         final legacyPath = await AppPaths.getLegacyIndexStatePath();
-        if (legacyPath != lockPath && Directory(legacyPath).existsSync()) {
-          Hive.box(name: 'books_indexed', directory: lockPath, maxSizeMiB: 100)
-              .close();
-          final legacyBooks = _readBooksDoneFromBox(legacyPath);
-          if (legacyBooks.isNotEmpty) {
-            booksDone = legacyBooks;
-            Hive.box(
-                    name: 'books_indexed',
-                    directory: legacyPath,
-                    maxSizeMiB: 100)
-                .close();
-            await saveBooksDoneToDisk();
-
-            // Verify the migration succeeded by reading back from the new path.
-            final verified = _readBooksDoneFromBox(lockPath);
-            if (verified.length == legacyBooks.length) {
-              // Close the new box first so the cache is clear,
-              // otherwise _deleteLegacyHiveFiles would get the cached
-              // lockPath box and delete the WRONG files.
-              Hive.box(
-                      name: 'books_indexed',
-                      directory: lockPath,
-                      maxSizeMiB: 100)
-                  .close();
-              _deleteLegacyHiveFiles(legacyPath);
-              // Re-open the box at the new path for ongoing use.
-              _readBooksDoneFromBox(lockPath);
-            } else {
-              debugPrint('⚠️ Migration verification failed, '
-                  'keeping legacy files.');
-            }
-          } else {
-            // Re-open the box at the new path for future use.
-            Hive.box(
-                    name: 'books_indexed',
-                    directory: legacyPath,
-                    maxSizeMiB: 100)
-                .close();
-            _readBooksDoneFromBox(lockPath);
-          }
+        final migrated = await TantivyDataProvider.migrateBooksDone(
+          currentDir: lockPath,
+          legacyDir: legacyPath,
+        );
+        if (migrated.isNotEmpty) {
+          booksDone = migrated;
         }
       }
-      _storedIndexStateVersion = _readIndexStateVersion(lockPath);
-      _catalogueOrderSignature = _readCatalogueOrderSignature(lockPath);
+
+      final box = await _openBox(lockPath);
+      _storedIndexStateVersion = _readIndexStateVersionFromBox(box);
+      _catalogueOrderSignature = _readCatalogueOrderSignatureFromBox(box);
     } catch (e) {
       debugPrint('⚠️ Error loading books done: $e');
       booksDone = [];
     }
   }
 
-  List<String> _readBooksDoneFromBox(String directory) {
-    final dynamic value = Hive.box(
-      name: 'books_indexed',
-      directory: directory,
-      maxSizeMiB: 100,
-    ).get(_booksDoneKey, defaultValue: []);
+  /// Migrates the [books_indexed] Hive box from [legacyDir] to [currentDir].
+  ///
+  /// Performs a write → read-back verify → delete-legacy sequence so that
+  /// legacy files are removed only after the data has been confirmed at the
+  /// new location.
+  ///
+  /// Returns the migrated book list on success, or an empty list when:
+  ///  - the paths are identical;
+  ///  - [legacyDir] does not exist on disk;
+  ///  - [legacyDir] contains no book entries;
+  ///  - the read-back verification fails (legacy files are left intact).
+  ///
+  /// **Caller responsibility**: close any open [books_indexed] Hive box
+  /// *before* calling this method — Hive does not allow the same box name
+  /// to be open at two paths simultaneously.
+  @visibleForTesting
+  static Future<List<String>> migrateBooksDone({
+    required String currentDir,
+    required String legacyDir,
+  }) async {
+    if (currentDir == legacyDir || !Directory(legacyDir).existsSync()) {
+      return <String>[];
+    }
 
+    // 1. Read from legacy location.
+    final legacyBox =
+        await Hive.openBox<dynamic>('books_indexed', path: legacyDir);
+    final dynamic rawLegacy = legacyBox.get(_booksDoneKey, defaultValue: <dynamic>[]);
+    final legacyBooks = rawLegacy is List
+        ? rawLegacy.map<String>((e) => e.toString()).toList(growable: false)
+        : <String>[];
+    await legacyBox.close();
+
+    if (legacyBooks.isEmpty) return <String>[];
+
+    // 2. Write to new location.
+    final currentBox =
+        await Hive.openBox<dynamic>('books_indexed', path: currentDir);
+    await currentBox.put(_booksDoneKey, legacyBooks);
+
+    // 3. Read-back verify before deleting legacy (safety net against I/O errors).
+    final dynamic rawVerified =
+        currentBox.get(_booksDoneKey, defaultValue: <dynamic>[]);
+    final verified = rawVerified is List
+        ? rawVerified.map<String>((e) => e.toString()).toList(growable: false)
+        : <String>[];
+    await currentBox.close();
+
+    if (verified.length != legacyBooks.length) {
+      debugPrint(
+          '⚠️ Migration verification failed — keeping legacy files intact.');
+      return <String>[];
+    }
+
+    // 4. Delete legacy Hive/Isar files.
+    for (final ext in const ['.hive', '.lock', '.isar', '.isar-lck']) {
+      final f = File('$legacyDir/books_indexed$ext');
+      if (f.existsSync()) {
+        try {
+          f.deleteSync();
+        } catch (e) {
+          debugPrint('⚠️ Could not delete legacy file $f: $e');
+        }
+      }
+    }
+
+    return legacyBooks;
+  }
+
+  Future<List<String>> _readBooksDoneFromBox(String directory) async {
+    final box = await _openBox(directory);
+    final dynamic value = box.get(_booksDoneKey, defaultValue: []);
     if (value is List) {
       return value.map<String>((e) => e.toString()).toList();
     }
-
     return [];
   }
 
-  int _readIndexStateVersion(String directory) {
-    final dynamic value = Hive.box(
-      name: 'books_indexed',
-      directory: directory,
-      maxSizeMiB: 100,
-    ).get(_indexStateVersionKey, defaultValue: 0);
-
-    if (value is int) {
-      return value;
-    }
-
-    if (value is num) {
-      return value.toInt();
-    }
-
+  int _readIndexStateVersionFromBox(Box box) {
+    final dynamic value = box.get(_indexStateVersionKey, defaultValue: 0);
+    if (value is int) return value;
+    if (value is num) return value.toInt();
     return 0;
   }
 
-  String? _readCatalogueOrderSignature(String directory) {
-    final dynamic value = Hive.box(
-      name: 'books_indexed',
-      directory: directory,
-      maxSizeMiB: 100,
-    ).get(_catalogueOrderSignatureKey);
-
-    if (value is String && value.isNotEmpty) {
-      return value;
-    }
-
+  String? _readCatalogueOrderSignatureFromBox(Box box) {
+    final dynamic value = box.get(_catalogueOrderSignatureKey);
+    if (value is String && value.isNotEmpty) return value;
     return null;
   }
 
@@ -305,32 +346,10 @@ class TantivyDataProvider {
   }
 
   Future<void> _persistIndexState(String directory) async {
-    final box = Hive.box(
-      name: 'books_indexed',
-      directory: directory,
-      maxSizeMiB: 100,
-    );
-    box.put(_booksDoneKey, booksDone);
-    box.put(_indexStateVersionKey, _storedIndexStateVersion);
-    box.put(_catalogueOrderSignatureKey, _catalogueOrderSignature ?? '');
-  }
-
-  /// Deletes the legacy Hive/Isar `books_indexed` files from [directory].
-  /// Must be called only after the box has been closed.
-  void _deleteLegacyHiveFiles(String directory) {
-    try {
-      // Re-open the legacy box just to call deleteFromDisk(), which lets
-      // Isar cleanly remove exactly the files it owns.
-      Hive.box(name: 'books_indexed', directory: directory, maxSizeMiB: 100)
-          .deleteFromDisk();
-      // deleteFromDisk() may leave the lock file behind — clean it up.
-      final lockFile = File('$directory/books_indexed.isar-lck');
-      if (lockFile.existsSync()) {
-        lockFile.deleteSync();
-      }
-    } catch (e) {
-      debugPrint('⚠️ Could not delete legacy Hive files: $e');
-    }
+    final box = await _openBox(directory);
+    await box.put(_booksDoneKey, booksDone);
+    await box.put(_indexStateVersionKey, _storedIndexStateVersion);
+    await box.put(_catalogueOrderSignatureKey, _catalogueOrderSignature ?? '');
   }
 
   Future<void> _handleSchemaError() async {
@@ -500,9 +519,7 @@ class TantivyDataProvider {
     Directory indexDirectory = Directory(indexPath);
     if (closeBooksDoneBox) {
       try {
-        final lockPath = await AppPaths.getTantivyLockPath();
-        Hive.box(name: 'books_indexed', directory: lockPath, maxSizeMiB: 100)
-            .close();
+        await _closeBox();
       } catch (e) {
         debugPrint('⚠️ Error closing Hive box: $e');
       }

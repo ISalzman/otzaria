@@ -5,12 +5,11 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/models/isar_collections/ref.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 
 /// DataRepository acts as a centralized data access layer that coordinates between different
-/// data providers (file system, Isar database, and Tantivy search engine).
+/// data providers (file system, Hive storage, and Tantivy search engine).
 ///
 /// This repository implements the Repository pattern to abstract the data source
 /// implementation details from the business logic. It provides a clean API for
