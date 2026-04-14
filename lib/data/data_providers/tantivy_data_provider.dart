@@ -11,7 +11,7 @@ import 'package:otzaria/core/app_paths.dart';
 /// This provider handles the search operations for both text-based and PDF books,
 /// maintaining an index for full-text search capabilities.
 class TantivyDataProvider {
-  static const int currentIndexStateVersion = 4;
+  static const int currentIndexStateVersion = 5;
   static const String _booksDoneKey = 'key-books-done';
   static const String _indexStateVersionKey = 'key-index-state-version';
   static const String _catalogueOrderSignatureKey =
@@ -171,7 +171,9 @@ class TantivyDataProvider {
   /// פותח את box ה-Hive בנתיב הנתון. אם כבר פתוח באותו נתיב — מחזיר אותו.
   /// אם פתוח בנתיב אחר — סוגר קודם ופותח מחדש.
   Future<Box> _openBox(String directory) async {
-    if (_hiveBox != null && _hiveBox!.isOpen && _hiveBoxDirectory == directory) {
+    if (_hiveBox != null &&
+        _hiveBox!.isOpen &&
+        _hiveBoxDirectory == directory) {
       return _hiveBox!;
     }
     if (_hiveBox != null && _hiveBox!.isOpen) {
@@ -247,7 +249,8 @@ class TantivyDataProvider {
     // 1. Read from legacy location.
     final legacyBox =
         await Hive.openBox<dynamic>('books_indexed', path: legacyDir);
-    final dynamic rawLegacy = legacyBox.get(_booksDoneKey, defaultValue: <dynamic>[]);
+    final dynamic rawLegacy =
+        legacyBox.get(_booksDoneKey, defaultValue: <dynamic>[]);
     final legacyBooks = rawLegacy is List
         ? rawLegacy.map<String>((e) => e.toString()).toList(growable: false)
         : <String>[];

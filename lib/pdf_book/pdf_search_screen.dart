@@ -25,6 +25,7 @@ class PdfBookSearchView extends StatefulWidget {
     this.outline,
     this.bookTitle,
     this.bookTopics,
+    this.bookCategoryPath,
     this.pdfFilePath,
     this.initialSearchText = '',
     this.initialSearchOptions = const {},
@@ -42,6 +43,7 @@ class PdfBookSearchView extends StatefulWidget {
   final List<PdfOutlineNode>? outline;
   final String? bookTitle;
   final String? bookTopics;
+  final String? bookCategoryPath;
 
   /// Absolute path to the currently opened PDF file.
   ///
@@ -138,6 +140,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
       title: title,
       initialTopics: widget.bookTopics ?? '',
       type: PdfBook,
+      categoryPath: widget.bookCategoryPath,
       fileType: 'pdf',
       filePath: widget.pdfFilePath,
     );
@@ -147,6 +150,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
     _bookPath = BookFacet.buildFacetPath(
       title: title,
       topics: topics,
+      categoryPath: widget.bookCategoryPath,
       fileType: 'pdf',
       filePath: widget.pdfFilePath,
     );

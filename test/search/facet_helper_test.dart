@@ -125,5 +125,28 @@ void main() {
       expect(counts['/משנה/זרעים'], 2);
       expect(counts['/משנה/זרעים/id:202'], 2);
     });
+
+    test('מנרמל categoryPath עם פסיקים לפני בניית facets', () {
+      final genesis = TextBook(
+        title: 'בראשית',
+        id: 101,
+        categoryPath: 'תנ"ך, תורה',
+      );
+
+      final counts = FacetHelper.buildFacetCountsFromBookCounts(
+        {
+          IndexingRepository.buildIndexedBookFilePath(genesis): 1,
+        },
+        {
+          IndexingRepository.buildIndexedBookFilePath(genesis): genesis,
+        },
+      );
+
+      expect(counts['/'], 1);
+      expect(counts['/תנ"ך'], 1);
+      expect(counts['/תנ"ך/תורה'], 1);
+      expect(counts['/תנ"ך/תורה/id:101'], 1);
+      expect(counts.containsKey('/תנ"ך, תורה'), isFalse);
+    });
   });
 }

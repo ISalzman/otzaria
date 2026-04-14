@@ -64,5 +64,38 @@ void main() {
 
       expect(facetPath, '/תנ"ך/תורה/id:1');
     });
+
+    test('מעדיף categoryPath על פני topics כשהם לא תואמים', () {
+      final facetPath = BookFacet.buildFacetPath(
+        title: 'בראשית',
+        topics: 'מקרא',
+        categoryPath: '/תנ"ך/תורה',
+        bookId: 1,
+      );
+
+      expect(facetPath, '/תנ"ך/תורה/id:1');
+    });
+
+    test('מנרמל categoryPath ללא לוכסן מוביל', () {
+      final facetPath = BookFacet.buildFacetPath(
+        title: 'בראשית',
+        topics: '',
+        categoryPath: 'תנ"ך/תורה',
+        bookId: 1,
+      );
+
+      expect(facetPath, '/תנ"ך/תורה/id:1');
+    });
+
+    test('מנרמל categoryPath בפורמט פסיקים לנתיב facet עם לוכסנים', () {
+      final facetPath = BookFacet.buildFacetPath(
+        title: 'בראשית',
+        topics: '',
+        categoryPath: 'תנ"ך, תורה',
+        bookId: 1,
+      );
+
+      expect(facetPath, '/תנ"ך/תורה/id:1');
+    });
   });
 }
