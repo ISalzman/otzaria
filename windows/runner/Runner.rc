@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "Otzaria" "\0"
-            VALUE "FileDescription", "otzaria" "\0"
+            VALUE "CompanyName", "אוצריא" "\0"
+            VALUE "FileDescription", "אוצריא" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "otzaria" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2024 com.example. All rights reserved." "\0"
             VALUE "OriginalFilename", "otzaria.exe" "\0"
-            VALUE "ProductName", "otzaria" "\0"
+            VALUE "ProductName", "אוצריא" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
