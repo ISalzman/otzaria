@@ -40,12 +40,11 @@ import 'package:printing/printing.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:flutter/gestures.dart';
+import 'package:otzaria/widgets/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
-import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
-import 'package:otzaria/widgets/reader_side_panel_shell.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/pdf_headings.dart';
@@ -130,11 +129,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   void _ensureSearchTabIsActive() {
-    widget.tab.showLeftPane.value = true;
+    _setLeftPaneVisibility(true);
     if (_leftPaneTabController != null && _leftPaneTabController!.index != 1) {
       _leftPaneTabController!.animateTo(1);
     }
     _searchFieldFocusNode.requestFocus();
+  }
+
+  void _setLeftPaneVisibility(bool show) {
+    final current = _bloc.state;
+    if (current is PdfBookLoaded && current.showLeftPane == show) {
+      return;
+    }
+    _bloc.add(pdf_events.ToggleLeftPane(show));
   }
 
   int? _lastProcessedSearchSessionId;
@@ -642,7 +649,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       onInteractionStart: (_) {
         if (!(widget.tab.pinLeftPane.value ||
             (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
-          widget.tab.showLeftPane.value = false;
+          _setLeftPaneVisibility(false);
         }
       },
       onGeneralTap: (tapContext, _, details) {
@@ -821,18 +828,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
         _runInitialSearchIfNeeded();
 
-        if (mounted &&
-            (widget.tab.showLeftPane.value ||
-                widget.tab.searchText.isNotEmpty)) {
-          widget.tab.showLeftPane.value = true;
-        }
-
-        if (mounted && !widget.tab.showLeftPane.value) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              _pdfViewFocusNode.requestFocus();
-            }
-          });
+        final shouldShowLeftPane =
+            widget.tab.showLeftPane.value || widget.tab.searchText.isNotEmpty;
+        if (mounted) {
+          if (shouldShowLeftPane) {
+            _setLeftPaneVisibility(true);
+          } else {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _pdfViewFocusNode.requestFocus();
+              }
+            });
+          }
         }
       },
     );
@@ -1671,447 +1678,398 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               icon: const Icon(FluentIcons.navigation_24_regular),
               tooltip: 'חיפוש וניווט',
               onPressed: () {
-                widget.tab.showLeftPane.value = !widget.tab.showLeftPane.value;
+                _setLeftPaneVisibility(!widget.tab.showLeftPane.value);
               },
             ),
             actions: _buildPdfActions(context, wideScreen),
           ),
-          body: Row(
-            children: [
-              _buildLeftPane(),
-              BlocBuilder<PdfBookBloc, PdfBookState>(
-                buildWhen: (prev, curr) {
-                  if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                    return prev.sidebarWidth != curr.sidebarWidth ||
-                        prev.showLeftPane != curr.showLeftPane;
-                  }
-                  return true;
-                },
-                builder: (context, state) {
-                  if (state is! PdfBookLoaded) return const SizedBox.shrink();
-                  if (!state.showLeftPane) {
-                    return const SizedBox.shrink();
-                  }
-                  return ResizableDragHandle(
-                    isVertical: true,
-                    hitSize: 4,
-                    onDragDelta: (delta) {
-                      final newWidth =
-                          (state.sidebarWidth - delta).clamp(200.0, 600.0);
-                      _bloc.add(pdf_events.UpdateSidebarWidth(newWidth));
-                    },
-                    onDragEnd: () {
-                      final current = _bloc.state;
-                      if (current is PdfBookLoaded) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(UpdateSidebarWidth(current.sidebarWidth));
-                      }
-                    },
-                  );
-                },
-              ),
-              Expanded(
-                child: Stack(
-                  children: [
-                    NotificationListener<UserScrollNotification>(
-                      onNotification: (notification) {
-                        if (!(widget.tab.pinLeftPane.value ||
-                            (Settings.getValue<bool>('key-pin-sidebar') ??
-                                false))) {
-                          Future.microtask(() {
-                            widget.tab.showLeftPane.value = false;
-                            _pdfViewFocusNode.requestFocus();
-                          });
-                        }
-                        return false;
-                      },
-                      child: Listener(
-                        onPointerSignal: (event) {
-                          if (event is PointerScrollEvent &&
-                              !(widget.tab.pinLeftPane.value ||
-                                  (Settings.getValue<bool>('key-pin-sidebar') ??
-                                      false))) {
-                            widget.tab.showLeftPane.value = false;
-                            Future.microtask(() {
-                              _pdfViewFocusNode.requestFocus();
-                            });
-                          }
-                        },
-                        child: Stack(
-                          children: [
-                            RepaintBoundary(
-                              key: _pdfViewportBoundaryKey,
-                              child: ColorFiltered(
-                                colorFilter: ColorFilter.mode(
-                                  Colors.white,
-                                  Provider.of<SettingsBloc>(context,
-                                              listen: true)
-                                          .state
-                                          .isDarkMode
-                                      ? BlendMode.difference
-                                      : BlendMode.dst,
-                                ),
-                                child: Stack(
-                                  children: [
-                                    _buildPdfViewerFromFile(
-                                        widget.tab.book.path),
-                                    BlocBuilder<PdfBookBloc, PdfBookState>(
-                                      buildWhen: (prev, curr) {
-                                        if (prev is PdfBookLoaded &&
-                                            curr is PdfBookLoaded) {
-                                          return prev.isLoading !=
-                                                  curr.isLoading ||
-                                              prev.loadSucceeded !=
-                                                  curr.loadSucceeded;
-                                        }
-                                        return true;
-                                      },
-                                      builder: (context, state) {
-                                        if (state is! PdfBookLoaded) {
-                                          return const Positioned.fill(
-                                            child: ColoredBox(
-                                              color: Color(0xFFFFFFFF),
-                                              child: Center(
-                                                  child:
-                                                      CircularProgressIndicator()),
-                                            ),
-                                          );
-                                        }
-                                        if (state.isLoading) {
-                                          return const Positioned.fill(
-                                            child: ColoredBox(
-                                              color: Color(0xFFFFFFFF),
-                                              child: Center(
-                                                  child:
-                                                      CircularProgressIndicator()),
-                                            ),
-                                          );
-                                        }
-                                        if (!state.loadSucceeded) {
-                                          return const Positioned.fill(
-                                            child: Center(
-                                                child:
-                                                    Text('Failed to load PDF')),
-                                          );
-                                        }
-                                        return const SizedBox.shrink();
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            _buildPageTurnOverlay(context),
-                          ],
-                        ),
-                      ),
-                    ),
-                    BlocBuilder<PdfBookBloc, PdfBookState>(
-                      buildWhen: (prev, curr) {
-                        if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                          return prev.showRightPane != curr.showRightPane ||
-                              prev.isRightPaneHovering !=
-                                  curr.isRightPaneHovering;
-                        }
-                        return true;
-                      },
-                      builder: (context, state) {
-                        if (state is! PdfBookLoaded) {
-                          return const SizedBox.shrink();
-                        }
-                        if (state.showRightPane) {
-                          return const SizedBox.shrink();
-                        }
+          body: BlocBuilder<PdfBookBloc, PdfBookState>(
+            buildWhen: (prev, curr) {
+              if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
+                return prev.showLeftPane != curr.showLeftPane ||
+                    prev.sidebarWidth != curr.sidebarWidth ||
+                    prev.showRightPane != curr.showRightPane ||
+                    prev.rightPaneWidth != curr.rightPaneWidth;
+              }
+              return true;
+            },
+            builder: (context, state) {
+              final leftPaneWidth =
+                  state is PdfBookLoaded ? state.sidebarWidth : 300.0;
+              final rightPaneWidth =
+                  state is PdfBookLoaded ? state.rightPaneWidth : 300.0;
+              final showLeftPane =
+                  state is PdfBookLoaded ? state.showLeftPane : false;
+              final showRightPane =
+                  state is PdfBookLoaded ? state.showRightPane : false;
 
-                        final isHovering = state.isRightPaneHovering;
-
-                        return Positioned(
-                          left: 0,
-                          top: MediaQuery.of(context).size.height * 0.10,
-                          child: CommentaryPaneTooltip(
-                            child: MouseRegion(
-                              onEnter: (_) => _bloc.add(
-                                  const pdf_events.SetRightPaneHovering(true)),
-                              onExit: (_) => _bloc.add(
-                                  const pdf_events.SetRightPaneHovering(false)),
-                              child: GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _rightPaneInitialTabIndex = 0;
-                                  });
-                                  _bloc.add(const pdf_events.ToggleRightPane(
-                                      show: true));
-                                },
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves.easeOut,
-                                  width: isHovering ? 48 : 20,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest
-                                        .withValues(
-                                            alpha: isHovering ? 0.95 : 0.8),
-                                    borderRadius: const BorderRadius.only(
-                                      topRight: Radius.circular(40),
-                                      bottomRight: Radius.circular(40),
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black
-                                            .withValues(alpha: 0.15),
-                                        blurRadius: isHovering ? 8 : 4,
-                                        offset: const Offset(2, 0),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: AnimatedOpacity(
-                                      duration:
-                                          const Duration(milliseconds: 150),
-                                      opacity: isHovering ? 1.0 : 0.6,
-                                      child: Icon(
-                                        FluentIcons.chevron_right_24_regular,
-                                        size: isHovering ? 24 : 18,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    BlocBuilder<PdfBookBloc, PdfBookState>(
-                      buildWhen: (prev, curr) {
-                        if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                          return prev.showZoomBar != curr.showZoomBar;
-                        }
-                        return true;
-                      },
-                      builder: (context, state) {
-                        final showZoomBar =
-                            state is PdfBookLoaded && state.showZoomBar;
-                        if (!showZoomBar ||
-                            !widget.tab.pdfViewerController.isReady) {
-                          return const SizedBox.shrink();
-                        }
-                        return Positioned(
-                          top: 16,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: PdfZoomBar(
-                              currentZoom:
-                                  widget.tab.pdfViewerController.value.zoom,
-                              onZoomIn: _zoomIn,
-                              onZoomOut: _zoomOut,
-                              onResetZoom: _resetZoom,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              BlocBuilder<PdfBookBloc, PdfBookState>(
-                buildWhen: (prev, curr) {
-                  if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                    return prev.showRightPane != curr.showRightPane ||
-                        prev.rightPaneWidth != curr.rightPaneWidth;
+              return DualAdaptiveReaderPane(
+                mainContent: _buildReaderMainContent(),
+                showLeftPane: showLeftPane,
+                leftPaneContent: _buildLeftPaneContent(),
+                leftPaneWidth: leftPaneWidth,
+                leftMinPaneWidth: 200,
+                leftMaxPaneWidth: 600,
+                onLeftPaneWidthChanged: (nextWidth) {
+                  _bloc.add(pdf_events.UpdateSidebarWidth(nextWidth));
+                },
+                onCloseLeftPane: () => _setLeftPaneVisibility(false),
+                onLeftPaneResizeEnd: () {
+                  final current = _bloc.state;
+                  if (current is PdfBookLoaded) {
+                    context
+                        .read<SettingsBloc>()
+                        .add(UpdateSidebarWidth(current.sidebarWidth));
                   }
-                  return true;
                 },
-                builder: (context, state) {
-                  if (state is! PdfBookLoaded) return const SizedBox.shrink();
-                  if (!state.showRightPane) return const SizedBox.shrink();
-                  return ResizableDragHandle(
-                    isVertical: true,
-                    hitSize: 4,
-                    onDragDelta: (delta) {
-                      final newWidth =
-                          (state.rightPaneWidth + delta).clamp(250.0, 600.0);
-                      _bloc.add(pdf_events.UpdateRightPaneWidth(newWidth));
-                    },
-                    onDragEnd: () {
-                      final current = _bloc.state;
-                      if (current is PdfBookLoaded) {
-                        context.read<SettingsBloc>().add(
-                            UpdateCommentaryPaneWidth(current.rightPaneWidth));
-                      }
-                    },
-                  );
+                showRightPane: showRightPane,
+                rightPaneContent: _buildRightPaneContent(),
+                rightPaneWidth: rightPaneWidth,
+                rightMinPaneWidth: 250,
+                rightMaxPaneWidth: 600,
+                onRightPaneWidthChanged: (nextWidth) {
+                  _bloc.add(pdf_events.UpdateRightPaneWidth(nextWidth));
                 },
-              ),
-              _buildRightPane(),
-            ],
+                onCloseRightPane: () {
+                  _bloc.add(const pdf_events.ToggleRightPane(show: false));
+                },
+                onRightPaneResizeEnd: () {
+                  final current = _bloc.state;
+                  if (current is PdfBookLoaded) {
+                    context
+                        .read<SettingsBloc>()
+                        .add(UpdateCommentaryPaneWidth(current.rightPaneWidth));
+                  }
+                },
+                minMainContentWidth: 640,
+              );
+            },
           ),
         ),
       );
     });
   }
 
-  AnimatedSize _buildLeftPane() {
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 300),
-      child: ValueListenableBuilder(
-        valueListenable: widget.tab.showLeftPane,
-        builder: (context, showLeftPane, child) =>
-            BlocBuilder<PdfBookBloc, PdfBookState>(
+  Widget _buildReaderMainContent() {
+    return Stack(
+      children: [
+        NotificationListener<UserScrollNotification>(
+          onNotification: (notification) {
+            if (!(widget.tab.pinLeftPane.value ||
+                (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
+              Future.microtask(() {
+                _setLeftPaneVisibility(false);
+                _pdfViewFocusNode.requestFocus();
+              });
+            }
+            return false;
+          },
+          child: Listener(
+            onPointerSignal: (event) {
+              if (event is PointerScrollEvent &&
+                  !(widget.tab.pinLeftPane.value ||
+                      (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
+                _setLeftPaneVisibility(false);
+                Future.microtask(() {
+                  _pdfViewFocusNode.requestFocus();
+                });
+              }
+            },
+            child: Stack(
+              children: [
+                RepaintBoundary(
+                  key: _pdfViewportBoundaryKey,
+                  child: ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                      Colors.white,
+                      Provider.of<SettingsBloc>(context, listen: true)
+                              .state
+                              .isDarkMode
+                          ? BlendMode.difference
+                          : BlendMode.dst,
+                    ),
+                    child: Stack(
+                      children: [
+                        _buildPdfViewerFromFile(widget.tab.book.path),
+                        BlocBuilder<PdfBookBloc, PdfBookState>(
+                          buildWhen: (prev, curr) {
+                            if (prev is PdfBookLoaded &&
+                                curr is PdfBookLoaded) {
+                              return prev.isLoading != curr.isLoading ||
+                                  prev.loadSucceeded != curr.loadSucceeded;
+                            }
+                            return true;
+                          },
+                          builder: (context, state) {
+                            if (state is! PdfBookLoaded || state.isLoading) {
+                              return const Positioned.fill(
+                                child: ColoredBox(
+                                  color: Color(0xFFFFFFFF),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                ),
+                              );
+                            }
+                            if (!state.loadSucceeded) {
+                              return const Positioned.fill(
+                                child:
+                                    Center(child: Text('Failed to load PDF')),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                _buildPageTurnOverlay(context),
+              ],
+            ),
+          ),
+        ),
+        BlocBuilder<PdfBookBloc, PdfBookState>(
           buildWhen: (prev, curr) {
             if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-              return prev.sidebarWidth != curr.sidebarWidth;
+              return prev.showRightPane != curr.showRightPane ||
+                  prev.isRightPaneHovering != curr.isRightPaneHovering;
             }
             return true;
           },
           builder: (context, state) {
-            final width = state is PdfBookLoaded ? state.sidebarWidth : 300.0;
-            return SizedBox(
-              width: showLeftPane ? width : 0,
-              child: child,
+            if (state is! PdfBookLoaded || state.showRightPane) {
+              return const SizedBox.shrink();
+            }
+
+            final isHovering = state.isRightPaneHovering;
+
+            return Positioned(
+              left: 0,
+              top: MediaQuery.of(context).size.height * 0.10,
+              child: CommentaryPaneTooltip(
+                child: MouseRegion(
+                  onEnter: (_) =>
+                      _bloc.add(const pdf_events.SetRightPaneHovering(true)),
+                  onExit: (_) =>
+                      _bloc.add(const pdf_events.SetRightPaneHovering(false)),
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _rightPaneInitialTabIndex = 0;
+                      });
+                      _bloc.add(const pdf_events.ToggleRightPane(show: true));
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      width: isHovering ? 48 : 20,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withValues(alpha: isHovering ? 0.95 : 0.8),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(40),
+                          bottomRight: Radius.circular(40),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: isHovering ? 8 : 4,
+                            offset: const Offset(2, 0),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 150),
+                          opacity: isHovering ? 1.0 : 0.6,
+                          child: Icon(
+                            FluentIcons.chevron_right_24_regular,
+                            size: isHovering ? 24 : 18,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             );
           },
         ),
-        child: ReaderSidePanelShell(
-          alignment: AlignmentDirectional.centerStart,
-          child: Column(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Theme.of(context).dividerColor,
-                      width: 1,
-                    ),
-                  ),
+        BlocBuilder<PdfBookBloc, PdfBookState>(
+          buildWhen: (prev, curr) {
+            if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
+              return prev.showZoomBar != curr.showZoomBar;
+            }
+            return true;
+          },
+          builder: (context, state) {
+            final showZoomBar = state is PdfBookLoaded && state.showZoomBar;
+            if (!showZoomBar || !widget.tab.pdfViewerController.isReady) {
+              return const SizedBox.shrink();
+            }
+            return Positioned(
+              top: 16,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: PdfZoomBar(
+                  currentZoom: widget.tab.pdfViewerController.value.zoom,
+                  onZoomIn: _zoomIn,
+                  onZoomOut: _zoomOut,
+                  onResetZoom: _resetZoom,
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TabBar(
-                        controller: _leftPaneTabController,
-                        tabs: const [
-                          Tab(text: 'ניווט'),
-                          Tab(text: 'חיפוש'),
-                          Tab(text: 'דפים'),
-                        ],
-                        labelColor: Theme.of(context).colorScheme.primary,
-                        unselectedLabelColor: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.6),
-                        indicatorColor: Theme.of(context).colorScheme.primary,
-                        dividerColor: Colors.transparent,
-                        overlayColor:
-                            WidgetStateProperty.all(Colors.transparent),
-                      ),
-                    ),
-                    if (MediaQuery.of(context).size.width >= 600)
-                      ValueListenableBuilder(
-                        valueListenable: widget.tab.pinLeftPane,
-                        builder: (context, pinLeftPanel, child) => IconButton(
-                          onPressed:
-                              (Settings.getValue<bool>('key-pin-sidebar') ??
-                                      false)
-                                  ? null
-                                  : () {
-                                      widget.tab.pinLeftPane.value =
-                                          !widget.tab.pinLeftPane.value;
-                                    },
-                          icon: AnimatedRotation(
-                            turns: (pinLeftPanel ||
-                                    (Settings.getValue<bool>(
-                                            'key-pin-sidebar') ??
-                                        false))
-                                ? -0.125
-                                : 0.0,
-                            duration: const Duration(milliseconds: 200),
-                            child: Icon(
-                              (pinLeftPanel ||
-                                      (Settings.getValue<bool>(
-                                              'key-pin-sidebar') ??
-                                          false))
-                                  ? FluentIcons.pin_24_filled
-                                  : FluentIcons.pin_24_regular,
-                            ),
-                          ),
-                          color: (pinLeftPanel ||
-                                  (Settings.getValue<bool>('key-pin-sidebar') ??
-                                      false))
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                          isSelected: pinLeftPanel ||
-                              (Settings.getValue<bool>('key-pin-sidebar') ??
-                                  false),
-                        ),
-                      ),
-                    ],
-                  ),
               ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLeftPaneContent() {
+    return Column(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 1,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
               Expanded(
-                child: TabBarView(
+                child: TabBar(
                   controller: _leftPaneTabController,
-                  children: [
-                    ValueListenableBuilder(
-                      valueListenable: widget.tab.outline,
-                      builder: (context, outline, child) => OutlineView(
-                        outline: outline,
-                        controller: widget.tab.pdfViewerController,
-                        focusNode: _navigationFieldFocusNode,
+                  tabs: const [
+                    Tab(text: 'ניווט'),
+                    Tab(text: 'חיפוש'),
+                    Tab(text: 'דפים'),
+                  ],
+                  labelColor: Theme.of(context).colorScheme.primary,
+                  unselectedLabelColor: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
+                  indicatorColor: Theme.of(context).colorScheme.primary,
+                  dividerColor: Colors.transparent,
+                  overlayColor: WidgetStateProperty.all(Colors.transparent),
+                ),
+              ),
+              if (MediaQuery.of(context).size.width >= 600)
+                ValueListenableBuilder(
+                  valueListenable: widget.tab.pinLeftPane,
+                  builder: (context, pinLeftPanel, child) => IconButton(
+                    onPressed:
+                        (Settings.getValue<bool>('key-pin-sidebar') ?? false)
+                            ? null
+                            : () {
+                                widget.tab.pinLeftPane.value =
+                                    !widget.tab.pinLeftPane.value;
+                              },
+                    icon: AnimatedRotation(
+                      turns: (pinLeftPanel ||
+                              (Settings.getValue<bool>('key-pin-sidebar') ??
+                                  false))
+                          ? -0.125
+                          : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        (pinLeftPanel ||
+                                (Settings.getValue<bool>('key-pin-sidebar') ??
+                                    false))
+                            ? FluentIcons.pin_24_filled
+                            : FluentIcons.pin_24_regular,
                       ),
                     ),
-                    ValueListenableBuilder(
-                      valueListenable: widget.tab.documentRef,
-                      builder: (context, documentRef, child) {
-                        if (widget.tab.searchController.text.isNotEmpty) {
-                          _lastProcessedSearchSessionId = null;
-                        }
-                        return child!;
-                      },
-                      child: textSearcher != null
-                          ? PdfBookSearchView(
-                              textSearcher: textSearcher!,
-                              searchController: widget.tab.searchController,
-                              focusNode: _searchFieldFocusNode,
-                              outline: widget.tab.outline.value,
-                              bookTitle: widget.tab.book.title,
-                              bookTopics: widget.tab.book.topics,
-                              pdfFilePath: widget.tab.book.path,
-                              initialSearchText: widget.tab.searchText,
-                              initialSearchOptions: widget.tab.searchOptions,
-                              initialAlternativeWords:
-                                  widget.tab.alternativeWords,
-                              initialSpacingValues: widget.tab.spacingValues,
-                              initialSearchMode: widget.tab.searchMode,
-                              initialTypoToleranceEnabled:
-                                  widget.tab.typoToleranceEnabled,
-                              onSearchResultNavigated: _ensureSearchTabIsActive,
-                            )
-                          : const Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                    ),
-                    ValueListenableBuilder(
-                      valueListenable: widget.tab.documentRef,
-                      builder: (context, documentRef, child) => child!,
-                      child: ThumbnailsView(
-                          documentRef: widget.tab.documentRef.value,
-                          controller: widget.tab.pdfViewerController),
-                    ),
-                  ],
+                    color: (pinLeftPanel ||
+                            (Settings.getValue<bool>('key-pin-sidebar') ??
+                                false))
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                    isSelected: pinLeftPanel ||
+                        (Settings.getValue<bool>('key-pin-sidebar') ?? false),
+                  ),
                 ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _leftPaneTabController,
+            children: [
+              ValueListenableBuilder(
+                valueListenable: widget.tab.outline,
+                builder: (context, outline, child) => OutlineView(
+                  outline: outline,
+                  controller: widget.tab.pdfViewerController,
+                  focusNode: _navigationFieldFocusNode,
+                ),
+              ),
+              ValueListenableBuilder(
+                valueListenable: widget.tab.documentRef,
+                builder: (context, documentRef, child) {
+                  if (widget.tab.searchController.text.isNotEmpty) {
+                    _lastProcessedSearchSessionId = null;
+                  }
+                  return child!;
+                },
+                child: textSearcher != null
+                    ? PdfBookSearchView(
+                        textSearcher: textSearcher!,
+                        searchController: widget.tab.searchController,
+                        focusNode: _searchFieldFocusNode,
+                        outline: widget.tab.outline.value,
+                        bookTitle: widget.tab.book.title,
+                        bookTopics: widget.tab.book.topics,
+                        pdfFilePath: widget.tab.book.path,
+                        initialSearchText: widget.tab.searchText,
+                        initialSearchOptions: widget.tab.searchOptions,
+                        initialAlternativeWords: widget.tab.alternativeWords,
+                        initialSpacingValues: widget.tab.spacingValues,
+                        initialSearchMode: widget.tab.searchMode,
+                        initialTypoToleranceEnabled:
+                            widget.tab.typoToleranceEnabled,
+                        onSearchResultNavigated: _ensureSearchTabIsActive,
+                      )
+                    : const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+              ),
+              ValueListenableBuilder(
+                valueListenable: widget.tab.documentRef,
+                builder: (context, documentRef, child) => child!,
+                child: ThumbnailsView(
+                    documentRef: widget.tab.documentRef.value,
+                    controller: widget.tab.pdfViewerController),
               ),
             ],
           ),
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _buildRightPaneContent() {
+    return PdfCommentaryPanel(
+      tab: widget.tab,
+      openBookCallback: (tab) {
+        if (tab is TextBookTab) {
+          openBook(context, tab.book, tab.index, '', ignoreHistory: false);
+        }
+      },
+      fontSize: 16.0,
+      onClose: () {
+        _bloc.add(const pdf_events.ToggleRightPane(show: false));
+      },
+      initialTabIndex: _rightPaneInitialTabIndex,
     );
   }
 
@@ -2840,50 +2798,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     ignoreHistory: true);
               })
           : const SizedBox.shrink(),
-    );
-  }
-
-  Widget _buildRightPane() {
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 300),
-      child: BlocBuilder<PdfBookBloc, PdfBookState>(
-        buildWhen: (prev, curr) {
-          if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-            return prev.showRightPane != curr.showRightPane ||
-                prev.rightPaneWidth != curr.rightPaneWidth;
-          }
-          return true;
-        },
-        builder: (context, state) {
-          final showRightPane = state is PdfBookLoaded && state.showRightPane;
-          final width = state is PdfBookLoaded ? state.rightPaneWidth : 300.0;
-          return ClipRect(
-            child: SizedBox(
-              width: showRightPane ? width : 0,
-              child: showRightPane
-                  ? ReaderSidePanelShell(
-                      alignment: AlignmentDirectional.centerEnd,
-                      child: PdfCommentaryPanel(
-                        tab: widget.tab,
-                        openBookCallback: (tab) {
-                          if (tab is TextBookTab) {
-                            openBook(context, tab.book, tab.index, '',
-                                ignoreHistory: false);
-                          }
-                        },
-                        fontSize: 16.0,
-                        onClose: () {
-                          _bloc.add(
-                              const pdf_events.ToggleRightPane(show: false));
-                        },
-                        initialTabIndex: _rightPaneInitialTabIndex,
-                      ),
-                    )
-                  : null,
-            ),
-          );
-        },
-      ),
     );
   }
 

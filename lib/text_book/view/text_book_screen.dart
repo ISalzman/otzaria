@@ -43,13 +43,12 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/fullscreen_helper.dart';
 
 import 'package:otzaria/widgets/responsive_action_bar.dart';
-import 'package:otzaria/widgets/reader_side_panel_shell.dart';
-import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/models/book_model.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/app_menu.dart';
+import 'package:otzaria/widgets/adaptive_side_pane.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
@@ -1069,7 +1068,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                             event, context, state, widget.tab),
                         child: Scaffold(
                           appBar: _buildAppBar(context, state, wideScreen),
-                          body: _buildBody(context, state, wideScreen),
+                          body: _buildBody(context, state),
                         ),
                       );
                     },
@@ -2114,40 +2113,31 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget _buildBody(
     BuildContext context,
     TextBookLoaded state,
-    bool wideScreen,
   ) {
-    return LayoutBuilder(
-      builder: (context, constraints) => MediaQuery.of(context).size.width < 600
-          ? Stack(
-              children: [
-                _buildHTMLViewer(state),
-                Container(
-                  color: Theme.of(context).colorScheme.surface,
-                  child: _buildTabBar(state),
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                _buildTabBar(state),
-                if (state.showLeftPane)
-                  ResizableDragHandle(
-                    isVertical: true,
-                    hitSize: 4,
-                    onDragDelta: (delta) {
-                      final newWidth =
-                          (_sidebarWidth.value - delta).clamp(200.0, 600.0);
-                      _sidebarWidth.value = newWidth;
-                    },
-                    onDragEnd: () {
-                      context
-                          .read<SettingsBloc>()
-                          .add(UpdateSidebarWidth(_sidebarWidth.value));
-                    },
-                  ),
-                Expanded(child: _buildHTMLViewer(state)),
-              ],
-            ),
+    return ValueListenableBuilder<double>(
+      valueListenable: _sidebarWidth,
+      builder: (context, width, child) => AdaptiveSidePane(
+        isOpen: state.showLeftPane,
+        alignment: AlignmentDirectional.centerEnd,
+        paneWidth: width,
+        minMainContentWidth: 520,
+        onClose: () =>
+            context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
+        paneContent: _buildLeftPaneContent(state),
+        mainContent: _buildHTMLViewer(state),
+        isResizable: true,
+        minPaneWidth: 200,
+        maxPaneWidth: 600,
+        onPaneWidthChanged: (nextWidth) {
+          _sidebarWidth.value = nextWidth;
+        },
+        onPaneResizeEnd: () {
+          context
+              .read<SettingsBloc>()
+              .add(UpdateSidebarWidth(_sidebarWidth.value));
+        },
+        autoHandleResponsiveVisibility: false,
+      ),
     );
   }
 
@@ -2222,7 +2212,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  Widget _buildTabBar(TextBookLoaded state) {
+  Widget _buildLeftPaneContent(TextBookLoaded state) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (state.showLeftPane && !Platform.isAndroid && !_isInitialFocusDone) {
         final hasSearchText = state.searchText.trim().isNotEmpty;
@@ -2236,146 +2226,121 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         _isInitialFocusDone = true;
       }
     });
-    return ValueListenableBuilder<double>(
-      valueListenable: _sidebarWidth,
-      builder: (context, width, child) => AnimatedSize(
-        duration: const Duration(milliseconds: 300),
-        child: SizedBox(
-          width: state.showLeftPane ? width : 0,
-          child: ReaderSidePanelShell(
-            alignment: AlignmentDirectional.centerStart,
-            child: Column(
-              children: [
-                SizedBox(
-                  height: 44,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Theme.of(context).dividerColor,
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TabBar(
-                            controller: tabController,
-                            tabs: [
-                              const Tab(
-                                icon: Icon(FluentIcons.navigation_24_regular,
-                                    size: 16),
-                                iconMargin: EdgeInsets.only(bottom: 1),
-                                height: 44,
-                                child: Text('ניווט',
-                                    style: TextStyle(fontSize: 11)),
-                              ),
-                              if (_hasAltTitles)
-                                const Tab(
-                                  icon: Icon(FluentIcons.list_24_regular,
-                                      size: 16),
-                                  iconMargin: EdgeInsets.only(bottom: 1),
-                                  height: 44,
-                                  child: Text('כותרות',
-                                      style: TextStyle(fontSize: 11)),
-                                ),
-                              const Tab(
-                                icon: Icon(FluentIcons.search_24_regular,
-                                    size: 16),
-                                iconMargin: EdgeInsets.only(bottom: 1),
-                                height: 44,
-                                child: Text('חיפוש',
-                                    style: TextStyle(fontSize: 11)),
-                              ),
-                            ],
-                            labelColor: Theme.of(context).colorScheme.primary,
-                            unselectedLabelColor: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.6),
-                            indicatorColor:
-                                Theme.of(context).colorScheme.primary,
-                            dividerColor: Colors.transparent,
-                          ),
-                        ),
-                        if (MediaQuery.of(context).size.width >= 600)
-                          IconButton(
-                            onPressed:
-                                (Settings.getValue<bool>('key-pin-sidebar') ??
-                                        false)
-                                    ? null
-                                    : () => context.read<TextBookBloc>().add(
-                                          TogglePinLeftPane(!state.pinLeftPane),
-                                        ),
-                            icon: AnimatedRotation(
-                              turns: (state.pinLeftPane ||
-                                      (Settings.getValue<bool>(
-                                              'key-pin-sidebar') ??
-                                          false))
-                                  ? -0.125
-                                  : 0.0,
-                              duration: const Duration(milliseconds: 200),
-                              child: Icon(
-                                (state.pinLeftPane ||
-                                        (Settings.getValue<bool>(
-                                                'key-pin-sidebar') ??
-                                            false))
-                                    ? FluentIcons.pin_24_filled
-                                    : FluentIcons.pin_24_regular,
-                              ),
-                            ),
-                            color: (state.pinLeftPane ||
-                                    (Settings.getValue<bool>(
-                                            'key-pin-sidebar') ??
-                                        false))
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
-                            isSelected: state.pinLeftPane ||
-                                (Settings.getValue<bool>('key-pin-sidebar') ??
-                                    false),
-                          ),
-                      ],
-                    ),
-                  ),
+    return Column(
+      children: [
+        SizedBox(
+          height: 44,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Theme.of(context).dividerColor,
+                  width: 1,
                 ),
+              ),
+            ),
+            child: Row(
+              children: [
                 Expanded(
-                  child: TabBarView(
+                  child: TabBar(
                     controller: tabController,
-                    children: [
-                      _buildTocViewer(context, state),
+                    tabs: [
+                      const Tab(
+                        icon: Icon(FluentIcons.navigation_24_regular, size: 16),
+                        iconMargin: EdgeInsets.only(bottom: 1),
+                        height: 44,
+                        child: Text('ניווט', style: TextStyle(fontSize: 11)),
+                      ),
                       if (_hasAltTitles)
-                        AltTocSidebarView(
-                          book: widget.tab.book,
-                          closeLeftPaneCallback: () => context
-                              .read<TextBookBloc>()
-                              .add(const ToggleLeftPane(false)),
-                          scrollController: state.scrollController,
+                        const Tab(
+                          icon: Icon(FluentIcons.list_24_regular, size: 16),
+                          iconMargin: EdgeInsets.only(bottom: 1),
+                          height: 44,
+                          child: Text('כותרות', style: TextStyle(fontSize: 11)),
                         ),
-                      CallbackShortcuts(
-                        bindings: <ShortcutActivator, VoidCallback>{
-                          LogicalKeySet(
-                            LogicalKeyboardKey.control,
-                            LogicalKeyboardKey.keyF,
-                          ): () {
-                            context.read<TextBookBloc>().add(
-                                  const ToggleLeftPane(true),
-                                );
-                            // Adjust index based on whether alt titles are shown
-                            tabController.index = _hasAltTitles ? 2 : 1;
-                            textSearchFocusNode.requestFocus();
-                          },
-                        },
-                        child: _buildSearchView(context, state),
+                      const Tab(
+                        icon: Icon(FluentIcons.search_24_regular, size: 16),
+                        iconMargin: EdgeInsets.only(bottom: 1),
+                        height: 44,
+                        child: Text('חיפוש', style: TextStyle(fontSize: 11)),
                       ),
                     ],
+                    labelColor: Theme.of(context).colorScheme.primary,
+                    unselectedLabelColor: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
+                    indicatorColor: Theme.of(context).colorScheme.primary,
+                    dividerColor: Colors.transparent,
                   ),
                 ),
+                if (MediaQuery.of(context).size.width >= 600)
+                  IconButton(
+                    onPressed:
+                        (Settings.getValue<bool>('key-pin-sidebar') ?? false)
+                            ? null
+                            : () => context.read<TextBookBloc>().add(
+                                  TogglePinLeftPane(!state.pinLeftPane),
+                                ),
+                    icon: AnimatedRotation(
+                      turns: (state.pinLeftPane ||
+                              (Settings.getValue<bool>('key-pin-sidebar') ??
+                                  false))
+                          ? -0.125
+                          : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        (state.pinLeftPane ||
+                                (Settings.getValue<bool>('key-pin-sidebar') ??
+                                    false))
+                            ? FluentIcons.pin_24_filled
+                            : FluentIcons.pin_24_regular,
+                      ),
+                    ),
+                    color: (state.pinLeftPane ||
+                            (Settings.getValue<bool>('key-pin-sidebar') ??
+                                false))
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                    isSelected: state.pinLeftPane ||
+                        (Settings.getValue<bool>('key-pin-sidebar') ?? false),
+                  ),
               ],
             ),
           ),
         ),
-      ),
+        Expanded(
+          child: TabBarView(
+            controller: tabController,
+            children: [
+              _buildTocViewer(context, state),
+              if (_hasAltTitles)
+                AltTocSidebarView(
+                  book: widget.tab.book,
+                  closeLeftPaneCallback: () => context
+                      .read<TextBookBloc>()
+                      .add(const ToggleLeftPane(false)),
+                  scrollController: state.scrollController,
+                ),
+              CallbackShortcuts(
+                bindings: <ShortcutActivator, VoidCallback>{
+                  LogicalKeySet(
+                    LogicalKeyboardKey.control,
+                    LogicalKeyboardKey.keyF,
+                  ): () {
+                    context.read<TextBookBloc>().add(
+                          const ToggleLeftPane(true),
+                        );
+                    tabController.index = _hasAltTitles ? 2 : 1;
+                    textSearchFocusNode.requestFocus();
+                  },
+                },
+                child: _buildSearchView(context, state),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
