@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/widgets/app_menu.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -14,8 +13,6 @@ import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/widgets/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
-import 'package:otzaria/utils/context_menu_utils.dart';
-import 'package:otzaria/text_book/view/error_report_dialog.dart';
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -50,7 +47,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   static const int _notesTabIndex = 2;
 
   late final MultiSplitViewController _controller;
-  late final GlobalKey<SelectionAreaState> _selectionKey;
   bool _paneOpen = false;
   int? _currentTabIndex;
   late double _leftPaneWidth;
@@ -62,7 +58,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   void initState() {
     super.initState();
     _controller = MultiSplitViewController();
-    _selectionKey = GlobalKey<SelectionAreaState>();
     _currentTabIndex = _getInitialTabIndex();
     if (widget.initialTabIndex != null) {
       _paneOpen = true;
@@ -169,51 +164,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     super.dispose();
   }
 
-  List<AppContextMenuEntry> _buildContextMenuEntries(
-      BuildContext menuCtx, TextBookLoaded state, String? selectedText) {
-    return [
-      AppContextMenuEntry(
-        label: 'העתק',
-        icon: FluentIcons.copy_24_regular,
-        enabled: selectedText != null && selectedText.trim().isNotEmpty,
-        onTap: () => ContextMenuUtils.copyFormattedText(
-          context: context,
-          savedSelectedText: selectedText,
-          fontSize: state.fontSize,
-        ),
-      ),
-      AppContextMenuEntry(
-        label: 'חיפוש',
-        onTap: () => widget.openLeftPaneTab(1, searchText: selectedText),
-      ),
-      AppContextMenuEntry(
-        label: 'דווח על טעות בספר',
-        icon: FluentIcons.error_circle_24_regular,
-        onTap: () => _openErrorReportDialog(selectedText ?? ''),
-      ),
-      const AppContextMenuEntry.divider(),
-      AppContextMenuEntry(
-        label: 'בחר את כל הטקסט',
-        onTap: () => _selectionKey.currentState?.selectableRegion.selectAll(),
-      ),
-    ];
-  }
-
-  /// פתיחת דיאלוג דיווח על טעות בספר
-  void _openErrorReportDialog(String selectedText) {
-    final state = context.read<TextBookBloc>().state;
-    if (state is! TextBookLoaded) return;
-
-    ErrorReportHelper.showErrorReportDialog(
-      context: context,
-      selectedText: selectedText,
-      state: state,
-      fontSize: state.fontSize,
-      bookTitle: widget.tab.book.title,
-      savedSelectedIndex: null, // אין savedSelectedIndex במסך זה
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return BlocListener<TextBookBloc, TextBookState>(
@@ -252,7 +202,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
             paneContent: ValueListenableBuilder<String?>(
               valueListenable: _savedSelectedText,
               child: SelectionArea(
-                key: _selectionKey,
                 contextMenuBuilder: (context, selectableRegionState) {
                   return const SizedBox.shrink();
                 },
@@ -285,13 +234,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                   },
                 ),
               ),
-              builder: (context, selectedText, child) {
-                return AppContextMenuRegion(
-                  menuBuilder: (menuCtx) =>
-                      _buildContextMenuEntries(menuCtx, state, selectedText),
-                  child: child!,
-                );
-              },
+              builder: (context, selectedText, child) => child!,
             ),
             mainContent: Stack(
               children: [
