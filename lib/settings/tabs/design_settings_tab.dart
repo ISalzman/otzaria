@@ -21,6 +21,7 @@ class DesignSettingsTab extends StatelessWidget {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, state) {
         return SingleChildScrollView(
+          primary: true,
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -243,8 +244,8 @@ class DesignSettingsTab extends StatelessWidget {
                         style: kSettingsTitleStyle),
                     subtitle: Text(
                         state.personalNotesCollapsedByDefault
-                        ? 'רשימות ההערות יוצגו כשהן סגורות'
-                        : 'רשימות ההערות יוצגו כשהן פתוחות',
+                            ? 'רשימות ההערות יוצגו כשהן סגורות'
+                            : 'רשימות ההערות יוצגו כשהן פתוחות',
                         style: kSettingsSubtitleStyle),
                     value: state.personalNotesCollapsedByDefault,
                     onChanged: (value) {

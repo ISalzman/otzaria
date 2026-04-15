@@ -235,33 +235,34 @@ class _AppTopBarState extends State<AppTopBar>
           ),
         );
 
-        if (widget.secondaryRow == null) return mainBar;
-
-        // שורה שניה עם אנימציה —
-        // SizeTransition מבטיח שהתוכן מתחת לסרגל לא ייחתך ולא יקפוץ
+        // תמיד מחזירים Column כדי לשמור על מיקום יציב של mainBar (position 0).
+        // שינוי מ-Material ישיר ל-Column גורם ל-Flutter למחוק ולאחזר את mainBar
+        // (ולאבד פוקוס מקלדת). עם Column קבוע, mainBar תמיד ב-position 0
+        // ו-Flutter שומר על ה-element (ועל הפוקוס) גם כשהשורה השניה מופיעה/נעלמת.
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             mainBar,
-            SizeTransition(
-              sizeFactor: _progress,
-              axisAlignment: -1.0,
-              child: FadeTransition(
-                opacity: _progress,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Material(
-                    key: _secondaryRowKey,
-                    color: barColor,
-                    elevation: 1.0,
-                    shadowColor: cs.shadow.withValues(alpha: 0.08),
-                    surfaceTintColor: Colors.transparent,
-                    child: widget.secondaryRow!,
+            if (widget.secondaryRow != null)
+              SizeTransition(
+                sizeFactor: _progress,
+                axisAlignment: -1.0,
+                child: FadeTransition(
+                  opacity: _progress,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Material(
+                      key: _secondaryRowKey,
+                      color: barColor,
+                      elevation: 1.0,
+                      shadowColor: cs.shadow.withValues(alpha: 0.08),
+                      surfaceTintColor: Colors.transparent,
+                      child: widget.secondaryRow!,
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         );
       },

@@ -157,9 +157,9 @@ class SearchQueryBuilder {
       effectiveSlop =
           SearchQueryBuilder.getMaxCustomSpacing(customSpacing, words.length);
     } else {
-      // חיפוש מדוייק של כמה מילים
+      // חיפוש מדוייק של כמה מילים - slop=0 כדי לאכוף סדר וצמידות
       regexTerms = words;
-      effectiveSlop = distance;
+      effectiveSlop = 0;
     }
 
     // חישוב maxExpansions בהתבסס על סוג החיפוש

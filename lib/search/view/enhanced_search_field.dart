@@ -20,10 +20,15 @@ class EnhancedSearchField extends StatefulWidget {
   /// האם להציג את כפתור החיפוש המובנה בתוך השדה.
   final bool showInlineSearchButton;
 
+  /// callback חיצוני שיופעל במקום לוגיקת החיפוש הפנימית כשמוגדר.
+  /// משמש בדיאלוג החיפוש המתקדם כך ש-Enter מוליך לחיפוש הנכון.
+  final VoidCallback? onSubmit;
+
   const EnhancedSearchField({
     super.key,
     required this.widget,
     this.showInlineSearchButton = true,
+    this.onSubmit,
   });
 
   SearchingTab get tab {
@@ -309,6 +314,12 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   }
 
   void _performSearch() {
+    // אם קיים callback חיצוני (למשל מהדיאלוג), משתמשים בו במקום לוגיקת החיפוש הפנימית
+    if (widget.onSubmit != null) {
+      widget.onSubmit!();
+      return;
+    }
+
     String query = widget.tab.queryController.text.trim();
     if (query.isNotEmpty) {
       // החיפוש עובד תמיד על טקסט ללא ניקוד.

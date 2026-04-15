@@ -277,123 +277,107 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   Widget _buildExpansionTile(Link link) {
     final keyStr = '${link.path2}_${link.index2}';
     final restoredExpanded = PageStorage.maybeOf(context)?.readState(
-          context,
-          identifier: keyStr,
-        ) as bool?;
+      context,
+      identifier: keyStr,
+    ) as bool?;
     final isExpanded = _expanded[keyStr] ?? restoredExpanded ?? false;
-    return AppContextMenuRegion(
-      menuBuilder: (menuCtx) => ContextMenuUtils.buildCommentaryContextMenu(
-        context: menuCtx,
-        link: link,
-        openBookCallback: widget.openBookCallback,
-        fontSize: widget.fontSize,
-        savedSelectedText: _savedSelectedText,
-        onCopySelected: () => ContextMenuUtils.copyFormattedText(
-          context: menuCtx,
-          savedSelectedText: _savedSelectedText,
-          fontSize: widget.fontSize,
-          link: _savedSelectedLink,
+    return ExpansionTile(
+      key: PageStorageKey(keyStr),
+      initiallyExpanded: isExpanded,
+      maintainState: true,
+      showTrailingIcon: false,
+      leading: AnimatedRotation(
+        turns: isExpanded ? -0.25 : 0,
+        duration: const Duration(milliseconds: 200),
+        child: Icon(
+          Icons.keyboard_arrow_left,
+          size: 20,
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
         ),
       ),
-      child: ExpansionTile(
-        key: PageStorageKey(keyStr),
-        initiallyExpanded: isExpanded,
-        maintainState: true,
-        showTrailingIcon: false,
-        leading: AnimatedRotation(
-          turns: isExpanded ? -0.25 : 0,
-          duration: const Duration(milliseconds: 200),
-          child: Icon(
-            Icons.keyboard_arrow_left,
-            size: 20,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-          ),
-        ),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
-        title: BlocBuilder<SettingsBloc, SettingsState>(
-          builder: (context, settingsState) {
-            String displayTitle = utils.getTitleFromPath(link.path2);
-            if (settingsState.replaceHolyNames) {
-              displayTitle = utils.replaceHolyNames(displayTitle);
-            }
-            return Text(
-              displayTitle,
-              style: TextStyle(
-                fontSize: settingsState.commentatorsFontSize - 2,
-                fontWeight: FontWeight.bold,
-                fontFamily: settingsState.commentatorsFontFamily,
-              ),
-              textDirection: TextDirection.rtl,
-            );
-          },
-        ),
-        subtitle: BlocBuilder<SettingsBloc, SettingsState>(
-          builder: (context, settingsState) {
-            return FutureBuilder<String>(
-              future: link.displayReference,
-              builder: (context, snapshot) {
-                String displaySubtitle =
-                    snapshot.data ?? link.fallbackDisplayReference;
-                if (settingsState.replaceHolyNames) {
-                  displaySubtitle = utils.replaceHolyNames(displaySubtitle);
-                }
-                return Text(
-                  displaySubtitle,
-                  style: TextStyle(
-                    fontSize: settingsState.commentatorsFontSize - 4,
-                    fontWeight: FontWeight.normal,
-                    fontFamily: settingsState.commentatorsFontFamily,
-                    color:
-                        Theme.of(context).colorScheme.onSurface.withAlpha(128),
-                  ),
-                  textDirection: TextDirection.rtl,
-                );
-              },
-            );
-          },
-        ),
-        onExpansionChanged: (isExpanded) {
-          // טוען תוכן רק אם נפתח ועדיין לא נטען
-          if (isExpanded && !_contentCache.containsKey(keyStr)) {
-            _contentCache[keyStr] = link.content;
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
+      title: BlocBuilder<SettingsBloc, SettingsState>(
+        builder: (context, settingsState) {
+          String displayTitle = utils.getTitleFromPath(link.path2);
+          if (settingsState.replaceHolyNames) {
+            displayTitle = utils.replaceHolyNames(displayTitle);
           }
-
-          // עדכון מצב ההרחבה עם setState בטוח - דוחה עד אחרי הבנייה
-          if (_expanded[keyStr] != isExpanded) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  _expanded[keyStr] = isExpanded;
-                });
-              }
-            });
-          }
+          return Text(
+            displayTitle,
+            style: TextStyle(
+              fontSize: settingsState.commentatorsFontSize - 2,
+              fontWeight: FontWeight.bold,
+              fontFamily: settingsState.commentatorsFontFamily,
+            ),
+            textDirection: TextDirection.rtl,
+          );
         },
-        children: [
-          if (isExpanded)
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: AppFutureBuilder<String>(
-                future: _contentCache[keyStr],
-                builder: (context, content) => _buildLinkContent(content, link),
-                errorBuilder: (context, error) =>
-                    BlocBuilder<SettingsBloc, SettingsState>(
-                  builder: (context, settingsState) {
-                    return Text(
-                      'שגיאה בטעינת התוכן: $error',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontSize: settingsState.commentatorsFontSize,
-                      ),
-                    );
-                  },
+      ),
+      subtitle: BlocBuilder<SettingsBloc, SettingsState>(
+        builder: (context, settingsState) {
+          return FutureBuilder<String>(
+            future: link.displayReference,
+            builder: (context, snapshot) {
+              String displaySubtitle =
+                  snapshot.data ?? link.fallbackDisplayReference;
+              if (settingsState.replaceHolyNames) {
+                displaySubtitle = utils.replaceHolyNames(displaySubtitle);
+              }
+              return Text(
+                displaySubtitle,
+                style: TextStyle(
+                  fontSize: settingsState.commentatorsFontSize - 4,
+                  fontWeight: FontWeight.normal,
+                  fontFamily: settingsState.commentatorsFontFamily,
+                  color: Theme.of(context).colorScheme.onSurface.withAlpha(128),
                 ),
+                textDirection: TextDirection.rtl,
+              );
+            },
+          );
+        },
+      ),
+      onExpansionChanged: (isExpanded) {
+        // טוען תוכן רק אם נפתח ועדיין לא נטען
+        if (isExpanded && !_contentCache.containsKey(keyStr)) {
+          _contentCache[keyStr] = link.content;
+        }
+
+        // עדכון מצב ההרחבה עם setState בטוח - דוחה עד אחרי הבנייה
+        if (_expanded[keyStr] != isExpanded) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _expanded[keyStr] = isExpanded;
+              });
+            }
+          });
+        }
+      },
+      children: [
+        if (isExpanded)
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: AppFutureBuilder<String>(
+              future: _contentCache[keyStr],
+              builder: (context, content) => _buildLinkContent(content, link),
+              errorBuilder: (context, error) =>
+                  BlocBuilder<SettingsBloc, SettingsState>(
+                builder: (context, settingsState) {
+                  return Text(
+                    'שגיאה בטעינת התוכן: $error',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: settingsState.commentatorsFontSize,
+                    ),
+                  );
+                },
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
@@ -413,6 +397,9 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
     }
 
     return SelectionArea(
+      contextMenuBuilder: (context, selectableRegionState) {
+        return const SizedBox.shrink();
+      },
       onSelectionChanged: (selection) {
         if (selection != null && selection.plainText.isNotEmpty) {
           _savedSelectedText = selection.plainText;
@@ -422,24 +409,40 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           _savedSelectedLink = null;
         }
       },
-      child: GestureDetector(
-        onTap: () {
-          widget.openBookCallback(
-            TextBookTab(
-              book: TextBook(
-                title: utils.getTitleFromPath(link.path2),
+      child: AppContextMenuRegion(
+        menuBuilder: (menuCtx) => ContextMenuUtils.buildCommentaryContextMenu(
+          context: menuCtx,
+          link: link,
+          openBookCallback: widget.openBookCallback,
+          fontSize: widget.fontSize,
+          savedSelectedText: _savedSelectedText,
+          onCopySelected: () => ContextMenuUtils.copyFormattedText(
+            context: menuCtx,
+            savedSelectedText: _savedSelectedText,
+            fontSize: widget.fontSize,
+            link: _savedSelectedLink,
+          ),
+        ),
+        child: GestureDetector(
+          onTap: () {
+            widget.openBookCallback(
+              TextBookTab(
+                book: TextBook(
+                  title: utils.getTitleFromPath(link.path2),
+                ),
+                index: link.index2 - 1,
+                openLeftPane:
+                    (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+                        (Settings.getValue<bool>('key-default-sidebar-open') ??
+                            false),
               ),
-              index: link.index2 - 1,
-              openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                      false) ||
-                  (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-            ),
-          );
-        },
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12.0),
-          child: _buildHighlightedText(content, link),
+            );
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12.0),
+            child: _buildHighlightedText(content, link),
+          ),
         ),
       ),
     );

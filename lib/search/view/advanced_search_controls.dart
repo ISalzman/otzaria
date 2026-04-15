@@ -335,7 +335,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
           decoration: BoxDecoration(
             color: isEnabled
                 ? Theme.of(context).colorScheme.primaryContainer
-                : Colors.grey.shade200,
+                : Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
@@ -345,7 +345,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
               fontWeight: FontWeight.bold,
               color: isEnabled
                   ? Theme.of(context).colorScheme.onPrimaryContainer
-                  : Colors.grey.shade500,
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ),

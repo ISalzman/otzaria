@@ -1052,7 +1052,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                       return;
                     }
 
-                    if (!_bookContentFocusNode.hasFocus) {
+                    if (!_bookContentFocusNode.hasFocus &&
+                        !textSearchFocusNode.hasFocus &&
+                        !navigationSearchFocusNode.hasFocus) {
                       _bookContentFocusNode.requestFocus();
                     }
                   });

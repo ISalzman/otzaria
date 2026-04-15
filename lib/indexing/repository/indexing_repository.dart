@@ -8,6 +8,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/indexing/services/indexing_isolate_service.dart';
+import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:search_engine/search_engine.dart';
 
@@ -306,7 +307,15 @@ class IndexingRepository {
 
     final index = await _tantivyDataProvider.engine;
     final title = book.title;
-    final topics = _buildTopicsPath(book);
+    final topics = BookFacet.buildFacetPath(
+      title: title,
+      topics: book.topics,
+      externalLibraryId: book.externalLibraryId,
+      bookId: book.id,
+      categoryPath: book.category?.path ?? book.categoryPath,
+      fileType: book.fileType,
+      filePath: book is FileBook ? book.path : book.filePath,
+    );
     final isPdf = book is PdfBook;
     final filePath = buildIndexedBookFilePath(book);
     final catalogueOrder =
@@ -400,14 +409,6 @@ class IndexingRepository {
       return book.path;
     }
     return catalogueOrderKey(book);
-  }
-
-  String _buildTopicsPath(Book book) {
-    final topics = "/${book.topics.replaceAll(', ', '/')}";
-    // שימוש ב-catalogueOrderKey במקום title כדי להבטיח ייחודיות
-    // זה מאפשר הבחנה בין ספרים עם אותו שם
-    final bookKey = catalogueOrderKey(book);
-    return '$topics/$bookKey';
   }
 
   /// Indexes a specific list of books (e.g. newly added personal books).

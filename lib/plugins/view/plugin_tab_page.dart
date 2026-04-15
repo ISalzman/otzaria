@@ -273,113 +273,138 @@ class _PluginTabPageState extends State<PluginTabPage> {
         ),
       ]),
       onWebViewCreated: (controller) {
-        webViewController = controller;
-        PluginRuntimeDispatcher.instance
-            .registerController(widget.plugin.pluginId, controller);
-        _bridge.register(controller);
+        try {
+          webViewController = controller;
+          PluginRuntimeDispatcher.instance
+              .registerController(widget.plugin.pluginId, controller);
+          _bridge.register(controller);
+        } catch (e) {
+          // bridge.register נכשל — מנקים את ה-registration הלא שלם
+          PluginRuntimeDispatcher.instance
+              .unregisterController(widget.plugin.pluginId);
+          debugPrint('Plugin [${widget.plugin.pluginId}] WebView init error: $e');
+          if (mounted) setState(() => _hasError = true);
+        }
       },
       shouldOverrideUrlLoading: (controller, navigationAction) async {
-        final uri = navigationAction.request.url;
-        if (uri == null) return NavigationActionPolicy.CANCEL;
+        try {
+          final uri = navigationAction.request.url;
+          if (uri == null) return NavigationActionPolicy.CANCEL;
 
-        if (uri.scheme == 'file') {
-          final normalizedUri = p.normalize(uri.toFilePath());
-          final normalizedInstall = p.normalize(widget.plugin.resolvedRootPath);
-          if (p.isWithin(normalizedInstall, normalizedUri) ||
-              normalizedUri == normalizedInstall) {
+          if (uri.scheme == 'file') {
+            final normalizedUri = p.normalize(uri.toFilePath());
+            final normalizedInstall =
+                p.normalize(widget.plugin.resolvedRootPath);
+            if (p.isWithin(normalizedInstall, normalizedUri) ||
+                normalizedUri == normalizedInstall) {
+              return NavigationActionPolicy.ALLOW;
+            }
+          } else if (uri.scheme == 'data' ||
+              uri.scheme == 'blob' ||
+              uri.scheme == 'about') {
             return NavigationActionPolicy.ALLOW;
           }
-        } else if (uri.scheme == 'data' ||
-            uri.scheme == 'blob' ||
-            uri.scheme == 'about') {
-          return NavigationActionPolicy.ALLOW;
-        }
 
-        if (uri.scheme == 'http' || uri.scheme == 'https') {
-          if (widget.plugin.manifest.networkEnabled) {
-            final granted = await _pluginRegistryRepository.getPermission(
-              widget.plugin.pluginId,
-              'network.access',
-            );
-            if (granted == true) {
-              final allowlist = widget.plugin.manifest.networkAllowlist;
-              if (allowlist.any((domain) =>
-                  uri.host == domain || uri.host.endsWith('.$domain'))) {
-                return NavigationActionPolicy.ALLOW;
+          if (uri.scheme == 'http' || uri.scheme == 'https') {
+            if (widget.plugin.manifest.networkEnabled) {
+              final granted = await _pluginRegistryRepository.getPermission(
+                widget.plugin.pluginId,
+                'network.access',
+              );
+              if (granted == true) {
+                final allowlist = widget.plugin.manifest.networkAllowlist;
+                if (allowlist.any((domain) =>
+                    uri.host == domain || uri.host.endsWith('.$domain'))) {
+                  return NavigationActionPolicy.ALLOW;
+                }
               }
             }
           }
-        }
 
-        return NavigationActionPolicy.CANCEL;
+          return NavigationActionPolicy.CANCEL;
+        } catch (e) {
+          debugPrint(
+              'Plugin [${widget.plugin.pluginId}] URL override error: $e');
+          return NavigationActionPolicy.CANCEL;
+        }
       },
       shouldInterceptRequest: (controller, request) async {
-        final uri = request.url;
-        if (uri.scheme == 'file') {
-          final normalizedUri = p.normalize(uri.toFilePath());
-          final normalizedInstall = p.normalize(widget.plugin.resolvedRootPath);
-          if (!p.isWithin(normalizedInstall, normalizedUri) &&
-              normalizedUri != normalizedInstall) {
+        try {
+          final uri = request.url;
+          if (uri.scheme == 'file') {
+            final normalizedUri = p.normalize(uri.toFilePath());
+            final normalizedInstall =
+                p.normalize(widget.plugin.resolvedRootPath);
+            if (!p.isWithin(normalizedInstall, normalizedUri) &&
+                normalizedUri != normalizedInstall) {
+              return WebResourceResponse(
+                  statusCode: 403, reasonPhrase: 'Forbidden');
+            }
+          }
+          if (uri.scheme == 'http' || uri.scheme == 'https') {
+            if (widget.plugin.manifest.networkEnabled) {
+              final granted = await _pluginRegistryRepository.getPermission(
+                widget.plugin.pluginId,
+                'network.access',
+              );
+              if (granted == true) {
+                final allowlist = widget.plugin.manifest.networkAllowlist;
+                if (!allowlist.any((domain) =>
+                    uri.host == domain || uri.host.endsWith('.$domain'))) {
+                  return WebResourceResponse(
+                      statusCode: 403, reasonPhrase: 'Forbidden');
+                }
+                return null;
+              }
+            }
             return WebResourceResponse(
                 statusCode: 403, reasonPhrase: 'Forbidden');
           }
-        }
-        if (uri.scheme == 'http' || uri.scheme == 'https') {
-          if (widget.plugin.manifest.networkEnabled) {
-            final granted = await _pluginRegistryRepository.getPermission(
-              widget.plugin.pluginId,
-              'network.access',
-            );
-            if (granted == true) {
-              final allowlist = widget.plugin.manifest.networkAllowlist;
-              if (!allowlist.any((domain) =>
-                  uri.host == domain || uri.host.endsWith('.$domain'))) {
-                return WebResourceResponse(
-                    statusCode: 403, reasonPhrase: 'Forbidden');
-              }
-              return null;
-            }
-          }
+          return null;
+        } catch (e) {
+          debugPrint(
+              'Plugin [${widget.plugin.pluginId}] intercept request error: $e');
           return WebResourceResponse(
               statusCode: 403, reasonPhrase: 'Forbidden');
         }
-        return null;
       },
       onLoadStop: (controller, url) async {
-        // לוכד theme לפני ה-await (context חייב להישמר synchronously)
-        final theme = buildThemePayload(context);
+        try {
+          // לוכד theme לפני ה-await (context חייב להישמר synchronously)
+          final theme = buildThemePayload(context);
 
-        // Use cached PackageInfo — avoids async gap crossing a dispose
-        final packageInfo =
-            _cachedPackageInfo ?? await PackageInfo.fromPlatform();
-        if (!mounted) return;
-        final permissions = await _pluginRegistryRepository.getPluginPermissions(
-          widget.plugin.pluginId,
-        );
-        if (!mounted) return;
-        final bootPayload = {
-          'plugin': {
-            'id': widget.plugin.pluginId,
-            'version': widget.plugin.version,
-          },
-          'app': {
-            'version': packageInfo.version,
-            'platform': Platform.operatingSystem,
-            'locale': 'he-IL',
-            'textDirection': 'rtl',
-          },
-          'theme': theme,
-          'permissions': permissions
-              .where((permission) => permission.granted)
-              .map((permission) => permission.permission)
-              .toList(),
-        };
+          // Use cached PackageInfo — avoids async gap crossing a dispose
+          final packageInfo =
+              _cachedPackageInfo ?? await PackageInfo.fromPlatform();
+          if (!mounted) return;
+          final permissions =
+              await _pluginRegistryRepository.getPluginPermissions(
+            widget.plugin.pluginId,
+          );
+          if (!mounted) return;
+          final bootPayload = {
+            'plugin': {
+              'id': widget.plugin.pluginId,
+              'version': widget.plugin.version,
+            },
+            'app': {
+              'version': packageInfo.version,
+              'platform': Platform.operatingSystem,
+              'locale': 'he-IL',
+              'textDirection': 'rtl',
+            },
+            'theme': theme,
+            'permissions': permissions
+                .where((permission) => permission.granted)
+                .map((permission) => permission.permission)
+                .toList(),
+          };
 
-        final jsonPayload = jsonEncode(bootPayload);
+          final jsonPayload = jsonEncode(bootPayload);
 
-        // Real SDK — injected after load, calls _boot() which re-plays queued
-        // Otzaria.on() calls and then fires plugin.boot
-        await controller.evaluateJavascript(source: '''
+          // Real SDK — injected after load, calls _boot() which re-plays queued
+          // Otzaria.on() calls and then fires plugin.boot
+          await controller.evaluateJavascript(source: '''
 (function () {
   var _ls = {};
   var realSdk = {
@@ -410,18 +435,35 @@ class _PluginTabPageState extends State<PluginTabPage> {
   window.Otzaria._boot(realSdk, $jsonPayload);
 })();
 ''');
+        } catch (e, st) {
+          debugPrint(
+              'Plugin [${widget.plugin.pluginId}] boot error: $e\n$st');
+          PluginSystemDatabase.instance.writeLog(
+              widget.plugin.pluginId, 'ERROR', 'Boot failed: $e');
+          if (!mounted) return;
+          if (widget.plugin.isDevelopment) {
+            setState(() => _devErrorMessage = 'שגיאה באתחול התוסף:\n$e');
+          } else {
+            setState(() => _hasError = true);
+          }
+        }
       },
       onReceivedError: (controller, request, error) {
         if (mounted) setState(() => _hasError = true);
       },
       onConsoleMessage: (controller, consoleMessage) {
-        if (consoleMessage.messageLevel == ConsoleMessageLevel.ERROR ||
-            consoleMessage.messageLevel == ConsoleMessageLevel.WARNING) {
-          PluginSystemDatabase.instance.writeLog(widget.plugin.pluginId,
-              consoleMessage.messageLevel.toString(), consoleMessage.message);
+        try {
+          if (consoleMessage.messageLevel == ConsoleMessageLevel.ERROR ||
+              consoleMessage.messageLevel == ConsoleMessageLevel.WARNING) {
+            PluginSystemDatabase.instance.writeLog(widget.plugin.pluginId,
+                consoleMessage.messageLevel.toString(), consoleMessage.message);
+          }
+          debugPrint(
+              'Plugin [${widget.plugin.pluginId}]: ${consoleMessage.message}');
+        } catch (e) {
+          debugPrint(
+              'Plugin [${widget.plugin.pluginId}] console log error: $e');
         }
-        debugPrint(
-            'Plugin [${widget.plugin.pluginId}]: ${consoleMessage.message}');
       },
     );
   }
