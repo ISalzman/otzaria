@@ -163,6 +163,8 @@ class MyDatabase {
 
     final db = sqlite3.sqlite3.open(path);
 
+    _repairLegacySchema(db);
+
     // Enable WAL for concurrent read/write access (uniform across all platforms).
     db.execute('PRAGMA journal_mode=WAL');
 
@@ -172,6 +174,93 @@ class MyDatabase {
     }
 
     return db;
+  }
+
+  void _repairLegacySchema(sqlite3.Database db) {
+    if (!_tableExists(db, 'category')) {
+      return;
+    }
+
+    _ensureColumn(
+      db,
+      tableName: 'category',
+      columnName: 'orderIndex',
+      columnDefinition: 'INTEGER NOT NULL DEFAULT 999',
+    );
+
+    if (_tableExists(db, 'line')) {
+      _ensureColumn(
+        db,
+        tableName: 'line',
+        columnName: 'heRef',
+        columnDefinition: 'TEXT',
+      );
+    }
+
+    if (_tableExists(db, 'tocEntry')) {
+      _ensureColumn(
+        db,
+        tableName: 'tocEntry',
+        columnName: 'lineIndex',
+        columnDefinition: 'INTEGER',
+      );
+    }
+
+    if (_tableExists(db, 'author')) {
+      _ensureColumn(
+        db,
+        tableName: 'author',
+        columnName: 'generationId',
+        columnDefinition: 'INTEGER',
+      );
+    }
+
+    if (_tableExists(db, 'book')) {
+      _ensureColumn(
+        db,
+        tableName: 'book',
+        columnName: 'pages',
+        columnDefinition: 'INTEGER DEFAULT NULL',
+      );
+      _ensureColumn(
+        db,
+        tableName: 'book',
+        columnName: 'volume',
+        columnDefinition: 'TEXT DEFAULT NULL',
+      );
+    }
+  }
+
+  bool _tableExists(sqlite3.Database db, String tableName) {
+    final result = db.select(
+      'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+      ['table', tableName],
+    );
+    return result.isNotEmpty;
+  }
+
+  bool _columnExists(
+    sqlite3.Database db,
+    String tableName,
+    String columnName,
+  ) {
+    final rows = db.select('PRAGMA table_info($tableName)');
+    return rows.any((row) => row['name'] == columnName);
+  }
+
+  void _ensureColumn(
+    sqlite3.Database db, {
+    required String tableName,
+    required String columnName,
+    required String columnDefinition,
+  }) {
+    if (_columnExists(db, tableName, columnName)) {
+      return;
+    }
+
+    db.execute(
+      'ALTER TABLE $tableName ADD COLUMN $columnName $columnDefinition',
+    );
   }
 
   void close() {
