@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class ColorUtils {
   static Color colorFromString(String? colorString) {
     if (colorString == null) {
-      return const Color(0xff2c1b02); // Default color
+      return const Color(0xff795548); // Default color
     }
     if (colorString.startsWith('#')) {
       colorString = colorString.substring(1);
