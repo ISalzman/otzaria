@@ -55,6 +55,7 @@ import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/error_log_file.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
@@ -76,6 +77,22 @@ AppWindowListener? _appWindowListener;
 
 /// Getter for accessing the window listener from other parts of the app
 AppWindowListener? get appWindowListener => _appWindowListener;
+
+void _appendUnhandledErrorToLocalLog(String formattedMessage) {
+  try {
+    final file = File(ErrorLogFile.resolvePath());
+    if (!file.parent.existsSync()) {
+      file.parent.createSync(recursive: true);
+    }
+    file.writeAsStringSync(formattedMessage, mode: FileMode.append, flush: true);
+  } catch (writeError, writeStackTrace) {
+    stderr.writeln(
+      'Failed to write error log to ${ErrorLogFile.resolvePath()}: $writeError',
+    );
+    stderr.writeln(writeStackTrace);
+    stderr.writeln(formattedMessage);
+  }
+}
 
 String formatFlutterErrorDetailsForLog(FlutterErrorDetails details) {
   final buffer = StringBuffer()
@@ -161,11 +178,7 @@ void main() async {
     if (kDebugMode) {
       FlutterError.dumpErrorToConsole(details);
     } else {
-      File('errors.txt').writeAsStringSync(
-        formatFlutterErrorDetailsForLog(details),
-        mode: FileMode.append,
-        flush: true,
-      );
+      _appendUnhandledErrorToLocalLog(formatFlutterErrorDetailsForLog(details));
     }
   };
 
@@ -191,11 +204,7 @@ void main() async {
         stack: stack,
       ));
     } else {
-      File('errors.txt').writeAsStringSync(
-        formatPlatformErrorForLog(error, stack),
-        mode: FileMode.append,
-        flush: true,
-      );
+      _appendUnhandledErrorToLocalLog(formatPlatformErrorForLog(error, stack));
     }
     return true;
   };
