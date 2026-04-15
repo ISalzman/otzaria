@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/widgets/app_menu.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -574,8 +573,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                       _itemKeys.putIfAbsent(key, () => GlobalKey());
                     }
 
-                    _expansionStates.removeWhere(
-                        (key, value) => !data.any((link) => key == utils.getTitleFromPath(link.path2)));
+                    _expansionStates.removeWhere((key, value) => !data.any(
+                        (link) => key == utils.getTitleFromPath(link.path2)));
 
                     final indexesKey = currentIndexes.join(',');
 
@@ -608,46 +607,45 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         child: Focus(
                           focusNode: _focusNode,
                           child: AppFutureBuilder<List<CommentaryGroup>>(
-                              future: _getCachedGroups(data),
-                              loadingWidget: _buildSkeletonLoading(),
-                              builder: (context, groups) {
-                                for (final group in groups) {
-                                  final groupKey = group.bookTitle;
-                                  _expansionStates.putIfAbsent(
-                                      groupKey, () => _allExpanded);
-                                }
+                            future: _getCachedGroups(data),
+                            loadingWidget: _buildSkeletonLoading(),
+                            builder: (context, groups) {
+                              for (final group in groups) {
+                                final groupKey = group.bookTitle;
+                                _expansionStates.putIfAbsent(
+                                    groupKey, () => _allExpanded);
+                              }
 
-                                return ProgressiveScroll(
-                                  scrollController: scrollController,
-                                  maxSpeed: 10000.0,
-                                  curve: 10.0,
-                                  accelerationFactor: 5,
-                                  child: ScrollablePositionedList.builder(
-                                    itemScrollController: _itemScrollController,
-                                    itemPositionsListener:
-                                        _itemPositionsListener,
-                                    initialScrollIndex: _lastScrollIndex
-                                        .clamp(0, groups.length - 1),
-                                    key: PageStorageKey(
-                                        'commentary_${selectedCommentators.join(',')}_$_allExpanded'),
-                                    physics: const ClampingScrollPhysics(),
-                                    scrollOffsetController: scrollController,
-                                    shrinkWrap: widget.shrinkWrap,
-                                    itemCount: groups.length,
-                                    itemBuilder: (context, groupIndex) {
-                                      final group = groups[groupIndex];
-                                      return _buildCommentaryGroupTile(
-                                        group: group,
-                                        state: state,
-                                        indexesKey: indexesKey,
-                                      );
-                                    },
-                                  ),
-                                );
-                              },
-                            ),
+                              return ProgressiveScroll(
+                                scrollController: scrollController,
+                                maxSpeed: 10000.0,
+                                curve: 10.0,
+                                accelerationFactor: 5,
+                                child: ScrollablePositionedList.builder(
+                                  itemScrollController: _itemScrollController,
+                                  itemPositionsListener: _itemPositionsListener,
+                                  initialScrollIndex: _lastScrollIndex.clamp(
+                                      0, groups.length - 1),
+                                  key: PageStorageKey(
+                                      'commentary_${selectedCommentators.join(',')}_$_allExpanded'),
+                                  physics: const ClampingScrollPhysics(),
+                                  scrollOffsetController: scrollController,
+                                  shrinkWrap: widget.shrinkWrap,
+                                  itemCount: groups.length,
+                                  itemBuilder: (context, groupIndex) {
+                                    final group = groups[groupIndex];
+                                    return _buildCommentaryGroupTile(
+                                      group: group,
+                                      state: state,
+                                      indexesKey: indexesKey,
+                                    );
+                                  },
+                                ),
+                              );
+                            },
                           ),
                         ),
+                      ),
                     );
                   },
                 );
@@ -1107,7 +1105,7 @@ class _CollapsibleCommentaryGroupState
                         style: TextStyle(
                           fontSize: widget.fontSize * 0.85,
                           fontWeight: FontWeight.bold,
-                          fontFamily: AppFonts.defaultFont,
+                          fontFamily: settingsState.commentatorsFontFamily,
                         ),
                       );
                     },
@@ -1121,6 +1119,9 @@ class _CollapsibleCommentaryGroupState
         if (_isExpanded)
           ...widget.group.links.map((link) {
             return SelectionArea(
+              contextMenuBuilder: (context, selectableRegionState) {
+                return const SizedBox.shrink();
+              },
               onSelectionChanged: (selection) {
                 if (selection != null && selection.plainText.isNotEmpty) {
                   widget.onLinkSelected(link, selection.plainText);
@@ -1129,98 +1130,99 @@ class _CollapsibleCommentaryGroupState
                 }
               },
               child: ValueListenableBuilder<String?>(
-              valueListenable: widget.savedSelectedTextListenable,
-              child: Padding(
-                key: widget.itemKeys[widget.getLinkKey(link)],
-                padding: const EdgeInsets.only(
-                    right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    BlocBuilder<SettingsBloc, SettingsState>(
-                      builder: (context, settingsState) {
-                        return FutureBuilder<String>(
-                          future: link.displayReference,
-                          builder: (context, snapshot) {
-                            String displayTitle =
-                                snapshot.data ?? link.fallbackDisplayReference;
-                            if (settingsState.replaceHolyNames) {
-                              displayTitle =
-                                  utils.replaceHolyNames(displayTitle);
-                            }
-                            return Text(
-                              displayTitle,
-                              style: TextStyle(
-                                fontSize: widget.fontSize * 0.75,
-                                fontWeight: FontWeight.normal,
-                                fontFamily: AppFonts.defaultFont,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.5),
+                valueListenable: widget.savedSelectedTextListenable,
+                child: Padding(
+                  key: widget.itemKeys[widget.getLinkKey(link)],
+                  padding: const EdgeInsets.only(
+                      right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      BlocBuilder<SettingsBloc, SettingsState>(
+                        builder: (context, settingsState) {
+                          return FutureBuilder<String>(
+                            future: link.displayReference,
+                            builder: (context, snapshot) {
+                              String displayTitle = snapshot.data ??
+                                  link.fallbackDisplayReference;
+                              if (settingsState.replaceHolyNames) {
+                                displayTitle =
+                                    utils.replaceHolyNames(displayTitle);
+                              }
+                              return Text(
+                                displayTitle,
+                                style: TextStyle(
+                                  fontSize: widget.fontSize * 0.75,
+                                  fontWeight: FontWeight.normal,
+                                  fontFamily:
+                                      settingsState.commentatorsFontFamily,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.5),
+                                ),
+                                textDirection: TextDirection.rtl,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 4),
+                      AnimatedBuilder(
+                        animation: Listenable.merge([
+                          widget.searchQueryListenable,
+                          widget.currentSearchIndexListenable,
+                          widget.totalSearchResultsListenable,
+                        ]),
+                        builder: (context, _) {
+                          final searchQuery = widget.showSearch
+                              ? widget.searchQueryListenable.value
+                              : '';
+                          final currentSearchIndex = widget.showSearch
+                              ? widget.getItemSearchIndex(link)
+                              : 0;
+                          return AppContextMenuRegion(
+                            menuBuilder: (menuCtx) =>
+                                ContextMenuUtils.buildCommentaryContextMenu(
+                              context: menuCtx,
+                              link: link,
+                              openBookCallback: widget.openBookCallback,
+                              fontSize: widget.fontSize,
+                              savedSelectedText:
+                                  widget.savedSelectedTextListenable.value,
+                              onCopySelected: () =>
+                                  ContextMenuUtils.copyFormattedText(
+                                context: menuCtx,
+                                savedSelectedText:
+                                    widget.savedSelectedTextListenable.value,
+                                fontSize: widget.fontSize,
+                                link: widget.lastSelectedLinkListenable.value,
                               ),
-                              textDirection: TextDirection.rtl,
-                            );
-                          },
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 4),
-                    AnimatedBuilder(
-                      animation: Listenable.merge([
-                        widget.searchQueryListenable,
-                        widget.currentSearchIndexListenable,
-                        widget.totalSearchResultsListenable,
-                      ]),
-                      builder: (context, _) {
-                        final searchQuery = widget.showSearch
-                            ? widget.searchQueryListenable.value
-                            : '';
-                        final currentSearchIndex = widget.showSearch
-                            ? widget.getItemSearchIndex(link)
-                            : 0;
-                        return CommentaryContent(
-                          key: ValueKey(
-                              '${link.index1}_${link.path2}_${link.index2}'),
-                          link: link,
-                          fontSize: widget.fontSize,
-                          openBookCallback: widget.openBookCallback,
-                          removeNikud: widget.removeNikud,
-                          searchQuery: searchQuery,
-                          currentSearchIndex: currentSearchIndex,
-                          onSearchResultsCountChanged: widget.showSearch
-                              ? (count) => widget.updateSearchResultsCount(
-                                    link,
-                                    count,
-                                  )
-                              : null,
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              builder: (context, selectedText, child) {
-                return AppContextMenuRegion(
-                  menuBuilder: (menuCtx) =>
-                      ContextMenuUtils.buildCommentaryContextMenu(
-                    context: menuCtx,
-                    link: link,
-                    openBookCallback: widget.openBookCallback,
-                    fontSize: widget.fontSize,
-                    savedSelectedText: selectedText,
-                    onCopySelected: () => ContextMenuUtils.copyFormattedText(
-                      context: menuCtx,
-                      savedSelectedText: selectedText,
-                      fontSize: widget.fontSize,
-                      // link מגיע ממקור הבחירה, לא מהפריט שעליו נפתח התפריט
-                      link: widget.lastSelectedLinkListenable.value,
-                    ),
+                            ),
+                            child: CommentaryContent(
+                              key: ValueKey(
+                                  '${link.index1}_${link.path2}_${link.index2}'),
+                              link: link,
+                              fontSize: widget.fontSize,
+                              openBookCallback: widget.openBookCallback,
+                              removeNikud: widget.removeNikud,
+                              searchQuery: searchQuery,
+                              currentSearchIndex: currentSearchIndex,
+                              onSearchResultsCountChanged: widget.showSearch
+                                  ? (count) => widget.updateSearchResultsCount(
+                                        link,
+                                        count,
+                                      )
+                                  : null,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                  child: child!,
-                );
-              },
-            ),
+                ),
+                builder: (context, selectedText, child) => child!,
+              ),
             );
           }),
         const Divider(height: 1),

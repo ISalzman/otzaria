@@ -62,6 +62,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
     }
 
     return SingleChildScrollView(
+      primary: true,
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

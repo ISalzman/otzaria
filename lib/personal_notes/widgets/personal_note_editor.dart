@@ -7,6 +7,55 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_link_dialog.dart';
 
+// RTL-aware arrow key shortcuts for QuillEditor.
+//
+// LEFT/RIGHT: flutter_quill doesn't flip forward/backward for RTL, so we swap them.
+//
+// UP/DOWN: the Windows platform text input handles arrow keys at the OS level,
+// but it can't compute vertical line positions in a multi-block rich text editor.
+// Adding them here routes them through QuillEditor's own adjacentLineAction,
+// which correctly finds the character position on the line above/below.
+const _rtlArrowShortcuts = <ShortcutActivator, Intent>{
+  // Horizontal navigation (RTL-swapped)
+  SingleActivator(LogicalKeyboardKey.arrowRight):
+      ExtendSelectionByCharacterIntent(
+          forward: false, collapseSelection: true),
+  SingleActivator(LogicalKeyboardKey.arrowLeft):
+      ExtendSelectionByCharacterIntent(
+          forward: true, collapseSelection: true),
+  SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
+      ExtendSelectionByCharacterIntent(
+          forward: false, collapseSelection: false),
+  SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
+      ExtendSelectionByCharacterIntent(
+          forward: true, collapseSelection: false),
+  SingleActivator(LogicalKeyboardKey.arrowRight, control: true):
+      ExtendSelectionToNextWordBoundaryIntent(
+          forward: false, collapseSelection: true),
+  SingleActivator(LogicalKeyboardKey.arrowLeft, control: true):
+      ExtendSelectionToNextWordBoundaryIntent(
+          forward: true, collapseSelection: true),
+  SingleActivator(LogicalKeyboardKey.arrowRight, control: true, shift: true):
+      ExtendSelectionToNextWordBoundaryIntent(
+          forward: false, collapseSelection: false),
+  SingleActivator(LogicalKeyboardKey.arrowLeft, control: true, shift: true):
+      ExtendSelectionToNextWordBoundaryIntent(
+          forward: true, collapseSelection: false),
+  // Vertical navigation (routed through Quill's adjacentLineAction)
+  SingleActivator(LogicalKeyboardKey.arrowUp):
+      ExtendSelectionVerticallyToAdjacentLineIntent(
+          forward: false, collapseSelection: true),
+  SingleActivator(LogicalKeyboardKey.arrowDown):
+      ExtendSelectionVerticallyToAdjacentLineIntent(
+          forward: true, collapseSelection: true),
+  SingleActivator(LogicalKeyboardKey.arrowUp, shift: true):
+      ExtendSelectionVerticallyToAdjacentLineIntent(
+          forward: false, collapseSelection: false),
+  SingleActivator(LogicalKeyboardKey.arrowDown, shift: true):
+      ExtendSelectionVerticallyToAdjacentLineIntent(
+          forward: true, collapseSelection: false),
+};
+
 class PersonalNoteEditorResult {
   final String content;
   final String contentPlain;
@@ -161,6 +210,7 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
                         padding: const EdgeInsets.all(12),
                         placeholder:
                             widget.hintText ?? 'כתוב כאן... (Alt+Enter לשמירה)',
+                        customShortcuts: _rtlArrowShortcuts,
                       ),
                     ),
                   ),

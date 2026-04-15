@@ -1264,7 +1264,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       LibraryOverflowTooltipText(
                         text: book.title,
@@ -1333,10 +1333,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               height: 18,
               fit: BoxFit.contain,
             ),
+            const SizedBox(width: 8),
+            Icon(
+              FluentIcons.open_24_regular,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              size: 16,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   LibraryOverflowTooltipText(
                     text: book.title,
@@ -1361,11 +1367,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                     ),
                 ],
               ),
-            ),
-            Icon(
-              FluentIcons.open_24_regular,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              size: 16,
             ),
           ],
         ),

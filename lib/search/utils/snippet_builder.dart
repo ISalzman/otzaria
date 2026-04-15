@@ -46,6 +46,7 @@ class SnippetBuilder {
     required double availableWidth,
     required Map<String, Map<String, bool>> searchOptions,
     required Map<int, List<String>> alternativeWords,
+    Map<String, String> customSpacing = const {},
     bool typoToleranceEnabled = false,
   }) {
     // 1. קבלת הטקסט הנקי מה-HTML
@@ -61,10 +62,12 @@ class SnippetBuilder {
         .toList();
 
     // הוספת מילים חילופיות ווריאציות כתיב מלא/חסר למילות החיפוש
-    final searchTerms = <String>[];
+    // termsByWord: רשימת רשימות - עבור כל מילת חיפוש, כל הווריאציות שלה
+    final termsByWord = <List<String>>[];
     for (int i = 0; i < originalWords.length; i++) {
       final word = originalWords[i];
       final wordKey = '${word}_$i';
+      final wordTerms = <String>[];
 
       // בדיקת אפשרויות החיפוש למילה הזו
       final wordOptions = searchOptions[wordKey] ?? {};
@@ -75,14 +78,14 @@ class SnippetBuilder {
         try {
           final variations =
               SearchRegexPatterns.generateFullPartialSpellingVariations(word);
-          searchTerms.addAll(variations);
+          wordTerms.addAll(variations);
         } catch (e) {
           // אם יש בעיה, נוסיף לפחות את המילה המקורית
-          searchTerms.add(word);
+          wordTerms.add(word);
         }
       } else {
         // אם אין כתיב מלא/חסר, נוסיף את המילה המקורית
-        searchTerms.add(word);
+        wordTerms.add(word);
       }
 
       // הוספת מילים חילופיות אם יש
@@ -95,23 +98,31 @@ class SnippetBuilder {
               final altVariations =
                   SearchRegexPatterns.generateFullPartialSpellingVariations(
                       alt);
-              searchTerms.addAll(altVariations);
+              wordTerms.addAll(altVariations);
             } catch (e) {
-              searchTerms.add(alt);
+              wordTerms.add(alt);
             }
           }
         } else {
-          searchTerms.addAll(alternatives);
+          wordTerms.addAll(alternatives);
         }
       }
+
+      termsByWord.add(wordTerms);
     }
+
+    // רשימה שטוחה - לשימוש בחיפוש מקורב
+    final searchTerms = termsByWord.expand((t) => t).toList();
 
     if (searchTerms.isEmpty || plainText.isEmpty) {
       return [TextSpan(text: plainText, style: defaultStyle)];
     }
 
     // 3. מציאת כל ההתאמות של כל המילים בטקסט המקורי
-    final exactMatches = _collectExactMatches(plainText, searchTerms);
+    // שימוש ב-phrase matching: מדגישים רק הופעות שבהן כל המילים מופיעות ברצף,
+    // כך שהופעות בודדות-מרוחקות לא מקבלות הדגשה מוטעית
+    final exactMatches = _collectPhraseWordMatches(plainText, termsByWord,
+        customSpacing: customSpacing);
     final approxMatches = typoToleranceEnabled
         ? _collectApproximateMatches(plainText, searchTerms,
             existingMatches: exactMatches)
@@ -243,22 +254,111 @@ class SnippetBuilder {
         snippetText, snippetMatches, defaultStyle, highlightStyle);
   }
 
-  static List<_SnippetMatchRange> _collectExactMatches(
+  /// מציאת התאמות ביטוי (phrase matching) בשיטת token-based:
+  /// מוצאים רק הופעות שבהן כל המילים מופיעות ברצף כשמספר הטוקנים
+  /// ביניהם <= customSpacing. תואם את סמנטיקת slop מנוע החיפוש.
+  /// אם לא נמצא ביטוי - מחזיר רשימה ריקה (אין הדגשה), לא מחזיר בodim בודדות.
+  static List<_SnippetMatchRange> _collectPhraseWordMatches(
     String plainText,
-    List<String> searchTerms,
-  ) {
-    final matches = <_SnippetMatchRange>[];
+    List<List<String>> termsByWord, {
+    Map<String, String> customSpacing = const {},
+  }) {
+    if (termsByWord.isEmpty) return const [];
 
-    for (final term in searchTerms) {
-      final regex = RegExp(_termToRegexPattern(term), caseSensitive: false);
-      matches.addAll(
-        regex
-            .allMatches(plainText)
-            .map((match) => _SnippetMatchRange(match.start, match.end)),
-      );
+    // 1. איסוף מקומות התאמות לכל מילה, ממוין לפי start
+    final matchesByWord = termsByWord.map((wordTerms) {
+      final wordMatches = <_SnippetMatchRange>[];
+      for (final term in wordTerms) {
+        final regex = RegExp(_termToRegexPattern(term), caseSensitive: false);
+        for (final m in regex.allMatches(plainText)) {
+          wordMatches.add(_SnippetMatchRange(m.start, m.end));
+        }
+      }
+      wordMatches.sort((a, b) => a.start.compareTo(b.start));
+      return wordMatches;
+    }).toList();
+
+    // מילה אחת - נחזיר את כל ההופעות
+    if (termsByWord.length == 1) {
+      return _mergeOverlappingRanges(matchesByWord[0]);
     }
 
-    return matches;
+    // 2. בניית רשימת תחילות הטוקנים (מילים לא-רווח) לספירת טוקנים בין היתורים
+    final tokenStarts = <int>[];
+    for (final m in RegExp(r'\S+').allMatches(plainText)) {
+      tokenStarts.add(m.start);
+    }
+
+    // 3. Phrase matching: עבור כל הופעה של המילה הראשונה, בודק אם שאר המילים מופיעות ברצף
+    final result = <_SnippetMatchRange>[];
+
+    for (final firstMatch in matchesByWord[0]) {
+      final phraseMatches = [firstMatch];
+      int prevEnd = firstMatch.end;
+      bool phraseValid = true;
+
+      for (int wordIdx = 1; wordIdx < matchesByWord.length; wordIdx++) {
+        final spacingKey = '${wordIdx - 1}-$wordIdx';
+        final maxTokensBetween =
+            int.tryParse(customSpacing[spacingKey] ?? '') ?? 0;
+
+        _SnippetMatchRange? best;
+        for (final candidate in matchesByWord[wordIdx]) {
+          if (candidate.start < prevEnd) continue;
+          final tokensBetween =
+              _countTokensInRange(tokenStarts, prevEnd, candidate.start);
+          if (tokensBetween > maxTokensBetween) break; // רשימה ממוינת, break תקין
+          best = candidate;
+          break; // נוצלים את הקרובה ביותר
+        }
+
+        if (best == null) {
+          phraseValid = false;
+          break;
+        }
+        phraseMatches.add(best);
+        prevEnd = best.end;
+      }
+
+      if (phraseValid) {
+        result.addAll(phraseMatches);
+      }
+    }
+
+    // אם לא נמצא ביטוי - מחזירים רשימה ריקה. דע caller יבחר להציג קטע ללא הדגשה.
+    // זה הוגן מהדגשת הופעות בודדות לא-קשורות.
+    return _mergeOverlappingRanges(result);
+  }
+
+  /// ספירת טוקנים בטווח [fromPos, toPos) עם binary search.
+  static int _countTokensInRange(
+      List<int> sortedStarts, int fromPos, int toPos) {
+    if (sortedStarts.isEmpty || toPos <= fromPos) return 0;
+
+    int lo = 0, hi = sortedStarts.length;
+    while (lo < hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (sortedStarts[mid] < fromPos) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    final left = lo;
+
+    lo = 0;
+    hi = sortedStarts.length;
+    while (lo < hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (sortedStarts[mid] < toPos) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    final right = lo;
+
+    return right - left;
   }
 
   static List<_ApproximateSnippetMatchCandidate> _collectApproximateMatches(

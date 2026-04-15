@@ -5,6 +5,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:updat/updat.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// רכיב לחיצה (chip) בעברית - דומה ל-flatChip המקורי
 Widget hebrewFlatChip({
@@ -238,7 +239,12 @@ void hebrewDefaultDialog({
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Markdown(data: changelog!),
+              child: Markdown(
+                data: changelog!,
+                onTapLink: (text, href, title) {
+                  if (href != null) launchUrl(Uri.parse(href));
+                },
+              ),
             ),
           ],
         ],

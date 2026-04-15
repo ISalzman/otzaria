@@ -60,7 +60,6 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   late TabController _tabController;
   bool _showFilterTab = false;
   String? _savedSelectedText;
-  late final GlobalKey<SelectionAreaState> _selectionKey;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int _currentSearchIndex = 0;
@@ -144,7 +143,6 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       vsync: this,
       initialIndex: widget.initialTabIndex ?? 0,
     );
-    _selectionKey = GlobalKey<SelectionAreaState>();
     _loadCommentatorGroups();
   }
 
@@ -172,11 +170,16 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     if (!mounted) return;
     setState(() {
       _commentatorGroups = [
-        CommentatorGroup(title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
+        CommentatorGroup(
+            title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
         CommentatorGroup(title: 'חז"ל', commentators: eras['חז"ל'] ?? const []),
-        CommentatorGroup(title: 'ראשונים', commentators: eras['ראשונים'] ?? const []),
-        CommentatorGroup(title: 'אחרונים', commentators: eras['אחרונים'] ?? const []),
-        CommentatorGroup(title: 'מחברי זמננו', commentators: eras['מחברי זמננו'] ?? const []),
+        CommentatorGroup(
+            title: 'ראשונים', commentators: eras['ראשונים'] ?? const []),
+        CommentatorGroup(
+            title: 'אחרונים', commentators: eras['אחרונים'] ?? const []),
+        CommentatorGroup(
+            title: 'מחברי זמננו',
+            commentators: eras['מחברי זמננו'] ?? const []),
         CommentatorGroup(title: 'שאר מפרשים', commentators: others),
       ];
     });
@@ -259,44 +262,6 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     );
   }
 
-  /// העתקת כל הטקסט הנראה בפאנל
-  Future<void> _copyAllVisibleText() async {
-    final selection = _selectionKey.currentState?.selectableRegion;
-    if (selection == null) return;
-
-    // בחירת כל הטקסט
-    selection.selectAll();
-
-    // המתנה קצרה לעדכון הבחירה
-    await Future.delayed(const Duration(milliseconds: 50));
-
-    // העתקה
-    await _copyFormattedText();
-  }
-
-  /// בניית תפריט הקשר כללי
-  List<AppContextMenuEntry> _buildContextMenuEntries(BuildContext menuCtx) {
-    return [
-      AppContextMenuEntry(
-        label: 'העתק',
-        icon: FluentIcons.copy_24_regular,
-        enabled:
-            _savedSelectedText != null && _savedSelectedText!.trim().isNotEmpty,
-        onTap: _copyFormattedText,
-      ),
-      AppContextMenuEntry(
-        label: 'העתק את כל הטקסט',
-        icon: FluentIcons.document_copy_24_regular,
-        onTap: _copyAllVisibleText,
-      ),
-      AppContextMenuEntry(
-        label: 'בחר את כל הטקסט',
-        icon: FluentIcons.select_all_on_24_regular,
-        onTap: () => _selectionKey.currentState?.selectableRegion.selectAll(),
-      ),
-    ];
-  }
-
   /// בניית תפריט הקשר למפרש ספציפי
   List<AppContextMenuEntry> _buildCommentaryContextMenuEntries(
       BuildContext menuCtx, Link link) {
@@ -346,45 +311,40 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         ),
         // תוכן הכרטיסיות - עטוף ב-SelectionArea כדי לאפשר בחירת טקסט
         Expanded(
-          child: AppContextMenuRegion(
-            menuBuilder: _buildContextMenuEntries,
-            child: SelectionArea(
-              key: _selectionKey,
-              contextMenuBuilder: (context, selectableRegionState) {
-                // מבטל את התפריט הרגיל של Flutter כי יש ContextMenuRegion
-                return const SizedBox.shrink();
-              },
-              onSelectionChanged: (selection) {
-                if (selection != null && selection.plainText.isNotEmpty) {
-                  setState(() {
-                    _savedSelectedText = selection.plainText;
-                  });
-                }
-              },
-              child: TabBarView(
-                controller: _tabController,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _KeepAliveTab(
-                    key: ValueKey(
-                      'commentary_${widget.tab.currentTextLineNumber}_${widget.tab.activeCommentators.hashCode}_$_showFilterTab',
-                    ),
-                    child: _buildCommentariesView(),
+          child: SelectionArea(
+            contextMenuBuilder: (context, selectableRegionState) {
+              return const SizedBox.shrink();
+            },
+            onSelectionChanged: (selection) {
+              if (selection != null && selection.plainText.isNotEmpty) {
+                setState(() {
+                  _savedSelectedText = selection.plainText;
+                });
+              }
+            },
+            child: TabBarView(
+              controller: _tabController,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _KeepAliveTab(
+                  key: ValueKey(
+                    'commentary_${widget.tab.currentTextLineNumber}_${widget.tab.activeCommentators.hashCode}_$_showFilterTab',
                   ),
-                  _KeepAliveTab(
-                    key: ValueKey(
-                      'links_${widget.tab.currentTextLineNumber}',
-                    ),
-                    child: _buildLinksView(),
+                  child: _buildCommentariesView(),
+                ),
+                _KeepAliveTab(
+                  key: ValueKey(
+                    'links_${widget.tab.currentTextLineNumber}',
                   ),
-                  _KeepAliveTab(
-                    key: ValueKey(
-                      'notes_${widget.tab.currentTextLineNumber}',
-                    ),
-                    child: _buildNotesView(),
+                  child: _buildLinksView(),
+                ),
+                _KeepAliveTab(
+                  key: ValueKey(
+                    'notes_${widget.tab.currentTextLineNumber}',
                   ),
-                ],
-              ),
+                  child: _buildNotesView(),
+                ),
+              ],
             ),
           ),
         ),
@@ -913,77 +873,78 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         final restoredExpanded = PageStorage.maybeOf(context)?.readState(
-              context,
-              identifier: keyStr,
-            ) as bool?;
-        final isExpanded = _expandedLinkStates[keyStr] ?? restoredExpanded ?? false;
+          context,
+          identifier: keyStr,
+        ) as bool?;
+        final isExpanded =
+            _expandedLinkStates[keyStr] ?? restoredExpanded ?? false;
 
-        return AppContextMenuRegion(
-          menuBuilder: (menuCtx) =>
-              _buildCommentaryContextMenuEntries(menuCtx, link),
-          child: ExpansionTile(
-            key: PageStorageKey(keyStr),
-            initiallyExpanded: isExpanded,
-            maintainState: true,
-            showTrailingIcon: false,
-            leading: AnimatedRotation(
-              turns: isExpanded ? -0.25 : 0,
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                Icons.keyboard_arrow_left,
-                size: 20,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
-              ),
+        return ExpansionTile(
+          key: PageStorageKey(keyStr),
+          initiallyExpanded: isExpanded,
+          maintainState: true,
+          showTrailingIcon: false,
+          leading: AnimatedRotation(
+            turns: isExpanded ? -0.25 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: Icon(
+              Icons.keyboard_arrow_left,
+              size: 20,
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.6),
             ),
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
-            title: Text(
-              utils.getTitleFromPath(link.path2),
-              style: TextStyle(
-                fontSize: settingsState.commentatorsFontSize - 2,
-                fontWeight: FontWeight.bold,
-                fontFamily: settingsState.commentatorsFontFamily,
-              ),
-              textDirection: TextDirection.rtl,
+          ),
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
+          title: Text(
+            utils.getTitleFromPath(link.path2),
+            style: TextStyle(
+              fontSize: settingsState.commentatorsFontSize - 2,
+              fontWeight: FontWeight.bold,
+              fontFamily: settingsState.commentatorsFontFamily,
             ),
-            subtitle: FutureBuilder<String>(
-              future: link.displayReference,
-              builder: (context, snapshot) {
-                return Text(
-                  snapshot.data ?? link.fallbackDisplayReference,
-                  style: TextStyle(
-                    fontSize: settingsState.commentatorsFontSize - 4,
-                    fontWeight: FontWeight.normal,
-                    fontFamily: settingsState.commentatorsFontFamily,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
-                  ),
-                  textDirection: TextDirection.rtl,
-                );
-              },
-            ),
-            onExpansionChanged: (expanded) {
-              if (expanded && !_linkContentCache.containsKey(keyStr)) {
-                _getCachedLinkContent(keyStr, link);
-              }
-
-              if (_expandedLinkStates[keyStr] != expanded) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!mounted) return;
-                  setState(() {
-                    _expandedLinkStates[keyStr] = expanded;
-                  });
-                });
-              }
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: FutureBuilder<String>(
+            future: link.displayReference,
+            builder: (context, snapshot) {
+              return Text(
+                snapshot.data ?? link.fallbackDisplayReference,
+                style: TextStyle(
+                  fontSize: settingsState.commentatorsFontSize - 4,
+                  fontWeight: FontWeight.normal,
+                  fontFamily: settingsState.commentatorsFontFamily,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.5),
+                ),
+                textDirection: TextDirection.rtl,
+              );
             },
-            children: [
-              if (isExpanded)
-                GestureDetector(
+          ),
+          onExpansionChanged: (expanded) {
+            if (expanded && !_linkContentCache.containsKey(keyStr)) {
+              _getCachedLinkContent(keyStr, link);
+            }
+
+            if (_expandedLinkStates[keyStr] != expanded) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                setState(() {
+                  _expandedLinkStates[keyStr] = expanded;
+                });
+              });
+            }
+          },
+          children: [
+            if (isExpanded)
+              AppContextMenuRegion(
+                menuBuilder: (menuCtx) =>
+                    _buildCommentaryContextMenuEntries(menuCtx, link),
+                child: GestureDetector(
                   onTap: () {
                     widget.openBookCallback(
                       TextBookTab(
@@ -1032,8 +993,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                     ),
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         );
       },
     );
@@ -1328,38 +1289,39 @@ class _CollapsibleCommentaryGroupState
         // תוכן המפרשים - מוצג רק כשמורחב
         if (widget.isExpanded)
           ...widget.group.links.map((link) {
-            return AppContextMenuRegion(
+            return Padding(
               key: widget.getKeyForLink
                   ?.call(link), // Attach the key here for scrolling
-              menuBuilder: (menuCtx) => widget.buildContextMenu(menuCtx, link),
-              child: Padding(
-                padding: const EdgeInsets.only(
-                    right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FutureBuilder<String>(
-                      future: link.displayReference,
-                      builder: (context, snapshot) {
-                        return Text(
-                          snapshot.data ?? link.fallbackDisplayReference,
-                          style: TextStyle(
-                            fontSize:
-                                widget.settingsState.commentatorsFontSize - 4,
-                            fontWeight: FontWeight.normal,
-                            fontFamily:
-                                widget.settingsState.commentatorsFontFamily,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.5),
-                          ),
-                          textDirection: TextDirection.rtl,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 4),
-                    PdfCommentaryContent(
+              padding: const EdgeInsets.only(
+                  right: 32.0, left: 16.0, top: 8.0, bottom: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FutureBuilder<String>(
+                    future: link.displayReference,
+                    builder: (context, snapshot) {
+                      return Text(
+                        snapshot.data ?? link.fallbackDisplayReference,
+                        style: TextStyle(
+                          fontSize:
+                              widget.settingsState.commentatorsFontSize - 4,
+                          fontWeight: FontWeight.normal,
+                          fontFamily:
+                              widget.settingsState.commentatorsFontFamily,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.5),
+                        ),
+                        textDirection: TextDirection.rtl,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  AppContextMenuRegion(
+                    menuBuilder: (menuCtx) =>
+                        widget.buildContextMenu(menuCtx, link),
+                    child: PdfCommentaryContent(
                       key: ValueKey(
                           '${link.path2}_${link.index1}_${link.index2}_${widget.tab.currentTextLineNumber}'),
                       link: link,
@@ -1372,8 +1334,8 @@ class _CollapsibleCommentaryGroupState
                       currentSearchIndex:
                           widget.getItemSearchIndex?.call(link) ?? -1,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           }),

@@ -1,5 +1,6 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -542,8 +543,12 @@ class AppContextMenuRegion extends StatefulWidget {
 }
 
 class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
-  final MenuController _menuController = MenuController();
-  List<AppContextMenuEntry> _currentEntries = const [];
+  static const double _contextMenuScreenPadding = 8;
+
+  bool _isMenuOpen = false;
+  OverlayEntry? _menuOverlayEntry;
+  final GlobalKey _menuPanelKey = GlobalKey();
+  Offset? _currentMenuOffset;
 
   bool get _supportsLongPressContextMenu {
     return switch (defaultTargetPlatform) {
@@ -552,16 +557,201 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
     };
   }
 
-  /// פותח את תפריט ההקשר במיקום הנקודה שהוקשה (בקואורדינטות מקומיות של ה-MenuAnchor).
-  void _openContextMenu(Offset localPosition) {
-    final entries = widget.menuBuilder(context);
+  @override
+  void dispose() {
+    _removeContextMenuOverlay();
+    super.dispose();
+  }
+
+  void _removeContextMenuOverlay() {
+    _menuOverlayEntry?.remove();
+    _menuOverlayEntry = null;
+    _currentMenuOffset = null;
+  }
+
+  void _closeContextMenu() {
+    _removeContextMenuOverlay();
+    if (_isMenuOpen && mounted) {
+      setState(() => _isMenuOpen = false);
+    }
+  }
+
+  bool _isPointerInsideMenu(Offset globalPosition) {
+    final renderObject = _menuPanelKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return false;
+    }
+
+    final menuRect = MatrixUtils.transformRect(
+      renderObject.getTransformTo(null),
+      Offset.zero & renderObject.size,
+    );
+    return menuRect.contains(globalPosition);
+  }
+
+  Offset _calculateMenuOffset(
+    RenderBox overlayRenderBox,
+    Offset overlayPosition,
+    List<AppContextMenuEntry> entries,
+    AppMenuMetrics metrics,
+  ) {
+    final estimatedHeight = entries.fold<double>(
+          metrics.menuPadding.vertical,
+          (sum, entry) =>
+              sum +
+              (entry.isDivider ? metrics.dividerHeight : metrics.itemHeight),
+        ) +
+        8;
+    final spaceAbove = overlayPosition.dy;
+    final spaceBelow = overlayRenderBox.size.height - overlayPosition.dy;
+    final shouldOpenAbove =
+        spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+    final spaceLeft = overlayPosition.dx;
+    final spaceRight = overlayRenderBox.size.width - overlayPosition.dx;
+    final shouldOpenLeft =
+        spaceRight < metrics.menuMinWidth && spaceLeft > spaceRight;
+
+    final estimatedWidth = metrics.menuMinWidth;
+    final rawDx = shouldOpenLeft
+        ? overlayPosition.dx - estimatedWidth
+        : overlayPosition.dx;
+    final maxDx = (overlayRenderBox.size.width -
+            estimatedWidth -
+            _contextMenuScreenPadding)
+        .clamp(_contextMenuScreenPadding, double.infinity)
+        .toDouble();
+    final dx = rawDx.clamp(_contextMenuScreenPadding, maxDx).toDouble();
+    final rawDy = shouldOpenAbove
+        ? overlayPosition.dy - estimatedHeight
+        : overlayPosition.dy;
+    final maxDy = (overlayRenderBox.size.height -
+            metrics.itemHeight -
+            _contextMenuScreenPadding)
+        .clamp(_contextMenuScreenPadding, double.infinity)
+        .toDouble();
+    final dy = rawDy.clamp(_contextMenuScreenPadding, maxDy).toDouble();
+
+    return Offset(dx, dy);
+  }
+
+  void _repositionContextMenuWithinOverlay(Size overlaySize) {
+    final renderObject = _menuPanelKey.currentContext?.findRenderObject();
+    final currentOffset = _currentMenuOffset;
+    if (renderObject is! RenderBox ||
+        !renderObject.hasSize ||
+        currentOffset == null ||
+        _menuOverlayEntry == null) {
+      return;
+    }
+
+    final panelSize = renderObject.size;
+    final maxDx =
+        (overlaySize.width - panelSize.width - _contextMenuScreenPadding)
+            .clamp(_contextMenuScreenPadding, double.infinity)
+            .toDouble();
+    final maxDy =
+        (overlaySize.height - panelSize.height - _contextMenuScreenPadding)
+            .clamp(_contextMenuScreenPadding, double.infinity)
+            .toDouble();
+
+    final adjustedOffset = Offset(
+      currentOffset.dx.clamp(_contextMenuScreenPadding, maxDx).toDouble(),
+      currentOffset.dy.clamp(_contextMenuScreenPadding, maxDy).toDouble(),
+    );
+
+    if (adjustedOffset == currentOffset) return;
+
+    _currentMenuOffset = adjustedOffset;
+    _menuOverlayEntry?.markNeedsBuild();
+  }
+
+  Future<void> _openContextMenu(Offset globalPosition) async {
+    final entries = _normalizeEntries(widget.menuBuilder(context));
     if (entries.isEmpty) return;
-    setState(() => _currentEntries = entries);
-    // פתיחה לאחר ה-build הבא — כדי שהפריטים המעודכנים יהיו כבר מוכנים
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final overlayRenderObject = overlay.context.findRenderObject();
+    if (overlayRenderObject is! RenderBox || !overlayRenderObject.hasSize) {
+      return;
+    }
+
+    final overlayPosition = overlayRenderObject.globalToLocal(globalPosition);
+    if (!overlayPosition.dx.isFinite || !overlayPosition.dy.isFinite) return;
+    final metrics = Theme.of(context).extension<AppMenuMetrics>() ??
+        AppMenuMetrics.create(compactMenus: false);
+    final menuOffset = _calculateMenuOffset(
+      overlayRenderObject,
+      overlayPosition,
+      entries,
+      metrics,
+    );
+    final menuStyle = _menuStyle(context, metrics);
+    final maxMenuWidth =
+        (overlayRenderObject.size.width - (_contextMenuScreenPadding * 2))
+            .clamp(metrics.menuMinWidth, double.infinity)
+            .toDouble();
+    final maxMenuHeight = (overlayRenderObject.size.height -
+            menuOffset.dy -
+            _contextMenuScreenPadding)
+        .clamp(metrics.itemHeight, double.infinity)
+        .toDouble();
+
+    _removeContextMenuOverlay();
+    _currentMenuOffset = menuOffset;
+
+    _menuOverlayEntry = OverlayEntry(
+      builder: (overlayContext) {
+        final currentMenuOffset = _currentMenuOffset ?? menuOffset;
+        return Positioned.fill(
+          child: Stack(
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _closeContextMenu,
+                child: const SizedBox.expand(),
+              ),
+              Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (event) {
+                  if (event.buttons != kSecondaryButton) {
+                    return;
+                  }
+                  if (_isPointerInsideMenu(event.position)) {
+                    return;
+                  }
+                  _closeContextMenu();
+                },
+                child: const SizedBox.expand(),
+              ),
+              Positioned(
+                left: currentMenuOffset.dx,
+                top: currentMenuOffset.dy,
+                child: _AppContextMenuPanel(
+                  key: _menuPanelKey,
+                  entries: entries,
+                  metrics: metrics,
+                  menuStyle: menuStyle,
+                  maxWidth: maxMenuWidth,
+                  maxHeight: maxMenuHeight,
+                  buildChildren: (panelContext, panelEntries) =>
+                      _buildMenuPanelChildren(
+                    panelContext,
+                    panelEntries,
+                    metrics,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    setState(() => _isMenuOpen = true);
+    overlay.insert(_menuOverlayEntry!);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _menuController.open(position: localPosition);
-      }
+      if (!mounted || !_isMenuOpen) return;
+      _repositionContextMenuWithinOverlay(overlayRenderObject.size);
     });
   }
 
@@ -571,40 +761,117 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
 
   @override
   Widget build(BuildContext context) {
-    final metrics = Theme.of(context).extension<AppMenuMetrics>() ??
-        AppMenuMetrics.create(compactMenus: false);
-
-    return MenuAnchor(
-      controller: _menuController,
-      style: _menuStyle(context, metrics),
-      menuChildren: _buildMenuChildren(context, _currentEntries, metrics),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onLongPressStart: (details) {
-          if (_supportsLongPressContextMenu) {
-            _openContextMenu(details.localPosition);
+    return GestureDetector(
+      behavior: HitTestBehavior.deferToChild,
+      onLongPressStart: (details) {
+        if (_supportsLongPressContextMenu) {
+          _openContextMenu(details.globalPosition);
+        }
+      },
+      child: Listener(
+        behavior: HitTestBehavior.deferToChild,
+        onPointerDown: (event) {
+          if (event.buttons == 2) {
+            _openContextMenu(event.position);
           }
         },
-        child: Listener(
-          behavior: HitTestBehavior.translucent,
-          onPointerDown: (event) {
-            if (event.buttons == 2) {
-              _openContextMenu(event.localPosition);
-            }
-          },
-          child: widget.child,
-        ),
+        child: widget.child,
       ),
     );
   }
 
-  List<Widget> _buildMenuChildren(
+  List<Widget> _buildMenuPanelChildren(
     BuildContext context,
     List<AppContextMenuEntry> entries,
     AppMenuMetrics metrics,
   ) {
-    final normalized = _normalizeEntries(entries);
-    return _buildSubmenuChildren(context, normalized, metrics);
+    return entries.map<Widget>((entry) {
+      if (entry.isDivider) {
+        return SizedBox(
+          height: metrics.dividerHeight,
+          child: const Divider(height: 1),
+        );
+      }
+
+      if (entry.children != null && entry.children!.isNotEmpty) {
+        final normalizedChildren = _normalizeEntries(entry.children!);
+        final hasEnabledChildren =
+            normalizedChildren.any((child) => !child.isDivider);
+        if (!entry.enabled || !hasEnabledChildren) {
+          return MenuItemButton(
+            style: buildAppSubmenuItemStyle(context, metrics),
+            onPressed: null,
+            child: _buildAppMenuRowContent(
+              context,
+              metrics,
+              label: entry.label ?? '',
+              labelWidget: entry.labelWidget,
+              icon: entry.icon,
+              trailing: entry.trailing,
+              isDestructive: entry.isDestructive,
+            ),
+          );
+        }
+
+        return SubmenuButton(
+          leadingIcon: entry.icon != null
+              ? Icon(entry.icon, size: metrics.iconSize)
+              : null,
+          trailingIcon: entry.trailing,
+          style: buildAppSubmenuItemStyle(context, metrics),
+          menuStyle: _menuStyle(context, metrics),
+          menuChildren: _buildSubmenuChildren(
+            context,
+            normalizedChildren,
+            metrics,
+          ),
+          child: DefaultTextStyle.merge(
+            style: TextStyle(
+              fontFamily: 'Roboto',
+              fontSize: metrics.fontSize,
+              fontWeight: metrics.itemFontWeight,
+            ),
+            child: Directionality(
+              textDirection: TextDirection.rtl,
+              child: entry.labelWidget ??
+                  Text(
+                    entry.label ?? '',
+                    textDirection: TextDirection.rtl,
+                  ),
+            ),
+          ),
+        );
+      }
+
+      return MenuItemButton(
+        leadingIcon: entry.icon != null
+            ? Icon(entry.icon, size: metrics.iconSize)
+            : null,
+        trailingIcon: entry.trailing,
+        style: buildAppSubmenuItemStyle(context, metrics),
+        onPressed: entry.enabled
+            ? () {
+                _closeContextMenu();
+                entry.onTap?.call();
+              }
+            : null,
+        child: DefaultTextStyle.merge(
+          style: TextStyle(
+            fontFamily: 'Roboto',
+            fontSize: metrics.fontSize,
+            fontWeight: metrics.itemFontWeight,
+          ),
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: entry.labelWidget ??
+                Text(
+                  entry.label ?? '',
+                  textDirection: TextDirection.rtl,
+                ),
+          ),
+        ),
+      );
+    }).toList();
   }
 
   List<AppContextMenuEntry> _normalizeEntries(
@@ -689,7 +956,12 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
             : null,
         trailingIcon: entry.trailing,
         style: buildAppSubmenuItemStyle(context, metrics),
-        onPressed: entry.enabled ? entry.onTap : null,
+        onPressed: entry.enabled
+            ? () {
+                _closeContextMenu();
+                entry.onTap?.call();
+              }
+            : null,
         child: DefaultTextStyle.merge(
           style: TextStyle(
             fontFamily: 'Roboto',
@@ -707,6 +979,61 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
         ),
       );
     }).toList();
+  }
+}
+
+class _AppContextMenuPanel extends StatelessWidget {
+  final List<AppContextMenuEntry> entries;
+  final AppMenuMetrics metrics;
+  final MenuStyle? menuStyle;
+  final double maxWidth;
+  final double maxHeight;
+  final List<Widget> Function(BuildContext, List<AppContextMenuEntry>)
+      buildChildren;
+
+  const _AppContextMenuPanel({
+    super.key,
+    required this.entries,
+    required this.metrics,
+    required this.menuStyle,
+    required this.maxWidth,
+    required this.maxHeight,
+    required this.buildChildren,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Material(
+      color: menuStyle?.backgroundColor?.resolve(const <WidgetState>{}) ??
+          colorScheme.surfaceContainer,
+      elevation:
+          menuStyle?.elevation?.resolve(const <WidgetState>{})?.toDouble() ?? 3,
+      shape: menuStyle?.shape?.resolve(const <WidgetState>{}) ??
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(metrics.menuBorderRadius),
+          ),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicWidth(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: metrics.menuMinWidth,
+            maxWidth: maxWidth,
+            maxHeight: maxHeight,
+          ),
+          child: SingleChildScrollView(
+            padding: metrics.menuPadding,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: buildChildren(context, entries),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -137,6 +137,7 @@ class AboutDevTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      primary: true,
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -183,6 +184,19 @@ class AboutDevTab extends StatelessWidget {
                 subtitle: 'מפתחים מוזמנים לתרום לקהילה התורנית',
                 buttonLabel: 'הצטרף עכשיו',
                 onTap: () => _openUrl('https://github.com/otzaria/otzaria'),
+              ),
+            ],
+          ),
+
+          // ── תורמים ──
+          SettingsCard(
+            title: 'תורמים',
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: _MemorialCardsGrid(
+                  onDonationTap: () => _openUrl('https://nedar.im/ezOd'),
+                ),
               ),
             ],
           ),
@@ -403,6 +417,140 @@ class _ContributorChip extends StatelessWidget {
       );
     }
     return content;
+  }
+}
+
+// ── _MemorialCardsGrid ────────────────────────────────────────────────────────
+
+class _MemorialCardsGrid extends StatelessWidget {
+  final VoidCallback onDonationTap;
+  const _MemorialCardsGrid({required this.onDonationTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 400) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _MemorialCard(
+              name: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
+              description: 'סכום משמעותי לפיתוח התוכנה',
+            ),
+            const SizedBox(height: 12),
+            _DonationMemorialCard(onTap: onDonationTap),
+            const SizedBox(height: 12),
+            _DonationMemorialCard(onTap: onDonationTap),
+          ],
+        );
+      }
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _MemorialCard(
+                name: "לע\"נ ר' משה בן יהודה ראה ז\"ל",
+                description: 'סכום משמעותי לפיתוח התוכנה',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: _DonationMemorialCard(onTap: onDonationTap)),
+            const SizedBox(width: 12),
+            Expanded(child: _DonationMemorialCard(onTap: onDonationTap)),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _MemorialCard extends StatelessWidget {
+  final String name;
+  final String description;
+  const _MemorialCard({required this.name, required this.description});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      elevation: 0,
+      color: colorScheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(FluentIcons.heart_24_filled,
+                color: colorScheme.primary, size: 24),
+            const SizedBox(height: 6),
+            Text(name,
+                textAlign: TextAlign.center,
+                textDirection: TextDirection.rtl,
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface)),
+            const SizedBox(height: 4),
+            Text(description,
+                textAlign: TextAlign.center,
+                textDirection: TextDirection.rtl,
+                style: TextStyle(
+                    fontSize: 11, color: colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DonationMemorialCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _DonationMemorialCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      elevation: 0,
+      color: colorScheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(FluentIcons.heart_24_regular,
+                color: colorScheme.primary.withValues(alpha: 0.6), size: 24),
+            const SizedBox(height: 6),
+            Text(
+              'מקום זה יכול להיות מונצח לע"נ יקירך',
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface),
+            ),
+            const SizedBox(height: 8),
+            RecommendedActionButton(
+              icon: FluentIcons.payment_24_regular,
+              text: 'נדרים+',
+              onPressed: onTap,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

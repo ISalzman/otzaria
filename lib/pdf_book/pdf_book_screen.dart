@@ -632,7 +632,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           : null,
       enableKeyboardNavigation: false,
       scrollByArrowKey: 25.0,
-      scrollByMouseWheel: 0.2,
+      scrollByMouseWheel: 0.0,
       onDocumentLoadFinished: (documentRef, succeeded) {
         if (!mounted) return;
         _bloc.add(pdf_events.SetLoadingState(
@@ -955,7 +955,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Rect? _currentVerticalScrollbarBounds(PdfViewerController controller) {
-    return _currentSpreadRect(controller);
+    if (!controller.isReady) return null;
+    if (_isBookViewModeActive()) {
+      return _currentSpreadRect(controller);
+    }
+    // תצוגה רגילה - החזר את גבולות המסמך המלא
+    final layout = controller.layout;
+    final pageLayouts = layout.pageLayouts;
+    if (pageLayouts.isEmpty) return null;
+    return Rect.fromLTRB(
+      0,
+      pageLayouts.first.top,
+      layout.documentSize.width,
+      pageLayouts.last.bottom,
+    );
   }
 
   Rect? _currentSpreadViewportRect(
@@ -1702,7 +1715,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   state is PdfBookLoaded ? state.showLeftPane : false;
               final showRightPane =
                   state is PdfBookLoaded ? state.showRightPane : false;
-
               return DualAdaptiveReaderPane(
                 mainContent: _buildReaderMainContent(),
                 showLeftPane: showLeftPane,
@@ -1766,13 +1778,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           },
           child: Listener(
             onPointerSignal: (event) {
-              if (event is PointerScrollEvent &&
-                  !(widget.tab.pinLeftPane.value ||
-                      (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
-                _setLeftPaneVisibility(false);
-                Future.microtask(() {
-                  _pdfViewFocusNode.requestFocus();
-                });
+              if (event is PointerScrollEvent) {
+                if (HardwareKeyboard.instance.isControlPressed) {
+                  return;
+                }
+
+                _captureScrollAnchor();
+                _applyPointerScroll(event);
+
+                if (!(widget.tab.pinLeftPane.value ||
+                    (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
+                  _setLeftPaneVisibility(false);
+                  Future.microtask(() {
+                    _pdfViewFocusNode.requestFocus();
+                  });
+                }
               }
             },
             child: Stack(
@@ -2029,6 +2049,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         outline: widget.tab.outline.value,
                         bookTitle: widget.tab.book.title,
                         bookTopics: widget.tab.book.topics,
+                        bookCategoryPath: widget.tab.book.categoryPath,
                         pdfFilePath: widget.tab.book.path,
                         initialSearchText: widget.tab.searchText,
                         initialSearchOptions: widget.tab.searchOptions,
@@ -2184,6 +2205,45 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _captureScrollAnchor() {
     if (!widget.tab.pdfViewerController.isReady) return;
     _scrollAnchorPage = widget.tab.pdfViewerController.pageNumber ?? 1;
+  }
+
+  void _applyPointerScroll(PointerScrollEvent event) {
+    if (!widget.tab.pdfViewerController.isReady) return;
+
+    final currentMatrix = widget.tab.pdfViewerController.value;
+    final zoom = currentMatrix.zoom;
+    final candidateMatrix = currentMatrix.clone()
+      ..translateByDouble(
+        -event.scrollDelta.dx / zoom,
+        -event.scrollDelta.dy / zoom,
+        0,
+        1,
+      );
+
+    if (!_isBookViewModeActive()) {
+      widget.tab.pdfViewerController.goTo(candidateMatrix);
+      return;
+    }
+
+    final anchorPage =
+        _scrollAnchorPage ?? (widget.tab.pdfViewerController.pageNumber ?? 1);
+    final clampedMatrix = _clampMatrixToSpread(
+      matrix: candidateMatrix,
+      viewSize: widget.tab.pdfViewerController.viewSize,
+      layout: widget.tab.pdfViewerController.layout,
+      controller: widget.tab.pdfViewerController,
+      spreadStartPage: _spreadStartPageFor(anchorPage),
+    );
+
+    widget.tab.pdfViewerController.goTo(clampedMatrix);
+
+    if (_wasMatrixClamped(
+      original: candidateMatrix,
+      clamped: clampedMatrix,
+      viewSize: widget.tab.pdfViewerController.viewSize,
+    )) {
+      _stopContinuousScroll();
+    }
   }
 
   void _applyVerticalScroll(double deltaY) {

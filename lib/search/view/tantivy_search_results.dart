@@ -190,6 +190,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               state.isTypoToleranceEnabled,
               widget.tab.searchOptionsChanged.value,
               widget.tab.alternativeWordsChanged.value,
+              widget.tab.spacingValuesChanged.value,
               settingsState.fontSize,
               settingsState.fontFamily,
               settingsState.replaceHolyNames,
@@ -223,6 +224,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                   availableWidth: availableWidth,
                   searchOptions: widget.tab.searchOptions,
                   alternativeWords: widget.tab.alternativeWords,
+                  customSpacing: widget.tab.spacingValues,
                   typoToleranceEnabled: state.isTypoToleranceEnabled,
                 );
               },

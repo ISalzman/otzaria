@@ -510,6 +510,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                   result.query,
                   settingsState,
                   context,
+                  spacingValues: _spacingValues,
+                  alternativeWords: _alternativeWords,
+                  allowReverseOrderFallback: true,
                 );
 
                 return Container(
@@ -552,8 +555,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 10),
                       child: RichText(
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.justify,
                         text: TextSpan(
                           style: TextStyle(
@@ -655,7 +656,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
           showDialog(
             context: context,
-            builder: (context) => SearchDialog(
+            builder: (dialogContext) => SearchDialog(
               existingTab: tempTab,
               bookTitle: bookTitle,
               onSearch: (query, searchOptions, alternativeWords, spacingValues,
@@ -767,8 +768,11 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     String text,
     String query,
     SettingsState settingsState,
-    BuildContext context,
-  ) {
+    BuildContext context, {
+    Map<String, String> spacingValues = const {},
+    Map<int, List<String>> alternativeWords = const {},
+    bool allowReverseOrderFallback = false,
+  }) {
     if (query.isEmpty) {
       return [TextSpan(text: text)];
     }
@@ -777,43 +781,121 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     final searchTerms =
         query.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
 
-    // לחיפוש של כמה מילים - pattern רצפי (כל המילים יחד לפי הסדר)
-    // לחיפוש של מילה אחת - חיפוש ישיר
-    final pattern = searchTerms.length == 1
-        ? RegExp.escape(searchTerms.first)
-        : searchTerms.map(RegExp.escape).join(r'\s+');
+    // בניית regex לכל מילה בנפרד + pattern לביטוי המלא
+    final wordRegexList = <RegExp>[];
+    final wordPatternStrings = <String>[];
 
-    final highlightRegex = RegExp(
-      pattern,
-      caseSensitive: false,
+    for (int i = 0; i < searchTerms.length; i++) {
+      final wordVariants = <String>[searchTerms[i]];
+      final alts = alternativeWords[i];
+      if (alts != null && alts.isNotEmpty) {
+        wordVariants.addAll(alts);
+      }
+      final wordPattern = wordVariants.map(RegExp.escape).join('|');
+      final wordPatternStr =
+          wordVariants.length > 1 ? '(?:$wordPattern)' : wordPattern;
+      wordPatternStrings.add(wordPatternStr);
+      wordRegexList.add(RegExp(wordPatternStr, caseSensitive: false));
+    }
+
+    final patternParts = <String>[];
+    for (int i = 0; i < wordPatternStrings.length; i++) {
+      patternParts.add(wordPatternStrings[i]);
+      if (i < wordPatternStrings.length - 1) {
+        final spacingKey = '$i-${i + 1}';
+        final maxTokens =
+            int.tryParse(spacingValues[spacingKey] ?? '') ?? 0;
+        if (maxTokens > 0) {
+          patternParts.add('(?:\\s+\\S+){0,$maxTokens}\\s+');
+        } else {
+          patternParts.add(r'\s+');
+        }
+      }
+    }
+    final phraseRegex = RegExp(patternParts.join(''), caseSensitive: false);
+
+    const highlightStyle = TextStyle(
+      fontWeight: FontWeight.bold,
+      fontSize: 18,
+      color: Color(0xFFD32F2F),
     );
+
+    // regex משולב לכל מילה בכל סדר – לשימוש כ-fallback
+    final anyWordRegex = wordPatternStrings.isNotEmpty
+        ? RegExp(wordPatternStrings.join('|'), caseSensitive: false)
+        : null;
+
+    // פונקציה פנימית: הדגשת מילות חיפוש בודדות (כל סדר) בטקסט נתון
+    void addIndividualWordHighlights(String segment) {
+      if (anyWordRegex == null) {
+        spans.add(TextSpan(text: segment));
+        return;
+      }
+      int pos = 0;
+      for (final m in anyWordRegex.allMatches(segment)) {
+        if (m.start > pos) {
+          spans.add(TextSpan(text: segment.substring(pos, m.start)));
+        }
+        spans.add(TextSpan(text: m.group(0), style: highlightStyle));
+        pos = m.end;
+      }
+      if (pos < segment.length) {
+        spans.add(TextSpan(text: segment.substring(pos)));
+      }
+    }
+
+    final phraseMatches = phraseRegex.allMatches(text).toList();
+    // אם הביטוי לא נמצא כלל וחיפוש לא מדויק, ייתכן שהמילים בסדר הפוך – נדגיש בנפרד
+    if (phraseMatches.isEmpty && allowReverseOrderFallback) {
+      addIndividualWordHighlights(text);
+      return spans;
+    }
 
     int currentPosition = 0;
 
-    for (final match in highlightRegex.allMatches(text)) {
-      // טקסט רגיל לפני ההדגשה
-      if (match.start > currentPosition) {
+    for (final phraseMatch in phraseMatches) {
+      // טקסט לפני הביטוי – ללא הדגשה (בחיפוש רגיל)
+      if (phraseMatch.start > currentPosition) {
         spans.add(TextSpan(
-          text: text.substring(currentPosition, match.start),
-        ));
+            text: text.substring(currentPosition, phraseMatch.start)));
       }
-      // הטקסט המודגש
-      spans.add(TextSpan(
-        text: match.group(0),
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 18,
-          color: Color(0xFFD32F2F), // צבע אדום חזק למילות החיפוש
-        ),
-      ));
-      currentPosition = match.end;
+
+      // הדגשת מילות החיפוש בלבד בתוך הביטוי (בסדר המקורי)
+      final phraseText = text.substring(phraseMatch.start, phraseMatch.end);
+      int phraseOffset = 0;
+
+      for (final wordRegex in wordRegexList) {
+        final wordMatch =
+            wordRegex.firstMatch(phraseText.substring(phraseOffset));
+        if (wordMatch == null) break;
+
+        final wordStart = phraseOffset + wordMatch.start;
+        final wordEnd = phraseOffset + wordMatch.end;
+
+        // טקסט בין המילים (לא מודגש)
+        if (wordStart > phraseOffset) {
+          spans.add(TextSpan(
+              text: phraseText.substring(phraseOffset, wordStart)));
+        }
+        // המילה המודגשת
+        spans.add(TextSpan(
+          text: phraseText.substring(wordStart, wordEnd),
+          style: highlightStyle,
+        ));
+        phraseOffset = wordEnd;
+      }
+
+      // טקסט שנותר אחרי המילה האחרונה בביטוי
+      if (phraseOffset < phraseText.length) {
+        spans.add(TextSpan(text: phraseText.substring(phraseOffset)));
+      }
+
+      currentPosition = phraseMatch.end;
     }
 
-    // טקסט רגיל אחרי ההדגשה האחרונה
+    // טקסט אחרי ההדגשה האחרונה – ללא הדגשה
     if (currentPosition < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(currentPosition),
-      ));
+      spans.add(TextSpan(text: text.substring(currentPosition)));
     }
 
     return spans;
@@ -892,7 +974,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     bestMatch ??= firstMatch;
 
     final len = text.length;
-    var start = (bestMatch!.start - (maxChars ~/ 2)).clamp(0, len);
+    var start = (bestMatch!.start - (maxChars ~/ 3)).clamp(0, len);
     var end = (start + maxChars).clamp(0, len);
 
     // If we're at the end and didn't get enough chars, shift the window left.
