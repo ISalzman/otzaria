@@ -65,7 +65,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   final FocusNode _firstSearchResultFocusNode = FocusNode();
   final Set<String> _expandedCategories = {};
-  bool _isSettingsPanelOpen = false;
+  final _settingsPanelOpen = ValueNotifier<bool>(false);
   double? _previewPaneWidthOverride;
   late final ValueNotifier<double> _topBarTotalHeight;
 
@@ -108,13 +108,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   bool _isPreviewPanelVisible(SettingsState s) => s.libraryShowPreview;
 
-  void _openSettingsPanel() => setState(() => _isSettingsPanelOpen = true);
+  void _openSettingsPanel() => _settingsPanelOpen.value = true;
 
-  void _closeSettingsPanel() {
-    if (_isSettingsPanelOpen) {
-      setState(() => _isSettingsPanelOpen = false);
-    }
-  }
+  void _closeSettingsPanel() => _settingsPanelOpen.value = false;
 
   void _showPreviewPanel(SettingsState s) {
     context.read<SettingsBloc>().add(const UpdateLibraryShowPreview(true));
@@ -132,7 +128,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   void _syncLibraryPanelController() {
     LibraryPanelController.register(
-      isSettingsPanelOpen: () => _isSettingsPanelOpen,
+      isSettingsPanelOpen: () => _settingsPanelOpen.value,
       showSettingsPanel: _openSettingsPanel,
       closeSettingsPanel: _closeSettingsPanel,
       openPreviewPanel: _showPreviewPanel,
@@ -168,9 +164,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   @override
   void deactivate() {
-    if (_isSettingsPanelOpen) {
-      _isSettingsPanelOpen = false;
-    }
+    _settingsPanelOpen.value = false;
     super.deactivate();
   }
 
@@ -180,6 +174,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     _scrollDebounce?.cancel();
     _secondaryRowVisible.dispose();
     _topBarTotalHeight.dispose();
+    _settingsPanelOpen.dispose();
     LibraryPanelController.unregister();
     _fileSyncBloc.close();
     super.dispose();
@@ -210,10 +205,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   // ── build ────────────────────────────────────────────────────────────────
 
   void closeTransientPanels() {
-    if (!_isSettingsPanelOpen) return;
-    setState(() {
-      _isSettingsPanelOpen = false;
-    });
+    _settingsPanelOpen.value = false;
   }
 
   @override
@@ -347,12 +339,14 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   ValueListenableBuilder<double>(
                     valueListenable: _topBarTotalHeight,
                     builder: (context, topBarHeight, _) {
-                      if (!_isSettingsPanelOpen) {
-                        return const SizedBox.shrink();
-                      }
-                      return Positioned.fill(
-                        top: topBarHeight,
-                        child: _buildSettingsOverlay(context, settingsState),
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: _settingsPanelOpen,
+                        builder: (context, isOpen, _) {
+                          return Positioned.fill(
+                            top: topBarHeight,
+                            child: _buildSettingsOverlay(context, isOpen),
+                          );
+                        },
                       );
                     },
                   ),
@@ -376,7 +370,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }) {
     final isCompact = settingsState.compactMenuMode;
     final previewSelected = _isPreviewPanelVisible(settingsState);
-    final settingsSelected = _isSettingsPanelOpen;
 
     // ── Trailing items ────────────────────────────────────────────────────
     final trailingItems = <AppTopBarItem>[];
@@ -429,20 +422,17 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         ),
       ),
       AppTopBarItem(
-        widget: ToolbarActionButton(
-          compact: isCompact,
-          tooltip: settingsSelected ? 'סגור הגדרות ספרייה' : 'הגדרות ספרייה',
-          icon: settingsSelected
-              ? FluentIcons.settings_24_filled
-              : FluentIcons.settings_24_regular,
-          selected: settingsSelected,
-          onPressed: () {
-            if (settingsSelected) {
-              _closeSettingsPanel();
-            } else {
-              _openSettingsPanel();
-            }
-          },
+        widget: ValueListenableBuilder<bool>(
+          valueListenable: _settingsPanelOpen,
+          builder: (context, isOpen, _) => ToolbarActionButton(
+            compact: isCompact,
+            tooltip: isOpen ? 'סגור הגדרות ספרייה' : 'הגדרות ספרייה',
+            icon: isOpen
+                ? FluentIcons.settings_24_filled
+                : FluentIcons.settings_24_regular,
+            selected: isOpen,
+            onPressed: isOpen ? _closeSettingsPanel : _openSettingsPanel,
+          ),
         ),
       ),
     ]);
@@ -1564,12 +1554,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
-  Widget _buildSettingsOverlay(
-    BuildContext context,
-    SettingsState settingsState,
-  ) {
+  Widget _buildSettingsOverlay(BuildContext context, bool isOpen) {
     return ContextOverlayPanel(
-      isOpen: _isSettingsPanelOpen,
+      isOpen: isOpen,
       onClose: _closeSettingsPanel,
       width: 400,
       child: Column(

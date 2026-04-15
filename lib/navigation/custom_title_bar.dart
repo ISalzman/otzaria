@@ -33,7 +33,14 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 class CustomTitleBar extends StatefulWidget {
-  const CustomTitleBar({super.key});
+  final VoidCallback? onReadingSettingsPressed;
+  final bool isReadingSettingsPanelOpen;
+
+  const CustomTitleBar({
+    super.key,
+    this.onReadingSettingsPressed,
+    this.isReadingSettingsPanelOpen = false,
+  });
 
   @override
   State<CustomTitleBar> createState() => _CustomTitleBarState();
@@ -443,9 +450,15 @@ class _CustomTitleBarState extends State<CustomTitleBar>
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4.0),
                 child: IconButton(
-                  icon: const Icon(FluentIcons.settings_24_regular, size: 18),
+                  icon: Icon(
+                    widget.isReadingSettingsPanelOpen
+                        ? FluentIcons.settings_24_filled
+                        : FluentIcons.settings_24_regular,
+                    size: 18,
+                  ),
                   tooltip: 'הגדרות תצוגת הספרים',
-                  onPressed: () => showReadingSettingsDialog(context),
+                  onPressed: widget.onReadingSettingsPressed ??
+                      () => showReadingSettingsDialog(context),
                   style: _kIconButtonStyle.copyWith(
                     foregroundColor: WidgetStatePropertyAll(
                         Theme.of(context).colorScheme.onSurfaceVariant),

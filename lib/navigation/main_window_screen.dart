@@ -35,6 +35,7 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_state.dart';
 import 'package:otzaria/widgets/indexing_status_overlay.dart';
+import 'package:otzaria/widgets/context_overlay_panel.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -98,6 +99,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   bool _hasStartedFileSync = false;
   bool _isSearchOpen = false;
   bool _isFindRefOpen = false;
+  bool _isReadingSettingsPanelOpen = false;
   late Screen _lastScreen;
   // עוקב אחר מצב ההגדרות הקודם לצורך dispatch ספציפי
   SettingsState? _prevSettingsState;
@@ -352,6 +354,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
         }
       });
     }
+  }
+
+  void _toggleReadingSettingsPanel() {
+    setState(() {
+      _isReadingSettingsPanelOpen = !_isReadingSettingsPanelOpen;
+    });
   }
 
   /// ודאו שה-PageView מסונכרן למצב הניווט הנוכחי גם אם בחרו שוב באותו יעד.
@@ -761,7 +769,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                       children: [
                         Column(
                           children: [
-                            const CustomTitleBar(),
+                            CustomTitleBar(
+                              onReadingSettingsPressed:
+                                  _toggleReadingSettingsPanel,
+                              isReadingSettingsPanelOpen:
+                                  _isReadingSettingsPanelOpen,
+                            ),
                             Expanded(
                               child: OrientationBuilder(
                                 builder: (context, orientation) {
@@ -906,6 +919,35 @@ class MainWindowScreenState extends State<MainWindowScreen>
                         ),
                         IndexingStatusOverlay(
                           onTap: _openIndexingSettings,
+                        ),
+                        ContextOverlayPanel(
+                          isOpen: _isReadingSettingsPanelOpen &&
+                              (state.currentScreen == Screen.reading ||
+                                  state.currentScreen == Screen.search),
+                          onClose: _toggleReadingSettingsPanel,
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      'הגדרות תצוגת הספרים',
+                                      textDirection: TextDirection.rtl,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Expanded(
+                                child: ReadingSettingsPanel(),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
