@@ -132,6 +132,11 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   // מונע rebuild מרובה של הטאבים כאשר הזהות המלאה של הלשוניות לא השתנתה
   String _lastDescriptorsSignature = '';
 
+  // גלילת שורת הטאבים בדסקטופ
+  final ScrollController _tabScrollController = ScrollController();
+  bool _canTabScrollLeft = false;
+  bool _canTabScrollRight = false;
+
   static const _mobileGroupDefs = [
     (label: 'לוח שנה', toolIds: <String>['builtin.calendar']),
     (label: 'תורה שלמדתי', toolIds: <String>['builtin.shamor_zachor', 'builtin.notes']),
@@ -331,11 +336,43 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────────
 
+  void _onTabScrollMetrics(ScrollMetrics metrics) {
+    final canLeft = metrics.pixels > metrics.minScrollExtent + 0.5;
+    final canRight = metrics.pixels < metrics.maxScrollExtent - 0.5;
+    if (_canTabScrollLeft != canLeft || _canTabScrollRight != canRight) {
+      setState(() {
+        _canTabScrollLeft = canLeft;
+        _canTabScrollRight = canRight;
+      });
+    }
+  }
+
+  void _updateTabScrollState() {
+    if (!mounted || !_tabScrollController.hasClients) return;
+    final pos = _tabScrollController.position;
+    if (!pos.hasContentDimensions) return;
+    _onTabScrollMetrics(pos);
+  }
+
+  void _tabScrollBy(double delta) {
+    if (!_tabScrollController.hasClients) return;
+    final pos = _tabScrollController.position;
+    final target =
+        (pos.pixels + delta).clamp(pos.minScrollExtent, pos.maxScrollExtent);
+    _tabScrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     FocusRepository().registerMoreScreenFocusRequester(requestActiveTabFocus);
     _applyTabState([], notify: false);
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _updateTabScrollState());
   }
 
   @override
@@ -366,6 +403,7 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
     FocusRepository().unregisterMoreScreenFocusRequester(requestActiveTabFocus);
     _contentFocusNode.dispose();
     _contentScrollController.dispose();
+    _tabScrollController.dispose();
     super.dispose();
   }
 
@@ -510,34 +548,110 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
                         ),
                         child: Row(
                           children: [
-                            // מאזן שמאלי כדי שהטאבים יישארו ממורכזים
-                            const SizedBox(width: 48),
+                            // חץ ימני – מוצג כשיש תוכן נסתר בצד ימין
+                            SizedBox(
+                              width: 36,
+                              height: 40,
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 200),
+                                opacity: _canTabScrollLeft ? 1.0 : 0.0,
+                                child: IgnorePointer(
+                                  ignoring: !_canTabScrollLeft,
+                                  child: IconButton(
+                                    icon: const Icon(
+                                        FluentIcons.chevron_right_24_regular),
+                                    iconSize: 18,
+                                    onPressed: () => _tabScrollBy(-150),
+                                    tooltip: 'גלול ימינה',
+                                    constraints: const BoxConstraints(
+                                        minWidth: 32, minHeight: 32),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                ),
+                              ),
+                            ),
                             Expanded(
-                              child: Center(
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      for (int index = 0; index < _descriptors.length; index++) ...[
-                                        _DesktopTopNavItem(
-                                          icon: _descriptors[index] is BuiltInToolDescriptor
-                                              ? (_descriptors[index] as BuiltInToolDescriptor).icon
-                                              : FluentIcons.puzzle_piece_24_regular,
-                                          iconFilled: _descriptors[index] is BuiltInToolDescriptor
-                                              ? (_descriptors[index] as BuiltInToolDescriptor).iconFilled
-                                              : FluentIcons.puzzle_piece_24_regular,
-                                          imageAsset: _descriptors[index] is BuiltInToolDescriptor
-                                              ? (_descriptors[index] as BuiltInToolDescriptor).imageIcon
-                                              : null,
-                                          label: _descriptors[index].label,
-                                          isSelected: _selectedToolId == _descriptors[index].toolId,
-                                          onTap: () => _changeTab(index),
-                                        ),
-                                        if (index < _descriptors.length - 1)
-                                          const SizedBox(width: AppTokens.spaceXS),
-                                      ],
-                                    ],
+                              child: NotificationListener<
+                                  ScrollMetricsNotification>(
+                                onNotification: (n) {
+                                  if (n.metrics.axis == Axis.horizontal) {
+                                    _onTabScrollMetrics(n.metrics);
+                                  }
+                                  return false;
+                                },
+                                child: NotificationListener<ScrollNotification>(
+                                  onNotification: (n) {
+                                    if (n.metrics.axis == Axis.horizontal) {
+                                      _onTabScrollMetrics(n.metrics);
+                                    }
+                                    return false;
+                                  },
+                                  child: Center(
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      controller: _tabScrollController,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          for (int index = 0;
+                                              index < _descriptors.length;
+                                              index++) ...[
+                                            _DesktopTopNavItem(
+                                              icon: _descriptors[index]
+                                                      is BuiltInToolDescriptor
+                                                  ? (_descriptors[index]
+                                                          as BuiltInToolDescriptor)
+                                                      .icon
+                                                  : FluentIcons
+                                                      .puzzle_piece_24_regular,
+                                              iconFilled: _descriptors[index]
+                                                      is BuiltInToolDescriptor
+                                                  ? (_descriptors[index]
+                                                          as BuiltInToolDescriptor)
+                                                      .iconFilled
+                                                  : FluentIcons
+                                                      .puzzle_piece_24_regular,
+                                              imageAsset: _descriptors[index]
+                                                      is BuiltInToolDescriptor
+                                                  ? (_descriptors[index]
+                                                          as BuiltInToolDescriptor)
+                                                      .imageIcon
+                                                  : null,
+                                              label: _descriptors[index].label,
+                                              isSelected: _selectedToolId ==
+                                                  _descriptors[index].toolId,
+                                              onTap: () => _changeTab(index),
+                                            ),
+                                            if (index <
+                                                _descriptors.length - 1)
+                                              const SizedBox(
+                                                  width: AppTokens.spaceXS),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // חץ שמאלי – מוצג כשיש תוכן נסתר בצד שמאל
+                            SizedBox(
+                              width: 36,
+                              height: 40,
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 200),
+                                opacity: _canTabScrollRight ? 1.0 : 0.0,
+                                child: IgnorePointer(
+                                  ignoring: !_canTabScrollRight,
+                                  child: IconButton(
+                                    icon: const Icon(
+                                        FluentIcons.chevron_left_24_regular),
+                                    iconSize: 18,
+                                    onPressed: () => _tabScrollBy(150),
+                                    tooltip: 'גלול שמאלה',
+                                    constraints: const BoxConstraints(
+                                        minWidth: 32, minHeight: 32),
+                                    padding: EdgeInsets.zero,
                                   ),
                                 ),
                               ),
