@@ -755,8 +755,14 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
     });
   }
 
-  MenuStyle? _menuStyle(BuildContext context, AppMenuMetrics metrics) {
-    return Theme.of(context).menuTheme.style;
+  MenuStyle _menuStyle(BuildContext context, AppMenuMetrics metrics) {
+    final themeStyle = Theme.of(context).menuTheme.style;
+    // alignment: Alignment.topLeft — מציב את הפינה השמאלית-עליונה של תת-התפריט
+    // בנקודת הכפתור (קצה ימין של הכפתור), כך שהתפריט נפתח ימינה.
+    // Flutter יהפוך אוטומטית שמאלה אם אין מקום בצד ימין.
+    return (themeStyle ?? const MenuStyle()).copyWith(
+      alignment: Alignment.topLeft,
+    );
   }
 
   @override
