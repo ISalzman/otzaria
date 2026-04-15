@@ -9,7 +9,7 @@
 // • פתיחה וסגירה באנימציית slide מהצד
 // • scrim לחיץ לסגירה
 // • גובה מלא של אזור התוכן
-// • צבע רקע לפי AppTopBar (secondaryContainer)
+// • צבע רקע לפי AppTopBar (surfaceContainerHigh)
 // • תמיכה בימין/שמאל
 //
 // **שימוש:**
@@ -46,7 +46,7 @@ class ContextOverlayPanel extends StatelessWidget {
   /// יישור הפאנל (ברירת מחדל: start - ימין בעברית)
   final AlignmentDirectional alignment;
 
-  /// צבע רקע (ברירת מחדל: secondaryContainer)
+  /// צבע רקע (ברירת מחדל: surfaceContainerHigh)
   final Color? backgroundColor;
 
   /// ריפוד פנימי אחיד לתוכן הפאנל
@@ -67,7 +67,7 @@ class ContextOverlayPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final effectiveBackgroundColor = backgroundColor ?? cs.secondaryContainer;
+    final effectiveBackgroundColor = backgroundColor ?? cs.surfaceContainerHigh;
     // centerEnd = שמאל פיזי ב-RTL, centerStart = ימין פיזי
     final isLeft = alignment == AlignmentDirectional.centerEnd;
 

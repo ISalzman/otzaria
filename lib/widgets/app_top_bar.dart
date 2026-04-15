@@ -204,8 +204,7 @@ class _AppTopBarState extends State<AppTopBar>
       builder: (context, settingsState) {
         final isCompact = settingsState.compactMenuMode;
         final cs = Theme.of(context).colorScheme;
-        // ✅ תוקן: barColor ו-shadowColor משתמשים בצבעי theme
-        final barColor = cs.secondaryContainer;
+        final barColor = cs.surfaceContainerHigh;
         final shadowColor = cs.shadow.withValues(alpha: 0.14);
         final barH = isCompact ? _kCompactHeight : _kTouchHeight;
         final hPad = isCompact ? 6.0 : 8.0;

@@ -114,13 +114,15 @@ class SettingsRepository {
   Future<Map<String, dynamic>> loadSettings() async {
     // Initialize default settings to disk if needed
     await _initializeDefaultsIfNeeded();
+    // Migrate users who received the old dark seed color as default
+    await _migrateDefaultSeedColorIfNeeded();
 
     return {
       'isDarkMode': _settings.getValue<bool>(keyDarkMode, defaultValue: false),
       'followSystemTheme':
           _settings.getValue<bool>(keyFollowSystemTheme, defaultValue: false),
       'seedColor': ColorUtils.colorFromString(
-        _settings.getValue<String>(keySwatchColor, defaultValue: '#ff2c1b02'),
+        _settings.getValue<String>(keySwatchColor, defaultValue: '#ff795548'),
       ),
       'darkSeedColor': ColorUtils.colorFromString(
         _settings.getValue<String>(keyDarkSwatchColor,
@@ -698,10 +700,19 @@ class SettingsRepository {
         defaultValue: false);
   }
 
+  /// Migrate users who received the old dark seed color (#2c1b02) as default
+  Future<void> _migrateDefaultSeedColorIfNeeded() async {
+    final stored =
+        _settings.getValue<String>(keySwatchColor, defaultValue: '');
+    if (stored == '#ff2c1b02' || stored == 'ff2c1b02') {
+      await _settings.setValue(keySwatchColor, '#ff795548');
+    }
+  }
+
   /// Write all default settings to persistent storage
   Future<void> _writeDefaultsToStorage() async {
     await _settings.setValue(keyDarkMode, false);
-    await _settings.setValue(keySwatchColor, '#ff2c1b02');
+    await _settings.setValue(keySwatchColor, '#ff795548');
     await _settings.setValue(keyDarkSwatchColor, '#ffce93d8');
     await _settings.setValue(keyTextMaxWidth, -1.0);
     await _settings.setValue(keyFontSize, 25.0);
