@@ -77,6 +77,47 @@ AppWindowListener? _appWindowListener;
 /// Getter for accessing the window listener from other parts of the app
 AppWindowListener? get appWindowListener => _appWindowListener;
 
+String formatFlutterErrorDetailsForLog(FlutterErrorDetails details) {
+  final buffer = StringBuffer()
+    ..writeln('=== FlutterError ${DateTime.now().toIso8601String()} ===')
+    ..writeln('Exception: ${details.exceptionAsString()}');
+
+  if (details.library != null) {
+    buffer.writeln('Library: ${details.library}');
+  }
+
+  if (details.context != null) {
+    buffer.writeln('Context: ${details.context}');
+  }
+
+  final informationCollector = details.informationCollector;
+  if (informationCollector != null) {
+    for (final node in informationCollector()) {
+      buffer.writeln(node.toDescription());
+    }
+  }
+
+  if (details.stack != null) {
+    buffer
+      ..writeln('Stack:')
+      ..writeln(details.stack);
+  }
+
+  buffer.writeln();
+  return buffer.toString();
+}
+
+String formatPlatformErrorForLog(Object error, StackTrace stack) {
+  final buffer = StringBuffer()
+    ..writeln('=== Unhandled Error ${DateTime.now().toIso8601String()} ===')
+    ..writeln('Exception: $error')
+    ..writeln('Stack:')
+    ..writeln(stack)
+    ..writeln();
+
+  return buffer.toString();
+}
+
 bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
   return errorString.contains('!_pressedKeys.containsKey(event.physicalKey)') ||
       errorString.contains(
@@ -101,7 +142,7 @@ void main() async {
   // Set up custom error handlers before Sentry initialization
   // Sentry will automatically wrap these handlers
   FlutterError.onError = (FlutterErrorDetails details) {
-    final errorString = details.toString();
+    final errorString = details.exceptionAsString();
 
     // Skip accessibility tree errors on Windows - they're harmless noise
     if (Platform.isWindows &&
@@ -120,8 +161,11 @@ void main() async {
     if (kDebugMode) {
       FlutterError.dumpErrorToConsole(details);
     } else {
-      File('errors.txt')
-          .writeAsStringSync(details.toString(), mode: FileMode.append);
+      File('errors.txt').writeAsStringSync(
+        formatFlutterErrorDetailsForLog(details),
+        mode: FileMode.append,
+        flush: true,
+      );
     }
   };
 
@@ -147,8 +191,11 @@ void main() async {
         stack: stack,
       ));
     } else {
-      File('errors.txt')
-          .writeAsStringSync(error.toString(), mode: FileMode.append);
+      File('errors.txt').writeAsStringSync(
+        formatPlatformErrorForLog(error, stack),
+        mode: FileMode.append,
+        flush: true,
+      );
     }
     return true;
   };
