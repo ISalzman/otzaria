@@ -8,6 +8,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/utils/reading_left_pane_policy.dart';
 
 /// Represents a tab with a PDF book.
 ///
@@ -111,9 +112,7 @@ class PdfBookTab extends OpenedTab {
   ///
   /// The JSON map should have 'path' and 'pageNumber' keys.
   factory PdfBookTab.fromJson(Map<String, dynamic> json) {
-    final bool shouldOpenLeftPane =
-        (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-            (Settings.getValue<bool>('key-default-sidebar-open') ?? false);
+    final bool shouldOpenLeftPane = resolveRestoredReadingLeftPaneState(json);
 
     final PdfBook restoredBook = json['book'] != null
         ? Book.fromJson(Map<String, dynamic>.from(json['book'])) as PdfBook
@@ -173,6 +172,7 @@ class PdfBookTab extends OpenedTab {
       'path': book.path,
       'book': book.toJson(),
       'pageNumber': currentPage,
+      'showLeftPane': showLeftPane.value,
       'isPinned': isPinned,
       'type': 'PdfBookTab',
       if (savedLayoutMode != null) 'savedLayoutMode': savedLayoutMode!.name,
