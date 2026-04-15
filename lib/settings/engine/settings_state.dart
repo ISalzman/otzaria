@@ -89,7 +89,7 @@ class SettingsState extends Equatable {
     return const SettingsState(
       isDarkMode: false,
       followSystemTheme: false,
-      seedColor: Colors.brown,
+      seedColor: Color(0xFF2C1B02),
       darkSeedColor: Color(0xFFCE93D8), // סגול בהיר למצב כהה
       textMaxWidth:
           -1, // רוחב מקסימלי לטקסט (-1 = רמה 1 = 95% כברירת מחדל, 0 = ללא הגבלה)
@@ -204,8 +204,7 @@ class SettingsState extends Equatable {
       shortcuts: shortcuts ?? this.shortcuts,
       enablePerBookSettings:
           enablePerBookSettings ?? this.enablePerBookSettings,
-        pdfBookViewByDefault:
-          pdfBookViewByDefault ?? this.pdfBookViewByDefault,
+      pdfBookViewByDefault: pdfBookViewByDefault ?? this.pdfBookViewByDefault,
       isOfflineMode: isOfflineMode ?? this.isOfflineMode,
       alignTabsToRight: alignTabsToRight ?? this.alignTabsToRight,
       enableHtmlLinks: enableHtmlLinks ?? this.enableHtmlLinks,
