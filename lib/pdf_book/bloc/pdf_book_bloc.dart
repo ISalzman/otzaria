@@ -13,6 +13,7 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/utils/reading_left_pane_policy.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -179,7 +180,10 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       return;
     }
 
-    final showLeftPane = tab.showLeftPane.value || searchText.isNotEmpty;
+    final showLeftPane = resolveInitialReadingLeftPaneVisibility(
+      explicitOpen: tab.showLeftPane.value,
+      hasSearchText: searchText.isNotEmpty,
+    );
     final pinLeftPane = Settings.getValue<bool>('key-pin-sidebar') ?? false;
     final sidebarWidth =
         Settings.getValue<double>('key-sidebar-width', defaultValue: 300)!;

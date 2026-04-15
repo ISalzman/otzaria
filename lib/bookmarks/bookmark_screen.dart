@@ -11,7 +11,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/utils/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/items_list_view.dart';
 
 class BookmarkView extends StatelessWidget {
@@ -28,8 +28,7 @@ class BookmarkView extends StatelessWidget {
       book,
       index,
       commentators: commentators,
-      openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-          (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
+      openLeftPane: shouldAutoOpenReadingLeftPane(),
     );
 
     context.read<TabsBloc>().add(

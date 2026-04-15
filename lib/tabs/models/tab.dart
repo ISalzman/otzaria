@@ -32,6 +32,7 @@ abstract class OpenedTab {
         book: tab.book,
         searchText: tab.searchText,
         commentators: tab.commentators,
+        openLeftPane: state is TextBookLoaded ? state.showLeftPane : false,
         splitedView: splitedView,
         showPageShapeView: showPageShapeView,
         isPinned: tab.isPinned,
@@ -41,6 +42,7 @@ abstract class OpenedTab {
       return PdfBookTab(
         book: tab.book,
         pageNumber: tab.pageNumber,
+        openLeftPane: tab.showLeftPane.value,
         isPinned: tab.isPinned,
         dedupeKey: tab.dedupeKey,
       );

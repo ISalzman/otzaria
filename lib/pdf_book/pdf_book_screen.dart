@@ -39,6 +39,7 @@ import 'pdf_thumbnails_screen.dart';
 import 'package:printing/printing.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/page_converter.dart';
+import 'package:otzaria/utils/reading_left_pane_policy.dart';
 import 'package:flutter/gestures.dart';
 import 'package:otzaria/widgets/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
@@ -828,8 +829,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
         _runInitialSearchIfNeeded();
 
-        final shouldShowLeftPane =
-            widget.tab.showLeftPane.value || widget.tab.searchText.isNotEmpty;
+        final shouldShowLeftPane = resolveInitialReadingLeftPaneVisibility(
+          explicitOpen: widget.tab.showLeftPane.value,
+          hasSearchText: widget.tab.searchText.isNotEmpty,
+        );
         if (mounted) {
           if (shouldShowLeftPane) {
             _setLeftPaneVisibility(true);

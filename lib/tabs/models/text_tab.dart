@@ -10,6 +10,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/utils/reading_left_pane_policy.dart';
 
 /// Represents a tab that contains a text book.
 ///
@@ -138,11 +139,7 @@ class TextBookTab extends OpenedTab {
   /// The JSON map should have 'initalIndex', 'title', 'commentaries',
   /// and 'type' keys.
   factory TextBookTab.fromJson(Map<String, dynamic> json) {
-    // במצב side-by-side, חלונית הצד תמיד סגורה
-    // אחרת, לפי ההגדרות
-    final bool shouldOpenLeftPane =
-        (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-            (Settings.getValue<bool>('key-default-sidebar-open') ?? false);
+    final bool shouldOpenLeftPane = resolveRestoredReadingLeftPaneState(json);
 
     // שחזור מצב התצוגה המפוצלת מה-JSON
     final bool splitedView = json['splitedView'] ??
@@ -195,6 +192,9 @@ class TextBookTab extends OpenedTab {
       'commentators': commentators,
       'splitedView': splitedView,
       'showPageShapeView': showPageShapeView,
+      'showLeftPane': bloc.state is TextBookLoaded
+          ? (bloc.state as TextBookLoaded).showLeftPane
+          : false,
       'isPinned': isPinned,
       'type': 'TextBookTab'
     };
