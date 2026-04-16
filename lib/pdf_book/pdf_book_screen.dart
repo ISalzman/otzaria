@@ -2097,6 +2097,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   outline: outline,
                   controller: widget.tab.pdfViewerController,
                   focusNode: _navigationFieldFocusNode,
+                  onNavigateToPage: _goToPageWithSpreadLock,
                 ),
               ),
               ValueListenableBuilder(
