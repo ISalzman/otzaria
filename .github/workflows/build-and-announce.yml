@@ -94,10 +94,16 @@ jobs:
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "ISCC resolved to: $iscc"
 
+      - name: Prepare Flutter dependencies for Windows release
+        shell: pwsh
+        run: |
+          flutter pub get
+          # Prevent bundling the PDFium WASM assets into non-Web release builds.
+          dart run pdfrx:remove_wasm_modules
+
       - name: Build Flutter Windows app
         shell: pwsh
         run: |
-          # flutter pub get
           flutter build windows --release
 
       - name: Zip Windows build
@@ -417,6 +423,14 @@ jobs:
       
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
+
+      - name: Prepare Flutter dependencies for Linux release
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          # Prevent bundling the PDFium WASM assets into non-Web release builds.
+          dart run pdfrx:remove_wasm_modules
       
       - name: Build Flutter Linux app (with retry)
         run: |
@@ -796,6 +810,8 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           flutter pub get
+          # Prevent bundling the PDFium WASM assets into non-Web release builds.
+          dart run pdfrx:remove_wasm_modules
           flutter build apk
           # ניקוי מיידי של קבצים מיותרים מהבנייה (לא ה-APK הסופי)
           rm -rf build/app/intermediates || true
@@ -918,6 +934,12 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+
+      - name: Prepare Flutter dependencies for macOS release
+        run: |
+          flutter pub get
+          # Prevent bundling the PDFium WASM assets into non-Web release builds.
+          dart run pdfrx:remove_wasm_modules
 
       - name: Build Flutter macOS app (Universal Binary)
         run: |
