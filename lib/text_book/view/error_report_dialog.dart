@@ -67,6 +67,8 @@ class SelectionContextResolution {
 /// Helper class for managing error report dialogs and actions
 class ErrorReportHelper {
   static const String _fallbackMail = 'otzaria.200@gmail.com';
+  static const String _otzariaDirectReportTarget = 'אוצריא';
+  static const String _sefariaDirectReportTarget = 'ספריא';
 
   static List<String> resolveReportContent({
     required TextBookLoaded state,
@@ -99,6 +101,18 @@ class ErrorReportHelper {
     }
 
     return sanitizeReportText(content[preferredLineNumber]);
+  }
+
+  static bool isSefariaSourceFolder(String? sourceFolder) {
+    final normalizedSource = sourceFolder?.trim().toLowerCase() ?? '';
+    return normalizedSource.contains('sefariatootzaria') ||
+        normalizedSource.contains('sefaria');
+  }
+
+  static String resolveDirectReportTargetLabel(String? sourceFolder) {
+    return isSefariaSourceFolder(sourceFolder)
+        ? _sefariaDirectReportTarget
+        : _otzariaDirectReportTarget;
   }
 
   /// מנקה טקסט לדיווח: מסיר תגיות HTML ומפענח ישויות HTML נפוצות.
@@ -704,6 +718,13 @@ $detailsSection
       selectedText: selectedText,
       preferredLineNumber: currentLineNumber,
     );
+    final bookDetails =
+        await BookDetailsService().getBookDetails(effectiveBook);
+    final directReportTargetLabel = resolveDirectReportTargetLabel(
+      bookDetails['תיקיית המקור'],
+    );
+
+    if (!context.mounted) return;
 
     // פתיחת הדיאלוג
     final ReportDialogResult? result = await showDialog<ReportDialogResult>(
@@ -715,6 +736,7 @@ $detailsSection
           bookTitle: bookTitle,
           currentLineNumber: currentLineNumber! + 1, // +1 כי השורות מתחילות מ-1
           state: state,
+          directReportTargetLabel: directReportTargetLabel,
         );
       },
     );
@@ -748,9 +770,6 @@ $detailsSection
           currentLineNumber,
           effectiveBook.tableOfContents,
         );
-        final bookDetails =
-            await BookDetailsService().getBookDetails(effectiveBook);
-
         // ביצוע הפעולה שנבחרה
         if (result.action == ErrorReportAction.sendEmail ||
             result.action == ErrorReportAction.saveForLater) {
@@ -813,6 +832,7 @@ class TabbedReportDialog extends StatefulWidget {
   final String bookTitle;
   final int currentLineNumber;
   final TextBookLoaded state;
+  final String directReportTargetLabel;
 
   const TabbedReportDialog({
     super.key,
@@ -821,6 +841,7 @@ class TabbedReportDialog extends StatefulWidget {
     required this.bookTitle,
     required this.currentLineNumber,
     required this.state,
+    required this.directReportTargetLabel,
   });
 
   @override
@@ -941,6 +962,7 @@ class _TabbedReportDialogState extends State<TabbedReportDialog>
       selectedText: widget.selectedText,
       fontSize: widget.fontSize,
       state: widget.state,
+      directReportTargetLabel: widget.directReportTargetLabel,
       onActionSelected: (action, reportData) {
         Navigator.of(context).pop(ReportDialogResult(action, reportData));
       },
@@ -1024,6 +1046,7 @@ class RegularReportTab extends StatefulWidget {
   final String selectedText;
   final double fontSize;
   final TextBookLoaded state;
+  final String directReportTargetLabel;
   final void Function(ErrorReportAction, ReportedErrorData) onActionSelected;
   final VoidCallback onCancel;
 
@@ -1032,6 +1055,7 @@ class RegularReportTab extends StatefulWidget {
     required this.selectedText,
     required this.fontSize,
     required this.state,
+    required this.directReportTargetLabel,
     required this.onActionSelected,
     required this.onCancel,
   });
@@ -1193,15 +1217,18 @@ class _RegularReportTabState extends State<RegularReportTab> {
             ),
           if (_canSubmit)
             RecommendedActionButton(
-              text: isOfflineMode ? 'שמור בתור לאוצריא' : 'שלח ישירות לאוצריא',
+              text: isOfflineMode
+                  ? 'שמור בתור ל${widget.directReportTargetLabel}'
+                  : 'שלח ישירות ל${widget.directReportTargetLabel}',
               icon: FluentIcons.arrow_upload_24_regular,
               onPressed: () async {
                 // דיאלוג אישור לפני שליחה ישירה
                 final shouldSend = await showTwoActionsDialog(
                   context: context,
                   title: 'אישור שליחת דיווח',
-                  content:
-                      'לחיצה על שלח דיווח תשלח את השגיאה ישירות לאוצריא, יש לשים לב לתקינות הדיווח לפני השליחה',
+                  content: 'לחיצה על שלח דיווח תשלח את השגיאה ישירות '
+                      'ל${widget.directReportTargetLabel}, יש לשים לב '
+                      'לתקינות הדיווח לפני השליחה',
                   cancelText: 'ביטול',
                   confirmText: 'שלח דיווח',
                 );
