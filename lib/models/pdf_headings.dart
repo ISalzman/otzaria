@@ -20,6 +20,7 @@ class PdfHeadings {
   static Future<PdfHeadings?> loadFromDatabase(
     String bookTitle, {
     int? categoryId,
+    String? filePath,
   }) async {
     try {
       final provider = SqliteDataProvider.instance;
@@ -33,9 +34,20 @@ class PdfHeadings {
         return null;
       }
 
-      final book = categoryId != null
-          ? await repository.getBookByTitleAndCategory(bookTitle, categoryId)
-          : await repository.getBookByTitle(bookTitle);
+      // חיפוש לפי filePath תחילה - מזהה מדויק שמונע החזרת ספר שגוי
+      // כשכמה ספרים חולקים אותה כותרת
+      var book = filePath != null
+          ? await repository.getExternalBookByFilePath(filePath)
+          : null;
+
+      // fallback לפי כותרת כאשר אין filePath או לא נמצא
+      if (book == null) {
+        book = categoryId != null
+            ? await repository.getBookByTitleAndCategory(bookTitle, categoryId)
+            : null;
+        book ??= await repository.getBookByTitle(bookTitle);
+      }
+
       if (book == null) {
         debugPrint('Book not found in DB for headings: $bookTitle');
         return null;
