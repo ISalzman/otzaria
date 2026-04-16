@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/error_log_file.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:path/path.dart' as p;
@@ -142,16 +144,27 @@ class IndexingDocumentBuilder {
 }
 
 class IndexingIsolateService {
-  IndexingIsolateService._(this._receivePort, this._workerToken) {
+  IndexingIsolateService._(
+    this._receivePort,
+    this._errorPort,
+    this._exitPort,
+    this._workerToken,
+  ) {
     _messagesSubscription = _receivePort.listen(_handleMessage);
+    _errorSubscription = _errorPort.listen(_handleUnhandledWorkerError);
+    _exitSubscription = _exitPort.listen(_handleWorkerExit);
   }
 
   static const int _batchSize = 200;
 
   final ReceivePort _receivePort;
+  final ReceivePort _errorPort;
+  final ReceivePort _exitPort;
   final RootIsolateToken? _workerToken;
 
   late final StreamSubscription<dynamic> _messagesSubscription;
+  late final StreamSubscription<dynamic> _errorSubscription;
+  late final StreamSubscription<dynamic> _exitSubscription;
   final Completer<void> _readyCompleter = Completer<void>();
   final Completer<void> _shutdownCompleter = Completer<void>();
 
@@ -159,11 +172,16 @@ class IndexingIsolateService {
   SendPort? _commandPort;
   Isolate? _isolate;
   bool _disposed = false;
+  bool _workerFailureReported = false;
 
   static Future<IndexingIsolateService> create() async {
     final receivePort = ReceivePort();
+    final errorPort = ReceivePort();
+    final exitPort = ReceivePort();
     final service = IndexingIsolateService._(
       receivePort,
+      errorPort,
+      exitPort,
       RootIsolateToken.instance,
     );
 
@@ -179,6 +197,8 @@ class IndexingIsolateService {
         rootToken: _workerToken,
       ),
       debugName: 'indexing_worker',
+      onError: _errorPort.sendPort,
+      onExit: _exitPort.sendPort,
     );
     await _readyCompleter.future;
   }
@@ -234,7 +254,11 @@ class IndexingIsolateService {
     );
 
     await _messagesSubscription.cancel();
+    await _errorSubscription.cancel();
+    await _exitSubscription.cancel();
     _receivePort.close();
+    _errorPort.close();
+    _exitPort.close();
     _isolate?.kill(priority: Isolate.immediate);
   }
 
@@ -305,6 +329,96 @@ class IndexingIsolateService {
     final controller = _activeController;
     _activeController = null;
     controller?.close();
+  }
+
+  void _handleUnhandledWorkerError(dynamic message) {
+    if (_workerFailureReported) {
+      return;
+    }
+    _workerFailureReported = true;
+
+    final parsed = _parseUnhandledIsolateError(message);
+    final error = parsed.$1;
+    final stackTrace = parsed.$2;
+
+    if (kDebugMode) {
+      debugPrint('Unhandled indexing isolate error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    } else {
+      ErrorLogFile.append(
+        title: 'Unhandled Isolate Error',
+        error: error,
+        stackTrace: stackTrace,
+        details: const {
+          'Service': 'IndexingIsolateService',
+        },
+      );
+    }
+
+    if (!_readyCompleter.isCompleted) {
+      _readyCompleter.completeError(error, stackTrace);
+    }
+
+    _activeController?.addError(error, stackTrace);
+    _closeActiveController();
+  }
+
+  void _handleWorkerExit(dynamic _) {
+    if (_disposed) {
+      if (!_shutdownCompleter.isCompleted) {
+        _shutdownCompleter.complete();
+      }
+      return;
+    }
+
+    if (_workerFailureReported) {
+      if (!_shutdownCompleter.isCompleted) {
+        _shutdownCompleter.complete();
+      }
+      return;
+    }
+    _workerFailureReported = true;
+
+    final error = StateError('Indexing isolate exited unexpectedly');
+    final stackTrace = StackTrace.current;
+
+    if (!_readyCompleter.isCompleted) {
+      _readyCompleter.completeError(error, stackTrace);
+    }
+
+    if (kDebugMode) {
+      debugPrint('$error');
+      debugPrintStack(stackTrace: stackTrace);
+    } else {
+      ErrorLogFile.append(
+        title: 'Unhandled Isolate Error',
+        error: error,
+        stackTrace: stackTrace,
+        details: const {
+          'Service': 'IndexingIsolateService',
+        },
+      );
+    }
+
+    _activeController?.addError(error, stackTrace);
+    _closeActiveController();
+
+    if (!_shutdownCompleter.isCompleted) {
+      _shutdownCompleter.complete();
+    }
+  }
+
+  (Object, StackTrace) _parseUnhandledIsolateError(dynamic message) {
+    if (message is List && message.length >= 2) {
+      final error = message[0] ?? 'Unknown isolate error';
+      final rawStackTrace = message[1];
+      final stackTrace = rawStackTrace is StackTrace
+          ? rawStackTrace
+          : StackTrace.fromString(rawStackTrace?.toString() ?? '');
+      return (error, stackTrace);
+    }
+
+    return (message ?? 'Unknown isolate error', StackTrace.current);
   }
 }
 

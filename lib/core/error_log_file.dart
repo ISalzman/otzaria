@@ -13,6 +13,27 @@ enum ErrorLogPlatform {
 
 class ErrorLogFile {
   static const String fileName = 'errors.txt';
+  static String _appVersion = 'unknown';
+
+  static String get appVersion => _appVersion;
+
+  static void setAppVersion(String version) {
+    final normalized = version.trim();
+    _appVersion = normalized.isEmpty ? 'unknown' : normalized;
+  }
+
+  /// מחזירה מופע קובץ עבור לוג השגיאות המקומי.
+  static File resolveFile({
+    Map<String, String>? environment,
+    ErrorLogPlatform? platform,
+    String? tempPath,
+  }) {
+    return File(resolvePath(
+      environment: environment,
+      platform: platform,
+      tempPath: tempPath,
+    ));
+  }
 
   /// מחזירה את הנתיב המלא לקובץ השגיאות של האפליקציה.
   ///
@@ -35,55 +56,133 @@ class ErrorLogFile {
     return p.join(baseDir, 'otzaria', 'logs', fileName);
   }
 
-  /// מוסיפה רשומת שגיאה לקובץ הלוג המקומי.
-  static void append(
-    Object error, {
-    StackTrace? stackTrace,
-    DateTime? timestamp,
+  /// מבטיחה שתיקיית הלוג והקובץ עצמו קיימים.
+  static void ensureExists({
     Map<String, String>? environment,
     ErrorLogPlatform? platform,
     String? tempPath,
   }) {
-    final file = File(resolvePath(
+    final file = resolveFile(
       environment: environment,
       platform: platform,
       tempPath: tempPath,
-    ));
+    );
 
     if (!file.parent.existsSync()) {
       file.parent.createSync(recursive: true);
     }
 
+    if (!file.existsSync()) {
+      file.createSync(recursive: true);
+    }
+  }
+
+  /// מוסיפה טקסט שכבר פורמט ללוג המקומי.
+  static void appendText(
+    String formattedMessage, {
+    Map<String, String>? environment,
+    ErrorLogPlatform? platform,
+    String? tempPath,
+  }) {
+    final file = resolveFile(
+      environment: environment,
+      platform: platform,
+      tempPath: tempPath,
+    );
+
+    ensureExists(
+      environment: environment,
+      platform: platform,
+      tempPath: tempPath,
+    );
+
     file.writeAsStringSync(
-      formatEntry(
-        error,
-        stackTrace: stackTrace,
-        timestamp: timestamp,
-      ),
+      formattedMessage,
       mode: FileMode.append,
       flush: true,
     );
   }
 
-  /// בונה את תוכן הרשומה שתישמר בקובץ הלוג.
-  static String formatEntry(
-    Object error, {
+  /// מוסיפה רשומת שגיאה לקובץ הלוג המקומי.
+  static void append({
+    required String title,
+    required Object error,
     StackTrace? stackTrace,
     DateTime? timestamp,
+    Map<String, String?> details = const {},
+    String? version,
+    Map<String, String>? environment,
+    ErrorLogPlatform? platform,
+    String? tempPath,
+  }) {
+    appendText(
+      formatEntry(
+        title: title,
+        error: error,
+        stackTrace: stackTrace,
+        timestamp: timestamp,
+        details: details,
+        version: version,
+      ),
+      environment: environment,
+      platform: platform,
+      tempPath: tempPath,
+    );
+  }
+
+  /// בונה את תוכן הרשומה שתישמר בקובץ הלוג.
+  static String formatEntry({
+    required String title,
+    required Object error,
+    StackTrace? stackTrace,
+    DateTime? timestamp,
+    Map<String, String?> details = const {},
+    String? version,
   }) {
     final logBuffer = StringBuffer()
       ..writeln(
-          '=== ${timestamp?.toIso8601String() ?? DateTime.now().toIso8601String()} ===')
-      ..writeln(error);
+        '=== $title ${timestamp?.toIso8601String() ?? DateTime.now().toIso8601String()} ===',
+      )
+      ..writeln('Version: ${_resolveVersion(version)}')
+      ..writeln('Exception: $error');
+
+    for (final entry in details.entries) {
+      final value = entry.value?.trim();
+      if (value == null || value.isEmpty) {
+        continue;
+      }
+
+      _writeDetail(logBuffer, entry.key, value);
+    }
 
     if (stackTrace != null) {
       logBuffer
         ..writeln()
+        ..writeln('Stack:')
         ..writeln(stackTrace);
     }
 
     logBuffer.writeln();
     return logBuffer.toString();
+  }
+
+  static String _resolveVersion(String? version) {
+    final normalized = version?.trim();
+    if (normalized != null && normalized.isNotEmpty) {
+      return normalized;
+    }
+    return _appVersion;
+  }
+
+  static void _writeDetail(StringBuffer buffer, String key, String value) {
+    if (value.contains('\n')) {
+      buffer
+        ..writeln('$key:')
+        ..writeln(value);
+      return;
+    }
+
+    buffer.writeln('$key: $value');
   }
 
   static String? _resolveBaseDirectory({
