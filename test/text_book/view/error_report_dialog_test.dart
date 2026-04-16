@@ -87,6 +87,20 @@ void main() {
 
       expect(result, equals("שלום 'עולם' & בדיקה"));
     });
+
+    test('resolves direct report target as sefaria for sefaria source', () {
+      final result = ErrorReportHelper.resolveDirectReportTargetLabel(
+        'sefariaToOtzaria',
+      );
+
+      expect(result, equals('ספריא'));
+    });
+
+    test('resolves direct report target as otzaria for non-sefaria source', () {
+      final result = ErrorReportHelper.resolveDirectReportTargetLabel('local');
+
+      expect(result, equals('אוצריא'));
+    });
   });
 
   group('ErrorReportHelper.buildContextAroundSelection', () {
@@ -545,6 +559,7 @@ void main() {
               selectedText: '',
               fontSize: 18,
               state: _loadedState(),
+              directReportTargetLabel: 'אוצריא',
               onActionSelected: (action, data) {
                 submittedAction = action;
                 submittedData = data;
@@ -565,10 +580,46 @@ void main() {
       await tester.tap(find.text('שלח ישירות לאוצריא'));
       await tester.pumpAndSettle();
 
+      await tester.tap(find.text('שלח דיווח'));
+      await tester.pumpAndSettle();
+
       expect(submittedAction, equals(ErrorReportAction.sendDirect));
       expect(submittedData, isNotNull);
       expect(submittedData!.selectedText, isEmpty);
       expect(submittedData!.errorDetails, equals('זו טעות בפסקה הנוכחית'));
+    });
+
+    testWidgets('shows sefaria label for sefaria sourced books',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RegularReportTab(
+              selectedText: '',
+              fontSize: 18,
+              state: _loadedState(),
+              directReportTargetLabel: 'ספריא',
+              onActionSelected: (_, __) {},
+              onCancel: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(find.byType(TextField), 'זו טעות שמקורה בספריא');
+      await tester.pumpAndSettle();
+
+      expect(find.text('שלח ישירות לספריא'), findsOneWidget);
+
+      await tester.tap(find.text('שלח ישירות לספריא'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'לחיצה על שלח דיווח תשלח את השגיאה ישירות לספריא, יש לשים לב לתקינות הדיווח לפני השליחה',
+        ),
+        findsOneWidget,
+      );
     });
   });
 }
