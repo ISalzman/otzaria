@@ -45,12 +45,8 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<DevelopmentPluginManifestChanged>(_onDevelopmentPluginManifestChanged);
 
     _devWatchSub = this.devWatchService.events.listen((change) {
-      if (isClosed) {
-        return;
-      }
-
       if (change.manifestChanged) {
-        _safeAdd(DevelopmentPluginManifestChanged(change.pluginId));
+        add(DevelopmentPluginManifestChanged(change.pluginId));
       } else {
         PluginRuntimeDispatcher.instance
             .reloadPlugin(change.pluginId)
@@ -62,16 +58,10 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   }
 
   @override
-  Future<void> close() async {
-    await _devWatchSub?.cancel();
+  Future<void> close() {
+    _devWatchSub?.cancel();
     devWatchService.dispose();
-    await super.close();
-  }
-
-  void _safeAdd(PluginSystemEvent event) {
-    if (!isClosed) {
-      add(event);
-    }
+    return super.close();
   }
 
   Future<void> _onLoadPlugins(
@@ -91,7 +81,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       PinPluginRequested event, Emitter<PluginSystemState> emit) async {
     try {
       await repository.updatePinState(event.pluginId, true);
-      _safeAdd(LoadPlugins());
+      add(LoadPlugins());
     } catch (e) {
       UiSnack.showError('שגיאה בהצמדת התוסף: ${e.toString()}');
     }
@@ -101,7 +91,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       UnpinPluginRequested event, Emitter<PluginSystemState> emit) async {
     try {
       await repository.updatePinState(event.pluginId, false);
-      _safeAdd(LoadPlugins());
+      add(LoadPlugins());
     } catch (e) {
       UiSnack.showError('שגיאה בהסרת הצמדת התוסף: ${e.toString()}');
     }
@@ -126,7 +116,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       ));
     } catch (e) {
       UiSnack.showError('שגיאה בהתקנת התוסף: ${e.toString()}');
-      _safeAdd(LoadPlugins()); // Reset state
+      add(LoadPlugins()); // Reset state
     }
   }
 
@@ -145,18 +135,18 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       }
 
       UiSnack.showSuccess('התוסף הותקן בהצלחה');
-      _safeAdd(LoadPlugins());
+      add(LoadPlugins());
     } catch (e) {
       await _installerService.cancelInstall(event.tempDirPath);
       UiSnack.showError('שגיאה באישור התקנה: ${e.toString()}');
-      _safeAdd(LoadPlugins());
+      add(LoadPlugins());
     }
   }
 
   Future<void> _onCancelPluginInstall(
       CancelPluginInstall event, Emitter<PluginSystemState> emit) async {
     await _installerService.cancelInstall(event.tempDirPath);
-    _safeAdd(LoadPlugins());
+    add(LoadPlugins());
   }
 
   Future<void> _onUninstallPluginRequested(
@@ -164,7 +154,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     try {
       ContextMenuRegistry.instance.removeAll(event.pluginId);
       await _installerService.uninstallPlugin(event.pluginId);
-      _safeAdd(LoadPlugins());
+      add(LoadPlugins());
     } catch (e) {
       UiSnack.showError('שגיאה בהסרת התוסף: ${e.toString()}');
     }
@@ -177,7 +167,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       if (plugin != null) {
         await repository.savePlugin(plugin.copyWith(enabled: true));
         PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);
-        _safeAdd(LoadPlugins());
+        add(LoadPlugins());
       }
     } catch (e) {
       UiSnack.showError('שגיאה בהפעלת התוסף: ${e.toString()}');
@@ -192,7 +182,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       if (plugin != null) {
         await repository.savePlugin(plugin.copyWith(enabled: false));
         PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);
-        _safeAdd(LoadPlugins());
+        add(LoadPlugins());
       }
     } catch (e) {
       UiSnack.showError('שגיאה בהשבתת התוסף: ${e.toString()}');
@@ -215,56 +205,49 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         'plugin.permissions_changed',
         {'permissions': grantedPermissions},
       );
-      _safeAdd(LoadPlugins());
+      add(LoadPlugins());
     } catch (e) {
       UiSnack.showError('שגיאה בעדכון הרשאה: ${e.toString()}');
     }
   }
 
   Future<void> _onLoadDevelopmentPluginRequested(
-      LoadDevelopmentPluginRequested event,
-      Emitter<PluginSystemState> emit) async {
+      LoadDevelopmentPluginRequested event, Emitter<PluginSystemState> emit) async {
     try {
       await devLoader.loadDevelopmentPlugin(event.directoryPath);
-      _safeAdd(LoadPlugins());
+      add(LoadPlugins());
       UiSnack.showSuccess('תוסף פיתוח נטען בהצלחה');
     } catch (e, stackTrace) {
-      debugPrint(
-          '[PluginDevLoader] Failed to load plugin from "${event.directoryPath}": $e');
+      debugPrint('[PluginDevLoader] Failed to load plugin from "${event.directoryPath}": $e');
       debugPrint('$stackTrace');
       UiSnack.showError('שגיאה בטעינת תוסף פתוח: ${e.toString()}');
     }
   }
 
   Future<void> _onDetachDevelopmentPluginRequested(
-      DetachDevelopmentPluginRequested event,
-      Emitter<PluginSystemState> emit) async {
+      DetachDevelopmentPluginRequested event, Emitter<PluginSystemState> emit) async {
     try {
       ContextMenuRegistry.instance.removeAll(event.pluginId);
       await repository.detachDevelopmentPlugin(event.pluginId);
       devWatchService.stopWatcher(event.pluginId);
-      _safeAdd(LoadPlugins());
+      add(LoadPlugins());
     } catch (e) {
       UiSnack.showError('שגיאה בניתוק התוסף: ${e.toString()}');
     }
   }
 
   Future<void> _onReloadDevelopmentPluginRequested(
-      ReloadDevelopmentPluginRequested event,
-      Emitter<PluginSystemState> emit) async {
+      ReloadDevelopmentPluginRequested event, Emitter<PluginSystemState> emit) async {
     PluginRuntimeDispatcher.instance.reloadPlugin(event.pluginId);
   }
 
   Future<void> _onDevelopmentPluginManifestChanged(
-      DevelopmentPluginManifestChanged event,
-      Emitter<PluginSystemState> emit) async {
+      DevelopmentPluginManifestChanged event, Emitter<PluginSystemState> emit) async {
     try {
       final plugin = await repository.getPlugin(event.pluginId);
-      if (plugin != null &&
-          plugin.isDevelopment &&
-          plugin.devRootPath != null) {
+      if (plugin != null && plugin.isDevelopment && plugin.devRootPath != null) {
         await devLoader.loadDevelopmentPlugin(plugin.devRootPath!);
-        _safeAdd(LoadPlugins());
+        add(LoadPlugins());
         PluginRuntimeDispatcher.instance.reloadPlugin(event.pluginId);
       }
     } catch (e) {
