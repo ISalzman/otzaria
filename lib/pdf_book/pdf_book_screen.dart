@@ -624,12 +624,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             }
           : null,
       normalizeMatrix: layoutMode == PdfLayoutMode.bookView
-          ? (matrix, viewSize, layout, controller) => _normalizeBookViewMatrix(
+          ? (matrix, viewSize, layout, controller) {
+              if (_isPageTurnInProgress) {
+                // Bypass normalization so goToPage can reach its target.
+                // Log only occasionally to avoid flooding the console.
+                return matrix;
+              }
+              return _normalizeBookViewMatrix(
                 matrix: matrix,
                 viewSize: viewSize,
                 layout: layout,
                 controller: controller,
-              )
+              );
+            }
           : null,
       enableKeyboardNavigation: false,
       scrollByArrowKey: 25.0,
@@ -723,6 +730,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       },
       onViewerReady: (document, controller) async {
         if (!mounted) return;
+        // Only grab focus if neither of the pane text-fields is focused.
+        // Unconditional requestFocus() here stole focus from open search/nav fields.
+        if (!_searchFieldFocusNode.hasFocus &&
+            !_navigationFieldFocusNode.hasFocus) {
+          _pdfViewFocusNode.requestFocus();
+        }
         textSearcher = PdfTextSearcher(pdfController)
           ..addListener(_onTextSearcherUpdated);
         widget.tab.documentRef.value = controller.documentRef;
@@ -886,7 +899,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 return KeyEventResult.handled;
               }
             } else if (event is KeyRepeatEvent) {
-              if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+              if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                _goNextPage();
+                return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                _goPreviousPage();
+                return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
                 _startContinuousScroll(LogicalKeyboardKey.arrowUp);
                 return KeyEventResult.handled;
               } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
@@ -931,8 +950,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return pageNumber.isEven ? pageNumber : pageNumber - 1;
   }
 
-  Rect _spreadRectForPageLayout(PdfPageLayout layout, int spreadStartPage) {
+  Rect? _spreadRectForPageLayout(PdfPageLayout layout, int spreadStartPage) {
     final pageLayouts = layout.pageLayouts;
+    if (pageLayouts.isEmpty || spreadStartPage - 1 >= pageLayouts.length) {
+      return null;
+    }
     final rightPageRect = pageLayouts[spreadStartPage - 1];
 
     if (spreadStartPage == 1) {
@@ -1131,33 +1153,61 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Positioned.fromRect(
-      rect: transition.viewportRect,
-      child: IgnorePointer(
-        child: AnimatedBuilder(
-          animation: _pageTurnController,
-          builder: (context, child) {
-            final progress = Curves.easeInOutCubic.transform(
-              _pageTurnController.value,
-            );
-
-            return CustomPaint(
-              size: transition.viewportRect.size,
-              painter: _BookPageTurnPainter(
-                snapshot: snapshot,
-                snapshotViewportRect: transition.viewportRect,
-                progress: progress,
-                direction: transition.direction,
-                pageBackColor: colorScheme.surface,
-                pageHighlightColor:
-                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.94),
-                shadowColor: colorScheme.shadow,
-                edgeColor: colorScheme.outlineVariant,
-              ),
-            );
-          },
+    // Two-layer overlay:
+    // 1. Full-viewport background: draws the snapshot everywhere EXCEPT the
+    //    already-revealed portion of the spread (so new pages show through there).
+    // 2. Spread-rect animation overlay: draws the curl + unrevealed snapshot.
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _pageTurnController,
+              builder: (context, child) {
+                final progress = Curves.easeInOutCubic.transform(
+                  _pageTurnController.value,
+                );
+                return CustomPaint(
+                  painter: _BookPageTurnBackgroundPainter(
+                    snapshot: snapshot,
+                    spreadRect: transition.viewportRect,
+                    progress: progress,
+                    direction: transition.direction,
+                  ),
+                );
+              },
+            ),
+          ),
         ),
-      ),
+        Positioned.fromRect(
+          rect: transition.viewportRect,
+          child: IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _pageTurnController,
+              builder: (context, child) {
+                final progress = Curves.easeInOutCubic.transform(
+                  _pageTurnController.value,
+                );
+
+                return CustomPaint(
+                  size: transition.viewportRect.size,
+                  painter: _BookPageTurnPainter(
+                    snapshot: snapshot,
+                    snapshotViewportRect: transition.viewportRect,
+                    progress: progress,
+                    direction: transition.direction,
+                    pageBackColor: colorScheme.surface,
+                    pageHighlightColor: colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.94),
+                    shadowColor: colorScheme.shadow,
+                    edgeColor: colorScheme.outlineVariant,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1205,6 +1255,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         _lockedSpreadStartPage ?? _spreadStartPageFor(currentPage);
     var spreadRect = _spreadRectForPageLayout(layout, spreadStartPage);
 
+    // layout עדיין לא כולל את הדפים הנדרשים (טעינה פרוגרסיבית) — לא נחסום
+    if (spreadRect == null) return matrix;
+
     if (!candidateVisibleRect.overlaps(spreadRect)) {
       final targetPage = _dominantPageForRect(
         candidateVisibleRect,
@@ -1213,6 +1266,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       );
       spreadStartPage = _spreadStartPageFor(targetPage);
       spreadRect = _spreadRectForPageLayout(layout, spreadStartPage);
+      if (spreadRect == null) return matrix;
     }
 
     _lockedSpreadStartPage = spreadStartPage;
@@ -1235,6 +1289,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }) {
     final candidateVisibleRect = matrix.calcVisibleRect(viewSize);
     final spreadRect = _spreadRectForPageLayout(layout, spreadStartPage);
+
+    // layout עדיין לא כולל את הדפים הנדרשים (טעינה פרוגרסיבית) — לא נחסום
+    if (spreadRect == null) return matrix;
 
     final newZoom = matrix.zoom;
     final halfWidth = viewSize.width / 2 / newZoom;
@@ -1285,7 +1342,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       _lockedSpreadStartPage = _spreadStartPageFor(safePage);
     }
 
-    await widget.tab.pdfViewerController.goToPage(pageNumber: safePage);
+    // During progressive PDF loading, pdfrx's goToPage waits for the view to
+    // stop moving. New tiles arriving cause layout shifts, so the view never
+    // fully settles and the Future hangs indefinitely. The timeout lets us
+    // proceed anyway — the view is close enough to the target page.
+    await widget.tab.pdfViewerController
+        .goToPage(pageNumber: safePage)
+        .timeout(const Duration(seconds: 3), onTimeout: () {});
 
     if (!_pdfViewFocusNode.hasFocus) {
       _pdfViewFocusNode.requestFocus();
@@ -1301,6 +1364,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final renderObject = boundaryContext.findRenderObject();
     if (renderObject is! RenderRepaintBoundary || renderObject.size.isEmpty) {
       return null;
+    }
+
+    // המתן לסיום הציור של הפריים הנוכחי לפני לכידה
+    if (renderObject.debugNeedsPaint) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return null;
+      if (renderObject.debugNeedsPaint) return null;
     }
 
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
@@ -1382,74 +1452,66 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       return;
     }
 
-    final currentSpreadViewportRect = _currentSpreadViewportRect(
-      widget.tab.pdfViewerController,
-      widget.tab.pdfViewerController.viewSize,
-    );
-
-    if (currentSpreadViewportRect == null) {
-      await _goToPageWithSpreadLock(targetPage);
-      return;
-    }
-
+    // Set the flag BEFORE any goToPage call so that the normalizeMatrix
+    // callback is disabled for the entire duration. Without this, when
+    // currentSpreadViewportRect is null (layout not ready during progressive
+    // loading), goToPage hangs because normalization keeps fighting it.
     _isPageTurnInProgress = true;
 
-    final snapshot = await _capturePdfViewportSnapshot();
-
-    if (!mounted || snapshot == null) {
-      snapshot?.dispose();
-      _isPageTurnInProgress = false;
-      await _goToPageWithSpreadLock(targetPage);
-      await _processPendingPageTurnIfNeeded();
-      return;
-    }
-
-    if (_hasNewerPendingPageTurn(
-        targetPage: targetPage, direction: direction)) {
-      snapshot.dispose();
-      _isPageTurnInProgress = false;
-      await _processPendingPageTurnIfNeeded();
-      return;
-    }
-
-    setState(() {
-      _disposePageTurnSnapshot();
-      _pageTurnSnapshot = snapshot;
-      _pageTurnTransition = _BookPageTurnTransition(
-        direction: direction,
-        viewportRect: currentSpreadViewportRect,
-      );
-    });
-
-    if (_hasNewerPendingPageTurn(
-        targetPage: targetPage, direction: direction)) {
-      if (mounted) {
-        setState(_clearPageTurnOverlay);
-      } else {
-        _clearPageTurnOverlay();
-      }
-      _isPageTurnInProgress = false;
-      await _processPendingPageTurnIfNeeded();
-      return;
-    }
-
-    await _goToPageWithSpreadLock(targetPage);
-
-    if (!mounted) {
-      _isPageTurnInProgress = false;
-      _clearPageTurnOverlay();
-      return;
-    }
-
-    await Future<void>.delayed(const Duration(milliseconds: 16));
-
-    if (!mounted) {
-      _isPageTurnInProgress = false;
-      _clearPageTurnOverlay();
-      return;
-    }
-
     try {
+      final currentSpreadViewportRect = _currentSpreadViewportRect(
+        widget.tab.pdfViewerController,
+        widget.tab.pdfViewerController.viewSize,
+      );
+
+      if (currentSpreadViewportRect == null) {
+        await _goToPageWithSpreadLock(targetPage);
+        return;
+      }
+
+      final snapshot = await _capturePdfViewportSnapshot();
+
+      if (!mounted || snapshot == null) {
+        snapshot?.dispose();
+        await _goToPageWithSpreadLock(targetPage);
+        return;
+      }
+
+      if (_hasNewerPendingPageTurn(
+          targetPage: targetPage, direction: direction)) {
+        snapshot.dispose();
+        return;
+      }
+
+      _pageTurnController.reset();
+      setState(() {
+        _disposePageTurnSnapshot();
+        _pageTurnSnapshot = snapshot;
+        _pageTurnTransition = _BookPageTurnTransition(
+          direction: direction,
+          viewportRect: currentSpreadViewportRect,
+        );
+      });
+
+      // Wait for the overlay frame to actually paint before jumping to the new
+      // page. Without this, goToPage fires while the snapshot is still scheduled
+      // (not yet on screen) and the new PDF tiles appear underneath a blank overlay.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+
+      if (_hasNewerPendingPageTurn(
+          targetPage: targetPage, direction: direction)) {
+        return;
+      }
+
+      await _goToPageWithSpreadLock(targetPage);
+
+      if (!mounted) return;
+
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+
+      if (!mounted) return;
+
       await _pageTurnController.forward(from: 0);
     } finally {
       _isPageTurnInProgress = false;
@@ -1527,6 +1589,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       final headings = await PdfHeadings.loadFromDatabase(
         widget.tab.book.title,
         categoryId: widget.tab.book.categoryId,
+        filePath: widget.tab.book.filePath,
       );
       if (headings != null) {
         widget.tab.pdfHeadings = headings;
@@ -2034,6 +2097,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   outline: outline,
                   controller: widget.tab.pdfViewerController,
                   focusNode: _navigationFieldFocusNode,
+                  onNavigateToPage: _goToPageWithSpreadLock,
                 ),
               ),
               ValueListenableBuilder(
@@ -3132,6 +3196,92 @@ class _BookSpreadPainter extends CustomPainter {
       oldDelegate.stackColor != stackColor ||
       oldDelegate.stackShadowColor != stackShadowColor ||
       oldDelegate.spineColor != spineColor;
+}
+
+/// Full-viewport background painter for the page-turn animation.
+///
+/// Draws the pre-animation snapshot over the **entire** viewer area, but
+/// punches a transparent hole in the portion of the spread that has already
+/// been revealed by the animation — so the new PDF pages show through there
+/// while the rest of the viewer still shows the old snapshot.
+class _BookPageTurnBackgroundPainter extends CustomPainter {
+  final ui.Image snapshot;
+
+  /// Position of the spread (book pages) inside the full viewer, in logical
+  /// pixels of the viewer's coordinate space.
+  final Rect spreadRect;
+  final double progress;
+  final _BookPageTurnDirection direction;
+
+  const _BookPageTurnBackgroundPainter({
+    required this.snapshot,
+    required this.spreadRect,
+    required this.progress,
+    required this.direction,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final destRect = Offset.zero & size;
+    final sourceRect = Rect.fromLTWH(
+      0,
+      0,
+      snapshot.width.toDouble(),
+      snapshot.height.toDouble(),
+    );
+
+    final revealedRect = _computeRevealedRect();
+
+    if (revealedRect == null) {
+      // Nothing revealed yet — draw full snapshot without clipping.
+      canvas.drawImageRect(snapshot, sourceRect, destRect, Paint());
+      return;
+    }
+
+    // Draw snapshot everywhere EXCEPT the revealed portion of the spread.
+    // Using an even-odd path (outer rect + hole rect) as a clip means the
+    // inner (hole) region is not drawn into — the new PDF shows through there.
+    canvas.save();
+    final clipPath = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(destRect)
+      ..addRect(revealedRect);
+    canvas.clipPath(clipPath);
+    canvas.drawImageRect(snapshot, sourceRect, destRect, Paint());
+    canvas.restore();
+  }
+
+  /// Returns the portion of the spread rect that the animation has already
+  /// swept past (where the new page should be visible).
+  Rect? _computeRevealedRect() {
+    final revealW = spreadRect.width * progress;
+    if (revealW <= 0) return null;
+
+    if (direction == _BookPageTurnDirection.next) {
+      // Curl sweeps left → right; left side is revealed first.
+      return Rect.fromLTWH(
+        spreadRect.left,
+        spreadRect.top,
+        revealW,
+        spreadRect.height,
+      );
+    } else {
+      // Curl sweeps right → left; right side is revealed first.
+      return Rect.fromLTWH(
+        spreadRect.right - revealW,
+        spreadRect.top,
+        revealW,
+        spreadRect.height,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BookPageTurnBackgroundPainter old) =>
+      old.progress != progress ||
+      old.snapshot != snapshot ||
+      old.spreadRect != spreadRect ||
+      old.direction != direction;
 }
 
 class _BookPageTurnPainter extends CustomPainter {
