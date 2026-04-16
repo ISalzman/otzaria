@@ -258,10 +258,30 @@ void main() {
   });
 
   group('DirectErrorReportService.submitReport', () {
+    test('success message uses sefaria label for sefaria sourced books',
+        () async {
+      final repository = InMemoryDirectErrorReportRepository();
+      final service = DirectErrorReportService(
+        client: MockClient((request) async => http.Response('', 200)),
+        queueRepository: repository,
+      );
+
+      final result = await service.submitReport(
+        _buildReport(
+          id: 'sefaria-success-report',
+          sourceFolder: 'sefariaToOtzaria',
+        ),
+      );
+
+      expect(result.status, DirectReportDeliveryStatus.sent);
+      expect(result.message, 'הדיווח נשלח בהצלחה לספריא.');
+    });
+
     test('permanent failure does not queue the current report', () async {
       final repository = InMemoryDirectErrorReportRepository();
       final service = DirectErrorReportService(
-        client: MockClient((request) async => http.Response('bad request', 400)),
+        client:
+            MockClient((request) async => http.Response('bad request', 400)),
         queueRepository: repository,
       );
 
@@ -303,11 +323,33 @@ void main() {
         DirectErrorReportQueueType.automaticRetry,
       );
     });
+
+    test(
+        'transient failure queue message uses sefaria label for sefaria source',
+        () async {
+      final repository = InMemoryDirectErrorReportRepository();
+      final service = DirectErrorReportService(
+        client: MockClient((request) async => http.Response('not found', 404)),
+        queueRepository: repository,
+      );
+
+      final result = await service.submitReport(
+        _buildReport(
+          id: 'sefaria-missing-endpoint-report',
+          sourceFolder: 'sefaria',
+          queueType: DirectErrorReportQueueType.automaticRetry,
+        ),
+      );
+
+      expect(result.status, DirectReportDeliveryStatus.queued);
+      expect(result.message, contains('לספריא'));
+    });
   });
 }
 
 DirectErrorReport _buildReport({
   required String id,
+  String sourceFolder = 'local',
   DirectErrorReportQueueType queueType = DirectErrorReportQueueType.manual,
 }) {
   return DirectErrorReport(
@@ -321,7 +363,7 @@ DirectErrorReport _buildReport({
     errorDetails: 'פרט',
     contextText: 'הקשר',
     filePath: 'C:/books/book.txt',
-    sourceFolder: 'local',
+    sourceFolder: sourceFolder,
     queueType: queueType,
     createdAt: DateTime.parse('2026-03-16T10:15:00Z'),
   );

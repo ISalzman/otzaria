@@ -57,6 +57,8 @@ class DirectErrorReportService {
   static const Duration _timeout = Duration(seconds: 10);
   static const Duration _flushInterval = Duration(minutes: 5);
   static const int _maxQueuedFlushPerRun = 20;
+  static const String _otzariaDirectReportTarget = 'אוצריא';
+  static const String _sefariaDirectReportTarget = 'ספריא';
 
   static Timer? _flushTimer;
   static bool _isFlushing = false;
@@ -162,6 +164,8 @@ exit /b %OTZARIA_EXIT_CODE%
   Future<DirectReportDeliveryResult> submitReport(
     DirectErrorReport report,
   ) async {
+    final directReportTargetLabel = _resolveDirectReportTargetLabel(report);
+
     if (_isOfflineMode) {
       if (!queueWhenOfflineEnabled) {
         return DirectReportDeliveryResult.failed(
@@ -174,15 +178,24 @@ exit /b %OTZARIA_EXIT_CODE%
         queueType: DirectErrorReportQueueType.automaticRetry,
       );
       return DirectReportDeliveryResult.queued(
-        'אין כרגע חיבור. הדיווח נשמר ויישלח אוטומטית כשהתוכנה תחזור להיות מקוונת. ניתן לנהל את הדיווחים השמורים בהגדרות.',
+        'אין כרגע חיבור. הדיווח נשמר ויישלח אוטומטית '
+        'ל$directReportTargetLabel כשהתוכנה תחזור להיות מקוונת. '
+        'ניתן לנהל את הדיווחים השמורים בהגדרות.',
       );
     }
 
     final attemptResult = await _trySend(report);
     if (attemptResult.isSuccess) {
       unawaited(flushPendingReports(onlyAutomaticRetry: true));
+      if (_isSefariaReport(report)) {
+        return DirectReportDeliveryResult.sent(
+          'הדיווח נשלח בהצלחה לספריא.',
+        );
+      }
+
       return DirectReportDeliveryResult.sent(
-          'הדיווח נשלח בהצלחה לצוות אוצריא.');
+        'הדיווח נשלח בהצלחה לצוות אוצריא.',
+      );
     }
 
     if (attemptResult.isPermanentFailure) {
@@ -194,8 +207,22 @@ exit /b %OTZARIA_EXIT_CODE%
       queueType: DirectErrorReportQueueType.automaticRetry,
     );
     return DirectReportDeliveryResult.queued(
-      'השליחה לא הצליחה כרגע. הדיווח נשמר להמשך ויישלח אוטומטית בניסיון הבא. ניתן לנהל את הדיווחים השמורים בהגדרות.',
+      'השליחה לא הצליחה כרגע. הדיווח נשמר להמשך ויישלח אוטומטית '
+      'ל$directReportTargetLabel בניסיון הבא. ניתן לנהל את הדיווחים '
+      'השמורים בהגדרות.',
     );
+  }
+
+  bool _isSefariaReport(DirectErrorReport report) {
+    final normalizedSource = report.sourceFolder.trim().toLowerCase();
+    return normalizedSource.contains('sefariatootzaria') ||
+        normalizedSource.contains('sefaria');
+  }
+
+  String _resolveDirectReportTargetLabel(DirectErrorReport report) {
+    return _isSefariaReport(report)
+        ? _sefariaDirectReportTarget
+        : _otzariaDirectReportTarget;
   }
 
   Future<int> flushPendingReports({
@@ -216,7 +243,8 @@ exit /b %OTZARIA_EXIT_CODE%
           ? pendingReports
               .where(
                 (report) =>
-                    report.queueType == DirectErrorReportQueueType.automaticRetry,
+                    report.queueType ==
+                    DirectErrorReportQueueType.automaticRetry,
               )
               .take(_maxQueuedFlushPerRun)
               .toList()

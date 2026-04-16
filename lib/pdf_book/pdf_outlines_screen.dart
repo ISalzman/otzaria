@@ -10,11 +10,13 @@ class OutlineView extends StatefulWidget {
     required this.outline,
     required this.controller,
     required this.focusNode,
+    this.onNavigateToPage,
   });
 
   final List<PdfOutlineNode>? outline;
   final PdfViewerController controller;
   final FocusNode focusNode;
+  final Future<void> Function(int pageNumber)? onNavigateToPage;
 
   @override
   State<OutlineView> createState() => _OutlineViewState();
@@ -320,15 +322,23 @@ class _OutlineViewState extends State<OutlineView>
   Widget _buildOutlineItem(PdfOutlineNode node,
       {int level = 0, bool isFirstChild = false}) {
     final itemKey = _tocItemKeys.putIfAbsent(node, () => GlobalKey());
-    void navigateToEntry() {
+    Future<void> navigateToEntry() async {
       setState(() {
         _isManuallyScrolling = false;
         _lastScrolledPage = null;
       });
-      if (node.dest != null) {
-        widget.controller.goTo(widget.controller
-            .calcMatrixFitWidthForPage(pageNumber: node.dest?.pageNumber ?? 1));
+      final targetPage = node.dest?.pageNumber;
+      if (targetPage == null) {
+        return;
       }
+
+      final onNavigateToPage = widget.onNavigateToPage;
+      if (onNavigateToPage != null) {
+        await onNavigateToPage(targetPage);
+        return;
+      }
+
+      await widget.controller.goToPage(pageNumber: targetPage);
     }
 
     final bool selected = widget.controller.isReady &&
@@ -337,7 +347,7 @@ class _OutlineViewState extends State<OutlineView>
     if (node.children.isEmpty) {
       return InkWell(
         key: itemKey,
-        onTap: navigateToEntry,
+        onTap: () async => navigateToEntry(),
         child: Container(
           padding: EdgeInsets.only(
             right: 16.0 + (level * 24.0),
@@ -418,7 +428,7 @@ class _OutlineViewState extends State<OutlineView>
                 // אזור הטקסט לניווט
                 Expanded(
                   child: InkWell(
-                    onTap: navigateToEntry,
+                    onTap: () async => navigateToEntry(),
                     child: Container(
                       padding: EdgeInsets.only(
                         right: 16.0 + (level * 24.0),

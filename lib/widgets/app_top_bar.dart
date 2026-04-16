@@ -103,11 +103,12 @@ class _AppTopBarState extends State<AppTopBar>
     if (oldWidget.secondaryRowVisible != widget.secondaryRowVisible) {
       oldWidget.secondaryRowVisible?.removeListener(_onVisibilityChanged);
       widget.secondaryRowVisible?.addListener(_onVisibilityChanged);
-      _syncToNotifier(immediate: true);
+      _pendingVisible = widget.secondaryRowVisible?.value ?? true;
+      _scheduleHeightSync(() => _syncToNotifier(immediate: true));
     }
     if (oldWidget.secondaryRow != widget.secondaryRow ||
         oldWidget.totalHeightNotifier != widget.totalHeightNotifier) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _notifyHeight());
+      _scheduleHeightSync(_notifyHeight);
     }
   }
 
@@ -139,6 +140,13 @@ class _AppTopBarState extends State<AppTopBar>
     if (notifier.value != totalHeight) {
       notifier.value = totalHeight;
     }
+  }
+
+  void _scheduleHeightSync(VoidCallback callback) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      callback();
+    });
   }
 
   void _onVisibilityChanged() {
@@ -195,11 +203,10 @@ class _AppTopBarState extends State<AppTopBar>
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<SettingsBloc, SettingsState>(
-      listenWhen: (prev, next) =>
-          prev.compactMenuMode != next.compactMenuMode,
+      listenWhen: (prev, next) => prev.compactMenuMode != next.compactMenuMode,
       listener: (context, _) {
         // גובה הסרגל השתנה — מעדכנים את totalHeightNotifier אחרי הframe
-        WidgetsBinding.instance.addPostFrameCallback((_) => _notifyHeight());
+        _scheduleHeightSync(_notifyHeight);
       },
       builder: (context, settingsState) {
         final isCompact = settingsState.compactMenuMode;
