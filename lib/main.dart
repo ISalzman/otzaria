@@ -69,6 +69,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/plugins/database/plugin_database_bootstrap.dart';
 import 'package:logging/logging.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/widgets/restart_widget.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
@@ -78,14 +79,26 @@ AppWindowListener? _appWindowListener;
 /// Getter for accessing the window listener from other parts of the app
 AppWindowListener? get appWindowListener => _appWindowListener;
 
-void _appendUnhandledErrorToLocalLog(String formattedMessage) {
+void _appendUnhandledErrorToLocalLog({
+  required String title,
+  required Object error,
+  StackTrace? stackTrace,
+  Map<String, String?> details = const {},
+}) {
   try {
-    final file = File(ErrorLogFile.resolvePath());
-    if (!file.parent.existsSync()) {
-      file.parent.createSync(recursive: true);
-    }
-    file.writeAsStringSync(formattedMessage, mode: FileMode.append, flush: true);
+    ErrorLogFile.append(
+      title: title,
+      error: error,
+      stackTrace: stackTrace,
+      details: details,
+    );
   } catch (writeError, writeStackTrace) {
+    final formattedMessage = ErrorLogFile.formatEntry(
+      title: title,
+      error: error,
+      stackTrace: stackTrace,
+      details: details,
+    );
     stderr.writeln(
       'Failed to write error log to ${ErrorLogFile.resolvePath()}: $writeError',
     );
@@ -94,45 +107,70 @@ void _appendUnhandledErrorToLocalLog(String formattedMessage) {
   }
 }
 
-String formatFlutterErrorDetailsForLog(FlutterErrorDetails details) {
-  final buffer = StringBuffer()
-    ..writeln('=== FlutterError ${DateTime.now().toIso8601String()} ===')
-    ..writeln('Exception: ${details.exceptionAsString()}');
-
-  if (details.library != null) {
-    buffer.writeln('Library: ${details.library}');
-  }
-
-  if (details.context != null) {
-    buffer.writeln('Context: ${details.context}');
-  }
-
+Map<String, String?> _flutterErrorDetailsForLog(FlutterErrorDetails details) {
   final informationCollector = details.informationCollector;
-  if (informationCollector != null) {
-    for (final node in informationCollector()) {
-      buffer.writeln(node.toDescription());
-    }
-  }
+  final collectedInformation = informationCollector == null
+      ? null
+      : informationCollector()
+          .map((node) => node.toDescription())
+          .where((description) => description.trim().isNotEmpty)
+          .join('\n');
 
-  if (details.stack != null) {
-    buffer
-      ..writeln('Stack:')
-      ..writeln(details.stack);
-  }
-
-  buffer.writeln();
-  return buffer.toString();
+  return {
+    'Library': details.library,
+    'Context': details.context?.toString(),
+    'Information': collectedInformation,
+  };
 }
 
-String formatPlatformErrorForLog(Object error, StackTrace stack) {
-  final buffer = StringBuffer()
-    ..writeln('=== Unhandled Error ${DateTime.now().toIso8601String()} ===')
-    ..writeln('Exception: $error')
-    ..writeln('Stack:')
-    ..writeln(stack)
-    ..writeln();
+String _formatAppVersion(PackageInfo packageInfo) {
+  final version = packageInfo.version.trim();
+  final buildNumber = packageInfo.buildNumber.trim();
 
-  return buffer.toString();
+  if (version.isEmpty) {
+    return buildNumber.isEmpty ? 'unknown' : buildNumber;
+  }
+
+  if (buildNumber.isEmpty || version.endsWith('+$buildNumber')) {
+    return version;
+  }
+
+  return '$version+$buildNumber';
+}
+
+Future<void> _initializeLogMetadata() async {
+  try {
+    final packageInfo = await PackageInfo.fromPlatform();
+    ErrorLogFile.setAppVersion(_formatAppVersion(packageInfo));
+  } catch (error, stackTrace) {
+    ErrorLogFile.setAppVersion('unknown');
+    if (kDebugMode) {
+      debugPrint('Failed to load app version for logs: $error\n$stackTrace');
+    }
+  }
+}
+
+void _logNonFatalInitializationError(
+  String component,
+  Object error,
+  StackTrace stackTrace,
+) {
+  if (kDebugMode) {
+    debugPrint(
+      'Non-fatal initialization error in $component: $error\n$stackTrace',
+    );
+    return;
+  }
+
+  _appendUnhandledErrorToLocalLog(
+    title: 'Initialization Warning',
+    error: error,
+    stackTrace: stackTrace,
+    details: {
+      'Phase': 'initialize',
+      'Component': component,
+    },
+  );
 }
 
 bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
@@ -154,6 +192,8 @@ bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
 /// 4. Calls [initialize] to set up required services and configurations
 /// 5. Launches the main application widget
 void main() async {
+  SentryWidgetsFlutterBinding.ensureInitialized();
+  await _initializeLogMetadata();
   hierarchicalLoggingEnabled = true;
 
   // Set up custom error handlers before Sentry initialization
@@ -178,7 +218,12 @@ void main() async {
     if (kDebugMode) {
       FlutterError.dumpErrorToConsole(details);
     } else {
-      _appendUnhandledErrorToLocalLog(formatFlutterErrorDetailsForLog(details));
+      _appendUnhandledErrorToLocalLog(
+        title: 'FlutterError',
+        error: details.exceptionAsString(),
+        stackTrace: details.stack,
+        details: _flutterErrorDetailsForLog(details),
+      );
     }
   };
 
@@ -204,10 +249,25 @@ void main() async {
         stack: stack,
       ));
     } else {
-      _appendUnhandledErrorToLocalLog(formatPlatformErrorForLog(error, stack));
+      _appendUnhandledErrorToLocalLog(
+        title: 'Unhandled Error',
+        error: error,
+        stackTrace: stack,
+      );
     }
     return true;
   };
+
+  if (!kDebugMode) {
+    try {
+      ErrorLogFile.ensureExists();
+    } catch (error, stackTrace) {
+      stderr.writeln(
+        'Failed to prepare error log file at ${ErrorLogFile.resolvePath()}: $error',
+      );
+      stderr.writeln(stackTrace);
+    }
+  }
 
   // Start Sentry in parallel to avoid blocking app startup.
   unawaited(_initializeSentry());
@@ -254,8 +314,6 @@ Future<void> _initializeSentry() async {
 }
 
 Future<void> _runAppBootstrap() async {
-  SentryWidgetsFlutterBinding.ensureInitialized();
-
   // Check for single instance - skip on Apple platforms (macOS/iOS) due to sandbox restrictions
   if (!Platform.isMacOS && !Platform.isIOS) {
     FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
@@ -459,8 +517,12 @@ Future<void> initialize() async {
     final cacheDir = await getTemporaryDirectory();
     Pdfrx.getCacheDirectory = () => cacheDir.path;
     debugPrint('Pdfrx cache directory set to: ${cacheDir.path}');
-  } catch (e) {
-    debugPrint('Failed to set Pdfrx cache directory: $e');
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+      'Pdfrx cache directory',
+      error,
+      stackTrace,
+    );
   }
 
   // Check and perform automatic backup if needed
@@ -468,11 +530,12 @@ Future<void> initialize() async {
     if (await BackupService.shouldPerformAutoBackup()) {
       await BackupService.performAutoBackup();
     }
-  } catch (e) {
-    if (kDebugMode) {
-      debugPrint('Failed to perform automatic backup: $e');
-    }
-    // Continue without backup if it fails
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+      'Automatic backup',
+      error,
+      stackTrace,
+    );
   }
 
   // Register SQLite sources for plugin database API
@@ -481,18 +544,22 @@ Future<void> initialize() async {
   // Initialize Notification Service
   try {
     await NotificationService().init();
-  } catch (e) {
-    if (kDebugMode) {
-      debugPrint('Failed to initialize notification service: $e');
-    }
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+      'Notification service',
+      error,
+      stackTrace,
+    );
   }
 
   try {
     await DirectErrorReportService().startAutomaticFlush();
-  } catch (e) {
-    if (kDebugMode) {
-      debugPrint('Failed to initialize direct error report queue: $e');
-    }
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+      'Direct error report queue',
+      error,
+      stackTrace,
+    );
   }
 }
 

@@ -1,36 +1,45 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/main.dart';
+import 'package:otzaria/core/error_log_file.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('formatFlutterErrorDetailsForLog מחזיר טקסט קריא עם exception ו-stack',
-      () {
-    final details = FlutterErrorDetails(
-      exception: StateError('boom'),
-      stack: StackTrace.fromString('stack-line-1\nstack-line-2'),
-      library: 'widgets library',
-      context: ErrorDescription('while building test widget'),
+  test('formatEntry כותב Version לפני Exception', () {
+    ErrorLogFile.setAppVersion('9.8.7+65');
+
+    final output = ErrorLogFile.formatEntry(
+      title: 'FlutterError',
+      error: StateError('boom'),
+      stackTrace: StackTrace.fromString('stack-line-1\nstack-line-2'),
+      details: const {
+        'Library': 'widgets library',
+        'Context': 'while building test widget',
+      },
     );
 
-    final output = formatFlutterErrorDetailsForLog(details);
-
     expect(output, contains('FlutterError'));
+    expect(output, contains('Version: 9.8.7+65'));
     expect(output, contains('Bad state: boom'));
     expect(output, contains('widgets library'));
     expect(output, contains('while building test widget'));
     expect(output, contains('stack-line-1'));
   });
 
-  test('formatPlatformErrorForLog מחזיר טקסט קריא עם exception ו-stack', () {
-    final output = formatPlatformErrorForLog(
-      ArgumentError('bad input'),
-      StackTrace.fromString('platform-stack'),
+  test('formatEntry מטפל בפרטים מרובי שורות', () {
+    final output = ErrorLogFile.formatEntry(
+      title: 'Initialization Warning',
+      error: ArgumentError('bad input'),
+      stackTrace: StackTrace.fromString('platform-stack'),
+      details: const {
+        'Information': 'line 1\nline 2',
+      },
     );
 
-    expect(output, contains('Unhandled Error'));
+    expect(output, contains('Initialization Warning'));
     expect(output, contains('Invalid argument(s): bad input'));
+    expect(output, contains('Information:'));
+    expect(output, contains('line 1'));
+    expect(output, contains('line 2'));
     expect(output, contains('platform-stack'));
   });
 }

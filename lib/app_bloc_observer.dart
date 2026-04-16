@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class AppBlocObserver extends BlocObserver {
@@ -17,8 +18,10 @@ class AppBlocObserver extends BlocObserver {
 
   @override
   void onError(BlocBase bloc, Object error, StackTrace stackTrace) {
-    // ignore: avoid_print
-    //print('🔴 ${bloc.runtimeType} Error: $error\n$stackTrace');
+    if (kDebugMode) {
+      debugPrint('BLoC error in ${bloc.runtimeType}: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
     super.onError(bloc, error, stackTrace);
   }
 
