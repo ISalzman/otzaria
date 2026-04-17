@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
-import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show ValueNotifier, debugPrint, visibleForTesting;
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
@@ -21,6 +22,238 @@ import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/utils/docx_to_otzaria.dart';
 import 'package:pdfrx/pdfrx.dart';
+
+// ──────────────────────────────────────────────────────────────────────────
+// Isolate helpers for scanning external-book folders.
+// All types must be sendable across isolate ports (no native handles,
+// no platform-channel objects, no closures with non-sendable captures).
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Sendable flat representation of a single TOC entry.
+/// Parent/child references use 0-based indices into the flat list.
+class _RawTocEntry {
+  final String text;
+  final int level;
+  final int lineIndex;
+
+  /// 0-based index of the parent entry; null for root entries.
+  final int? parentIndex;
+
+  const _RawTocEntry({
+    required this.text,
+    required this.level,
+    required this.lineIndex,
+    this.parentIndex,
+  });
+}
+
+/// Sendable description of a discovered book file, returned from the
+/// background isolate to the main isolate.
+class _DiscoveredBook {
+  final String path;
+  final String title;
+  final String fileType; // 'txt' | 'docx' | 'pdf'
+  final int fileSize;
+  final int lastModified;
+  final List<String> categoryPath;
+
+  /// Pre-parsed TOC for TXT / DOCX files (parsed inside the isolate).
+  /// null for PDF (platform channel) or for metadata-update-only books.
+  final List<_RawTocEntry>? tocEntries;
+
+  /// Non-null when the book already exists in the DB but its file metadata
+  /// (size or mtime) changed. Phase 2 only updates metadata; no insert needed.
+  final int? existingBookId;
+
+  const _DiscoveredBook({
+    required this.path,
+    required this.title,
+    required this.fileType,
+    required this.fileSize,
+    required this.lastModified,
+    required this.categoryPath,
+    this.tocEntries,
+    this.existingBookId,
+  });
+}
+
+/// Entry point for [Isolate.run]: scans [folderPath] recursively,
+/// filters out already-indexed unchanged books via a direct sqlite3 read,
+/// and parses TXT / DOCX TOC for genuinely NEW books.
+/// PDF TOC is intentionally skipped here (pdfrx uses platform channels).
+Future<List<_DiscoveredBook>> _scanExternalFolderInIsolate(
+    (String folderPath, String folderName, String dbPath) args) async {
+  // Open a read-only sqlite3 connection to check existing books without
+  // going through the Drift/sqflite layer (which requires platform channels).
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(args.$3, mode: sqlite3.OpenMode.readOnly);
+  } catch (_) {
+    // If the DB cannot be opened (first run, locked, etc.) fall through
+    // and treat every file as new.
+  }
+
+  final books = <_DiscoveredBook>[];
+  await _collectBookFilesRecursive(
+    Directory(args.$1),
+    ['ספרים אישיים', args.$2],
+    books,
+    db,
+  );
+  db?.close();
+  return books;
+}
+
+Future<void> _collectBookFilesRecursive(
+  Directory dir,
+  List<String> categoryPath,
+  List<_DiscoveredBook> books,
+  sqlite3.Database? db,
+) async {
+  await for (final entity in dir.list()) {
+    try {
+      final name = entity.path.split(Platform.pathSeparator).last;
+      if (isHiddenOrSystem(entity.path)) continue;
+
+      if (entity is Directory) {
+        await _collectBookFilesRecursive(
+          entity,
+          [...categoryPath, name],
+          books,
+          db,
+        );
+      } else if (entity is File) {
+        final lower = name.toLowerCase();
+        String fileType;
+        if (lower.endsWith('.txt')) {
+          fileType = 'txt';
+        } else if (lower.endsWith('.docx')) {
+          fileType = 'docx';
+        } else if (lower.endsWith('.pdf')) {
+          fileType = 'pdf';
+        } else {
+          continue;
+        }
+
+        final stat = await entity.stat();
+        final title = getTitleFromPath(entity.path);
+        final fileSize = stat.size;
+        final lastModified = stat.modified.millisecondsSinceEpoch;
+
+        // ── DB existence check ─────────────────────────────────────────────
+        // Perform BEFORE any expensive IO (TOC parse) so unchanged books are
+        // skipped entirely without reading file content.
+        if (db != null) {
+          final rows = db.select(
+            'SELECT id, fileSize, lastModified FROM book WHERE filePath = ? LIMIT 1',
+            [entity.path],
+          ).toMapList();
+          if (rows.isNotEmpty) {
+            final row = rows.first;
+            final storedSize = row['fileSize'] as int? ?? -1;
+            final storedMtime = row['lastModified'] as int? ?? -1;
+            if (storedSize == fileSize && storedMtime == lastModified) {
+              // Unchanged — skip entirely, no work needed.
+              continue;
+            }
+            // File has changed — report for metadata-only update.
+            books.add(_DiscoveredBook(
+              path: entity.path,
+              title: title,
+              fileType: fileType,
+              fileSize: fileSize,
+              lastModified: lastModified,
+              categoryPath: categoryPath,
+              tocEntries: null, // no re-parse on metadata update
+              existingBookId: row['id'] as int,
+            ));
+            continue;
+          }
+        }
+        // ──────────────────────────────────────────────────────────────────
+
+        // Genuinely new book — parse TOC for TXT / DOCX.
+        List<_RawTocEntry>? rawToc;
+        if (fileType == 'txt') {
+          try {
+            final content = await entity.readAsString();
+            // Synchronous call — we are already in a background isolate.
+            final parsed = TocParser.parseEntriesFromContent(content);
+            rawToc = _flattenTocToRaw(parsed);
+          } catch (_) {
+            // TOC parse failure is non-fatal.
+          }
+        } else if (fileType == 'docx') {
+          try {
+            final bytes = await entity.readAsBytes();
+            final content = docxToText(bytes, title);
+            final parsed = TocParser.parseEntriesFromContent(content);
+            rawToc = _flattenTocToRaw(parsed);
+          } catch (_) {
+            // TOC parse failure is non-fatal.
+          }
+        }
+        // PDF: rawToc stays null — parsed on the main isolate.
+
+        books.add(_DiscoveredBook(
+          path: entity.path,
+          title: title,
+          fileType: fileType,
+          fileSize: fileSize,
+          lastModified: lastModified,
+          categoryPath: categoryPath,
+          tocEntries: rawToc,
+        ));
+      }
+    } catch (e) {
+      debugPrint('⚠️ Skipping inaccessible entity: ${entity.path}: $e');
+    }
+  }
+}
+
+/// Exposed for unit-testing only.
+///
+/// Returns a list of maps with keys: `path`, `existingBookId` (nullable).
+/// Unchanged books (already in DB with matching metadata) are absent from
+/// the list.
+@visibleForTesting
+Future<List<Map<String, Object?>>> scanExternalFolderForTest(
+    String folderPath, String folderName, String dbPath) async {
+  final result =
+      await _scanExternalFolderInIsolate((folderPath, folderName, dbPath));
+  return result
+      .map((b) => {'path': b.path, 'existingBookId': b.existingBookId})
+      .toList();
+}
+
+/// Converts a hierarchical [TocEntry] tree into a flat, sendable list.
+/// Uses pre-order (depth-first) traversal so each parent precedes its children.
+List<_RawTocEntry> _flattenTocToRaw(List<TocEntry> roots) {
+  final flat = <_RawTocEntry>[];
+  _flattenRawRecursive(roots, flat, null);
+  return flat;
+}
+
+void _flattenRawRecursive(
+  List<TocEntry> entries,
+  List<_RawTocEntry> flat,
+  int? parentIndex,
+) {
+  for (final entry in entries) {
+    final myIndex = flat.length;
+    flat.add(_RawTocEntry(
+      text: entry.text,
+      level: entry.level,
+      lineIndex: entry.index,
+      parentIndex: parentIndex,
+    ));
+    if (entry.children.isNotEmpty) {
+      _flattenRawRecursive(entry.children, flat, myIndex);
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 
 List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
   required String dbPath,
@@ -171,6 +404,63 @@ List<Map<String, dynamic>> _loadAlternativeStructuresRowsInIsolate({
   }
 }
 
+/// מתאם כל פעולות הכתיבה לספרים האישיים: add-folder scan, rescan, toggle, remove.
+///
+/// תור סריאלי יחיד עם ספירת עסוקות נצפית.
+/// ה-singleton חי על [DatabaseLibraryProvider] ולכן שורד פירוק ויצירה של widgets.
+class PersonalBooksOperationQueue {
+  Future<void> _tail = Future.value();
+
+  /// מספר הפעולות הממתינות או הרצות כרגע.
+  /// עולה ב-1 מיד כשמוסיפים לתור (לא רק כשמתחיל הביצוע),
+  /// כך שה-UI מציג מצב עסוק גם בזמן ההמתנה בתור.
+  final ValueNotifier<int> busyCount = ValueNotifier(0);
+
+  bool get isBusy => busyCount.value > 0;
+
+  /// מוסיף [operation] לתור הסריאלי ומחזיר את תוצאתה.
+  ///
+  /// פעולות מבוצעות בסדר הוספה בלבד, לעולם לא במקביל.
+  Future<T> enqueue<T>(Future<T> Function() operation) {
+    busyCount.value++; // עולה מיד, עוד לפני הביצוע
+    final result = _tail.then<T>((_) async {
+      try {
+        return await operation();
+      } finally {
+        busyCount.value--;
+      }
+    });
+    // _tail לעולם לא נדחית; אחרת שרשרת ה-then תיקלע לדד-לוק.
+    _tail = result.then<void>((_) {}).catchError((_) {});
+    return result;
+  }
+}
+
+/// תוצאת סריקת תיקייה חיצונית.
+///
+/// [addedBooks]  - מספר הספרים שנוספו ל-DB בהצלחה.
+/// [updatedBooks] - מספר הספרים שעודכנו (שינוי metadata).
+/// [failedBooks]  - מספר הספרים שנכשלו בעיבוד (שגיאה חלקית).
+/// [fatalError]   - שגיאה קטלנית שמנעה את הסריקה כולה (Isolate נפל וכד׳).
+///                  כאשר שגיאה זו קיימת, ספירות הספרים הן 0.
+class ScanResult {
+  final int addedBooks;
+  final int updatedBooks;
+  final int failedBooks;
+  final Object? fatalError;
+
+  const ScanResult({
+    this.addedBooks = 0,
+    this.updatedBooks = 0,
+    this.failedBooks = 0,
+    this.fatalError,
+  });
+
+  bool get isSuccess => fatalError == null;
+  bool get hasPartialFailure => fatalError == null && failedBooks > 0;
+  bool get hasChanges => addedBooks > 0 || updatedBooks > 0;
+}
+
 /// Library provider that loads books from the SQLite database.
 class DatabaseLibraryProvider implements LibraryProvider {
   final SqliteDataProvider _sqliteProvider = SqliteDataProvider.instance;
@@ -180,6 +470,12 @@ class DatabaseLibraryProvider implements LibraryProvider {
   bool _titlesCached = false;
   String? _bundledTalmudBavliPathCache;
   bool? _bundledTalmudBavliExistsCache;
+
+  /// תור פעולות יחיד לכל כתיבות ה-DB של ספרים אישיים.
+  /// ה-static מאפשר גישה ישירה ב-DatabaseLibraryProvider.operationQueue
+  /// גם ממסכים אחרים, בלי להצמד ל-instance.
+  static final PersonalBooksOperationQueue operationQueue =
+      PersonalBooksOperationQueue();
 
   /// Singleton instance
   static DatabaseLibraryProvider? _instance;
@@ -1002,51 +1298,6 @@ class DatabaseLibraryProvider implements LibraryProvider {
     return parentId!;
   }
 
-  /// Parses TOC entries for an external text book.
-  /// Returns a list of TocEntry objects ready for insertion.
-  Future<List<db_models.TocEntry>?> _parseTocForExternalBook(
-    File file,
-    int bookId,
-  ) async {
-    try {
-      final lowerPath = file.path.toLowerCase();
-
-      List<TocEntry> tocEntries;
-
-      if (lowerPath.endsWith('.pdf')) {
-        // Parse PDF outline
-        tocEntries = await _parsePdfOutline(file);
-      } else {
-        // Parse text content (TXT or DOCX)
-        String content;
-        if (lowerPath.endsWith('.docx')) {
-          final title = getTitleFromPath(file.path);
-          final bytes = await file.readAsBytes();
-          content = await Isolate.run(() => docxToText(bytes, title));
-        } else {
-          content = await file.readAsString();
-        }
-
-        // Parse TOC using the existing TocParser
-        tocEntries =
-            await Isolate.run(() => TocParser.parseEntriesFromContent(content));
-      }
-
-      if (tocEntries.isEmpty) {
-        return null;
-      }
-
-      // Convert to DB TocEntry format
-      final dbEntries = <db_models.TocEntry>[];
-      _convertTocEntriesToDb(tocEntries, dbEntries, bookId, null);
-
-      return dbEntries;
-    } catch (e) {
-      debugPrint('⚠️ Failed to parse TOC for external book: $e');
-      return null;
-    }
-  }
-
   /// Parses PDF outline and converts to TocEntry format.
   Future<List<TocEntry>> _parsePdfOutline(File file) async {
     try {
@@ -1594,150 +1845,200 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   /// This is called when a new custom folder is added.
   ///
-  /// [folderPath] - The full path to the folder to scan
-  /// [folderName] - The display name of the folder
-  /// [repository] - The repository to use for database operations
-  Future<void> scanAndAddExternalBooksFromFolder(
+  /// Fires the scan in the background and returns immediately.
+  /// סורקת תיקייה חיצונית ומוסיפה ספרים ל-DB.
+  ///
+  /// מחזירה [Future<ScanResult>] עם ספירות ותוצאה. הסריקות מסודרות בתור
+  /// פנימי — סריקה חדשה מתחילה רק אחרי שהקודמת מסיימת, כך שאין
+  /// כתיבות מקביליות ל-DB גם אם ה-UI לא חוסם.
+  ///
+  /// [folderPath] - הנתיב המלא לתיקייה לסריקה
+  /// [folderName] - שם התצוגה של התיקייה
+  /// [repository] - ה-repository לפעולות DB
+  Future<ScanResult> scanAndAddExternalBooksFromFolder(
+    String folderPath,
+    String folderName,
+    dynamic repository,
+  ) {
+    // _doScan never throws; operationQueue handles busyCount and serialization.
+    return operationQueue.enqueue(
+      () => _doScan(folderPath, folderName, repository),
+    );
+  }
+
+  Future<ScanResult> _doScan(
     String folderPath,
     String folderName,
     dynamic repository,
   ) async {
     debugPrint('📁 Scanning custom folder for external books: $folderPath');
 
-    final dir = Directory(folderPath);
-    if (!await dir.exists()) {
-      debugPrint('⚠️ Folder does not exist: $folderPath');
-      return;
-    }
+    int added = 0;
+    int updated = 0;
+    int failed = 0;
 
-    // Load metadata (empty map if not available)
-    final metadata = <String, Map<String, dynamic>>{};
+    try {
+      final dir = Directory(folderPath);
+      if (!await dir.exists()) {
+        debugPrint('⚠️ Folder does not exist: $folderPath');
+        return const ScanResult(fatalError: 'התיקייה לא נמצאה');
+      }
 
-    // Scan the folder recursively
-    await _scanFolderForExternalBooks(
-      dir,
-      repository,
-      metadata,
-      ['ספרים אישיים', folderName],
-    );
+      // Phase 1 (background isolate): scan directory, check DB existence via a
+      // direct sqlite3 read-only connection, and parse TXT/DOCX TOC only for
+      // genuinely new books. Unchanged books are filtered out here.
+      final dbPath = SqliteDataProvider.instance.dbPath;
+      final discovered = await Isolate.run(
+        () => _scanExternalFolderInIsolate((folderPath, folderName, dbPath)),
+      );
+      debugPrint(
+          '📁 Isolate found ${discovered.length} books to process in $folderPath');
 
-    debugPrint('📁 Finished scanning custom folder: $folderPath');
-  }
-
-  /// Recursively scans a folder and adds external books to the database.
-  Future<void> _scanFolderForExternalBooks(
-    Directory dir,
-    dynamic repository,
-    Map<String, Map<String, dynamic>> metadata,
-    List<String> categoryPath,
-  ) async {
-    await for (FileSystemEntity entity in dir.list()) {
-      try {
-        await entity.stat();
-
-        final entityName = entity.path.split(Platform.pathSeparator).last;
-        if (isHiddenOrSystem(entity.path)) continue;
-
-        if (entity is Directory) {
-          final newPath = [...categoryPath, entityName];
-          await _scanFolderForExternalBooks(
-            entity,
-            repository,
-            metadata,
-            newPath,
-          );
-        } else if (entity is File) {
-          final fileName = entityName.toLowerCase();
-          // Only process supported file types
-          if (!fileName.endsWith('.pdf') &&
-              !fileName.endsWith('.txt') &&
-              !fileName.endsWith('.docx')) {
+      // Phase 2 (main isolate): only metadata updates + new-book inserts.
+      // This is deliberately light: unchanged books were already filtered in
+      // Phase 1, so no TOC parse or DB read happens here for them.
+      for (final book in discovered) {
+        try {
+          if (book.existingBookId != null) {
+            // Metadata-only update (file changed since last scan).
+            await repository.updateExternalBookMetadata(
+              book.existingBookId!,
+              book.fileSize,
+              book.lastModified,
+            );
+            debugPrint('📁 Updated external book metadata: ${book.title}');
+            updated++;
             continue;
           }
 
-          await _addSingleExternalBookToDb(
-            entity,
-            repository,
-            metadata,
-            categoryPath,
+          // New book: create category, parse PDF outline, insert.
+          // Re-check authoritatively before inserting (guards against Phase-1
+          // fallback duplicates and concurrent-scan races).
+          if (await _recheckBeforeInsert(
+              repository, book.path, book.fileSize, book.lastModified)) {
+            continue;
+          }
+
+          final categoryId = await _getOrCreateCategoryInDb(book.categoryPath);
+
+          List<db_models.TocEntry>? tocEntries;
+          if (book.tocEntries != null && book.tocEntries!.isNotEmpty) {
+            // TXT / DOCX: already parsed inside the isolate.
+            tocEntries = _rawTocToDbEntries(book.tocEntries!);
+          } else if (book.fileType == 'pdf') {
+            // PDF: parse outline here — pdfrx requires platform channels.
+            final pdfToc = await _parsePdfOutline(File(book.path));
+            if (pdfToc.isNotEmpty) {
+              final dbEntries = <db_models.TocEntry>[];
+              _convertTocEntriesToDb(pdfToc, dbEntries, 0, null);
+              tocEntries = dbEntries.isNotEmpty ? dbEntries : null;
+            }
+          }
+
+          await repository.insertExternalContentBook(
+            categoryId: categoryId,
+            title: book.title,
+            filePath: book.path,
+            fileType: book.fileType,
+            fileSize: book.fileSize,
+            lastModified: book.lastModified,
+            heShortDesc: null,
+            orderIndex: 999.0,
+            isPersonal: true,
+            tocEntries: tocEntries,
           );
+          debugPrint(
+              '📁 Inserted external book to DB: ${book.title} (type: ${book.fileType})');
+          added++;
+        } catch (e) {
+          debugPrint('⚠️ Failed to process book: ${book.path} - $e');
+          failed++;
         }
-      } catch (e) {
-        debugPrint('⚠️ Skipping inaccessible entity: ${entity.path}');
-        continue;
       }
+
+      debugPrint(
+          '📁 Finished scanning custom folder: $folderPath '
+          '(added=$added, updated=$updated, failed=$failed)');
+      return ScanResult(
+          addedBooks: added, updatedBooks: updated, failedBooks: failed);
+    } catch (e) {
+      debugPrint('⚠️ Scan failed for $folderPath: $e');
+      return ScanResult(fatalError: e);
     }
   }
 
-  /// Adds a single external book to the database.
-  Future<void> _addSingleExternalBookToDb(
-    File file,
+  /// Authoritative pre-insert recheck.
+  ///
+  /// Returns `true` if [filePath] is already in the DB — the caller must skip
+  /// the insert. Returns `false` if the file is genuinely new.
+  /// When found and metadata has changed, the DB row is updated in-place.
+  Future<bool> _recheckBeforeInsert(
     dynamic repository,
-    Map<String, Map<String, dynamic>> metadata,
-    List<String> categoryPath,
+    String filePath,
+    int fileSize,
+    int lastModified,
   ) async {
-    final path = file.path.toLowerCase();
-    final title = getTitleFromPath(file.path);
-    final fileStat = await file.stat();
-    final fileSize = fileStat.size;
-    final lastModified = fileStat.modified.millisecondsSinceEpoch;
+    final alreadyInDb = await repository.getExternalBookByFilePath(filePath);
+    if (alreadyInDb == null) return false;
+    if (alreadyInDb.fileSize != fileSize ||
+        alreadyInDb.lastModified != lastModified) {
+      await repository.updateExternalBookMetadata(
+          alreadyInDb.id, fileSize, lastModified);
+      debugPrint('📁 Updated metadata (recheck): $filePath');
+    }
+    return true;
+  }
 
-    // Determine file type
-    String fileType;
-    if (path.endsWith('.pdf')) {
-      fileType = 'pdf';
-    } else if (path.endsWith('.txt')) {
-      fileType = 'txt';
-    } else if (path.endsWith('.docx')) {
-      fileType = 'docx';
-    } else {
-      return;
+  /// Exposes [_recheckBeforeInsert] for unit tests via a duck-typed [repository].
+  ///
+  /// The [repository] only needs to implement:
+  ///   - `Future<T?> getExternalBookByFilePath(String path)`
+  ///   - `Future<void> updateExternalBookMetadata(int id, int size, int mtime)`
+  @visibleForTesting
+  static Future<bool> recheckBeforeInsertForTest({
+    required dynamic repository,
+    required String filePath,
+    required int fileSize,
+    required int lastModified,
+  }) {
+    return DatabaseLibraryProvider.instance._recheckBeforeInsert(
+      repository,
+      filePath,
+      fileSize,
+      lastModified,
+    );
+  }
+
+  /// Converts a flat [_RawTocEntry] list (produced by the background isolate)
+  /// into [db_models.TocEntry] objects ready for DB insertion.
+  ///
+  /// The flat list uses 0-based [_RawTocEntry.parentIndex]; the DB model uses
+  /// 1-based local IDs that are resolved by [SeforimRepository._insertTocEntriesForExternalBook].
+  List<db_models.TocEntry> _rawTocToDbEntries(List<_RawTocEntry> raw) {
+    // For each parentIndex value, record the last entry that has it so we can
+    // flag isLastChild correctly.
+    final lastChildOf = <int?, int>{};
+    for (int i = 0; i < raw.length; i++) {
+      lastChildOf[raw[i].parentIndex] = i;
     }
 
-    // Check if the book already exists in DB (by file path)
-    final existingBook = await repository.getExternalBookByFilePath(file.path);
-    if (existingBook != null) {
-      // Book exists - check if we need to update metadata
-      if (existingBook.fileSize != fileSize ||
-          existingBook.lastModified != lastModified) {
-        await repository.updateExternalBookMetadata(
-          existingBook.id,
-          fileSize,
-          lastModified,
-        );
-        debugPrint('📁 Updated external book metadata: $title');
-      }
-      return;
-    }
-
-    // Book doesn't exist - add it to DB
-    try {
-      // Get or create category in DB
-      final categoryId = await _getOrCreateCategoryInDb(categoryPath);
-
-      // Parse TOC for text-like files and PDFs
-      List<db_models.TocEntry>? tocEntries;
-      if (fileType == 'txt' || fileType == 'docx' || fileType == 'pdf') {
-        tocEntries = await _parseTocForExternalBook(file, categoryId);
-      }
-
-      // Insert the external book
-      await repository.insertExternalContentBook(
-        categoryId: categoryId,
-        title: title,
-        filePath: file.path,
-        fileType: fileType,
-        fileSize: fileSize,
-        lastModified: lastModified,
-        heShortDesc: metadata[title]?['heShortDesc'],
-        orderIndex: (metadata[title]?['order'] ?? 999).toDouble(),
-        isPersonal: true,
-        tocEntries: tocEntries,
+    return List.generate(raw.length, (i) {
+      final r = raw[i];
+      // In pre-order traversal a node has children iff its immediate successor
+      // has this node's index as its parentIndex.
+      final hasChildren =
+          (i + 1 < raw.length) && (raw[i + 1].parentIndex == i);
+      return db_models.TocEntry(
+        id: i + 1, // 1-based local ID; resolved during insertion
+        bookId: 0, // placeholder; overridden in _insertTocEntriesForExternalBook
+        parentId: r.parentIndex != null ? r.parentIndex! + 1 : null,
+        text: r.text,
+        level: r.level,
+        lineId: null,
+        lineIndex: r.lineIndex,
+        isLastChild: lastChildOf[r.parentIndex] == i,
+        hasChildren: hasChildren,
       );
-
-      debugPrint('📁 Inserted external book to DB: $title (type: $fileType)');
-    } catch (e) {
-      debugPrint('⚠️ Failed to insert external book to DB: $title - $e');
-    }
+    });
   }
 }

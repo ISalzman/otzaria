@@ -29,7 +29,14 @@ class CustomFoldersTile extends StatefulWidget {
 class _CustomFoldersTileState extends State<CustomFoldersTile> {
   List<CustomFolder> _folders = [];
   bool _isExpanded = false;
-  bool _isSyncing = false;
+
+  // _isSyncing is backed by the singleton queue — persists across widget rebuilds.
+  // A freshly-opened screen immediately reflects a scan that started earlier.
+  bool get _isSyncing => DatabaseLibraryProvider.operationQueue.isBusy;
+
+  void _onBusyChanged() {
+    if (mounted) setState(() {});
+  }
 
   static const String _customFoldersReloadNotice =
       'לאחר הוספת ספרים חדשים לתיקייה קיימת, יש ללחוץ על סמל הרענון.';
@@ -37,7 +44,15 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
   @override
   void initState() {
     super.initState();
+    DatabaseLibraryProvider.operationQueue.busyCount.addListener(_onBusyChanged);
     _loadFolders();
+  }
+
+  @override
+  void dispose() {
+    DatabaseLibraryProvider.operationQueue.busyCount
+        .removeListener(_onBusyChanged);
+    super.dispose();
   }
 
   void _loadFolders() {
@@ -104,13 +119,10 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       });
       await _saveFolders();
 
-      // סריקת הספרים בתיקייה והוספתם ל-DB כספרים חיצוניים
-      await _scanAndAddExternalBooks(path);
-
-      // רענון הספרייה כדי להציג את הספרים החדשים
-      if (mounted) {
-        context.read<LibraryBloc>().add(RefreshLibrary());
-      }
+      // סריקת הספרים בתיקייה והוספתם ל-DB כספרים חיצוניים (ברקע).
+      // RefreshLibrary מופעל אחרי גמר הסריקה כדי לא לחסום את ה-UI.
+      // סריקה ברקע — _activeScanCount מנוהל בתוך _startBackgroundScan.
+      _startBackgroundScan(path);
 
       if (!mounted) return;
       String successMessage =
@@ -125,35 +137,55 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     }
   }
 
-  /// סריקת תיקייה והוספת הספרים שבה ל-DB כספרים חיצוניים
-  Future<void> _scanAndAddExternalBooks(String folderPath) async {
+  /// סריקת תיקייה והוספת הספרים שבה ל-DB כספרים חיצוניים (ברקע).
+  ///
+  /// מחזירה [Future<ScanResult>] שמסתיים כשכל כתיבות ה-DB גמורות.
+  /// הקריאה אינה חוסמת — המתקשר צריך להגדיל את [_activeScanCount]
+  /// לפני הקריאה ולהקטין אותו ב-then/catchError.
+  Future<ScanResult> _scanAndAddExternalBooks(String folderPath) async {
     try {
       final sqliteProvider = SqliteDataProvider.instance;
       if (!sqliteProvider.isInitialized) {
         await sqliteProvider.initialize();
       }
-
       final repository = sqliteProvider.repository;
       if (repository == null) {
         debugPrint('Repository not available for scanning external books');
-        return;
+        return ScanResult(fatalError: 'מסד הנתונים לא זמין');
       }
-
-      // קבלת שם התיקייה
       final folderName = folderPath.split(Platform.pathSeparator).last;
-
-      // סריקת הספרים בתיקייה והוספתם ל-DB
-      final dbProvider = DatabaseLibraryProvider.instance;
-      await dbProvider.scanAndAddExternalBooksFromFolder(
-        folderPath,
-        folderName,
-        repository,
-      );
-
-      debugPrint('Finished scanning external books from: $folderPath');
+      return await DatabaseLibraryProvider.instance
+          .scanAndAddExternalBooksFromFolder(folderPath, folderName, repository);
     } catch (e) {
       debugPrint('Error scanning external books: $e');
+      return ScanResult(fatalError: e);
     }
+  }
+
+  /// מפעיל סריקה ברקע ומעדכן את ה-UI לפי התוצאה.
+  /// הספירה מנוהלת על ידי operationQueue; אין צורך בספירה מקומית.
+  void _startBackgroundScan(String folderPath) {
+    if (!mounted) return;
+    // תופסים רפרנס לפני הסריקה — RefreshLibrary יישלח גם אם ה-widget יתפרק
+    // באמצע הסריקה (כגון שהמשתמש יסגור את המסך).
+    final libraryBloc = context.read<LibraryBloc>();
+    _scanAndAddExternalBooks(folderPath).then((result) {
+      // רענון הספרייה תמיד — גם אם ה-widget כבר לא mounted.
+      if (result.isSuccess) {
+        libraryBloc.add(RefreshLibrary());
+      }
+      // הודעות UI רק אם ה-widget עדיין חי.
+      if (!mounted) return;
+      if (!result.isSuccess) {
+        UiSnack.showError('שגיאת סריקה: ${result.fatalError}');
+      } else if (result.hasPartialFailure) {
+        UiSnack.show(
+          '${result.addedBooks} ספרים נוספו, '
+          '${result.updatedBooks} עודכנו '
+          '(כשל: ${result.failedBooks})',
+        );
+      }
+    });
   }
 
   /// הסרת תיקייה מהתוכנה.
@@ -355,10 +387,6 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
   }
 
   Future<void> _rescanCustomFolders({bool showNoChangesMessage = true}) async {
-    setState(() {
-      _isSyncing = true;
-    });
-
     try {
       final sqliteProvider = SqliteDataProvider.instance;
       if (!sqliteProvider.isInitialized) {
@@ -375,11 +403,14 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
         throw Exception('שירות הסנכרון לא זמין');
       }
 
-      // סריקה מחדש של כל התיקיות האישיות השמורות בהגדרות
-      final result = await syncService.syncFiles(
-        onProgress: (progress, message) {
-          debugPrint('Sync progress: $progress - $message');
-        },
+      // סריקה מחדש של כל התיקיות האישיות השמורות בהגדרות.
+      // עוברת דרך אותו תור סריאלי כמו add-folder; פעולות לא רצות במקביל.
+      final result = await DatabaseLibraryProvider.operationQueue.enqueue(
+        () => syncService.syncFiles(
+          onProgress: (progress, message) {
+            debugPrint('Sync progress: $progress - $message');
+          },
+        ),
       );
 
       // רענון הספרייה
@@ -400,12 +431,6 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     } catch (e) {
       if (!mounted) return;
       UiSnack.showError('שגיאה בסריקת תיקיות אישיות: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSyncing = false;
-        });
-      }
     }
   }
 
@@ -442,6 +467,7 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                 text: 'הוסף תיקייה',
                 icon: FluentIcons.folder_add_24_regular,
                 onPressed: _addFolder,
+                isLoading: _isSyncing,
               ),
               if (_folders.isNotEmpty)
                 IconButton(
@@ -549,13 +575,15 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
                   )
                 : Switch(
                     value: folder.addToDatabase,
-                    onChanged: (value) => _toggleAddToDatabase(folder, value),
+                    onChanged: _isSyncing
+                        ? null
+                        : (value) => _toggleAddToDatabase(folder, value),
                   ),
           ),
-          // כפתור הסרה
+          // כפתור הסרה — חסום בזמן סריקה כדי למנוע כתיבה מקבילה ל-DB
           IconButton(
             icon: const Icon(FluentIcons.delete_24_regular, size: 18),
-            onPressed: () => _removeFolder(folder),
+            onPressed: _isSyncing ? null : () => _removeFolder(folder),
             tooltip: 'הסר תיקייה',
           ),
         ],
