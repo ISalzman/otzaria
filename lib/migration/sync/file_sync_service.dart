@@ -412,6 +412,7 @@ class FileSyncService {
       await _refreshConfiguredCustomFolderSources(customFolders);
       await _storeCustomFoldersRefreshSignature(customFolders);
     }
+    await _repository.rebuildCategoryClosure();
     await pruneRemovedCustomFoldersFromDatabase(customFolders);
   }
 

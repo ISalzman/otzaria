@@ -497,8 +497,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 current.newBooksToIndex != null &&
                 current.newBooksToIndex!.isNotEmpty,
             listener: (context, state) {
-              context.read<IndexingBloc>().add(
-                  IndexSpecificBooks(state.newBooksToIndex!, state.library!));
+              if (context.read<SettingsBloc>().state.autoUpdateIndex) {
+                context.read<IndexingBloc>().add(
+                    IndexSpecificBooks(
+                        state.newBooksToIndex!, state.library!));
+              }
             },
           ),
           BlocListener<IndexingBloc, IndexingState>(

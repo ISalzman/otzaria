@@ -343,6 +343,75 @@ void main() {
     expect(await repository.getCategory(staleCategoryId), isNull);
   });
 
+  // Regression test for bug introduced in commit 72ca3b4aa:
+  // When a folder was added via UI (custom_folders_tile.dart → _scanAndAddExternalBooks),
+  // insertCategory was called without rebuildCategoryClosure.
+  // Then RefreshLibrary → _pruneRemovedCustomFoldersIfNeeded ran immediately,
+  // and _categoryBelongsToAnyConfiguredFolder returned false (empty closure table),
+  // so the newly-added folder was deleted right away.
+  // Fix: refreshSourcesAndPruneRemovedCustomFolders now calls rebuildCategoryClosure
+  // before pruneRemovedCustomFoldersFromDatabase.
+  test(
+      'regression: refreshSourcesAndPruneRemovedCustomFolders לא מוחק תיקייה שנוספה דרך UI ללא rebuildCategoryClosure',
+      () async {
+    final activeFolderPath = path.join(tempDir.path, 'my-books');
+
+    // מדמה את _getOrCreateCategoryInDb ב-database_library_provider.dart:
+    // מוסיף קטגוריות עם insertCategory בלי לקרוא ל-rebuildCategoryClosure.
+    final personalCategoryId = await repository.insertCategory(
+      const Category(title: 'ספרים אישיים'),
+    );
+    final newCategoryId = await repository.insertCategory(
+      Category(
+        title: 'my-books',
+        parentId: personalCategoryId,
+        level: 1,
+      ),
+    );
+    final sourceId = await repository.insertSource(
+      _sourceNameForFolder(activeFolderPath),
+      -1,
+    );
+    await repository.insertBook(
+      Book(
+        id: await repository.getNextNegativeBookId(),
+        categoryId: newCategoryId,
+        sourceId: sourceId,
+        title: 'ספר חדש',
+        isPersonal: true,
+        fileType: 'txt',
+        filePath: path.join(activeFolderPath, 'ספר חדש.txt'),
+      ),
+    );
+
+    // בכוונה לא קוראים ל-rebuildCategoryClosure לפני refreshSources,
+    // בדיוק כמו שה-UI עושה: הוסיף תיקייה ואז מיד שלח RefreshLibrary.
+    // לפני התיקון, prune היה מוחק את הקטגוריה כי category_closure ריק.
+
+    final service = await FileSyncService.getInstance(repository);
+
+    await service!.refreshSourcesAndPruneRemovedCustomFolders([
+      CustomFolder(
+        path: activeFolderPath,
+        addToDatabase: true,
+        addedAt: DateTime(2026, 4, 17),
+      ),
+    ]);
+
+    expect(
+      await repository.getCategory(newCategoryId),
+      isNotNull,
+      reason:
+          'תיקייה שנוספה דרך UI לא צריכה להימחק על ידי prune כי category_closure לא עודכן עדיין',
+    );
+    final books = await repository.getBooksByCategory(newCategoryId);
+    expect(
+      books,
+      isNotEmpty,
+      reason: 'ספרים בתיקייה שנוספה לא צריכים להימחק',
+    );
+  });
+
   test(
       'pruneRemovedCustomFoldersFromDatabase מוחק קטגוריה עמומה בלי הוכחת source או path',
       () async {
