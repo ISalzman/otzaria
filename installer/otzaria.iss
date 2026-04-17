@@ -39,9 +39,9 @@ DisableDirPage=no
 Type: filesandordirs; Name: "{app}\default.isar";
 
 [Dirs]
-Name: "{commonappdata}\{#MyAppName}"; Permissions: users-modify; Check: IsAdminInstallMode
-Name: "{commonappdata}\{#MyAppName}\books"; Permissions: users-modify; Check: IsAdminInstallMode
-Name: "{commonappdata}\{#MyAppName}\index"; Permissions: users-modify; Check: IsAdminInstallMode
+Name: "{code:GetDataDir}"; Permissions: users-modify
+Name: "{code:GetDataDir}\books"; Permissions: users-modify
+Name: "{code:GetDataDir}\index"; Permissions: users-modify
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -123,6 +123,14 @@ begin
     Result := ExpandConstant('{autopf}\אוצריא');
 end;
 
+function GetDataDir(Param: String): String;
+begin
+  if IsAdminInstallMode then
+    Result := ExpandConstant('{commonappdata}\otzaria')
+  else
+    Result := ExpandConstant('{userappdata}\{#MyAppName}\{#MyAppName}');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   AppDataPath: string;
@@ -131,8 +139,19 @@ begin
   begin
     if WizardIsTaskSelected('resetsettings') then
     begin
-      // Delete previous installation directory (usually in LocalAppData)
+      AppDataPath := GetDataDir('');
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
+
       AppDataPath := ExpandConstant('{userappdata}\otzaria');
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
+
+      AppDataPath := ExpandConstant('{commonappdata}\otzaria');
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
+
+      AppDataPath := ExpandConstant('{localappdata}\otzaria');
       if DirExists(AppDataPath) then
         DelTree(AppDataPath, True, True, True);
         

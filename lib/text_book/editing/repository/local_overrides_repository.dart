@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 import 'overrides_repository.dart';
@@ -34,12 +36,75 @@ class LocalOverridesRepository implements OverridesRepository {
 
   Future<void> _initializeBasePath() async {
     try {
-      final appDocDir = await getApplicationDocumentsDirectory();
-      final basePath = path.join(appDocDir.path, _overridesDir);
+      final basePath = await AppPaths.getUserOverridesRootPath();
+      await _migrateLegacyOverrides(basePath);
       await Directory(basePath).create(recursive: true);
       _basePathCompleter.complete(basePath);
     } catch (e) {
       _basePathCompleter.completeError(e);
+    }
+  }
+
+  Future<void> _migrateLegacyOverrides(String newBasePath) async {
+    final appDocDir = await getApplicationDocumentsDirectory();
+    final legacyPath = path.join(appDocDir.path, _overridesDir);
+    await migrateLegacyOverridesDirectory(
+      legacyPath: legacyPath,
+      newBasePath: newBasePath,
+    );
+  }
+
+  @visibleForTesting
+  static Future<void> migrateLegacyOverridesDirectory({
+    required String legacyPath,
+    required String newBasePath,
+  }) async {
+    if (path.normalize(legacyPath) == path.normalize(newBasePath)) {
+      return;
+    }
+
+    final legacyDir = Directory(legacyPath);
+    if (!await legacyDir.exists()) {
+      return;
+    }
+
+    final newDir = Directory(newBasePath);
+    if (!await newDir.exists()) {
+      await newDir.parent.create(recursive: true);
+      try {
+        await legacyDir.rename(newDir.path);
+        return;
+      } catch (_) {
+        await newDir.create(recursive: true);
+      }
+    }
+
+    await for (final entity in legacyDir.list(recursive: true, followLinks: false)) {
+      final relativePath = path.relative(entity.path, from: legacyDir.path);
+      final targetPath = path.join(newDir.path, relativePath);
+
+      if (entity is Directory) {
+        await Directory(targetPath).create(recursive: true);
+        continue;
+      }
+
+      if (entity is! File) {
+        continue;
+      }
+
+      final targetFile = File(targetPath);
+      if (await targetFile.exists()) {
+        continue;
+      }
+
+      await targetFile.parent.create(recursive: true);
+      await entity.copy(targetPath);
+    }
+
+    try {
+      await legacyDir.delete(recursive: true);
+    } catch (_) {
+      // Cleanup is best-effort; the migrated directory is now authoritative.
     }
   }
 

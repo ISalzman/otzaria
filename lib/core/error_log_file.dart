@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:otzaria/core/app_paths.dart';
 import 'package:path/path.dart' as p;
 
 enum ErrorLogPlatform {
@@ -46,14 +47,19 @@ class ErrorLogFile {
   }) {
     final env = environment ?? Platform.environment;
     final currentPlatform = platform ?? _detectPlatform();
-    final baseDir = _resolveBaseDirectory(
+    final configuredDataRoot =
+        environment == null && platform == null && tempPath == null
+            ? AppPaths.cachedDataRootPath
+            : null;
+    final baseDir = configuredDataRoot ??
+        _resolveBaseDirectory(
           environment: env,
           platform: currentPlatform,
         ) ??
         tempPath ??
         Directory.systemTemp.path;
 
-    return p.join(baseDir, 'otzaria', 'logs', fileName);
+    return p.join(baseDir, 'logs', fileName);
   }
 
   /// מבטיחה שתיקיית הלוג והקובץ עצמו קיימים.

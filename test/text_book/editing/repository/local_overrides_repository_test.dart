@@ -1,20 +1,78 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/text_book/editing/repository/local_overrides_repository.dart';
 import 'package:otzaria/text_book/editing/models/editor_settings.dart';
+import 'package:path/path.dart' as path;
+
+import 'dart:io';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('LocalOverridesRepository', () {
-    late LocalOverridesRepository repository;
+    group('Legacy Migration', () {
+      test('moves legacy overrides and removes the old directory', () async {
+        final tempRoot = Directory.systemTemp.createTempSync('otzaria_overrides_migration_');
 
-    setUp(() {
-      repository = LocalOverridesRepository(
-        settings: const EditorSettings(),
-      );
+        try {
+          final legacyDir = Directory(path.join(tempRoot.path, 'legacy_user_overrides'));
+          final legacyFile = File(path.join(legacyDir.path, 'book1', 'section1.md'));
+          legacyFile.parent.createSync(recursive: true);
+          legacyFile.writeAsStringSync('legacy content');
+
+          final newDirPath = path.join(tempRoot.path, 'new_user_overrides');
+
+          await LocalOverridesRepository.migrateLegacyOverridesDirectory(
+            legacyPath: legacyDir.path,
+            newBasePath: newDirPath,
+          );
+
+          expect(File(path.join(newDirPath, 'book1', 'section1.md')).existsSync(), isTrue);
+          expect(
+            File(path.join(newDirPath, 'book1', 'section1.md')).readAsStringSync(),
+            'legacy content',
+          );
+          expect(legacyDir.existsSync(), isFalse);
+        } finally {
+          tempRoot.deleteSync(recursive: true);
+        }
+      });
+
+      test('keeps target files authoritative and still removes the legacy directory', () async {
+        final tempRoot = Directory.systemTemp.createTempSync('otzaria_overrides_migration_');
+
+        try {
+          final legacyDir = Directory(path.join(tempRoot.path, 'legacy_user_overrides'));
+          final legacyFile = File(path.join(legacyDir.path, 'book1', 'section1.md'));
+          legacyFile.parent.createSync(recursive: true);
+          legacyFile.writeAsStringSync('legacy content');
+
+          final newDirPath = path.join(tempRoot.path, 'new_user_overrides');
+          final targetFile = File(path.join(newDirPath, 'book1', 'section1.md'));
+          targetFile.parent.createSync(recursive: true);
+          targetFile.writeAsStringSync('new content');
+
+          await LocalOverridesRepository.migrateLegacyOverridesDirectory(
+            legacyPath: legacyDir.path,
+            newBasePath: newDirPath,
+          );
+
+          expect(targetFile.readAsStringSync(), 'new content');
+          expect(legacyDir.existsSync(), isFalse);
+        } finally {
+          tempRoot.deleteSync(recursive: true);
+        }
+      });
     });
 
     group('Override Operations', () {
+      late LocalOverridesRepository repository;
+
+      setUp(() {
+        repository = LocalOverridesRepository(
+          settings: const EditorSettings(),
+        );
+      });
+
       test('should write and read override', () async {
         const bookId = 'test_book';
         const sectionId = 'test_section';
@@ -50,6 +108,14 @@ void main() {
     });
 
     group('Draft Operations', () {
+      late LocalOverridesRepository repository;
+
+      setUp(() {
+        repository = LocalOverridesRepository(
+          settings: const EditorSettings(),
+        );
+      });
+
       test('should write and read draft', () async {
         const bookId = 'test_book';
         const sectionId = 'test_section';
@@ -95,6 +161,14 @@ void main() {
     });
 
     group('Listing Operations', () {
+      late LocalOverridesRepository repository;
+
+      setUp(() {
+        repository = LocalOverridesRepository(
+          settings: const EditorSettings(),
+        );
+      });
+
       test('should list overrides for book', () async {
         const bookId = 'test_book';
 
@@ -121,6 +195,14 @@ void main() {
     });
 
     group('Links File Detection', () {
+      late LocalOverridesRepository repository;
+
+      setUp(() {
+        repository = LocalOverridesRepository(
+          settings: const EditorSettings(),
+        );
+      });
+
       test('should detect links file existence', () async {
         // This test would need to be adapted based on actual file structure
         final hasLinks = await repository.hasLinksFile('test_book');

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -9,6 +10,79 @@ enum InstallMode { systemWide, perUser }
 /// Utility class for managing application paths.
 /// Centralizes path construction logic to avoid duplication.
 class AppPaths {
+  static String? _cachedDataRootPath;
+
+  /// Returns the default writable root for user-scoped app data.
+  static Future<String> getDataRootPath() async {
+    if (_cachedDataRootPath != null && _cachedDataRootPath!.isNotEmpty) {
+      return _cachedDataRootPath!;
+    }
+
+    final Directory rootDir;
+    if (Platform.isAndroid || Platform.isIOS) {
+      rootDir = await getApplicationDocumentsDirectory();
+    } else {
+      rootDir = await getApplicationSupportDirectory();
+    }
+
+    _cachedDataRootPath = rootDir.path;
+    return _cachedDataRootPath!;
+  }
+
+  static String? get cachedDataRootPath => _cachedDataRootPath;
+
+  /// Migrates legacy data roots and saved default paths to the current layout.
+  static Future<void> migrateLegacyDataToUnifiedRoot() async {
+    final newRoot = await getDataRootPath();
+    final defaultLibraryPath = await getDefaultLibraryPath();
+    final defaultIndexPath = await _getDefaultIndexPath();
+    final defaultLockPath = p.join(p.dirname(defaultIndexPath), 'tantivy.lock');
+
+    final legacyRoots = _legacyDataRootsForCurrentPlatform();
+    for (final legacyRoot in legacyRoots) {
+      await _migrateDirectoryIfNeeded(
+        sourcePath: p.join(legacyRoot, 'books'),
+        targetPath: defaultLibraryPath,
+      );
+      await _migrateDirectoryIfNeeded(
+        sourcePath: p.join(legacyRoot, 'index'),
+        targetPath: defaultIndexPath,
+      );
+      await _migrateDirectoryIfNeeded(
+        sourcePath: p.join(legacyRoot, 'logs'),
+        targetPath: p.join(newRoot, 'logs'),
+      );
+      await _migrateDirectoryIfNeeded(
+        sourcePath: p.join(legacyRoot, 'tantivy.lock'),
+        targetPath: defaultLockPath,
+      );
+    }
+
+    final legacyBackupPaths = await _legacyBackupPaths();
+    for (final legacyBackupPath in legacyBackupPaths) {
+      await _migrateDirectoryIfNeeded(
+        sourcePath: legacyBackupPath,
+        targetPath: p.join(newRoot, 'backups'),
+      );
+    }
+
+    await _migrateSettingPath(
+      settingKey: SettingsRepository.keyLibraryPath,
+      legacyPaths: legacyRoots.map((root) => p.join(root, 'books')).toList(),
+      targetPath: defaultLibraryPath,
+    );
+    await _migrateSettingPath(
+      settingKey: SettingsRepository.keyIndexPath,
+      legacyPaths: legacyRoots.map((root) => p.join(root, 'index')).toList(),
+      targetPath: defaultIndexPath,
+    );
+    await _migrateSettingPath(
+      settingKey: SettingsRepository.keyBackupPath,
+      legacyPaths: legacyBackupPaths,
+      targetPath: p.join(newRoot, 'backups'),
+    );
+  }
+
   /// Detects whether the app is installed system-wide or per-user.
   static Future<InstallMode> detectInstallMode() async {
     if (Platform.isMacOS) {
@@ -30,49 +104,203 @@ class AppPaths {
     return InstallMode.perUser;
   }
 
-  /// Default library path based on install mode and platform.
+  /// Default library path.
+  ///
+  /// On system-wide desktop installs this remains in the shared data root.
+  /// Otherwise it lives under the user-scoped app data root.
   static Future<String> getDefaultLibraryPath() async {
-    final mode = await detectInstallMode();
-    if (mode == InstallMode.systemWide) {
-      if (Platform.isWindows) {
-        final pd = Platform.environment['ProgramData'] ?? r'C:\ProgramData';
-        return p.join(pd, 'otzaria', 'books');
-      }
-      if (Platform.isMacOS) return '/Library/Application Support/otzaria/books';
-      if (Platform.isLinux) return '/var/lib/otzaria/books';
+    final systemWideRoot = await _getSystemWideLibraryRootIfNeeded();
+    if (systemWideRoot != null) {
+      return p.join(systemWideRoot, 'books');
     }
 
-    // Per-user defaults
+    return p.join(await getDataRootPath(), 'books');
+  }
+
+  static Future<String?> _getSystemWideLibraryRootIfNeeded() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      return null;
+    }
+
+    final mode = await detectInstallMode();
+    if (mode != InstallMode.systemWide) {
+      return null;
+    }
+
     if (Platform.isWindows) {
-      final appData = Platform.environment['APPDATA'] ?? '';
-      return p.join(appData, 'otzaria', 'books');
+      final pd = Platform.environment['ProgramData'] ?? r'C:\ProgramData';
+      return p.join(pd, 'otzaria');
     }
     if (Platform.isMacOS) {
-      final home = Platform.environment['HOME'] ?? '';
-      return p.join(home, 'Library', 'Application Support', 'otzaria', 'books');
+      return '/Library/Application Support/otzaria';
     }
     if (Platform.isLinux) {
-      final home = Platform.environment['HOME'] ?? '';
-      return p.join(home, '.local', 'share', 'otzaria', 'books');
+      return '/var/lib/otzaria';
     }
-    if (Platform.isAndroid) {
-      try {
-        final ext = await getExternalStorageDirectory();
-        return p.join(
-            ext?.path ?? (await getApplicationDocumentsDirectory()).path,
-            'otzaria',
-            'books');
-      } catch (_) {
-        return p.join((await getApplicationDocumentsDirectory()).path,
-            'otzaria', 'books');
+
+    return null;
+  }
+
+  static Future<String> _getDefaultIndexPath() async {
+    final systemWideRoot = await _getSystemWideLibraryRootIfNeeded();
+    if (systemWideRoot != null) {
+      return p.join(systemWideRoot, 'index');
+    }
+
+    return p.join(await getDataRootPath(), 'index');
+  }
+
+  static List<String> _legacyDataRootsForCurrentPlatform() {
+    final roots = <String>{};
+
+    if (Platform.isWindows) {
+      final appData = Platform.environment['APPDATA'];
+      if (appData != null && appData.isNotEmpty) {
+        roots.add(p.join(appData, 'otzaria'));
+      }
+
+      final localAppData = Platform.environment['LOCALAPPDATA'];
+      if (localAppData != null && localAppData.isNotEmpty) {
+        roots.add(p.join(localAppData, 'otzaria'));
+      }
+
+      final programData = Platform.environment['ProgramData'];
+      if (programData != null && programData.isNotEmpty) {
+        roots.add(p.join(programData, 'otzaria'));
       }
     }
-    if (Platform.isIOS) {
-      return p.join(
-          (await getApplicationDocumentsDirectory()).path, 'otzaria', 'books');
+
+    if (Platform.isMacOS) {
+      final home = Platform.environment['HOME'];
+      if (home != null && home.isNotEmpty) {
+        roots.add(p.join(home, 'Library', 'Application Support', 'otzaria'));
+      }
+      roots.add('/Library/Application Support/otzaria');
     }
-    return p.join(
-        (await getApplicationDocumentsDirectory()).path, 'otzaria', 'books');
+
+    if (Platform.isLinux) {
+      final home = Platform.environment['HOME'];
+      if (home != null && home.isNotEmpty) {
+        roots.add(p.join(home, '.local', 'share', 'otzaria'));
+      }
+      roots.add('/var/lib/otzaria');
+    }
+
+    if (Platform.isAndroid || Platform.isIOS) {
+      final documentsPath = _cachedDataRootPath;
+      if (documentsPath != null && documentsPath.isNotEmpty) {
+        roots.add(p.join(documentsPath, 'otzaria'));
+      }
+    }
+
+    return roots.toList();
+  }
+
+  static Future<List<String>> _legacyBackupPaths() async {
+    final backupPaths = <String>{};
+    final docs = await getApplicationDocumentsDirectory();
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      backupPaths.add(p.join(docs.path, 'OtzariaBackups'));
+    } else {
+      backupPaths.add(p.join(docs.path, 'otzaria', 'backups'));
+    }
+
+    return backupPaths.toList();
+  }
+
+  static Future<void> _migrateSettingPath({
+    required String settingKey,
+    required List<String> legacyPaths,
+    required String targetPath,
+  }) async {
+    final savedPath = Settings.getValue<String>(settingKey);
+    if (savedPath == null || savedPath.isEmpty) {
+      return;
+    }
+
+    final normalizedSavedPath = p.normalize(savedPath);
+    final normalizedTargetPath = p.normalize(targetPath);
+    if (normalizedSavedPath == normalizedTargetPath) {
+      return;
+    }
+
+    final matchesLegacyPath = legacyPaths
+        .map(p.normalize)
+        .any((legacyPath) => legacyPath == normalizedSavedPath);
+    if (!matchesLegacyPath) {
+      return;
+    }
+
+    if (!await Directory(targetPath).exists()) {
+      return;
+    }
+
+    await Settings.setValue(settingKey, targetPath);
+  }
+
+  static Future<void> _migrateDirectoryIfNeeded({
+    required String sourcePath,
+    required String targetPath,
+  }) async {
+    try {
+      final normalizedSourcePath = p.normalize(sourcePath);
+      final normalizedTargetPath = p.normalize(targetPath);
+      if (normalizedSourcePath == normalizedTargetPath) {
+        return;
+      }
+
+      final sourceDir = Directory(sourcePath);
+      if (!await sourceDir.exists()) {
+        return;
+      }
+
+      final targetDir = Directory(targetPath);
+      if (await targetDir.exists()) {
+        return;
+      }
+
+      await targetDir.parent.create(recursive: true);
+
+      try {
+        await sourceDir.rename(targetPath);
+        return;
+      } catch (_) {}
+
+      await _copyDirectory(sourceDir, targetDir);
+
+      try {
+        await sourceDir.delete(recursive: true);
+      } catch (_) {}
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'Failed to migrate legacy directory from $sourcePath to $targetPath: $error\n$stackTrace',
+        );
+      }
+    }
+  }
+
+  static Future<void> _copyDirectory(
+    Directory sourceDir,
+    Directory targetDir,
+  ) async {
+    await targetDir.create(recursive: true);
+
+    await for (final entity in sourceDir.list(recursive: false, followLinks: false)) {
+      final name = p.basename(entity.path);
+      final targetPath = p.join(targetDir.path, name);
+
+      if (entity is Directory) {
+        await _copyDirectory(entity, Directory(targetPath));
+        continue;
+      }
+
+      if (entity is File) {
+        await File(targetPath).parent.create(recursive: true);
+        await entity.copy(targetPath);
+      }
+    }
   }
 
   /// Gets the main library path from settings, or gracefully falls back to default paths.
@@ -92,29 +320,21 @@ class AppPaths {
     return libraryPath;
   }
 
-  /// Gets the search index path (library_path/index)
+  /// Gets the search index path.
+  ///
+  /// On system-wide desktop installs this remains next to the shared library.
   static Future<String> getIndexPath() async {
     // Check if there is a separate index path assigned
     final savedIndex =
         Settings.getValue<String>(SettingsRepository.keyIndexPath);
     if (savedIndex != null && savedIndex.isNotEmpty) return savedIndex;
 
-    // fallback: parallel to the library path (otzaria/index)
-    final libraryPath = await getLibraryPath();
-    final parentDir = p.dirname(libraryPath);
-    return p.join(parentDir, 'index');
+    return _getDefaultIndexPath();
   }
 
-  /// Returns user's generic backup path.
+  /// Returns the backup path inside the writable app data root.
   static Future<String> getDefaultBackupPath() async {
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      final docs = await getApplicationDocumentsDirectory();
-      return p.join(docs.path, 'OtzariaBackups');
-    } else {
-      // Mobile
-      final docs = await getApplicationDocumentsDirectory();
-      return p.join(docs.path, 'backups');
-    }
+    return p.join(await getDataRootPath(), 'backups');
   }
 
   /// Gets backup path from settings.
@@ -125,8 +345,7 @@ class AppPaths {
   }
 
   /// Gets the shared directory used for Tantivy lock/state files.
-  /// It is kept next to the index directory so all users of the same
-  /// installation can access the same lock files.
+  /// It is kept next to the active index directory.
   static Future<String> getTantivyLockPath() async {
     final indexPath = await getIndexPath();
     final lockDir = Directory(p.join(p.dirname(indexPath), 'tantivy.lock'));
@@ -152,14 +371,7 @@ class AppPaths {
   /// Resolves the notes database path - for cross-platform compatibility.
   /// Also migrates the DB from the old sqflite location the first time it runs on mobile.
   static Future<String> resolveNotesDbPath(String fileName) async {
-    final Directory dbDir;
-    if (Platform.isAndroid || Platform.isIOS) {
-      final appDir = await getApplicationDocumentsDirectory();
-      dbDir = Directory(p.join(appDir.path, 'databases'));
-    } else {
-      final support = await getApplicationSupportDirectory();
-      dbDir = Directory(p.join(support.path, 'databases'));
-    }
+    final dbDir = Directory(p.join(await getDataRootPath(), 'databases'));
     if (!await dbDir.exists()) await dbDir.create(recursive: true);
     final newPath = p.join(dbDir.path, fileName);
 
@@ -192,23 +404,24 @@ class AppPaths {
     }
   }
 
-  /// Creates necessary directories for the application
-  /// Note: Does NOT create the library path itself - only index directories
-  /// The library path should be created by the user or during library download
+  /// Creates startup directories when eagerly required.
   static Future<void> createNecessaryDirectories() async {
-    // Index directory is created by TantivyDataProvider._initEngine().
-    // No other directories need pre-creation at startup.
+    // Directories are created lazily by the services that actually use them.
   }
 
   /// Gets the root path for all plugin data.
   static Future<String> getPluginsRootPath() async {
-    final Directory baseDir;
-    if (Platform.isAndroid || Platform.isIOS) {
-      baseDir = await getApplicationDocumentsDirectory();
-    } else {
-      baseDir = await getApplicationSupportDirectory();
-    }
-    return p.join(baseDir.path, 'plugins');
+    return p.join(await getDataRootPath(), 'plugins');
+  }
+
+  /// Gets the root path for user overrides.
+  static Future<String> getUserOverridesRootPath() async {
+    return p.join(await getDataRootPath(), 'user_overrides');
+  }
+
+  /// Gets the root path for per-book settings files.
+  static Future<String> getPerBookSettingsPath() async {
+    return p.join(await getDataRootPath(), 'per_book_settings');
   }
 
   /// Gets the path where downloaded/extracted plugins are installed.

@@ -138,6 +138,16 @@ String _formatAppVersion(PackageInfo packageInfo) {
   return '$version+$buildNumber';
 }
 
+Future<void> _initializeDataRootForEarlyLogging() async {
+  try {
+    await AppPaths.getDataRootPath();
+  } catch (error, stackTrace) {
+    if (kDebugMode) {
+      debugPrint('Failed to resolve app data root early: $error\n$stackTrace');
+    }
+  }
+}
+
 Future<void> _initializeLogMetadata() async {
   try {
     final packageInfo = await PackageInfo.fromPlatform();
@@ -193,6 +203,7 @@ bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
 /// 5. Launches the main application widget
 void main() async {
   SentryWidgetsFlutterBinding.ensureInitialized();
+  await _initializeDataRootForEarlyLogging();
   await _initializeLogMetadata();
   hierarchicalLoggingEnabled = true;
 
@@ -499,6 +510,7 @@ Future<void> initialize() async {
 
   await RustLib.init();
   await Settings.init(cacheProvider: HiveCache());
+  await AppPaths.migrateLegacyDataToUnifiedRoot();
   await initHive();
   await createDirs();
   await loadCerts();
@@ -565,9 +577,7 @@ Future<void> initialize() async {
 
 /// Creates the necessary directory structure for the application.
 ///
-/// Sets up two main directories:
-/// - Main library directory ('אוצריא')
-/// - Index directory for search functionality
+/// Sets up the unified writable app-data root and its subdirectories.
 Future<void> createDirs() async {
   await AppPaths.createNecessaryDirectories();
 }
