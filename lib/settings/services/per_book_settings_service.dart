@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/core/app_paths.dart';
 
 /// מחלקה לניהול הגדרות פר-ספר
 class PerBookSettings {
@@ -9,10 +10,9 @@ class PerBookSettings {
   static bool _migrationAttempted = false;
 
   /// קבלת נתיב תיקיית ההגדרות
-  /// נשמר בתיקיית ה־Application Support (זהה לשאר הגדרות האפליקציה)
+  /// נשמרת תחת שורש הנתונים האחיד של האפליקציה.
   static Future<Directory> _getSettingsDirectory() async {
-    final appDir = await getApplicationSupportDirectory();
-    final settingsDir = Directory('${appDir.path}/$_settingsFolderName');
+    final settingsDir = Directory(await AppPaths.getPerBookSettingsPath());
     if (!await settingsDir.exists()) {
       await settingsDir.create(recursive: true);
     }

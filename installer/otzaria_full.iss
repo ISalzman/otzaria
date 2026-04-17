@@ -39,9 +39,9 @@ DisableDirPage=no
 Type: filesandordirs; Name: "{code:GetDataDir}\books"
 
 [Dirs]
-Name: "{commonappdata}\otzaria"; Permissions: users-modify; Check: IsAdminInstallMode
-Name: "{commonappdata}\otzaria\books"; Permissions: users-modify; Check: IsAdminInstallMode
-Name: "{commonappdata}\otzaria\index"; Permissions: users-modify; Check: IsAdminInstallMode
+Name: "{code:GetDataDir}"; Permissions: users-modify
+Name: "{code:GetDataDir}\books"; Permissions: users-modify
+Name: "{code:GetDataDir}\index"; Permissions: users-modify
 
 [Languages]
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
@@ -112,7 +112,7 @@ begin
   if IsAdminInstallMode then
     Result := ExpandConstant('{commonappdata}\otzaria')
   else
-    Result := ExpandConstant('{userappdata}\otzaria');
+    Result := ExpandConstant('{userappdata}\{#MyAppName}\{#MyAppName}');
 end;
 
 function InitializeSetup(): Boolean;
@@ -249,8 +249,19 @@ begin
   begin
     if WizardIsTaskSelected('resetsettings') then
     begin
-      // Delete previous installation directory (usually in LocalAppData)
+      AppDataPath := GetDataDir('');
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
+
       AppDataPath := ExpandConstant('{userappdata}\otzaria');
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
+
+      AppDataPath := ExpandConstant('{commonappdata}\otzaria');
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
+
+      AppDataPath := ExpandConstant('{localappdata}\otzaria');
       if DirExists(AppDataPath) then
         DelTree(AppDataPath, True, True, True);
         

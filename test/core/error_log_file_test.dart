@@ -16,7 +16,7 @@ void main() {
 
     expect(
       path,
-      p.join(r'C:\Users\tester\AppData\Local', 'otzaria', 'logs', 'errors.txt'),
+      p.join(r'C:\Users\tester\AppData\Local', 'logs', 'errors.txt'),
     );
   });
 
@@ -27,7 +27,7 @@ void main() {
       tempPath: r'C:\Temp',
     );
 
-    expect(path, p.join(r'C:\Temp', 'otzaria', 'logs', 'errors.txt'));
+    expect(path, p.join(r'C:\Temp', 'logs', 'errors.txt'));
   });
 
   test('formatEntry includes version, details and stack trace when provided', () {

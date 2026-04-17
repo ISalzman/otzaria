@@ -13,7 +13,6 @@ import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path_provider/path_provider.dart';
 
 /// Service for backing up and restoring app data
 class BackupService {
@@ -236,8 +235,7 @@ class BackupService {
 
   /// Backup user overrides
   static Future<Map<String, dynamic>> _backupUserOverrides() async {
-    final docs = await getApplicationDocumentsDirectory();
-    final overridesDir = Directory(p.join(docs.path, 'user_overrides'));
+    final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
     
     if (!await overridesDir.exists()) {
       return {};
@@ -539,8 +537,7 @@ class BackupService {
 
   /// Restore user overrides to files
   static Future<void> _restoreUserOverrides(Map<String, dynamic> overridesData) async {
-    final docs = await getApplicationDocumentsDirectory();
-    final overridesDir = Directory(p.join(docs.path, 'user_overrides'));
+    final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
     
     for (final entry in overridesData.entries) {
       try {
