@@ -6,7 +6,7 @@ permissions:
 on:
   push:
     branches:
-      - main
+      - migrationDB_V2
 
   workflow_dispatch:
 
