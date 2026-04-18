@@ -88,8 +88,8 @@ build/
 fonts/
 external/
 
-installer/otzaria-0.9.89-windows.exe
-installer/otzaria-0.9.89-windows-full.exe
+installer/otzaria-0.9.90-windows.exe
+installer/otzaria-0.9.90-windows-full.exe
 pubspec.lock
 flutter/
 
