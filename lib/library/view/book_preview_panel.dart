@@ -37,6 +37,7 @@ class BookPreviewPanel extends StatefulWidget {
 class _BookPreviewPanelState extends State<BookPreviewPanel> {
   TextBookTab? _currentTextTab;
   PdfViewerController? _pdfController;
+  bool _isPdfViewerReady = false;
   double _fontSize = 18.0; // ברירת מחדל לגודל פונט
   DateTime? _lastPdfPrimaryClickAt;
   Offset? _lastPdfPrimaryClickPosition;
@@ -49,9 +50,11 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     super.didUpdateWidget(oldWidget);
 
     // אם הספר השתנה, נצור tab חדש
-    if (widget.book != oldWidget.book && widget.book != null) {
+    if (widget.book != oldWidget.book) {
       _disposeCurrentTab();
-      _createNewTab();
+      if (widget.book != null) {
+        _createNewTab();
+      }
     }
   }
 
@@ -75,6 +78,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     _currentTextTab?.dispose();
     _currentTextTab = null;
     _pdfController = null;
+    _isPdfViewerReady = false;
   }
 
   void _createNewTab() {
@@ -82,6 +86,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
 
     if (widget.book is TextBook) {
       setState(() {
+        _isPdfViewerReady = false;
         _currentTextTab = TextBookTab(
           book: widget.book as TextBook,
           index: 0,
@@ -92,6 +97,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
       });
     } else if (widget.book is PdfBook) {
       setState(() {
+        _isPdfViewerReady = false;
         _pdfController = PdfViewerController();
       });
     }
@@ -385,26 +391,43 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
             verticalCacheExtent: 1,
             pageAnchor: PdfPageAnchor.top,
             margin: 4,
+            onDocumentChanged: (document) {
+              if (document != null || !_isPdfViewerReady || !mounted) {
+                return;
+              }
+
+              setState(() {
+                _isPdfViewerReady = false;
+              });
+            },
             onViewerReady: (document, controller) {
-              // PDF viewer ready
+              if (_isPdfViewerReady || !mounted) {
+                return;
+              }
+
+              setState(() {
+                _isPdfViewerReady = true;
+              });
             },
             viewerOverlayBuilder: (context, size, handleLinkTap) => [
-              KeyedSubtree(
-                key: _pdfVerticalScrollbarKey,
-                child: PdfScrollbar(
-                  controller: _pdfController!,
-                  orientation: ScrollbarOrientation.right,
-                  trackThickness: 16.0,
-                  thumbMinSize: 50.0,
+              if (_isPdfViewerReady)
+                KeyedSubtree(
+                  key: _pdfVerticalScrollbarKey,
+                  child: PdfScrollbar(
+                    controller: _pdfController!,
+                    orientation: ScrollbarOrientation.right,
+                    trackThickness: 16.0,
+                    thumbMinSize: 50.0,
+                  ),
                 ),
-              ),
-              KeyedSubtree(
-                key: _pdfHorizontalScrollbarKey,
-                child: PdfHorizontalScrollbar(
-                  controller: _pdfController!,
-                  trackThickness: 10.0,
+              if (_isPdfViewerReady)
+                KeyedSubtree(
+                  key: _pdfHorizontalScrollbarKey,
+                  child: PdfHorizontalScrollbar(
+                    controller: _pdfController!,
+                    trackThickness: 10.0,
+                  ),
                 ),
-              ),
             ],
           ),
         ),

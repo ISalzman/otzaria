@@ -68,14 +68,15 @@ class PdfScrollbar extends StatelessWidget {
         ? Alignment.centerLeft
         : Alignment.centerRight;
     final colorScheme = Theme.of(context).colorScheme;
-    final resolvedTrackColor =
-        trackColor ?? colorScheme.surfaceContainerHighest.withValues(alpha: 0.8);
+    final resolvedTrackColor = trackColor ??
+        colorScheme.surfaceContainerHighest.withValues(alpha: 0.8);
     final resolvedThumbColor =
         thumbColor ?? colorScheme.primary.withValues(alpha: 0.82);
 
-    return ValueListenableBuilder(
-      valueListenable: controller,
-      builder: (context, value, child) {
+    // PdfViewerController.value זורק לפני שה-viewer מתחבר אליו.
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
         if (!controller.isReady) {
           return const SizedBox.shrink();
         }
@@ -88,8 +89,9 @@ class PdfScrollbar extends StatelessWidget {
         final visibleRect = controller.visibleRect;
         final visibleHeight = math.min(visibleRect.height, bounds.height);
         final scrollableExtent = math.max(bounds.height - visibleHeight, 0.0);
-        final currentTop =
-            (visibleRect.top - bounds.top).clamp(0.0, scrollableExtent).toDouble();
+        final currentTop = (visibleRect.top - bounds.top)
+            .clamp(0.0, scrollableExtent)
+            .toDouble();
 
         return Align(
           alignment: alignment,
@@ -106,7 +108,8 @@ class PdfScrollbar extends StatelessWidget {
                 final rawThumbHeight = bounds.height <= 0
                     ? trackHeight
                     : trackHeight * (visibleHeight / bounds.height);
-                final thumbHeight = rawThumbHeight.clamp(thumbMinSize, trackHeight);
+                final thumbHeight =
+                    rawThumbHeight.clamp(thumbMinSize, trackHeight);
                 final maxThumbTop = math.max(trackHeight - thumbHeight, 0.0);
                 final thumbTop = scrollableExtent == 0
                     ? 0.0
@@ -117,7 +120,9 @@ class PdfScrollbar extends StatelessWidget {
                   final normalizedTop =
                       (desiredThumbTop.clamp(0.0, maxThumbTop) / maxThumbTop)
                           .toDouble();
-                  final targetTop = bounds.top + normalizedTop * scrollableExtent;
+                  final targetTop =
+                      bounds.top + normalizedTop * scrollableExtent;
+                  final zoom = controller.value.zoom;
                   final targetCenter = Offset(
                     visibleRect.center.dx,
                     targetTop + visibleHeight / 2,
@@ -125,7 +130,7 @@ class PdfScrollbar extends StatelessWidget {
                   controller.goTo(
                     controller.calcMatrixFor(
                       targetCenter,
-                      zoom: value.zoom,
+                      zoom: zoom,
                       viewSize: controller.viewSize,
                     ),
                   );
@@ -142,7 +147,8 @@ class PdfScrollbar extends StatelessWidget {
                         width: trackThickness,
                         decoration: BoxDecoration(
                           color: resolvedTrackColor,
-                          borderRadius: BorderRadius.circular(trackThickness / 2),
+                          borderRadius:
+                              BorderRadius.circular(trackThickness / 2),
                         ),
                       ),
                       Positioned(
@@ -214,14 +220,14 @@ class PdfHorizontalScrollbar extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return ValueListenableBuilder(
-      valueListenable: controller,
-      builder: (context, value, child) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
         if (!controller.isReady) {
           return const SizedBox.shrink();
         }
 
-        final zoom = value.zoom;
+        final zoom = controller.value.zoom;
         final normalizedZoom =
             ((zoom - _minZoomForNormalization) / _zoomRangeForNormalization)
                 .clamp(0.0, 1.0);
@@ -242,7 +248,8 @@ class PdfHorizontalScrollbar extends StatelessWidget {
               width: thumbSize.width,
               height: trackThickness,
               decoration: BoxDecoration(
-                color: thumbColor ?? colorScheme.outline.withValues(alpha: 0.75),
+                color:
+                    thumbColor ?? colorScheme.outline.withValues(alpha: 0.75),
                 borderRadius: BorderRadius.circular(trackThickness / 2),
               ),
             );
