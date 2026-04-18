@@ -59,7 +59,6 @@ class App extends StatelessWidget {
             (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
         return MaterialApp(
           navigatorKey: navigatorKey,
-          scaffoldMessengerKey: scaffoldMessengerKey,
           localizationsDelegates: const [
             GlobalCupertinoLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
