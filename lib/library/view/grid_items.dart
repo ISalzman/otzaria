@@ -569,31 +569,6 @@ class _BookGridActionColumn extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if ((book.heShortDesc ?? '').isNotEmpty)
-          Tooltip(
-            message: book.heShortDesc ?? '',
-            waitDuration: const Duration(milliseconds: 400),
-            textAlign: TextAlign.right,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            margin: const EdgeInsets.all(12),
-            constraints: const BoxConstraints(maxWidth: 320),
-            decoration: _libraryTooltipDecoration(context),
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.75),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                FluentIcons.info_24_regular,
-                size: 15,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
         FutureBuilder<String>(
           future: FileSystemData.instance.getBookDataSource(
             book.title,
