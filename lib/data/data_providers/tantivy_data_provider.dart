@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:search_engine/search_engine.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:otzaria/search/search_repository.dart';
@@ -203,7 +204,8 @@ class TantivyDataProvider {
       // conflict.
       if (booksDone.isEmpty) {
         await _closeBox();
-        final legacyPath = await AppPaths.getLegacyIndexStatePath();
+        final legacyPath =
+            p.join(await AppPaths.getDataRootPath(), 'index_state');
         final migrated = await TantivyDataProvider.migrateBooksDone(
           currentDir: lockPath,
           legacyDir: legacyPath,

@@ -128,12 +128,7 @@ begin
   if IsAdminInstallMode then
     Result := ExpandConstant('{commonappdata}\otzaria')
   else
-    Result := ExpandConstant('{userappdata}\{#MyAppName}\{#MyAppName}');
-end;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  AppDataPath: string;
+    Result := ExpandConstant('{userappdata}\otzaria');
 begin
   if CurStep = ssInstall then
   begin

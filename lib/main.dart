@@ -510,7 +510,6 @@ Future<void> initialize() async {
 
   await RustLib.init();
   await Settings.init(cacheProvider: HiveCache());
-  await AppPaths.migrateLegacyDataToUnifiedRoot();
   await initHive();
   await createDirs();
   await loadCerts();
@@ -596,7 +595,7 @@ void createDirectoryIfNotExists(String path) {
 }
 
 Future<void> initHive() async {
-  Hive.init((await getApplicationSupportDirectory()).path);
+  Hive.init(await AppPaths.getDataRootPath());
   await Hive.openBox<dynamic>('tabs');
   await Hive.openBox<dynamic>('workspaces');
   await Hive.openBox<dynamic>('history');
