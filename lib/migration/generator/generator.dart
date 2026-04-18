@@ -33,11 +33,6 @@ class DatabaseGenerator {
   /// Callback for progress updates
   final void Function(double progress, String message)? onProgress;
 
-  /// Callback to handle duplicate books. Returns true to replace, false to skip.
-  /// If null, duplicates will be skipped by default.
-  /// Parameters: bookTitle, categoryId
-  Future<bool> Function(String bookTitle, int categoryId)? onDuplicateBook;
-
   /// Library root path for relative path computations
   late String _libraryRoot;
 
@@ -58,7 +53,7 @@ class DatabaseGenerator {
   final Map<String, List<String>> _bookContentCache = {};
 
   DatabaseGenerator(this.sourceDirectory, this.repository,
-      {this.onDuplicateBook, this.onProgress})
+      {this.onProgress})
       : _libraryRoot = sourceDirectory;
 
   /// Sets the total books to process for progress reporting.
@@ -317,29 +312,9 @@ class DatabaseGenerator {
             _processedBooksCount /
                 (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
             'עודכן ספר: $title ($pct%)');
-
-        // Call the callback if provided
-        if (onDuplicateBook != null) {
-          final shouldReplace = await onDuplicateBook!(title, categoryId);
-          if (!shouldReplace) {
-            onProgress?.call(
-                _processedBooksCount /
-                    (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
-                'מדלג על כפילות: $title');
-            _processedBooksCount++;
-            return;
-          }
-          // Delete the existing book and continue with insertion
-          await repository.deleteBookCompletely(existingBook.id);
-        } else {
-          // Default behavior: skip duplicates
-          onProgress?.call(
-              _processedBooksCount /
-                  (_totalBooksToProcess > 0 ? _totalBooksToProcess : 1),
-              'מדלג על כפילות: $title');
-          _processedBooksCount++;
-          return;
-        }
+        // The book was updated; no need to fall through to the duplicate-skip
+        // or delete-and-re-insert logic.
+        return;
       }
 
       // קביעת מזהה לספר: שלילי אם אישי או קובץ שאינו txt, אחרת רגיל

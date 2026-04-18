@@ -172,22 +172,29 @@ class SeforimRepository {
         'DELETE FROM line_toc WHERE lineId IN (SELECT id FROM line WHERE bookId = ?)',
         [bookId]);
 
-    // Insert computed mappings
+    // Insert computed mappings.
+    // Lines that appear before the first heading have no tocEntry covering them;
+    // the subquery returns NULL for those rows.  We skip them rather than
+    // violating the NOT NULL constraint on line_toc.tocEntryId.
     db.execute('''
       INSERT INTO line_toc(lineId, tocEntryId)
-      SELECT l.id AS lineId,
-             (
-                 SELECT t.id
-                 FROM tocEntry t
-                 JOIN line sl ON sl.id = t.lineId
-                 WHERE t.bookId = l.bookId
-                   AND t.lineId IS NOT NULL
-                   AND sl.lineIndex <= l.lineIndex
-                 ORDER BY sl.lineIndex DESC
-                 LIMIT 1
-             ) AS tocEntryId
-      FROM line l
-      WHERE l.bookId = ?
+      SELECT lineId, tocEntryId
+      FROM (
+          SELECT l.id AS lineId,
+                 (
+                     SELECT t.id
+                     FROM tocEntry t
+                     JOIN line sl ON sl.id = t.lineId
+                     WHERE t.bookId = l.bookId
+                       AND t.lineId IS NOT NULL
+                       AND sl.lineIndex <= l.lineIndex
+                     ORDER BY sl.lineIndex DESC
+                     LIMIT 1
+                 ) AS tocEntryId
+          FROM line l
+          WHERE l.bookId = ?
+      )
+      WHERE tocEntryId IS NOT NULL
     ''', [bookId]);
   }
 
