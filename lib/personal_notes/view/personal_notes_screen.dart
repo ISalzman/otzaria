@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/core/focus_repository.dart';
 
 import 'package:otzaria/widgets/otzaria_search_field.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -136,12 +135,12 @@ class _PersonalNotesManagerScreenState
 
   void requestKeyboardFocus() {
     if (!mounted || !_windowFocusNode.canRequestFocus) return;
-    requestFocusIfNeeded(_windowFocusNode);
+    if (!_windowFocusNode.hasFocus) _windowFocusNode.requestFocus();
   }
 
   void _focusSearchField() {
     if (!mounted || !_searchFocusNode.canRequestFocus) return;
-    requestFocusIfNeeded(_searchFocusNode);
+    if (!_searchFocusNode.hasFocus) _searchFocusNode.requestFocus();
   }
 
   KeyEventResult _handleWindowKeyEvent(FocusNode node, KeyEvent event) {

@@ -287,6 +287,18 @@ class MainWindowScreenState extends State<MainWindowScreen>
         settingsBloc.add(UpdateIsFullscreen(isFullscreen));
       }
     };
+
+    // שחזור פוקוס לאחר אירועי מצב חלון דיסקרטיים (maximize/unmaximize/fullscreen/restore)
+    appWindowListener?.onWindowStateChanged = () {
+      if (!mounted) return;
+      FocusRepository().scheduleRestore();
+    };
+
+    // שחזור פוקוס בזמן resize רציף — עם debounce כדי למנוע הצפת קריאות
+    appWindowListener?.onWindowResizeOccurred = () {
+      if (!mounted) return;
+      FocusRepository().scheduleRestoreDebounced();
+    };
   }
 
   /// Restore fullscreen state from settings when app starts
@@ -323,6 +335,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
   void dispose() {
     // Clean up fullscreen callback
     appWindowListener?.onFullscreenChanged = null;
+    appWindowListener?.onWindowStateChanged = null;
+    appWindowListener?.onWindowResizeOccurred = null;
     _calendarCubit.close();
     _emptyLibraryBloc?.close();
     _readerLocationTracker?.dispose();
@@ -442,6 +456,19 @@ class MainWindowScreenState extends State<MainWindowScreen>
           context.read<FocusRepository>().requestBookContentFocus();
         }
       });
+    } else if (state.currentScreen == Screen.settings) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.read<FocusRepository>().requestSettingsFocus();
+        }
+      });
+    } else if (state.currentScreen == Screen.find) {
+      // find_ref_dialog registers its own restorer on open
+      context.read<FocusRepository>().requestFindRefSearchFocus();
+    } else if (state.currentScreen == Screen.search) {
+      // TantivyFullTextSearch listens to NavigationBloc and registers
+      // itself via setScreenRestorer in _requestSearchFieldFocus.
+      // No extra action needed here.
     }
   }
 
@@ -1002,6 +1029,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
     ).then((_) {
       if (!mounted) return;
       setState(() => _isSearchOpen = false);
+      // Restore focus to the screen below (dialog restorer was already removed
+      // by SearchDialog.dispose → unregisterActiveRestorer)
+      FocusRepository().scheduleRestore();
       final currentScreen = navigationBloc.state.currentScreen;
       if (currentScreen == Screen.reading || currentScreen == Screen.search) {
         _syncPageWithState();
@@ -1024,6 +1054,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
     ).then((_) {
       if (!mounted) return;
       setState(() => _isFindRefOpen = false);
+      // Restore focus to the screen below (dialog restorer was already removed
+      // by FindRefDialog.dispose → unregisterActiveRestorer)
+      FocusRepository().scheduleRestore();
       final currentScreen = navigationBloc.state.currentScreen;
       if (currentScreen == Screen.reading || currentScreen == Screen.search) {
         _syncPageWithState();

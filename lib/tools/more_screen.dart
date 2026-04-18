@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
-import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
-import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/personal_notes/view/personal_notes_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/measurement_converter/measurement_converter_screen.dart';
@@ -172,15 +170,43 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
     });
   }
 
+  /// מעדכן את ה-screen restorer של מסך הכלים.
+  ///
+  /// הקריטריון הוא מה מחובר לעץ הפוקוס בפועל, לא _showMobileMenu:
+  /// - בdesktop, _contentFocusNode תמיד בעץ גם כש-_showMobileMenu==true
+  /// - בmobile menu, _contentFocusNode לא מחובר → canRestore=false טבעית
+  void _registerMoreRestorer() {
+    FocusRepository().setScreenRestorer(
+      restore: () {
+        if (!mounted) return;
+        if (_selectedToolId == 'builtin.calendar') {
+          _requestCalendarFocus();
+        } else if (_contentFocusNode.enclosingScope != null) {
+          _contentFocusNode.requestFocus();
+        }
+      },
+      canRestore: () {
+        if (!mounted) return false;
+        if (_selectedToolId == 'builtin.calendar') {
+          return _calendarKey.currentState != null;
+        }
+        return _contentFocusNode.enclosingScope != null;
+      },
+    );
+  }
+
   void requestActiveTabFocus() {
+    // עדכון restorer מיידי לפי מצב נוכחי, לפני כל addPostFrameCallback
+    _registerMoreRestorer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      FocusManager.instance.primaryFocus?.unfocus();
-      if (_contentFocusNode.canRequestFocus) {
-        _contentFocusNode.requestFocus();
-      }
+      // אין unfocus גלובלי — זה עלול להשאיר את האפליקציה ללא פוקוס כלל
+      // אם ה-requestFocus שאחריו נכשל (למשל בזמן resize ב-Windows).
       if (_selectedToolId == 'builtin.calendar') {
         _requestCalendarFocus();
+      } else if (_contentFocusNode.enclosingScope != null &&
+          !_contentFocusNode.hasFocus) {
+        _contentFocusNode.requestFocus();
       }
     });
   }
@@ -714,15 +740,6 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final isMoreScreenActive =
-        context.select((NavigationBloc bloc) => bloc.state.currentScreen) ==
-            Screen.more;
-
-    if (isMoreScreenActive && _selectedToolId == 'builtin.calendar') {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) requestActiveTabFocus();
-      });
-    }
 
     final bgColor = AppSurfaces.panelBackground(context);
 
@@ -784,24 +801,11 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
                     : _buildMobileContent(bgColor))
                 : _buildDesktop(bgColor);
 
-            return AnimatedSwitcher(
-              duration: AppTokens.animNormal,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeInOut,
-                ),
-                child: child,
-              ),
-              child: KeyedSubtree(
-                key: ValueKey(
-                  isMobile
-                      ? 'mobile-${_showMobileMenu ? 'menu' : 'content-$_selectedToolId'}'
-                      : 'desktop',
-                ),
-                child: content,
-              ),
-            );
+            // החזרת content ישירות — ללא AnimatedSwitcher וללא KeyedSubtree.
+            // AnimatedSwitcher עם key משתנה גורם ל-Flutter לשמיד ולהקים
+            // מחדש את כל ה-subtree (כולל FocusNodes) בכל מעבר mobile↔desktop,
+            // וזו שורש הקריסות ואיבודי הפוקוס ב-Windows בזמן resize.
+            return content;
           },
         ),
       ),

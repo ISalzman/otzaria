@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
 import 'package:otzaria/settings/tabs/settings_tabs_exports.dart';
 import 'package:otzaria/settings/services/safer_mode/protected_settings_wrapper.dart';
@@ -51,10 +52,12 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     super.initState();
     widget.controller?.addListener(_handleRequestedTab);
     _applyRequestedTab(widget.controller?.requestedTab);
+    FocusRepository().registerSettingsFocusRequester(_requestSettingsFocus);
   }
 
   @override
   void dispose() {
+    FocusRepository().unregisterSettingsFocusRequester(_requestSettingsFocus);
     widget.controller?.removeListener(_handleRequestedTab);
     _contentFocusNode.dispose();
     _contentScrollController.dispose();
@@ -73,7 +76,27 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
 
   void _changeTab(int index) {
     setState(() => _selectedIndex = index);
-    _contentFocusNode.requestFocus();
+    // בטוח רק בdesktop layout — במוד mobile ה-node לא מחובר לעץ הפוקוס
+    if (_contentFocusNode.enclosingScope != null) {
+      _contentFocusNode.requestFocus();
+    }
+  }
+
+  void _requestSettingsFocus() {
+    if (!mounted) return;
+    // מעדכן את ה-screen restorer עם canRestore תלוי-layout —
+    // במוד mobile ה-contentFocusNode לא מחובר לעץ הפוקוס ולכן canRestore=false.
+    FocusRepository().setScreenRestorer(
+      restore: () {
+        if (mounted && _contentFocusNode.enclosingScope != null) {
+          _contentFocusNode.requestFocus();
+        }
+      },
+      canRestore: () => mounted && _contentFocusNode.enclosingScope != null,
+    );
+    if (_contentFocusNode.enclosingScope != null) {
+      _contentFocusNode.requestFocus();
+    }
   }
 
   void _handleRequestedTab() {
@@ -103,7 +126,10 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       _selectedIndex = tabIndex;
       _showMobileMenu = false;
     });
-    _contentFocusNode.requestFocus();
+    // בטוח רק בdesktop layout — במוד mobile ה-node לא מחובר לעץ הפוקוס
+    if (_contentFocusNode.enclosingScope != null) {
+      _contentFocusNode.requestFocus();
+    }
   }
 
   // ── הגדרת רשימת הטאבים ────────────────────────────────────────────────────

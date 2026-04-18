@@ -10,6 +10,7 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/search/view/full_text_settings_widgets.dart';
 import 'package:otzaria/search/view/tantivy_search_results.dart';
 import 'package:otzaria/search/view/full_text_facet_filtering.dart';
@@ -141,6 +142,24 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             tabsState.currentTabIndex < tabsState.tabs.length &&
             tabsState.tabs[tabsState.currentTabIndex] == widget.tab) {
           widget.tab.searchFieldFocusNode.requestFocus();
+          // Register as screen-level restorer so window events restore focus here
+          FocusRepository().setScreenRestorer(
+            restore: () {
+              if (mounted && widget.tab.searchFieldFocusNode.canRequestFocus) {
+                widget.tab.searchFieldFocusNode.requestFocus();
+              }
+            },
+            canRestore: () {
+              if (!mounted ||
+                  !widget.tab.searchFieldFocusNode.canRequestFocus) {
+                return false;
+              }
+              final state = context.read<TabsBloc>().state;
+              return state.hasOpenTabs &&
+                  state.currentTabIndex < state.tabs.length &&
+                  state.tabs[state.currentTabIndex] == widget.tab;
+            },
+          );
         }
       }
     });
