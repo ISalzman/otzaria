@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:otzaria/core/app_paths.dart';
 
 /// A cache access provider class for shared preferences using Hive library
 class HiveCache extends CacheProvider {
@@ -11,10 +11,10 @@ class HiveCache extends CacheProvider {
   @override
   Future<void> init() async {
     if (!kIsWeb) {
-      final defaultDirectory = await getApplicationSupportDirectory();
+      final defaultDirectory = await AppPaths.getDataRootPath();
       _preferences = await Hive.openBox<dynamic>(
         keyName,
-        path: defaultDirectory.path,
+        path: defaultDirectory,
       );
     }
   }

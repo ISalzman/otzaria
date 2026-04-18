@@ -112,7 +112,7 @@ begin
   if IsAdminInstallMode then
     Result := ExpandConstant('{commonappdata}\otzaria')
   else
-    Result := ExpandConstant('{userappdata}\{#MyAppName}\{#MyAppName}');
+    Result := ExpandConstant('{userappdata}\otzaria');
 end;
 
 function InitializeSetup(): Boolean;
