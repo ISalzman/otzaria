@@ -16,12 +16,20 @@ typedef FullscreenCallback = void Function(bool isFullscreen);
 class AppWindowListener extends WindowListener {
   FullscreenCallback? onFullscreenChanged;
 
+  /// נקרא לאחר אירועי מצב חלון דיסקרטיים שעלולים לגרום לאיבוד פוקוס:
+  /// maximize, unmaximize, restore, כניסה/יציאה ממסך מלא.
+  VoidCallback? onWindowStateChanged;
+
+  /// נקרא בכל אירוע resize רציף — מיועד ל-debounced restore.
+  VoidCallback? onWindowResizeOccurred;
+
   @override
   void onWindowEnterFullScreen() {
     if (kDebugMode) {
       print('Window entered fullscreen');
     }
     onFullscreenChanged?.call(true);
+    onWindowStateChanged?.call();
   }
 
   @override
@@ -30,6 +38,7 @@ class AppWindowListener extends WindowListener {
       print('Window left fullscreen');
     }
     onFullscreenChanged?.call(false);
+    onWindowStateChanged?.call();
   }
 
   @override
@@ -122,6 +131,7 @@ class AppWindowListener extends WindowListener {
     if (kDebugMode) {
       print('Window restored');
     }
+    onWindowStateChanged?.call();
   }
 
   @override
@@ -132,6 +142,7 @@ class AppWindowListener extends WindowListener {
 
     if (WindowPersistence.isRestoring) return;
     WindowPersistence.scheduleSave();
+    onWindowResizeOccurred?.call();
   }
 
   @override
@@ -151,6 +162,7 @@ class AppWindowListener extends WindowListener {
     }
     if (WindowPersistence.isRestoring) return;
     WindowPersistence.scheduleSave();
+    onWindowStateChanged?.call();
   }
 
   @override
@@ -160,6 +172,7 @@ class AppWindowListener extends WindowListener {
     }
     if (WindowPersistence.isRestoring) return;
     WindowPersistence.scheduleSave();
+    onWindowStateChanged?.call();
   }
 
   /// Clean up the listener when disposing

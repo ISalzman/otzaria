@@ -23,6 +23,7 @@ class FindRefDialog extends StatefulWidget {
 class _FindRefDialogState extends State<FindRefDialog> {
   int _selectedIndex = 0;
   final Map<int, GlobalKey> _itemKeys = {};
+  FocusRestorer? _focusRestorer;
 
   @override
   void initState() {
@@ -30,13 +31,31 @@ class _FindRefDialogState extends State<FindRefDialog> {
 
     // בחירת הטקסט הקיים כאשר חוזרים למסך
     // מבוצע מיד ולא ב-postFrameCallback כדי למנוע אובדן פוקוס באנדרואיד
-    final controller = context.read<FocusRepository>().findRefSearchController;
+    final controller = FocusRepository().findRefSearchController;
     if (controller.text.isNotEmpty) {
       controller.selection = TextSelection(
         baseOffset: 0,
         extentOffset: controller.text.length,
       );
     }
+
+    // רישום כ-active restorer כדי שהדיאלוג יקבל שחזור פוקוס לאחר אירועי חלון
+    _focusRestorer = FocusRepository().registerActiveRestorer(
+      restore: () {
+        if (mounted) FocusRepository().findRefSearchFocusNode.requestFocus();
+      },
+      canRestore: () =>
+          mounted &&
+          FocusRepository().findRefSearchFocusNode.canRequestFocus &&
+          (ModalRoute.of(context)?.isCurrent ?? false),
+    );
+  }
+
+  @override
+  void dispose() {
+    final restorer = _focusRestorer;
+    if (restorer != null) FocusRepository().unregisterActiveRestorer(restorer);
+    super.dispose();
   }
 
   GlobalKey _getKeyForIndex(int index) {

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
@@ -50,6 +51,7 @@ class SearchDialog extends StatefulWidget {
 
 class _SearchDialogState extends State<SearchDialog> {
   late SearchingTab _searchTab;
+  FocusRestorer? _focusRestorer;
   bool _showIndexWarning = false;
   bool _showHistoryDropdown = false;
   final ValueNotifier<bool> _advancedControlsHasFocus = ValueNotifier(false);
@@ -111,10 +113,19 @@ class _SearchDialogState extends State<SearchDialog> {
     };
     _searchTab.queryController.addListener(_queryListener);
 
-    // בקשת פוקוס לתיבת החיפוש
+    // בקשת פוקוס לתיבת החיפוש + רישום כ-active restorer לשחזור לאחר אירועי חלון
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _searchTab.searchFieldFocusNode.requestFocus();
+        _focusRestorer = FocusRepository().registerActiveRestorer(
+          restore: () {
+            if (mounted) _searchTab.searchFieldFocusNode.requestFocus();
+          },
+          canRestore: () =>
+              mounted &&
+              _searchTab.searchFieldFocusNode.canRequestFocus &&
+              (ModalRoute.of(context)?.isCurrent ?? false),
+        );
       }
     });
   }
@@ -228,6 +239,8 @@ class _SearchDialogState extends State<SearchDialog> {
 
   @override
   void dispose() {
+    final restorer = _focusRestorer;
+    if (restorer != null) FocusRepository().unregisterActiveRestorer(restorer);
     _searchTab.queryController.removeListener(_queryListener);
     _advancedControlsHasFocus.dispose();
     super.dispose();
