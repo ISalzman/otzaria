@@ -626,8 +626,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       normalizeMatrix: layoutMode == PdfLayoutMode.bookView
           ? (matrix, viewSize, layout, controller) {
               if (_isPageTurnInProgress) {
-                // Bypass normalization so goToPage can reach its target.
-                // Log only occasionally to avoid flooding the console.
                 return matrix;
               }
               return _normalizeBookViewMatrix(
@@ -1342,10 +1340,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       _lockedSpreadStartPage = _spreadStartPageFor(safePage);
     }
 
-    // During progressive PDF loading, pdfrx's goToPage waits for the view to
-    // stop moving. New tiles arriving cause layout shifts, so the view never
-    // fully settles and the Future hangs indefinitely. The timeout lets us
-    // proceed anyway — the view is close enough to the target page.
+    // During progressive PDF loading, pdfrx may wait indefinitely for the
+    // viewport to settle while new tiles keep arriving. Time out the await so
+    // page-turn state cannot deadlock the navigation flow.
     await widget.tab.pdfViewerController
         .goToPage(pageNumber: safePage)
         .timeout(const Duration(seconds: 3), onTimeout: () {});
@@ -1366,11 +1363,33 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       return null;
     }
 
-    // המתן לסיום הציור של הפריים הנוכחי לפני לכידה
-    if (renderObject.debugNeedsPaint) {
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return null;
-      if (renderObject.debugNeedsPaint) return null;
+    var needsPaint = false;
+    assert(() {
+      needsPaint = renderObject.debugNeedsPaint;
+      return true;
+    }());
+
+    if (needsPaint) {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) {
+          return null;
+        }
+
+        needsPaint = false;
+        assert(() {
+          needsPaint = renderObject.debugNeedsPaint;
+          return true;
+        }());
+
+        if (!needsPaint) {
+          break;
+        }
+      }
+
+      if (needsPaint) {
+        return null;
+      }
     }
 
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
@@ -1483,6 +1502,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         return;
       }
 
+      // Reset to 0 before setState so that when the AnimatedBuilder first
+      // paints the overlay it uses progress=0 (full snapshot, no hole).
+      // Without this, a previous completed animation leaves the controller
+      // at 1.0, punching a full-spread hole in the snapshot and exposing
+      // the loading tiles underneath before the animation even starts.
       _pageTurnController.reset();
       setState(() {
         _disposePageTurnSnapshot();
@@ -1493,9 +1517,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         );
       });
 
-      // Wait for the overlay frame to actually paint before jumping to the new
-      // page. Without this, goToPage fires while the snapshot is still scheduled
-      // (not yet on screen) and the new PDF tiles appear underneath a blank overlay.
+      // Wait for the overlay frame to actually paint before jumping to the
+      // new page. Without this, goToPage fires while the snapshot is still
+      // scheduled (not yet on screen) and the new PDF tiles appear
+      // underneath a blank overlay.
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
 
@@ -1508,6 +1533,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
       if (!mounted) return;
 
+      // Allow the PDF to begin rendering the new page tiles before the
+      // animation starts, so the revealed area isn't blank.
       await Future<void>.delayed(const Duration(milliseconds: 16));
 
       if (!mounted) return;
