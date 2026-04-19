@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:logging/logging.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/engine/settings_wrapper.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 
 import '../../data/data_providers/sqlite_data_provider.dart';
+import 'background_db_sync_worker.dart';
 import 'file_sync_service.dart';
 
 /// Initializes background file sync after app startup.
@@ -27,7 +30,6 @@ class BackgroundSyncInitializer {
   ///                  Default is 3 seconds to ensure UI is responsive.
   static Future<void> initializeAfterDelay({
     int delaySeconds = 5,
-    void Function(double progress, String message)? onProgress,
     void Function(FileSyncResult result)? onComplete,
   }) async {
     if (_hasRun) {
@@ -44,12 +46,11 @@ class BackgroundSyncInitializer {
     await Future.delayed(Duration(seconds: delaySeconds));
 
     // Run sync in background
-    _runBackgroundSync(onProgress: onProgress, onComplete: onComplete);
+    _runBackgroundSync(onComplete: onComplete);
   }
 
   /// Run the background sync
   static Future<void> _runBackgroundSync({
-    void Function(double progress, String message)? onProgress,
     void Function(FileSyncResult result)? onComplete,
   }) async {
     try {
@@ -64,10 +65,7 @@ class BackgroundSyncInitializer {
 
       _log.info('Starting background file sync...');
 
-      // Get SQLite provider
       final sqliteProvider = SqliteDataProvider.instance;
-
-      // Ensure database is initialized
       if (!sqliteProvider.isInitialized) {
         await sqliteProvider.initialize();
       }
@@ -78,24 +76,25 @@ class BackgroundSyncInitializer {
         return;
       }
 
-      // Get repository
-      final repository = sqliteProvider.repository;
-      if (repository == null) {
-        _log.warning('Repository not available, skipping sync');
+      final dbPath = sqliteProvider.dbPath;
+      final libraryPath = Settings.getValue<String>('key-library-path');
+      if (libraryPath == null || libraryPath.isEmpty) {
+        _log.warning('Library path not set, skipping sync');
         _syncCompleter?.complete(null);
         return;
       }
 
-      // Create sync service
-      final syncService = await FileSyncService.getInstance(repository);
-      if (syncService == null) {
-        _log.warning('Could not create sync service, skipping sync');
-        _syncCompleter?.complete(null);
-        return;
-      }
+      final customFoldersJson =
+          Settings.getValue<String>(SettingsRepository.keyCustomFolders);
+      final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
 
-      // Run sync
-      final result = await syncService.syncFiles(onProgress: onProgress);
+      final result = await runCustomFoldersDbSyncInIsolate(
+        dbPath: dbPath,
+        libraryPath: libraryPath,
+        customFolders: customFolders,
+      );
+
+      await FileSyncService.saveCustomFoldersSignature(customFolders);
 
       _log.info('Background sync completed: $result');
 

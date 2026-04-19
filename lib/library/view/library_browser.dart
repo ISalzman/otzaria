@@ -19,7 +19,10 @@ import 'package:otzaria/file_sync/file_sync_event.dart';
 import 'package:otzaria/file_sync/file_sync_repository.dart';
 import 'package:otzaria/file_sync/file_sync_state.dart';
 import 'package:otzaria/library/view/library_daf_yomi.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart';
+import 'package:otzaria/migration/sync/background_db_sync_worker.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/widgets/filter_chips_widget.dart';
 import 'package:otzaria/navigation/main_window_screen.dart';
 import 'package:otzaria/library/view/grid_items.dart';
@@ -796,12 +799,23 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       if (!sqliteProvider.isInitialized) {
         await sqliteProvider.initialize();
       }
+      if (!sqliteProvider.isInitialized) return;
 
-      final repository = sqliteProvider.repository;
-      if (repository != null) {
-        final syncService = await FileSyncService.getInstance(repository);
-        await syncService?.syncFiles();
-      }
+      final dbPath = sqliteProvider.dbPath;
+      final libraryPath = Settings.getValue<String>('key-library-path');
+      if (libraryPath == null || libraryPath.isEmpty) return;
+
+      final customFoldersJson =
+          Settings.getValue<String>(SettingsRepository.keyCustomFolders);
+      final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
+
+      await runCustomFoldersDbSyncInIsolate(
+        dbPath: dbPath,
+        libraryPath: libraryPath,
+        customFolders: customFolders,
+      );
+
+      await FileSyncService.saveCustomFoldersSignature(customFolders);
     } catch (_) {
       // גם אם סריקת התיקיות נכשלה, עדיין נרענן את הספרייה.
     }
