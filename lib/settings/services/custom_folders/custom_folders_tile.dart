@@ -11,6 +11,7 @@ import 'package:otzaria/widgets/confirmation_dialog.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart';
+import 'package:otzaria/migration/sync/background_db_sync_worker.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -260,8 +261,6 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
     try {
       final sqliteProvider = SqliteDataProvider.instance;
       if (!sqliteProvider.isInitialized) {
-        debugPrint(
-            '[CustomFolders] _deleteFolderFromDatabase: initializing SqliteProvider...');
         await sqliteProvider.initialize();
       }
 
@@ -272,62 +271,44 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
         return;
       }
 
-      // מצא את קטגוריית "ספרים אישיים"
+      // Lightweight reads to resolve category IDs — done on main isolate.
       final rootCategories = await repository.getRootCategories();
-      debugPrint(
-          '[CustomFolders] _deleteFolderFromDatabase: found ${rootCategories.length} root categories');
       Category? personalCategory;
       for (final cat in rootCategories) {
-        debugPrint(
-            '[CustomFolders]   root category: id=${cat.id}, title="${cat.title}"');
         if (cat.title == 'ספרים אישיים') {
           personalCategory = cat;
           break;
         }
       }
-
       if (personalCategory == null) {
         debugPrint(
-            '[CustomFolders] _deleteFolderFromDatabase: "ספרים אישיים" NOT FOUND, aborting');
+            '[CustomFolders] _deleteFolderFromDatabase: "ספרים אישיים" NOT FOUND');
         return;
       }
-      debugPrint(
-          '[CustomFolders] _deleteFolderFromDatabase: found "ספרים אישיים" id=${personalCategory.id}');
 
-      // מצא את קטגוריית התיקייה
       final folderCategories =
           await repository.getCategoryChildren(personalCategory.id);
-      debugPrint(
-          '[CustomFolders] _deleteFolderFromDatabase: ${folderCategories.length} children under "ספרים אישיים"');
       Category? folderCategory;
       for (final cat in folderCategories) {
-        debugPrint(
-            '[CustomFolders]   child category: id=${cat.id}, title="${cat.title}"');
         if (cat.title == folder.name) {
           folderCategory = cat;
           break;
         }
       }
-
       if (folderCategory == null) {
         debugPrint(
-            '[CustomFolders] _deleteFolderFromDatabase: folder category "${folder.name}" NOT FOUND, aborting');
+            '[CustomFolders] _deleteFolderFromDatabase: "${folder.name}" NOT FOUND');
         return;
       }
-      debugPrint(
-          '[CustomFolders] _deleteFolderFromDatabase: found folder category id=${folderCategory.id}, calling deleteFolderFromDatabase...');
 
-      // מחק את התיקייה וכל תוכנה מה-DB
-      final syncService = await FileSyncService.getInstance(repository);
-      if (syncService != null) {
-        await syncService.deleteFolderFromDatabase(
-            folderCategory.id, personalCategory.id);
-        debugPrint(
-            '[CustomFolders] _deleteFolderFromDatabase: deletion COMPLETE');
-      } else {
-        debugPrint(
-            '[CustomFolders] _deleteFolderFromDatabase: syncService is NULL');
-      }
+      // Heavy recursive delete runs in a background isolate.
+      // Serialisation is handled inside runDeleteFolderFromDbInIsolate.
+      await runDeleteFolderFromDbInIsolate(
+        dbPath: sqliteProvider.dbPath,
+        folderCategoryId: folderCategory.id,
+        personalCategoryId: personalCategory.id,
+      );
+      debugPrint('[CustomFolders] _deleteFolderFromDatabase: deletion COMPLETE');
     } catch (e, stackTrace) {
       debugPrint('[CustomFolders] _deleteFolderFromDatabase ERROR: $e');
       debugPrint('[CustomFolders] stackTrace: $stackTrace');
@@ -392,28 +373,27 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       if (!sqliteProvider.isInitialized) {
         await sqliteProvider.initialize();
       }
-
-      final repository = sqliteProvider.repository;
-      if (repository == null) {
+      if (!sqliteProvider.isInitialized) {
         throw Exception('מסד הנתונים לא זמין');
       }
 
-      final syncService = await FileSyncService.getInstance(repository);
-      if (syncService == null) {
-        throw Exception('שירות הסנכרון לא זמין');
+      final dbPath = sqliteProvider.dbPath;
+      final libraryPath = Settings.getValue<String>('key-library-path');
+      if (libraryPath == null || libraryPath.isEmpty) {
+        throw Exception('נתיב הספרייה לא מוגדר');
       }
 
-      // סריקה מחדש של כל התיקיות האישיות השמורות בהגדרות.
-      // עוברת דרך אותו תור סריאלי כמו add-folder; פעולות לא רצות במקביל.
-      final result = await DatabaseLibraryProvider.operationQueue.enqueue(
-        () => syncService.syncFiles(
-          onProgress: (progress, message) {
-            debugPrint('Sync progress: $progress - $message');
-          },
-        ),
+      // _folders already holds the up-to-date state saved before this call.
+      // Serialisation is handled inside runCustomFoldersDbSyncInIsolate.
+      final result = await runCustomFoldersDbSyncInIsolate(
+        dbPath: dbPath,
+        libraryPath: libraryPath,
+        customFolders: _folders,
       );
 
-      // רענון הספרייה
+      // Store signature on main isolate after worker succeeds.
+      await FileSyncService.saveCustomFoldersSignature(_folders);
+
       if (mounted) {
         context.read<LibraryBloc>().add(RefreshLibrary());
       }

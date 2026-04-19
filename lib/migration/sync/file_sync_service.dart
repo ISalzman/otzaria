@@ -68,6 +68,29 @@ class FileSyncService {
     return _instance;
   }
 
+  /// Creates a fresh instance for use inside a background worker isolate.
+  /// Must NOT be used from the main isolate — use [getInstance] instead.
+  factory FileSyncService.createForWorker(SeforimRepository repository) {
+    return FileSyncService._(repository);
+  }
+
+  /// Stores the custom-folders refresh signature in Settings.
+  /// Must be called on the main isolate after a worker sync completes.
+  static Future<void> saveCustomFoldersSignature(
+      List<CustomFolder> customFolders) async {
+    String normalize(String folderPath) {
+      final n = path.normalize(folderPath);
+      return Platform.isWindows ? n.toLowerCase() : n;
+    }
+
+    final normalized = customFolders.map((f) => normalize(f.path)).toList()
+      ..sort();
+    await Settings.setValue(
+      SettingsRepository.keyCustomFoldersRefreshSignature,
+      normalized.join('|'),
+    );
+  }
+
   /// Check if sync is currently running
   bool get isSyncing => _isSyncing;
 
@@ -579,8 +602,12 @@ class FileSyncService {
     );
   }
 
-  /// Main sync function - scans אוצריא and links folders for new files
-  Future<FileSyncResult> syncFiles({
+  /// Pure sync logic — receives all inputs, touches no Settings.
+  /// Suitable for running inside a background worker isolate.
+  /// Does NOT call [_storeCustomFoldersRefreshSignature]; the caller must.
+  Future<FileSyncResult> syncCustomFoldersWithInputs({
+    required String libraryPath,
+    required List<CustomFolder> customFolders,
     void Function(double progress, String message)? onProgress,
   }) async {
     if (_isSyncing) {
@@ -600,29 +627,12 @@ class FileSyncService {
     final errors = <String>[];
 
     try {
-      final libraryPath = Settings.getValue<String>('key-library-path');
-      if (libraryPath == null || libraryPath.isEmpty) {
-        _log.warning('Library path not set, skipping sync');
-        return const FileSyncResult(errors: ['Library path not set']);
-      }
-
-      // Setup Generator
       final generator =
           DatabaseGenerator(libraryPath, _repository, onProgress: onProgress);
       generator.initializeForSync(
           libraryRoot: path.join(libraryPath, 'אוצריא'));
-      // Load metadata
 
-      // Skip scanning אוצריא folder - it only contains the DB file now
-      // All books are already in the database
-      _log.info('Skipping אוצריא folder scan - books are in database');
-
-      // Scan ALL custom folders (DB is single source of truth)
       _reportProgress(0.4, 'סורק תיקיות מותאמות אישית...');
-      // Load custom folders from settings
-      final customFoldersJson =
-          Settings.getValue<String>(SettingsRepository.keyCustomFolders);
-      final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
 
       if (customFolders.isNotEmpty) {
         _log.info('Found ${customFolders.length} custom folders to sync');
@@ -638,15 +648,13 @@ class FileSyncService {
           _log.info(
               'Scanning custom folder: ${folder.path} (addToDatabase: ${folder.addToDatabase})');
 
-          // insertContent depends on the addToDatabase flag:
-          // true = content lines go into DB
-          // false = only metadata/TOC saved, content read on-the-fly from file
           final result = await _scanAndImportPath(
-              rootPath: folder.path,
-              categoryPrefix: ['ספרים אישיים', folder.name],
-              insertContent: folder.addToDatabase,
-              customSourceName: _buildCustomFolderSourceName(folder.path),
-              generator: generator);
+            rootPath: folder.path,
+            categoryPrefix: ['ספרים אישיים', folder.name],
+            insertContent: folder.addToDatabase,
+            customSourceName: _buildCustomFolderSourceName(folder.path),
+            generator: generator,
+          );
 
           addedBooks += result.addedBooks;
           updatedBooks += result.updatedBooks;
@@ -662,9 +670,7 @@ class FileSyncService {
       }
 
       await pruneRemovedCustomFoldersFromDatabase(customFolders);
-      await _storeCustomFoldersRefreshSignature(customFolders);
 
-      // Scan links folder for JSON files only
       final linksPath = path.join(libraryPath, 'links');
       final linksDir = Directory(linksPath);
 
@@ -672,12 +678,10 @@ class FileSyncService {
         _log.info('Scanning links folder: $linksPath');
         _reportProgress(0.6, 'סורק תיקיית קישורים...');
 
-        // Use unified link processor method
         final linkProcessor = LinkProcessor(_repository);
         final linksResult = await linkProcessor.processLinksDirectory(
           linksPath: linksPath,
           onProgress: (progress, message) {
-            // Map progress from 0-1 to 0.6-0.9 range
             _reportProgress(0.6 + (progress * 0.3), message);
           },
           updateBookHasLinks: true,
@@ -706,6 +710,36 @@ class FileSyncService {
     );
 
     _log.info('Sync completed: $result');
+    return result;
+  }
+
+  /// Legacy wrapper — reads Settings and delegates to [syncCustomFoldersWithInputs].
+  /// Prefer calling [syncCustomFoldersWithInputs] via a worker isolate instead.
+  Future<FileSyncResult> syncFiles({
+    void Function(double progress, String message)? onProgress,
+  }) async {
+    if (_isSyncing) {
+      _log.warning('Sync already in progress, skipping');
+      return const FileSyncResult(errors: ['Sync already in progress']);
+    }
+
+    final libraryPath = Settings.getValue<String>('key-library-path');
+    if (libraryPath == null || libraryPath.isEmpty) {
+      _log.warning('Library path not set, skipping sync');
+      return const FileSyncResult(errors: ['Library path not set']);
+    }
+
+    final customFoldersJson =
+        Settings.getValue<String>(SettingsRepository.keyCustomFolders);
+    final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
+
+    final result = await syncCustomFoldersWithInputs(
+      libraryPath: libraryPath,
+      customFolders: customFolders,
+      onProgress: onProgress,
+    );
+
+    await _storeCustomFoldersRefreshSignature(customFolders);
     return result;
   }
 

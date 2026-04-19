@@ -5,6 +5,22 @@ class QueryLoader {
   static final Map<String, Map<String, String>> _queryCache = {};
   static bool _initialized = false;
 
+  /// Returns a snapshot of the loaded cache for transport to another isolate.
+  /// Call [initialize] first on the source isolate.
+  static Map<String, Map<String, String>> get cacheSnapshot =>
+      Map.fromEntries(
+        _queryCache.entries.map(
+          (e) => MapEntry(e.key, Map<String, String>.from(e.value)),
+        ),
+      );
+
+  /// Seeds the cache from a snapshot received from another isolate.
+  /// After this call [initialize] is a no-op; no [rootBundle] access needed.
+  static void seedCache(Map<String, Map<String, String>> snapshot) {
+    _queryCache.addAll(snapshot);
+    _initialized = true;
+  }
+
   /// Initialize the query loader by preloading all query files
   /// Must be called before using loadQueries
   static Future<void> initialize() async {
