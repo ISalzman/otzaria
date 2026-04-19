@@ -20,7 +20,7 @@ class DatabaseConstants {
   static const String externalCatalogVersionFileName = 'version.txt';
 
   /// The default name of the Otzaria folder
-  static const String otzariaFolderName = 'אוצריא';
+  static const String otzariaFolderName = 'Otzaria';
 
   /// Gets the full database path based on the library path setting.
   ///
