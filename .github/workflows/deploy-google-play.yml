@@ -1,54 +1,28 @@
 name: Deploy Android to Google Play
 
 on:
-  push:
-    branches:
-      - main
-
   workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Git ref to build and publish to Google Play (branch or tag)
+        required: false
+        default: main
+        type: string
+
+  release:
+    types:
+      - published
 
 permissions:
   contents: read
 
 concurrency:
-  group: google-play-production-${{ github.ref }}
+  group: google-play-production-${{ github.event.inputs.git_ref || github.event.release.tag_name || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  detect_release_commit:
-    name: Detect release commit
-    runs-on: ubuntu-latest
-    outputs:
-      is_version: ${{ steps.check.outputs.is_version }}
-      version: ${{ steps.check.outputs.version }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check if commit message is a version tag
-        id: check
-        shell: bash
-        run: |
-          COMMIT_MESSAGE='${{ github.event.head_commit.message }}'
-          if [ -z "$COMMIT_MESSAGE" ]; then
-            echo "Commit message not available in event payload; using checked-out HEAD commit message instead"
-            COMMIT_MESSAGE=$(git log -1 --pretty=%B)
-          fi
-          COMMIT_MESSAGE=$(printf '%s' "$COMMIT_MESSAGE" | head -n 1 | xargs)
-          echo "Commit message: $COMMIT_MESSAGE"
-
-          if printf '%s' "$COMMIT_MESSAGE" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "is_version=true" >> "$GITHUB_OUTPUT"
-            echo "version=$COMMIT_MESSAGE" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_version=false" >> "$GITHUB_OUTPUT"
-            echo "version=" >> "$GITHUB_OUTPUT"
-          fi
-
   deploy_play:
     name: Build and publish to Google Play production
-    needs: detect_release_commit
-    if: github.event_name == 'workflow_dispatch' || needs.detect_release_commit.outputs.is_version == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -57,6 +31,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.git_ref || github.event.release.tag_name || github.ref }}
 
       - name: Free up disk space
         run: |
