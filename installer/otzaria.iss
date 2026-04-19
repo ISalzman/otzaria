@@ -129,6 +129,11 @@ begin
     Result := ExpandConstant('{commonappdata}\otzaria')
   else
     Result := ExpandConstant('{userappdata}\otzaria');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  AppDataPath: string;
 begin
   if CurStep = ssInstall then
   begin
