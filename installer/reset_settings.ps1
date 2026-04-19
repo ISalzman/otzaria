@@ -2,7 +2,6 @@ $targetPaths = @(
     "${env:APPDATA}\אוצריא\אוצריא",
     "${env:APPDATA}\otzaria",
     "${env:LOCALAPPDATA}\otzaria",
-    "${env:ProgramData}\otzaria",
     "${env:APPDATA}\com.example"
 )
 
