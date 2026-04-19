@@ -6,6 +6,10 @@ permissions:
 on:
   workflow_dispatch:
 
+  # טריגר לפרסום בלבד
+  release:
+    types: [published, prereleased]
+
 jobs:
   build_windows:
     if: github.event_name != 'release' && github.event_name != 'pull_request'
@@ -1337,7 +1341,7 @@ jobs:
           files: release-files/*
           body_path: release-body.md
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
 
   # --- הכרזה על גרסה שפורסמה ---
   announce_release:

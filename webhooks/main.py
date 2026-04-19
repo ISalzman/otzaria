@@ -1,5 +1,5 @@
-import os
 import json
+import os
 
 from pyluach import dates
 
@@ -13,40 +13,71 @@ def heb_date() -> str:
     return date_str
 
 
+def require_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value.strip()
+
+
+def load_asset_links(event_path: str | None) -> list[str]:
+    if not event_path:
+        return []
+
+    with open(event_path, "r", encoding="utf-8") as file:
+        event_data = json.load(file)
+
+    assets = event_data.get("release", {}).get("assets", [])
+    return [f"[{asset['name']}]({asset['browser_download_url']})" for asset in assets]
+
+
 date_str = heb_date()
 RELEASE_TAG = os.getenv("RELEASE_TAG", "Unknown")
 RELEASE_NAME = os.getenv("RELEASE_NAME", "No Name")
 RELEASE_BODY = os.getenv("RELEASE_BODY", "")
 RELEASE_URL = os.getenv("RELEASE_URL", "")
 GITHUB_EVENT_PATH = os.getenv("GITHUB_EVENT_PATH")
-username = os.getenv("USER_NAME")
-password = os.getenv("PASSWORD")
-yemot_token = os.getenv("TOKEN_YEMOT")
-asset_links = []
-if GITHUB_EVENT_PATH:
-    with open(GITHUB_EVENT_PATH, "r", encoding="utf-8") as f:
-        event_data = json.load(f)
-        assets = event_data.get("release", {}).get("assets", [])
-        for asset in assets:
-            asset_links.append(f"[{asset['name']}]({asset['browser_download_url']})")
+username = require_env("USER_NAME")
+password = require_env("PASSWORD")
+yemot_token = require_env("TOKEN_YEMOT")
+asset_links = load_asset_links(GITHUB_EVENT_PATH)
 date_yemot = f"עדכון {date_str}\n"
 yemot_path = "ivr2:/2"
 tzintuk_list_name = "software update"
 yemot_message = f"עדכון {date_str}\nשחרור {RELEASE_NAME}\nפרטים: {RELEASE_BODY}\n"
-content_mitmachim = f"עדכון {date_str}\nשחרור {RELEASE_NAME}\nפרטים: {RELEASE_BODY}\n{RELEASE_URL}\nקבצים מצורפים:\n* {"\n* ".join(asset_links)}"
-
-client = MitmachimClient(username.strip().replace(" ", "+"), password.strip())
+asset_section = ""
 if asset_links:
-    try:
-        client.login()
-        topic_id = 87961
-        client.send_post(content_mitmachim, topic_id)
-    except Exception as e:
-        print(e)
-    finally:
-        client.logout()
+    asset_section = "\nקבצים מצורפים:\n* " + "\n* ".join(asset_links)
+content_mitmachim = (
+    f"עדכון {date_str}\n"
+    f"שחרור {RELEASE_NAME}\n"
+    f"תג: {RELEASE_TAG}\n"
+    f"פרטים: {RELEASE_BODY}\n"
+    f"{RELEASE_URL}"
+    f"{asset_section}"
+)
 
-    try:
-        split_and_send(yemot_message, date_yemot, yemot_token, yemot_path, tzintuk_list_name)
-    except Exception as e:
-        print(e)
+errors = []
+client = None
+
+try:
+    client = MitmachimClient(username.replace(" ", "+"), password)
+    client.login()
+    topic_id = 87961
+    client.send_post(content_mitmachim, topic_id)
+except Exception as error:
+    errors.append(f"Mitmachim announcement failed: {error}")
+finally:
+    if client is not None:
+        try:
+            client.logout()
+        except Exception as error:
+            errors.append(f"Mitmachim logout failed: {error}")
+
+try:
+    split_and_send(yemot_message, date_yemot, yemot_token, yemot_path, tzintuk_list_name)
+except Exception as error:
+    errors.append(f"Yemot announcement failed: {error}")
+
+if errors:
+    raise RuntimeError("\n".join(errors))
