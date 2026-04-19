@@ -808,11 +808,15 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       final customFoldersJson =
           Settings.getValue<String>(SettingsRepository.keyCustomFolders);
       final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
+      final folderName =
+          Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
+              '';
 
       await runCustomFoldersDbSyncInIsolate(
         dbPath: dbPath,
         libraryPath: libraryPath,
         customFolders: customFolders,
+        folderName: folderName,
       );
 
       await FileSyncService.saveCustomFoldersSignature(customFolders);

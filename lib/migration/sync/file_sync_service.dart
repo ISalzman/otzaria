@@ -608,6 +608,7 @@ class FileSyncService {
   Future<FileSyncResult> syncCustomFoldersWithInputs({
     required String libraryPath,
     required List<CustomFolder> customFolders,
+    String folderName = '',
     void Function(double progress, String message)? onProgress,
   }) async {
     if (_isSyncing) {
@@ -629,8 +630,10 @@ class FileSyncService {
     try {
       final generator =
           DatabaseGenerator(libraryPath, _repository, onProgress: onProgress);
-      generator.initializeForSync(
-          libraryRoot: path.join(libraryPath, 'אוצריא'));
+      final libraryRoot = folderName.isNotEmpty
+          ? path.join(libraryPath, folderName)
+          : libraryPath;
+      generator.initializeForSync(libraryRoot: libraryRoot);
 
       _reportProgress(0.4, 'סורק תיקיות מותאמות אישית...');
 
@@ -733,9 +736,12 @@ class FileSyncService {
         Settings.getValue<String>(SettingsRepository.keyCustomFolders);
     final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
 
+    final libraryFolderName =
+        Settings.getValue<String>('key-library-folder-name') ?? '';
     final result = await syncCustomFoldersWithInputs(
       libraryPath: libraryPath,
       customFolders: customFolders,
+      folderName: libraryFolderName,
       onProgress: onProgress,
     );
 
