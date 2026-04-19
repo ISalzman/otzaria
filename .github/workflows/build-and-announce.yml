@@ -312,11 +312,17 @@ jobs:
             throw "Regular installer build failed"
           }
 
-      - name: Upload Windows installer
+      - name: Upload Windows installer (regular)
         uses: actions/upload-artifact@v4
         with:
           name: otzaria-windows-installer
-          path: installer/otzaria-*-windows*.exe
+          path: installer/otzaria-*-windows.exe
+
+      - name: Upload Windows installer (full)
+        uses: actions/upload-artifact@v4
+        with:
+          name: otzaria-windows-installer-full
+          path: installer/otzaria-*-windows-full.exe
 
       - name: Upload Windows ZIP
         uses: actions/upload-artifact@v4
@@ -1107,9 +1113,14 @@ jobs:
         run: |
           mkdir -p release-files
           
-          # Windows installer
+          # Windows installer (regular)
           if [ -d "artifacts/otzaria-windows-installer" ]; then
             cp artifacts/otzaria-windows-installer/*.exe release-files/ || true
+          fi
+
+          # Windows installer (full)
+          if [ -d "artifacts/otzaria-windows-installer-full" ]; then
+            cp artifacts/otzaria-windows-installer-full/*.exe release-files/ || true
           fi
           
           # Windows ZIP
