@@ -17,6 +17,27 @@ if (-not (Test-Path $VersionFile)) {
 $versionData = Get-Content $VersionFile | ConvertFrom-Json
 $newVersion = $versionData.version
 
+function Get-VersionCode {
+    param(
+        [string]$Version
+    )
+
+    $versionParts = $Version.Split('.')
+    if ($versionParts.Length -ne 3) {
+        throw "Version '$Version' must have format major.minor.patch"
+    }
+
+    $major = [int64]$versionParts[0]
+    $minor = [int64]$versionParts[1]
+    $patch = [int64]$versionParts[2]
+
+    # Keep the last digit available for manual hotfix bumps while preserving
+    # monotonic ordering across major/minor/patch increments.
+    return (($major * 1000000) + ($minor * 10000) + ($patch * 10)).ToString()
+}
+
+$versionCode = Get-VersionCode -Version $newVersion
+
 Write-Host "Updating version to: $newVersion"
 
 # Update .gitignore (lines 63-64)
@@ -34,10 +55,6 @@ Write-Host "Updated .gitignore"
 
 # Update pubspec.yaml (lines 13 and 39)
 $pubspecContent = Get-Content "pubspec.yaml"
-# Calculate versionCode from version (e.g., 0.9.88 -> 988)
-$versionParts = $newVersion.Split('.')
-$versionCode = ($versionParts[1] + $versionParts[2]).TrimStart('0')
-if ([string]::IsNullOrEmpty($versionCode)) { $versionCode = "1" }
 
 for ($i = 0; $i -lt $pubspecContent.Length; $i++) {
     if ($pubspecContent[$i] -match "^\s*version:\s*") {
@@ -70,11 +87,6 @@ Write-Host "Updated installer/otzaria.iss"
 # Update android/local.properties (versionName and versionCode)
 $localPropertiesFile = "android/local.properties"
 if (Test-Path $localPropertiesFile) {
-    # Calculate versionCode from version (e.g., 0.9.88 -> 988)
-    $versionParts = $newVersion.Split('.')
-    $versionCode = ($versionParts[1] + $versionParts[2]).TrimStart('0')
-    if ([string]::IsNullOrEmpty($versionCode)) { $versionCode = "1" }
-    
     $localPropsContent = Get-Content $localPropertiesFile
     $versionNameFound = $false
     $versionCodeFound = $false
