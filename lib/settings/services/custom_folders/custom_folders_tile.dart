@@ -45,7 +45,8 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
   @override
   void initState() {
     super.initState();
-    DatabaseLibraryProvider.operationQueue.busyCount.addListener(_onBusyChanged);
+    DatabaseLibraryProvider.operationQueue.busyCount
+        .addListener(_onBusyChanged);
     _loadFolders();
   }
 
@@ -156,7 +157,8 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
       }
       final folderName = folderPath.split(Platform.pathSeparator).last;
       return await DatabaseLibraryProvider.instance
-          .scanAndAddExternalBooksFromFolder(folderPath, folderName, repository);
+          .scanAndAddExternalBooksFromFolder(
+              folderPath, folderName, repository);
     } catch (e) {
       debugPrint('Error scanning external books: $e');
       return ScanResult(fatalError: e);
@@ -308,7 +310,8 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
         folderCategoryId: folderCategory.id,
         personalCategoryId: personalCategory.id,
       );
-      debugPrint('[CustomFolders] _deleteFolderFromDatabase: deletion COMPLETE');
+      debugPrint(
+          '[CustomFolders] _deleteFolderFromDatabase: deletion COMPLETE');
     } catch (e, stackTrace) {
       debugPrint('[CustomFolders] _deleteFolderFromDatabase ERROR: $e');
       debugPrint('[CustomFolders] stackTrace: $stackTrace');
@@ -385,10 +388,14 @@ class _CustomFoldersTileState extends State<CustomFoldersTile> {
 
       // _folders already holds the up-to-date state saved before this call.
       // Serialisation is handled inside runCustomFoldersDbSyncInIsolate.
+      final folderName =
+          Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
+              '';
       final result = await runCustomFoldersDbSyncInIsolate(
         dbPath: dbPath,
         libraryPath: libraryPath,
         customFolders: _folders,
+        folderName: folderName,
       );
 
       // Store signature on main isolate after worker succeeds.

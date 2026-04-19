@@ -20,6 +20,7 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
   required String dbPath,
   required String libraryPath,
   required List<CustomFolder> customFolders,
+  String folderName = '',
 }) {
   return DatabaseLibraryProvider.operationQueue.enqueue(() async {
     await QueryLoader.initialize();
@@ -27,6 +28,7 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
       'queryCache': QueryLoader.cacheSnapshot,
       'dbPath': dbPath,
       'libraryPath': libraryPath,
+      'folderName': folderName,
       'customFolders': customFolders.map((f) => f.toJson()).toList(),
     };
     final resultMap = await Isolate.run(() => _syncWorkerEntryPoint(payload));
@@ -76,6 +78,7 @@ Future<Map<String, Object?>> _syncWorkerEntryPoint(
 
   final dbPath = payload['dbPath'] as String;
   final libraryPath = payload['libraryPath'] as String;
+  final folderName = (payload['folderName'] as String?) ?? '';
   final rawFolders =
       (payload['customFolders'] as List).cast<Map<String, dynamic>>();
   final customFolders = rawFolders.map(CustomFolder.fromJson).toList();
@@ -89,6 +92,7 @@ Future<Map<String, Object?>> _syncWorkerEntryPoint(
     final result = await service.syncCustomFoldersWithInputs(
       libraryPath: libraryPath,
       customFolders: customFolders,
+      folderName: folderName,
     );
     return {
       'addedBooks': result.addedBooks,
@@ -119,7 +123,8 @@ Future<void> _deleteWorkerEntryPoint(Map<String, Object?> payload) async {
   final service = FileSyncService.createForWorker(repository);
 
   try {
-    await service.deleteFolderFromDatabase(folderCategoryId, personalCategoryId);
+    await service.deleteFolderFromDatabase(
+        folderCategoryId, personalCategoryId);
   } finally {
     database.close();
   }

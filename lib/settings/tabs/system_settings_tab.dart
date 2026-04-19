@@ -28,6 +28,7 @@ import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
 import 'package:otzaria/widgets/error_report_sender_email_dialog.dart';
 import 'package:otzaria/settings/settings_card.dart';
@@ -1118,10 +1119,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   }
 
   Future<void> _showLibraryChangelogDialog(BuildContext context) async {
-    final libraryPath =
-        Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '';
-    final changelogPath =
-        p.join(libraryPath, 'אוצריא', 'אודות התוכנה', 'עדכוני ספריה.md');
+    final changelogPath = p.join(DatabaseConstants.getDatabaseDirectoryPath(),
+        'אודות התוכנה', 'עדכוני ספריה.md');
     final file = File(changelogPath);
     final changelog = (await file.exists())
         ? await file.readAsString()

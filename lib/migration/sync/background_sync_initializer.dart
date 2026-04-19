@@ -87,11 +87,15 @@ class BackgroundSyncInitializer {
       final customFoldersJson =
           Settings.getValue<String>(SettingsRepository.keyCustomFolders);
       final customFolders = CustomFoldersManager.loadFolders(customFoldersJson);
+      final folderName =
+          Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
+              '';
 
       final result = await runCustomFoldersDbSyncInIsolate(
         dbPath: dbPath,
         libraryPath: libraryPath,
         customFolders: customFolders,
+        folderName: folderName,
       );
 
       await FileSyncService.saveCustomFoldersSignature(customFolders);
