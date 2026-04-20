@@ -1,8 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
 import 'package:kosher_dart/kosher_dart.dart';
+import 'package:timezone/data/latest_all.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
 void main() {
+  setUpAll(() {
+    tz_data.initializeTimeZones();
+  });
+
   group('CalendarCubit Jewish month navigation', () {
     test('next month handles Adar I -> Adar II and no year rollover to Nissan',
         () {
@@ -48,4 +54,144 @@ void main() {
       expect(prev.getJewishYear(), 5784);
     });
   });
+
+  group('Calendar day transition', () {
+    test('sunset moves the calendar day before midnight', () {
+      final jerusalem = tz.getLocation('Asia/Jerusalem');
+
+      final beforeSunset = resolveCalendarDayForTransition(
+        now: tz.TZDateTime(jerusalem, 2026, 4, 20, 18),
+        city: 'ירושלים',
+        transition: CalendarDayTransition.sunset,
+      );
+      expect(beforeSunset, DateTime(2026, 4, 20));
+
+      final afterSunset = resolveCalendarDayForTransition(
+        now: tz.TZDateTime(jerusalem, 2026, 4, 20, 20, 30),
+        city: 'ירושלים',
+        transition: CalendarDayTransition.sunset,
+      );
+      expect(afterSunset, DateTime(2026, 4, 21));
+    });
+
+    test('sunset uses the selected city date, not the computer timezone date',
+        () {
+      final newYork = tz.getLocation('America/New_York');
+
+      final beforeNewYorkSunset = resolveCalendarDayForTransition(
+        now: tz.TZDateTime(newYork, 2026, 4, 20, 18),
+        city: 'ניו יורק',
+        transition: CalendarDayTransition.sunset,
+      );
+
+      expect(beforeNewYorkSunset, DateTime(2026, 4, 20));
+    });
+
+    test('midnight preserves the civil date until midnight', () {
+      final jerusalem = tz.getLocation('Asia/Jerusalem');
+
+      final lateEvening = resolveCalendarDayForTransition(
+        now: tz.TZDateTime(jerusalem, 2026, 4, 20, 23, 30),
+        city: 'ירושלים',
+        transition: CalendarDayTransition.midnight,
+      );
+      expect(lateEvening, DateTime(2026, 4, 20));
+    });
+
+    test('rabbeinu tam waits longer than regular sunset', () {
+      final jerusalem = tz.getLocation('Asia/Jerusalem');
+
+      final afterSunsetBeforeRabbeinuTam = resolveCalendarDayForTransition(
+        now: tz.TZDateTime(jerusalem, 2026, 4, 20, 19, 45),
+        city: 'ירושלים',
+        transition: CalendarDayTransition.rabbeinuTam,
+      );
+      expect(afterSunsetBeforeRabbeinuTam, DateTime(2026, 4, 20));
+
+      final afterRabbeinuTam = resolveCalendarDayForTransition(
+        now: tz.TZDateTime(jerusalem, 2026, 4, 20, 21, 30),
+        city: 'ירושלים',
+        transition: CalendarDayTransition.rabbeinuTam,
+      );
+      expect(afterRabbeinuTam, DateTime(2026, 4, 21));
+    });
+  });
+
+  group('Calendar header Ohr prefix', () {
+    test('shows Ohr prefix before 90 minute alos on the current day', () {
+      final jerusalem = tz.getLocation('Asia/Jerusalem');
+      final date = DateTime(2026, 4, 20);
+      final state = _buildCalendarState(date);
+
+      final shouldShow = shouldShowOhrPrefixForCalendarHeader(
+        state: state,
+        now: tz.TZDateTime(jerusalem, 2026, 4, 20, 3),
+      );
+
+      expect(shouldShow, isTrue);
+    });
+
+    test('does not show Ohr prefix after 90 minute alos', () {
+      final jerusalem = tz.getLocation('Asia/Jerusalem');
+      final date = DateTime(2026, 4, 20);
+      final state = _buildCalendarState(date);
+
+      final shouldShow = shouldShowOhrPrefixForCalendarHeader(
+        state: state,
+        now: tz.TZDateTime(jerusalem, 2026, 4, 20, 5),
+      );
+
+      expect(shouldShow, isFalse);
+    });
+
+    test('does not show Ohr prefix when selected date is not current day', () {
+      final jerusalem = tz.getLocation('Asia/Jerusalem');
+      final selected = DateTime(2026, 4, 19);
+      final today = DateTime(2026, 4, 20);
+      final state = _buildCalendarState(selected, today: today);
+
+      final shouldShow = shouldShowOhrPrefixForCalendarHeader(
+        state: state,
+        now: tz.TZDateTime(jerusalem, 2026, 4, 20, 3),
+      );
+
+      expect(shouldShow, isFalse);
+    });
+
+    test('next refresh is scheduled for alos when it is the next boundary', () {
+      final jerusalem = tz.getLocation('Asia/Jerusalem');
+
+      final nextRefresh = nextCalendarTodayRefreshTime(
+        now: tz.TZDateTime(jerusalem, 2026, 4, 20, 3),
+        city: 'ירושלים',
+        transition: CalendarDayTransition.sunset,
+      );
+
+      final refreshInJerusalem = tz.TZDateTime.from(nextRefresh, jerusalem);
+      expect(refreshInJerusalem.year, 2026);
+      expect(refreshInJerusalem.month, 4);
+      expect(refreshInJerusalem.day, 20);
+      expect(refreshInJerusalem.hour, 4);
+    });
+  });
+}
+
+CalendarState _buildCalendarState(DateTime selectedDate, {DateTime? today}) {
+  final selectedJewishDate = JewishDate.fromDateTime(selectedDate);
+  final todayDate = today ?? selectedDate;
+  final todayJewishDate = JewishDate.fromDateTime(todayDate);
+
+  return CalendarState(
+    selectedJewishDate: selectedJewishDate,
+    selectedGregorianDate: selectedDate,
+    selectedCity: 'ירושלים',
+    dailyTimes: const {},
+    currentJewishDate: todayJewishDate,
+    currentGregorianDate: todayDate,
+    todayGregorianDate: todayDate,
+    calendarType: CalendarType.combined,
+    calendarView: CalendarView.month,
+    dayTransition: CalendarDayTransition.sunset,
+    inIsrael: true,
+  );
 }

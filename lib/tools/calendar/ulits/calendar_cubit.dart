@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -16,6 +17,8 @@ import 'package:timezone/timezone.dart' as tz;
 enum CalendarType { hebrew, gregorian, combined }
 
 enum CalendarView { month, week, day }
+
+enum CalendarDayTransition { sunset, tzais, rabbeinuTam, midnight }
 
 class ZmanAlertPreference extends Equatable {
   final int minutesBefore;
@@ -63,8 +66,11 @@ class CalendarState extends Equatable {
   final Map<String, String> dailyTimes;
   final JewishDate currentJewishDate;
   final DateTime currentGregorianDate;
+  final DateTime todayGregorianDate;
   final CalendarType calendarType;
   final CalendarView calendarView;
+  final CalendarDayTransition dayTransition;
+  final int calendarClockTick;
   final List<CustomEvent> events;
   final String eventSearchQuery;
   final bool searchInDescriptions;
@@ -90,9 +96,12 @@ class CalendarState extends Equatable {
     required this.dailyTimes,
     required this.currentJewishDate,
     required this.currentGregorianDate,
+    required this.todayGregorianDate,
     required this.calendarType,
     required this.calendarView,
+    required this.dayTransition,
     required this.inIsrael,
+    this.calendarClockTick = 0,
     this.events = const [],
     this.eventSearchQuery = '',
     this.searchInDescriptions = false,
@@ -122,8 +131,10 @@ class CalendarState extends Equatable {
       dailyTimes: const {},
       currentJewishDate: jewishNow,
       currentGregorianDate: now,
+      todayGregorianDate: DateTime(now.year, now.month, now.day),
       calendarType: CalendarType.combined,
       calendarView: CalendarView.month,
+      dayTransition: CalendarDayTransition.sunset,
       searchInDescriptions: false,
       inIsrael: true,
       showAllEvents: false,
@@ -143,8 +154,11 @@ class CalendarState extends Equatable {
     Map<String, String>? dailyTimes,
     JewishDate? currentJewishDate,
     DateTime? currentGregorianDate,
+    DateTime? todayGregorianDate,
     CalendarType? calendarType,
     CalendarView? calendarView,
+    CalendarDayTransition? dayTransition,
+    int? calendarClockTick,
     List<CustomEvent>? events,
     String? eventSearchQuery,
     bool? searchInDescriptions,
@@ -172,8 +186,11 @@ class CalendarState extends Equatable {
       dailyTimes: dailyTimes ?? this.dailyTimes,
       currentJewishDate: currentJewishDate ?? this.currentJewishDate,
       currentGregorianDate: currentGregorianDate ?? this.currentGregorianDate,
+      todayGregorianDate: todayGregorianDate ?? this.todayGregorianDate,
       calendarType: calendarType ?? this.calendarType,
       calendarView: calendarView ?? this.calendarView,
+      dayTransition: dayTransition ?? this.dayTransition,
+      calendarClockTick: calendarClockTick ?? this.calendarClockTick,
       events: events ?? this.events,
       eventSearchQuery: eventSearchQuery ?? this.eventSearchQuery,
       searchInDescriptions: searchInDescriptions ?? this.searchInDescriptions,
@@ -227,8 +244,11 @@ class CalendarState extends Equatable {
         currentJewishDate.getJewishDayOfMonth(),
 
         currentGregorianDate,
+        todayGregorianDate,
         calendarType,
         calendarView,
+        dayTransition,
+        calendarClockTick,
         inIsrael,
         showAllEvents,
         calendarNotificationsEnabled,
@@ -254,6 +274,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   final SettingsRepository _settingsRepository;
   final NotificationService _notificationService;
   final GoogleCalendarService _googleCalendarService;
+  Timer? _todayRefreshTimer;
 
   // Getter for accessing notification service from outside
   NotificationService get notificationService => _notificationService;
@@ -267,15 +288,33 @@ class CalendarCubit extends Cubit<CalendarState> {
         _googleCalendarService =
             googleCalendarService ?? GoogleCalendarService(),
         super(CalendarState.initial()) {
-    _initializeCalendar();
+    _initializeCalendar(resetSelectedToToday: true);
   }
 
-  Future<void> _initializeCalendar() async {
+  Future<void> _initializeCalendar({bool resetSelectedToToday = false}) async {
     final settings = await _settingsRepository.loadSettings();
     if (isClosed) return;
     final calendarTypeString = settings['calendarType'] as String;
     final calendarType = _stringToCalendarType(calendarTypeString);
+    final dayTransitionString = settings['calendarDayTransition'] as String;
+    final dayTransition = calendarDayTransitionFromString(dayTransitionString);
     final selectedCity = settings['selectedCity'] as String;
+    final today = resolveCalendarDayForTransition(
+      now: DateTime.now(),
+      city: selectedCity,
+      transition: dayTransition,
+    );
+    final todayJewishDate = JewishDate.fromDateTime(today);
+    final selectedGregorianDate =
+        resetSelectedToToday ? today : state.selectedGregorianDate;
+    final selectedJewishDate = resetSelectedToToday
+        ? todayJewishDate
+        : JewishDate.fromDateTime(selectedGregorianDate);
+    final currentGregorianDate =
+        resetSelectedToToday ? today : state.currentGregorianDate;
+    final currentJewishDate = resetSelectedToToday
+        ? todayJewishDate
+        : JewishDate.fromDateTime(currentGregorianDate);
     final eventsJson = settings['calendarEvents'] as String;
     final bool inIsrael = _isCityInIsrael(selectedCity);
     final bool calendarNotificationsEnabled =
@@ -321,7 +360,13 @@ class CalendarCubit extends Cubit<CalendarState> {
 
     emit(state.copyWith(
       calendarType: calendarType,
+      dayTransition: dayTransition,
       selectedCity: selectedCity,
+      selectedJewishDate: selectedJewishDate,
+      selectedGregorianDate: selectedGregorianDate,
+      currentJewishDate: currentJewishDate,
+      currentGregorianDate: currentGregorianDate,
+      todayGregorianDate: today,
       events: events,
       inIsrael: inIsrael,
       calendarNotificationsEnabled: calendarNotificationsEnabled,
@@ -337,7 +382,7 @@ class CalendarCubit extends Cubit<CalendarState> {
           : null,
     ));
     if (isClosed) return;
-    _updateTimesForDate(state.selectedGregorianDate, selectedCity);
+    _updateTimesForDate(selectedGregorianDate, selectedCity);
     await _rescheduleNotifications();
     if (isClosed) return;
     await _rescheduleZmanAlerts();
@@ -347,6 +392,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     if (googleCalendarEnabled) {
       await syncGoogleCalendar(interactive: false);
     }
+    _scheduleTodayRefresh();
   }
 
   /// מרענן אירועי plugin בזמן אמת.
@@ -361,9 +407,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     String? currentBookId,
   }) async {
     // שמור אירועי משתמש בלבד (id ללא ':' הם אירועי משתמש)
-    final userEvents = state.events
-        .where((e) => !e.id.contains(':'))
-        .toList();
+    final userEvents = state.events.where((e) => !e.id.contains(':')).toList();
 
     final merged = await PluginCalendarAdapter().loadAndMergePluginEvents(
       userEvents,
@@ -569,6 +613,62 @@ class CalendarCubit extends Cubit<CalendarState> {
     emit(state.copyWith(dailyTimes: newTimes));
   }
 
+  void _scheduleTodayRefresh() {
+    _todayRefreshTimer?.cancel();
+    if (isClosed) return;
+
+    final nextRefresh = nextCalendarTodayRefreshTime(
+      now: DateTime.now(),
+      city: state.selectedCity,
+      transition: state.dayTransition,
+    );
+    final duration = nextRefresh.difference(DateTime.now());
+    _todayRefreshTimer = Timer(
+      duration.isNegative ? const Duration(seconds: 1) : duration,
+      _refreshCalendarToday,
+    );
+  }
+
+  void _refreshCalendarToday() {
+    if (isClosed) return;
+
+    final previousToday = state.todayGregorianDate;
+    final today = resolveCalendarDayForTransition(
+      now: DateTime.now(),
+      city: state.selectedCity,
+      transition: state.dayTransition,
+    );
+    final wasViewingToday =
+        _isSameDateOnly(state.selectedGregorianDate, previousToday);
+
+    if (!_isSameDateOnly(today, previousToday)) {
+      final jewishToday = JewishDate.fromDateTime(today);
+      final newTimes = wasViewingToday
+          ? _calculateDailyTimes(today, state.selectedCity)
+          : state.dailyTimes;
+      emit(state.copyWith(
+        todayGregorianDate: today,
+        selectedGregorianDate:
+            wasViewingToday ? today : state.selectedGregorianDate,
+        selectedJewishDate:
+            wasViewingToday ? jewishToday : state.selectedJewishDate,
+        currentGregorianDate:
+            wasViewingToday ? today : state.currentGregorianDate,
+        currentJewishDate:
+            wasViewingToday ? jewishToday : state.currentJewishDate,
+        dailyTimes: newTimes,
+        calendarClockTick: state.calendarClockTick + 1,
+      ));
+    } else {
+      emit(state.copyWith(
+        todayGregorianDate: today,
+        calendarClockTick: state.calendarClockTick + 1,
+      ));
+    }
+
+    _scheduleTodayRefresh();
+  }
+
   void selectDate(JewishDate jewishDate, DateTime gregorianDate) {
     final newTimes = _calculateDailyTimes(gregorianDate, state.selectedCity);
     // When in month view, selecting a cell should also update the month header anchors
@@ -585,18 +685,37 @@ class CalendarCubit extends Cubit<CalendarState> {
   }
 
   Future<void> changeCity(String newCity) async {
-    final newTimes = _calculateDailyTimes(state.selectedGregorianDate, newCity);
     final bool inIsrael = _isCityInIsrael(newCity);
+    final wasViewingToday =
+        _isSameDateOnly(state.selectedGregorianDate, state.todayGregorianDate);
+    final today = resolveCalendarDayForTransition(
+      now: DateTime.now(),
+      city: newCity,
+      transition: state.dayTransition,
+    );
+    final jewishToday = JewishDate.fromDateTime(today);
+    final selectedDate = wasViewingToday ? today : state.selectedGregorianDate;
+    final newTimes = _calculateDailyTimes(selectedDate, newCity);
     emit(state.copyWith(
       selectedCity: newCity,
       dailyTimes: newTimes,
       inIsrael: inIsrael,
+      todayGregorianDate: today,
+      selectedGregorianDate:
+          wasViewingToday ? today : state.selectedGregorianDate,
+      selectedJewishDate:
+          wasViewingToday ? jewishToday : state.selectedJewishDate,
+      currentGregorianDate:
+          wasViewingToday ? today : state.currentGregorianDate,
+      currentJewishDate:
+          wasViewingToday ? jewishToday : state.currentJewishDate,
     ));
     // שמור את הבחירה בהגדרות
     await _settingsRepository.updateSelectedCity(newCity);
 
     // Times shift with city, so reschedule zman alerts.
     await _rescheduleZmanAlerts();
+    _scheduleTodayRefresh();
   }
 
   Future<void> changeCalendarType(CalendarType type) async {
@@ -605,9 +724,47 @@ class CalendarCubit extends Cubit<CalendarState> {
     await _settingsRepository.updateCalendarType(_calendarTypeToString(type));
   }
 
+  Future<void> changeCalendarDayTransition(
+      CalendarDayTransition transition) async {
+    final wasViewingToday =
+        _isSameDateOnly(state.selectedGregorianDate, state.todayGregorianDate);
+    final today = resolveCalendarDayForTransition(
+      now: DateTime.now(),
+      city: state.selectedCity,
+      transition: transition,
+    );
+    final jewishToday = JewishDate.fromDateTime(today);
+    final newTimes = wasViewingToday
+        ? _calculateDailyTimes(today, state.selectedCity)
+        : state.dailyTimes;
+    emit(state.copyWith(
+      dayTransition: transition,
+      todayGregorianDate: today,
+      selectedGregorianDate:
+          wasViewingToday ? today : state.selectedGregorianDate,
+      selectedJewishDate:
+          wasViewingToday ? jewishToday : state.selectedJewishDate,
+      currentGregorianDate:
+          wasViewingToday ? today : state.currentGregorianDate,
+      currentJewishDate:
+          wasViewingToday ? jewishToday : state.currentJewishDate,
+      dailyTimes: newTimes,
+    ));
+    await _settingsRepository.updateCalendarDayTransition(
+      calendarDayTransitionToString(transition),
+    );
+    _scheduleTodayRefresh();
+  }
+
   /// טעינה מחדש של הגדרות מהאחסון
   Future<void> reloadSettings() async {
     await _initializeCalendar();
+  }
+
+  @override
+  Future<void> close() {
+    _todayRefreshTimer?.cancel();
+    return super.close();
   }
 
   void _previousMonth() {
@@ -748,15 +905,20 @@ class CalendarCubit extends Cubit<CalendarState> {
   }
 
   void jumpToToday() {
-    final now = DateTime.now();
-    final jewishNow = JewishDate();
-    final newTimes = _calculateDailyTimes(now, state.selectedCity);
+    final today = resolveCalendarDayForTransition(
+      now: DateTime.now(),
+      city: state.selectedCity,
+      transition: state.dayTransition,
+    );
+    final jewishToday = JewishDate.fromDateTime(today);
+    final newTimes = _calculateDailyTimes(today, state.selectedCity);
 
     emit(state.copyWith(
-      selectedJewishDate: jewishNow,
-      selectedGregorianDate: now,
-      currentJewishDate: jewishNow,
-      currentGregorianDate: now,
+      selectedJewishDate: jewishToday,
+      selectedGregorianDate: today,
+      currentJewishDate: jewishToday,
+      currentGregorianDate: today,
+      todayGregorianDate: today,
       dailyTimes: newTimes,
     ));
   }
@@ -1487,7 +1649,8 @@ class CalendarCubit extends Cubit<CalendarState> {
         await _settingsRepository.updateCalendarNotificationsEnabled(false);
 
         // הצג הודעת שגיאה למשתמש עם הוראות מפורטות
-        UiSnack.showWarning('לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+        UiSnack.showWarning(
+            'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
             'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
             duration: const Duration(seconds: 8));
         return;
@@ -2694,7 +2857,17 @@ Map<String, String> _calculateDailyTimes(DateTime date, String city) {
 
   // Set the timezone for the location
   final tzLocation = tz.getLocation(timeZoneId);
-  final tzDateTime = tz.TZDateTime.from(date, tzLocation);
+  final tzDateTime = tz.TZDateTime(
+    tzLocation,
+    date.year,
+    date.month,
+    date.day,
+    date.hour,
+    date.minute,
+    date.second,
+    date.millisecond,
+    date.microsecond,
+  );
   location.setDateTime(tzDateTime);
 
   final zmanimCalendar = ComplexZmanimCalendar.intGeoLocation(location);
@@ -2975,6 +3148,214 @@ String _calendarTypeToString(CalendarType type) {
     case CalendarType.combined:
       return 'combined';
   }
+}
+
+/// מחזירה את היום הלוחי לפי זמן מעבר היום שנבחר והעיר הנוכחית.
+DateTime resolveCalendarDayForTransition({
+  required DateTime now,
+  required String city,
+  required CalendarDayTransition transition,
+}) {
+  final cityData = _getCityData(city);
+  final timeZoneId = cityData?['timezone'] as String? ?? 'Asia/Jerusalem';
+  final tzLocation = tz.getLocation(timeZoneId);
+  final nowInCity = tz.TZDateTime.from(now, tzLocation);
+  final civilToday = DateTime(
+    nowInCity.year,
+    nowInCity.month,
+    nowInCity.day,
+  );
+
+  if (transition == CalendarDayTransition.midnight) {
+    return civilToday;
+  }
+
+  final transitionTime = _calculateDayTransitionTime(
+    civilToday,
+    city,
+    transition,
+  );
+  if (transitionTime == null) {
+    return civilToday;
+  }
+
+  final transitionInCity = tz.TZDateTime.from(transitionTime, tzLocation);
+  if (nowInCity.isBefore(transitionInCity)) {
+    return civilToday;
+  }
+
+  return civilToday.add(const Duration(days: 1));
+}
+
+/// ממירה מחרוזת שמורה להגדרת מעבר היום, עם ברירת מחדל לשקיעה.
+CalendarDayTransition calendarDayTransitionFromString(String value) {
+  switch (value) {
+    case 'tzais':
+      return CalendarDayTransition.tzais;
+    case 'rabbeinuTam':
+      return CalendarDayTransition.rabbeinuTam;
+    case 'midnight':
+      return CalendarDayTransition.midnight;
+    case 'sunset':
+    default:
+      return CalendarDayTransition.sunset;
+  }
+}
+
+/// ממירה את הגדרת מעבר היום למחרוזת לשמירה בהגדרות.
+String calendarDayTransitionToString(CalendarDayTransition transition) {
+  switch (transition) {
+    case CalendarDayTransition.sunset:
+      return 'sunset';
+    case CalendarDayTransition.tzais:
+      return 'tzais';
+    case CalendarDayTransition.rabbeinuTam:
+      return 'rabbeinuTam';
+    case CalendarDayTransition.midnight:
+      return 'midnight';
+  }
+}
+
+/// בודקת אם יש להציג את התאריך העברי העליון בנוסח "אור ל...".
+bool shouldShowOhrPrefixForCalendarHeader({
+  required CalendarState state,
+  DateTime? now,
+}) {
+  if (!_isSameDateOnly(state.selectedGregorianDate, state.todayGregorianDate)) {
+    return false;
+  }
+
+  final cityData = _getCityData(state.selectedCity);
+  if (cityData == null) return false;
+
+  final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
+  final tzLocation = tz.getLocation(timeZoneId);
+  final nowInCity = now == null
+      ? tz.TZDateTime.now(tzLocation)
+      : tz.TZDateTime.from(now, tzLocation);
+  final alos90 = _calculateAlos90(
+    state.todayGregorianDate,
+    state.selectedCity,
+  );
+  if (alos90 == null) return false;
+
+  return nowInCity.isBefore(tz.TZDateTime.from(alos90, tzLocation));
+}
+
+/// מחזירה את זמן הרענון הבא לסימון "היום" ולתצוגת "אור ל...".
+DateTime nextCalendarTodayRefreshTime({
+  required DateTime now,
+  required String city,
+  required CalendarDayTransition transition,
+}) {
+  final cityData = _getCityData(city);
+  final timeZoneId = cityData?['timezone'] as String? ?? 'Asia/Jerusalem';
+  final tzLocation = tz.getLocation(timeZoneId);
+  final nowInCity = tz.TZDateTime.from(now, tzLocation);
+  final civilToday = DateTime(
+    nowInCity.year,
+    nowInCity.month,
+    nowInCity.day,
+  );
+  final candidates = <DateTime>[];
+
+  for (int dayOffset = 0; dayOffset <= 1; dayOffset++) {
+    final date = civilToday.add(Duration(days: dayOffset));
+    final alos90 = _calculateAlos90(date, city);
+    if (alos90 != null) {
+      candidates.add(tz.TZDateTime.from(alos90, tzLocation));
+    }
+
+    if (transition == CalendarDayTransition.midnight) {
+      candidates.add(
+        tz.TZDateTime(
+          tzLocation,
+          date.year,
+          date.month,
+          date.day + 1,
+        ),
+      );
+    } else {
+      final transitionTime = _calculateDayTransitionTime(
+        date,
+        city,
+        transition,
+      );
+      if (transitionTime != null) {
+        candidates.add(tz.TZDateTime.from(transitionTime, tzLocation));
+      }
+    }
+  }
+
+  candidates.sort();
+  for (final candidate in candidates) {
+    if (candidate.isAfter(nowInCity)) {
+      return candidate.add(const Duration(seconds: 2));
+    }
+  }
+
+  return now.add(const Duration(hours: 1));
+}
+
+DateTime? _calculateDayTransitionTime(
+  DateTime date,
+  String city,
+  CalendarDayTransition transition,
+) {
+  final cityData = _getCityData(city);
+  if (cityData == null) return null;
+
+  final location = GeoLocation();
+  location.setLocationName(city);
+  location.setLatitude(latitude: cityData['lat']!);
+  location.setLongitude(longitude: cityData['lng']!);
+  final elevation = cityData['elevation']!;
+  location.setElevation(elevation > 0 ? elevation : 0);
+
+  final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
+  final tzLocation = tz.getLocation(timeZoneId);
+  location
+      .setDateTime(tz.TZDateTime(tzLocation, date.year, date.month, date.day));
+
+  final zmanimCalendar = ComplexZmanimCalendar.intGeoLocation(location);
+  switch (transition) {
+    case CalendarDayTransition.sunset:
+      return zmanimCalendar.getSunset();
+    case CalendarDayTransition.tzais:
+      return zmanimCalendar.getTzais();
+    case CalendarDayTransition.rabbeinuTam:
+      final sunset = zmanimCalendar.getSunset();
+      return sunset?.add(const Duration(minutes: 72));
+    case CalendarDayTransition.midnight:
+      return null;
+  }
+}
+
+DateTime? _calculateAlos90(DateTime date, String city) {
+  final cityData = _getCityData(city);
+  if (cityData == null) return null;
+
+  final location = GeoLocation();
+  location.setLocationName(city);
+  location.setLatitude(latitude: cityData['lat']!);
+  location.setLongitude(longitude: cityData['lng']!);
+  final elevation = cityData['elevation']!;
+  location.setElevation(elevation > 0 ? elevation : 0);
+
+  final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
+  final tzLocation = tz.getLocation(timeZoneId);
+  location
+      .setDateTime(tz.TZDateTime(tzLocation, date.year, date.month, date.day));
+
+  final zmanimCalendar = ComplexZmanimCalendar.intGeoLocation(location);
+  final sunrise = zmanimCalendar.getSunrise();
+  return sunrise?.subtract(const Duration(minutes: 90));
+}
+
+bool _isSameDateOnly(DateTime first, DateTime second) {
+  return first.year == second.year &&
+      first.month == second.month &&
+      first.day == second.day;
 }
 
 // Google Calendar Info

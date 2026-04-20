@@ -19,7 +19,17 @@ Map<String, String> calculateDailyTimes(DateTime date, String city) {
   location.setElevation(elevation > 0 ? elevation : 0);
 
   final tzLocation = tz.getLocation(timeZoneId);
-  final tzDateTime = tz.TZDateTime.from(date, tzLocation);
+  final tzDateTime = tz.TZDateTime(
+    tzLocation,
+    date.year,
+    date.month,
+    date.day,
+    date.hour,
+    date.minute,
+    date.second,
+    date.millisecond,
+    date.microsecond,
+  );
   location.setDateTime(tzDateTime);
 
   final zmanimCalendar = ComplexZmanimCalendar.intGeoLocation(location);
