@@ -83,7 +83,7 @@ const List<_CalendarTimeDefinition> _kBaseTimeDefinitions = [
   _CalendarTimeDefinition(id: 'minchaKetana', name: 'מנחה קטנה'),
   _CalendarTimeDefinition(id: 'plagHamincha', name: 'פלג המנחה'),
   _CalendarTimeDefinition(id: 'sunset', name: 'שקיעה'),
-  _CalendarTimeDefinition(id: 'sunsetRT', name: 'שקיעה לרבנו תם'),
+  _CalendarTimeDefinition(id: 'sunsetRT', name: 'צאת הכוכבים לרבנו תם'),
   _CalendarTimeDefinition(id: 'tzais', name: 'צאת הכוכבים'),
 ];
 

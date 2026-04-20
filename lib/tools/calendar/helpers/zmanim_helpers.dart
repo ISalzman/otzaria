@@ -73,7 +73,7 @@ DateTime _calculateChatzosLayla(ComplexZmanimCalendar zmanimCalendar) {
   return chatzos.add(const Duration(hours: 12));
 }
 
-// חישוב שקיעה לפי רבנו תם
+// חישוב צאת הכוכבים לפי רבנו תם
 DateTime _calculateSunsetRT(ComplexZmanimCalendar zmanimCalendar) {
   final sunset = zmanimCalendar.getSunset()!;
   return sunset.add(const Duration(minutes: 72));
