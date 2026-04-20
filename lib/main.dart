@@ -74,6 +74,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/widgets/restart_widget.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
+// Updated automatically by version update scripts - do not edit manually
+const int _latestReleasedBuildNumber = 9900;
+
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
 
@@ -289,6 +292,9 @@ void main() async {
 
 Future<void> _initializeSentry() async {
   try {
+    final info = await PackageInfo.fromPlatform();
+    final currentBuild = int.tryParse(info.buildNumber.trim()) ?? 0;
+
     await SentryFlutter.init(
       (options) {
         // Use environment variable for DSN, with fallback to default
@@ -297,24 +303,31 @@ Future<void> _initializeSentry() async {
           defaultValue:
               'https://79d3003f822fa62bce0c928656308121@o4510914530902016.ingest.us.sentry.io/4510914532868096',
         );
+        options.release = '${info.appName}@${info.version}+${info.buildNumber}';
         // Privacy: Do not collect IP addresses and request headers
         options.sendDefaultPii = false;
         // Use lower sampling rates in production to reduce overhead
         options.tracesSampleRate = kDebugMode ? 1.0 : 0.1;
 
-        // Filter out Windows accessibility errors from being sent to Sentry
         options.beforeSend = (event, hint) {
+          // Only report from the latest released version
+          if (currentBuild != _latestReleasedBuildNumber) return null;
+
           final exception = event.throwable?.toString() ?? '';
           if (Platform.isWindows &&
               (exception.contains('Failed to update ui::AXTree') ||
                   exception.contains('accessibility_bridge.cc'))) {
-            return null; // Don't send to Sentry
+            return null;
           }
           // Filter HardwareKeyboard assertion - handled by clearState() on window focus
           if (_isIgnorableHardwareKeyboardAssertion(exception)) {
-            return null; // Don't send to Sentry
+            return null;
           }
           return event;
+        };
+        options.beforeSendTransaction = (transaction, hint) {
+          if (currentBuild != _latestReleasedBuildNumber) return null;
+          return transaction;
         };
       },
     );

@@ -116,6 +116,21 @@ if (Test-Path $localPropertiesFile) {
     Write-Warning "File '$localPropertiesFile' not found! Skipping Android version update."
 }
 
+# Update lib/main.dart (_latestReleasedBuildNumber constant)
+$mainDartFile = "lib/main.dart"
+if (Test-Path $mainDartFile) {
+    $mainDartContent = Get-Content $mainDartFile
+    for ($i = 0; $i -lt $mainDartContent.Length; $i++) {
+        if ($mainDartContent[$i] -match '^const int _latestReleasedBuildNumber\s*=\s*\d+;') {
+            $mainDartContent[$i] = "const int _latestReleasedBuildNumber = $versionCode;"
+        }
+    }
+    $mainDartContent | Set-Content $mainDartFile -Encoding $Utf8NoBom
+    Write-Host "Updated $mainDartFile (_latestReleasedBuildNumber = $versionCode)"
+} else {
+    Write-Warning "File '$mainDartFile' not found! Skipping main.dart update."
+}
+
 # Update assets/יומן שינויים.md (Add new version as first item)
 $changelogFile = "assets/יומן שינויים.md"
 # 1. REMOVE the leading `n` from the version line itself
@@ -125,9 +140,8 @@ if (Test-Path $changelogFile) {
     # Read existing content
     $existingContent = Get-Content $changelogFile -Raw -Encoding $Utf8NoBom
 
-    # 2. Add the NEW version line (no leading newline)
-    #    THEN add TWO newlines (one to end the first line, one to separate from the next entry)
-    $newChangelogContent = $changelogVersionLine + "`n`n" + $existingContent
+    # 2. Add the NEW version line followed by a single newline
+    $newChangelogContent = $changelogVersionLine + "`n" + $existingContent
 
     # 3. Write back to the file
     $newChangelogContent | Set-Content $changelogFile -Encoding $Utf8NoBom
@@ -140,6 +154,6 @@ Write-Host "Version update completed successfully!"
 Write-Host "All files have been updated to version: $newVersion"
 
 # Git commit
-git add ".gitignore" "pubspec.yaml" "installer/otzaria_full.iss" "installer/otzaria.iss" $changelogFile $VersionFile $localPropertiesFile
+git add ".gitignore" "pubspec.yaml" "installer/otzaria_full.iss" "installer/otzaria.iss" $changelogFile $VersionFile $mainDartFile
 git commit -m "$newVersion"
 Write-Host "Git commit created for version: $newVersion"
