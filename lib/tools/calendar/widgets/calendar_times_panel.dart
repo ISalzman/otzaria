@@ -5,9 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/tools/calendar/helpers/omer_counting_helpers.dart';
-import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart'
-    hide cityCoordinates;
+import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart' hide cityCoordinates;
 import 'package:otzaria/tools/calendar/models/calendar_location.dart';
 import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
 import 'package:otzaria/tools/calendar/dialogs/calendar_zman_alert_dialog.dart';
@@ -269,8 +267,9 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
       return null;
     }
 
-    final sortTime =
-        regularExit?.isNotEmpty == true ? regularExit! : chazonIshExit ?? '';
+    final sortTime = regularExit?.isNotEmpty == true
+        ? regularExit!
+        : chazonIshExit ?? '';
 
     return CalendarTimeEntry(
       id: 'shabbosExitComposite',
@@ -299,6 +298,114 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
     );
   }
 
+  String? _buildOmerInfo(DateTime date) {
+    final jewishCalendar = JewishCalendar.fromDateTime(date);
+    final omerDay = jewishCalendar.getDayOfOmer();
+    if (omerDay == -1) {
+      return null;
+    }
+    return _buildOmerCountingText(omerDay);
+  }
+
+  String _buildOmerCountingText(int day) {
+    final totalDaysText = _buildOmerDayCountText(day);
+    final weeks = day ~/ 7;
+    final extraDays = day % 7;
+
+    if (weeks == 0) {
+      return 'היום $totalDaysText בעומר';
+    }
+
+    final weeksText = _buildOmerWeekCountText(weeks);
+    if (extraDays == 0) {
+      return 'היום $totalDaysText שהם $weeksText בעומר';
+    }
+
+    final extraDaysText = _buildOmerDayCountText(extraDays);
+    return 'היום $totalDaysText שהם $weeksText ו$extraDaysText בעומר';
+  }
+
+  String _buildOmerDayCountText(int day) {
+    const ones = [
+      '',
+      'יום אחד',
+      'שני ימים',
+      'שלשה ימים',
+      'ארבעה ימים',
+      'חמשה ימים',
+      'ששה ימים',
+      'שבעה ימים',
+      'שמונה ימים',
+      'תשעה ימים',
+      'עשרה ימים',
+      'אחד עשר יום',
+      'שנים עשר יום',
+      'שלשה עשר יום',
+      'ארבעה עשר יום',
+      'חמשה עשר יום',
+      'ששה עשר יום',
+      'שבעה עשר יום',
+      'שמונה עשר יום',
+      'תשעה עשר יום',
+    ];
+    const tens = ['', '', 'עשרים', 'שלשים', 'ארבעים'];
+    const onesSimple = [
+      '',
+      'אחד',
+      'שנים',
+      'שלשה',
+      'ארבעה',
+      'חמשה',
+      'ששה',
+      'שבעה',
+      'שמונה',
+      'תשעה',
+    ];
+
+    if (day <= 0 || day > 49) {
+      return 'יום $day';
+    }
+
+    if (day < 20) {
+      return ones[day];
+    }
+
+    final tensText = tens[day ~/ 10];
+    final onesValue = day % 10;
+    if (onesValue == 0) {
+      return '$tensText יום';
+    }
+
+    return '${onesSimple[onesValue]} ו$tensText יום';
+  }
+
+  String _buildOmerWeekCountText(int weeks) {
+    const oneToNine = [
+      '',
+      'אחד',
+      'שני',
+      'שלשה',
+      'ארבעה',
+      'חמשה',
+      'ששה',
+      'שבעה',
+      'שמונה',
+      'תשעה',
+    ];
+
+    if (weeks <= 0) {
+      return '';
+    }
+    if (weeks == 1) {
+      return 'שבוע אחד';
+    }
+    if (weeks == 2) {
+      return 'שני שבועות';
+    }
+
+    return '${oneToNine[weeks]} שבועות';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -309,11 +416,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final omerDisplayData = buildOmerDisplayData(
-      selectedDate: widget.state.selectedGregorianDate,
-      cityName: widget.state.selectedCity,
-      dailyTimes: widget.state.dailyTimes,
-    );
+    final omerInfo = _buildOmerInfo(widget.state.selectedGregorianDate);
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
@@ -331,12 +434,12 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
               ],
             ),
           ),
-          if (omerDisplayData != null)
+          if (omerInfo != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: SizedBox(
                 width: double.infinity,
-                child: _buildOmerButton(context, omerDisplayData),
+                child: _buildOmerButton(context, omerInfo),
               ),
             ),
           Padding(
@@ -444,7 +547,8 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
                       context,
                       zmanName: timeName,
                       timeLabel: timeLabel,
-                      initialMinutesBefore: existingAlert?.minutesBefore ?? 60,
+                      initialMinutesBefore:
+                          existingAlert?.minutesBefore ?? 60,
                       isEnabled: hasAlert,
                     );
                     if (result == null) return;
@@ -515,7 +619,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
     );
   }
 
-  Widget _buildOmerButton(BuildContext context, OmerDisplayData displayData) {
+  Widget _buildOmerButton(BuildContext context, String text) {
     final existingAlert = widget.state.zmanAlerts['omerCounting'];
     final cubit = context.read<CalendarCubit>();
     final cs = Theme.of(context).colorScheme;
@@ -530,11 +634,11 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
           );
 
     return RecommendedActionButton(
-      text: displayData.text,
+      text: text,
       iconWidget: iconWidget,
       textAlign: TextAlign.center,
       onPressed: () async {
-        final timeLabel = displayData.timeLabel;
+        final timeLabel = widget.state.dailyTimes['omerCounting'] ?? '--:--';
         if (timeLabel == '--:--') {
           UiSnack.showError('לא ניתן להפעיל התראה לספירת העומר ביום זה');
           return;
@@ -641,16 +745,18 @@ class _ZmanCard extends StatelessWidget {
                                 : timeData.name.length > 16
                                     ? 13.0
                                     : 14.0;
-                        final nameStyle =
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: titleFontSize,
-                                  color: hasAlert
-                                      ? scheme.onErrorContainer
-                                      : timeData.isHolidaySpecial
-                                          ? scheme.onSecondaryContainer
-                                          : scheme.onSurface,
-                                );
+                        final nameStyle = Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: titleFontSize,
+                              color: hasAlert
+                                  ? scheme.onErrorContainer
+                                  : timeData.isHolidaySpecial
+                                      ? scheme.onSecondaryContainer
+                                      : scheme.onSurface,
+                            );
                         return FittedBox(
                           alignment: AlignmentDirectional.centerStart,
                           fit: BoxFit.scaleDown,
@@ -678,8 +784,9 @@ class _ZmanCard extends StatelessWidget {
                     )
                   else
                     PopupMenuButton<CalendarTimeAlertOption>(
-                      tooltip:
-                          hasAlert ? 'מופעלת התראה לזמן זה' : 'בחר זמן להתראה',
+                      tooltip: hasAlert
+                          ? 'מופעלת התראה לזמן זה'
+                          : 'בחר זמן להתראה',
                       icon: Icon(
                         FluentIcons.more_vertical_24_regular,
                         size: 20,
