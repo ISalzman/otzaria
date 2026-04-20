@@ -5,12 +5,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart' hide cityCoordinates;
+import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart'
+    hide cityCoordinates;
 import 'package:otzaria/tools/calendar/models/calendar_location.dart';
 import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
+import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart'
+    as zmanim_helpers;
 import 'package:otzaria/tools/calendar/dialogs/calendar_zman_alert_dialog.dart';
 import 'package:otzaria/widgets/app_menu.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class CalendarTimeEntry {
   final String id;
@@ -267,9 +271,8 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
       return null;
     }
 
-    final sortTime = regularExit?.isNotEmpty == true
-        ? regularExit!
-        : chazonIshExit ?? '';
+    final sortTime =
+        regularExit?.isNotEmpty == true ? regularExit! : chazonIshExit ?? '';
 
     return CalendarTimeEntry(
       id: 'shabbosExitComposite',
@@ -305,6 +308,34 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
       return null;
     }
     return _buildOmerCountingText(omerDay);
+  }
+
+  String _resolveOmerAlertTimeLabel() {
+    final selectedDate = widget.state.selectedGregorianDate;
+    final todayDate = widget.state.todayGregorianDate;
+    final cityData = getCityData(widget.state.selectedCity);
+    if (cityData == null ||
+        selectedDate.year != todayDate.year ||
+        selectedDate.month != todayDate.month ||
+        selectedDate.day != todayDate.day) {
+      return widget.state.dailyTimes['omerCounting'] ?? '--:--';
+    }
+
+    final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
+    final tzLocation = tz.getLocation(timeZoneId);
+    final nowInCity = tz.TZDateTime.now(tzLocation);
+    final currentCivilDate = DateTime(
+      nowInCity.year,
+      nowInCity.month,
+      nowInCity.day,
+    );
+    final tonightTimes = zmanim_helpers.calculateDailyTimes(
+      currentCivilDate,
+      widget.state.selectedCity,
+    );
+    return tonightTimes['omerCounting'] ??
+        widget.state.dailyTimes['omerCounting'] ??
+        '--:--';
   }
 
   String _buildOmerCountingText(int day) {
@@ -547,8 +578,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
                       context,
                       zmanName: timeName,
                       timeLabel: timeLabel,
-                      initialMinutesBefore:
-                          existingAlert?.minutesBefore ?? 60,
+                      initialMinutesBefore: existingAlert?.minutesBefore ?? 60,
                       isEnabled: hasAlert,
                     );
                     if (result == null) return;
@@ -638,7 +668,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
       iconWidget: iconWidget,
       textAlign: TextAlign.center,
       onPressed: () async {
-        final timeLabel = widget.state.dailyTimes['omerCounting'] ?? '--:--';
+        final timeLabel = _resolveOmerAlertTimeLabel();
         if (timeLabel == '--:--') {
           UiSnack.showError('לא ניתן להפעיל התראה לספירת העומר ביום זה');
           return;
@@ -745,18 +775,16 @@ class _ZmanCard extends StatelessWidget {
                                 : timeData.name.length > 16
                                     ? 13.0
                                     : 14.0;
-                        final nameStyle = Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              fontSize: titleFontSize,
-                              color: hasAlert
-                                  ? scheme.onErrorContainer
-                                  : timeData.isHolidaySpecial
-                                      ? scheme.onSecondaryContainer
-                                      : scheme.onSurface,
-                            );
+                        final nameStyle =
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: titleFontSize,
+                                  color: hasAlert
+                                      ? scheme.onErrorContainer
+                                      : timeData.isHolidaySpecial
+                                          ? scheme.onSecondaryContainer
+                                          : scheme.onSurface,
+                                );
                         return FittedBox(
                           alignment: AlignmentDirectional.centerStart,
                           fit: BoxFit.scaleDown,
@@ -784,9 +812,8 @@ class _ZmanCard extends StatelessWidget {
                     )
                   else
                     PopupMenuButton<CalendarTimeAlertOption>(
-                      tooltip: hasAlert
-                          ? 'מופעלת התראה לזמן זה'
-                          : 'בחר זמן להתראה',
+                      tooltip:
+                          hasAlert ? 'מופעלת התראה לזמן זה' : 'בחר זמן להתראה',
                       icon: Icon(
                         FluentIcons.more_vertical_24_regular,
                         size: 20,
