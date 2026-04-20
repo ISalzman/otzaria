@@ -32,6 +32,7 @@ class SettingsRepository {
   static const String keyFacetFilteringWidth = 'key-facet-filtering-width';
   static const String keyCommentaryPaneWidth = 'key-commentary-pane-width';
   static const String keyCalendarType = 'key-calendar-type';
+  static const String keyCalendarDayTransition = 'key-calendar-day-transition';
   static const String keySelectedCity = 'key-selected-city';
   static const String keyCalendarEvents = 'key-calendar-events';
   static const String keyCopyWithHeaders = 'key-copy-with-headers';
@@ -196,6 +197,10 @@ class SettingsRepository {
       'calendarType': _settings.getValue<String>(
         keyCalendarType,
         defaultValue: 'combined',
+      ),
+      'calendarDayTransition': _settings.getValue<String>(
+        keyCalendarDayTransition,
+        defaultValue: 'sunset',
       ),
       'selectedCity': _settings.getValue<String>(
         keySelectedCity,
@@ -423,6 +428,10 @@ class SettingsRepository {
 
   Future<void> updateCalendarType(String value) async {
     await _settings.setValue(keyCalendarType, value);
+  }
+
+  Future<void> updateCalendarDayTransition(String value) async {
+    await _settings.setValue(keyCalendarDayTransition, value);
   }
 
   Future<void> updateSelectedCity(String value) async {
@@ -730,6 +739,7 @@ class SettingsRepository {
     await _settings.setValue(keyFacetFilteringWidth, 235.0);
     await _settings.setValue(keyCommentaryPaneWidth, 400.0);
     await _settings.setValue(keyCalendarType, 'combined');
+    await _settings.setValue(keyCalendarDayTransition, 'sunset');
     await _settings.setValue(keySelectedCity, 'ירושלים');
     await _settings.setValue(keyCalendarEvents, '[]');
     await _settings.setValue(keyCopyWithHeaders, 'none');
