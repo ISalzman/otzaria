@@ -16,7 +16,7 @@ import 'package:otzaria/personal_notes/widgets/inline_note_editor.dart';
 import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/widgets/dialogs.dart';
+import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 class PersonalNotesSidebar extends StatefulWidget {
