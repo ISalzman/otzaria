@@ -280,6 +280,7 @@ Widget _buildAppMenuRowContent(
   BuildContext context,
   AppMenuMetrics metrics, {
   required String label,
+  double? maxWidth,
   Widget? labelWidget,
   IconData? icon,
   Widget? trailing,
@@ -296,6 +297,21 @@ Widget _buildAppMenuRowContent(
           ? colorScheme.onPrimaryContainer
           : colorScheme.onSurface;
 
+  final hasTrailingWidget = isSelected || trailing != null;
+  final labelMaxWidth = _calculateAppMenuLabelMaxWidth(
+    metrics,
+    maxWidth: maxWidth,
+    hasLeadingIcon: icon != null,
+    hasTrailingWidget: hasTrailingWidget,
+  );
+  final labelChild = labelWidget ??
+      Text(
+        label,
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
+        textDirection: TextDirection.rtl,
+      );
+
   return Container(
     constraints: BoxConstraints(
       minWidth: metrics.menuMinWidth,
@@ -306,30 +322,28 @@ Widget _buildAppMenuRowContent(
     padding: metrics.itemPadding,
     alignment: AlignmentDirectional.centerStart,
     child: Row(
-      mainAxisSize: MainAxisSize.max,
+      mainAxisSize: MainAxisSize.min,
       children: [
         if (icon != null) ...[
           Icon(icon, size: metrics.iconSize, color: foregroundColor),
           const SizedBox(width: 8),
         ],
-        Expanded(
-          child: Directionality(
-            textDirection: TextDirection.rtl,
-            child: DefaultTextStyle.merge(
-              style: TextStyle(
-                fontFamily: 'Roboto',
-                fontSize: metrics.fontSize,
-                fontWeight:
-                    isSelected ? FontWeight.w600 : metrics.itemFontWeight,
-                color: foregroundColor,
-              ),
-              child: labelWidget ??
-                  Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.rtl,
-                  ),
+        Directionality(
+          textDirection: TextDirection.rtl,
+          child: DefaultTextStyle.merge(
+            style: TextStyle(
+              fontFamily: 'Roboto',
+              fontSize: metrics.fontSize,
+              fontWeight:
+                  isSelected ? FontWeight.w600 : metrics.itemFontWeight,
+              color: foregroundColor,
             ),
+            child: labelMaxWidth == null
+                ? labelChild
+                : ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: labelMaxWidth),
+                    child: labelChild,
+                  ),
           ),
         ),
         // סימן ✓ לפריט נבחר (תמיד, בכל סוג תפריט)
@@ -356,6 +370,23 @@ Widget _buildAppMenuRowContent(
       ],
     ),
   );
+}
+
+double? _calculateAppMenuLabelMaxWidth(
+  AppMenuMetrics metrics, {
+  required double? maxWidth,
+  required bool hasLeadingIcon,
+  required bool hasTrailingWidget,
+}) {
+  if (maxWidth == null) return null;
+
+  final occupiedWidth = metrics.itemPadding.horizontal +
+      (hasLeadingIcon ? metrics.iconSize + 8 : 0) +
+      (hasTrailingWidget ? metrics.iconSize + 8 : 0);
+  final availableWidth = maxWidth - occupiedWidth;
+  if (availableWidth <= 0) return null;
+
+  return availableWidth;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -544,6 +575,7 @@ class AppContextMenuRegion extends StatefulWidget {
 
 class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
   static const double _contextMenuScreenPadding = 8;
+  static const double _contextMenuMaxWidth = 320;
 
   bool _isMenuOpen = false;
   OverlayEntry? _menuOverlayEntry;
@@ -574,6 +606,16 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
     if (_isMenuOpen && mounted) {
       setState(() => _isMenuOpen = false);
     }
+  }
+
+  double _resolveContextMenuMaxWidth(
+    double overlayWidth,
+    AppMenuMetrics metrics,
+  ) {
+    final availableWidth = overlayWidth - (_contextMenuScreenPadding * 2);
+    return availableWidth
+        .clamp(metrics.menuMinWidth, _contextMenuMaxWidth)
+        .toDouble();
   }
 
   bool _isPointerInsideMenu(Offset globalPosition) {
@@ -611,7 +653,10 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
     final shouldOpenLeft =
         spaceRight < metrics.menuMinWidth && spaceLeft > spaceRight;
 
-    final estimatedWidth = metrics.menuMinWidth;
+    final estimatedWidth = _resolveContextMenuMaxWidth(
+      overlayRenderBox.size.width,
+      metrics,
+    );
     final rawDx = shouldOpenLeft
         ? overlayPosition.dx - estimatedWidth
         : overlayPosition.dx;
@@ -686,15 +731,24 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
       metrics,
     );
     final menuStyle = _menuStyle(context, metrics);
-    final maxMenuWidth =
-        (overlayRenderObject.size.width - (_contextMenuScreenPadding * 2))
-            .clamp(metrics.menuMinWidth, double.infinity)
-            .toDouble();
+    final maxMenuWidth = _resolveContextMenuMaxWidth(
+      overlayRenderObject.size.width,
+      metrics,
+    );
     final maxMenuHeight = (overlayRenderObject.size.height -
             menuOffset.dy -
             _contextMenuScreenPadding)
         .clamp(metrics.itemHeight, double.infinity)
         .toDouble();
+
+    // Create controllers once per menu open — stable across overlay rebuilds
+    final submenuControllers = <AppContextMenuEntry, MenuController>{
+      for (final entry in entries)
+        if (entry.children != null &&
+            entry.children!.isNotEmpty &&
+            entry.enabled)
+          entry: MenuController(),
+    };
 
     _removeContextMenuOverlay();
     _currentMenuOffset = menuOffset;
@@ -738,6 +792,8 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
                     panelContext,
                     panelEntries,
                     metrics,
+                    maxMenuWidth,
+                    submenuControllers,
                   ),
                 ),
               ),
@@ -790,6 +846,8 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
     BuildContext context,
     List<AppContextMenuEntry> entries,
     AppMenuMetrics metrics,
+    double maxWidth,
+    Map<AppContextMenuEntry, MenuController> submenuControllers,
   ) {
     return entries.map<Widget>((entry) {
       if (entry.isDivider) {
@@ -810,6 +868,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
             child: _buildAppMenuRowContent(
               context,
               metrics,
+              maxWidth: maxWidth,
               label: entry.label ?? '',
               labelWidget: entry.labelWidget,
               icon: entry.icon,
@@ -819,41 +878,44 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
           );
         }
 
+        final controller = submenuControllers[entry];
+        final isRtl = Directionality.of(context) == TextDirection.rtl;
         return SubmenuButton(
-          leadingIcon: entry.icon != null
-              ? Icon(entry.icon, size: metrics.iconSize)
-              : null,
-          trailingIcon: entry.trailing,
+          controller: controller,
+          onOpen: () {
+            for (final ctrl in submenuControllers.values) {
+              if (ctrl != controller && ctrl.isOpen) ctrl.close();
+            }
+          },
+          trailingIcon: entry.trailing ??
+              Icon(
+                isRtl
+                    ? FluentIcons.chevron_right_16_regular
+                    : FluentIcons.chevron_left_16_regular,
+                size: metrics.iconSize,
+              ),
           style: buildAppSubmenuItemStyle(context, metrics),
           menuStyle: _menuStyle(context, metrics),
           menuChildren: _buildSubmenuChildren(
             context,
             normalizedChildren,
             metrics,
+            maxWidth,
           ),
-          child: DefaultTextStyle.merge(
-            style: TextStyle(
-              fontFamily: 'Roboto',
-              fontSize: metrics.fontSize,
-              fontWeight: metrics.itemFontWeight,
-            ),
-            child: Directionality(
-              textDirection: TextDirection.rtl,
-              child: entry.labelWidget ??
-                  Text(
-                    entry.label ?? '',
-                    textDirection: TextDirection.rtl,
-                  ),
-            ),
+          child: _buildAppMenuRowContent(
+            context,
+            metrics,
+            maxWidth: maxWidth,
+            label: entry.label ?? '',
+            labelWidget: entry.labelWidget,
+            icon: entry.icon,
+            trailing: null,
+            isDestructive: entry.isDestructive,
           ),
         );
       }
 
       return MenuItemButton(
-        leadingIcon: entry.icon != null
-            ? Icon(entry.icon, size: metrics.iconSize)
-            : null,
-        trailingIcon: entry.trailing,
         style: buildAppSubmenuItemStyle(context, metrics),
         onPressed: entry.enabled
             ? () {
@@ -861,20 +923,15 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
                 entry.onTap?.call();
               }
             : null,
-        child: DefaultTextStyle.merge(
-          style: TextStyle(
-            fontFamily: 'Roboto',
-            fontSize: metrics.fontSize,
-            fontWeight: metrics.itemFontWeight,
-          ),
-          child: Directionality(
-            textDirection: TextDirection.rtl,
-            child: entry.labelWidget ??
-                Text(
-                  entry.label ?? '',
-                  textDirection: TextDirection.rtl,
-                ),
-          ),
+        child: _buildAppMenuRowContent(
+          context,
+          metrics,
+          maxWidth: maxWidth,
+          label: entry.label ?? '',
+          labelWidget: entry.labelWidget,
+          icon: entry.icon,
+          trailing: entry.trailing,
+          isDestructive: entry.isDestructive,
         ),
       );
     }).toList();
@@ -901,7 +958,10 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
     BuildContext context,
     List<AppContextMenuEntry> entries,
     AppMenuMetrics metrics,
+    double maxWidth,
   ) {
+    final submenuContentMaxWidth = maxWidth - metrics.itemPadding.horizontal;
+
     return entries.map((entry) {
       if (entry.isDivider) {
         return const Padding(
@@ -916,51 +976,48 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
             normalizedChildren.any((child) => !child.isDivider);
         if (!entry.enabled || !hasEnabledChildren) {
           return MenuItemButton(
-            leadingIcon: entry.icon != null
-                ? Icon(entry.icon, size: metrics.iconSize)
-                : null,
-            trailingIcon: entry.trailing,
             style: buildAppSubmenuItemStyle(context, metrics),
             onPressed: null,
-            child: Text(
-              entry.label ?? '',
-              textDirection: TextDirection.rtl,
+            child: _buildAppMenuRowContent(
+              context,
+              metrics,
+              maxWidth: submenuContentMaxWidth,
+              label: entry.label ?? '',
+              labelWidget: entry.labelWidget,
+              icon: entry.icon,
+              trailing: entry.trailing,
+              isDestructive: entry.isDestructive,
             ),
           );
         }
 
+        final isRtl = Directionality.of(context) == TextDirection.rtl;
         return SubmenuButton(
-          leadingIcon: entry.icon != null
-              ? Icon(entry.icon, size: metrics.iconSize)
-              : null,
-          trailingIcon: entry.trailing,
+          trailingIcon: entry.trailing ??
+              Icon(
+                isRtl
+                    ? FluentIcons.chevron_right_16_regular
+                    : FluentIcons.chevron_left_16_regular,
+                size: metrics.iconSize,
+              ),
           style: buildAppSubmenuItemStyle(context, metrics),
           menuStyle: _menuStyle(context, metrics),
           menuChildren:
-              _buildSubmenuChildren(context, normalizedChildren, metrics),
-          child: DefaultTextStyle.merge(
-            style: TextStyle(
-              fontFamily: 'Roboto',
-              fontSize: metrics.fontSize,
-              fontWeight: metrics.itemFontWeight,
-            ),
-            child: Directionality(
-              textDirection: TextDirection.rtl,
-              child: entry.labelWidget ??
-                  Text(
-                    entry.label ?? '',
-                    textDirection: TextDirection.rtl,
-                  ),
-            ),
+              _buildSubmenuChildren(context, normalizedChildren, metrics, maxWidth),
+          child: _buildAppMenuRowContent(
+            context,
+            metrics,
+            maxWidth: submenuContentMaxWidth,
+            label: entry.label ?? '',
+            labelWidget: entry.labelWidget,
+            icon: entry.icon,
+            trailing: null,
+            isDestructive: entry.isDestructive,
           ),
         );
       }
 
       return MenuItemButton(
-        leadingIcon: entry.icon != null
-            ? Icon(entry.icon, size: metrics.iconSize)
-            : null,
-        trailingIcon: entry.trailing,
         style: buildAppSubmenuItemStyle(context, metrics),
         onPressed: entry.enabled
             ? () {
@@ -968,20 +1025,15 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
                 entry.onTap?.call();
               }
             : null,
-        child: DefaultTextStyle.merge(
-          style: TextStyle(
-            fontFamily: 'Roboto',
-            fontSize: metrics.fontSize,
-            fontWeight: metrics.itemFontWeight,
-          ),
-          child: Directionality(
-            textDirection: TextDirection.rtl,
-            child: entry.labelWidget ??
-                Text(
-                  entry.label ?? '',
-                  textDirection: TextDirection.rtl,
-                ),
-          ),
+        child: _buildAppMenuRowContent(
+          context,
+          metrics,
+          maxWidth: submenuContentMaxWidth,
+          label: entry.label ?? '',
+          labelWidget: entry.labelWidget,
+          icon: entry.icon,
+          trailing: entry.trailing,
+          isDestructive: entry.isDestructive,
         ),
       );
     }).toList();
@@ -1012,7 +1064,10 @@ class _AppContextMenuPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Material(
+    return FocusScope(
+      canRequestFocus: false,
+      skipTraversal: true,
+      child: Material(
       color: menuStyle?.backgroundColor?.resolve(const <WidgetState>{}) ??
           colorScheme.surfaceContainer,
       elevation:
@@ -1039,7 +1094,7 @@ class _AppContextMenuPanel extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
