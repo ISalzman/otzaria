@@ -1,4 +1,4 @@
-// lib/widgets/dialogs.dart
+// lib/widgets/dialogs/dialogs_exports.dart
 //
 // Barrel export לכל דיאלוגי האפליקציה.
 //
@@ -26,3 +26,4 @@ export '../confirmation_dialog.dart';
 export 'app_dialogs.dart';
 export '../input_dialog.dart';
 export '../selection_dialog.dart';
+export '../multi_selection_dialog.dart';
