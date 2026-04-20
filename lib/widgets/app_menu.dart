@@ -831,7 +831,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
         }
       },
       child: Listener(
-        behavior: HitTestBehavior.deferToChild,
+        behavior: HitTestBehavior.translucent,
         onPointerDown: (event) {
           if (event.buttons == 2) {
             _openContextMenu(event.position);
