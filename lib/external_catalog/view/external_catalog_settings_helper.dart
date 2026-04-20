@@ -3,9 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
-import 'package:otzaria/settings/engine/settings_bloc.dart';
-import 'package:otzaria/settings/engine/settings_event.dart';
-import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/widgets/custom_ui_components.dart';
 
 class ExternalCatalogSettingsHelper {
