@@ -10,6 +10,8 @@ import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
+import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart'
+    as zmanim_helpers;
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/plugins/adapters/plugin_calendar_adapter.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -2838,292 +2840,7 @@ Map<String, dynamic>? _getCityData(String cityName) {
 
 // Calculate daily times function
 Map<String, String> _calculateDailyTimes(DateTime date, String city) {
-  final cityData = _getCityData(city);
-  if (cityData == null) {
-    return {};
-  }
-
-  final locationName = city;
-  final latitude = cityData['lat']!;
-  final longitude = cityData['lng']!;
-  final elevation = cityData['elevation']!;
-  final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
-
-  final location = GeoLocation();
-  location.setLocationName(locationName);
-  location.setLatitude(latitude: latitude);
-  location.setLongitude(longitude: longitude);
-  location.setElevation(elevation > 0 ? elevation : 0);
-
-  // Set the timezone for the location
-  final tzLocation = tz.getLocation(timeZoneId);
-  final tzDateTime = tz.TZDateTime(
-    tzLocation,
-    date.year,
-    date.month,
-    date.day,
-    date.hour,
-    date.minute,
-    date.second,
-    date.millisecond,
-    date.microsecond,
-  );
-  location.setDateTime(tzDateTime);
-
-  final zmanimCalendar = ComplexZmanimCalendar.intGeoLocation(location);
-
-  final bool isInIsrael = _isCityInIsrael(city);
-  final jewishCalendar = JewishCalendar.fromDateTime(date);
-  jewishCalendar.inIsrael = isInIsrael;
-
-  final Map<String, String> times = {
-    'alos': _formatTime(zmanimCalendar.getAlosHashachar()!, tzLocation),
-    'alos16point1Degrees':
-        _formatTime(zmanimCalendar.getAlos16Point1Degrees()!, tzLocation),
-    'alos19point8Degrees':
-        _formatTime(zmanimCalendar.getAlos19Point8Degrees()!, tzLocation),
-    'sunrise': _formatTime(zmanimCalendar.getSunrise()!, tzLocation),
-    'sofZmanShmaMGA':
-        _formatTime(zmanimCalendar.getSofZmanShmaMGA()!, tzLocation),
-    'sofZmanShmaGRA':
-        _formatTime(zmanimCalendar.getSofZmanShmaGRA()!, tzLocation),
-    'sofZmanTfilaMGA':
-        _formatTime(zmanimCalendar.getSofZmanTfilaMGA()!, tzLocation),
-    'sofZmanTfilaGRA':
-        _formatTime(zmanimCalendar.getSofZmanTfilaGRA()!, tzLocation),
-    'chatzos': _formatTime(zmanimCalendar.getChatzos()!, tzLocation),
-    'chatzosLayla':
-        _formatTime(_calculateChatzosLayla(zmanimCalendar), tzLocation),
-    'minchaGedola': _formatTime(zmanimCalendar.getMinchaGedola()!, tzLocation),
-    'minchaKetana': _formatTime(zmanimCalendar.getMinchaKetana()!, tzLocation),
-    'plagHamincha': _formatTime(zmanimCalendar.getPlagHamincha()!, tzLocation),
-    'sunset': _formatTime(zmanimCalendar.getSunset()!, tzLocation),
-    'sunsetRT': _formatTime(_calculateSunsetRT(zmanimCalendar), tzLocation),
-    'tzais': _formatTime(zmanimCalendar.getTzais()!, tzLocation),
-  };
-
-  // הוספת זמנים מיוחדים לחגים
-  _addSpecialTimes(times, jewishCalendar, zmanimCalendar, city, tzLocation);
-
-  return times;
-}
-
-String _formatTime(DateTime dt, tz.Location tzLocation) {
-  // Convert to the correct timezone before formatting
-  final tzDateTime = tz.TZDateTime.from(dt, tzLocation);
-  return '${tzDateTime.hour.toString().padLeft(2, '0')}:${tzDateTime.minute.toString().padLeft(2, '0')}';
-}
-
-// חישוב חצות לילה - 12 שעות אחרי חצות היום
-DateTime _calculateChatzosLayla(ComplexZmanimCalendar zmanimCalendar) {
-  final chatzos = zmanimCalendar.getChatzos()!;
-  return chatzos.add(const Duration(hours: 12));
-}
-
-// חישוב צאת הכוכבים לפי רבנו תם - בין השמשות רבנו תם
-DateTime _calculateSunsetRT(ComplexZmanimCalendar zmanimCalendar) {
-  // רבנו תם - 72 דקות אחרי השקיעה
-  final sunset = zmanimCalendar.getSunset()!;
-  return sunset.add(const Duration(minutes: 72));
-}
-
-// הוספת זמנים מיוחדים לחגים
-void _addSpecialTimes(Map<String, String> times, JewishCalendar jewishCalendar,
-    ComplexZmanimCalendar zmanimCalendar, String city, tz.Location tzLocation) {
-  // זמנים מיוחדים לערב פסח
-  if (jewishCalendar.getYomTovIndex() == JewishCalendar.EREV_PESACH) {
-    // סוף זמן אכילת חמץ - מג"א (4 שעות זמניות)
-    final sofZmanAchilasChametzMGA =
-        zmanimCalendar.getSofZmanAchilasChametzMGA72Minutes();
-    if (sofZmanAchilasChametzMGA != null) {
-      times['sofZmanAchilasChametzMGA'] =
-          _formatTime(sofZmanAchilasChametzMGA, tzLocation);
-    }
-
-    // סוף זמן אכילת חמץ - גר"א (4 שעות זמניות)
-    final sofZmanAchilasChametzGRA =
-        zmanimCalendar.getSofZmanAchilasChametzGRA();
-    if (sofZmanAchilasChametzGRA != null) {
-      times['sofZmanAchilasChametzGRA'] =
-          _formatTime(sofZmanAchilasChametzGRA, tzLocation);
-    }
-
-    // סוף זמן ביעור חמץ - מג"א (5 שעות זמניות)
-    final sofZmanBiurChametzMGA =
-        zmanimCalendar.getSofZmanBiurChametzMGA72Minutes();
-    if (sofZmanBiurChametzMGA != null) {
-      times['sofZmanBiurChametzMGA'] =
-          _formatTime(sofZmanBiurChametzMGA, tzLocation);
-    }
-
-    // סוף זמן ביעור חמץ - גר"א (5 שעות זמניות)
-    final sofZmanBiurChametzGRA = zmanimCalendar.getSofZmanBiurChametzGRA();
-    if (sofZmanBiurChametzGRA != null) {
-      times['sofZmanBiurChametzGRA'] =
-          _formatTime(sofZmanBiurChametzGRA, tzLocation);
-    }
-  }
-
-  // זמני כניסת שבת/חג
-  if (jewishCalendar.getDayOfWeek() == 6 || jewishCalendar.isErevYomTov()) {
-    final candleLightingTime =
-        _calculateCandleLightingTime(zmanimCalendar, city);
-    if (candleLightingTime != null) {
-      times['candleLighting'] = _formatTime(candleLightingTime, tzLocation);
-    }
-  }
-
-  // זמני יציאת שבת/חג
-  if (jewishCalendar.getDayOfWeek() == 7 || jewishCalendar.isYomTov()) {
-    final shabbosExitTime1 = _calculateShabbosExitTime1(zmanimCalendar);
-    final shabbosExitTime2 = _calculateShabbosExitTime2(zmanimCalendar);
-
-    if (shabbosExitTime1 != null) {
-      times['shabbosExit1'] = _formatTime(shabbosExitTime1, tzLocation);
-    }
-    if (shabbosExitTime2 != null) {
-      times['shabbosExit2'] = _formatTime(shabbosExitTime2, tzLocation);
-    }
-  }
-
-  // זמן ספירת העומר (מליל יום שני של פסח עד ערב שבועות)
-  if (jewishCalendar.getDayOfOmer() != -1) {
-    final omerCountingTime = _calculateOmerCountingTime(zmanimCalendar);
-    if (omerCountingTime != null) {
-      times['omerCounting'] = _formatTime(omerCountingTime, tzLocation);
-    }
-  }
-
-  // זמני תענית
-  if (jewishCalendar.isTaanis() &&
-      jewishCalendar.getYomTovIndex() != JewishCalendar.YOM_KIPPUR) {
-    final fastStartTime = _calculateFastStartTime(zmanimCalendar);
-    final fastEndTime = _calculateFastEndTime(zmanimCalendar);
-
-    if (fastStartTime != null) {
-      times['fastStart'] = _formatTime(fastStartTime, tzLocation);
-    }
-    if (fastEndTime != null) {
-      times['fastEnd'] = _formatTime(fastEndTime, tzLocation);
-    }
-  }
-
-  // זמן קידוש לבנה
-  if (_isKidushLevanaTime(jewishCalendar)) {
-    final kidushLevanaEarliest =
-        _calculateKidushLevanaEarliest(jewishCalendar, zmanimCalendar);
-    final kidushLevanaLatest =
-        _calculateKidushLevanaLatest(jewishCalendar, zmanimCalendar);
-
-    if (kidushLevanaEarliest != null) {
-      times['kidushLevanaEarliest'] =
-          _formatTime(kidushLevanaEarliest, tzLocation);
-    }
-    if (kidushLevanaLatest != null) {
-      times['kidushLevanaLatest'] = _formatTime(kidushLevanaLatest, tzLocation);
-    }
-  }
-
-  // זמני קידוש לבנה
-  try {
-    final tchilasKidushLevana =
-        zmanimCalendar.getTchilasZmanKidushLevana3Days();
-    final sofZmanKidushLevana =
-        zmanimCalendar.getSofZmanKidushLevanaBetweenMoldos();
-
-    if (tchilasKidushLevana != null) {
-      times['tchilasKidushLevana'] =
-          _formatTime(tchilasKidushLevana, tzLocation);
-    }
-    if (sofZmanKidushLevana != null) {
-      times['sofZmanKidushLevana'] =
-          _formatTime(sofZmanKidushLevana, tzLocation);
-    }
-  } catch (e) {
-    // Ignore errors in calculating moon times for certain dates
-  }
-}
-
-// חישוב זמן הדלקת נרות לפי עיר
-DateTime? _calculateCandleLightingTime(
-    ComplexZmanimCalendar zmanimCalendar, String city) {
-  final sunset = zmanimCalendar.getSunset();
-  if (sunset == null) return null;
-
-  int minutesBefore;
-  switch (city) {
-    case 'ירושלים':
-      minutesBefore = 40;
-      break;
-    case 'בני ברק':
-      minutesBefore = 22;
-      break;
-    case 'מודיעין עילית':
-      minutesBefore = 30;
-      break;
-    default:
-      minutesBefore = 30;
-      break;
-  }
-
-  return sunset.subtract(Duration(minutes: minutesBefore));
-}
-
-// חישוב זמן יציאת שבת 1 - 34 דקות אחרי השקיעה
-DateTime? _calculateShabbosExitTime1(ComplexZmanimCalendar zmanimCalendar) {
-  final sunset = zmanimCalendar.getSunset();
-  if (sunset == null) return null;
-
-  return sunset.add(const Duration(minutes: 34));
-}
-
-// חישוב זמן יציאת שבת 2 - צאת השבת חזו"א - 38 דקות אחרי השקיעה
-DateTime? _calculateShabbosExitTime2(ComplexZmanimCalendar zmanimCalendar) {
-  final sunset = zmanimCalendar.getSunset();
-  if (sunset == null) return null;
-
-  return sunset.add(const Duration(minutes: 38));
-}
-
-// חישוב זמן ספירת העומר - אחרי צאת הכוכבים
-DateTime? _calculateOmerCountingTime(ComplexZmanimCalendar zmanimCalendar) {
-  return zmanimCalendar.getTzais();
-}
-
-// חישוב תחילת תענית - עלות השחר
-DateTime? _calculateFastStartTime(ComplexZmanimCalendar zmanimCalendar) {
-  return zmanimCalendar.getAlosHashachar();
-}
-
-// חישוב סיום תענית - צאת הכוכבים
-DateTime? _calculateFastEndTime(ComplexZmanimCalendar zmanimCalendar) {
-  return zmanimCalendar.getTzais();
-}
-
-// בדיקה אם זה זמן קידוש לבנה (מיום 3 עד יום 15 בחודש)
-bool _isKidushLevanaTime(JewishCalendar jewishCalendar) {
-  final dayOfMonth = jewishCalendar.getJewishDayOfMonth();
-  return dayOfMonth >= 3 && dayOfMonth <= 15;
-}
-
-// חישוב תחילת זמן קידוש לבנה - 3 ימים אחרי המולד
-DateTime? _calculateKidushLevanaEarliest(
-    JewishCalendar jewishCalendar, ComplexZmanimCalendar zmanimCalendar) {
-  // זמן קידוש לבנה מתחיל 3 ימים אחרי המולד, אחרי צאת הכוכבים
-  if (jewishCalendar.getJewishDayOfMonth() == 3) {
-    return zmanimCalendar.getTzais();
-  }
-  return null;
-}
-
-// חישוב סוף זמן קידוש לבנה - 15 ימים אחרי המולד
-DateTime? _calculateKidushLevanaLatest(
-    JewishCalendar jewishCalendar, ComplexZmanimCalendar zmanimCalendar) {
-  // זמן קידוש לבנה מסתיים ביום 15, לפני עלות השחר
-  if (jewishCalendar.getJewishDayOfMonth() == 15) {
-    return zmanimCalendar.getAlosHashachar();
-  }
-  return null;
+  return zmanim_helpers.calculateDailyTimes(date, city);
 }
 
 // Helper functions for CalendarType conversion
@@ -3267,12 +2984,13 @@ DateTime nextCalendarTodayRefreshTime({
     }
 
     if (transition == CalendarDayTransition.midnight) {
+      final nextDate = date.add(const Duration(days: 1));
       candidates.add(
         tz.TZDateTime(
           tzLocation,
-          date.year,
-          date.month,
-          date.day + 1,
+          nextDate.year,
+          nextDate.month,
+          nextDate.day,
         ),
       );
     } else {
@@ -3302,22 +3020,9 @@ DateTime? _calculateDayTransitionTime(
   String city,
   CalendarDayTransition transition,
 ) {
-  final cityData = _getCityData(city);
-  if (cityData == null) return null;
-
-  final location = GeoLocation();
-  location.setLocationName(city);
-  location.setLatitude(latitude: cityData['lat']!);
-  location.setLongitude(longitude: cityData['lng']!);
-  final elevation = cityData['elevation']!;
-  location.setElevation(elevation > 0 ? elevation : 0);
-
-  final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
-  final tzLocation = tz.getLocation(timeZoneId);
-  location
-      .setDateTime(tz.TZDateTime(tzLocation, date.year, date.month, date.day));
-
-  final zmanimCalendar = ComplexZmanimCalendar.intGeoLocation(location);
+  final context = zmanim_helpers.buildZmanimCalendarContext(date, city);
+  if (context == null) return null;
+  final zmanimCalendar = context.zmanimCalendar;
   switch (transition) {
     case CalendarDayTransition.sunset:
       return zmanimCalendar.getSunset();
@@ -3332,23 +3037,8 @@ DateTime? _calculateDayTransitionTime(
 }
 
 DateTime? _calculateAlos90(DateTime date, String city) {
-  final cityData = _getCityData(city);
-  if (cityData == null) return null;
-
-  final location = GeoLocation();
-  location.setLocationName(city);
-  location.setLatitude(latitude: cityData['lat']!);
-  location.setLongitude(longitude: cityData['lng']!);
-  final elevation = cityData['elevation']!;
-  location.setElevation(elevation > 0 ? elevation : 0);
-
-  final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
-  final tzLocation = tz.getLocation(timeZoneId);
-  location
-      .setDateTime(tz.TZDateTime(tzLocation, date.year, date.month, date.day));
-
-  final zmanimCalendar = ComplexZmanimCalendar.intGeoLocation(location);
-  final sunrise = zmanimCalendar.getSunrise();
+  final context = zmanim_helpers.buildZmanimCalendarContext(date, city);
+  final sunrise = context?.zmanimCalendar.getSunrise();
   return sunrise?.subtract(const Duration(minutes: 90));
 }
 
