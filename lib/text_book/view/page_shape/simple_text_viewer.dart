@@ -26,7 +26,7 @@ import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
-import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
