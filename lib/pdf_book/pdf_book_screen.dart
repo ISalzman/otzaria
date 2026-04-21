@@ -649,8 +649,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       backgroundColor:
           Colors.white, // תמיד לבן - ה-ColorFilter יהפוך לשחור במצב כהה
       maxScale: 10,
-      horizontalCacheExtent: 0, // רק דפים נראים
-      verticalCacheExtent: 1, // רק דף אחד למעלה/למטה
+      horizontalCacheExtent: 0,
+      verticalCacheExtent:
+          layoutMode == PdfLayoutMode.bookView ? 2 : 1, // במצב ספר: פריסה אחת קדימה/אחורה נוספת
       pageAnchor: PdfPageAnchor.top, // עיגון לראש הדף
       onInteractionStart: (_) {
         if (!(widget.tab.pinLeftPane.value ||
@@ -1192,6 +1193,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   painter: _BookPageTurnPainter(
                     snapshot: snapshot,
                     snapshotViewportRect: transition.viewportRect,
+                    viewportLogicalSize: transition.viewportLogicalSize,
                     progress: progress,
                     direction: transition.direction,
                     pageBackColor: colorScheme.surface,
@@ -1352,7 +1354,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
   }
 
-  Future<ui.Image?> _capturePdfViewportSnapshot() async {
+  Future<({ui.Image image, Size viewportLogicalSize})?> _capturePdfViewportSnapshot() async {
     final boundaryContext = _pdfViewportBoundaryKey.currentContext;
     if (boundaryContext == null) {
       return null;
@@ -1401,7 +1403,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         min(devicePixelRatio, min(1.35, cappedPixelRatio)).clamp(0.85, 1.35);
 
     try {
-      return await renderObject.toImage(pixelRatio: pixelRatio);
+      final image = await renderObject.toImage(pixelRatio: pixelRatio);
+      return (image: image, viewportLogicalSize: renderObject.size);
     } catch (error, stackTrace) {
       debugPrint('Failed to capture PDF snapshot: $error\n$stackTrace');
       return null;
@@ -1488,17 +1491,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         return;
       }
 
-      final snapshot = await _capturePdfViewportSnapshot();
+      final captureResult = await _capturePdfViewportSnapshot();
 
-      if (!mounted || snapshot == null) {
-        snapshot?.dispose();
+      if (!mounted || captureResult == null) {
+        captureResult?.image.dispose();
         await _goToPageWithSpreadLock(targetPage);
         return;
       }
 
       if (_hasNewerPendingPageTurn(
           targetPage: targetPage, direction: direction)) {
-        snapshot.dispose();
+        captureResult.image.dispose();
         return;
       }
 
@@ -1510,10 +1513,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       _pageTurnController.reset();
       setState(() {
         _disposePageTurnSnapshot();
-        _pageTurnSnapshot = snapshot;
+        _pageTurnSnapshot = captureResult.image;
         _pageTurnTransition = _BookPageTurnTransition(
           direction: direction,
           viewportRect: currentSpreadViewportRect,
+          viewportLogicalSize: captureResult.viewportLogicalSize,
         );
       });
 
@@ -1535,7 +1539,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
       // Allow the PDF to begin rendering the new page tiles before the
       // animation starts, so the revealed area isn't blank.
-      await Future<void>.delayed(const Duration(milliseconds: 16));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
 
       if (!mounted) return;
 
@@ -3043,10 +3047,12 @@ class _PendingBookPageTurn {
 class _BookPageTurnTransition {
   final _BookPageTurnDirection direction;
   final Rect viewportRect;
+  final Size viewportLogicalSize;
 
   const _BookPageTurnTransition({
     required this.direction,
     required this.viewportRect,
+    required this.viewportLogicalSize,
   });
 }
 
@@ -3314,6 +3320,7 @@ class _BookPageTurnBackgroundPainter extends CustomPainter {
 class _BookPageTurnPainter extends CustomPainter {
   final ui.Image snapshot;
   final Rect snapshotViewportRect;
+  final Size viewportLogicalSize;
   final double progress;
   final _BookPageTurnDirection direction;
   final Color pageBackColor;
@@ -3324,6 +3331,7 @@ class _BookPageTurnPainter extends CustomPainter {
   const _BookPageTurnPainter({
     required this.snapshot,
     required this.snapshotViewportRect,
+    required this.viewportLogicalSize,
     required this.progress,
     required this.direction,
     required this.pageBackColor,
@@ -3339,10 +3347,10 @@ class _BookPageTurnPainter extends CustomPainter {
     }
 
     final viewportRect = Offset.zero & size;
-    final curlWidth = max(
-      size.width * 0.12,
-      size.width * (0.08 + (sin(pi * progress) * 0.10)),
-    );
+    // curlWidth is zero at progress=0 and progress=1 (no visible curl at
+    // the start/end), and peaks mid-animation. Avoids an abrupt jump at the
+    // first frame that made pages appear to shift sideways.
+    final curlWidth = size.width * sin(pi * progress) * 0.18;
 
     if (direction == _BookPageTurnDirection.next) {
       _paintNextTurn(
@@ -3579,16 +3587,20 @@ class _BookPageTurnPainter extends CustomPainter {
       snapshot.width.toDouble(),
       snapshot.height.toDouble(),
     );
-    final normalizedLeft = destinationRect.left / viewportRect.width;
-    final normalizedTop = destinationRect.top / viewportRect.height;
-    final normalizedWidth = destinationRect.width / viewportRect.width;
-    final normalizedHeight = destinationRect.height / viewportRect.height;
+    // snapshotViewportRect is in logical pixels; the snapshot image is
+    // captured at pixelRatio = image.width / viewportLogicalSize.width.
+    // Convert local destination coords → viewport logical → image pixels.
+    final pRatioX = snapshot.width / viewportLogicalSize.width;
+    final pRatioY = snapshot.height / viewportLogicalSize.height;
+
+    final viewportLeft = snapshotViewportRect.left + destinationRect.left;
+    final viewportTop = snapshotViewportRect.top + destinationRect.top;
 
     return Rect.fromLTWH(
-      snapshotViewportRect.left + (snapshotViewportRect.width * normalizedLeft),
-      snapshotViewportRect.top + (snapshotViewportRect.height * normalizedTop),
-      snapshotViewportRect.width * normalizedWidth,
-      snapshotViewportRect.height * normalizedHeight,
+      viewportLeft * pRatioX,
+      viewportTop * pRatioY,
+      destinationRect.width * pRatioX,
+      destinationRect.height * pRatioY,
     ).intersect(fullImageRect);
   }
 
@@ -3596,6 +3608,7 @@ class _BookPageTurnPainter extends CustomPainter {
   bool shouldRepaint(_BookPageTurnPainter oldDelegate) =>
       oldDelegate.snapshot != snapshot ||
       oldDelegate.snapshotViewportRect != snapshotViewportRect ||
+      oldDelegate.viewportLogicalSize != viewportLogicalSize ||
       oldDelegate.progress != progress ||
       oldDelegate.direction != direction ||
       oldDelegate.pageBackColor != pageBackColor ||
