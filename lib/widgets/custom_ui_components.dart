@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/app_restart.dart';
-import 'package:otzaria/widgets/mixins/dialog_navigation_mixin.dart';
+import 'package:otzaria/widgets/keyboard_dialog_navigation.dart';
 import 'package:otzaria/theme/app_theme.dart';
 
 // ── קבועי סגנון גלובליים ─────────────────────────────────────────────────────

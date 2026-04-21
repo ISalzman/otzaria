@@ -1,4 +1,4 @@
-// lib/widgets/dialogs.dart
+// lib/widgets/dialogs/dialogs_exports.dart
 //
 // Barrel export לכל דיאלוגי האפליקציה.
 //
