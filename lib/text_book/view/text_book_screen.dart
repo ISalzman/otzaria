@@ -445,6 +445,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         builder: (context) => PrintingScreen(
           data: Future.value(state.content.join('\n')),
           bookId: state.book.title,
+          book: state.book,
           links: state.links,
           activeCommentators: state.activeCommentators,
           startLine: state.visibleIndices.first,
@@ -1937,6 +1938,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             builder: (context) => PrintingScreen(
               data: Future.value(state.content.join('\n')),
               bookId: state.book.title,
+              book: state.book,
               links: state.links,
               activeCommentators: state.activeCommentators,
               startLine: state.visibleIndices.first,
@@ -2452,6 +2454,7 @@ bool _handleGlobalKeyEvent(KeyEvent event, BuildContext context,
         builder: (context) => PrintingScreen(
           data: Future.value(state.content.join('\n')),
           bookId: state.book.title,
+          book: state.book,
           links: state.links,
           activeCommentators: state.activeCommentators,
           startLine: state.visibleIndices.first,
