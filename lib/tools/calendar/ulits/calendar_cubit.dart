@@ -72,7 +72,8 @@ class CalendarState extends Equatable {
   final CalendarType calendarType;
   final CalendarView calendarView;
   final CalendarDayTransition dayTransition;
-  final int calendarClockTick;
+  final int? _calendarClockTick;
+  int get calendarClockTick => _calendarClockTick ?? 0;
   final List<CustomEvent> events;
   final String eventSearchQuery;
   final bool searchInDescriptions;
@@ -103,7 +104,7 @@ class CalendarState extends Equatable {
     required this.calendarView,
     required this.dayTransition,
     required this.inIsrael,
-    this.calendarClockTick = 0,
+    int? calendarClockTick = 0,
     this.events = const [],
     this.eventSearchQuery = '',
     this.searchInDescriptions = false,
@@ -120,7 +121,7 @@ class CalendarState extends Equatable {
     this.googleCalendarLastSync,
     this.googleCalendarSyncPastDays = 60,
     this.googleCalendarSyncFutureDays = 365,
-  });
+  }) : _calendarClockTick = calendarClockTick;
 
   factory CalendarState.initial() {
     final now = DateTime.now();
