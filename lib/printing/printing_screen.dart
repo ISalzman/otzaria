@@ -123,7 +123,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (widget.createPdfOverride != null) {
       _rangeMode = _PrintRangeMode.lines;
       _flatHeaders = const [];
-      _previewPdf = _createBasePdf(format);
+      _previewPdf = _createPreviewPdf(format);
       return;
     }
 
@@ -157,7 +157,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (mounted) {
       setState(() {});
     }
-    return _createBasePdf(format);
+    return _createPreviewPdf(format);
   }
 
   Future<int> _totalLineCount() async => (await _dataFuture).split('\n').length;
@@ -283,22 +283,22 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
   }
 
-  void printPdf() {
-    Printing.layoutPdf(onLayout: createPdf);
-  }
-
   void _refreshPreviewPdf({bool immediate = false}) {
     _previewRefreshTimer?.cancel();
     if (immediate) {
-      _previewPdf = _createBasePdf(format);
+      _previewPdf = _createPreviewPdf(format);
       return;
     }
     _previewRefreshTimer = Timer(const Duration(milliseconds: 250), () {
       if (!mounted) return;
       setState(() {
-        _previewPdf = _createBasePdf(format);
+        _previewPdf = _createPreviewPdf(format);
       });
     });
+  }
+
+  Future<Uint8List> _createPreviewPdf(PdfPageFormat format) {
+    return _createOutputPdf(format);
   }
 
   Future<Uint8List> _createOutputPdf(PdfPageFormat format) async {
@@ -308,13 +308,20 @@ class _PrintingScreenState extends State<PrintingScreen> {
     try {
       return await _createNUpPdfFromRaster(
         base,
-        sheetFormat: format,
+        sheetFormat: _effectivePageFormat(format),
         pagesPerSheet: _pagesPerSheet,
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('N-up PDF creation failed: $e');
       // fallback: always return original PDF if raster/imposition fails
       return base;
     }
+  }
+
+  PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
+    return orientation == pw.PageOrientation.landscape
+        ? format.landscape
+        : format;
   }
 
   Future<Uint8List> _createBasePdf(PdfPageFormat format) async {
@@ -1264,6 +1271,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                           if (value == null) return;
                                           setState(() {
                                             _pagesPerSheet = value;
+                                            _refreshPreviewPdf();
                                           });
                                         },
                                         items: const [
@@ -2013,6 +2021,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                           if (value == null) return;
                                           setState(() {
                                             _pagesPerSheet = value;
+                                            _refreshPreviewPdf();
                                           });
                                         },
                                         items: const [
