@@ -19,7 +19,7 @@ import 'package:otzaria/find_ref/find_ref_dialog.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/tabs/reading_screen.dart';
-import 'package:otzaria/tools/more_screen.dart';
+import 'package:otzaria/tools/tools_screen.dart';
 import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
 import 'dart:async';
 import 'package:otzaria/update/my_updat_widget.dart';
@@ -64,7 +64,7 @@ class MainWindowScreen extends StatefulWidget {
 }
 
 // Global key for accessing MoreScreen
-final GlobalKey<MoreScreenState> moreScreenKey = GlobalKey<MoreScreenState>();
+final GlobalKey<ToolsScreenState> moreScreenKey = GlobalKey<ToolsScreenState>();
 final GlobalKey<State<LibraryBrowser>> libraryBrowserKey =
     GlobalKey<State<LibraryBrowser>>();
 
@@ -802,7 +802,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
             }
 
             _cachedReadingPage ??= const ReadingScreen();
-            _cachedMorePage ??= MoreScreen(key: moreScreenKey);
+            _cachedMorePage ??= ToolsScreen(key: moreScreenKey);
             _cachedSettingsPage ??=
                 MySettingsScreen(controller: _settingsScreenController);
 
