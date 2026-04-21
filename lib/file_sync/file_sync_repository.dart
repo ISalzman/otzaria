@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -113,6 +113,8 @@ class FileSyncRepository {
     isSyncing = false;
   }
 
+  String getDbPath() => DatabaseConstants.getDatabasePath();
+
   Future<int> getCurrentLibraryVersion() async {
     sqlite3.Database? db;
     try {
@@ -207,7 +209,6 @@ class FileSyncRepository {
     return assets;
   }
 
-  @visibleForTesting
   static List<DiffReleaseAsset> buildUpdateChain({
     required int currentVersion,
     required List<DiffReleaseAsset> availableAssets,
@@ -321,7 +322,6 @@ class FileSyncRepository {
     );
   }
 
-  @visibleForTesting
   static List<String> splitSqlStatements(String sql) {
     final statements = <String>[];
     var buffer = StringBuffer();

@@ -34,8 +34,10 @@ import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_state.dart';
-import 'package:otzaria/widgets/indexing_status_overlay.dart';
 import 'package:otzaria/widgets/context_overlay_panel.dart';
+import 'package:otzaria/work_status/work_status_cubit.dart';
+import 'package:otzaria/work_status/work_status_item.dart';
+import 'package:otzaria/work_status/work_status_overlay.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -542,6 +544,27 @@ class MainWindowScreenState extends State<MainWindowScreen>
               _tryStartDeferredStartupWork();
             },
           ),
+          BlocListener<IndexingBloc, IndexingState>(
+            listener: (context, state) {
+              final cubit = context.read<WorkStatusCubit>();
+              if (state is IndexingInProgress && state.isCreatingIndex) {
+                final total = state.totalBooks ?? 0;
+                final processed = state.booksProcessed ?? 0;
+                final progress = total > 0
+                    ? (processed / total).clamp(0.0, 1.0)
+                    : null;
+                cubit.upsert(WorkStatusItem(
+                  id: 'indexing',
+                  title: 'אינדוקס ספרים',
+                  message: 'התוכנה בתהליך אינדוקס',
+                  detail: 'התקדמות: $processed/$total',
+                  progress: progress,
+                ));
+              } else {
+                cubit.remove('indexing');
+              }
+            },
+          ),
           BlocListener<SettingsBloc, SettingsState>(
             listenWhen: (previous, current) {
               // fire on first load or any change to plugin-visible settings
@@ -947,7 +970,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                             ),
                           ],
                         ),
-                        IndexingStatusOverlay(
+                        WorkStatusOverlay(
                           onTap: _openIndexingSettings,
                         ),
                         ContextOverlayPanel(
