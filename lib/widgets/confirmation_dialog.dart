@@ -57,18 +57,41 @@ class _ConfirmationDialogState extends State<ConfirmationDialog>
     required VoidCallback onPressed,
     bool isConfirm = false,
   }) {
+    final cs = Theme.of(context).colorScheme;
     final color = isConfirm
-        ? (widget.confirmColor ??
-            (widget.isDangerous ? Colors.red : Theme.of(context).primaryColor))
+        ? (widget.confirmColor ?? (widget.isDangerous ? cs.error : cs.primary))
         : null;
+    final foregroundColor = color == null
+        ? null
+        : (widget.confirmColor == null
+            ? (widget.isDangerous ? cs.onError : cs.onPrimary)
+            : (ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+                ? cs.surface
+                : cs.onSurface));
 
-    return TextButton(
+    if (isConfirm) {
+      return FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: isFocused ? color!.withValues(alpha: 0.9) : color,
+          foregroundColor: foregroundColor,
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontWeight: isFocused ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      );
+    }
+
+    return FilledButton.tonal(
       onPressed: onPressed,
-      style: TextButton.styleFrom(
+      style: FilledButton.styleFrom(
         backgroundColor: isFocused
-            ? (color ?? Theme.of(context).primaryColor).withValues(alpha: 0.1)
-            : null,
-        foregroundColor: color,
+            ? cs.secondaryContainer.withValues(alpha: 0.9)
+            : cs.secondaryContainer,
+        foregroundColor: cs.onSecondaryContainer,
       ),
       child: Text(
         text,

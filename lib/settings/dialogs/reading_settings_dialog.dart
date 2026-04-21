@@ -17,8 +17,7 @@ void showReadingSettingsDialog(BuildContext context) {
     builder: (context) => BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         return AlertDialog(
-          backgroundColor:
-              Theme.of(context).colorScheme.surfaceContainerHigh,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
           title: const Text(
             'הגדרות תצוגת הספרים',
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -30,7 +29,7 @@ void showReadingSettingsDialog(BuildContext context) {
             child: const TextSettingsTab(isDialog: true),
           ),
           actions: [
-            TextButton(
+            FilledButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('סגור'),
             ),

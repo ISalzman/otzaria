@@ -106,9 +106,9 @@ Future<void> showBookSourceDialog(
                         },
                         child: Text(
                           displayText,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: Colors.blue,
+                            color: Theme.of(context).colorScheme.primary,
                             decoration: TextDecoration.underline,
                           ),
                         ),
@@ -122,7 +122,7 @@ Future<void> showBookSourceDialog(
           ),
         ),
         actions: [
-          TextButton(
+          FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('סגור'),
           ),

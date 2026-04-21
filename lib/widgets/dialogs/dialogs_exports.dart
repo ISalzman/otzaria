@@ -9,6 +9,7 @@
 // [SingleActionDialog] / [showSingleActionDialog]     → dialogs/app_dialogs.dart
 // [TwoActionsDialog]   / [showTwoActionsDialog]       → dialogs/app_dialogs.dart
 // [WarningDialog]      / [showWarningDialog]          → dialogs/app_dialogs.dart
+// [showRestartRequiredDialog] / [showDbCopyRequiredDialog] → dialogs/app_dialogs.dart
 //   שימוש: דיאלוגים M3 FilledButton לפעולות כלליות.
 //
 // ─── דיאלוגי קלט ─────────────────────────────────────────────────────────────

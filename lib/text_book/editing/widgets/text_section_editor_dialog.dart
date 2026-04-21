@@ -13,6 +13,7 @@ import '../services/preview_renderer.dart';
 import '../models/editor_settings.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'markdown_toolbar.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
@@ -735,19 +736,19 @@ class _SearchDialogState extends State<_SearchDialog> {
           const SizedBox(height: 8),
           const Text(
             'החיפוש מתחיל מהסמן הנוכחי וממשיך מהתחלה אם לא נמצא',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
+            style: TextStyle(fontSize: 12),
             textDirection: TextDirection.rtl,
           ),
         ],
       ),
       actions: [
-        TextButton(
+        NeutralActionButton(
+          text: 'סגור',
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('סגור'),
         ),
-        ElevatedButton(
+        RecommendedActionButton(
+          text: 'חפש',
           onPressed: _performSearch,
-          child: const Text('חפש'),
         ),
       ],
     );
@@ -815,16 +816,16 @@ class _LinkInsertDialogState extends State<_LinkInsertDialog> {
           ],
         ),
         actions: [
-          TextButton(
+          NeutralActionButton(
+            text: 'ביטול',
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ביטול'),
           ),
-          TextButton(
+          RecommendedActionButton(
+            text: 'הוסף',
             onPressed: () {
               widget.onInsert(_textController.text, _urlController.text);
               Navigator.of(context).pop();
             },
-            child: const Text('הוסף'),
           ),
         ],
       ),

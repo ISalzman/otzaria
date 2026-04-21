@@ -20,50 +20,55 @@ class PreviewRenderer {
     required TextStyle textStyle,
     String? fontFamily,
   }) {
-    if (markdown.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        child: Text(
-          'תצוגה מקדימה תופיע כאן...',
-          style: textStyle.copyWith(
-            color: Colors.grey,
-            fontStyle: FontStyle.italic,
-          ),
-          textDirection: TextDirection.rtl,
-        ),
-      );
-    }
+    return Builder(
+      builder: (context) {
+        final cs = Theme.of(context).colorScheme;
 
-    try {
-      final html = _processor.markdownToHtml(markdown);
+        if (markdown.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'תצוגה מקדימה תופיע כאן...',
+              style: textStyle.copyWith(
+                color: cs.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+              textDirection: TextDirection.rtl,
+            ),
+          );
+        }
 
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: HtmlWidget(
-          html,
-          textStyle: textStyle.copyWith(
-            fontFamily: fontFamily,
-            height: 1.5,
-          ),
-          customStylesBuilder: (element) {
-            return _getCustomStyles(element, textStyle);
-          },
-          onTapUrl: (url) {
-            // Handle URL taps - could open in browser or show warning
-            return _handleUrlTap(url);
-          },
-        ),
-      );
-    } catch (e) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        child: Text(
-          'שגיאה בתצוגה מקדימה: ${e.toString()}',
-          style: textStyle.copyWith(color: Colors.red),
-          textDirection: TextDirection.rtl,
-        ),
-      );
-    }
+        try {
+          final html = _processor.markdownToHtml(markdown);
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: HtmlWidget(
+              html,
+              textStyle: textStyle.copyWith(
+                fontFamily: fontFamily,
+                height: 1.5,
+              ),
+              customStylesBuilder: (element) {
+                return _getCustomStyles(element, textStyle);
+              },
+              onTapUrl: (url) {
+                return _handleUrlTap(url);
+              },
+            ),
+          );
+        } catch (e) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'שגיאה בתצוגה מקדימה: ${e.toString()}',
+              style: textStyle.copyWith(color: cs.error),
+              textDirection: TextDirection.rtl,
+            ),
+          );
+        }
+      },
+    );
   }
 
 // lib/text_book/editing/services/preview_renderer.dart

@@ -168,15 +168,16 @@ class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
     bool isConfirm = false,
     bool isLoading = false,
   }) {
+    final cs = Theme.of(context).colorScheme;
     final showHover = isFocused && !_textFieldFocusNode.hasFocus;
 
     if (isConfirm) {
       return FilledButton(
         onPressed: enabled ? onPressed : null,
         style: FilledButton.styleFrom(
-          backgroundColor: showHover
-              ? Theme.of(context).primaryColor.withValues(alpha: 0.9)
-              : null,
+          backgroundColor:
+              showHover ? cs.primary.withValues(alpha: 0.9) : cs.primary,
+          foregroundColor: cs.onPrimary,
         ),
         child: isLoading
             ? const SizedBox(
@@ -187,12 +188,13 @@ class _PasswordVerificationDialogState extends State<PasswordVerificationDialog>
             : Text(text),
       );
     } else {
-      return TextButton(
+      return FilledButton.tonal(
         onPressed: enabled ? onPressed : null,
-        style: TextButton.styleFrom(
+        style: FilledButton.styleFrom(
           backgroundColor: showHover
-              ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-              : null,
+              ? cs.secondaryContainer.withValues(alpha: 0.9)
+              : cs.secondaryContainer,
+          foregroundColor: cs.onSecondaryContainer,
         ),
         child: Text(text),
       );
@@ -395,6 +397,7 @@ class _SetPasswordDialogState extends State<SetPasswordDialog>
     bool isConfirm = false,
     bool isLoading = false,
   }) {
+    final cs = Theme.of(context).colorScheme;
     final showHover = isFocused &&
         !_passwordFocusNode.hasFocus &&
         !_confirmFocusNode.hasFocus;
@@ -403,9 +406,9 @@ class _SetPasswordDialogState extends State<SetPasswordDialog>
       return FilledButton(
         onPressed: enabled ? onPressed : null,
         style: FilledButton.styleFrom(
-          backgroundColor: showHover
-              ? Theme.of(context).primaryColor.withValues(alpha: 0.9)
-              : null,
+          backgroundColor:
+              showHover ? cs.primary.withValues(alpha: 0.9) : cs.primary,
+          foregroundColor: cs.onPrimary,
         ),
         child: isLoading
             ? const SizedBox(
@@ -416,12 +419,13 @@ class _SetPasswordDialogState extends State<SetPasswordDialog>
             : Text(text),
       );
     } else {
-      return TextButton(
+      return FilledButton.tonal(
         onPressed: enabled ? onPressed : null,
-        style: TextButton.styleFrom(
+        style: FilledButton.styleFrom(
           backgroundColor: showHover
-              ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-              : null,
+              ? cs.secondaryContainer.withValues(alpha: 0.9)
+              : cs.secondaryContainer,
+          foregroundColor: cs.onSecondaryContainer,
         ),
         child: Text(text),
       );

@@ -4,7 +4,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart';
-import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 
 class ExternalCatalogSettingsHelper {
   static bool _isAutoSyncInProgress = false;

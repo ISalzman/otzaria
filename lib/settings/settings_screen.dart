@@ -223,7 +223,9 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                                   leading: Icon(_tabsData[idx].icon,
                                       color: colorScheme.primary),
                                   title: Text(_tabsData[idx].label),
-                                  trailing: const Icon(Icons.chevron_left),
+                                  trailing: const Icon(
+                                    FluentIcons.chevron_left_24_regular,
+                                  ),
                                   onTap: () {
                                     setState(() {
                                       _selectedIndex = idx;
@@ -254,7 +256,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                       leading: Tooltip(
                         message: 'חזור (Backspace)',
                         child: IconButton(
-                          icon: const Icon(Icons.arrow_forward),
+                          icon: const Icon(FluentIcons.arrow_right_24_regular),
                           onPressed: () =>
                               setState(() => _showMobileMenu = true),
                         ),

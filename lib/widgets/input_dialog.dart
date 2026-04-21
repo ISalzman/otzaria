@@ -114,9 +114,13 @@ class _InputDialogState extends State<InputDialog> with DialogNavigationMixin {
     required VoidCallback onPressed,
     bool isConfirm = false,
   }) {
-    final color = isConfirm
-        ? (widget.confirmColor ?? Theme.of(context).primaryColor)
-        : null;
+    final cs = Theme.of(context).colorScheme;
+    final color = isConfirm ? (widget.confirmColor ?? cs.primary) : null;
+    final foregroundColor = color == null
+        ? null
+        : (ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+            ? cs.surface
+            : cs.onSurface);
 
     final showHover = isFocused && !_textFieldFocusNode.hasFocus;
 
@@ -124,19 +128,19 @@ class _InputDialogState extends State<InputDialog> with DialogNavigationMixin {
       return FilledButton(
         onPressed: onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: showHover
-              ? (color ?? Theme.of(context).primaryColor).withValues(alpha: 0.9)
-              : null,
+          backgroundColor: showHover ? color!.withValues(alpha: 0.9) : color,
+          foregroundColor: foregroundColor,
         ),
         child: Text(text),
       );
     } else {
-      return TextButton(
+      return FilledButton.tonal(
         onPressed: onPressed,
-        style: TextButton.styleFrom(
+        style: FilledButton.styleFrom(
           backgroundColor: showHover
-              ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-              : null,
+              ? cs.secondaryContainer.withValues(alpha: 0.9)
+              : cs.secondaryContainer,
+          foregroundColor: cs.onSecondaryContainer,
         ),
         child: Text(text),
       );
