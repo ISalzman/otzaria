@@ -49,6 +49,7 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/migration/file_to_db_migrator.dart';
 import 'package:otzaria/file_sync/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/file_sync_repository.dart';
+import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
@@ -448,13 +449,17 @@ Future<void> _runAppBootstrap() async {
                       dataProvider: dataProvider);
                 },
               ),
+              BlocProvider<WorkStatusCubit>(
+                create: (_) => WorkStatusCubit(),
+              ),
               BlocProvider<FileSyncBloc>(
-                lazy: true, // יוצר רק כשנדרש לראשונה
+                lazy: true,
                 create: (context) => FileSyncBloc(
                   repository: FileSyncRepository(
                     githubOwner: 'Otzaria',
                     repositoryName: 'SeforimLibrary',
                   ),
+                  workStatusCubit: context.read<WorkStatusCubit>(),
                 ),
               ),
               BlocProvider<PluginSystemBloc>(

@@ -16,7 +16,6 @@ import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/file_sync/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/file_sync_event.dart';
-import 'package:otzaria/file_sync/file_sync_repository.dart';
 import 'package:otzaria/file_sync/file_sync_state.dart';
 import 'package:otzaria/library/view/library_daf_yomi.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -140,7 +139,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
-  late final FileSyncBloc _fileSyncBloc;
 
   @override
   void initState() {
@@ -149,12 +147,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     _topBarTotalHeight = ValueNotifier<double>(0);
     context.read<LibraryBloc>().add(LoadLibrary());
     _syncLibraryPanelController();
-    _fileSyncBloc = FileSyncBloc(
-      repository: FileSyncRepository(
-        githubOwner: 'Otzaria',
-        repositoryName: 'SeforimLibrary',
-      ),
-    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(
@@ -179,7 +171,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     _topBarTotalHeight.dispose();
     _settingsPanelOpen.dispose();
     LibraryPanelController.unregister();
-    _fileSyncBloc.close();
     super.dispose();
   }
 
@@ -744,9 +735,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   ActionButtonData _buildSyncActionButton({required bool compact}) {
     return ActionButtonData(
-      widget: BlocProvider.value(
-        value: _fileSyncBloc,
-        child: BlocConsumer<FileSyncBloc, FileSyncState>(
+      widget: BlocConsumer<FileSyncBloc, FileSyncState>(
           listener: (ctx, s) {
             if ((s.status == FileSyncStatus.completed ||
                     s.status == FileSyncStatus.error) &&
@@ -785,11 +774,15 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               },
             );
           },
-        ),
       ),
       icon: FluentIcons.arrow_sync_24_regular,
       tooltip: 'סינכרון',
-      onPressed: () => _fileSyncBloc.add(const StartSync()),
+      onPressed: () {
+        final b = context.read<FileSyncBloc>();
+        if (b.state.status != FileSyncStatus.syncing) {
+          b.add(const StartSync());
+        }
+      },
     );
   }
 
