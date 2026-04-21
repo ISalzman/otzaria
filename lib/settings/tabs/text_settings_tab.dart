@@ -649,6 +649,7 @@ class _FontDropdown extends StatelessWidget {
         Expanded(
           child: AppDropdownField<String>(
             value: value,
+            enableSearch: true,
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
             ),
