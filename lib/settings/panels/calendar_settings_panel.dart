@@ -6,7 +6,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/otzaria_search_field.dart';
 import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
 import 'package:otzaria/settings/settings_card.dart';
-import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/app_menu.dart';
 
@@ -20,8 +20,7 @@ class CalendarSettingsTab extends StatefulWidget {
 
 class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
   final List<String> _cityNames =
-      cityCoordinates.values.expand((cities) => cities.keys).toList()
-        ..sort();
+      cityCoordinates.values.expand((cities) => cities.keys).toList()..sort();
 
   @override
   void initState() {
@@ -32,8 +31,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
   Widget build(BuildContext context) {
     return BlocBuilder<CalendarCubit, CalendarState>(
       builder: (context, state) {
-        final isOfflineMode =
-            context.watch<SettingsBloc>().state.isOfflineMode;
+        final isOfflineMode = context.watch<SettingsBloc>().state.isOfflineMode;
         // [הוסר] SingleChildScrollView — ToolsSettingsTab גולל את כולם
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -54,7 +52,8 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   options: const [
                     SegmentOption(value: CalendarType.hebrew, label: 'עברי'),
                     SegmentOption(value: CalendarType.combined, label: 'משולב'),
-                    SegmentOption(value: CalendarType.gregorian, label: 'לועזי'),
+                    SegmentOption(
+                        value: CalendarType.gregorian, label: 'לועזי'),
                   ],
                   currentValue: state.calendarType,
                   onChanged: (value) {
@@ -72,7 +71,8 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                   enableSearch: true,
                   entries: _cityNames
                       .map(
-                        (city) => AppMenuEntry<String>(value: city, label: city),
+                        (city) =>
+                            AppMenuEntry<String>(value: city, label: city),
                       )
                       .toList(),
                   onSelected: (city) {
@@ -85,246 +85,244 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
 
             kSettingsCardSpacing,
 
-              // ── אירועים ותזכורות: התראות + Google Calendar ──
-              SettingsCard(
-                title: 'אירועים ותזכורות',
-                children: [
-                  // הפעל התראות
-                  SwitchSettingsTile(
-                    leading: const Icon(FluentIcons.alert_24_regular),
-                    title: const Text('הפעל התראות על אירועים',
-                        style: kSettingsTitleStyle),
-                    value: state.calendarNotificationsEnabled,
-                    onChanged: (value) {
-                      context
-                          .read<CalendarCubit>()
-                          .changeCalendarNotificationsEnabled(value);
-                    },
-                  ),
-                  if (state.calendarNotificationsEnabled) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(right: 16.0, left: 16.0),
-                      child: SwitchSettingsTile(
-                        title: const Text('השמע צליל בהתראה',
-                            style: kSettingsTitleStyle),
-                        value: state.calendarNotificationSound,
-                        onChanged: (value) {
-                          context
-                              .read<CalendarCubit>()
-                              .changeCalendarNotificationSound(value);
-                        },
-                      ),
-                    ),
-                    _buildResponsiveDropdownTile<int>(
-                      icon: FluentIcons.alert_snooze_24_regular,
-                      title: 'זמן תזכורת לפני האירוע',
-                      subtitle: 'כמה זמן לפני תחילת האירוע תופיע התראה',
-                      value: state.calendarNotificationTime,
-                      minFieldWidth: 180,
-                      maxFieldWidth: 240,
-                      entries: const [
-                        AppMenuEntry(value: 60, label: 'שעה'),
-                        AppMenuEntry(value: 720, label: '12 שעות'),
-                        AppMenuEntry(value: 1440, label: 'יום'),
-                        AppMenuEntry(value: 2880, label: 'יומיים'),
-                      ],
-                      onSelected: (value) {
-                        if (value != null) {
-                          context
-                              .read<CalendarCubit>()
-                              .changeCalendarNotificationTime(value);
-                        }
+            // ── אירועים ותזכורות: התראות + Google Calendar ──
+            SettingsCard(
+              title: 'אירועים ותזכורות',
+              children: [
+                // הפעל התראות
+                SwitchSettingsTile(
+                  leading: const Icon(FluentIcons.alert_24_regular),
+                  title: const Text('הפעל התראות על אירועים',
+                      style: kSettingsTitleStyle),
+                  value: state.calendarNotificationsEnabled,
+                  onChanged: (value) {
+                    context
+                        .read<CalendarCubit>()
+                        .changeCalendarNotificationsEnabled(value);
+                  },
+                ),
+                if (state.calendarNotificationsEnabled) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16.0, left: 16.0),
+                    child: SwitchSettingsTile(
+                      title: const Text('השמע צליל בהתראה',
+                          style: kSettingsTitleStyle),
+                      value: state.calendarNotificationSound,
+                      onChanged: (value) {
+                        context
+                            .read<CalendarCubit>()
+                            .changeCalendarNotificationSound(value);
                       },
                     ),
-                  ],
-
-                  // ── לוח שנה גוגל ──
-                  SwitchSettingsTile(
-                    leading: const Icon(FluentIcons.arrow_sync_24_regular),
-                    title: const Text('לוח שנה של Google',
-                        style: kSettingsTitleStyle),
-                    subtitle: Text(
-                        isOfflineMode
-                            ? 'מושבת במצב מנותק'
-                            : 'סנכרון אירועים עם Google Calendar',
-                        style: kSettingsSubtitleStyle),
-                    value: state.googleCalendarEnabled,
-                    enabled: !isOfflineMode,
-                    onChanged: (value) {
-                      context
-                          .read<CalendarCubit>()
-                          .setGoogleCalendarEnabled(value);
+                  ),
+                  _buildResponsiveDropdownTile<int>(
+                    icon: FluentIcons.alert_snooze_24_regular,
+                    title: 'זמן תזכורת לפני האירוע',
+                    subtitle: 'כמה זמן לפני תחילת האירוע תופיע התראה',
+                    value: state.calendarNotificationTime,
+                    minFieldWidth: 180,
+                    maxFieldWidth: 240,
+                    entries: const [
+                      AppMenuEntry(value: 60, label: 'שעה'),
+                      AppMenuEntry(value: 720, label: '12 שעות'),
+                      AppMenuEntry(value: 1440, label: 'יום'),
+                      AppMenuEntry(value: 2880, label: 'יומיים'),
+                    ],
+                    onSelected: (value) {
+                      if (value != null) {
+                        context
+                            .read<CalendarCubit>()
+                            .changeCalendarNotificationTime(value);
+                      }
                     },
                   ),
+                ],
 
-                  if (state.googleCalendarEnabled && !isOfflineMode) ...[
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // כפתור "התחברות לחשבון" / מצב מחובר
-                          if (!state.googleCalendarConnected) ...[
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                onPressed: state.googleCalendarSyncInProgress
-                                    ? null
-                                    : () async {
-                                        final cubit =
-                                            context.read<CalendarCubit>();
-                                        final success =
-                                            await cubit.connectGoogleCalendar();
-                                        if (!context.mounted) return;
-                                        if (success) {
-                                          final calendars = await cubit
-                                              .getAvailableCalendars();
-                                          if (!context.mounted) return;
-                                          final selected =
-                                              await _showCalendarMultiSelectionDialog<
-                                                  String>(
-                                            context: context,
-                                            title: 'בחר לוחות שנה',
-                                            items: calendars
-                                                .map((cal) =>
-                                                    _CalendarMultiSelectionItem<
-                                                        String>(
-                                                      label: cal.name,
-                                                      value: cal.id,
-                                                      subtitle: cal.isPrimary
-                                                          ? 'לוח שנה ראשי'
-                                                          : null,
-                                                    ))
-                                                .toList(),
-                                            initialSelectedValues:
-                                                state.googleCalendarSelectedIds,
-                                            searchHint: 'חפש לוח שנה...',
-                                            emptyMessage: 'לא נמצאו לוחות שנה',
-                                          );
-                                          if (selected != null &&
-                                              selected.isNotEmpty) {
-                                            cubit
-                                                .updateGoogleCalendarSelectedIds(
-                                                    selected);
-                                          }
-                                        }
-                                      },
-                                icon: state.googleCalendarSyncInProgress
-                                    ? const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2),
-                                      )
-                                    : const Icon(
-                                        FluentIcons.person_accounts_24_regular,
-                                        size: 18),
-                                label: const Text('התחברות לחשבון'),
-                              ),
-                            ),
-                          ] else ...[
-                            // מחובר — הצג אפשרויות
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: NeutralActionButton(
-                                    text:
-                                        'לוחות שנה (${state.googleCalendarSelectedIds.length})',
-                                    icon: FluentIcons.calendar_24_regular,
-                                    onPressed: () async {
+                // ── לוח שנה גוגל ──
+                SwitchSettingsTile(
+                  leading: const Icon(FluentIcons.arrow_sync_24_regular),
+                  title: const Text('לוח שנה של Google',
+                      style: kSettingsTitleStyle),
+                  subtitle: Text(
+                      isOfflineMode
+                          ? 'מושבת במצב מנותק'
+                          : 'סנכרון אירועים עם Google Calendar',
+                      style: kSettingsSubtitleStyle),
+                  value: state.googleCalendarEnabled,
+                  enabled: !isOfflineMode,
+                  onChanged: (value) {
+                    context
+                        .read<CalendarCubit>()
+                        .setGoogleCalendarEnabled(value);
+                  },
+                ),
+
+                if (state.googleCalendarEnabled && !isOfflineMode) ...[
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // כפתור "התחברות לחשבון" / מצב מחובר
+                        if (!state.googleCalendarConnected) ...[
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: state.googleCalendarSyncInProgress
+                                  ? null
+                                  : () async {
                                       final cubit =
                                           context.read<CalendarCubit>();
-                                      final calendars =
-                                          await cubit.getAvailableCalendars();
+                                      final success =
+                                          await cubit.connectGoogleCalendar();
                                       if (!context.mounted) return;
-                                      if (calendars.isEmpty) {
-                                        UiSnack.show(
-                                            'לא נמצאו לוחות שנה. נסה להתחבר מחדש.');
-                                        return;
-                                      }
-                                      final selected =
-                                          await _showCalendarMultiSelectionDialog<
-                                              String>(
-                                        context: context,
-                                        title: 'בחר לוחות שנה',
-                                        items: calendars
-                                            .map((cal) =>
-                                                _CalendarMultiSelectionItem<
-                                                    String>(
-                                                  label: cal.name,
-                                                  value: cal.id,
-                                                  subtitle: cal.isPrimary
-                                                      ? 'לוח שנה ראשי'
-                                                      : null,
-                                                ))
-                                            .toList(),
-                                        initialSelectedValues:
-                                            state.googleCalendarSelectedIds,
-                                        searchHint: 'חפש לוח שנה...',
-                                        emptyMessage: 'לא נמצאו לוחות שנה',
-                                      );
-                                      if (selected != null &&
-                                          selected.isNotEmpty) {
-                                        cubit.updateGoogleCalendarSelectedIds(
-                                            selected);
-                                        cubit.syncGoogleCalendar(
-                                            interactive: false);
+                                      if (success) {
+                                        final calendars =
+                                            await cubit.getAvailableCalendars();
+                                        if (!context.mounted) return;
+                                        final selected =
+                                            await _showCalendarMultiSelectionDialog<
+                                                String>(
+                                          context: context,
+                                          title: 'בחר לוחות שנה',
+                                          items: calendars
+                                              .map((cal) =>
+                                                  _CalendarMultiSelectionItem<
+                                                      String>(
+                                                    label: cal.name,
+                                                    value: cal.id,
+                                                    subtitle: cal.isPrimary
+                                                        ? 'לוח שנה ראשי'
+                                                        : null,
+                                                  ))
+                                              .toList(),
+                                          initialSelectedValues:
+                                              state.googleCalendarSelectedIds,
+                                          searchHint: 'חפש לוח שנה...',
+                                          emptyMessage: 'לא נמצאו לוחות שנה',
+                                        );
+                                        if (selected != null &&
+                                            selected.isNotEmpty) {
+                                          cubit.updateGoogleCalendarSelectedIds(
+                                              selected);
+                                        }
                                       }
                                     },
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                RecommendedActionButton(
-                                  text: 'סנכרן',
-                                  icon: FluentIcons.arrow_sync_24_regular,
-                                  isLoading: state.googleCalendarSyncInProgress,
-                                  onPressed: () => context
-                                      .read<CalendarCubit>()
-                                      .syncGoogleCalendar(interactive: true),
-                                ),
-                                const SizedBox(width: 8),
-                                TextButton(
-                                  onPressed: () => context
-                                      .read<CalendarCubit>()
-                                      .disconnectGoogleCalendar(),
-                                  child: const Text('התנתק'),
-                                ),
-                              ],
+                              icon: state.googleCalendarSyncInProgress
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : const Icon(
+                                      FluentIcons.person_accounts_24_regular,
+                                      size: 18),
+                              label: const Text('התחברות לחשבון'),
                             ),
-                          ],
-
-                          // מידע נוסף
-                          if (state.googleCalendarLastSync != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(
-                                'סנכרון אחרון: ${state.googleCalendarLastSync}',
-                                style: TextStyle(
-                                  fontSize: AppTokens.fontSM,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
+                          ),
+                        ] else ...[
+                          // מחובר — הצג אפשרויות
+                          Row(
+                            children: [
+                              Expanded(
+                                child: NeutralActionButton(
+                                  text:
+                                      'לוחות שנה (${state.googleCalendarSelectedIds.length})',
+                                  icon: FluentIcons.calendar_24_regular,
+                                  onPressed: () async {
+                                    final cubit = context.read<CalendarCubit>();
+                                    final calendars =
+                                        await cubit.getAvailableCalendars();
+                                    if (!context.mounted) return;
+                                    if (calendars.isEmpty) {
+                                      UiSnack.show(
+                                          'לא נמצאו לוחות שנה. נסה להתחבר מחדש.');
+                                      return;
+                                    }
+                                    final selected =
+                                        await _showCalendarMultiSelectionDialog<
+                                            String>(
+                                      context: context,
+                                      title: 'בחר לוחות שנה',
+                                      items: calendars
+                                          .map((cal) =>
+                                              _CalendarMultiSelectionItem<
+                                                  String>(
+                                                label: cal.name,
+                                                value: cal.id,
+                                                subtitle: cal.isPrimary
+                                                    ? 'לוח שנה ראשי'
+                                                    : null,
+                                              ))
+                                          .toList(),
+                                      initialSelectedValues:
+                                          state.googleCalendarSelectedIds,
+                                      searchHint: 'חפש לוח שנה...',
+                                      emptyMessage: 'לא נמצאו לוחות שנה',
+                                    );
+                                    if (selected != null &&
+                                        selected.isNotEmpty) {
+                                      cubit.updateGoogleCalendarSelectedIds(
+                                          selected);
+                                      cubit.syncGoogleCalendar(
+                                          interactive: false);
+                                    }
+                                  },
                                 ),
                               ),
-                            ),
-                          if (state.googleCalendarSyncError != null &&
-                              state.googleCalendarSyncError!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(
-                                state.googleCalendarSyncError!,
-                                style: TextStyle(
-                                  fontSize: AppTokens.fontSM,
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
+                              const SizedBox(width: 8),
+                              RecommendedActionButton(
+                                text: 'סנכרן',
+                                icon: FluentIcons.arrow_sync_24_regular,
+                                isLoading: state.googleCalendarSyncInProgress,
+                                onPressed: () => context
+                                    .read<CalendarCubit>()
+                                    .syncGoogleCalendar(interactive: true),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              TextButton(
+                                onPressed: () => context
+                                    .read<CalendarCubit>()
+                                    .disconnectGoogleCalendar(),
+                                child: const Text('התנתק'),
+                              ),
+                            ],
+                          ),
                         ],
-                      ),
+
+                        // מידע נוסף
+                        if (state.googleCalendarLastSync != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              'סנכרון אחרון: ${state.googleCalendarLastSync}',
+                              style: TextStyle(
+                                fontSize: AppTokens.fontSM,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        if (state.googleCalendarSyncError != null &&
+                            state.googleCalendarSyncError!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              state.googleCalendarSyncError!,
+                              style: TextStyle(
+                                fontSize: AppTokens.fontSM,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                  ],
+                  ),
                 ],
-              ),
+              ],
+            ),
           ],
         );
       },

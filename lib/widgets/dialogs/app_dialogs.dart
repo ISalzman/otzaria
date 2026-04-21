@@ -21,6 +21,7 @@
 // ```
 
 import 'package:flutter/material.dart';
+import 'package:otzaria/core/app_restart.dart';
 import 'package:otzaria/widgets/keyboard_dialog_navigation.dart';
 
 // ── SingleActionDialog ────────────────────────────────────────────────────────
@@ -78,6 +79,7 @@ class _SingleActionDialogState extends State<SingleActionDialog>
 class TwoActionsDialog extends StatefulWidget {
   final dynamic title;
   final String content;
+  final Widget? customContent;
   final String cancelText;
   final String confirmText;
 
@@ -85,6 +87,7 @@ class TwoActionsDialog extends StatefulWidget {
     super.key,
     required this.title,
     required this.content,
+    this.customContent,
     this.cancelText = 'ביטול',
     this.confirmText = 'אישור',
   });
@@ -104,7 +107,7 @@ class _TwoActionsDialogState extends State<TwoActionsDialog>
       child: AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
         title: widget.title is String ? Text(widget.title) : widget.title,
-        content: Text(widget.content),
+        content: widget.customContent ?? Text(widget.content),
         actions: [
           FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(false),
@@ -213,6 +216,7 @@ Future<bool?> showTwoActionsDialog({
   required BuildContext context,
   required String title,
   required String content,
+  Widget? customContent,
   String cancelText = 'ביטול',
   String confirmText = 'אישור',
   bool barrierDismissible = true,
@@ -223,6 +227,7 @@ Future<bool?> showTwoActionsDialog({
       builder: (_) => TwoActionsDialog(
           title: title,
           content: content,
+          customContent: customContent,
           cancelText: cancelText,
           confirmText: confirmText),
     );
@@ -249,44 +254,56 @@ Future<bool?> showWarningDialog({
 
 Future<bool?> showRestartRequiredDialog({
   required BuildContext context,
-  bool barrierDismissible = true,
-}) {
-  return showTwoActionsDialog(
-    context: context,
-    title: 'נדרשת הפעלה מחדש',
-    content:
-        'כדי להשלים את השינוי יש לסגור ולהפעיל מחדש את התוכנה. האם לסגור עכשיו?',
-    cancelText: 'אחר כך',
-    confirmText: 'סגור עכשיו',
-    barrierDismissible: barrierDismissible,
-  );
-}
+  String title = 'נדרשת הפעלה מחדש',
+  String? content,
+  String? confirmText,
+  bool barrierDismissible = false,
+}) =>
+    showSingleActionDialog(
+      context: context,
+      title: title,
+      content: content ??
+          (canRestartApplication()
+              ? 'הספרייה נמצאה בהצלחה.\nלחץ על הכפתור להפעלה מחדש של התוכנה.'
+              : 'הספרייה נמצאה בהצלחה.\nלחץ על הכפתור לסגירת האפליקציה, ולאחר מכן פתח אותה מחדש.'),
+      confirmText: confirmText ??
+          (canRestartApplication()
+              ? 'הפעל מחדש את התוכנה'
+              : 'סגור את האפליקציה'),
+      barrierDismissible: barrierDismissible,
+    );
 
 Future<bool?> showDbCopyRequiredDialog({
   required BuildContext context,
   required String sizeText,
-  bool barrierDismissible = true,
-}) {
-  return showDialog<bool>(
-    context: context,
-    barrierDismissible: barrierDismissible,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('נדרשת בחירה כיצד לשמור את מסד הנתונים'),
-      content: Text(
-        'גודל מסד הנתונים הוא $sizeText.\n\n'
-        'ניתן להעביר את הקובץ למיקום החדש, או להעתיק אותו ולהשאיר את המקור.',
-        textDirection: TextDirection.rtl,
+  bool barrierDismissible = false,
+}) =>
+    showTwoActionsDialog(
+      context: context,
+      title: 'נדרשת העתקה של קובץ הספרייה',
+      content: '',
+      barrierDismissible: barrierDismissible,
+      cancelText: 'העתק (שמור מקור)',
+      confirmText: 'העתק + נסה מחק מקור',
+      customContent: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'לא ניתן לגשת ישירות לקובץ seforim.db (גודל: $sizeText) מכיוון שהוא נמצא באחסון חיצוני ב-Android.',
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'לחץ על כפתור למטה, נווט לאותה תיקייה ובחר את הקובץ seforim.db — האפליקציה תעתיק אותו לאחסון הפנימי.',
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            '(אפשרות "נסה מחק מקור" — ניסיון למחוק לאחר העתקה. עשויה שלא להצליח בכל גרסאות Android.)',
+            style: TextStyle(fontSize: 12),
+            textDirection: TextDirection.rtl,
+          ),
+        ],
       ),
-      actions: [
-        FilledButton.tonal(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('העתק'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('העבר'),
-        ),
-      ],
-    ),
-  );
-}
+    );

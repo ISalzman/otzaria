@@ -90,11 +90,11 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog> {
         title: const Text('אזהרה'),
         content: const Text('ההערה לא נשמרה. לשמור טיוטה?'),
         actions: [
-          TextButton(
+          FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(_DraftDecision.cancel),
             child: const Text('ביטול'),
           ),
-          TextButton(
+          FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(_DraftDecision.discard),
             child: const Text('סגור בלי לשמור'),
           ),
@@ -281,25 +281,27 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog> {
     required VoidCallback onPressed,
     bool isConfirm = false,
   }) {
+    final cs = Theme.of(context).colorScheme;
     final showHover = isFocused && !_textFieldFocusNode.hasFocus;
 
     if (isConfirm) {
       return FilledButton(
         onPressed: onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: showHover
-              ? Theme.of(context).primaryColor.withValues(alpha: 0.9)
-              : null,
+          backgroundColor:
+              showHover ? cs.primary.withValues(alpha: 0.9) : cs.primary,
+          foregroundColor: cs.onPrimary,
         ),
         child: Text(text),
       );
     } else {
-      return TextButton(
+      return FilledButton.tonal(
         onPressed: onPressed,
-        style: TextButton.styleFrom(
+        style: FilledButton.styleFrom(
           backgroundColor: showHover
-              ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-              : null,
+              ? cs.secondaryContainer.withValues(alpha: 0.9)
+              : cs.secondaryContainer,
+          foregroundColor: cs.onSecondaryContainer,
         ),
         child: Text(text),
       );

@@ -12,7 +12,6 @@ import 'package:otzaria/tools/aramaic_dictionary/aramaic_dictionary_screen.dart'
 import 'package:otzaria/tools/shamor_zachor/shamor_zachor.dart';
 import 'package:otzaria/tools/calendar/calendar_screen.dart';
 import 'package:otzaria/widgets/keyboard_navigator.dart';
-import 'package:otzaria/widgets/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
@@ -508,7 +507,7 @@ class MoreScreenState extends State<MoreScreen>
                       descriptor.label,
                       textDirection: TextDirection.rtl,
                     ),
-                    trailing: const RtlIcon(Icons.chevron_left),
+                    trailing: const Icon(FluentIcons.chevron_left_24_regular),
                     onTap: () {
                       final index = _descriptors.indexOf(descriptor);
                       if (index != -1) _changeTab(index);
@@ -547,7 +546,7 @@ class MoreScreenState extends State<MoreScreen>
           leading: Tooltip(
             message: 'חזור (Backspace)',
             child: IconButton(
-              icon: const RtlIcon(Icons.arrow_forward),
+              icon: const Icon(FluentIcons.arrow_right_24_regular),
               onPressed: () => setState(() => _showMobileMenu = true),
             ),
           ),

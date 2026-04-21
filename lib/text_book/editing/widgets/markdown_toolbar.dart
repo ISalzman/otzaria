@@ -39,6 +39,7 @@ class MarkdownToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -161,9 +162,11 @@ class MarkdownToolbar extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
+                color: cs.errorContainer.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: cs.error.withValues(alpha: 0.35),
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -171,14 +174,14 @@ class MarkdownToolbar extends StatelessWidget {
                   Icon(
                     FluentIcons.warning_24_regular,
                     size: 16,
-                    color: Colors.orange,
+                    color: cs.error,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     'ספר עם קישורים - אין לשנות מבנה שורות',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.orange.shade700,
+                      color: cs.onErrorContainer,
                     ),
                   ),
                 ],
@@ -209,6 +212,7 @@ class _ToolbarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     // ================== התחלת הקוד החדש ==================
     Widget content;
     if (text != null) {
@@ -222,7 +226,7 @@ class _ToolbarButton extends StatelessWidget {
             fontWeight: FontWeight.bold,
             color: enabled
                 ? Theme.of(context).textTheme.bodyLarge?.color
-                : Colors.grey,
+                : cs.onSurfaceVariant,
           ),
         ),
       );

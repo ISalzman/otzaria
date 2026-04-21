@@ -22,7 +22,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/utils/book_open_coordinator.dart';
-import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/plugins/view/plugin_dev_error_view.dart';
 
 // ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     );
     // Pre-fetch so onLoadStop has no async gap
     _ensurePackageInfo();
-    
+
     PluginRuntimeDispatcher.instance.registerReloadCallback(
       widget.plugin.pluginId,
       _reloadFromDisk,
@@ -181,38 +181,44 @@ class _PluginTabPageState extends State<PluginTabPage> {
 
     try {
       await _ensurePackageInfo();
-      final manifestFile = File(p.join(widget.plugin.resolvedRootPath, 'manifest.json'));
+      final manifestFile =
+          File(p.join(widget.plugin.resolvedRootPath, 'manifest.json'));
       if (!manifestFile.existsSync()) {
         setState(() => _devErrorMessage = 'קובץ manifest.json חסר בתיקייה.');
         return;
       }
       final manifestStr = await manifestFile.readAsString();
       final manifestJson = jsonDecode(manifestStr);
-      
+
       // Perform strict manifest validation
       final manifest = PluginManifest.fromJson(manifestJson);
-      
+
       await PluginManifestValidator.validateManifest(
         manifest: manifest,
         directoryPath: widget.plugin.resolvedRootPath,
         currentAppVersion: _cachedPackageInfo?.version,
       );
-      
+
       if (manifest.id != widget.plugin.pluginId) {
-        setState(() => _devErrorMessage = 'מזהה התוסף (id) השתנה.\nמצופה: ${widget.plugin.pluginId}\nנמצא: ${manifest.id}\nשינוי ID דורש התקנה מחדש.');
+        setState(() => _devErrorMessage =
+            'מזהה התוסף (id) השתנה.\nמצופה: ${widget.plugin.pluginId}\nנמצא: ${manifest.id}\nשינוי ID דורש התקנה מחדש.');
         return;
       }
 
       setState(() => _devErrorMessage = null);
-      
+
       try {
         await InAppWebViewController.clearAllCache();
       } catch (_) {}
 
-      localHtmlPath = p.join(widget.plugin.resolvedRootPath, manifest.entrypoint);
-      await webViewController?.loadUrl(urlRequest: URLRequest(url: WebUri.uri(Uri.file(localHtmlPath))));
+      localHtmlPath =
+          p.join(widget.plugin.resolvedRootPath, manifest.entrypoint);
+      await webViewController?.loadUrl(
+          urlRequest: URLRequest(url: WebUri.uri(Uri.file(localHtmlPath))));
     } catch (e) {
-      if (mounted) setState(() => _devErrorMessage = 'שגיאה בלתי צפויה בריענון התוסף: $e');
+      if (mounted) {
+        setState(() => _devErrorMessage = 'שגיאה בלתי צפויה בריענון התוסף: $e');
+      }
     }
   }
 
@@ -263,7 +269,6 @@ class _PluginTabPageState extends State<PluginTabPage> {
         useShouldOverrideUrlLoading: true,
         useShouldInterceptRequest: true,
         cacheEnabled: !widget.plugin.isDevelopment,
-        clearCache: widget.plugin.isDevelopment,
       ),
       // Stub SDK — injected BEFORE any page JS runs
       initialUserScripts: UnmodifiableListView<UserScript>([
@@ -282,7 +287,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // bridge.register נכשל — מנקים את ה-registration הלא שלם
           PluginRuntimeDispatcher.instance
               .unregisterController(widget.plugin.pluginId);
-          debugPrint('Plugin [${widget.plugin.pluginId}] WebView init error: $e');
+          debugPrint(
+              'Plugin [${widget.plugin.pluginId}] WebView init error: $e');
           if (mounted) setState(() => _hasError = true);
         }
       },
@@ -436,10 +442,9 @@ class _PluginTabPageState extends State<PluginTabPage> {
 })();
 ''');
         } catch (e, st) {
-          debugPrint(
-              'Plugin [${widget.plugin.pluginId}] boot error: $e\n$st');
-          PluginSystemDatabase.instance.writeLog(
-              widget.plugin.pluginId, 'ERROR', 'Boot failed: $e');
+          debugPrint('Plugin [${widget.plugin.pluginId}] boot error: $e\n$st');
+          PluginSystemDatabase.instance
+              .writeLog(widget.plugin.pluginId, 'ERROR', 'Boot failed: $e');
           if (!mounted) return;
           if (widget.plugin.isDevelopment) {
             setState(() => _devErrorMessage = 'שגיאה באתחול התוסף:\n$e');

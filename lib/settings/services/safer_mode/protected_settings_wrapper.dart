@@ -149,7 +149,7 @@ class _ProtectedSettingsWrapperState extends State<ProtectedSettingsWrapper> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.lock_outline,
+                  FluentIcons.lock_closed_24_regular,
                   size: 64,
                   color: Theme.of(context).colorScheme.primary,
                 ),
