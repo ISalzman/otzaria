@@ -18,6 +18,7 @@ import 'package:otzaria/pdf_book/pdf_page_number_dispaly.dart';
 import 'package:otzaria/pdf_book/pdf_thumbnails_screen.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:otzaria/printing/print_content_models.dart';
+import 'package:otzaria/printing/pdf_text_rasterizer.dart';
 import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
@@ -405,6 +406,13 @@ class _PrintingScreenState extends State<PrintingScreen> {
       shouldReplaceHolyNames: shouldReplaceHolyNames,
       personalNotes: personalNotes,
     );
+    final contentWidth = max(1.0, format.width - pageMargin * 2);
+    final rasterizedNikudBlocks = await _rasterizeNikudBlocks(
+      blocks: blocks,
+      fontName: fontName,
+      fontSize: fontSize,
+      contentWidth: contentWidth,
+    );
 
     final result = await Isolate.run(() async {
       final pdfData =
@@ -437,63 +445,71 @@ class _PrintingScreenState extends State<PrintingScreen> {
                         .copyWith(color: PdfColors.grey)));
           },
           build: (pw.Context context) {
-            return blocks.map((b) {
+            return blocks.asMap().entries.expand((entry) {
+              final blockIndex = entry.key;
+              final b = entry.value;
               final kind = b['kind'];
               final title = b['title'];
               final text = (b['text'] ?? '').replaceAll('\n', '');
 
               if (kind == 'commentaryTitle') {
-                return pw.Padding(
-                  padding: const pw.EdgeInsets.only(
-                    top: 6,
-                    right: 8,
-                    left: 8,
-                  ),
-                  child: pw.Text(
-                    title ?? 'מפרשים',
-                    style: pw.TextStyle(
-                      fontSize: max(10.0, fontSize * 0.9),
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.grey800,
+                return [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(
+                      top: 6,
+                      right: 8,
+                      left: 8,
                     ),
-                  ),
-                );
+                    child: pw.Text(
+                      title ?? 'מפרשים',
+                      style: pw.TextStyle(
+                        fontSize: max(10.0, fontSize * 0.9),
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey800,
+                      ),
+                    ),
+                  )
+                ];
               }
 
               if (kind == 'commentaryGroupTitle') {
-                return pw.Padding(
-                  padding: const pw.EdgeInsets.only(
-                    top: 4,
-                    right: 12,
-                    left: 8,
-                  ),
-                  child: pw.Text(
-                    title ?? '',
-                    style: pw.TextStyle(
-                      fontSize: max(10.0, fontSize * 0.9),
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.grey900,
+                return [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(
+                      top: 4,
+                      right: 12,
+                      left: 8,
                     ),
-                  ),
-                );
+                    child: pw.Text(
+                      title ?? '',
+                      style: pw.TextStyle(
+                        fontSize: max(10.0, fontSize * 0.9),
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey900,
+                      ),
+                    ),
+                  )
+                ];
               }
 
               if (kind == 'noteTitle') {
-                return pw.Padding(
-                  padding: const pw.EdgeInsets.only(
-                    top: 6,
-                    right: 8,
-                    left: 8,
-                  ),
-                  child: pw.Text(
-                    title ?? 'הערות אישיות',
-                    style: pw.TextStyle(
-                      fontSize: max(10.0, fontSize * 0.9),
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.grey800,
+                return [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(
+                      top: 6,
+                      right: 8,
+                      left: 8,
                     ),
-                  ),
-                );
+                    child: pw.Text(
+                      title ?? 'הערות אישיות',
+                      style: pw.TextStyle(
+                        fontSize: max(10.0, fontSize * 0.9),
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey800,
+                      ),
+                    ),
+                  )
+                ];
               }
 
               final effectiveFontSize = switch (kind) {
@@ -516,18 +532,43 @@ class _PrintingScreenState extends State<PrintingScreen> {
                   ),
                 _ => const pw.EdgeInsets.all(8.0),
               };
+              final rasterizedLines = rasterizedNikudBlocks[blockIndex];
+              if (rasterizedLines != null && rasterizedLines.isNotEmpty) {
+                final lineWidth = max(
+                  1.0,
+                  contentWidth - padding.left - padding.right,
+                );
+                return rasterizedLines.asMap().entries.map((lineEntry) {
+                  final isFirst = lineEntry.key == 0;
+                  final isLast = lineEntry.key == rasterizedLines.length - 1;
+                  return pw.Padding(
+                    padding: pw.EdgeInsets.only(
+                      top: isFirst ? padding.top : 0,
+                      bottom: isLast ? padding.bottom : 0,
+                      right: padding.right,
+                      left: padding.left,
+                    ),
+                    child: pw.Image(
+                      pw.MemoryImage(lineEntry.value),
+                      width: lineWidth,
+                    ),
+                  );
+                });
+              }
 
-              return pw.Padding(
-                padding: padding,
-                child: pw.Paragraph(
-                  text: text,
-                  textAlign: pw.TextAlign.justify,
-                  style: pw.TextStyle(
-                    fontSize: effectiveFontSize,
-                    font: font,
+              return [
+                pw.Padding(
+                  padding: padding,
+                  child: pw.Paragraph(
+                    text: text,
+                    textAlign: pw.TextAlign.justify,
+                    style: pw.TextStyle(
+                      fontSize: effectiveFontSize,
+                      font: font,
+                    ),
                   ),
-                ),
-              );
+                )
+              ];
             }).toList();
           }));
 
@@ -535,6 +576,55 @@ class _PrintingScreenState extends State<PrintingScreen> {
     });
 
     return result;
+  }
+
+  Future<Map<int, List<Uint8List>>> _rasterizeNikudBlocks({
+    required List<Map<String, String>> blocks,
+    required String fontName,
+    required double fontSize,
+    required double contentWidth,
+  }) async {
+    if (_removeNikud) return const {};
+
+    final images = <int, List<Uint8List>>{};
+    for (var i = 0; i < blocks.length; i++) {
+      final block = blocks[i];
+      final kind = block['kind'];
+      if (kind == 'commentaryTitle' ||
+          kind == 'commentaryGroupTitle' ||
+          kind == 'noteTitle') {
+        continue;
+      }
+
+      final text = (block['text'] ?? '').replaceAll('\n', '');
+      if (!PdfTextRasterizer.containsHebrewMarks(text)) continue;
+
+      final effectiveFontSize = switch (kind) {
+        'commentary' || 'note' => max(10.0, fontSize * 0.9),
+        _ => fontSize,
+      };
+
+      final paddingHorizontal = switch (kind) {
+        'commentary' || 'note' => 26.0,
+        'commentaryGroupTitle' => 20.0,
+        _ => 16.0,
+      };
+
+      final lines = await PdfTextRasterizer.renderRtlTextLines(
+        text: text,
+        maxWidth: max(1.0, contentWidth - paddingHorizontal),
+        style: TextStyle(
+          color: Colors.black,
+          fontFamily: fontName,
+          fontSize: effectiveFontSize,
+          height: 1.35,
+        ),
+      );
+      if (lines.isNotEmpty) {
+        images[i] = lines;
+      }
+    }
+    return images;
   }
 
   Future<List<Link>> _loadLinksForPrintRange(
