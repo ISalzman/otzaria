@@ -20,8 +20,7 @@ import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:otzaria/printing/print_content_models.dart';
 import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
-import 'package:otzaria/widgets/custom_ui_components.dart';
-import 'package:otzaria/widgets/dialogs.dart';
+import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
@@ -154,9 +153,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
           .getAltTocLineIndices(structures.first.id);
       if (!mounted || rows.isEmpty) return;
 
-      final altEntries = rows
-          .map((r) => TocEntry(text: r.text, index: r.lineIndex))
-          .toList();
+      final altEntries =
+          rows.map((r) => TocEntry(text: r.text, index: r.lineIndex)).toList();
 
       setState(() {
         _flatAltHeaders = altEntries;
@@ -1284,55 +1282,82 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                 child: Column(
                                   children: [
                                     // תפריט בחירה: שורות/כותרות/כותרות משנה
-                                    if (_flatHeaders.isNotEmpty || _flatAltHeaders.isNotEmpty)
+                                    if (_flatHeaders.isNotEmpty ||
+                                        _flatAltHeaders.isNotEmpty)
                                       Padding(
                                         padding:
                                             const EdgeInsets.only(bottom: 16),
                                         child: Row(
                                           children: [
                                             Expanded(
-                                              child: SegmentedButton<_PrintRangeMode>(
+                                              child: SegmentedButton<
+                                                  _PrintRangeMode>(
                                                 showSelectedIcon: false,
                                                 segments: [
                                                   if (_flatHeaders.isNotEmpty)
-                                                    const ButtonSegment<_PrintRangeMode>(
-                                                      value: _PrintRangeMode.headers,
+                                                    const ButtonSegment<
+                                                        _PrintRangeMode>(
+                                                      value: _PrintRangeMode
+                                                          .headers,
                                                       label: Text('כותרות'),
                                                     ),
-                                                  if (_flatAltHeaders.isNotEmpty)
-                                                    ButtonSegment<_PrintRangeMode>(
-                                                      value: _PrintRangeMode.altHeaders,
+                                                  if (_flatAltHeaders
+                                                      .isNotEmpty)
+                                                    ButtonSegment<
+                                                        _PrintRangeMode>(
+                                                      value: _PrintRangeMode
+                                                          .altHeaders,
                                                       label: Column(
-                                                        mainAxisSize: MainAxisSize.min,
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
                                                         children: const [
-                                                          Text('כותרות', style: TextStyle(fontSize: 11)),
-                                                          Text('משנה', style: TextStyle(fontSize: 11)),
+                                                          Text('כותרות',
+                                                              style: TextStyle(
+                                                                  fontSize:
+                                                                      11)),
+                                                          Text('משנה',
+                                                              style: TextStyle(
+                                                                  fontSize:
+                                                                      11)),
                                                         ],
                                                       ),
                                                     ),
-                                                  const ButtonSegment<_PrintRangeMode>(
-                                                    value: _PrintRangeMode.lines,
+                                                  const ButtonSegment<
+                                                      _PrintRangeMode>(
+                                                    value:
+                                                        _PrintRangeMode.lines,
                                                     label: Text('שורות'),
                                                   ),
                                                 ],
                                                 selected: {_rangeMode},
                                                 onSelectionChanged:
-                                                    (Set<_PrintRangeMode> newSelection) {
+                                                    (Set<_PrintRangeMode>
+                                                        newSelection) {
                                                   setState(() {
-                                                    _rangeMode = newSelection.first;
-                                                    if (_rangeMode == _PrintRangeMode.headers &&
-                                                        _flatHeaders.isNotEmpty) {
+                                                    _rangeMode =
+                                                        newSelection.first;
+                                                    if (_rangeMode ==
+                                                            _PrintRangeMode
+                                                                .headers &&
+                                                        _flatHeaders
+                                                            .isNotEmpty) {
                                                       _startHeaderIndex = 0;
                                                       _endHeaderIndex = min(
                                                           2,
-                                                          _flatHeaders.length - 1);
+                                                          _flatHeaders.length -
+                                                              1);
                                                       _updateRangeByHeaders();
-                                                    } else if (_rangeMode == _PrintRangeMode.altHeaders &&
-                                                        _flatAltHeaders.isNotEmpty) {
+                                                    } else if (_rangeMode ==
+                                                            _PrintRangeMode
+                                                                .altHeaders &&
+                                                        _flatAltHeaders
+                                                            .isNotEmpty) {
                                                       _startAltHeaderIndex = 0;
                                                       _endAltHeaderIndex = min(
                                                           2,
-                                                          _flatAltHeaders.length - 1);
+                                                          _flatAltHeaders
+                                                                  .length -
+                                                              1);
                                                       _updateRangeByAltHeaders();
                                                     } else {
                                                       _refreshPreviewPdf();
@@ -1346,7 +1371,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       ),
 
                                     // בחירת טווח לפי שורות
-                                    if (_rangeMode == _PrintRangeMode.lines) ...[
+                                    if (_rangeMode ==
+                                        _PrintRangeMode.lines) ...[
                                       Row(
                                         mainAxisAlignment:
                                             MainAxisAlignment.spaceBetween,
@@ -1478,7 +1504,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                     ],
 
                                     // בחירת טווח לפי כותרות משנה
-                                    if (_rangeMode == _PrintRangeMode.altHeaders &&
+                                    if (_rangeMode ==
+                                            _PrintRangeMode.altHeaders &&
                                         _flatAltHeaders.isNotEmpty) ...[
                                       _buildDropdownRow(
                                         context: context,
@@ -1528,9 +1555,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                           onChanged: (int? value) {
                                             setState(() {
                                               _endAltHeaderIndex = value;
-                                              if (_startAltHeaderIndex != null &&
+                                              if (_startAltHeaderIndex !=
+                                                      null &&
                                                   value != null &&
-                                                  value < _startAltHeaderIndex!) {
+                                                  value <
+                                                      _startAltHeaderIndex!) {
                                                 _startAltHeaderIndex = value;
                                               }
                                               _updateRangeByAltHeaders();

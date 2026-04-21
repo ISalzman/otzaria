@@ -13,7 +13,7 @@ import 'package:otzaria/tools/shamor_zachor/shamor_zachor.dart';
 import 'package:otzaria/tools/calendar/calendar_screen.dart';
 import 'package:otzaria/widgets/keyboard_navigator.dart';
 import 'package:otzaria/widgets/rtl_icon.dart';
-import 'package:otzaria/widgets/custom_ui_components.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
@@ -27,7 +27,8 @@ abstract class ToolDescriptor {
   final String toolId;
   final String label;
   final int order;
-  const ToolDescriptor({required this.toolId, required this.label, required this.order});
+  const ToolDescriptor(
+      {required this.toolId, required this.label, required this.order});
   Widget buildTab(BuildContext context);
   Widget buildPage(BuildContext context);
 }
@@ -53,7 +54,8 @@ class BuiltInToolDescriptor extends ToolDescriptor {
     if (imageIcon != null) {
       return SizedBox(
         width: 100,
-        child: Tab(text: label, icon: ImageIcon(AssetImage(imageIcon!), size: 20)),
+        child:
+            Tab(text: label, icon: ImageIcon(AssetImage(imageIcon!), size: 20)),
       );
     }
     return SizedBox(
@@ -112,11 +114,14 @@ class MoreScreen extends StatefulWidget {
   MoreScreenState createState() => MoreScreenState();
 }
 
-class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMixin {
+class MoreScreenState extends State<MoreScreen>
+    with AutomaticKeepAliveClientMixin {
   static const int _calendarFocusRetryCount = 6;
 
-  final GlobalKey<CalendarWidgetState> _calendarKey = GlobalKey<CalendarWidgetState>();
-  final GlobalKey<GematriaSearchScreenState> _gematriaKey = GlobalKey<GematriaSearchScreenState>();
+  final GlobalKey<CalendarWidgetState> _calendarKey =
+      GlobalKey<CalendarWidgetState>();
+  final GlobalKey<GematriaSearchScreenState> _gematriaKey =
+      GlobalKey<GematriaSearchScreenState>();
   final FocusNode _contentFocusNode = FocusNode(skipTraversal: true);
   final ScrollController _contentScrollController = ScrollController();
 
@@ -137,8 +142,19 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
 
   static const _mobileGroupDefs = [
     (label: 'לוח שנה', toolIds: <String>['builtin.calendar']),
-    (label: 'תורה שלמדתי', toolIds: <String>['builtin.shamor_zachor', 'builtin.notes']),
-    (label: 'דקדוקי סופרים', toolIds: <String>['builtin.measurements', 'builtin.gematria', 'builtin.aramaic_dictionary', 'builtin.acronyms_dictionary']),
+    (
+      label: 'תורה שלמדתי',
+      toolIds: <String>['builtin.shamor_zachor', 'builtin.notes']
+    ),
+    (
+      label: 'דקדוקי סופרים',
+      toolIds: <String>[
+        'builtin.measurements',
+        'builtin.gematria',
+        'builtin.aramaic_dictionary',
+        'builtin.acronyms_dictionary'
+      ]
+    ),
   ];
 
   // ─── Focus management ────────────────────────────────────────────────────────
@@ -152,7 +168,8 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
     }).join('::');
   }
 
-  void _requestCalendarFocus({int remainingAttempts = _calendarFocusRetryCount}) {
+  void _requestCalendarFocus(
+      {int remainingAttempts = _calendarFocusRetryCount}) {
     if (!mounted) return;
     final calendarState = _calendarKey.currentState;
     if (calendarState != null) {
@@ -355,7 +372,8 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
     }
   }
 
-  void _rebuildTabs(List<InstalledPlugin> pinnedPlugins, {InstalledPlugin? transient}) {
+  void _rebuildTabs(List<InstalledPlugin> pinnedPlugins,
+      {InstalledPlugin? transient}) {
     if (!mounted) return;
     _applyTabState(pinnedPlugins, transient: transient, notify: true);
   }
@@ -444,7 +462,8 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
     final groupedDescriptors = <({String label, List<ToolDescriptor> tools})>[];
     for (final group in _mobileGroupDefs) {
       final tools = [
-        for (final id in group.toolIds) ..._descriptors.where((d) => d.toolId == id),
+        for (final id in group.toolIds)
+          ..._descriptors.where((d) => d.toolId == id),
       ];
       if (tools.isNotEmpty) {
         groupedDescriptors.add((label: group.label, tools: tools));
@@ -452,7 +471,8 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
     }
 
     final groupedIds = _mobileGroupDefs.expand((g) => g.toolIds).toSet();
-    final ungroupedPlugins = _descriptors.where((d) => !groupedIds.contains(d.toolId)).toList();
+    final ungroupedPlugins =
+        _descriptors.where((d) => !groupedIds.contains(d.toolId)).toList();
     if (ungroupedPlugins.isNotEmpty) {
       groupedDescriptors.add((label: 'תוספים', tools: ungroupedPlugins));
     }
@@ -482,7 +502,8 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
                                 color: cs.primary,
                               )
                             : Icon(descriptor.icon, color: cs.primary))
-                        : Icon(FluentIcons.puzzle_piece_24_regular, color: cs.primary),
+                        : Icon(FluentIcons.puzzle_piece_24_regular,
+                            color: cs.primary),
                     title: Text(
                       descriptor.label,
                       textDirection: TextDirection.rtl,
@@ -503,8 +524,10 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   }
 
   Widget _buildMobileContent(Color bgColor) {
-    final currentIndex = _descriptors.indexWhere((d) => d.toolId == _selectedToolId);
-    final safeIndex = currentIndex.clamp(0, _descriptors.isEmpty ? 0 : _descriptors.length - 1);
+    final currentIndex =
+        _descriptors.indexWhere((d) => d.toolId == _selectedToolId);
+    final safeIndex = currentIndex.clamp(
+        0, _descriptors.isEmpty ? 0 : _descriptors.length - 1);
 
     return KeyboardNavigator(
       currentTabIndex: safeIndex,
@@ -541,8 +564,10 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
   }
 
   Widget _buildDesktop(Color bgColor) {
-    final currentIndex = _descriptors.indexWhere((d) => d.toolId == _selectedToolId);
-    final safeIndex = currentIndex.clamp(0, _descriptors.isEmpty ? 0 : _descriptors.length - 1);
+    final currentIndex =
+        _descriptors.indexWhere((d) => d.toolId == _selectedToolId);
+    final safeIndex = currentIndex.clamp(
+        0, _descriptors.isEmpty ? 0 : _descriptors.length - 1);
 
     return KeyboardNavigator(
       currentTabIndex: safeIndex,
@@ -557,10 +582,13 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
             Expanded(
               child: Listener(
                 onPointerSignal: (event) {
-                  if (event is PointerScrollEvent && _contentScrollController.hasClients) {
-                    final newOffset = _contentScrollController.offset + event.scrollDelta.dy;
+                  if (event is PointerScrollEvent &&
+                      _contentScrollController.hasClients) {
+                    final newOffset =
+                        _contentScrollController.offset + event.scrollDelta.dy;
                     _contentScrollController.jumpTo(
-                      newOffset.clamp(0.0, _contentScrollController.position.maxScrollExtent),
+                      newOffset.clamp(0.0,
+                          _contentScrollController.position.maxScrollExtent),
                     );
                   }
                 },
@@ -648,8 +676,7 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
                                                   _descriptors[index].toolId,
                                               onTap: () => _changeTab(index),
                                             ),
-                                            if (index <
-                                                _descriptors.length - 1)
+                                            if (index < _descriptors.length - 1)
                                               const SizedBox(
                                                   width: AppTokens.spaceXS),
                                           ],
@@ -684,7 +711,8 @@ class MoreScreenState extends State<MoreScreen> with AutomaticKeepAliveClientMix
                             ),
                             // כפתור תוספים מוצמד לשמאל חזותי (סוף Row ב-RTL)
                             IconButton(
-                              icon: const Icon(FluentIcons.puzzle_piece_24_regular),
+                              icon: const Icon(
+                                  FluentIcons.puzzle_piece_24_regular),
                               onPressed: () =>
                                   setState(() => _isPanelOpen = !_isPanelOpen),
                               tooltip: 'תוספים',
