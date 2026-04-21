@@ -27,6 +27,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
+import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 
 enum _PrintRangeMode { headers, altHeaders, lines }
 
@@ -34,6 +35,7 @@ class PrintingScreen extends StatefulWidget {
   final Future<String> data;
   final Future<Uint8List> Function(PdfPageFormat format)? createPdfOverride;
   final String bookId;
+  final TextBook? book;
   final List<Link> links;
   final List<String> activeCommentators;
   final bool removeNikud;
@@ -45,6 +47,7 @@ class PrintingScreen extends StatefulWidget {
     required this.data,
     this.createPdfOverride,
     required this.bookId,
+    this.book,
     this.links = const [],
     this.activeCommentators = const [],
     this.startLine = 0,
@@ -534,6 +537,48 @@ class _PrintingScreenState extends State<PrintingScreen> {
     return result;
   }
 
+  Future<List<Link>> _loadLinksForPrintRange(
+      int selectedStart, int selectedEnd) async {
+    final book = widget.book;
+    if (book == null) return widget.links;
+
+    final categoryId = book.categoryId;
+    final fileType = book.fileType ?? 'txt';
+
+    final provider = LibraryProviderManager.instance.getProviderForBook(
+      book.title,
+      categoryId: categoryId,
+      fileType: fileType,
+    );
+
+    if (provider is DatabaseLibraryProvider && categoryId != null) {
+      try {
+        return await provider.getLinksForBookRange(
+          book.title,
+          categoryId,
+          fileType,
+          startLineIndex: selectedStart,
+          endLineIndex: selectedEnd,
+          targetBookTitles: widget.activeCommentators,
+        );
+      } catch (_) {}
+    }
+
+    // ספרים מבוססי-קבצים: טעינת כל הקישורים וסינון לפי טווח
+    try {
+      final allLinks = await book.links;
+      if (allLinks.isNotEmpty) {
+        final rangeStart = selectedStart + 1;
+        final rangeEnd = selectedEnd + 1;
+        return allLinks
+            .where((l) => l.index1 >= rangeStart && l.index1 <= rangeEnd)
+            .toList();
+      }
+    } catch (_) {}
+
+    return widget.links;
+  }
+
   Future<List<Map<String, String>>> _buildPrintBlocks({
     required List<String> allLines,
     required int selectedStart,
@@ -554,6 +599,10 @@ class _PrintingScreenState extends State<PrintingScreen> {
       notesByLine = map;
     }
 
+    final rangeLinks = _includeCommentaries
+        ? await _loadLinksForPrintRange(selectedStart, selectedEnd)
+        : <Link>[];
+
     for (var i = selectedStart; i < selectedEnd; i++) {
       var lineText = allLines[i];
       if (shouldReplaceHolyNames) {
@@ -566,7 +615,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
       if (_includeCommentaries) {
         final linksForLine = await getLinksforIndexs(
           indexes: [i],
-          links: widget.links,
+          links: rangeLinks,
           commentatorsToShow: widget.activeCommentators,
         );
 
@@ -893,7 +942,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
     try {
       final repo = PersonalNotesRepository();
-      final all = await repo.loadNotes(bookId);
+      final all =
+          await repo.loadNotes(bookId, categoryId: widget.book?.categoryId);
       final located = all.where((n) => n.hasLocation).toList();
       _personalNotesCache = located;
       return located;
