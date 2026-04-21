@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
@@ -67,6 +68,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
   late int startLine;
   late int endLine;
   late Future<Uint8List> _previewPdf;
+  late Future<String> _dataFuture;
   pw.PageOrientation orientation = pw.PageOrientation.portrait;
   PdfPageFormat format = PdfPageFormat.a4;
   double pageMargin = 20.0;
@@ -84,6 +86,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
   final Map<String, String> _commentaryContentCache = {};
   List<PersonalNote>? _personalNotesCache;
   bool _isLoadingNotes = false;
+  Timer? _previewRefreshTimer;
 
   // מצב בחירה: שורות, כותרות, או כותרות משנה
   _PrintRangeMode _rangeMode = _PrintRangeMode.headers;
@@ -103,6 +106,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
   @override
   void initState() {
     super.initState();
+    _dataFuture = widget.data;
     startLine = widget.startLine;
     endLine = startLine;
 
@@ -130,19 +134,82 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (_flatHeaders.isNotEmpty) {
       _startHeaderIndex = 0;
       _endHeaderIndex = min(2, _flatHeaders.length - 1);
-      _updateRangeByHeaders();
     } else {
       // אם אין כותרות, עבור למצב שורות
       _rangeMode = _PrintRangeMode.lines;
-      () async {
-        endLine = min(startLine + 3, (await widget.data).split('\n').length);
-        _refreshPreviewPdf();
-        setState(() {});
-      }();
     }
 
-    _previewPdf = _createBasePdf(format);
+    _previewPdf = _createInitialPreviewPdf();
     _loadAltHeaders();
+  }
+
+  @override
+  void didUpdateWidget(covariant PrintingScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data != widget.data) {
+      _dataFuture = widget.data;
+      _previewPdf = _createInitialPreviewPdf();
+    }
+  }
+
+  Future<Uint8List> _createInitialPreviewPdf() async {
+    await _applyCurrentRange();
+    if (mounted) {
+      setState(() {});
+    }
+    return _createBasePdf(format);
+  }
+
+  Future<int> _totalLineCount() async => (await _dataFuture).split('\n').length;
+
+  Future<void> _applyCurrentRange() async {
+    if (_rangeMode == _PrintRangeMode.headers) {
+      await _applyHeaderRange();
+      return;
+    }
+    if (_rangeMode == _PrintRangeMode.altHeaders) {
+      await _applyAltHeaderRange();
+      return;
+    }
+    final totalLines = await _totalLineCount();
+    if (endLine <= startLine) {
+      endLine = min(startLine + 3, totalLines);
+    } else {
+      startLine = startLine.clamp(0, totalLines);
+      endLine = endLine.clamp(startLine, totalLines);
+    }
+  }
+
+  Future<void> _applyAltHeaderRange() async {
+    if (_startAltHeaderIndex == null || _endAltHeaderIndex == null) return;
+    if (_flatAltHeaders.isEmpty) return;
+
+    final startEntry = _flatAltHeaders[_startAltHeaderIndex!];
+    final totalLines = await _totalLineCount();
+    if (!mounted) return;
+
+    startLine = startEntry.index;
+    if (_endAltHeaderIndex! < _flatAltHeaders.length - 1) {
+      endLine = _flatAltHeaders[_endAltHeaderIndex! + 1].index;
+    } else {
+      endLine = totalLines;
+    }
+  }
+
+  Future<void> _applyHeaderRange() async {
+    if (_startHeaderIndex == null || _endHeaderIndex == null) return;
+    if (_flatHeaders.isEmpty) return;
+
+    final startHeader = _flatHeaders[_startHeaderIndex!];
+    final totalLines = await _totalLineCount();
+    if (!mounted) return;
+
+    startLine = startHeader.index;
+    if (_endHeaderIndex! < _flatHeaders.length - 1) {
+      endLine = _flatHeaders[_endHeaderIndex! + 1].index;
+    } else {
+      endLine = totalLines;
+    }
   }
 
   Future<void> _loadAltHeaders() async {
@@ -177,24 +244,16 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
   void _updateRangeByAltHeaders() async {
     if (_startAltHeaderIndex != null && _endAltHeaderIndex != null) {
-      final startEntry = _flatAltHeaders[_startAltHeaderIndex!];
-      final totalLines = (await widget.data).split('\n').length;
-
-      startLine = startEntry.index;
-
-      if (_endAltHeaderIndex! < _flatAltHeaders.length - 1) {
-        endLine = _flatAltHeaders[_endAltHeaderIndex! + 1].index;
-      } else {
-        endLine = totalLines;
-      }
-
-      _refreshPreviewPdf();
+      await _applyAltHeaderRange();
+      if (!mounted) return;
+      _refreshPreviewPdf(immediate: true);
       setState(() {});
     }
   }
 
   @override
   void dispose() {
+    _previewRefreshTimer?.cancel();
     _documentRef.dispose();
     super.dispose();
   }
@@ -217,21 +276,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
   // עדכון טווח השורות לפי כותרות נבחרות
   void _updateRangeByHeaders() async {
     if (_startHeaderIndex != null && _endHeaderIndex != null) {
-      final startHeader = _flatHeaders[_startHeaderIndex!];
-      final totalLines = (await widget.data).split('\n').length;
-
-      startLine = startHeader.index;
-
-      // מציאת סוף הכותרת האחרונה
-      if (_endHeaderIndex! < _flatHeaders.length - 1) {
-        // אם יש כותרת נוספת, נעצור לפניה
-        endLine = _flatHeaders[_endHeaderIndex! + 1].index;
-      } else {
-        // אם זו הכותרת האחרונה, נלך עד סוף הספר
-        endLine = totalLines;
-      }
-
-      _refreshPreviewPdf();
+      await _applyHeaderRange();
+      if (!mounted) return;
+      _refreshPreviewPdf(immediate: true);
       setState(() {});
     }
   }
@@ -240,8 +287,18 @@ class _PrintingScreenState extends State<PrintingScreen> {
     Printing.layoutPdf(onLayout: createPdf);
   }
 
-  void _refreshPreviewPdf() {
-    _previewPdf = _createBasePdf(format);
+  void _refreshPreviewPdf({bool immediate = false}) {
+    _previewRefreshTimer?.cancel();
+    if (immediate) {
+      _previewPdf = _createBasePdf(format);
+      return;
+    }
+    _previewRefreshTimer = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() {
+        _previewPdf = _createBasePdf(format);
+      });
+    });
   }
 
   Future<Uint8List> _createOutputPdf(PdfPageFormat format) async {
@@ -353,7 +410,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     final font = pw.Font.ttf(await rootBundle.load(fontPath));
     final fullBackFont = pw.Font.ttf(await rootBundle
         .load('fonts/NotoSerifHebrew-VariableFont_wdth,wght.ttf'));
-    String dataString = await widget.data;
+    String dataString = await _dataFuture;
     if (orientation == pw.PageOrientation.landscape) {
       format = format.landscape;
     }
@@ -758,7 +815,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
   }
 
   Future<PreparedPrintDocument> _prepareWordDocument() async {
-    String dataString = await widget.data;
+    String dataString = await _dataFuture;
 
     if (_removeNikud && _removeTaamim) {
       dataString = removeVolwels(dataString);
@@ -1081,7 +1138,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
           ),
           Expanded(
             child: FutureBuilder(
-              future: widget.data,
+              future: _dataFuture,
               builder: (context, snapshot) {
                 if (isCustomPdfMode) {
                   return Row(
@@ -1543,6 +1600,12 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                             startLine.toDouble(),
                                             endLine.toDouble()),
                                         onChanged: (value) {
+                                          setState(() {
+                                            startLine = value.start.toInt();
+                                            endLine = value.end.toInt();
+                                          });
+                                        },
+                                        onChangeEnd: (value) {
                                           startLine = value.start.toInt();
                                           endLine = value.end.toInt();
                                           setState(_refreshPreviewPdf);
@@ -1753,8 +1816,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       onChanged: (value) {
                                         setState(() {
                                           fontSize = value;
-                                          _refreshPreviewPdf();
                                         });
+                                      },
+                                      onChangeEnd: (value) {
+                                        fontSize = value;
+                                        setState(_refreshPreviewPdf);
                                       },
                                     ),
                                     const SizedBox(height: 16),
@@ -1878,8 +1944,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       onChanged: (value) {
                                         setState(() {
                                           pageMargin = value;
-                                          _refreshPreviewPdf();
                                         });
+                                      },
+                                      onChangeEnd: (value) {
+                                        pageMargin = value;
+                                        setState(_refreshPreviewPdf);
                                       },
                                     ),
                                     const SizedBox(height: 16),
@@ -2134,6 +2203,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     required double max,
     required String displayValue,
     required ValueChanged<double> onChanged,
+    ValueChanged<double>? onChangeEnd,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -2177,6 +2247,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
             min: min,
             max: max,
             onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
           ),
         ),
       ],
