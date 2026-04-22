@@ -1,14 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/error_log_file.dart';
-import 'package:otzaria/utils/ref_helper.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
-import 'package:path/path.dart' as p;
-import 'package:pdfrx/pdfrx.dart';
 
 class PreparedIndexDocument {
   final String reference;
@@ -218,9 +214,8 @@ class IndexingIsolateService {
     return controller.stream;
   }
 
-  Future<Stream<IndexingIsolateUpdate>> processPdfBook({
-    required String title,
-    required String path,
+  Future<Stream<IndexingIsolateUpdate>> processPdfPages({
+    required List<({String reference, String text, int pageIndex})> pages,
   }) async {
     await _ensureReady();
     _ensureIdle();
@@ -228,9 +223,14 @@ class IndexingIsolateService {
     final controller = StreamController<IndexingIsolateUpdate>();
     _activeController = controller;
     _commandPort!.send({
-      'type': 'processPdfBook',
-      'title': title,
-      'path': path,
+      'type': 'processPdfPages',
+      'pages': pages
+          .map((p) => {
+                'reference': p.reference,
+                'text': p.text,
+                'pageIndex': p.pageIndex,
+              })
+          .toList(),
     });
     return controller.stream;
   }
@@ -438,7 +438,6 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
 
   var isProcessing = false;
   var shouldCancel = false;
-  var pdfrxInitialized = false;
   Completer<void>? pendingBatchAck;
 
   Future<void> completePendingAck() async {
@@ -461,23 +460,6 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
       'documents': documents,
     });
     await ackCompleter.future;
-  }
-
-  Future<void> ensurePdfrxInitialized() async {
-    if (pdfrxInitialized) {
-      return;
-    }
-
-    final rootToken = bootstrap.rootToken;
-    if (rootToken != null) {
-      BackgroundIsolateBinaryMessenger.ensureInitialized(rootToken);
-    }
-
-    Pdfrx.getCacheDirectory ??= () => Directory.systemTemp.path;
-    // pdfrxFlutterInitialize calls WidgetsFlutterBinding.ensureInitialized() which is
-    // forbidden in background isolates. Instead, initialize PDFium directly via FFI.
-    await PdfrxEntryFunctions.instance.init();
-    pdfrxInitialized = true;
   }
 
   Future<void> processTextBook(String text) async {
@@ -519,146 +501,43 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
     await emitBatch(batch);
   }
 
-  Future<void> processPdfBook({
-    required String title,
-    required String path,
-  }) async {
-    await ensurePdfrxInitialized();
+  Future<void> processPdfPages(List<dynamic> rawPages) async {
+    var batch = <Map<String, Object?>>[];
+    var ordinal = 0;
 
-    PdfDocument? document;
-    try {
-      final file = File(path);
-      if (!await file.exists()) {
-        return;
-      }
+    for (final rawPage in rawPages) {
+      if (shouldCancel) return;
 
-      document = await PdfDocument.openFile(path).timeout(
-        const Duration(seconds: 60),
-      );
+      final page = rawPage as Map<dynamic, dynamic>;
+      final reference = page['reference'] as String? ?? '';
+      final text = page['text'] as String? ?? '';
+      final pageIndex = (page['pageIndex'] as num?)?.toInt() ?? 0;
 
-      final outline = await document.loadOutline().timeout(
-            const Duration(seconds: 15),
-            onTimeout: () => <PdfOutlineNode>[],
-          );
+      final rawLines = text.split('\n');
+      for (final rawLine in rawLines) {
+        if (shouldCancel) return;
 
-      var batch = <Map<String, Object?>>[];
-      var addedAny = false;
-      var ordinal = 0;
-
-      for (int i = 0; i < document.pages.length; i++) {
-        if (shouldCancel) {
-          return;
-        }
-
-        final pageText = await document.pages[i].loadText().timeout(
-              const Duration(seconds: 5),
-              onTimeout: () => null,
-            );
-        if (pageText == null) {
+        final normalized =
+            IndexingDocumentBuilder.normalizePdfTextForIndexing(rawLine);
+        if (IndexingDocumentBuilder.isProbablyGarbagePdfText(normalized)) {
           continue;
         }
 
-        final bookmark = await refFromPageNumber(i + 1, outline, title);
-        final ref = bookmark.isNotEmpty
-            ? '$title, $bookmark, עמוד ${i + 1}'
-            : '$title, עמוד ${i + 1}';
+        batch.add({
+          'reference': reference,
+          'text': normalized,
+          'segment': pageIndex,
+          'ordinal': ordinal++,
+        });
 
-        final rawLines = pageText.fullText.split('\n');
-        for (final rawLine in rawLines) {
-          if (shouldCancel) {
-            return;
-          }
-
-          final normalized =
-              IndexingDocumentBuilder.normalizePdfTextForIndexing(rawLine);
-          if (IndexingDocumentBuilder.isProbablyGarbagePdfText(normalized)) {
-            continue;
-          }
-
-          batch.add({
-            'reference': ref,
-            'text': normalized,
-            'segment': i,
-            'ordinal': ordinal++,
-          });
-          addedAny = true;
-
-          if (batch.length >= IndexingIsolateService._batchSize) {
-            await emitBatch(batch);
-            batch = <Map<String, Object?>>[];
-          }
+        if (batch.length >= IndexingIsolateService._batchSize) {
+          await emitBatch(batch);
+          batch = <Map<String, Object?>>[];
         }
       }
-
-      if (!addedAny) {
-        final candidates = <String>{
-          '$path.txt',
-          p.setExtension(path, '.txt'),
-        };
-
-        File? sidecar;
-        for (final candidate in candidates) {
-          final file = File(candidate);
-          if (await file.exists()) {
-            sidecar = file;
-            break;
-          }
-        }
-
-        if (sidecar != null) {
-          final ocrText = await sidecar.readAsString();
-          final pagesText =
-              ocrText.contains('\f') ? ocrText.split('\f') : <String>[ocrText];
-
-          for (int pageIndex = 0; pageIndex < pagesText.length; pageIndex++) {
-            if (shouldCancel) {
-              return;
-            }
-
-            final bookmark =
-                await refFromPageNumber(pageIndex + 1, outline, title);
-            final ref = bookmark.isNotEmpty
-                ? '$title, $bookmark, עמוד ${pageIndex + 1}'
-                : '$title, עמוד ${pageIndex + 1}';
-
-            final lines = pagesText[pageIndex].split('\n');
-            for (final line in lines) {
-              if (shouldCancel) {
-                return;
-              }
-
-              final normalized =
-                  IndexingDocumentBuilder.normalizePdfTextForIndexing(line);
-              if (IndexingDocumentBuilder.isProbablyGarbagePdfText(
-                  normalized)) {
-                continue;
-              }
-
-              batch.add({
-                'reference': ref,
-                'text': normalized,
-                'segment': pageIndex,
-                'ordinal': ordinal++,
-              });
-
-              if (batch.length >= IndexingIsolateService._batchSize) {
-                await emitBatch(batch);
-                batch = <Map<String, Object?>>[];
-              }
-            }
-          }
-        }
-      }
-
-      await emitBatch(batch);
-    } finally {
-      // Don't call document.dispose() explicitly - pdfrx's background page
-      // preloader (_loadPagesInLimitedTime) runs in a separate isolate and may
-      // still be executing FFI callbacks at this point. Calling dispose() while
-      // the worker is active causes a fatal "Callback invoked after it has been
-      // deleted" crash. Let the GC collect the document instead, which gives
-      // the worker time to finish naturally.
     }
+
+    await emitBatch(batch);
   }
 
   receivePort.listen((dynamic message) {
@@ -697,7 +576,7 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
           }
         }());
         return;
-      case 'processPdfBook':
+      case 'processPdfPages':
         if (isProcessing) {
           bootstrap.mainSendPort.send({
             'type': 'error',
@@ -710,9 +589,8 @@ void _indexingWorkerMain(_WorkerBootstrapMessage bootstrap) {
         shouldCancel = false;
         unawaited(() async {
           try {
-            await processPdfBook(
-              title: message['title'] as String? ?? '',
-              path: message['path'] as String? ?? '',
+            await processPdfPages(
+              (message['pages'] as List<dynamic>?) ?? const [],
             );
             bootstrap.mainSendPort.send({
               'type': shouldCancel ? 'cancelled' : 'complete',
