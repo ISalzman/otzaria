@@ -102,6 +102,10 @@ class IndexingRepository {
                   onActualIndexingStarted?.call();
                 },
               );
+              if (!_tantivyDataProvider.isIndexing.value) {
+                cancelled = true;
+                break;
+              }
               _tantivyDataProvider.booksDone.add(indexedBookKey);
               actuallyIndexed++;
             } else {
@@ -569,6 +573,10 @@ class IndexingRepository {
                   onActualIndexingStarted?.call();
                 },
               );
+              if (!_tantivyDataProvider.isIndexing.value) {
+                cancelled = true;
+                break;
+              }
               _tantivyDataProvider.booksDone.add(indexedBookKey);
               actuallyIndexed++;
             }
