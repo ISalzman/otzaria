@@ -210,6 +210,8 @@ void hebrewDefaultDialog({
   required Future<void> Function() launchInstaller,
   required void Function() dismissUpdate,
 }) {
+  final changelogText = changelog?.trim() ?? '';
+
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
@@ -239,12 +241,14 @@ void hebrewDefaultDialog({
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Markdown(
-                data: changelog!,
-                onTapLink: (text, href, title) {
-                  if (href != null) launchUrl(Uri.parse(href));
-                },
-              ),
+              child: changelogText.isEmpty
+                  ? const Text('לא נמצאו פריטי יומן שינויים לעדכון זה.')
+                  : MarkdownBody(
+                      data: changelogText,
+                      onTapLink: (text, href, title) {
+                        if (href != null) launchUrl(Uri.parse(href));
+                      },
+                    ),
             ),
           ],
         ],
