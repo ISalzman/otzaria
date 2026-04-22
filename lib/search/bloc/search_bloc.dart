@@ -401,8 +401,12 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     SetFacet event,
     Emitter<SearchState> emit,
   ) {
+    // Clicking root "/" in a scoped search means "all books within scope"
+    final effectiveFacets = (event.facet == '/' && state.hasScopedFacetFilter)
+        ? state.searchScopeFacets
+        : [event.facet];
     final newConfig =
-        state.configuration.copyWith(currentFacets: [event.facet]);
+        state.configuration.copyWith(currentFacets: effectiveFacets);
     emit(state.copyWith(configuration: newConfig));
     add(UpdateSearchQuery(
       state.searchQuery,
