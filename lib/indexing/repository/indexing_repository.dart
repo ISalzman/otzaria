@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -10,6 +11,9 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/indexing/services/indexing_isolate_service.dart';
 import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
+import 'package:otzaria/utils/ref_helper.dart';
+import 'package:path/path.dart' as p;
+import 'package:pdfrx/pdfrx.dart';
 import 'package:search_engine/search_engine.dart';
 
 class IndexingRepository {
@@ -119,6 +123,10 @@ class IndexingRepository {
                   onActualIndexingStarted?.call();
                 },
               );
+              if (!_tantivyDataProvider.isIndexing.value) {
+                cancelled = true;
+                break;
+              }
               _tantivyDataProvider.booksDone.add(indexedBookKey);
               actuallyIndexed++;
             } else {
@@ -214,10 +222,10 @@ class IndexingRepository {
     required Map<String, int> catalogueOrderByBookKey,
     void Function()? onActualIndexingStarted,
   }) async {
-    final stream = await isolateService.processPdfBook(
-      title: book.title,
-      path: book.path,
-    );
+    final pages = await _extractPdfPages(book);
+    if (pages.isEmpty) return;
+
+    final stream = await isolateService.processPdfPages(pages: pages);
     await _consumePreparedDocuments(
       book: book,
       stream: stream,
@@ -225,6 +233,101 @@ class IndexingRepository {
       catalogueOrderByBookKey: catalogueOrderByBookKey,
       onActualIndexingStarted: onActualIndexingStarted,
     );
+  }
+
+  bool _hasUsablePdfText(
+      List<({String reference, String text, int pageIndex})> pages) {
+    for (final page in pages) {
+      for (final line in page.text.split('\n')) {
+        final normalized =
+            IndexingDocumentBuilder.normalizePdfTextForIndexing(line);
+        if (!IndexingDocumentBuilder.isProbablyGarbagePdfText(normalized)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Future<List<({String reference, String text, int pageIndex})>>
+      _extractPdfPages(PdfBook book) async {
+    final file = File(book.path);
+    if (!await file.exists()) return const [];
+
+    List<PdfOutlineNode> outline = const [];
+
+    try {
+      final document = await PdfDocument.openFile(book.path)
+          .timeout(const Duration(seconds: 60));
+      outline = await document.loadOutline().timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => <PdfOutlineNode>[],
+          );
+
+      final pages = <({String reference, String text, int pageIndex})>[];
+
+      for (int i = 0; i < document.pages.length; i++) {
+        if (!_tantivyDataProvider.isIndexing.value) return const [];
+
+        final pageText = await document.pages[i].loadText().timeout(
+              const Duration(seconds: 5),
+              onTimeout: () => null,
+            );
+        if (pageText == null) continue;
+
+        final bookmark = await refFromPageNumber(i + 1, outline, book.title);
+        final ref = bookmark.isNotEmpty
+            ? '${book.title}, $bookmark, עמוד ${i + 1}'
+            : '${book.title}, עמוד ${i + 1}';
+
+        pages.add((reference: ref, text: pageText.fullText, pageIndex: i));
+      }
+
+      // Don't call document.dispose() explicitly - pdfrx's background page
+      // preloader may still be executing FFI callbacks at this point.
+      // Let the GC collect the document instead.
+
+      if (_hasUsablePdfText(pages)) return pages;
+    } catch (e) {
+      debugPrint('❌ שגיאה בפתיחת PDF לאינדוקס: ${book.title}: $e');
+    }
+
+    return _loadPdfSidecar(book, outline);
+  }
+
+  Future<List<({String reference, String text, int pageIndex})>>
+      _loadPdfSidecar(PdfBook book, List<PdfOutlineNode> outline) async {
+    final candidates = <String>{
+      '${book.path}.txt',
+      p.setExtension(book.path, '.txt'),
+    };
+
+    File? sidecar;
+    for (final candidate in candidates) {
+      final f = File(candidate);
+      if (await f.exists()) {
+        sidecar = f;
+        break;
+      }
+    }
+
+    if (sidecar == null) return const [];
+
+    final ocrText = await sidecar.readAsString();
+    final pagesText =
+        ocrText.contains('\f') ? ocrText.split('\f') : <String>[ocrText];
+
+    final pages = <({String reference, String text, int pageIndex})>[];
+    for (int pageIndex = 0; pageIndex < pagesText.length; pageIndex++) {
+      final bookmark =
+          await refFromPageNumber(pageIndex + 1, outline, book.title);
+      final ref = bookmark.isNotEmpty
+          ? '${book.title}, $bookmark, עמוד ${pageIndex + 1}'
+          : '${book.title}, עמוד ${pageIndex + 1}';
+      pages.add(
+          (reference: ref, text: pagesText[pageIndex], pageIndex: pageIndex));
+    }
+    return pages;
   }
 
   Future<String?> _loadTextBookText(
@@ -482,6 +585,10 @@ class IndexingRepository {
                   onActualIndexingStarted?.call();
                 },
               );
+              if (!_tantivyDataProvider.isIndexing.value) {
+                cancelled = true;
+                break;
+              }
               _tantivyDataProvider.booksDone.add(indexedBookKey);
               actuallyIndexed++;
             }
