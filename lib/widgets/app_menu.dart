@@ -286,16 +286,19 @@ Widget _buildAppMenuRowContent(
   Widget? trailing,
   bool isSelected = false,
   bool isDestructive = false,
+  bool enabled = true,
 }) {
   final colorScheme = Theme.of(context).colorScheme;
   // M3: selectedContainer = primaryContainer (ללא גבול, ממלא שורה שלמה)
   final selectedBackground =
       colorScheme.primaryContainer.withValues(alpha: 0.95);
-  final foregroundColor = isDestructive
-      ? colorScheme.error
-      : isSelected
-          ? colorScheme.onPrimaryContainer
-          : colorScheme.onSurface;
+  final foregroundColor = !enabled
+      ? colorScheme.onSurface.withValues(alpha: 0.38)
+      : isDestructive
+          ? colorScheme.error
+          : isSelected
+              ? colorScheme.onPrimaryContainer
+              : colorScheme.onSurface;
 
   final hasTrailingWidget = isSelected || trailing != null;
   final labelMaxWidth = _calculateAppMenuLabelMaxWidth(
@@ -334,8 +337,7 @@ Widget _buildAppMenuRowContent(
             style: TextStyle(
               fontFamily: 'Roboto',
               fontSize: metrics.fontSize,
-              fontWeight:
-                  isSelected ? FontWeight.w600 : metrics.itemFontWeight,
+              fontWeight: isSelected ? FontWeight.w600 : metrics.itemFontWeight,
               color: foregroundColor,
             ),
             child: labelMaxWidth == null
@@ -416,6 +418,7 @@ PopupMenuEntry<T> buildAppPopupMenuItem<T>(
       trailing: entry.trailing,
       isSelected: isSelected,
       isDestructive: entry.isDestructive,
+      enabled: entry.enabled,
     ),
   );
 }
@@ -874,6 +877,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
               icon: entry.icon,
               trailing: entry.trailing,
               isDestructive: entry.isDestructive,
+              enabled: false,
             ),
           );
         }
@@ -911,6 +915,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
             icon: entry.icon,
             trailing: null,
             isDestructive: entry.isDestructive,
+            enabled: entry.enabled,
           ),
         );
       }
@@ -932,6 +937,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
           icon: entry.icon,
           trailing: entry.trailing,
           isDestructive: entry.isDestructive,
+          enabled: entry.enabled,
         ),
       );
     }).toList();
@@ -987,6 +993,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
               icon: entry.icon,
               trailing: entry.trailing,
               isDestructive: entry.isDestructive,
+              enabled: false,
             ),
           );
         }
@@ -1002,8 +1009,8 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
               ),
           style: buildAppSubmenuItemStyle(context, metrics),
           menuStyle: _menuStyle(context, metrics),
-          menuChildren:
-              _buildSubmenuChildren(context, normalizedChildren, metrics, maxWidth),
+          menuChildren: _buildSubmenuChildren(
+              context, normalizedChildren, metrics, maxWidth),
           child: _buildAppMenuRowContent(
             context,
             metrics,
@@ -1013,6 +1020,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
             icon: entry.icon,
             trailing: null,
             isDestructive: entry.isDestructive,
+            enabled: entry.enabled,
           ),
         );
       }
@@ -1034,6 +1042,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
           icon: entry.icon,
           trailing: entry.trailing,
           isDestructive: entry.isDestructive,
+          enabled: entry.enabled,
         ),
       );
     }).toList();
@@ -1065,36 +1074,37 @@ class _AppContextMenuPanel extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return FocusScope(
-      canRequestFocus: false,
-      skipTraversal: true,
-      child: Material(
-      color: menuStyle?.backgroundColor?.resolve(const <WidgetState>{}) ??
-          colorScheme.surfaceContainer,
-      elevation:
-          menuStyle?.elevation?.resolve(const <WidgetState>{})?.toDouble() ?? 3,
-      shape: menuStyle?.shape?.resolve(const <WidgetState>{}) ??
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(metrics.menuBorderRadius),
-          ),
-      clipBehavior: Clip.antiAlias,
-      child: IntrinsicWidth(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minWidth: metrics.menuMinWidth,
-            maxWidth: maxWidth,
-            maxHeight: maxHeight,
-          ),
-          child: SingleChildScrollView(
-            padding: metrics.menuPadding,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: buildChildren(context, entries),
+        canRequestFocus: false,
+        skipTraversal: true,
+        child: Material(
+          color: menuStyle?.backgroundColor?.resolve(const <WidgetState>{}) ??
+              colorScheme.surfaceContainer,
+          elevation: menuStyle?.elevation
+                  ?.resolve(const <WidgetState>{})?.toDouble() ??
+              3,
+          shape: menuStyle?.shape?.resolve(const <WidgetState>{}) ??
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(metrics.menuBorderRadius),
+              ),
+          clipBehavior: Clip.antiAlias,
+          child: IntrinsicWidth(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: metrics.menuMinWidth,
+                maxWidth: maxWidth,
+                maxHeight: maxHeight,
+              ),
+              child: SingleChildScrollView(
+                padding: metrics.menuPadding,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: buildChildren(context, entries),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-    ));
+        ));
   }
 }
 
@@ -1703,6 +1713,7 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
                     trailing: entry.trailing,
                     isSelected: isSelected,
                     isDestructive: entry.isDestructive,
+                    enabled: entry.enabled,
                   ),
                   enabled: entry.enabled,
                   style: ButtonStyle(
