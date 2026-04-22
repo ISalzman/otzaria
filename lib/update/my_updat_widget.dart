@@ -16,6 +16,53 @@ import 'package:otzaria/settings/settings_exports.dart';
 const _kInstallKind =
     String.fromEnvironment('INSTALL_KIND', defaultValue: 'auto');
 
+const _changelogUrl =
+    'https://raw.githubusercontent.com/Otzaria/otzaria/refs/heads/migrationDB_V2/assets/%D7%99%D7%95%D7%9E%D7%9F%20%D7%A9%D7%99%D7%A0%D7%95%D7%99%D7%99%D7%9D.md';
+const _githubOwner = 'Otzaria';
+const _githubRepository = 'otzaria';
+
+final _changelogHeadingPattern = RegExp(
+  r'^\s*(?:(?:#{1,6}|[*-])\s*)?\*{0,2}v?(\d+(?:\.\d+){1,2}(?:[-+][^\s*]+)?)\*{0,2}\s*$',
+);
+
+class _ParsedVersion implements Comparable<_ParsedVersion> {
+  final int major;
+  final int minor;
+  final int patch;
+
+  const _ParsedVersion(this.major, this.minor, this.patch);
+
+  @override
+  int compareTo(_ParsedVersion other) {
+    final majorCompare = major.compareTo(other.major);
+    if (majorCompare != 0) return majorCompare;
+
+    final minorCompare = minor.compareTo(other.minor);
+    if (minorCompare != 0) return minorCompare;
+
+    return patch.compareTo(other.patch);
+  }
+
+  bool operator >(_ParsedVersion other) => compareTo(other) > 0;
+
+  bool operator <=(_ParsedVersion other) => compareTo(other) <= 0;
+
+  @override
+  String toString() => '$major.$minor.$patch';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ParsedVersion &&
+          runtimeType == other.runtimeType &&
+          major == other.major &&
+          minor == other.minor &&
+          patch == other.patch;
+
+  @override
+  int get hashCode => Object.hash(major, minor, patch);
+}
+
 /// זיהוי סוג ההתקנה ב-Windows
 /// אם הוגדר INSTALL_KIND בזמן build - משתמש בו
 /// אחרת - מזהה לפי נתיב הקובץ
@@ -39,6 +86,85 @@ String _preferredWindowsFormat() {
     // במקרה של שגיאה, ברירת מחדל היא EXE
     return 'exe';
   }
+}
+
+String _normalizeVersion(String version) {
+  var normalized = version.trim();
+  if (normalized.startsWith('v')) {
+    normalized = normalized.substring(1);
+  }
+
+  final plusIndex = normalized.indexOf('+');
+  if (plusIndex != -1) {
+    normalized = normalized.substring(0, plusIndex);
+  }
+
+  return normalized;
+}
+
+_ParsedVersion? _tryParseVersion(String version) {
+  final core = _normalizeVersion(version).split('-').first;
+  final parts = core.split('.');
+  if (parts.length < 2 || parts.length > 3) return null;
+
+  final major = int.tryParse(parts[0]);
+  final minor = int.tryParse(parts[1]);
+  final patch = parts.length == 3 ? int.tryParse(parts[2]) : 0;
+  if (major == null || minor == null || patch == null) return null;
+
+  return _ParsedVersion(major, minor, patch);
+}
+
+/// מחזירה את פריטי יומן השינויים שבין הגרסה הנוכחית לגרסה הזמינה.
+@visibleForTesting
+String changelogBetweenVersionsForUpdateDialog({
+  required String changelog,
+  required String currentVersion,
+  required String latestVersion,
+}) {
+  final current = _tryParseVersion(currentVersion);
+  final latest = _tryParseVersion(latestVersion);
+  if (current == null || latest == null || latest <= current) {
+    return changelog;
+  }
+
+  final lines = changelog.split('\n');
+  final selected = <String>[];
+  var includeCurrentSection = false;
+  var sawVersionHeading = false;
+
+  for (final line in lines) {
+    final match = _changelogHeadingPattern.firstMatch(line);
+    if (match != null) {
+      sawVersionHeading = true;
+      final headingVersion = _tryParseVersion(match.group(1)!);
+      includeCurrentSection = headingVersion != null &&
+          headingVersion > current &&
+          headingVersion <= latest;
+
+      if (includeCurrentSection) {
+        if (selected.isNotEmpty && selected.last.trim().isNotEmpty) {
+          selected.add('');
+        }
+        selected.add(line);
+      }
+      continue;
+    }
+
+    if (!sawVersionHeading) {
+      continue;
+    }
+
+    if (includeCurrentSection) {
+      selected.add(line);
+    }
+  }
+
+  final result = selected.join('\n').trim();
+  if (result.isEmpty) {
+    return 'לא נמצאו פריטי יומן שינויים בין גרסה $currentVersion לגרסה $latestVersion.';
+  }
+  return result;
 }
 
 /// עוטף את [hebrewFlatChip] ומבטל אוטומטית שגיאות עדכון לאחר השהיה קצרה.
@@ -103,22 +229,10 @@ class MyUpdatWidget extends StatelessWidget {
               final isDevChannel =
                   Settings.getValue<bool>('key-dev-channel') ?? false;
 
-              String normalizeVersion(String version) {
-                // Remove 'v' prefix if present
-                version =
-                    version.startsWith('v') ? version.substring(1) : version;
-                // Remove build number (everything after '+')
-                final plusIndex = version.indexOf('+');
-                if (plusIndex != -1) {
-                  version = version.substring(0, plusIndex);
-                }
-                return version;
-              }
-
               if (isDevChannel) {
                 // For dev channel, get the latest pre-release from the main repo
                 final data = await http.get(Uri.parse(
-                  "https://api.github.com/repos/Y-PLONI/otzaria/releases",
+                  "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases",
                 ));
                 final releases = jsonDecode(data.body) as List;
                 // Find the first pre-release that is not a draft and not a PR preview
@@ -129,25 +243,24 @@ class MyUpdatWidget extends StatelessWidget {
                       !release["tag_name"].toString().contains('-pr'),
                   orElse: () => releases.first,
                 );
-                return normalizeVersion(preRelease["tag_name"]);
+                return _normalizeVersion(preRelease["tag_name"]);
               } else {
                 // For stable channel, get the latest stable release
                 final data = await http.get(Uri.parse(
-                  "https://api.github.com/repos/sivan22/otzaria/releases/latest",
+                  "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/latest",
                 ));
-                return normalizeVersion(jsonDecode(data.body)["tag_name"]);
+                return _normalizeVersion(jsonDecode(data.body)["tag_name"]);
               }
             },
             getBinaryUrl: (version) async {
               final isDev = Settings.getValue<bool>('key-dev-channel') ?? false;
-              final repo = isDev ? "Y-PLONI" : "sivan22";
 
               // קבלת פרטי ה-release
               dynamic release;
               if (isDev) {
                 // ערוץ dev - חיפוש לפי התחלת גרסה
                 final data = await http.get(Uri.parse(
-                    "https://api.github.com/repos/$repo/otzaria/releases"));
+                    "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases"));
                 final releases = jsonDecode(data.body) as List;
                 final versionStr = version ?? '';
                 release = releases.firstWhere(
@@ -157,10 +270,10 @@ class MyUpdatWidget extends StatelessWidget {
               } else {
                 // ערוץ stable - ניסיון עם/בלי קידומת v
                 var resp = await http.get(Uri.parse(
-                    "https://api.github.com/repos/$repo/otzaria/releases/tags/$version"));
+                    "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/$version"));
                 if (resp.statusCode == 404) {
                   resp = await http.get(Uri.parse(
-                      "https://api.github.com/repos/$repo/otzaria/releases/tags/v$version"));
+                      "https://api.github.com/repos/$_githubOwner/$_githubRepository/releases/tags/v$version"));
                 }
                 // וידוא שה-release נמצא
                 if (resp.statusCode >= 400) {
@@ -269,18 +382,21 @@ class MyUpdatWidget extends StatelessWidget {
               return assetUrl;
             },
             appName: "otzaria", // This is used to name the downloaded files.
-            getChangelog: (_, __) async {
+            getChangelog: (latestVersion, appVersion) async {
               // Load changelog directly from GitHub repository
               try {
                 final response = await http
                     .get(
-                      Uri.parse(
-                          'https://raw.githubusercontent.com/Y-PLONI/otzaria/refs/heads/dev/assets/%D7%99%D7%95%D7%9E%D7%9F%20%D7%A9%D7%99%D7%A0%D7%95%D7%99%D7%99%D7%9D.md'),
+                      Uri.parse(_changelogUrl),
                     )
                     .timeout(const Duration(seconds: 10));
 
                 if (response.statusCode == 200) {
-                  return response.body;
+                  return changelogBetweenVersionsForUpdateDialog(
+                    changelog: response.body,
+                    currentVersion: appVersion,
+                    latestVersion: latestVersion,
+                  );
                 } else {
                   return 'שגיאה בטעינת יומן השינויים.\nקוד שגיאה: ${response.statusCode}';
                 }
