@@ -689,7 +689,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         _buildBookViewViewportMask(size),
         _buildBookViewStackDecoration(context, size),
         _buildBookViewTurnButtons(context, size),
-
       ],
       loadingBannerBuilder: (context, bytesDownloaded, totalBytes) => Center(
         child: CircularProgressIndicator(
@@ -1330,18 +1329,64 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Future<void> _goToPageWithSpreadLock(int pageNumber) async {
-    if (!widget.tab.pdfViewerController.isReady) return;
-    final totalPages = widget.tab.pdfViewerController.pageCount;
+    final controller = widget.tab.pdfViewerController;
+    if (!controller.isReady) return;
+    final totalPages = controller.pageCount;
     final safePage = pageNumber.clamp(1, totalPages);
 
     if (_isBookViewModeActive()) {
+      // Capture current spread BEFORE updating _lockedSpreadStartPage, because
+      // _currentSpreadRect reads _lockedSpreadStartPage to find the spread rect.
+      final currentSpreadRect = _currentSpreadRect(controller);
       _lockedSpreadStartPage = _spreadStartPageFor(safePage);
+
+      // Calculate the target matrix directly so we jump to the correct vertical
+      // position in one shot — avoiding a flash-to-top that would occur if we
+      // called goToPage and then corrected afterwards.
+      final newSpreadRect =
+          _spreadRectForPageLayout(controller.layout, _lockedSpreadStartPage!);
+      if (currentSpreadRect != null &&
+          newSpreadRect != null &&
+          currentSpreadRect.height > 0 &&
+          newSpreadRect.height > 0) {
+        final visibleRect = controller.visibleRect;
+        final visibleHeight = min(visibleRect.height, currentSpreadRect.height);
+        final currentScrollableExtent =
+            max(currentSpreadRect.height - visibleHeight, 0.0);
+
+        // Relative scroll: 0.0 = top of spread, 1.0 = bottom.
+        // Uses scroll offset (not center) to avoid placing center outside spread.
+        double relativeScroll = 0.0;
+        if (currentScrollableExtent > 0) {
+          final currentScrollTop = (visibleRect.top - currentSpreadRect.top)
+              .clamp(0.0, currentScrollableExtent);
+          relativeScroll = currentScrollTop / currentScrollableExtent;
+        }
+
+        final newScrollableExtent =
+            max(newSpreadRect.height - visibleHeight, 0.0);
+        final newScrollTop = relativeScroll * newScrollableExtent;
+        final targetCenterY =
+            newSpreadRect.top + newScrollTop + visibleHeight / 2;
+
+        await controller
+            .goTo(controller.calcMatrixFor(
+              Offset(newSpreadRect.center.dx, targetCenterY),
+              zoom: controller.value.zoom,
+              viewSize: controller.viewSize,
+            ))
+            .timeout(const Duration(seconds: 3), onTimeout: () {});
+        if (!_pdfViewFocusNode.hasFocus) {
+          _pdfViewFocusNode.requestFocus();
+        }
+        return;
+      }
     }
 
     // During progressive PDF loading, pdfrx may wait indefinitely for the
     // viewport to settle while new tiles keep arriving. Time out the await so
     // page-turn state cannot deadlock the navigation flow.
-    await widget.tab.pdfViewerController
+    await controller
         .goToPage(pageNumber: safePage)
         .timeout(const Duration(seconds: 3), onTimeout: () {});
 
@@ -1966,6 +2011,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   trackThickness: 16.0,
                   thumbMinSize: 50.0,
                   scrollBoundsBuilder: _currentVerticalScrollbarBounds,
+                  freezeThumb: _pageTurnTransition != null,
                 ),
                 PdfHorizontalScrollbar(
                   controller: widget.tab.pdfViewerController,
