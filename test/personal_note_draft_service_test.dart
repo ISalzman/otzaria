@@ -95,4 +95,28 @@ void main() {
     expect(loaded.contentPlain, 'שלום');
     expect(loaded.contentFormat, PersonalNoteContentFormat.quillDelta);
   });
+
+  test('clearDraft מוחק את המפתח מה-Box', () async {
+    final service = PersonalNoteDraftService();
+
+    await service.saveDraft(
+      bookId: 'ספר ג',
+      lineNumber: 5,
+      draft: PersonalNoteDraft(
+        content: 'טיוטה זמנית',
+        contentPlain: 'טיוטה זמנית',
+        contentFormat: PersonalNoteContentFormat.plain,
+        updatedAt: DateTime(2026, 1, 5),
+        lineNumber: 5,
+      ),
+    );
+
+    final box = Hive.box<dynamic>(HiveCache.keyName);
+    expect(box.containsKey('personal_note_draft:ספר ג:5'), isTrue);
+
+    await service.clearDraft(bookId: 'ספר ג', lineNumber: 5);
+
+    expect(box.containsKey('personal_note_draft:ספר ג:5'), isFalse);
+    expect(await service.loadDraft(bookId: 'ספר ג', lineNumber: 5), isNull);
+  });
 }
