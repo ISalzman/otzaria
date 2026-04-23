@@ -6,7 +6,7 @@ import 'package:pdfrx/pdfrx.dart';
 typedef PdfScrollBoundsBuilder = Rect? Function(PdfViewerController controller);
 
 /// פס גלילה מותאם אישית ל-PDF עם track מלא.
-class PdfScrollbar extends StatelessWidget {
+class PdfScrollbar extends StatefulWidget {
   final PdfViewerController controller;
   final ScrollbarOrientation orientation;
   final double trackThickness;
@@ -14,6 +14,7 @@ class PdfScrollbar extends StatelessWidget {
   final Color? thumbColor;
   final double thumbMinSize;
   final PdfScrollBoundsBuilder? scrollBoundsBuilder;
+  final bool freezeThumb;
 
   const PdfScrollbar({
     super.key,
@@ -24,28 +25,39 @@ class PdfScrollbar extends StatelessWidget {
     this.thumbColor,
     this.thumbMinSize = 40.0,
     this.scrollBoundsBuilder,
+    this.freezeThumb = false,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final isVertical = orientation == ScrollbarOrientation.right ||
-        orientation == ScrollbarOrientation.left;
+  State<PdfScrollbar> createState() => _PdfScrollbarState();
+}
 
-    if (!isVertical || scrollBoundsBuilder == null) {
+class _PdfScrollbarState extends State<PdfScrollbar> {
+  double? _lastThumbTop;
+  double? _lastThumbHeight;
+  int? _lastPageNumber;
+
+  @override
+  Widget build(BuildContext context) {
+    final isVertical = widget.orientation == ScrollbarOrientation.right ||
+        widget.orientation == ScrollbarOrientation.left;
+
+    if (!isVertical || widget.scrollBoundsBuilder == null) {
       return PdfViewerScrollThumb(
-        controller: controller,
-        orientation: orientation,
+        controller: widget.controller,
+        orientation: widget.orientation,
         thumbSize: isVertical
-            ? Size(trackThickness, thumbMinSize)
-            : Size(thumbMinSize, trackThickness),
+            ? Size(widget.trackThickness, widget.thumbMinSize)
+            : Size(widget.thumbMinSize, widget.trackThickness),
         thumbBuilder: (context, thumbSize, pageNumber, controller) {
           final colorScheme = Theme.of(context).colorScheme;
           return Container(
-            width: isVertical ? trackThickness : thumbSize.width,
-            height: isVertical ? thumbSize.height : trackThickness,
+            width: isVertical ? widget.trackThickness : thumbSize.width,
+            height: isVertical ? thumbSize.height : widget.trackThickness,
             decoration: BoxDecoration(
-              color: thumbColor ?? colorScheme.outline.withValues(alpha: 0.75),
-              borderRadius: BorderRadius.circular(trackThickness / 2),
+              color: widget.thumbColor ??
+                  colorScheme.outline.withValues(alpha: 0.75),
+              borderRadius: BorderRadius.circular(widget.trackThickness / 2),
             ),
             child: isVertical
                 ? Center(
@@ -64,29 +76,29 @@ class PdfScrollbar extends StatelessWidget {
       );
     }
 
-    final alignment = orientation == ScrollbarOrientation.left
+    final alignment = widget.orientation == ScrollbarOrientation.left
         ? Alignment.centerLeft
         : Alignment.centerRight;
     final colorScheme = Theme.of(context).colorScheme;
-    final resolvedTrackColor = trackColor ??
+    final resolvedTrackColor = widget.trackColor ??
         colorScheme.surfaceContainerHighest.withValues(alpha: 0.8);
     final resolvedThumbColor =
-        thumbColor ?? colorScheme.primary.withValues(alpha: 0.82);
+        widget.thumbColor ?? colorScheme.primary.withValues(alpha: 0.82);
 
     // PdfViewerController.value זורק לפני שה-viewer מתחבר אליו.
     return AnimatedBuilder(
-      animation: controller,
+      animation: widget.controller,
       builder: (context, child) {
-        if (!controller.isReady) {
+        if (!widget.controller.isReady) {
           return const SizedBox.shrink();
         }
 
-        final bounds = scrollBoundsBuilder!(controller);
+        final bounds = widget.scrollBoundsBuilder!(widget.controller);
         if (bounds == null) {
           return const SizedBox.shrink();
         }
 
-        final visibleRect = controller.visibleRect;
+        final visibleRect = widget.controller.visibleRect;
         final visibleHeight = math.min(visibleRect.height, bounds.height);
         final scrollableExtent = math.max(bounds.height - visibleHeight, 0.0);
         final currentTop = (visibleRect.top - bounds.top)
@@ -96,7 +108,7 @@ class PdfScrollbar extends StatelessWidget {
         return Align(
           alignment: alignment,
           child: SizedBox(
-            width: trackThickness,
+            width: widget.trackThickness,
             height: double.infinity,
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -105,33 +117,54 @@ class PdfScrollbar extends StatelessWidget {
                   return const SizedBox.shrink();
                 }
 
+                if (scrollableExtent == 0) {
+                  return const SizedBox.shrink();
+                }
+
                 final rawThumbHeight = bounds.height <= 0
                     ? trackHeight
                     : trackHeight * (visibleHeight / bounds.height);
+                final computedThumbHeight =
+                    rawThumbHeight.clamp(widget.thumbMinSize, trackHeight);
+                final pageNumber = widget.controller.pageNumber ?? 1;
+                final useFrozenThumb =
+                    widget.freezeThumb && _lastThumbTop != null;
                 final thumbHeight =
-                    rawThumbHeight.clamp(thumbMinSize, trackHeight);
+                    useFrozenThumb ? _lastThumbHeight! : computedThumbHeight;
                 final maxThumbTop = math.max(trackHeight - thumbHeight, 0.0);
-                final thumbTop = scrollableExtent == 0
+                final computedThumbTop = scrollableExtent == 0
                     ? 0.0
                     : maxThumbTop * (currentTop / scrollableExtent);
+                final thumbTop = useFrozenThumb
+                    ? _lastThumbTop!.clamp(0.0, maxThumbTop).toDouble()
+                    : computedThumbTop;
+                final displayedPageNumber =
+                    useFrozenThumb ? _lastPageNumber ?? pageNumber : pageNumber;
+
+                if (!widget.freezeThumb || _lastThumbTop == null) {
+                  _lastThumbTop = computedThumbTop;
+                  _lastThumbHeight = computedThumbHeight;
+                  _lastPageNumber = pageNumber;
+                }
 
                 void jumpToThumbTop(double desiredThumbTop) {
+                  if (widget.freezeThumb) return;
                   if (maxThumbTop <= 0) return;
                   final normalizedTop =
                       (desiredThumbTop.clamp(0.0, maxThumbTop) / maxThumbTop)
                           .toDouble();
                   final targetTop =
                       bounds.top + normalizedTop * scrollableExtent;
-                  final zoom = controller.value.zoom;
+                  final zoom = widget.controller.value.zoom;
                   final targetCenter = Offset(
                     visibleRect.center.dx,
                     targetTop + visibleHeight / 2,
                   );
-                  controller.goTo(
-                    controller.calcMatrixFor(
+                  widget.controller.goTo(
+                    widget.controller.calcMatrixFor(
                       targetCenter,
                       zoom: zoom,
-                      viewSize: controller.viewSize,
+                      viewSize: widget.controller.viewSize,
                     ),
                   );
                 }
@@ -144,11 +177,11 @@ class PdfScrollbar extends StatelessWidget {
                   child: Stack(
                     children: [
                       Container(
-                        width: trackThickness,
+                        width: widget.trackThickness,
                         decoration: BoxDecoration(
                           color: resolvedTrackColor,
                           borderRadius:
-                              BorderRadius.circular(trackThickness / 2),
+                              BorderRadius.circular(widget.trackThickness / 2),
                         ),
                       ),
                       Positioned(
@@ -161,16 +194,16 @@ class PdfScrollbar extends StatelessWidget {
                             jumpToThumbTop(thumbTop + details.delta.dy);
                           },
                           child: Container(
-                            width: trackThickness,
+                            width: widget.trackThickness,
                             height: thumbHeight,
                             decoration: BoxDecoration(
                               color: resolvedThumbColor,
-                              borderRadius:
-                                  BorderRadius.circular(trackThickness / 2),
+                              borderRadius: BorderRadius.circular(
+                                  widget.trackThickness / 2),
                             ),
                             child: Center(
                               child: Text(
-                                (controller.pageNumber ?? 1).toString(),
+                                displayedPageNumber.toString(),
                                 style: TextStyle(
                                   color: colorScheme.onPrimary,
                                   fontSize: 11,

@@ -326,11 +326,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     // Check if auto-update is enabled
     if (context.read<SettingsBloc>().state.autoUpdateIndex) {
-      DataRepository.instance.library.then((library) {
-        if (!mounted || !context.mounted) return;
-        context.read<IndexingBloc>().add(StartIndexing(library));
-      });
+      _startIndexing(context);
     }
+  }
+
+  void _startIndexing(BuildContext context) {
+    DataRepository.instance.library.then((library) {
+      if (!mounted || !context.mounted) return;
+      context.read<IndexingBloc>().add(StartIndexing(library));
+    });
   }
 
   @override
@@ -690,6 +694,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
               // --- internal app logic ---
               _checkAndStartIndexing(context);
+              if (!previous.autoUpdateIndex && current.autoUpdateIndex) {
+                _startIndexing(context);
+              }
               _startupWorkGate.markIndexingDecisionResolved(
                 expectIndexing: current.autoUpdateIndex,
               );

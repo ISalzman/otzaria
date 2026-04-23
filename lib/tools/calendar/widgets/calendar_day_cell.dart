@@ -30,22 +30,21 @@ Color? getDayBackgroundColor(
 
 /// תא יום בלוח השנה
 Widget buildDayCell(
-  BuildContext context,
-  CalendarState state,
-  DateTime gregorianDate,
-  JewishDate jewishDate,
-  bool isFromOtherMonth,
-  VoidCallback onTap,
-  VoidCallback onAdd,
-  {List<String> additionalInfoLines = const []}
-) {
+    BuildContext context,
+    CalendarState state,
+    DateTime gregorianDate,
+    JewishDate jewishDate,
+    bool isFromOtherMonth,
+    VoidCallback onTap,
+    VoidCallback onAdd,
+    {List<String> additionalInfoLines = const []}) {
   final isSelected = state.selectedJewishDate.getJewishDayOfMonth() ==
           jewishDate.getJewishDayOfMonth() &&
       state.selectedJewishDate.getJewishMonth() ==
           jewishDate.getJewishMonth() &&
       state.selectedJewishDate.getJewishYear() == jewishDate.getJewishYear();
 
-  final today = DateTime.now();
+  final today = state.todayGregorianDate;
   final isToday = gregorianDate.day == today.day &&
       gregorianDate.month == today.month &&
       gregorianDate.year == today.year;
@@ -96,10 +95,10 @@ Widget buildDayCell(
                 builder: (context, constraints) {
                   final compactCell = constraints.maxHeight < 84;
                   final veryCompactCell = constraints.maxHeight < 64;
-                  final primaryFontSize = state.calendarType ==
-                          CalendarType.combined
-                      ? (compactCell ? 11.0 : 12.0)
-                      : (compactCell ? 12.0 : 14.0);
+                  final primaryFontSize =
+                      state.calendarType == CalendarType.combined
+                          ? (compactCell ? 11.0 : 12.0)
+                          : (compactCell ? 12.0 : 14.0);
                   final secondaryFontSize = compactCell ? 9.0 : 10.0;
                   final monthLabelFontSize = compactCell ? 7.0 : 8.0;
 
@@ -148,7 +147,8 @@ Widget buildDayCell(
                                     fontSize: primaryFontSize,
                                   ),
                                 ),
-                                if ((state.calendarType == CalendarType.hebrew ||
+                                if ((state.calendarType ==
+                                            CalendarType.hebrew ||
                                         state.calendarType ==
                                             CalendarType.combined) &&
                                     jewishDate.isJewishLeapYear() &&
@@ -175,9 +175,8 @@ Widget buildDayCell(
                             child: DayExtras(
                               date: gregorianDate,
                               inIsrael: state.inIsrael,
-                              maxVisibleItems: veryCompactCell
-                                  ? 0
-                                  : (compactCell ? 1 : 2),
+                              maxVisibleItems:
+                                  veryCompactCell ? 0 : (compactCell ? 1 : 2),
                               compact: compactCell,
                               additionalInfoLines: additionalInfoLines,
                             ),
@@ -254,8 +253,8 @@ class DayExtras extends StatelessWidget {
     }
 
     remainingSlots = maxVisibleItems - visibleItems.length;
-    for (final info in additionalInfoLines
-        .take(remainingSlots.clamp(0, maxVisibleItems))) {
+    for (final info
+        in additionalInfoLines.take(remainingSlots.clamp(0, maxVisibleItems))) {
       visibleItems.add(Text(
         info,
         maxLines: 1,

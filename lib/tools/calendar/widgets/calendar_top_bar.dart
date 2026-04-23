@@ -124,9 +124,11 @@ class _CalendarTopBarState extends State<CalendarTopBar> {
 
   Widget _buildDateText(BuildContext context) {
     final s = widget.state;
+    final showOhrPrefix = s.calendarView != CalendarView.week &&
+        shouldShowOhrPrefixForCalendarHeader(state: s);
     final heb = s.calendarView == CalendarView.week
         ? _formatWeekHebrewRange(s)
-        : '${formatHebrewDay(s.selectedJewishDate.getJewishDayOfMonth())} '
+        : '${showOhrPrefix ? 'אור ל' : ''}${formatHebrewDay(s.selectedJewishDate.getJewishDayOfMonth())} '
             '${getHebrewMonthNameFor(s.selectedJewishDate)} '
             '${numberToHebrewWithoutQuotes(s.selectedJewishDate.getJewishYear())}';
     final greg = s.calendarView == CalendarView.week
@@ -408,12 +410,10 @@ class _CalendarTopBarState extends State<CalendarTopBar> {
         return LayoutBuilder(
           builder: (context, constraints) {
             final isNarrow = constraints.maxWidth < _kTopBarNarrowBreakpoint;
-            final isMedium =
-                constraints.maxWidth >= _kTopBarNarrowBreakpoint &&
-                    constraints.maxWidth < _kTopBarMediumBreakpoint;
-            final isWide =
-                constraints.maxWidth >= _kTopBarMediumBreakpoint &&
-                    constraints.maxWidth < _kTopBarWideBreakpoint;
+            final isMedium = constraints.maxWidth >= _kTopBarNarrowBreakpoint &&
+                constraints.maxWidth < _kTopBarMediumBreakpoint;
+            final isWide = constraints.maxWidth >= _kTopBarMediumBreakpoint &&
+                constraints.maxWidth < _kTopBarWideBreakpoint;
 
             if (isNarrow) {
               final secondaryRow = Padding(

@@ -93,7 +93,8 @@ String removePunctuation(String text) {
           ch == ',' ||
           ch == '?' ||
           ch == '-' ||
-          ch == '—';
+          ch == '—' ||
+          ch == '–';
 
       if (parenDepth > 0 && (ch == ':' || ch == '.')) {
         buffer.write(ch);
@@ -235,6 +236,142 @@ List<String> generateFullPartialSpellingVariations(String word) {
   return variations.toList();
 }
 
+String _highlightWordSeparator({int maxIntermediateWords = 0}) {
+  const separator =
+      r'''(?:\s|[\u0591-\u05C7]|<[^>]*>|[.,:;!?'"״׳־\-–—()\[\]{}])+''';
+  if (maxIntermediateWords <= 0) {
+    return separator;
+  }
+
+  return '$separator(?:\\S+$separator){0,$maxIntermediateWords}';
+}
+
+int _maxSpacingValue(Map<String, String> spacingValues) {
+  var maxSpacing = 0;
+  for (final value in spacingValues.values) {
+    final spacing = int.tryParse(value) ?? 0;
+    if (spacing > maxSpacing) {
+      maxSpacing = spacing;
+    }
+  }
+  return maxSpacing;
+}
+
+String _highlightSeparatorForIndex(
+  Map<String, String> spacingValues,
+  int index,
+) {
+  final maxIntermediateWords =
+      int.tryParse(spacingValues['$index-${index + 1}'] ?? '') ??
+          _maxSpacingValue(spacingValues);
+  return _highlightWordSeparator(maxIntermediateWords: maxIntermediateWords);
+}
+
+class _HighlightMatch {
+  final Match match;
+  final List<_HighlightRange> ranges;
+
+  const _HighlightMatch(this.match, this.ranges);
+}
+
+class _HighlightRange {
+  final int start;
+  final int end;
+
+  const _HighlightRange(this.start, this.end);
+}
+
+bool _isHebrewMark(String char) {
+  return SearchRegexPatterns.vowelsAndCantillation.hasMatch(char);
+}
+
+bool _isSearchTokenChar(String char) {
+  return RegExp(r'[א-תA-Za-z0-9]').hasMatch(char);
+}
+
+bool _hasTokenBoundaryBefore(String text, int start) {
+  var index = start - 1;
+  while (index >= 0 && _isHebrewMark(text[index])) {
+    index--;
+  }
+
+  return index < 0 || !_isSearchTokenChar(text[index]);
+}
+
+bool _hasTokenBoundaryAfter(String text, int end) {
+  var index = end;
+  while (index < text.length && _isHebrewMark(text[index])) {
+    index++;
+  }
+
+  return index >= text.length || !_isSearchTokenChar(text[index]);
+}
+
+List<_HighlightRange>? _collectMatchedSearchWordRanges(
+  String fullText,
+  String matchedText,
+  int matchStart,
+  List<List<String>> patternGroups,
+  List<bool> requireTokenBoundaries,
+) {
+  final ranges = <_HighlightRange>[];
+  var searchOffset = 0;
+
+  for (var i = 0; i < patternGroups.length; i++) {
+    final group = patternGroups[i];
+    final wordPattern =
+        group.length == 1 ? group.first : '(?:${group.join('|')})';
+    final wordRegex = RegExp(wordPattern, caseSensitive: false);
+    final searchText = matchedText.substring(searchOffset);
+    final wordMatch = wordRegex.firstMatch(searchText);
+    if (wordMatch == null) {
+      return null;
+    }
+
+    final wordStart = searchOffset + wordMatch.start;
+    final wordEnd = searchOffset + wordMatch.end;
+    final absoluteStart = matchStart + wordStart;
+    final absoluteEnd = matchStart + wordEnd;
+
+    if (requireTokenBoundaries[i] &&
+        (!_hasTokenBoundaryBefore(fullText, absoluteStart) ||
+            !_hasTokenBoundaryAfter(fullText, absoluteEnd))) {
+      return null;
+    }
+
+    ranges.add(_HighlightRange(wordStart, wordEnd));
+    searchOffset = wordEnd;
+  }
+
+  return ranges;
+}
+
+String _highlightMatchedSearchWords(
+  String matchedText,
+  List<_HighlightRange> ranges,
+  String style,
+) {
+  final result = StringBuffer();
+  var currentPosition = 0;
+
+  for (final range in ranges) {
+    if (range.start > currentPosition) {
+      result.write(matchedText.substring(currentPosition, range.start));
+    }
+    result.write('<span style="$style">');
+    result.write(matchedText.substring(range.start, range.end));
+    result.write('</span>');
+
+    currentPosition = range.end;
+  }
+
+  if (currentPosition < matchedText.length) {
+    result.write(matchedText.substring(currentPosition));
+  }
+
+  return result.toString();
+}
+
 String highLight(
   String data,
   String searchQuery, {
@@ -257,13 +394,24 @@ String highLight(
 
   // בניית קבוצת patterns לכל מילה בנפרד (כולל חלופות לכל מיקום)
   final patternGroups = <List<String>>[];
+  final requireTokenBoundaries = <bool>[];
   for (int i = 0; i < originalWords.length; i++) {
     final word = originalWords[i];
     final wordKey = '${word}_$i';
 
     // בדיקת אפשרויות החיפוש למילה הזו
     final wordOptions = searchOptions[wordKey] ?? {};
+    final hasPrefix = wordOptions['קידומות'] == true;
+    final hasSuffix = wordOptions['סיומות'] == true;
+    final hasGrammaticalPrefixes = wordOptions['קידומות דקדוקיות'] == true;
+    final hasGrammaticalSuffixes = wordOptions['סיומות דקדוקיות'] == true;
     final hasFullPartialSpelling = wordOptions['כתיב מלא/חסר'] == true;
+    final hasPartialWord = wordOptions['חלק ממילה'] == true;
+    final hasWordExpansion = hasPrefix ||
+        hasSuffix ||
+        hasGrammaticalPrefixes ||
+        hasGrammaticalSuffixes ||
+        hasPartialWord;
 
     final wordTerms = <String>[];
     if (hasFullPartialSpelling) {
@@ -296,6 +444,7 @@ String highLight(
     }).toList();
 
     patternGroups.add(wordPatterns);
+    requireTokenBoundaries.add(!hasWordExpansion);
   }
 
   if (patternGroups.isEmpty) return data;
@@ -310,14 +459,34 @@ String highLight(
     combinedPattern =
         patterns.length == 1 ? patterns.first : '(?:${patterns.join('|')})';
   } else {
-    const wordSeparator = r'(?:\s|[\u0591-\u05C7]|<[^>]*>)+';
     final wordPatternStrings = patternGroups.map((group) {
       return group.length == 1 ? group.first : '(?:${group.join('|')})';
     }).toList();
-    combinedPattern = wordPatternStrings.join(wordSeparator);
+    final patternParts = <String>[];
+    for (var i = 0; i < wordPatternStrings.length; i++) {
+      patternParts.add(wordPatternStrings[i]);
+      if (i < wordPatternStrings.length - 1) {
+        patternParts.add(_highlightSeparatorForIndex(spacingValues, i));
+      }
+    }
+    combinedPattern = patternParts.join();
   }
   final regex = RegExp(combinedPattern, caseSensitive: false);
-  final matches = regex.allMatches(data).toList();
+  final matches = regex
+      .allMatches(data)
+      .map((match) {
+        final matchedText = match.group(0)!;
+        final ranges = _collectMatchedSearchWordRanges(
+          data,
+          matchedText,
+          match.start,
+          patternGroups,
+          requireTokenBoundaries,
+        );
+        return ranges == null ? null : _HighlightMatch(match, ranges);
+      })
+      .whereType<_HighlightMatch>()
+      .toList();
 
   if (matches.isEmpty) return data;
 
@@ -326,9 +495,14 @@ String highLight(
     String result = data;
     int offset = 0;
 
-    for (final match in matches) {
+    for (final highlightMatch in matches) {
+      final match = highlightMatch.match;
       final matchedText = match.group(0)!;
-      final replacement = '<span style="color: red">$matchedText</span>';
+      final replacement = _highlightMatchedSearchWords(
+        matchedText,
+        highlightMatch.ranges,
+        'color: red',
+      );
 
       final start = match.start + offset;
       final end = match.end + offset;
@@ -345,13 +519,17 @@ String highLight(
   int offset = 0;
 
   for (int i = 0; i < matches.length; i++) {
-    final match = matches[i];
+    final highlightMatch = matches[i];
+    final match = highlightMatch.match;
     final matchedText = match.group(0)!;
     final color = i == currentIndex ? 'blue' : 'red';
     final backgroundColor =
         i == currentIndex ? 'background-color: yellow;' : '';
-    final replacement =
-        '<span style="color: $color; $backgroundColor">$matchedText</span>';
+    final replacement = _highlightMatchedSearchWords(
+      matchedText,
+      highlightMatch.ranges,
+      'color: $color; $backgroundColor',
+    );
 
     final start = match.start + offset;
     final end = match.end + offset;
