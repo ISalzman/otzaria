@@ -82,9 +82,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   SearchMode _searchMode = SearchMode.exact;
   bool _typoToleranceEnabled = false;
   bool _searchWithNikud = false;
-  bool _searchInCurrentSection = false;
-  SectionBounds? _currentSectionBounds;
-  List<int> _lastVisibleIndices = [];
   int? _selectedSearchResultIndex;
 
   bool get _isSimpleSearch =>
@@ -180,7 +177,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeBookPath();
-      _updateCurrentSection();
     });
   }
 
@@ -272,29 +268,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     _searchTextUpdated();
   }
 
-  void _updateCurrentSection() {
-    if (!mounted) return;
-    final state = context.read<TextBookBloc>().state;
-    if (state is! TextBookLoaded) return;
-
-    // Check if visibleIndices changed to avoid unnecessary recalculation
-    if (_lastVisibleIndices.isNotEmpty &&
-        listEquals(_lastVisibleIndices, state.visibleIndices)) {
-      return;
-    }
-
-    _lastVisibleIndices = List.from(state.visibleIndices);
-
-    final bounds = detectCurrentSection(
-      content: _content,
-      visibleIndices: state.visibleIndices,
-    );
-
-    setState(() {
-      _currentSectionBounds = bounds;
-    });
-  }
-
   Future<void> _searchTextUpdated() async {
     String query = searchTextController.text.trim();
     if (query.isEmpty ||
@@ -319,7 +292,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       final results = await searchInContent(
         content: _content,
         query: query,
-        bounds: _searchInCurrentSection ? _currentSectionBounds : null,
       );
 
       if (mounted) {
@@ -499,15 +471,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       items.add(_GroupedResultItem.result(r, resultListIndex));
     }
 
-    return BlocListener<TextBookBloc, TextBookState>(
-      listenWhen: (prev, current) =>
-          prev is TextBookLoaded &&
-          current is TextBookLoaded &&
-          !listEquals(prev.visibleIndices, current.visibleIndices),
-      listener: (context, state) {
-        _updateCurrentSection();
-      },
-      child: SearchPaneBase(
+    return SearchPaneBase(
         searchController: searchTextController,
         focusNode: widget.focusNode,
         progressWidget:
@@ -676,7 +640,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             _searchMode = SearchMode.exact;
             _typoToleranceEnabled = false;
             _searchWithNikud = false;
-            _searchInCurrentSection = false;
           });
           context.read<TextBookBloc>().add(
                 const UpdateSearchText(
@@ -690,38 +653,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
               );
         },
         additionalActions: [
-          // כפתור "כל הספר"
-          _buildScopeButton(
-            message: 'חיפוש בכל הספר',
-            icon: FluentIcons.book_24_regular,
-            isActive: !_searchInCurrentSection,
-            onTap: () {
-              setState(() {
-                _searchInCurrentSection = false;
-              });
-              _searchTextUpdated();
-            },
-          ),
-          const SizedBox(width: 4),
-          // כפתור "כותרת נוכחית"
-          _buildScopeButton(
-            message: 'חיפוש בקטע נוכחי',
-            icon: FluentIcons.text_align_right_24_regular,
-            isActive: _searchInCurrentSection,
-            onTap: () {
-              setState(() {
-                _searchInCurrentSection = true;
-              });
-              _updateCurrentSection(); // עדכן את הקטע הנוכחי
-              // Wait for the next frame to ensure _currentSectionBounds is updated
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _searchTextUpdated();
-              });
-            },
-          ),
-          // כפתור חיפוש עם ניקוד (רק אם יש ניקוד בטקסט)
           if (utils.hasNikud(searchTextController.text)) ...[
-            const SizedBox(width: 4),
             NikudSearchButton(
               isActive: _searchWithNikud,
               onPressed: () {
@@ -789,8 +721,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             ),
           );
         },
-      ),
-    );
+      );
   }
 
   Widget _buildSearchResultNavigationBar() {
@@ -1089,43 +1020,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     final prefix = start > 0 ? '... ' : '';
     final suffix = end < len ? ' ...' : '';
     return '$prefix${text.substring(start, end)}$suffix';
-  }
-
-  /// בונה כפתור בחירת טווח חיפוש (כל הספר / קטע נוכחי)
-  Widget _buildScopeButton({
-    required String message,
-    required IconData icon,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: message,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: isActive ? colorScheme.primaryContainer : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: isActive
-                  ? colorScheme.primary
-                  : colorScheme.outline.withValues(alpha: 0.5),
-              width: 1.5,
-            ),
-          ),
-          child: Icon(
-            icon,
-            size: 16,
-            color: isActive
-                ? colorScheme.primary
-                : colorScheme.onSurface.withValues(alpha: 0.6),
-          ),
-        ),
-      ),
-    );
   }
 
   @override
