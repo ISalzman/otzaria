@@ -41,6 +41,7 @@ class _CommentaryListState extends State<CommentaryList> {
   final ValueNotifier<int> _currentSearchIndexNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> _totalSearchResultsNotifier = ValueNotifier<int>(0);
   final Map<int, int> _searchResultsPerItem = {};
+  String _lastIndexesKey = '';
 
   int _getItemSearchIndex(int itemIndex) {
     int cumulativeIndex = 0;
@@ -285,6 +286,22 @@ class _CommentaryListState extends State<CommentaryList> {
 
                 // יצירת מפתח ייחודי לאינדקסים הנוכחיים
                 final indexesKey = currentIndexes.join(',');
+
+                // signature שכולל גם מפרשים פעילים וזהות state.links —
+                // שינוי בכל אחד מהם משנה את ה-items
+                final listSignature =
+                    '$indexesKey|${state.activeCommentators.join(",")}|${identityHashCode(state.links)}';
+
+                // ניקוי ספירות חיפוש כשהקטע או המפרשים משתנים
+                if (_lastIndexesKey != listSignature) {
+                  _lastIndexesKey = listSignature;
+                  _searchResultsPerItem.clear();
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    _totalSearchResultsNotifier.value = 0;
+                    _currentSearchIndexNotifier.value = 0;
+                  });
+                }
 
                 return ProgressiveScroll(
                   scrollController: scrollController,
