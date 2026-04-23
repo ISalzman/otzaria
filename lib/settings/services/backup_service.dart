@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:hive_ce/hive.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:logging/logging.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
+import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/history/history_repository.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/workspaces/workspace_repository.dart';
@@ -17,19 +19,6 @@ import 'package:otzaria/core/app_paths.dart';
 class BackupService {
   static final Logger _logger = Logger('BackupService');
   static const String backupFolderName = 'backups';
-
-  // All Shamor Zachor keys stored in Hive
-  static const _shamorZachorStringKeys = [
-    'sz:progress_data',
-    'sz:completion_dates',
-    'sz:last_accessed',
-    'sz:tracked_books',
-    'sz:progress_by_id',
-    'sz:completion_dates_by_id',
-  ];
-  static const _shamorZachorBoolKeys = [
-    'sz:migration_completed',
-  ];
 
   /// Get the backup directory path
   static Future<String> getBackupDirectory() async {
@@ -282,20 +271,15 @@ class BackupService {
     };
   }
 
-  /// Backup Shamor Zachor data - backs up all known sz: keys
+  /// Backup Shamor Zachor data - backs up all sz: keys found in Hive
   static Future<Map<String, dynamic>> _backupShamorZachor() async {
+    final box = Hive.box<dynamic>(HiveCache.keyName);
     final shamorZachorData = <String, dynamic>{};
 
-    for (final key in _shamorZachorStringKeys) {
-      final value = Settings.getValue<String>(key);
+    for (final key in box.keys.where((k) => k.toString().startsWith('sz:'))) {
+      final value = box.get(key);
       if (value != null) {
-        shamorZachorData[key] = value;
-      }
-    }
-    for (final key in _shamorZachorBoolKeys) {
-      final value = Settings.getValue<bool>(key);
-      if (value != null) {
-        shamorZachorData[key] = value;
+        shamorZachorData[key.toString()] = value;
       }
     }
 
@@ -594,21 +578,15 @@ class BackupService {
   static Future<void> _restoreShamorZachor(
     Map<String, dynamic> shamorZachorData,
   ) async {
+    final box = Hive.box<dynamic>(HiveCache.keyName);
+
     for (final entry in shamorZachorData.entries) {
       final key = entry.key;
       final value = entry.value;
 
       if (value == null) continue;
 
-      if (value is String) {
-        await Settings.setValue<String>(key, value);
-      } else if (value is int) {
-        await Settings.setValue<int>(key, value);
-      } else if (value is double) {
-        await Settings.setValue<double>(key, value);
-      } else if (value is bool) {
-        await Settings.setValue<bool>(key, value);
-      }
+      await box.put(key, value);
     }
   }
 
