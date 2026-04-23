@@ -282,7 +282,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       });
     }
 
-    // 4. ביצוע הגלילה בשני שלבים בתוך Callback
+    // 4. ביצוע הגלילה בתוך Callback
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
 
@@ -292,38 +292,38 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         if (!mounted) return;
       }
 
-      // שלב א': גלילה גסה לקבוצה (כותרת הספר) כדי להבטיח שהפריטים ירונדרו
-      if (_itemScrollController.isAttached) {
-        _itemScrollController.scrollTo(
-          index: targetGroupIndex,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-          alignment: 0.05, // מביא את הכותרת לראש העמוד
-        );
-      }
-
-      // המתנה לסיום הגלילה הגסה ורינדור הפריטים
-      await Future.delayed(const Duration(milliseconds: 350));
-      // תיקון שגיאת לינט: בדיקת mounted אחרי await
-      if (!mounted) return;
-
-      // שלב ב': גלילה עדינה לפריט הספציפי באמצעות חישוב אופסט ידני
       final linkKey = _getLinkKey(targetLink!);
       final itemKey = _itemKeys[linkKey];
       final BuildContext? itemContext = itemKey?.currentContext;
 
-      // תיקון שגיאת לינט: בדיקה ש-itemContext עצמו mounted
-      if (itemContext != null && itemContext.mounted) {
+      // בודק אם הפריט כבר בעץ הרינדור (לא נדרשת גלילה גסה להכניסו לזיכרון)
+      final bool itemInRenderTree = itemContext != null &&
+          itemContext.mounted &&
+          itemContext.findRenderObject() is RenderBox;
+
+      // שלב א': גלילה גסה לקבוצה – רק אם הפריט לא בעץ הרינדור
+      if (!itemInRenderTree) {
+        if (_itemScrollController.isAttached) {
+          _itemScrollController.scrollTo(
+            index: targetGroupIndex,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+            alignment: 0.05,
+          );
+        }
+        await Future.delayed(const Duration(milliseconds: 350));
+        if (!mounted) return;
+      }
+
+      // שלב ב': גלילה עדינה לפריט הספציפי
+      final BuildContext? ctx = itemKey?.currentContext;
+      if (ctx != null && ctx.mounted) {
         try {
-          // מציאת ה-RenderObject של הפריט
-          final RenderObject? itemRenderObj = itemContext.findRenderObject();
+          final RenderObject? itemRenderObj = ctx.findRenderObject();
           if (itemRenderObj is! RenderBox) return;
           final RenderBox itemBox = itemRenderObj;
 
-          // תיקון שגיאת לינט: שימוש במשתנה שאינו nullable
-          final ScrollableState scrollable = Scrollable.of(itemContext);
-
-          // תיקון שגיאת לינט: בדיקת mounted ל-scrollable לפני גישה ל-context שלו
+          final ScrollableState scrollable = Scrollable.of(ctx);
           if (!scrollable.mounted) return;
 
           final RenderObject? viewportRenderObj =
@@ -331,21 +331,16 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           if (viewportRenderObj is! RenderBox) return;
           final RenderBox viewportBox = viewportRenderObj;
 
-          // חישוב המיקום של הפריט ביחס ל-Viewport של הרשימה
           final Offset itemOffset =
               itemBox.localToGlobal(Offset.zero, ancestor: viewportBox);
 
-          // אנו רוצים שהפריט יהיה בערך ב-10% מהחלק העליון של הרשימה
+          // מביא את הפריט ל-10% מראש הרשימה
           final double targetY = viewportBox.size.height * 0.1;
-          final double currentY = itemOffset.dy;
+          final double scrollDelta = itemOffset.dy - targetY;
 
-          // חישוב הדלתא לגלילה
-          final double scrollDelta = currentY - targetY;
-
-          // אם הדלתא משמעותית, נבצע גלילה מתקנת
           if (scrollDelta.abs() > 10) {
             scrollController.animateScroll(
-                offset: scrollDelta, // גלילה יחסית
+                offset: scrollDelta,
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeInOut);
           }
@@ -596,6 +591,28 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         (key, value) => !currentLinkKeys.contains(key));
                     for (final key in currentLinkKeys) {
                       _itemKeys.putIfAbsent(key, () => GlobalKey());
+                    }
+
+                    // ניקוי ספירות חיפוש מקישורים שאינם בקטע הנוכחי
+                    // (מניעת ספירה מנופחת ממעבר בין קטעים)
+                    final staleSearchKeys = _searchResultsPerLink.keys
+                        .where((key) => !currentLinkKeys.contains(key))
+                        .toList();
+                    if (staleSearchKeys.isNotEmpty) {
+                      for (final key in staleSearchKeys) {
+                        _searchResultsPerLink.remove(key);
+                      }
+                      _pendingCounts
+                          .removeWhere((key, _) => !currentLinkKeys.contains(key));
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        final newTotal = _searchResultsPerLink.values
+                            .fold(0, (sum, c) => sum + c);
+                        _totalSearchResultsNotifier.value = newTotal;
+                        if (_currentSearchIndexNotifier.value >= newTotal) {
+                          _currentSearchIndexNotifier.value = 0;
+                        }
+                      });
                     }
 
                     _expansionStates.removeWhere((key, value) => !data.any(
