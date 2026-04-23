@@ -108,8 +108,12 @@ List<Link> _computeVisibleLinks({
   return visibleLinks;
 }
 
-Future<({List<Link> links, Map<int, List<Link>> linksByLine, List<Link> visibleLinks})>
-    _processLinksForState({
+Future<
+    ({
+      List<Link> links,
+      Map<int, List<Link>> linksByLine,
+      List<Link> visibleLinks
+    })> _processLinksForState({
   required List<Link> existingLinks,
   required List<Link> incomingLinks,
   required bool replaceExisting,
@@ -357,6 +361,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     Map<int, List<String>> alternativeWords = {};
     Map<String, String> spacingValues = {};
     SearchMode searchMode = SearchMode.exact;
+    bool typoToleranceEnabled = false;
     bool showLeftPane;
     List<String> commentators;
     late final List<int> visibleIndices;
@@ -378,6 +383,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       alternativeWords = currentState.alternativeWords;
       spacingValues = currentState.spacingValues;
       searchMode = currentState.searchMode;
+      typoToleranceEnabled = currentState.typoToleranceEnabled;
       showLeftPane = currentState.showLeftPane;
       commentators = currentState.activeCommentators;
       visibleIndices = currentState.visibleIndices;
@@ -395,6 +401,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       alternativeWords = initial.alternativeWords;
       spacingValues = initial.spacingValues;
       searchMode = initial.searchMode;
+      typoToleranceEnabled = initial.typoToleranceEnabled;
       showLeftPane = initial.showLeftPane;
       commentators = initial.commentators;
       visibleIndices = [initial.index < 0 ? 0 : initial.index];
@@ -547,11 +554,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         tableOfContents: tableOfContents,
         fontSize: event.fontSize,
         showLeftPane: event.forceCloseLeftPane
-          ? false
-          : resolveInitialReadingLeftPaneVisibility(
-            explicitOpen: showLeftPane,
-            hasSearchText: searchText.isNotEmpty,
-            ),
+            ? false
+            : resolveInitialReadingLeftPaneVisibility(
+                explicitOpen: showLeftPane,
+                hasSearchText: searchText.isNotEmpty,
+              ),
         showSplitView: event.showSplitView,
         showPageShapeView: initialShowPageShapeView,
         activeCommentators: commentators,
@@ -561,12 +568,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             : removeNikud,
         isTanach: isTanach,
         visibleIndices: visibleIndices,
-        pinLeftPane: preservedPinLeftPane ?? (Settings.getValue<bool>('key-pin-sidebar') ?? false),
+        pinLeftPane: preservedPinLeftPane ??
+            (Settings.getValue<bool>('key-pin-sidebar') ?? false),
         searchText: searchText,
         searchOptions: searchOptions,
         alternativeWords: alternativeWords,
         spacingValues: spacingValues,
         searchMode: searchMode,
+        typoToleranceEnabled: typoToleranceEnabled,
         scrollController: scrollController,
         positionsListener: positionsListener,
         currentTitle: currentTitle,
@@ -762,8 +771,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       );
       emit(updatedState);
       if (_shouldLoadLinksForState(updatedState)) {
-        final targetIndices =
-            _targetIndicesForCommentaryRefresh(updatedState);
+        final targetIndices = _targetIndicesForCommentaryRefresh(updatedState);
         _loadLinksInBackground(
           updatedState.book,
           targetIndices,
@@ -871,7 +879,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           visibleIndices: event.visibleIndecies,
           currentTitle: newTitle,
           selectedIndex: index,
-          clearSelectedIndex: index == null && currentState.selectedIndex != null,
+          clearSelectedIndex:
+              index == null && currentState.selectedIndex != null,
           visibleLinks: visibleLinks,
         ));
 
@@ -1156,6 +1165,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final currentState = state as TextBookLoaded;
       emit(currentState.copyWith(
         searchText: event.text,
+        searchOptions: event.searchOptions,
+        alternativeWords: event.alternativeWords,
+        spacingValues: event.spacingValues,
+        searchMode: event.searchMode,
+        typoToleranceEnabled: event.typoToleranceEnabled,
         selectedIndex: currentState.selectedIndex,
       ));
     }
@@ -1200,7 +1214,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         selectedTextStart: event.start,
         selectedTextEnd: event.end,
       ));
-
     }
   }
 
@@ -1538,8 +1551,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     } else {
       final runtimeState = state;
       if (runtimeState is TextBookLoaded) {
-      targetBookTitles = await _resolveTargetBookTitlesForLinks(runtimeState);
-      targetBookTitlesSignature = _targetBookTitlesSignature(targetBookTitles);
+        targetBookTitles = await _resolveTargetBookTitlesForLinks(runtimeState);
+        targetBookTitlesSignature =
+            _targetBookTitlesSignature(targetBookTitles);
       }
     }
 

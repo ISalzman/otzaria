@@ -16,8 +16,13 @@ void main() {
       final result = highLight(text, 'כל היום');
       // המילה "היה" לא אמורה להיות מודגשת
       expect(result, isNot(contains('<span style="color: red">היה')));
-      // הרצף "כל היום" אמור להיות מודגש כיחידה אחת
-      expect(result, contains('<span style="color: red">כל היום</span>'));
+      // רק מילות החיפוש עצמן אמורות להיות מודגשות
+      expect(
+        result,
+        contains(
+          '<span style="color: red">כל</span> <span style="color: red">היום</span>',
+        ),
+      );
       // "היה", "זה", "טוב" לא אמורים להיות מודגשים
       expect(result, isNot(contains('<span style="color: red">טוב')));
     });
@@ -28,6 +33,92 @@ void main() {
       final result = highLight(text, 'כל היום');
       // אין מופע של "כל היום" יחד - לכן לא אמור להיות highlighting כלל
       expect(result, isNot(contains('<span')));
+    });
+
+    test('single word - does not highlight inside another word by default', () {
+      const text = 'ויאמר משה';
+      final result = highLight(text, 'אמר');
+
+      expect(result, isNot(contains('<span')));
+    });
+
+    test('single word - can highlight inside another word when enabled', () {
+      const text = 'ויאמר משה';
+      final result = highLight(
+        text,
+        'אמר',
+        searchOptions: const {
+          'אמר_0': {'חלק ממילה': true},
+        },
+      );
+
+      expect(result, contains('<span style="color: red">אמר</span>'));
+    });
+
+    test('multi-word query with spacing - highlights spaced phrase', () {
+      const text = 'היה זה כל דבר היום טוב';
+      final result = highLight(
+        text,
+        'כל היום',
+        spacingValues: const {'0-1': '1'},
+      );
+
+      expect(
+        result,
+        contains(
+          '<span style="color: red">כל</span> דבר <span style="color: red">היום</span>',
+        ),
+      );
+      expect(result, isNot(contains('<span style="color: red">דבר</span>')));
+    });
+
+    test('multi-word query with spacing - respects spacing limit', () {
+      const text = 'היה זה כל דבר נוסף היום טוב';
+      final result = highLight(
+        text,
+        'כל היום',
+        spacingValues: const {'0-1': '1'},
+      );
+
+      expect(result, isNot(contains('<span')));
+    });
+
+    test('multi-word query with spacing - ignores punctuation between words',
+        () {
+      const text = 'אמר ליה רבי יוחנן: הוא אפילו תינוקות';
+      final result = highLight(
+        text,
+        'אמר רבי יוחנן הוא',
+        spacingValues: const {'0-1': '1'},
+      );
+
+      expect(
+        result,
+        contains(
+          '<span style="color: red">אמר</span> ליה <span style="color: red">רבי</span> <span style="color: red">יוחנן</span>: <span style="color: red">הוא</span>',
+        ),
+      );
+      expect(result, isNot(contains('<span style="color: red">ליה</span>')));
+    });
+
+    test(
+        'multi-word query with one spacing value - applies max spacing to all gaps',
+        () {
+      const text = 'אמר רבי שמעון בן לקיש';
+      final result = highLight(
+        text,
+        'אמר שמעון לקיש',
+        spacingValues: const {'0-1': '1'},
+      );
+
+      expect(
+        result,
+        contains(
+          '<span style="color: red">אמר</span> רבי <span style="color: red">שמעון</span> בן <span style="color: red">לקיש</span>',
+        ),
+      );
+      expect(result, isNot(contains('<span style="color: red">רבי</span>')));
+      expect(result, isNot(contains('<span style="color: red">בן</span>')));
     });
 
     test('single word with nikud in text - highlights correctly', () {
