@@ -935,7 +935,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     setState(() {
       _expandedCategories.clear();
     });
-    context.read<LibraryBloc>().add(LoadLibrary());
+    if (state.library != null) {
+      context.read<LibraryBloc>().add(NavigateToCategory(state.library!));
+    }
     context.read<FocusRepository>().librarySearchController.clear();
     _update(
       context,
