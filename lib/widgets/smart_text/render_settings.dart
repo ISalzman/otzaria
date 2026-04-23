@@ -1,6 +1,90 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 
+bool _searchOptionsEquals(
+  Map<String, Map<String, bool>> first,
+  Map<String, Map<String, bool>> second,
+) {
+  if (identical(first, second)) return true;
+  if (first.length != second.length) return false;
+
+  for (final key in first.keys) {
+    final firstValue = first[key];
+    final secondValue = second[key];
+    if (firstValue == null || secondValue == null) return false;
+    if (firstValue.length != secondValue.length) return false;
+
+    for (final optionKey in firstValue.keys) {
+      if (firstValue[optionKey] != secondValue[optionKey]) return false;
+    }
+  }
+
+  return true;
+}
+
+bool _alternativeWordsEquals(
+  Map<int, List<String>> first,
+  Map<int, List<String>> second,
+) {
+  if (identical(first, second)) return true;
+  if (first.length != second.length) return false;
+
+  for (final key in first.keys) {
+    final firstValue = first[key];
+    final secondValue = second[key];
+    if (firstValue == null || secondValue == null) return false;
+    if (firstValue.length != secondValue.length) return false;
+
+    for (var i = 0; i < firstValue.length; i++) {
+      if (firstValue[i] != secondValue[i]) return false;
+    }
+  }
+
+  return true;
+}
+
+bool _stringMapEquals(
+  Map<String, String> first,
+  Map<String, String> second,
+) {
+  if (identical(first, second)) return true;
+  if (first.length != second.length) return false;
+
+  for (final key in first.keys) {
+    if (first[key] != second[key]) return false;
+  }
+
+  return true;
+}
+
+int _searchOptionsHash(Map<String, Map<String, bool>> options) {
+  final keys = options.keys.toList()..sort();
+  return Object.hashAll(
+    keys.map((key) {
+      final inner = options[key]!;
+      final innerKeys = inner.keys.toList()..sort();
+      return Object.hash(
+        key,
+        Object.hashAll(
+          innerKeys.map((innerKey) => Object.hash(innerKey, inner[innerKey])),
+        ),
+      );
+    }),
+  );
+}
+
+int _alternativeWordsHash(Map<int, List<String>> words) {
+  final keys = words.keys.toList()..sort();
+  return Object.hashAll(
+    keys.map((key) => Object.hash(key, Object.hashAll(words[key]!))),
+  );
+}
+
+int _stringMapHash(Map<String, String> values) {
+  final keys = values.keys.toList()..sort();
+  return Object.hashAll(keys.map((key) => Object.hash(key, values[key])));
+}
+
 /// הגדרות לרינדור טקסט
 ///
 /// מחלקה זו מכילה את כל הפרמטרים הדרושים לעיבוד והצגת טקסט,
@@ -129,6 +213,9 @@ class RenderSettings {
         replaceHolyNames == other.replaceHolyNames &&
         searchText == other.searchText &&
         currentSearchIndex == other.currentSearchIndex &&
+        _searchOptionsEquals(searchOptions, other.searchOptions) &&
+        _alternativeWordsEquals(alternativeWords, other.alternativeWords) &&
+        _stringMapEquals(spacingValues, other.spacingValues) &&
         isFuzzySearch == other.isFuzzySearch &&
         searchMode == other.searchMode &&
         fontSize == other.fontSize &&
@@ -148,6 +235,9 @@ class RenderSettings {
       replaceHolyNames,
       searchText,
       currentSearchIndex,
+      _searchOptionsHash(searchOptions),
+      _alternativeWordsHash(alternativeWords),
+      _stringMapHash(spacingValues),
       isFuzzySearch,
       searchMode,
       fontSize,

@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 
 sealed class TextBookEvent extends Equatable {
   const TextBookEvent();
@@ -27,7 +28,8 @@ class LoadContent extends TextBookEvent {
     this.preserveState = false, // Default to false for backward compatibility
     this.loadCommentators = true, // Default to true for backward compatibility
     this.forceCloseLeftPane = false, // Default to false
-    this.preserveRemoveNikud = false, // Default to false for backward compatibility
+    this.preserveRemoveNikud =
+        false, // Default to false for backward compatibility
   });
 
   @override
@@ -161,11 +163,30 @@ class TogglePinLeftPane extends TextBookEvent {
 
 class UpdateSearchText extends TextBookEvent {
   final String text;
+  final Map<String, Map<String, bool>>? searchOptions;
+  final Map<int, List<String>>? alternativeWords;
+  final Map<String, String>? spacingValues;
+  final SearchMode? searchMode;
+  final bool? typoToleranceEnabled;
 
-  const UpdateSearchText(this.text);
+  const UpdateSearchText(
+    this.text, {
+    this.searchOptions,
+    this.alternativeWords,
+    this.spacingValues,
+    this.searchMode,
+    this.typoToleranceEnabled,
+  });
 
   @override
-  List<Object?> get props => [text];
+  List<Object?> get props => [
+        text,
+        searchOptions,
+        alternativeWords,
+        spacingValues,
+        searchMode,
+        typoToleranceEnabled,
+      ];
 }
 
 class ApplyFullBookContent extends TextBookEvent {

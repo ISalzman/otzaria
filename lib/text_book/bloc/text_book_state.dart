@@ -6,6 +6,33 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 
+String _searchOptionsSignature(Map<String, Map<String, bool>> options) {
+  if (options.isEmpty) return '';
+
+  final keys = options.keys.toList()..sort();
+  return keys.map((key) {
+    final inner = options[key]!;
+    final innerKeys = inner.keys.toList()..sort();
+    final innerSignature =
+        innerKeys.map((innerKey) => '$innerKey=${inner[innerKey]}').join(',');
+    return '$key:{$innerSignature}';
+  }).join('|');
+}
+
+String _alternativeWordsSignature(Map<int, List<String>> words) {
+  if (words.isEmpty) return '';
+
+  final keys = words.keys.toList()..sort();
+  return keys.map((key) => '$key:${words[key]!.join(',')}').join('|');
+}
+
+String _spacingValuesSignature(Map<String, String> values) {
+  if (values.isEmpty) return '';
+
+  final keys = values.keys.toList()..sort();
+  return keys.map((key) => '$key=${values[key]}').join('|');
+}
+
 abstract class TextBookState extends Equatable {
   final TextBook book;
   final int index;
@@ -56,8 +83,17 @@ class TextBookInitial extends TextBookState {
   }) : splitedView = splitedView ?? false; // ברירת מחדל: מפרשים מתחת
 
   @override
-  List<Object?> get props =>
-      [book.title, searchText, splitedView, showPageShapeView];
+  List<Object?> get props => [
+        book.title,
+        searchText,
+        _searchOptionsSignature(searchOptions),
+        _alternativeWordsSignature(alternativeWords),
+        _spacingValuesSignature(spacingValues),
+        searchMode,
+        typoToleranceEnabled,
+        splitedView,
+        showPageShapeView,
+      ];
 }
 
 class TextBookLoading extends TextBookState {
@@ -101,6 +137,7 @@ class TextBookLoaded extends TextBookState {
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
+  final bool typoToleranceEnabled;
   final String? currentTitle;
   final String? selectedTextForNote;
   final int? selectedTextStart;
@@ -148,6 +185,7 @@ class TextBookLoaded extends TextBookState {
     this.alternativeWords = const {},
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
+    this.typoToleranceEnabled = false,
     required this.scrollController,
     required this.positionsListener,
     this.currentTitle,
@@ -188,6 +226,7 @@ class TextBookLoaded extends TextBookState {
       removeNikud: false,
       pinLeftPane: Settings.getValue<bool>('key-pin-sidebar') ?? false,
       searchText: '',
+      typoToleranceEnabled: false,
       scrollController: ItemScrollController(),
       positionsListener: ItemPositionsListener.create(),
       visibleIndices: [index],
@@ -231,6 +270,7 @@ class TextBookLoaded extends TextBookState {
     Map<int, List<String>>? alternativeWords,
     Map<String, String>? spacingValues,
     SearchMode? searchMode,
+    bool? typoToleranceEnabled,
     ItemScrollController? scrollController,
     ItemPositionsListener? positionsListener,
     String? currentTitle,
@@ -274,6 +314,7 @@ class TextBookLoaded extends TextBookState {
       alternativeWords: alternativeWords ?? this.alternativeWords,
       spacingValues: spacingValues ?? this.spacingValues,
       searchMode: searchMode ?? this.searchMode,
+      typoToleranceEnabled: typoToleranceEnabled ?? this.typoToleranceEnabled,
       scrollController: scrollController ?? this.scrollController,
       positionsListener: positionsListener ?? this.positionsListener,
       currentTitle: currentTitle ?? this.currentTitle,
@@ -313,6 +354,11 @@ class TextBookLoaded extends TextBookState {
         selectedIndex,
         pinLeftPane,
         searchText,
+        _searchOptionsSignature(searchOptions),
+        _alternativeWordsSignature(alternativeWords),
+        _spacingValuesSignature(spacingValues),
+        searchMode,
+        typoToleranceEnabled,
         currentTitle,
         selectedTextForNote,
         selectedTextStart,

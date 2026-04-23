@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -365,6 +366,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       removeTeamim: !settingsState.showTeamim,
       replaceHolyNames: settingsState.replaceHolyNames,
       searchText: widget.isMainText ? state.searchText : '',
+      searchOptions: widget.isMainText ? state.searchOptions : const {},
+      alternativeWords: widget.isMainText ? state.alternativeWords : const {},
+      spacingValues: widget.isMainText ? state.spacingValues : const {},
+      isFuzzySearch: widget.isMainText && state.searchMode == SearchMode.fuzzy,
+      searchMode: widget.isMainText ? state.searchMode : SearchMode.exact,
       fontSize: widget.fontSize,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
       lineHeight: settingsState.lineHeight,
@@ -1170,6 +1176,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                       removeTeamim: !settingsState.showTeamim,
                       replaceHolyNames: settingsState.replaceHolyNames,
                       searchText: searchText,
+                      searchOptions:
+                          widget.isMainText ? state.searchOptions : const {},
+                      alternativeWords:
+                          widget.isMainText ? state.alternativeWords : const {},
+                      spacingValues:
+                          widget.isMainText ? state.spacingValues : const {},
+                      isFuzzySearch: widget.isMainText &&
+                          state.searchMode == SearchMode.fuzzy,
+                      searchMode: widget.isMainText
+                          ? state.searchMode
+                          : SearchMode.exact,
                       fontSize: widget.fontSize,
                       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
                       lineHeight: settingsState.lineHeight,
