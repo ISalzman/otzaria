@@ -964,11 +964,30 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
     final settingsState = context.read<SettingsBloc>().state;
     if (settingsState.libraryViewMode == 'grid') {
-      final items = state.searchResults != null
-          ? _buildSearchResults(state.searchResults!)
-          : _buildCategoryContent(state.currentCategory!);
+      if (state.searchResults != null) {
+        final books = state.searchResults!;
+        if (books.isEmpty) {
+          final repo = context.read<FocusRepository>();
+          return Center(
+            child: Text(
+              repo.librarySearchController.text.isNotEmpty
+                  ? 'אין תוצאות עבור "${repo.librarySearchController.text}"'
+                  : 'אין פריטים להצגה בתיקייה זו',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+          );
+        }
+        final displayLimit = min(books.length, 100);
+        return SingleChildScrollView(
+          key: PageStorageKey(state.currentCategory),
+          child: Column(
+            children: [_buildSearchResultsGrid(books, displayLimit)],
+          ),
+        );
+      }
       return FutureBuilder<List<Widget>>(
-        future: items,
+        future: _buildCategoryContent(state.currentCategory!),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -999,15 +1018,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       return _buildSearchListView(state.searchResults!);
     }
     return _buildListView(state.currentCategory!);
-  }
-
-  Future<List<Widget>> _buildSearchResults(List<Book> books) async {
-    // בניית כל הפריטים מראש
-    final displayLimit = min(books.length, 100);
-
-    return [
-      _buildSearchResultsGrid(books, displayLimit),
-    ];
   }
 
   Future<List<Widget>> _buildCategoryContent(Category category) async {
