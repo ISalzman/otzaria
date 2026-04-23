@@ -269,17 +269,34 @@ class AppFonts {
       };
 
   /// יצירת רשימת DropdownMenuItem לבחירת גופן
-  static List<DropdownMenuItem<String>> buildDropdownItems() {
-    return availableFonts.map((font) {
+  static List<DropdownMenuItem<String>> buildDropdownItems({
+    String? selectedValue,
+    TextStyle? itemTextStyle,
+  }) {
+    final fonts = [...availableFonts];
+    final hasSelectedValue = selectedValue == null ||
+        selectedValue.isEmpty ||
+        fonts.any((font) => font.value == selectedValue);
+
+    if (!hasSelectedValue) {
+      fonts.insert(
+        0,
+        FontInfo(
+          value: selectedValue,
+          label: '$selectedValue (לא זמין במחשב זה)',
+        ),
+      );
+    }
+
+    return fonts.map((font) {
+      final previewStyle = fontPaths.containsKey(font.value)
+          ? TextStyle(fontFamily: font.value)
+          : const TextStyle();
       return DropdownMenuItem<String>(
         value: font.value,
         child: Text(
           font.label,
-          // הצגת תצוגה מקדימה רק לגופנים מוטמעים.
-          // גופני מערכת נטענים בזמן בחירה (כדי לא לטעון מאות גופנים מראש).
-          style: fontPaths.containsKey(font.value)
-              ? TextStyle(fontFamily: font.value)
-              : null,
+          style: previewStyle.merge(itemTextStyle),
         ),
       );
     }).toList();
