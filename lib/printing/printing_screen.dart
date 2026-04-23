@@ -260,10 +260,16 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
   // פונקציה ליצירת רשימה שטוחה של כל הכותרות
   List<TocEntry> _flattenHeaders(List<TocEntry> headers) {
+    // דילוג על רמה 1 רק כאשר יש entry יחיד ברמה 1 עם ילדים
+    // (מצב זה מסמל שם ספר-עטיפה). כאשר יש מספר entries ברמה 1,
+    // הם כותרות תוכן אמיתיות ויש לכלול אותן.
+    final level1Roots = headers.where((h) => h.level == 1).toList();
+    final skipLevel1 =
+        level1Roots.length == 1 && level1Roots.first.children.isNotEmpty;
+
     List<TocEntry> result = [];
     for (var header in headers) {
-      // דילוג על רמה 1 (כותרת ראשית של הספר)
-      if (header.level > 1) {
+      if (!skipLevel1 || header.level > 1) {
         result.add(header);
       }
       if (header.children.isNotEmpty) {
