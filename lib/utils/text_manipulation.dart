@@ -93,7 +93,8 @@ String removePunctuation(String text) {
           ch == ',' ||
           ch == '?' ||
           ch == '-' ||
-          ch == '—';
+          ch == '—' ||
+          ch == '–';
 
       if (parenDepth > 0 && (ch == ':' || ch == '.')) {
         buffer.write(ch);

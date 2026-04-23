@@ -403,6 +403,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       fontSize: widget.fontSize,
       openBookCallback: widget.openBookCallback,
       removeNikud: state.removeNikud,
+      removePunctuation: state.removePunctuation,
       showSearch: widget.showSearch,
       searchQueryListenable: _searchQueryNotifier,
       currentSearchIndexListenable: _currentSearchIndexNotifier,
@@ -451,7 +452,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               !listEquals(previous.visibleIndices, current.visibleIndices) ||
               previous.selectedIndex != current.selectedIndex ||
               previous.fontSize != current.fontSize ||
-              previous.removeNikud != current.removeNikud;
+              previous.removeNikud != current.removeNikud ||
+              previous.removePunctuation != current.removePunctuation;
         },
         loadingWidget: const Center(),
         builder: (context, state) {
@@ -1000,6 +1002,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   final double fontSize;
   final Function(TextBookTab) openBookCallback;
   final bool removeNikud;
+  final bool removePunctuation;
   final bool showSearch;
   final ValueListenable<String> searchQueryListenable;
   final ValueListenable<int> currentSearchIndexListenable;
@@ -1022,6 +1025,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     required this.fontSize,
     required this.openBookCallback,
     required this.removeNikud,
+    required this.removePunctuation,
     required this.showSearch,
     required this.searchQueryListenable,
     required this.currentSearchIndexListenable,
@@ -1206,6 +1210,7 @@ class _CollapsibleCommentaryGroupState
                               fontSize: widget.fontSize,
                               openBookCallback: widget.openBookCallback,
                               removeNikud: widget.removeNikud,
+                              removePunctuation: widget.removePunctuation,
                               searchQuery: searchQuery,
                               currentSearchIndex: currentSearchIndex,
                               onSearchResultsCountChanged: widget.showSearch
