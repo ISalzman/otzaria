@@ -975,15 +975,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       return _currentSpreadRect(controller);
     }
     // תצוגה רגילה - החזר את גבולות המסמך המלא
-    final layout = controller.layout;
-    final pageLayouts = layout.pageLayouts;
-    if (pageLayouts.isEmpty) return null;
-    return Rect.fromLTRB(
-      0,
-      pageLayouts.first.top,
-      layout.documentSize.width,
-      pageLayouts.last.bottom,
-    );
+    // controller.layout זורק אם ה-PdfViewer state לא חובר עדיין (race condition ב-pdfrx)
+    try {
+      final layout = controller.layout;
+      final pageLayouts = layout.pageLayouts;
+      if (pageLayouts.isEmpty) return null;
+      return Rect.fromLTRB(
+        0,
+        pageLayouts.first.top,
+        layout.documentSize.width,
+        pageLayouts.last.bottom,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Rect? _currentSpreadViewportRect(

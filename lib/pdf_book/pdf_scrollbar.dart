@@ -43,35 +43,43 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
         widget.orientation == ScrollbarOrientation.left;
 
     if (!isVertical || widget.scrollBoundsBuilder == null) {
-      return PdfViewerScrollThumb(
-        controller: widget.controller,
-        orientation: widget.orientation,
-        thumbSize: isVertical
-            ? Size(widget.trackThickness, widget.thumbMinSize)
-            : Size(widget.thumbMinSize, widget.trackThickness),
-        thumbBuilder: (context, thumbSize, pageNumber, controller) {
-          final colorScheme = Theme.of(context).colorScheme;
-          return Container(
-            width: isVertical ? widget.trackThickness : thumbSize.width,
-            height: isVertical ? thumbSize.height : widget.trackThickness,
-            decoration: BoxDecoration(
-              color: widget.thumbColor ??
-                  colorScheme.outline.withValues(alpha: 0.75),
-              borderRadius: BorderRadius.circular(widget.trackThickness / 2),
-            ),
-            child: isVertical
-                ? Center(
-                    child: Text(
-                      (pageNumber ?? 1).toString(),
-                      style: TextStyle(
-                        color: colorScheme.onPrimary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
+      // PdfViewerScrollThumb זורק אם ה-controller לא מוכן עדיין (race condition ב-pdfrx)
+      return AnimatedBuilder(
+        animation: widget.controller,
+        child: PdfViewerScrollThumb(
+          controller: widget.controller,
+          orientation: widget.orientation,
+          thumbSize: isVertical
+              ? Size(widget.trackThickness, widget.thumbMinSize)
+              : Size(widget.thumbMinSize, widget.trackThickness),
+          thumbBuilder: (context, thumbSize, pageNumber, controller) {
+            final colorScheme = Theme.of(context).colorScheme;
+            return Container(
+              width: isVertical ? widget.trackThickness : thumbSize.width,
+              height: isVertical ? thumbSize.height : widget.trackThickness,
+              decoration: BoxDecoration(
+                color: widget.thumbColor ??
+                    colorScheme.outline.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(widget.trackThickness / 2),
+              ),
+              child: isVertical
+                  ? Center(
+                      child: Text(
+                        (pageNumber ?? 1).toString(),
+                        style: TextStyle(
+                          color: colorScheme.onPrimary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  )
-                : null,
-          );
+                    )
+                  : null,
+            );
+          },
+        ),
+        builder: (context, child) {
+          if (!widget.controller.isReady) return const SizedBox.shrink();
+          return child!;
         },
       );
     }
@@ -98,7 +106,13 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
           return const SizedBox.shrink();
         }
 
-        final visibleRect = widget.controller.visibleRect;
+        // controller.visibleRect זורק אם ה-PdfViewer state לא חובר עדיין
+        final Rect visibleRect;
+        try {
+          visibleRect = widget.controller.visibleRect;
+        } catch (_) {
+          return const SizedBox.shrink();
+        }
         final visibleHeight = math.min(visibleRect.height, bounds.height);
         final scrollableExtent = math.max(bounds.height - visibleHeight, 0.0);
         final currentTop = (visibleRect.top - bounds.top)
