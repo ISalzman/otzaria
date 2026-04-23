@@ -1,16 +1,30 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:hive_ce/hive.dart';
+import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() {
-    SharedPreferences.setMockInitialValues({});
+  late Directory tempDir;
+
+  setUp(() async {
+    tempDir = await Directory.systemTemp.createTemp('hive_test_');
+    Hive.init(tempDir.path);
+    await Hive.openBox<dynamic>(HiveCache.keyName);
+    await Settings.init(cacheProvider: HiveCache());
   });
 
-  test('loadLatestNewNoteDraft מחזיר את הטיוטה החדשה האחרונה של הספר', () async {
+  tearDown(() async {
+    await Hive.close();
+    await tempDir.delete(recursive: true);
+  });
+
+  test('loadLatestNewNoteDraft מחזיר את הטיוטה החדשה האחרונה של הספר',
+      () async {
     final service = PersonalNoteDraftService();
 
     await service.saveDraft(

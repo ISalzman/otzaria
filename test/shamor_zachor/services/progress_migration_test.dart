@@ -1,15 +1,16 @@
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:otzaria/tools/shamor_zachor/services/progress_service.dart';
 import 'package:otzaria/tools/shamor_zachor/models/progress_model.dart';
 import 'dart:convert';
+import '../../test_helpers/memory_cache_provider.dart';
 
 void main() {
   group('Progress Migration Tests', () {
     late ProgressService progressService;
 
     setUp(() async {
-      SharedPreferences.setMockInitialValues({});
+      await Settings.init(cacheProvider: MemoryCacheProvider());
       progressService = ProgressService();
     });
 
@@ -41,8 +42,7 @@ void main() {
       };
 
       // Save old format data
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
+      await Settings.setValue<String>(
           'sz:progress_data', _encodeOldProgress(oldProgress));
 
       // Mock book ID finder
@@ -64,7 +64,8 @@ void main() {
       expect(result, isTrue);
 
       // Verify migration flag is set
-      final migrationCompleted = prefs.getBool('sz:migration_completed');
+      final migrationCompleted =
+          Settings.getValue<bool>('sz:migration_completed');
       expect(migrationCompleted, isTrue);
 
       // Verify new format data
@@ -104,8 +105,7 @@ void main() {
         },
       };
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
+      await Settings.setValue<String>(
           'sz:progress_data', _encodeOldProgress(oldProgress));
 
       Future<int?> findBookId(String category, String book) async {
@@ -140,8 +140,7 @@ void main() {
         }
       };
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
+      await Settings.setValue<String>(
           'sz:progress_data', _encodeOldProgress(oldProgress));
 
       Future<int?> findBookId(String category, String book) async {
@@ -154,7 +153,7 @@ void main() {
       );
 
       // Clear new data to test if migration runs again
-      await prefs.remove('sz:progress_by_id');
+      await Settings.setValue<String?>('sz:progress_by_id', null);
 
       // Run migration second time
       final result = await progressService.migrateOldProgressToNewFormat(
@@ -182,8 +181,7 @@ void main() {
         }
       };
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
+      await Settings.setValue<String>(
           'sz:progress_data', _encodeOldProgress(oldProgress));
 
       Future<int?> findBookId(String category, String book) async {
@@ -219,8 +217,8 @@ void main() {
       // Assert: Should succeed and mark as completed
       expect(result, isTrue);
 
-      final prefs = await SharedPreferences.getInstance();
-      final migrationCompleted = prefs.getBool('sz:migration_completed');
+      final migrationCompleted =
+          Settings.getValue<bool>('sz:migration_completed');
       expect(migrationCompleted, isTrue);
     });
   });

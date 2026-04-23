@@ -12,12 +12,24 @@ import 'package:otzaria/workspaces/workspace.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/core/app_paths.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Service for backing up and restoring app data
 class BackupService {
   static final Logger _logger = Logger('BackupService');
   static const String backupFolderName = 'backups';
+
+  // All Shamor Zachor keys stored in Hive
+  static const _shamorZachorStringKeys = [
+    'sz:progress_data',
+    'sz:completion_dates',
+    'sz:last_accessed',
+    'sz:tracked_books',
+    'sz:progress_by_id',
+    'sz:completion_dates_by_id',
+  ];
+  static const _shamorZachorBoolKeys = [
+    'sz:migration_completed',
+  ];
 
   /// Get the backup directory path
   static Future<String> getBackupDirectory() async {
@@ -236,18 +248,18 @@ class BackupService {
   /// Backup user overrides
   static Future<Map<String, dynamic>> _backupUserOverrides() async {
     final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
-    
+
     if (!await overridesDir.exists()) {
       return {};
     }
 
     final overridesData = <String, dynamic>{};
-    
+
     await for (final entity in overridesDir.list(recursive: true)) {
-      if (entity is File && 
-         (entity.path.endsWith('.md') || 
-          entity.path.endsWith('.tmp') || 
-          entity.path.endsWith('.recovery'))) {
+      if (entity is File &&
+          (entity.path.endsWith('.md') ||
+              entity.path.endsWith('.tmp') ||
+              entity.path.endsWith('.recovery'))) {
         final relativePath = p.relative(entity.path, from: overridesDir.path);
         try {
           overridesData[relativePath] = await entity.readAsString();
@@ -256,7 +268,7 @@ class BackupService {
         }
       }
     }
-    
+
     return overridesData;
   }
 
@@ -270,19 +282,20 @@ class BackupService {
     };
   }
 
-  /// Backup Shamor Zachor data - backs up ALL keys starting with 'sz:'
+  /// Backup Shamor Zachor data - backs up all known sz: keys
   static Future<Map<String, dynamic>> _backupShamorZachor() async {
-    final prefs = await SharedPreferences.getInstance();
-    final allKeys = prefs.getKeys();
     final shamorZachorData = <String, dynamic>{};
 
-    // Backup all keys that start with 'sz:' prefix
-    for (final key in allKeys) {
-      if (key.startsWith('sz:')) {
-        final value = prefs.get(key);
-        if (value != null) {
-          shamorZachorData[key] = value;
-        }
+    for (final key in _shamorZachorStringKeys) {
+      final value = Settings.getValue<String>(key);
+      if (value != null) {
+        shamorZachorData[key] = value;
+      }
+    }
+    for (final key in _shamorZachorBoolKeys) {
+      final value = Settings.getValue<bool>(key);
+      if (value != null) {
+        shamorZachorData[key] = value;
       }
     }
 
@@ -338,7 +351,8 @@ class BackupService {
     }
 
     // Restore user_overrides
-    final includeOverrides = includes['userOverrides'] as bool? ?? includes['notes'] == true;
+    final includeOverrides =
+        includes['userOverrides'] as bool? ?? includes['notes'] == true;
     if (includeOverrides && backupData.containsKey('user_overrides')) {
       await _restoreUserOverrides(
         backupData['user_overrides'] as Map<String, dynamic>,
@@ -536,20 +550,21 @@ class BackupService {
   }
 
   /// Restore user overrides to files
-  static Future<void> _restoreUserOverrides(Map<String, dynamic> overridesData) async {
+  static Future<void> _restoreUserOverrides(
+      Map<String, dynamic> overridesData) async {
     final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
-    
+
     for (final entry in overridesData.entries) {
       try {
         final relativePath = entry.key;
         final content = entry.value as String;
-        
+
         final filePath = p.join(overridesDir.path, relativePath);
         final file = File(filePath);
-        
+
         // Ensure parent directory exists
         await file.parent.create(recursive: true);
-        
+
         // Only restore if file doesn't exist, to not overwrite user's latest edits,
         // or overwrite it if wanted. The standard restore overwrites.
         await file.writeAsString(content);
@@ -579,26 +594,20 @@ class BackupService {
   static Future<void> _restoreShamorZachor(
     Map<String, dynamic> shamorZachorData,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // Restore all backed up keys
     for (final entry in shamorZachorData.entries) {
       final key = entry.key;
       final value = entry.value;
 
       if (value == null) continue;
 
-      // Set the value based on its type
       if (value is String) {
-        await prefs.setString(key, value);
+        await Settings.setValue<String>(key, value);
       } else if (value is int) {
-        await prefs.setInt(key, value);
+        await Settings.setValue<int>(key, value);
       } else if (value is double) {
-        await prefs.setDouble(key, value);
+        await Settings.setValue<double>(key, value);
       } else if (value is bool) {
-        await prefs.setBool(key, value);
-      } else if (value is List<String>) {
-        await prefs.setStringList(key, value);
+        await Settings.setValue<bool>(key, value);
       }
     }
   }

@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'dart:convert';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/migration/dao/repository/seforim_repository.dart';
@@ -30,7 +30,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
   // OPTIMIZATION 3: Cache for TOC data - loaded on demand only
   final Map<int, List<BookSection>> _tocCache = {};
 
-  // Tracked books list - stored in SharedPreferences
+  // Tracked books list - stored in Hive via Settings
   static const String _trackedBooksKey = 'sz:tracked_books';
   Set<int> _trackedBookIds = {};
 
@@ -572,11 +572,10 @@ class ShamorZachorDataProvider with ChangeNotifier {
     _tocCache.clear();
   }
 
-  /// Load tracked books list from SharedPreferences
+  /// Load tracked books list from Hive
   Future<void> _loadTrackedBooksList() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonString = prefs.getString(_trackedBooksKey);
+      final jsonString = Settings.getValue<String>(_trackedBooksKey);
 
       if (jsonString == null || jsonString.isEmpty) {
         _trackedBookIds = {};
@@ -591,12 +590,11 @@ class ShamorZachorDataProvider with ChangeNotifier {
     }
   }
 
-  /// Save tracked books list to SharedPreferences
+  /// Save tracked books list to Hive
   Future<void> _saveTrackedBooksList() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final jsonString = jsonEncode(_trackedBookIds.toList());
-      await prefs.setString(_trackedBooksKey, jsonString);
+      await Settings.setValue<String>(_trackedBooksKey, jsonString);
     } catch (e) {
       _logger.warning('Failed to save tracked books list', e);
     }
@@ -604,7 +602,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
 
   /// Add a book ID to the tracked books list
   Future<void> _addToTrackedBooksList(int bookId) async {
-    // Always load from SharedPreferences first to avoid overwriting existing tracked books
+    // Always load from Hive first to avoid overwriting existing tracked books
     // when the in-memory list hasn't been loaded yet (e.g. first call after app restart)
     if (_trackedBookIds.isEmpty) {
       await _loadTrackedBooksList();

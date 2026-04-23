@@ -8,7 +8,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../test_helpers/memory_cache_provider.dart';
 
 class _FakeTextBookRepository extends TextBookRepository {
   _FakeTextBookRepository() : super(fileSystem: FileSystemData.instance);
@@ -21,8 +21,7 @@ void main() {
   late TextBook book;
 
   setUpAll(() async {
-    SharedPreferences.setMockInitialValues({});
-    await Settings.init();
+    await Settings.init(cacheProvider: MemoryCacheProvider());
   });
 
   setUp(() {

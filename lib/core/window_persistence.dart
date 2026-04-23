@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:window_manager/window_manager.dart';
 
 class WindowPersistence {
@@ -27,12 +27,11 @@ class WindowPersistence {
     _isRestoring = true;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final isMaximized = prefs.getBool(_kIsMaximized) ?? false;
-      final left = prefs.getDouble(_kLeft);
-      final top = prefs.getDouble(_kTop);
-      final width = prefs.getDouble(_kWidth);
-      final height = prefs.getDouble(_kHeight);
+      final isMaximized = Settings.getValue<bool>(_kIsMaximized) ?? false;
+      final left = Settings.getValue<double>(_kLeft);
+      final top = Settings.getValue<double>(_kTop);
+      final width = Settings.getValue<double>(_kWidth);
+      final height = Settings.getValue<double>(_kHeight);
 
       // If we don't have a complete set of bounds, do nothing.
       if (left == null || top == null || width == null || height == null) {
@@ -56,7 +55,7 @@ class WindowPersistence {
         await windowManager.maximize();
       }
     } catch (_) {
-      // SharedPreferences or window manager may fail on first launch;
+      // window manager may fail on first launch;
       // silently continue with default window dimensions.
     } finally {
       _isRestoring = false;
@@ -83,11 +82,9 @@ class WindowPersistence {
   }
 
   static Future<void> _saveNow() async {
-    final prefs = await SharedPreferences.getInstance();
-
     final isFullscreen = await windowManager.isFullScreen();
     final isMaximized = await windowManager.isMaximized();
-    await prefs.setBool(_kIsMaximized, isMaximized);
+    await Settings.setValue(_kIsMaximized, isMaximized);
 
     // When fullscreen or maximized, don't overwrite the last "normal" bounds.
     // getBounds() while maximized returns the full-screen rect, not the
@@ -96,9 +93,9 @@ class WindowPersistence {
     if (isFullscreen || isMaximized) return;
 
     final bounds = await windowManager.getBounds();
-    await prefs.setDouble(_kLeft, bounds.left);
-    await prefs.setDouble(_kTop, bounds.top);
-    await prefs.setDouble(_kWidth, bounds.width);
-    await prefs.setDouble(_kHeight, bounds.height);
+    await Settings.setValue(_kLeft, bounds.left);
+    await Settings.setValue(_kTop, bounds.top);
+    await Settings.setValue(_kWidth, bounds.width);
+    await Settings.setValue(_kHeight, bounds.height);
   }
 }
