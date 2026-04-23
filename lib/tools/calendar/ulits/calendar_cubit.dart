@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -9,6 +10,8 @@ import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
+import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart'
+    as zmanim_helpers;
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/plugins/adapters/plugin_calendar_adapter.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -16,6 +19,8 @@ import 'package:timezone/timezone.dart' as tz;
 enum CalendarType { hebrew, gregorian, combined }
 
 enum CalendarView { month, week, day }
+
+enum CalendarDayTransition { sunset, tzais, rabbeinuTam, midnight }
 
 class ZmanAlertPreference extends Equatable {
   final int minutesBefore;
@@ -63,8 +68,12 @@ class CalendarState extends Equatable {
   final Map<String, String> dailyTimes;
   final JewishDate currentJewishDate;
   final DateTime currentGregorianDate;
+  final DateTime todayGregorianDate;
   final CalendarType calendarType;
   final CalendarView calendarView;
+  final CalendarDayTransition dayTransition;
+  final int? _calendarClockTick;
+  int get calendarClockTick => _calendarClockTick ?? 0;
   final List<CustomEvent> events;
   final String eventSearchQuery;
   final bool searchInDescriptions;
@@ -90,9 +99,12 @@ class CalendarState extends Equatable {
     required this.dailyTimes,
     required this.currentJewishDate,
     required this.currentGregorianDate,
+    required this.todayGregorianDate,
     required this.calendarType,
     required this.calendarView,
+    required this.dayTransition,
     required this.inIsrael,
+    int? calendarClockTick = 0,
     this.events = const [],
     this.eventSearchQuery = '',
     this.searchInDescriptions = false,
@@ -109,7 +121,7 @@ class CalendarState extends Equatable {
     this.googleCalendarLastSync,
     this.googleCalendarSyncPastDays = 60,
     this.googleCalendarSyncFutureDays = 365,
-  });
+  }) : _calendarClockTick = calendarClockTick;
 
   factory CalendarState.initial() {
     final now = DateTime.now();
@@ -122,8 +134,10 @@ class CalendarState extends Equatable {
       dailyTimes: const {},
       currentJewishDate: jewishNow,
       currentGregorianDate: now,
+      todayGregorianDate: DateTime(now.year, now.month, now.day),
       calendarType: CalendarType.combined,
       calendarView: CalendarView.month,
+      dayTransition: CalendarDayTransition.sunset,
       searchInDescriptions: false,
       inIsrael: true,
       showAllEvents: false,
@@ -143,8 +157,11 @@ class CalendarState extends Equatable {
     Map<String, String>? dailyTimes,
     JewishDate? currentJewishDate,
     DateTime? currentGregorianDate,
+    DateTime? todayGregorianDate,
     CalendarType? calendarType,
     CalendarView? calendarView,
+    CalendarDayTransition? dayTransition,
+    int? calendarClockTick,
     List<CustomEvent>? events,
     String? eventSearchQuery,
     bool? searchInDescriptions,
@@ -172,8 +189,11 @@ class CalendarState extends Equatable {
       dailyTimes: dailyTimes ?? this.dailyTimes,
       currentJewishDate: currentJewishDate ?? this.currentJewishDate,
       currentGregorianDate: currentGregorianDate ?? this.currentGregorianDate,
+      todayGregorianDate: todayGregorianDate ?? this.todayGregorianDate,
       calendarType: calendarType ?? this.calendarType,
       calendarView: calendarView ?? this.calendarView,
+      dayTransition: dayTransition ?? this.dayTransition,
+      calendarClockTick: calendarClockTick ?? this.calendarClockTick,
       events: events ?? this.events,
       eventSearchQuery: eventSearchQuery ?? this.eventSearchQuery,
       searchInDescriptions: searchInDescriptions ?? this.searchInDescriptions,
@@ -227,8 +247,11 @@ class CalendarState extends Equatable {
         currentJewishDate.getJewishDayOfMonth(),
 
         currentGregorianDate,
+        todayGregorianDate,
         calendarType,
         calendarView,
+        dayTransition,
+        calendarClockTick,
         inIsrael,
         showAllEvents,
         calendarNotificationsEnabled,
@@ -254,6 +277,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   final SettingsRepository _settingsRepository;
   final NotificationService _notificationService;
   final GoogleCalendarService _googleCalendarService;
+  Timer? _todayRefreshTimer;
 
   // Getter for accessing notification service from outside
   NotificationService get notificationService => _notificationService;
@@ -267,15 +291,33 @@ class CalendarCubit extends Cubit<CalendarState> {
         _googleCalendarService =
             googleCalendarService ?? GoogleCalendarService(),
         super(CalendarState.initial()) {
-    _initializeCalendar();
+    _initializeCalendar(resetSelectedToToday: true);
   }
 
-  Future<void> _initializeCalendar() async {
+  Future<void> _initializeCalendar({bool resetSelectedToToday = false}) async {
     final settings = await _settingsRepository.loadSettings();
     if (isClosed) return;
     final calendarTypeString = settings['calendarType'] as String;
     final calendarType = _stringToCalendarType(calendarTypeString);
+    final dayTransitionString = settings['calendarDayTransition'] as String;
+    final dayTransition = calendarDayTransitionFromString(dayTransitionString);
     final selectedCity = settings['selectedCity'] as String;
+    final today = resolveCalendarDayForTransition(
+      now: DateTime.now(),
+      city: selectedCity,
+      transition: dayTransition,
+    );
+    final todayJewishDate = JewishDate.fromDateTime(today);
+    final selectedGregorianDate =
+        resetSelectedToToday ? today : state.selectedGregorianDate;
+    final selectedJewishDate = resetSelectedToToday
+        ? todayJewishDate
+        : JewishDate.fromDateTime(selectedGregorianDate);
+    final currentGregorianDate =
+        resetSelectedToToday ? today : state.currentGregorianDate;
+    final currentJewishDate = resetSelectedToToday
+        ? todayJewishDate
+        : JewishDate.fromDateTime(currentGregorianDate);
     final eventsJson = settings['calendarEvents'] as String;
     final bool inIsrael = _isCityInIsrael(selectedCity);
     final bool calendarNotificationsEnabled =
@@ -321,7 +363,13 @@ class CalendarCubit extends Cubit<CalendarState> {
 
     emit(state.copyWith(
       calendarType: calendarType,
+      dayTransition: dayTransition,
       selectedCity: selectedCity,
+      selectedJewishDate: selectedJewishDate,
+      selectedGregorianDate: selectedGregorianDate,
+      currentJewishDate: currentJewishDate,
+      currentGregorianDate: currentGregorianDate,
+      todayGregorianDate: today,
       events: events,
       inIsrael: inIsrael,
       calendarNotificationsEnabled: calendarNotificationsEnabled,
@@ -337,7 +385,7 @@ class CalendarCubit extends Cubit<CalendarState> {
           : null,
     ));
     if (isClosed) return;
-    _updateTimesForDate(state.selectedGregorianDate, selectedCity);
+    _updateTimesForDate(selectedGregorianDate, selectedCity);
     await _rescheduleNotifications();
     if (isClosed) return;
     await _rescheduleZmanAlerts();
@@ -347,6 +395,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     if (googleCalendarEnabled) {
       await syncGoogleCalendar(interactive: false);
     }
+    _scheduleTodayRefresh();
   }
 
   /// מרענן אירועי plugin בזמן אמת.
@@ -361,9 +410,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     String? currentBookId,
   }) async {
     // שמור אירועי משתמש בלבד (id ללא ':' הם אירועי משתמש)
-    final userEvents = state.events
-        .where((e) => !e.id.contains(':'))
-        .toList();
+    final userEvents = state.events.where((e) => !e.id.contains(':')).toList();
 
     final merged = await PluginCalendarAdapter().loadAndMergePluginEvents(
       userEvents,
@@ -569,6 +616,62 @@ class CalendarCubit extends Cubit<CalendarState> {
     emit(state.copyWith(dailyTimes: newTimes));
   }
 
+  void _scheduleTodayRefresh() {
+    _todayRefreshTimer?.cancel();
+    if (isClosed) return;
+
+    final nextRefresh = nextCalendarTodayRefreshTime(
+      now: DateTime.now(),
+      city: state.selectedCity,
+      transition: state.dayTransition,
+    );
+    final duration = nextRefresh.difference(DateTime.now());
+    _todayRefreshTimer = Timer(
+      duration.isNegative ? const Duration(seconds: 1) : duration,
+      _refreshCalendarToday,
+    );
+  }
+
+  void _refreshCalendarToday() {
+    if (isClosed) return;
+
+    final previousToday = state.todayGregorianDate;
+    final today = resolveCalendarDayForTransition(
+      now: DateTime.now(),
+      city: state.selectedCity,
+      transition: state.dayTransition,
+    );
+    final wasViewingToday =
+        _isSameDateOnly(state.selectedGregorianDate, previousToday);
+
+    if (!_isSameDateOnly(today, previousToday)) {
+      final jewishToday = JewishDate.fromDateTime(today);
+      final newTimes = wasViewingToday
+          ? _calculateDailyTimes(today, state.selectedCity)
+          : state.dailyTimes;
+      emit(state.copyWith(
+        todayGregorianDate: today,
+        selectedGregorianDate:
+            wasViewingToday ? today : state.selectedGregorianDate,
+        selectedJewishDate:
+            wasViewingToday ? jewishToday : state.selectedJewishDate,
+        currentGregorianDate:
+            wasViewingToday ? today : state.currentGregorianDate,
+        currentJewishDate:
+            wasViewingToday ? jewishToday : state.currentJewishDate,
+        dailyTimes: newTimes,
+        calendarClockTick: state.calendarClockTick + 1,
+      ));
+    } else {
+      emit(state.copyWith(
+        todayGregorianDate: today,
+        calendarClockTick: state.calendarClockTick + 1,
+      ));
+    }
+
+    _scheduleTodayRefresh();
+  }
+
   void selectDate(JewishDate jewishDate, DateTime gregorianDate) {
     final newTimes = _calculateDailyTimes(gregorianDate, state.selectedCity);
     // When in month view, selecting a cell should also update the month header anchors
@@ -585,18 +688,37 @@ class CalendarCubit extends Cubit<CalendarState> {
   }
 
   Future<void> changeCity(String newCity) async {
-    final newTimes = _calculateDailyTimes(state.selectedGregorianDate, newCity);
     final bool inIsrael = _isCityInIsrael(newCity);
+    final wasViewingToday =
+        _isSameDateOnly(state.selectedGregorianDate, state.todayGregorianDate);
+    final today = resolveCalendarDayForTransition(
+      now: DateTime.now(),
+      city: newCity,
+      transition: state.dayTransition,
+    );
+    final jewishToday = JewishDate.fromDateTime(today);
+    final selectedDate = wasViewingToday ? today : state.selectedGregorianDate;
+    final newTimes = _calculateDailyTimes(selectedDate, newCity);
     emit(state.copyWith(
       selectedCity: newCity,
       dailyTimes: newTimes,
       inIsrael: inIsrael,
+      todayGregorianDate: today,
+      selectedGregorianDate:
+          wasViewingToday ? today : state.selectedGregorianDate,
+      selectedJewishDate:
+          wasViewingToday ? jewishToday : state.selectedJewishDate,
+      currentGregorianDate:
+          wasViewingToday ? today : state.currentGregorianDate,
+      currentJewishDate:
+          wasViewingToday ? jewishToday : state.currentJewishDate,
     ));
     // שמור את הבחירה בהגדרות
     await _settingsRepository.updateSelectedCity(newCity);
 
     // Times shift with city, so reschedule zman alerts.
     await _rescheduleZmanAlerts();
+    _scheduleTodayRefresh();
   }
 
   Future<void> changeCalendarType(CalendarType type) async {
@@ -605,9 +727,47 @@ class CalendarCubit extends Cubit<CalendarState> {
     await _settingsRepository.updateCalendarType(_calendarTypeToString(type));
   }
 
+  Future<void> changeCalendarDayTransition(
+      CalendarDayTransition transition) async {
+    final wasViewingToday =
+        _isSameDateOnly(state.selectedGregorianDate, state.todayGregorianDate);
+    final today = resolveCalendarDayForTransition(
+      now: DateTime.now(),
+      city: state.selectedCity,
+      transition: transition,
+    );
+    final jewishToday = JewishDate.fromDateTime(today);
+    final newTimes = wasViewingToday
+        ? _calculateDailyTimes(today, state.selectedCity)
+        : state.dailyTimes;
+    emit(state.copyWith(
+      dayTransition: transition,
+      todayGregorianDate: today,
+      selectedGregorianDate:
+          wasViewingToday ? today : state.selectedGregorianDate,
+      selectedJewishDate:
+          wasViewingToday ? jewishToday : state.selectedJewishDate,
+      currentGregorianDate:
+          wasViewingToday ? today : state.currentGregorianDate,
+      currentJewishDate:
+          wasViewingToday ? jewishToday : state.currentJewishDate,
+      dailyTimes: newTimes,
+    ));
+    await _settingsRepository.updateCalendarDayTransition(
+      calendarDayTransitionToString(transition),
+    );
+    _scheduleTodayRefresh();
+  }
+
   /// טעינה מחדש של הגדרות מהאחסון
   Future<void> reloadSettings() async {
     await _initializeCalendar();
+  }
+
+  @override
+  Future<void> close() {
+    _todayRefreshTimer?.cancel();
+    return super.close();
   }
 
   void _previousMonth() {
@@ -748,15 +908,20 @@ class CalendarCubit extends Cubit<CalendarState> {
   }
 
   void jumpToToday() {
-    final now = DateTime.now();
-    final jewishNow = JewishDate();
-    final newTimes = _calculateDailyTimes(now, state.selectedCity);
+    final today = resolveCalendarDayForTransition(
+      now: DateTime.now(),
+      city: state.selectedCity,
+      transition: state.dayTransition,
+    );
+    final jewishToday = JewishDate.fromDateTime(today);
+    final newTimes = _calculateDailyTimes(today, state.selectedCity);
 
     emit(state.copyWith(
-      selectedJewishDate: jewishNow,
-      selectedGregorianDate: now,
-      currentJewishDate: jewishNow,
-      currentGregorianDate: now,
+      selectedJewishDate: jewishToday,
+      selectedGregorianDate: today,
+      currentJewishDate: jewishToday,
+      currentGregorianDate: today,
+      todayGregorianDate: today,
       dailyTimes: newTimes,
     ));
   }
@@ -1487,7 +1652,8 @@ class CalendarCubit extends Cubit<CalendarState> {
         await _settingsRepository.updateCalendarNotificationsEnabled(false);
 
         // הצג הודעת שגיאה למשתמש עם הוראות מפורטות
-        UiSnack.showWarning('לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
+        UiSnack.showWarning(
+            'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
             'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
             duration: const Duration(seconds: 8));
         return;
@@ -2675,282 +2841,7 @@ Map<String, dynamic>? _getCityData(String cityName) {
 
 // Calculate daily times function
 Map<String, String> _calculateDailyTimes(DateTime date, String city) {
-  final cityData = _getCityData(city);
-  if (cityData == null) {
-    return {};
-  }
-
-  final locationName = city;
-  final latitude = cityData['lat']!;
-  final longitude = cityData['lng']!;
-  final elevation = cityData['elevation']!;
-  final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
-
-  final location = GeoLocation();
-  location.setLocationName(locationName);
-  location.setLatitude(latitude: latitude);
-  location.setLongitude(longitude: longitude);
-  location.setElevation(elevation > 0 ? elevation : 0);
-
-  // Set the timezone for the location
-  final tzLocation = tz.getLocation(timeZoneId);
-  final tzDateTime = tz.TZDateTime.from(date, tzLocation);
-  location.setDateTime(tzDateTime);
-
-  final zmanimCalendar = ComplexZmanimCalendar.intGeoLocation(location);
-
-  final bool isInIsrael = _isCityInIsrael(city);
-  final jewishCalendar = JewishCalendar.fromDateTime(date);
-  jewishCalendar.inIsrael = isInIsrael;
-
-  final Map<String, String> times = {
-    'alos': _formatTime(zmanimCalendar.getAlosHashachar()!, tzLocation),
-    'alos16point1Degrees':
-        _formatTime(zmanimCalendar.getAlos16Point1Degrees()!, tzLocation),
-    'alos19point8Degrees':
-        _formatTime(zmanimCalendar.getAlos19Point8Degrees()!, tzLocation),
-    'sunrise': _formatTime(zmanimCalendar.getSunrise()!, tzLocation),
-    'sofZmanShmaMGA':
-        _formatTime(zmanimCalendar.getSofZmanShmaMGA()!, tzLocation),
-    'sofZmanShmaGRA':
-        _formatTime(zmanimCalendar.getSofZmanShmaGRA()!, tzLocation),
-    'sofZmanTfilaMGA':
-        _formatTime(zmanimCalendar.getSofZmanTfilaMGA()!, tzLocation),
-    'sofZmanTfilaGRA':
-        _formatTime(zmanimCalendar.getSofZmanTfilaGRA()!, tzLocation),
-    'chatzos': _formatTime(zmanimCalendar.getChatzos()!, tzLocation),
-    'chatzosLayla':
-        _formatTime(_calculateChatzosLayla(zmanimCalendar), tzLocation),
-    'minchaGedola': _formatTime(zmanimCalendar.getMinchaGedola()!, tzLocation),
-    'minchaKetana': _formatTime(zmanimCalendar.getMinchaKetana()!, tzLocation),
-    'plagHamincha': _formatTime(zmanimCalendar.getPlagHamincha()!, tzLocation),
-    'sunset': _formatTime(zmanimCalendar.getSunset()!, tzLocation),
-    'sunsetRT': _formatTime(_calculateSunsetRT(zmanimCalendar), tzLocation),
-    'tzais': _formatTime(zmanimCalendar.getTzais()!, tzLocation),
-  };
-
-  // הוספת זמנים מיוחדים לחגים
-  _addSpecialTimes(times, jewishCalendar, zmanimCalendar, city, tzLocation);
-
-  return times;
-}
-
-String _formatTime(DateTime dt, tz.Location tzLocation) {
-  // Convert to the correct timezone before formatting
-  final tzDateTime = tz.TZDateTime.from(dt, tzLocation);
-  return '${tzDateTime.hour.toString().padLeft(2, '0')}:${tzDateTime.minute.toString().padLeft(2, '0')}';
-}
-
-// חישוב חצות לילה - 12 שעות אחרי חצות היום
-DateTime _calculateChatzosLayla(ComplexZmanimCalendar zmanimCalendar) {
-  final chatzos = zmanimCalendar.getChatzos()!;
-  return chatzos.add(const Duration(hours: 12));
-}
-
-// חישוב שקיעה לפי רבנו תם - בין השמשות רבנו תם
-DateTime _calculateSunsetRT(ComplexZmanimCalendar zmanimCalendar) {
-  // רבנו תם - 72 דקות אחרי השקיעה
-  final sunset = zmanimCalendar.getSunset()!;
-  return sunset.add(const Duration(minutes: 72));
-}
-
-// הוספת זמנים מיוחדים לחגים
-void _addSpecialTimes(Map<String, String> times, JewishCalendar jewishCalendar,
-    ComplexZmanimCalendar zmanimCalendar, String city, tz.Location tzLocation) {
-  // זמנים מיוחדים לערב פסח
-  if (jewishCalendar.getYomTovIndex() == JewishCalendar.EREV_PESACH) {
-    // סוף זמן אכילת חמץ - מג"א (4 שעות זמניות)
-    final sofZmanAchilasChametzMGA =
-        zmanimCalendar.getSofZmanAchilasChametzMGA72Minutes();
-    if (sofZmanAchilasChametzMGA != null) {
-      times['sofZmanAchilasChametzMGA'] =
-          _formatTime(sofZmanAchilasChametzMGA, tzLocation);
-    }
-
-    // סוף זמן אכילת חמץ - גר"א (4 שעות זמניות)
-    final sofZmanAchilasChametzGRA =
-        zmanimCalendar.getSofZmanAchilasChametzGRA();
-    if (sofZmanAchilasChametzGRA != null) {
-      times['sofZmanAchilasChametzGRA'] =
-          _formatTime(sofZmanAchilasChametzGRA, tzLocation);
-    }
-
-    // סוף זמן ביעור חמץ - מג"א (5 שעות זמניות)
-    final sofZmanBiurChametzMGA =
-        zmanimCalendar.getSofZmanBiurChametzMGA72Minutes();
-    if (sofZmanBiurChametzMGA != null) {
-      times['sofZmanBiurChametzMGA'] =
-          _formatTime(sofZmanBiurChametzMGA, tzLocation);
-    }
-
-    // סוף זמן ביעור חמץ - גר"א (5 שעות זמניות)
-    final sofZmanBiurChametzGRA = zmanimCalendar.getSofZmanBiurChametzGRA();
-    if (sofZmanBiurChametzGRA != null) {
-      times['sofZmanBiurChametzGRA'] =
-          _formatTime(sofZmanBiurChametzGRA, tzLocation);
-    }
-  }
-
-  // זמני כניסת שבת/חג
-  if (jewishCalendar.getDayOfWeek() == 6 || jewishCalendar.isErevYomTov()) {
-    final candleLightingTime =
-        _calculateCandleLightingTime(zmanimCalendar, city);
-    if (candleLightingTime != null) {
-      times['candleLighting'] = _formatTime(candleLightingTime, tzLocation);
-    }
-  }
-
-  // זמני יציאת שבת/חג
-  if (jewishCalendar.getDayOfWeek() == 7 || jewishCalendar.isYomTov()) {
-    final shabbosExitTime1 = _calculateShabbosExitTime1(zmanimCalendar);
-    final shabbosExitTime2 = _calculateShabbosExitTime2(zmanimCalendar);
-
-    if (shabbosExitTime1 != null) {
-      times['shabbosExit1'] = _formatTime(shabbosExitTime1, tzLocation);
-    }
-    if (shabbosExitTime2 != null) {
-      times['shabbosExit2'] = _formatTime(shabbosExitTime2, tzLocation);
-    }
-  }
-
-  // זמן ספירת העומר (מליל יום שני של פסח עד ערב שבועות)
-  if (jewishCalendar.getDayOfOmer() != -1) {
-    final omerCountingTime = _calculateOmerCountingTime(zmanimCalendar);
-    if (omerCountingTime != null) {
-      times['omerCounting'] = _formatTime(omerCountingTime, tzLocation);
-    }
-  }
-
-  // זמני תענית
-  if (jewishCalendar.isTaanis() &&
-      jewishCalendar.getYomTovIndex() != JewishCalendar.YOM_KIPPUR) {
-    final fastStartTime = _calculateFastStartTime(zmanimCalendar);
-    final fastEndTime = _calculateFastEndTime(zmanimCalendar);
-
-    if (fastStartTime != null) {
-      times['fastStart'] = _formatTime(fastStartTime, tzLocation);
-    }
-    if (fastEndTime != null) {
-      times['fastEnd'] = _formatTime(fastEndTime, tzLocation);
-    }
-  }
-
-  // זמן קידוש לבנה
-  if (_isKidushLevanaTime(jewishCalendar)) {
-    final kidushLevanaEarliest =
-        _calculateKidushLevanaEarliest(jewishCalendar, zmanimCalendar);
-    final kidushLevanaLatest =
-        _calculateKidushLevanaLatest(jewishCalendar, zmanimCalendar);
-
-    if (kidushLevanaEarliest != null) {
-      times['kidushLevanaEarliest'] =
-          _formatTime(kidushLevanaEarliest, tzLocation);
-    }
-    if (kidushLevanaLatest != null) {
-      times['kidushLevanaLatest'] = _formatTime(kidushLevanaLatest, tzLocation);
-    }
-  }
-
-  // זמני קידוש לבנה
-  try {
-    final tchilasKidushLevana =
-        zmanimCalendar.getTchilasZmanKidushLevana3Days();
-    final sofZmanKidushLevana =
-        zmanimCalendar.getSofZmanKidushLevanaBetweenMoldos();
-
-    if (tchilasKidushLevana != null) {
-      times['tchilasKidushLevana'] =
-          _formatTime(tchilasKidushLevana, tzLocation);
-    }
-    if (sofZmanKidushLevana != null) {
-      times['sofZmanKidushLevana'] =
-          _formatTime(sofZmanKidushLevana, tzLocation);
-    }
-  } catch (e) {
-    // Ignore errors in calculating moon times for certain dates
-  }
-}
-
-// חישוב זמן הדלקת נרות לפי עיר
-DateTime? _calculateCandleLightingTime(
-    ComplexZmanimCalendar zmanimCalendar, String city) {
-  final sunset = zmanimCalendar.getSunset();
-  if (sunset == null) return null;
-
-  int minutesBefore;
-  switch (city) {
-    case 'ירושלים':
-      minutesBefore = 40;
-      break;
-    case 'בני ברק':
-      minutesBefore = 22;
-      break;
-    case 'מודיעין עילית':
-      minutesBefore = 30;
-      break;
-    default:
-      minutesBefore = 30;
-      break;
-  }
-
-  return sunset.subtract(Duration(minutes: minutesBefore));
-}
-
-// חישוב זמן יציאת שבת 1 - 34 דקות אחרי השקיעה
-DateTime? _calculateShabbosExitTime1(ComplexZmanimCalendar zmanimCalendar) {
-  final sunset = zmanimCalendar.getSunset();
-  if (sunset == null) return null;
-
-  return sunset.add(const Duration(minutes: 34));
-}
-
-// חישוב זמן יציאת שבת 2 - צאת השבת חזו"א - 38 דקות אחרי השקיעה
-DateTime? _calculateShabbosExitTime2(ComplexZmanimCalendar zmanimCalendar) {
-  final sunset = zmanimCalendar.getSunset();
-  if (sunset == null) return null;
-
-  return sunset.add(const Duration(minutes: 38));
-}
-
-// חישוב זמן ספירת העומר - אחרי צאת הכוכבים
-DateTime? _calculateOmerCountingTime(ComplexZmanimCalendar zmanimCalendar) {
-  return zmanimCalendar.getTzais();
-}
-
-// חישוב תחילת תענית - עלות השחר
-DateTime? _calculateFastStartTime(ComplexZmanimCalendar zmanimCalendar) {
-  return zmanimCalendar.getAlosHashachar();
-}
-
-// חישוב סיום תענית - צאת הכוכבים
-DateTime? _calculateFastEndTime(ComplexZmanimCalendar zmanimCalendar) {
-  return zmanimCalendar.getTzais();
-}
-
-// בדיקה אם זה זמן קידוש לבנה (מיום 3 עד יום 15 בחודש)
-bool _isKidushLevanaTime(JewishCalendar jewishCalendar) {
-  final dayOfMonth = jewishCalendar.getJewishDayOfMonth();
-  return dayOfMonth >= 3 && dayOfMonth <= 15;
-}
-
-// חישוב תחילת זמן קידוש לבנה - 3 ימים אחרי המולד
-DateTime? _calculateKidushLevanaEarliest(
-    JewishCalendar jewishCalendar, ComplexZmanimCalendar zmanimCalendar) {
-  // זמן קידוש לבנה מתחיל 3 ימים אחרי המולד, אחרי צאת הכוכבים
-  if (jewishCalendar.getJewishDayOfMonth() == 3) {
-    return zmanimCalendar.getTzais();
-  }
-  return null;
-}
-
-// חישוב סוף זמן קידוש לבנה - 15 ימים אחרי המולד
-DateTime? _calculateKidushLevanaLatest(
-    JewishCalendar jewishCalendar, ComplexZmanimCalendar zmanimCalendar) {
-  // זמן קידוש לבנה מסתיים ביום 15, לפני עלות השחר
-  if (jewishCalendar.getJewishDayOfMonth() == 15) {
-    return zmanimCalendar.getAlosHashachar();
-  }
-  return null;
+  return zmanim_helpers.calculateDailyTimes(date, city);
 }
 
 // Helper functions for CalendarType conversion
@@ -2975,6 +2866,187 @@ String _calendarTypeToString(CalendarType type) {
     case CalendarType.combined:
       return 'combined';
   }
+}
+
+/// מחזירה את היום הלוחי לפי זמן מעבר היום שנבחר והעיר הנוכחית.
+DateTime resolveCalendarDayForTransition({
+  required DateTime now,
+  required String city,
+  required CalendarDayTransition transition,
+}) {
+  final cityData = _getCityData(city);
+  final timeZoneId = cityData?['timezone'] as String? ?? 'Asia/Jerusalem';
+  final tzLocation = tz.getLocation(timeZoneId);
+  final nowInCity = tz.TZDateTime.from(now, tzLocation);
+  final civilToday = DateTime(
+    nowInCity.year,
+    nowInCity.month,
+    nowInCity.day,
+  );
+
+  if (transition == CalendarDayTransition.midnight) {
+    return civilToday;
+  }
+
+  final transitionTime = _calculateDayTransitionTime(
+    civilToday,
+    city,
+    transition,
+  );
+  if (transitionTime == null) {
+    return civilToday;
+  }
+
+  final transitionInCity = tz.TZDateTime.from(transitionTime, tzLocation);
+  if (nowInCity.isBefore(transitionInCity)) {
+    return civilToday;
+  }
+
+  return civilToday.add(const Duration(days: 1));
+}
+
+/// ממירה מחרוזת שמורה להגדרת מעבר היום, עם ברירת מחדל לשקיעה.
+CalendarDayTransition calendarDayTransitionFromString(String value) {
+  switch (value) {
+    case 'tzais':
+      return CalendarDayTransition.tzais;
+    case 'rabbeinuTam':
+      return CalendarDayTransition.rabbeinuTam;
+    case 'midnight':
+      return CalendarDayTransition.midnight;
+    case 'sunset':
+    default:
+      return CalendarDayTransition.sunset;
+  }
+}
+
+/// ממירה את הגדרת מעבר היום למחרוזת לשמירה בהגדרות.
+String calendarDayTransitionToString(CalendarDayTransition transition) {
+  switch (transition) {
+    case CalendarDayTransition.sunset:
+      return 'sunset';
+    case CalendarDayTransition.tzais:
+      return 'tzais';
+    case CalendarDayTransition.rabbeinuTam:
+      return 'rabbeinuTam';
+    case CalendarDayTransition.midnight:
+      return 'midnight';
+  }
+}
+
+/// בודקת אם יש להציג את התאריך העברי העליון בנוסח "אור ל...".
+bool shouldShowOhrPrefixForCalendarHeader({
+  required CalendarState state,
+  DateTime? now,
+}) {
+  if (!_isSameDateOnly(state.selectedGregorianDate, state.todayGregorianDate)) {
+    return false;
+  }
+
+  final cityData = _getCityData(state.selectedCity);
+  if (cityData == null) return false;
+
+  final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
+  final tzLocation = tz.getLocation(timeZoneId);
+  final nowInCity = now == null
+      ? tz.TZDateTime.now(tzLocation)
+      : tz.TZDateTime.from(now, tzLocation);
+  final alos90 = _calculateAlos90(
+    state.todayGregorianDate,
+    state.selectedCity,
+  );
+  if (alos90 == null) return false;
+
+  return nowInCity.isBefore(tz.TZDateTime.from(alos90, tzLocation));
+}
+
+/// מחזירה את זמן הרענון הבא לסימון "היום" ולתצוגת "אור ל...".
+DateTime nextCalendarTodayRefreshTime({
+  required DateTime now,
+  required String city,
+  required CalendarDayTransition transition,
+}) {
+  final cityData = _getCityData(city);
+  final timeZoneId = cityData?['timezone'] as String? ?? 'Asia/Jerusalem';
+  final tzLocation = tz.getLocation(timeZoneId);
+  final nowInCity = tz.TZDateTime.from(now, tzLocation);
+  final civilToday = DateTime(
+    nowInCity.year,
+    nowInCity.month,
+    nowInCity.day,
+  );
+  final candidates = <DateTime>[];
+
+  for (int dayOffset = 0; dayOffset <= 1; dayOffset++) {
+    final date = civilToday.add(Duration(days: dayOffset));
+    final alos90 = _calculateAlos90(date, city);
+    if (alos90 != null) {
+      candidates.add(tz.TZDateTime.from(alos90, tzLocation));
+    }
+
+    if (transition == CalendarDayTransition.midnight) {
+      final nextDate = date.add(const Duration(days: 1));
+      candidates.add(
+        tz.TZDateTime(
+          tzLocation,
+          nextDate.year,
+          nextDate.month,
+          nextDate.day,
+        ),
+      );
+    } else {
+      final transitionTime = _calculateDayTransitionTime(
+        date,
+        city,
+        transition,
+      );
+      if (transitionTime != null) {
+        candidates.add(tz.TZDateTime.from(transitionTime, tzLocation));
+      }
+    }
+  }
+
+  candidates.sort();
+  for (final candidate in candidates) {
+    if (candidate.isAfter(nowInCity)) {
+      return candidate.add(const Duration(seconds: 2));
+    }
+  }
+
+  return now.add(const Duration(hours: 1));
+}
+
+DateTime? _calculateDayTransitionTime(
+  DateTime date,
+  String city,
+  CalendarDayTransition transition,
+) {
+  final context = zmanim_helpers.buildZmanimCalendarContext(date, city);
+  if (context == null) return null;
+  final zmanimCalendar = context.zmanimCalendar;
+  switch (transition) {
+    case CalendarDayTransition.sunset:
+      return zmanimCalendar.getSunset();
+    case CalendarDayTransition.tzais:
+      return zmanimCalendar.getTzais();
+    case CalendarDayTransition.rabbeinuTam:
+      final sunset = zmanimCalendar.getSunset();
+      return sunset?.add(const Duration(minutes: 72));
+    case CalendarDayTransition.midnight:
+      return null;
+  }
+}
+
+DateTime? _calculateAlos90(DateTime date, String city) {
+  final context = zmanim_helpers.buildZmanimCalendarContext(date, city);
+  final sunrise = context?.zmanimCalendar.getSunrise();
+  return sunrise?.subtract(const Duration(minutes: 90));
+}
+
+bool _isSameDateOnly(DateTime first, DateTime second) {
+  return first.year == second.year &&
+      first.month == second.month &&
+      first.day == second.day;
 }
 
 // Google Calendar Info

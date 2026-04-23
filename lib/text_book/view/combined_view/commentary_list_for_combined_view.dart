@@ -43,7 +43,8 @@ class _CommentaryListForCombinedViewState
               previous.activeCommentators, current.activeCommentators) ||
           previous.links != current.links ||
           previous.fontSize != current.fontSize ||
-          previous.removeNikud != current.removeNikud;
+          previous.removeNikud != current.removeNikud ||
+          previous.removePunctuation != current.removePunctuation;
     }, builder: (context, state) {
       if (state is! TextBookLoaded) return const Center();
 
@@ -89,8 +90,7 @@ class _CommentaryListForCombinedViewState
                             link: thisLinksSnapshot.data![index1],
                             fontSize: widget.fontSize,
                             openBookCallback: widget.openBookCallback,
-                            removeNikud: state.removeNikud,
-                          ),
+                            removeNikud: state.removeNikud,                            removePunctuation: state.removePunctuation,                          ),
                         ),
                       ),
                     ),

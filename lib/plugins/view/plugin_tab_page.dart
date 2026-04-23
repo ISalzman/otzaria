@@ -217,7 +217,9 @@ class _PluginTabPageState extends State<PluginTabPage> {
           urlRequest: URLRequest(url: WebUri.uri(Uri.file(localHtmlPath))));
     } catch (e) {
       if (mounted) {
-        setState(() => _devErrorMessage = 'שגיאה בלתי צפויה בריענון התוסף: $e');
+        setState(
+          () => _devErrorMessage = 'שגיאה בלתי צפויה בריענון התוסף: $e',
+        );
       }
     }
   }

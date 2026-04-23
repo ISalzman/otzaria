@@ -446,8 +446,10 @@ CalendarState _buildCalendarState(
     dailyTimes: const {},
     currentJewishDate: jewishDate,
     currentGregorianDate: gregorianDate,
+    todayGregorianDate: gregorianDate,
     calendarType: CalendarType.combined,
     calendarView: CalendarView.month,
+    dayTransition: CalendarDayTransition.sunset,
     inIsrael: inIsrael,
   );
 }

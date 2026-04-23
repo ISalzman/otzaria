@@ -120,7 +120,8 @@ class _CommentaryListState extends State<CommentaryList> {
           !listEquals(previous.visibleIndices, current.visibleIndices) ||
           previous.selectedIndex != current.selectedIndex ||
           previous.fontSize != current.fontSize ||
-          previous.removeNikud != current.removeNikud;
+          previous.removeNikud != current.removeNikud ||
+          previous.removePunctuation != current.removePunctuation;
     }, builder: (context, state) {
       if (state is! TextBookLoaded) return const Center();
       final currentIndexes = state.selectedIndex != null
@@ -333,6 +334,7 @@ class _CommentaryListState extends State<CommentaryList> {
                             fontSize: widget.fontSize,
                             openBookCallback: widget.openBookCallback,
                             removeNikud: state.removeNikud,
+                            removePunctuation: state.removePunctuation,
                             searchQuery: _searchQueryNotifier.value,
                             currentSearchIndex: _getItemSearchIndex(index1),
                             onSearchResultsCountChanged: (count) =>

@@ -2,10 +2,19 @@ import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/tools/calendar/models/calendar_location.dart';
 import 'package:timezone/timezone.dart' as tz;
 
-/// מחשב את כל הזמנים ההלכתיים ליום נתון ועיר נתונה
-Map<String, String> calculateDailyTimes(DateTime date, String city) {
+class ZmanimCalendarContext {
+  final ComplexZmanimCalendar zmanimCalendar;
+  final tz.Location tzLocation;
+
+  const ZmanimCalendarContext({
+    required this.zmanimCalendar,
+    required this.tzLocation,
+  });
+}
+
+ZmanimCalendarContext? buildZmanimCalendarContext(DateTime date, String city) {
   final cityData = getCityData(city);
-  if (cityData == null) return {};
+  if (cityData == null) return null;
 
   final latitude = cityData['lat']!;
   final longitude = cityData['lng']!;
@@ -19,10 +28,31 @@ Map<String, String> calculateDailyTimes(DateTime date, String city) {
   location.setElevation(elevation > 0 ? elevation : 0);
 
   final tzLocation = tz.getLocation(timeZoneId);
-  final tzDateTime = tz.TZDateTime.from(date, tzLocation);
+  final tzDateTime = tz.TZDateTime(
+    tzLocation,
+    date.year,
+    date.month,
+    date.day,
+    date.hour,
+    date.minute,
+    date.second,
+    date.millisecond,
+    date.microsecond,
+  );
   location.setDateTime(tzDateTime);
 
-  final zmanimCalendar = ComplexZmanimCalendar.intGeoLocation(location);
+  return ZmanimCalendarContext(
+    zmanimCalendar: ComplexZmanimCalendar.intGeoLocation(location),
+    tzLocation: tzLocation,
+  );
+}
+
+/// מחשב את כל הזמנים ההלכתיים ליום נתון ועיר נתונה
+Map<String, String> calculateDailyTimes(DateTime date, String city) {
+  final context = buildZmanimCalendarContext(date, city);
+  if (context == null) return {};
+  final zmanimCalendar = context.zmanimCalendar;
+  final tzLocation = context.tzLocation;
 
   final bool isInIsrael = isCityInIsrael(city);
   final jewishCalendar = JewishCalendar.fromDateTime(date);
@@ -53,7 +83,7 @@ Map<String, String> calculateDailyTimes(DateTime date, String city) {
     'plagHamincha':
         formatZmanTime(zmanimCalendar.getPlagHamincha()!, tzLocation),
     'sunset': formatZmanTime(zmanimCalendar.getSunset()!, tzLocation),
-    'sunsetRT': formatZmanTime(_calculateSunsetRT(zmanimCalendar), tzLocation),
+    'sunsetRT': formatZmanTime(_calculateTzaisRT(zmanimCalendar), tzLocation),
     'tzais': formatZmanTime(zmanimCalendar.getTzais()!, tzLocation),
   };
 
@@ -73,8 +103,8 @@ DateTime _calculateChatzosLayla(ComplexZmanimCalendar zmanimCalendar) {
   return chatzos.add(const Duration(hours: 12));
 }
 
-// חישוב שקיעה לפי רבנו תם
-DateTime _calculateSunsetRT(ComplexZmanimCalendar zmanimCalendar) {
+// חישוב צאת הכוכבים לפי רבנו תם
+DateTime _calculateTzaisRT(ComplexZmanimCalendar zmanimCalendar) {
   final sunset = zmanimCalendar.getSunset()!;
   return sunset.add(const Duration(minutes: 72));
 }

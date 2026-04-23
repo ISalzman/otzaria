@@ -5,14 +5,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/tools/calendar/helpers/omer_counting_helpers.dart';
 import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart'
     hide cityCoordinates;
 import 'package:otzaria/tools/calendar/models/calendar_location.dart';
 import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
+import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart'
+    as zmanim_helpers;
 import 'package:otzaria/tools/calendar/dialogs/calendar_zman_alert_dialog.dart';
 import 'package:otzaria/widgets/app_menu.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class CalendarTimeEntry {
   final String id;
@@ -85,7 +87,7 @@ const List<_CalendarTimeDefinition> _kBaseTimeDefinitions = [
   _CalendarTimeDefinition(id: 'minchaKetana', name: 'מנחה קטנה'),
   _CalendarTimeDefinition(id: 'plagHamincha', name: 'פלג המנחה'),
   _CalendarTimeDefinition(id: 'sunset', name: 'שקיעה'),
-  _CalendarTimeDefinition(id: 'sunsetRT', name: 'שקיעה לרבנו תם'),
+  _CalendarTimeDefinition(id: 'sunsetRT', name: 'צאת הכוכבים לרבנו תם'),
   _CalendarTimeDefinition(id: 'tzais', name: 'צאת הכוכבים'),
 ];
 
@@ -299,6 +301,142 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
     );
   }
 
+  String? _buildOmerInfo(DateTime date) {
+    final jewishCalendar = JewishCalendar.fromDateTime(date);
+    final omerDay = jewishCalendar.getDayOfOmer();
+    if (omerDay == -1) {
+      return null;
+    }
+    return _buildOmerCountingText(omerDay);
+  }
+
+  String _resolveOmerAlertTimeLabel() {
+    final selectedDate = widget.state.selectedGregorianDate;
+    final todayDate = widget.state.todayGregorianDate;
+    final cityData = getCityData(widget.state.selectedCity);
+    if (cityData == null ||
+        selectedDate.year != todayDate.year ||
+        selectedDate.month != todayDate.month ||
+        selectedDate.day != todayDate.day) {
+      return widget.state.dailyTimes['omerCounting'] ?? '--:--';
+    }
+
+    final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
+    final tzLocation = tz.getLocation(timeZoneId);
+    final nowInCity = tz.TZDateTime.now(tzLocation);
+    final currentCivilDate = DateTime(
+      nowInCity.year,
+      nowInCity.month,
+      nowInCity.day,
+    );
+    final tonightTimes = zmanim_helpers.calculateDailyTimes(
+      currentCivilDate,
+      widget.state.selectedCity,
+    );
+    return tonightTimes['omerCounting'] ??
+        widget.state.dailyTimes['omerCounting'] ??
+        '--:--';
+  }
+
+  String _buildOmerCountingText(int day) {
+    final totalDaysText = _buildOmerDayCountText(day);
+    final weeks = day ~/ 7;
+    final extraDays = day % 7;
+
+    if (weeks == 0) {
+      return 'היום $totalDaysText בעומר';
+    }
+
+    final weeksText = _buildOmerWeekCountText(weeks);
+    if (extraDays == 0) {
+      return 'היום $totalDaysText שהם $weeksText בעומר';
+    }
+
+    final extraDaysText = _buildOmerDayCountText(extraDays);
+    return 'היום $totalDaysText שהם $weeksText ו$extraDaysText בעומר';
+  }
+
+  String _buildOmerDayCountText(int day) {
+    const ones = [
+      '',
+      'יום אחד',
+      'שני ימים',
+      'שלשה ימים',
+      'ארבעה ימים',
+      'חמשה ימים',
+      'ששה ימים',
+      'שבעה ימים',
+      'שמונה ימים',
+      'תשעה ימים',
+      'עשרה ימים',
+      'אחד עשר יום',
+      'שנים עשר יום',
+      'שלשה עשר יום',
+      'ארבעה עשר יום',
+      'חמשה עשר יום',
+      'ששה עשר יום',
+      'שבעה עשר יום',
+      'שמונה עשר יום',
+      'תשעה עשר יום',
+    ];
+    const tens = ['', '', 'עשרים', 'שלשים', 'ארבעים'];
+    const onesSimple = [
+      '',
+      'אחד',
+      'שנים',
+      'שלשה',
+      'ארבעה',
+      'חמשה',
+      'ששה',
+      'שבעה',
+      'שמונה',
+      'תשעה',
+    ];
+
+    if (day <= 0 || day > 49) {
+      return 'יום $day';
+    }
+
+    if (day < 20) {
+      return ones[day];
+    }
+
+    final tensText = tens[day ~/ 10];
+    final onesValue = day % 10;
+    if (onesValue == 0) {
+      return '$tensText יום';
+    }
+
+    return '${onesSimple[onesValue]} ו$tensText יום';
+  }
+
+  String _buildOmerWeekCountText(int weeks) {
+    const oneToNine = [
+      '',
+      'אחד',
+      'שני',
+      'שלשה',
+      'ארבעה',
+      'חמשה',
+      'ששה',
+      'שבעה',
+      'שמונה',
+      'תשעה',
+    ];
+
+    if (weeks <= 0) {
+      return '';
+    }
+    if (weeks == 1) {
+      return 'שבוע אחד';
+    }
+    if (weeks == 2) {
+      return 'שני שבועות';
+    }
+
+    return '${oneToNine[weeks]} שבועות';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -309,11 +447,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final omerDisplayData = buildOmerDisplayData(
-      selectedDate: widget.state.selectedGregorianDate,
-      cityName: widget.state.selectedCity,
-      dailyTimes: widget.state.dailyTimes,
-    );
+    final omerInfo = _buildOmerInfo(widget.state.selectedGregorianDate);
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
@@ -331,12 +465,12 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
               ],
             ),
           ),
-          if (omerDisplayData != null)
+          if (omerInfo != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: SizedBox(
                 width: double.infinity,
-                child: _buildOmerButton(context, omerDisplayData),
+                child: _buildOmerButton(context, omerInfo),
               ),
             ),
           Padding(
@@ -515,7 +649,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
     );
   }
 
-  Widget _buildOmerButton(BuildContext context, OmerDisplayData displayData) {
+  Widget _buildOmerButton(BuildContext context, String text) {
     final existingAlert = widget.state.zmanAlerts['omerCounting'];
     final cubit = context.read<CalendarCubit>();
     final cs = Theme.of(context).colorScheme;
@@ -530,11 +664,11 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
           );
 
     return RecommendedActionButton(
-      text: displayData.text,
+      text: text,
       iconWidget: iconWidget,
       textAlign: TextAlign.center,
       onPressed: () async {
-        final timeLabel = displayData.timeLabel;
+        final timeLabel = _resolveOmerAlertTimeLabel();
         if (timeLabel == '--:--') {
           UiSnack.showError('לא ניתן להפעיל התראה לספירת העומר ביום זה');
           return;

@@ -60,6 +60,35 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                     context.read<CalendarCubit>().changeCalendarType(value);
                   },
                 ),
+                SegmentedSettingsTile<CalendarDayTransition>(
+                  icon: FluentIcons.weather_sunny_low_24_regular,
+                  title: 'מעבר יום',
+                  subtitle: _calendarDayTransitionSubtitle(state.dayTransition),
+                  options: const [
+                    SegmentOption(
+                      value: CalendarDayTransition.sunset,
+                      label: 'שקיעה',
+                    ),
+                    SegmentOption(
+                      value: CalendarDayTransition.tzais,
+                      label: 'צאה"כ',
+                    ),
+                    SegmentOption(
+                      value: CalendarDayTransition.rabbeinuTam,
+                      label: 'רבינו תם',
+                    ),
+                    SegmentOption(
+                      value: CalendarDayTransition.midnight,
+                      label: '12 בלילה',
+                    ),
+                  ],
+                  currentValue: state.dayTransition,
+                  onChanged: (value) {
+                    context
+                        .read<CalendarCubit>()
+                        .changeCalendarDayTransition(value);
+                  },
+                ),
                 // עיר
                 _buildResponsiveDropdownTile<String>(
                   icon: FluentIcons.location_24_regular,
@@ -167,58 +196,45 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                         if (!state.googleCalendarConnected) ...[
                           SizedBox(
                             width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: state.googleCalendarSyncInProgress
-                                  ? null
-                                  : () async {
-                                      final cubit =
-                                          context.read<CalendarCubit>();
-                                      final success =
-                                          await cubit.connectGoogleCalendar();
-                                      if (!context.mounted) return;
-                                      if (success) {
-                                        final calendars =
-                                            await cubit.getAvailableCalendars();
-                                        if (!context.mounted) return;
-                                        final selected =
-                                            await _showCalendarMultiSelectionDialog<
-                                                String>(
-                                          context: context,
-                                          title: 'בחר לוחות שנה',
-                                          items: calendars
-                                              .map((cal) =>
-                                                  _CalendarMultiSelectionItem<
-                                                      String>(
-                                                    label: cal.name,
-                                                    value: cal.id,
-                                                    subtitle: cal.isPrimary
-                                                        ? 'לוח שנה ראשי'
-                                                        : null,
-                                                  ))
-                                              .toList(),
-                                          initialSelectedValues:
-                                              state.googleCalendarSelectedIds,
-                                          searchHint: 'חפש לוח שנה...',
-                                          emptyMessage: 'לא נמצאו לוחות שנה',
-                                        );
-                                        if (selected != null &&
-                                            selected.isNotEmpty) {
-                                          cubit.updateGoogleCalendarSelectedIds(
-                                              selected);
-                                        }
-                                      }
-                                    },
-                              icon: state.googleCalendarSyncInProgress
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    )
-                                  : const Icon(
-                                      FluentIcons.person_accounts_24_regular,
-                                      size: 18),
-                              label: const Text('התחברות לחשבון'),
+                            child: RecommendedActionButton(
+                              text: 'התחברות לחשבון',
+                              icon: FluentIcons.person_accounts_24_regular,
+                              isLoading: state.googleCalendarSyncInProgress,
+                              onPressed: () async {
+                                final cubit = context.read<CalendarCubit>();
+                                final success =
+                                    await cubit.connectGoogleCalendar();
+                                if (!context.mounted) return;
+                                if (success) {
+                                  final calendars =
+                                      await cubit.getAvailableCalendars();
+                                  if (!context.mounted) return;
+                                  final selected =
+                                      await _showCalendarMultiSelectionDialog<
+                                          String>(
+                                    context: context,
+                                    title: 'בחר לוחות שנה',
+                                    items: calendars
+                                        .map((cal) =>
+                                            _CalendarMultiSelectionItem<String>(
+                                              label: cal.name,
+                                              value: cal.id,
+                                              subtitle: cal.isPrimary
+                                                  ? 'לוח שנה ראשי'
+                                                  : null,
+                                            ))
+                                        .toList(),
+                                    initialSelectedValues:
+                                        state.googleCalendarSelectedIds,
+                                    searchHint: 'חפש לוח שנה...',
+                                    emptyMessage: 'לא נמצאו לוחות שנה',
+                                  );
+                                  if (selected != null && selected.isNotEmpty) {
+                                    cubit.updateGoogleCalendarSelectedIds(
+                                        selected);
+                                  }
+                                }
+                              },
                             ),
                           ),
                         ] else ...[
@@ -281,11 +297,11 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                                     .syncGoogleCalendar(interactive: true),
                               ),
                               const SizedBox(width: 8),
-                              TextButton(
+                              NeutralActionButton(
+                                text: 'התנתק',
                                 onPressed: () => context
                                     .read<CalendarCubit>()
                                     .disconnectGoogleCalendar(),
-                                child: const Text('התנתק'),
                               ),
                             ],
                           ),
@@ -406,6 +422,19 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
         },
       ),
     );
+  }
+}
+
+String _calendarDayTransitionSubtitle(CalendarDayTransition transition) {
+  switch (transition) {
+    case CalendarDayTransition.sunset:
+      return 'היום בלוח יתחלף בזמן השקיעה של העיר הנבחרת';
+    case CalendarDayTransition.tzais:
+      return 'היום בלוח יתחלף בצאת הכוכבים של העיר הנבחרת';
+    case CalendarDayTransition.rabbeinuTam:
+      return 'היום בלוח יתחלף בצאת הכוכבים לרבינו תם';
+    case CalendarDayTransition.midnight:
+      return 'היום בלוח יתחלף בשעה 12 בלילה';
   }
 }
 

@@ -89,26 +89,40 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
     final searchField = Padding(
       key: const ValueKey('searchField'),
       padding: const EdgeInsets.all(8.0),
-      child: OtzariaSearchField(
-        controller: widget.searchController,
-        focusNode: widget.focusNode,
-        autofocus: true,
-        hintText: widget.hintText ?? '',
-        onChanged: (value) =>
-            _debounce(() => widget.onSearchTextChanged?.call(value)),
-        onSubmitted: (_) => widget.focusNode.requestFocus(),
-        onClear: () {
-          widget.onSearchTextChanged?.call('');
-          widget.resetSearchCallback();
-          widget.focusNode.requestFocus();
-        },
-        isCompact: _isCompact,
-        onExpand: () => setState(() => _isCompact = false),
-        leading: const Icon(FluentIcons.search_24_regular),
-        trailingActions: [
-          if (widget.additionalActions != null) ...widget.additionalActions!,
-          if (widget.onAdvancedSearch != null)
-            OtzariaSearchAction.settings(onPressed: widget.onAdvancedSearch!),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OtzariaSearchField(
+            controller: widget.searchController,
+            focusNode: widget.focusNode,
+            autofocus: true,
+            hintText: widget.hintText ?? '',
+            onChanged: (value) =>
+                _debounce(() => widget.onSearchTextChanged?.call(value)),
+            onSubmitted: (_) => widget.focusNode.requestFocus(),
+            onClear: () {
+              widget.onSearchTextChanged?.call('');
+              widget.resetSearchCallback();
+              widget.focusNode.requestFocus();
+            },
+            isCompact: _isCompact,
+            onExpand: () => setState(() => _isCompact = false),
+            leading: const Icon(FluentIcons.search_24_regular),
+            trailingActions: [
+              if (widget.onAdvancedSearch != null)
+                OtzariaSearchAction.settings(onPressed: widget.onAdvancedSearch!),
+            ],
+          ),
+          if (!_isCompact &&
+              widget.additionalActions != null &&
+              widget.additionalActions!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0, left: 8.0, bottom: 4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: widget.additionalActions!,
+              ),
+            ),
         ],
       ),
     );

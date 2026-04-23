@@ -82,9 +82,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   SearchMode _searchMode = SearchMode.exact;
   bool _typoToleranceEnabled = false;
   bool _searchWithNikud = false;
-  bool _searchInCurrentSection = false;
-  SectionBounds? _currentSectionBounds;
-  List<int> _lastVisibleIndices = [];
   int? _selectedSearchResultIndex;
 
   bool get _isSimpleSearch =>
@@ -100,32 +97,86 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
   static const int _maxResultSnippetChars = 220;
 
+  SearchMode _normalizedSearchMode(SearchMode searchMode) {
+    return searchMode == SearchMode.levenshtein
+        ? SearchMode.advanced
+        : searchMode;
+  }
+
+  bool _effectiveTypoTolerance(
+    SearchMode searchMode,
+    bool typoToleranceEnabled,
+  ) {
+    return typoToleranceEnabled || searchMode == SearchMode.levenshtein;
+  }
+
+  bool _searchOptionsEqual(
+    Map<String, Map<String, bool>> first,
+    Map<String, Map<String, bool>> second,
+  ) {
+    if (identical(first, second)) return true;
+    if (first.length != second.length) return false;
+
+    for (final key in first.keys) {
+      final firstValue = first[key];
+      final secondValue = second[key];
+      if (firstValue == null || secondValue == null) return false;
+      if (!mapEquals(firstValue, secondValue)) return false;
+    }
+
+    return true;
+  }
+
+  bool _alternativeWordsEqual(
+    Map<int, List<String>> first,
+    Map<int, List<String>> second,
+  ) {
+    if (identical(first, second)) return true;
+    if (first.length != second.length) return false;
+
+    for (final key in first.keys) {
+      final firstValue = first[key];
+      final secondValue = second[key];
+      if (firstValue == null || secondValue == null) return false;
+      if (!listEquals(firstValue, secondValue)) return false;
+    }
+
+    return true;
+  }
+
+  void _updateForceSearchEngine() {
+    _forceSearchEngine = _searchMode != SearchMode.exact ||
+        _searchOptions.isNotEmpty ||
+        _alternativeWords.isNotEmpty ||
+        _spacingValues.isNotEmpty ||
+        _typoToleranceEnabled;
+  }
+
+  void _syncSearchConfigurationFromWidget() {
+    _searchOptions = widget.initialSearchOptions;
+    _alternativeWords = widget.initialAlternativeWords;
+    _spacingValues = widget.initialSpacingValues;
+    _typoToleranceEnabled = _effectiveTypoTolerance(
+      widget.initialSearchMode,
+      widget.initialTypoToleranceEnabled,
+    );
+    _searchMode = _normalizedSearchMode(widget.initialSearchMode);
+    _updateForceSearchEngine();
+  }
+
   @override
   void initState() {
     super.initState();
     _content = widget.data.split('\n');
 
     searchTextController.text = widget.initialQuery;
-    _searchOptions = widget.initialSearchOptions;
-    _alternativeWords = widget.initialAlternativeWords;
-    _spacingValues = widget.initialSpacingValues;
-    _typoToleranceEnabled = widget.initialTypoToleranceEnabled ||
-        widget.initialSearchMode == SearchMode.levenshtein;
-    _searchMode = widget.initialSearchMode == SearchMode.levenshtein
-        ? SearchMode.advanced
-        : widget.initialSearchMode;
-    _forceSearchEngine = _searchMode != SearchMode.exact ||
-        _searchOptions.isNotEmpty ||
-        _alternativeWords.isNotEmpty ||
-        _spacingValues.isNotEmpty ||
-        _typoToleranceEnabled;
+    _syncSearchConfigurationFromWidget();
 
     scrollControler = widget.scrollControler;
     widget.focusNode.requestFocus();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeBookPath();
-      _updateCurrentSection();
     });
   }
 
@@ -133,15 +184,37 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   void didUpdateWidget(TextBookSearchView oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    if (widget.data != oldWidget.data) {
+      _content = widget.data.split('\n');
+    }
+
     // עדכון שדה החיפוש אם initialQuery השתנה
     final queryChanged = widget.initialQuery != oldWidget.initialQuery;
     final needsControllerSync =
         widget.initialQuery != searchTextController.text;
+    final normalizedSearchMode =
+        _normalizedSearchMode(widget.initialSearchMode);
+    final effectiveTypoTolerance = _effectiveTypoTolerance(
+      widget.initialSearchMode,
+      widget.initialTypoToleranceEnabled,
+    );
+    final searchConfigurationChanged =
+        !_searchOptionsEqual(_searchOptions, widget.initialSearchOptions) ||
+            !_alternativeWordsEqual(
+                _alternativeWords, widget.initialAlternativeWords) ||
+            !mapEquals(_spacingValues, widget.initialSpacingValues) ||
+            _searchMode != normalizedSearchMode ||
+            _typoToleranceEnabled != effectiveTypoTolerance;
 
     if (queryChanged && needsControllerSync) {
       syncSearchControllerQuery(searchTextController, widget.initialQuery);
+    }
 
-      // הרצת חיפוש אם יש טקסט חדש
+    if (searchConfigurationChanged) {
+      _syncSearchConfigurationFromWidget();
+    }
+
+    if (queryChanged || searchConfigurationChanged) {
       if (widget.initialQuery.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -195,29 +268,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     _searchTextUpdated();
   }
 
-  void _updateCurrentSection() {
-    if (!mounted) return;
-    final state = context.read<TextBookBloc>().state;
-    if (state is! TextBookLoaded) return;
-
-    // Check if visibleIndices changed to avoid unnecessary recalculation
-    if (_lastVisibleIndices.isNotEmpty &&
-        listEquals(_lastVisibleIndices, state.visibleIndices)) {
-      return;
-    }
-
-    _lastVisibleIndices = List.from(state.visibleIndices);
-
-    final bounds = detectCurrentSection(
-      content: _content,
-      visibleIndices: state.visibleIndices,
-    );
-
-    setState(() {
-      _currentSectionBounds = bounds;
-    });
-  }
-
   Future<void> _searchTextUpdated() async {
     String query = searchTextController.text.trim();
     if (query.isEmpty ||
@@ -242,7 +292,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       final results = await searchInContent(
         content: _content,
         query: query,
-        bounds: _searchInCurrentSection ? _currentSectionBounds : null,
       );
 
       if (mounted) {
@@ -422,15 +471,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       items.add(_GroupedResultItem.result(r, resultListIndex));
     }
 
-    return BlocListener<TextBookBloc, TextBookState>(
-      listenWhen: (prev, current) =>
-          prev is TextBookLoaded &&
-          current is TextBookLoaded &&
-          !listEquals(prev.visibleIndices, current.visibleIndices),
-      listener: (context, state) {
-        _updateCurrentSection();
-      },
-      child: SearchPaneBase(
+    return SearchPaneBase(
         searchController: searchTextController,
         focusNode: widget.focusNode,
         progressWidget:
@@ -577,7 +618,16 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             searchTextController.text.isNotEmpty &&
             !_isSearching,
         onSearchTextChanged: (value) {
-          context.read<TextBookBloc>().add(UpdateSearchText(value));
+          context.read<TextBookBloc>().add(
+                UpdateSearchText(
+                  value,
+                  searchOptions: _searchOptions,
+                  alternativeWords: _alternativeWords,
+                  spacingValues: _spacingValues,
+                  searchMode: _searchMode,
+                  typoToleranceEnabled: _typoToleranceEnabled,
+                ),
+              );
           _searchTextUpdated();
         },
         resetSearchCallback: () {
@@ -590,42 +640,20 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             _searchMode = SearchMode.exact;
             _typoToleranceEnabled = false;
             _searchWithNikud = false;
-            _searchInCurrentSection = false;
           });
+          context.read<TextBookBloc>().add(
+                const UpdateSearchText(
+                  '',
+                  searchOptions: {},
+                  alternativeWords: {},
+                  spacingValues: {},
+                  searchMode: SearchMode.exact,
+                  typoToleranceEnabled: false,
+                ),
+              );
         },
         additionalActions: [
-          // כפתור "כל הספר"
-          _buildScopeButton(
-            message: 'חיפוש בכל הספר',
-            icon: FluentIcons.book_24_regular,
-            isActive: !_searchInCurrentSection,
-            onTap: () {
-              setState(() {
-                _searchInCurrentSection = false;
-              });
-              _searchTextUpdated();
-            },
-          ),
-          const SizedBox(width: 4),
-          // כפתור "כותרת נוכחית"
-          _buildScopeButton(
-            message: 'חיפוש בקטע נוכחי',
-            icon: FluentIcons.text_align_right_24_regular,
-            isActive: _searchInCurrentSection,
-            onTap: () {
-              setState(() {
-                _searchInCurrentSection = true;
-              });
-              _updateCurrentSection(); // עדכן את הקטע הנוכחי
-              // Wait for the next frame to ensure _currentSectionBounds is updated
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _searchTextUpdated();
-              });
-            },
-          ),
-          // כפתור חיפוש עם ניקוד (רק אם יש ניקוד בטקסט)
           if (utils.hasNikud(searchTextController.text)) ...[
-            const SizedBox(width: 4),
             NikudSearchButton(
               isActive: _searchWithNikud,
               onPressed: () {
@@ -661,34 +689,39 @@ class TextBookSearchViewState extends State<TextBookSearchView>
               bookTitle: bookTitle,
               onSearch: (query, searchOptions, alternativeWords, spacingValues,
                   searchMode, typoToleranceEnabled) {
+                final effectiveSearchMode = searchMode == SearchMode.levenshtein
+                    ? SearchMode.advanced
+                    : searchMode;
                 applyInBookSearchQuery(
                   controller: searchTextController,
                   query: query,
                   onQueryChanged: (value) {
-                    context.read<TextBookBloc>().add(UpdateSearchText(value));
+                    context.read<TextBookBloc>().add(
+                          UpdateSearchText(
+                            value,
+                            searchOptions: searchOptions,
+                            alternativeWords: alternativeWords,
+                            spacingValues: spacingValues,
+                            searchMode: effectiveSearchMode,
+                            typoToleranceEnabled: typoToleranceEnabled,
+                          ),
+                        );
                   },
                 );
                 setState(() {
                   _searchOptions = searchOptions;
                   _alternativeWords = alternativeWords;
                   _spacingValues = spacingValues;
-                  _searchMode = searchMode == SearchMode.levenshtein
-                      ? SearchMode.advanced
-                      : searchMode;
+                  _searchMode = effectiveSearchMode;
                   _typoToleranceEnabled = typoToleranceEnabled;
-                  _forceSearchEngine = _searchMode != SearchMode.exact ||
-                      _searchOptions.isNotEmpty ||
-                      _alternativeWords.isNotEmpty ||
-                      _spacingValues.isNotEmpty ||
-                      _typoToleranceEnabled;
+                  _updateForceSearchEngine();
                 });
                 _searchTextUpdated();
               },
             ),
           );
         },
-      ),
-    );
+      );
   }
 
   Widget _buildSearchResultNavigationBar() {
@@ -803,8 +836,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       patternParts.add(wordPatternStrings[i]);
       if (i < wordPatternStrings.length - 1) {
         final spacingKey = '$i-${i + 1}';
-        final maxTokens =
-            int.tryParse(spacingValues[spacingKey] ?? '') ?? 0;
+        final maxTokens = int.tryParse(spacingValues[spacingKey] ?? '') ?? 0;
         if (maxTokens > 0) {
           patternParts.add('(?:\\s+\\S+){0,$maxTokens}\\s+');
         } else {
@@ -856,8 +888,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     for (final phraseMatch in phraseMatches) {
       // טקסט לפני הביטוי – ללא הדגשה (בחיפוש רגיל)
       if (phraseMatch.start > currentPosition) {
-        spans.add(TextSpan(
-            text: text.substring(currentPosition, phraseMatch.start)));
+        spans.add(
+            TextSpan(text: text.substring(currentPosition, phraseMatch.start)));
       }
 
       // הדגשת מילות החיפוש בלבד בתוך הביטוי (בסדר המקורי)
@@ -874,8 +906,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
         // טקסט בין המילים (לא מודגש)
         if (wordStart > phraseOffset) {
-          spans.add(TextSpan(
-              text: phraseText.substring(phraseOffset, wordStart)));
+          spans.add(
+              TextSpan(text: phraseText.substring(phraseOffset, wordStart)));
         }
         // המילה המודגשת
         spans.add(TextSpan(
@@ -988,43 +1020,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     final prefix = start > 0 ? '... ' : '';
     final suffix = end < len ? ' ...' : '';
     return '$prefix${text.substring(start, end)}$suffix';
-  }
-
-  /// בונה כפתור בחירת טווח חיפוש (כל הספר / קטע נוכחי)
-  Widget _buildScopeButton({
-    required String message,
-    required IconData icon,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: message,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: isActive ? colorScheme.primaryContainer : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: isActive
-                  ? colorScheme.primary
-                  : colorScheme.outline.withValues(alpha: 0.5),
-              width: 1.5,
-            ),
-          ),
-          child: Icon(
-            icon,
-            size: 16,
-            color: isActive
-                ? colorScheme.primary
-                : colorScheme.onSurface.withValues(alpha: 0.6),
-          ),
-        ),
-      ),
-    );
   }
 
   @override

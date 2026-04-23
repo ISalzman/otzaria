@@ -17,11 +17,13 @@ class CommentaryContent extends StatefulWidget {
     required this.fontSize,
     required this.openBookCallback,
     required this.removeNikud,
+    this.removePunctuation = false,
     this.searchQuery = '',
     this.currentSearchIndex = 0,
     this.onSearchResultsCountChanged,
   });
   final bool removeNikud;
+  final bool removePunctuation;
   final Link link;
   final double fontSize;
   final Function(TextBookTab) openBookCallback;
@@ -117,9 +119,13 @@ class _CommentaryContentState extends State<CommentaryContent> {
                         snapshot.data ?? widget.removeNikud;
 
                     if (widget.searchQuery.isNotEmpty) {
-                      final textForCount = effectiveRemoveNikud
-                          ? utils.removeVolwels(data)
-                          : data;
+                      String textForCount = data;
+                      if (effectiveRemoveNikud) {
+                        textForCount = utils.removeVolwels(textForCount);
+                      }
+                      if (widget.removePunctuation) {
+                        textForCount = utils.removePunctuation(textForCount);
+                      }
                       final searchCount =
                           _countSearchMatches(textForCount, widget.searchQuery);
                       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -131,6 +137,7 @@ class _CommentaryContentState extends State<CommentaryContent> {
                       text: data,
                       settings: RenderSettings(
                         removeNikud: effectiveRemoveNikud,
+                        removePunctuation: widget.removePunctuation,
                         removeTeamim: !settingsState.showTeamim,
                         replaceHolyNames: settingsState.replaceHolyNames,
                         searchText: widget.searchQuery,
