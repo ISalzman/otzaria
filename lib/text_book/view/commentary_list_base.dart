@@ -87,6 +87,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   final ValueNotifier<Link?> _lastSelectedLink =
       ValueNotifier<Link?>(null); // ה-link האחרון שנוגעו בו (לכותרות בהעתקה)
   bool _showCommentatorsFilter = false; // האם להציג את מסך בחירת המפרשים
+  bool _filterWasAutoOpened = false; // האם מסך הסינון נפתח אוטומטית (לא ידנית)
+  bool _userInteractedWithFilter = false; // האם המשתמש בחר בעצמו בתוך פאנל הסינון
   final FocusNode _focusNode = FocusNode();
 
   String _getLinkKey(Link link) =>
@@ -157,6 +159,23 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     _itemPositionsListener.itemPositions.addListener(_updateLastScrollIndex);
   }
 
+  @override
+  void didUpdateWidget(CommentaryListBase oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // סגירה אוטומטית של מסך הסינון כאשר המפרשים עוברים מריק לא-ריק
+    // (קורה כאשר המשתמש בוחר "כל המפרשים" מהתפריט הימני)
+    if (_showCommentatorsFilter &&
+        _filterWasAutoOpened &&
+        !_userInteractedWithFilter &&
+        (oldWidget.selectedCommentatorsOverride ?? []).isEmpty &&
+        (widget.selectedCommentatorsOverride ?? []).isNotEmpty) {
+      setState(() {
+        _showCommentatorsFilter = false;
+        _filterWasAutoOpened = false;
+      });
+    }
+  }
+
   void scrollToTop() {
     if (_itemScrollController.isAttached) {
       _itemScrollController.scrollTo(
@@ -178,12 +197,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   void _openCommentatorsFilter() {
     setState(() {
       _showCommentatorsFilter = true;
+      _filterWasAutoOpened = false;
     });
   }
 
   void _closeCommentatorsFilter() {
     setState(() {
       _showCommentatorsFilter = false;
+      _userInteractedWithFilter = false;
     });
   }
 
@@ -468,6 +489,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               if (mounted) {
                 setState(() {
                   _showCommentatorsFilter = true;
+                  _filterWasAutoOpened = true;
                 });
               }
             });
@@ -523,6 +545,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                       if (mounted) {
                         setState(() {
                           _showCommentatorsFilter = true;
+                          _filterWasAutoOpened = true;
                         });
                       }
                     });
@@ -667,7 +690,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     ? CommentatorsSelectionPanel(
                         groups: groups,
                         selectedCommentators: selectedCommentators,
-                        onSelectionChanged: customSelection,
+                        onSelectionChanged: (list) {
+                          _userInteractedWithFilter = true;
+                          customSelection(list);
+                        },
                         bookTitle: _bookTitle(state),
                       )
                     : CommentatorsListView(
