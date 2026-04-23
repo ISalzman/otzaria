@@ -769,7 +769,7 @@ class _FontDropdown extends StatelessWidget {
             ),
             dropdownColor: Theme.of(context).colorScheme.surface,
             isExpanded: true,
-            items: AppFonts.buildDropdownItems(),
+            items: AppFonts.buildDropdownItems(selectedValue: value),
             onChanged: onChanged,
           ),
         ),

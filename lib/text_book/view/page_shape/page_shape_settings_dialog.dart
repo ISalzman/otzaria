@@ -740,21 +740,10 @@ class _PageShapeSettingsDialogState extends State<PageShapeSettingsDialog> {
                         contentPadding:
                             EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       ),
-                      items: AppFonts.availableFonts.map((font) {
-                        return DropdownMenuItem<String>(
-                          value: font.value,
-                          child: Text(
-                            font.label,
-                            style: TextStyle(
-                              fontFamily:
-                                  AppFonts.fontPaths.containsKey(font.value)
-                                      ? font.value
-                                      : null,
-                              fontSize: 13,
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                      items: AppFonts.buildDropdownItems(
+                        selectedValue: _bottomFontFamily,
+                        itemTextStyle: const TextStyle(fontSize: 13),
+                      ),
                       onChanged: (value) {
                         if (value != null) {
                           _onFontChanged(value);

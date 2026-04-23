@@ -17,20 +17,21 @@
 // Stack(
 //   children: [
 //     MainContent(),
-//     if (isSettingsPanelOpen)
-//       ContextOverlayPanel(
-//         isOpen: isSettingsPanelOpen,
-//         onClose: () => setState(() => isSettingsPanelOpen = false),
-//         child: MySettingsContent(),
-//       ),
+//     ContextOverlayPanel(
+//       isOpen: isSettingsPanelOpen,
+//       onClose: () => setState(() => isSettingsPanelOpen = false),
+//       child: MySettingsContent(),
+//     ),
 //   ],
 // )
 // ```
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:otzaria/widgets/floating_panel.dart';
 
-class ContextOverlayPanel extends StatelessWidget {
+class ContextOverlayPanel extends StatefulWidget {
   /// האם הפאנל פתוח
   final bool isOpen;
 
@@ -65,23 +66,76 @@ class ContextOverlayPanel extends StatelessWidget {
   });
 
   @override
+  State<ContextOverlayPanel> createState() => _ContextOverlayPanelState();
+}
+
+class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
+  static const _opacityDuration = Duration(milliseconds: 200);
+  static const _slideDuration = Duration(milliseconds: 300);
+
+  Timer? _disposeChildTimer;
+  late bool _shouldBuildChild;
+
+  @override
+  void initState() {
+    super.initState();
+    _shouldBuildChild = widget.isOpen;
+  }
+
+  @override
+  void didUpdateWidget(covariant ContextOverlayPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.isOpen) {
+      _disposeChildTimer?.cancel();
+      if (!_shouldBuildChild) {
+        setState(() {
+          _shouldBuildChild = true;
+        });
+      }
+      return;
+    }
+
+    if (!oldWidget.isOpen || !_shouldBuildChild) {
+      return;
+    }
+
+    _disposeChildTimer?.cancel();
+    _disposeChildTimer = Timer(_slideDuration, () {
+      if (!mounted || widget.isOpen) {
+        return;
+      }
+      setState(() {
+        _shouldBuildChild = false;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _disposeChildTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final effectiveBackgroundColor = backgroundColor ?? cs.surfaceContainerHigh;
+    final effectiveBackgroundColor =
+        widget.backgroundColor ?? cs.surfaceContainerHigh;
     // centerEnd = שמאל פיזי ב-RTL, centerStart = ימין פיזי
-    final isLeft = alignment == AlignmentDirectional.centerEnd;
+    final isLeft = widget.alignment == AlignmentDirectional.centerEnd;
 
     return IgnorePointer(
-      ignoring: !isOpen,
+      ignoring: !widget.isOpen,
       child: Stack(
         children: [
           // ── scrim (רקע שקוף לחיץ) ──────────────────────────────────────
           Positioned.fill(
             child: GestureDetector(
-              onTap: onClose,
+              onTap: widget.onClose,
               child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: isOpen ? 1.0 : 0.0,
+                duration: _opacityDuration,
+                opacity: widget.isOpen ? 1.0 : 0.0,
                 child: ColoredBox(
                   color: cs.scrim.withValues(alpha: 0.30),
                 ),
@@ -95,12 +149,12 @@ class ContextOverlayPanel extends StatelessWidget {
             left: isLeft ? 10 : null,
             right: isLeft ? null : 10,
             child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: isOpen ? 1.0 : 0.0,
+              duration: _opacityDuration,
+              opacity: widget.isOpen ? 1.0 : 0.0,
               child: AnimatedSlide(
-                duration: const Duration(milliseconds: 300),
+                duration: _slideDuration,
                 curve: Curves.easeInOut,
-                offset: isOpen
+                offset: widget.isOpen
                     ? Offset.zero
                     : (isLeft
                         ? const Offset(-1, 0) // שמאל → יוצא שמאלה
@@ -110,11 +164,13 @@ class ContextOverlayPanel extends StatelessWidget {
                   color: effectiveBackgroundColor,
                   borderRadius: BorderRadius.circular(18),
                   child: SizedBox(
-                    width: width,
+                    width: widget.width,
                     child: SafeArea(
                       child: Padding(
-                        padding: contentPadding,
-                        child: child,
+                        padding: widget.contentPadding,
+                        child: _shouldBuildChild
+                            ? widget.child
+                            : const SizedBox.shrink(),
                       ),
                     ),
                   ),
