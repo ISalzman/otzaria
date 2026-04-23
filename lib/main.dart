@@ -56,7 +56,6 @@ import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
-import 'package:otzaria/core/shared_prefs_setup.dart';
 import 'package:otzaria/core/error_log_file.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
@@ -528,7 +527,6 @@ Future<void> initialize() async {
   }
 
   await RustLib.init();
-  await configureSharedPreferencesPath();
   await Settings.init(cacheProvider: HiveCache());
   await initHive();
   await createDirs();

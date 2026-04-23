@@ -1,6 +1,8 @@
 import 'dart:convert';
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:hive_ce/hive.dart';
+import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 
 class PersonalNoteDraft {
@@ -59,8 +61,7 @@ class PersonalNoteDraftService {
     String? noteId,
   }) {
     assert((lineNumber == null) != (noteId == null));
-    final bookSegment =
-        categoryId != null ? '$bookId@$categoryId' : bookId;
+    final bookSegment = categoryId != null ? '$bookId@$categoryId' : bookId;
     if (noteId != null) {
       return '$_prefix$bookSegment:note:$noteId';
     }
@@ -68,8 +69,7 @@ class PersonalNoteDraftService {
   }
 
   String _bookPrefix(String bookId, {int? categoryId}) {
-    final bookSegment =
-        categoryId != null ? '$bookId@$categoryId' : bookId;
+    final bookSegment = categoryId != null ? '$bookId@$categoryId' : bookId;
     return '$_prefix$bookSegment:';
   }
 
@@ -79,9 +79,9 @@ class PersonalNoteDraftService {
     int? lineNumber,
     String? noteId,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = _key(bookId, categoryId: categoryId, lineNumber: lineNumber, noteId: noteId);
-    final raw = prefs.getString(key);
+    final key = _key(bookId,
+        categoryId: categoryId, lineNumber: lineNumber, noteId: noteId);
+    final raw = Settings.getValue<String>(key);
     if (raw == null) return null;
     try {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
@@ -98,8 +98,8 @@ class PersonalNoteDraftService {
     String? noteId,
     required PersonalNoteDraft draft,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = _key(bookId, categoryId: categoryId, lineNumber: lineNumber, noteId: noteId);
+    final key = _key(bookId,
+        categoryId: categoryId, lineNumber: lineNumber, noteId: noteId);
     final normalizedDraft = PersonalNoteDraft(
       content: draft.content,
       contentPlain: draft.contentPlain,
@@ -109,7 +109,7 @@ class PersonalNoteDraftService {
       noteId: noteId ?? draft.noteId,
       referenceText: draft.referenceText,
     );
-    await prefs.setString(key, jsonEncode(normalizedDraft.toJson()));
+    await Settings.setValue<String>(key, jsonEncode(normalizedDraft.toJson()));
   }
 
   Future<void> clearDraft({
@@ -118,25 +118,28 @@ class PersonalNoteDraftService {
     int? lineNumber,
     String? noteId,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = _key(bookId, categoryId: categoryId, lineNumber: lineNumber, noteId: noteId);
-    await prefs.remove(key);
+    final key = _key(bookId,
+        categoryId: categoryId, lineNumber: lineNumber, noteId: noteId);
+    await Settings.setValue<String?>(key, null);
   }
 
   Future<PersonalNoteDraft?> loadLatestNewNoteDraft({
     required String bookId,
     int? categoryId,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
     final prefix = _bookPrefix(bookId, categoryId: categoryId);
-    final matchingKeys =
-        prefs.getKeys().where((key) => key.startsWith(prefix)).toList()..sort();
+    final box = Hive.box<dynamic>(HiveCache.keyName);
+    final matchingKeys = box.keys
+        .map((k) => k.toString())
+        .where((key) => key.startsWith(prefix))
+        .toList()
+      ..sort();
 
     PersonalNoteDraft? latestDraft;
     for (final key in matchingKeys) {
       if (key.contains(':note:')) continue;
 
-      final raw = prefs.getString(key);
+      final raw = Settings.getValue<String>(key);
       if (raw == null) continue;
 
       try {

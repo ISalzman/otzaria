@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:logging/logging.dart';
 
 import '../models/progress_model.dart';
@@ -22,8 +22,6 @@ class ProgressService {
   final Duration _saveDelay = const Duration(milliseconds: 500);
   final Map<String, dynamic> _pendingChanges = {};
 
-  SharedPreferences? _prefs;
-
   // Legacy -> current category names used by old Shamor Zachor data.
   static const Map<String, String> _legacyCategoryAliases = {
     'תנך': 'תנ"ך',
@@ -31,28 +29,10 @@ class ProgressService {
     'ירושלמי': 'תלמוד ירושלמי',
   };
 
-  /// Get SharedPreferences instance with error handling
-  Future<SharedPreferences> _getPrefs() async {
-    if (_prefs != null) return _prefs!;
-
-    try {
-      _prefs = await SharedPreferences.getInstance();
-      return _prefs!;
-    } catch (e, stackTrace) {
-      throw ShamorZachorError.fromException(
-        e,
-        stackTrace: stackTrace,
-        type: ShamorZachorErrorType.storageUnavailable,
-        customMessage: 'Failed to access local storage',
-      );
-    }
-  }
-
   /// Load full progress data from storage
   Future<FullProgressMap> loadFullProgressData() async {
     try {
-      final prefs = await _getPrefs();
-      final jsonString = prefs.getString(_progressDataKey);
+      final jsonString = Settings.getValue<String>(_progressDataKey);
 
       if (jsonString == null || jsonString.isEmpty) {
         return {};
@@ -102,9 +82,7 @@ class ProgressService {
   /// Save full progress data to storage
   Future<void> _saveFullProgressData(FullProgressMap data) async {
     try {
-      final prefs = await _getPrefs();
-      final jsonString = json.encode(data);
-      await prefs.setString(_progressDataKey, jsonString);
+      await Settings.setValue<String>(_progressDataKey, json.encode(data));
       _logger.fine('Saved progress data for ${data.length} categories');
     } catch (e, stackTrace) {
       throw ShamorZachorError.fromException(
@@ -246,8 +224,7 @@ class ProgressService {
   /// Load completion dates
   Future<CompletionDatesMap> loadCompletionDates() async {
     try {
-      final prefs = await _getPrefs();
-      final jsonString = prefs.getString(_completionDatesKey);
+      final jsonString = Settings.getValue<String>(_completionDatesKey);
 
       if (jsonString == null || jsonString.isEmpty) return {};
 
@@ -271,8 +248,7 @@ class ProgressService {
   /// Save completion dates
   Future<void> _saveCompletionDates(CompletionDatesMap dates) async {
     try {
-      final prefs = await _getPrefs();
-      await prefs.setString(_completionDatesKey, json.encode(dates));
+      await Settings.setValue<String>(_completionDatesKey, json.encode(dates));
     } catch (e, stackTrace) {
       throw ShamorZachorError.fromException(
         e,
@@ -316,8 +292,8 @@ class ProgressService {
   /// Update last accessed timestamp
   Future<void> _updateLastAccessed() async {
     try {
-      final prefs = await _getPrefs();
-      await prefs.setString(_lastAccessedKey, DateTime.now().toIso8601String());
+      await Settings.setValue<String>(
+          _lastAccessedKey, DateTime.now().toIso8601String());
     } catch (e) {
       _logger.fine('Failed to update last accessed: $e');
       // Don't throw - this is not critical
@@ -432,9 +408,9 @@ class ProgressService {
   /// Export all progress data
   Future<String> exportProgressData() async {
     try {
-      final prefs = await _getPrefs();
-      final progressJsonString = prefs.getString(_progressDataKey);
-      final completionDatesJsonString = prefs.getString(_completionDatesKey);
+      final progressJsonString = Settings.getValue<String>(_progressDataKey);
+      final completionDatesJsonString =
+          Settings.getValue<String>(_completionDatesKey);
 
       final Map<String, String?> dataToExport = {
         'progress_data': progressJsonString,
@@ -456,7 +432,6 @@ class ProgressService {
   /// Import progress data
   Future<bool> importProgressData(String jsonData) async {
     try {
-      final prefs = await _getPrefs();
       final Map<String, dynamic> decodedData = json.decode(jsonData);
 
       final String? progressDataString =
@@ -464,8 +439,10 @@ class ProgressService {
       final String? completionDatesString =
           decodedData['completion_dates'] as String?;
 
-      await prefs.setString(_progressDataKey, progressDataString ?? '{}');
-      await prefs.setString(_completionDatesKey, completionDatesString ?? '{}');
+      await Settings.setValue<String>(
+          _progressDataKey, progressDataString ?? '{}');
+      await Settings.setValue<String>(
+          _completionDatesKey, completionDatesString ?? '{}');
 
       _logger.info('Successfully imported progress data');
       return true;
@@ -474,9 +451,8 @@ class ProgressService {
 
       // Reset to empty state on import failure
       try {
-        final prefs = await _getPrefs();
-        await prefs.setString(_progressDataKey, '{}');
-        await prefs.setString(_completionDatesKey, '{}');
+        await Settings.setValue<String>(_progressDataKey, '{}');
+        await Settings.setValue<String>(_completionDatesKey, '{}');
       } catch (resetError) {
         _logger.severe(
             'Failed to reset progress data after import failure: $resetError');
@@ -489,10 +465,9 @@ class ProgressService {
   /// Clear all progress data
   Future<void> clearAllProgress() async {
     try {
-      final prefs = await _getPrefs();
-      await prefs.remove(_progressDataKey);
-      await prefs.remove(_completionDatesKey);
-      await prefs.remove(_lastAccessedKey);
+      await Settings.setValue<String?>(_progressDataKey, null);
+      await Settings.setValue<String?>(_completionDatesKey, null);
+      await Settings.setValue<String?>(_lastAccessedKey, null);
 
       _pendingChanges.clear();
       _saveTimer?.cancel();
@@ -514,8 +489,8 @@ class ProgressService {
   /// Load progress data by book ID
   Future<ProgressMapById> loadProgressDataById() async {
     try {
-      final prefs = await _getPrefs();
-      final jsonString = prefs.getString('${_keyPrefix}progress_by_id');
+      final jsonString =
+          Settings.getValue<String>('${_keyPrefix}progress_by_id');
 
       if (jsonString == null || jsonString.isEmpty) {
         return {};
@@ -561,8 +536,6 @@ class ProgressService {
   /// Save progress data by book ID
   Future<void> saveProgressDataById(ProgressMapById data) async {
     try {
-      final prefs = await _getPrefs();
-
       // המרה ידנית ל-JSON כי PageProgress לא ממיר אוטומטית
       final Map<String, dynamic> jsonData = {};
       data.forEach((bookId, progressMap) {
@@ -574,7 +547,8 @@ class ProgressService {
       });
 
       final jsonString = json.encode(jsonData);
-      await prefs.setString('${_keyPrefix}progress_by_id', jsonString);
+      await Settings.setValue<String>(
+          '${_keyPrefix}progress_by_id', jsonString);
       _logger.fine('Saved progress data for ${data.length} books by ID');
     } catch (e, stackTrace) {
       throw ShamorZachorError.fromException(
@@ -589,8 +563,8 @@ class ProgressService {
   /// Load completion dates by book ID
   Future<CompletionDatesByIdMap> loadCompletionDatesById() async {
     try {
-      final prefs = await _getPrefs();
-      final jsonString = prefs.getString('${_keyPrefix}completion_dates_by_id');
+      final jsonString =
+          Settings.getValue<String>('${_keyPrefix}completion_dates_by_id');
 
       if (jsonString == null || jsonString.isEmpty) {
         return {};
@@ -626,10 +600,10 @@ class ProgressService {
       final dates = await loadCompletionDatesById();
       dates[bookId] = date;
 
-      final prefs = await _getPrefs();
       final jsonString =
           json.encode(dates.map((k, v) => MapEntry(k.toString(), v)));
-      await prefs.setString('${_keyPrefix}completion_dates_by_id', jsonString);
+      await Settings.setValue<String>(
+          '${_keyPrefix}completion_dates_by_id', jsonString);
 
       _logger.fine('Saved completion date for book $bookId');
     } catch (e, stackTrace) {
@@ -644,10 +618,10 @@ class ProgressService {
   /// Save all completion dates by book ID
   Future<void> saveCompletionDatesById(CompletionDatesByIdMap dates) async {
     try {
-      final prefs = await _getPrefs();
       final jsonString =
           json.encode(dates.map((k, v) => MapEntry(k.toString(), v)));
-      await prefs.setString('${_keyPrefix}completion_dates_by_id', jsonString);
+      await Settings.setValue<String>(
+          '${_keyPrefix}completion_dates_by_id', jsonString);
     } catch (e, stackTrace) {
       throw ShamorZachorError.fromException(
         e,
@@ -697,11 +671,9 @@ class ProgressService {
         findBookIdByName,
   }) async {
     try {
-      final prefs = await _getPrefs();
-
       // Check if migration already completed
       final migrationCompleted =
-          prefs.getBool('${_keyPrefix}migration_completed') ?? false;
+          Settings.getValue<bool>('${_keyPrefix}migration_completed') ?? false;
       if (migrationCompleted) {
         _logger.fine('Migration already completed, skipping');
         return true;
@@ -715,7 +687,7 @@ class ProgressService {
 
       if (oldProgress.isEmpty && oldCompletionDates.isEmpty) {
         _logger.info('No old data to migrate');
-        await prefs.setBool('${_keyPrefix}migration_completed', true);
+        await Settings.setValue<bool>('${_keyPrefix}migration_completed', true);
         return true;
       }
 
@@ -812,13 +784,13 @@ class ProgressService {
 
       // Save migrated data
       await saveProgressDataById(newProgress);
-      await prefs.setString(
+      await Settings.setValue<String>(
           '${_keyPrefix}completion_dates_by_id',
           json.encode(
               newCompletionDates.map((k, v) => MapEntry(k.toString(), v))));
 
       // Mark migration as completed
-      await prefs.setBool('${_keyPrefix}migration_completed', true);
+      await Settings.setValue<bool>('${_keyPrefix}migration_completed', true);
 
       _logger.info(
           'Migration completed: $migratedBooks books migrated, $failedBooks failed');
@@ -842,8 +814,7 @@ class ProgressService {
   /// Reset migration flag (for testing purposes)
   Future<void> resetMigrationFlag() async {
     try {
-      final prefs = await _getPrefs();
-      await prefs.remove('${_keyPrefix}migration_completed');
+      await Settings.setValue<bool?>('${_keyPrefix}migration_completed', null);
       _logger.info('Migration flag reset');
     } catch (e) {
       _logger.warning('Failed to reset migration flag', e);
