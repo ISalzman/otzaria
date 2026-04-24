@@ -1630,6 +1630,7 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                     textDirection: TextDirection.rtl,
                   );
 
