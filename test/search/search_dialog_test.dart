@@ -16,7 +16,7 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../test_helpers/memory_cache_provider.dart';
 
 class MockHistoryBloc extends MockBloc<HistoryEvent, HistoryState>
     implements HistoryBloc {}
@@ -29,8 +29,7 @@ class MockNavigationBloc extends MockBloc<NavigationEvent, NavigationState>
 
 void main() {
   setUpAll(() async {
-    SharedPreferences.setMockInitialValues({});
-    await Settings.init();
+    await Settings.init(cacheProvider: MemoryCacheProvider());
   });
 
   testWidgets('מגירת ההיסטוריה משתמשת ברקע של הדיאלוג',

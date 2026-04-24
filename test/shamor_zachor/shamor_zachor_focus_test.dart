@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -16,13 +15,13 @@ import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_pro
 import 'package:otzaria/tools/shamor_zachor/screens/shamor_zachor_main_screen.dart';
 import 'package:otzaria/tools/shamor_zachor/shamor_zachor_widget.dart';
 import 'package:otzaria/tools/shamor_zachor/widgets/book_card_widget.dart';
+import '../test_helpers/memory_cache_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
-    SharedPreferences.setMockInitialValues({});
-    await Settings.init();
+    await Settings.init(cacheProvider: MemoryCacheProvider());
   });
 
   group('Shamor Zachor focus controller', () {

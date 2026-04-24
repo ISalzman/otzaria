@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/personal_notes/widgets/note_tile.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../test_helpers/memory_cache_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() {
-    SharedPreferences.setMockInitialValues({});
+  setUp(() async {
+    await Settings.init(cacheProvider: MemoryCacheProvider());
   });
 
   testWidgets('NoteTile פותח אוטומטית עריכה כשיש טיוטה להערה קיימת',

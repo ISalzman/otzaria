@@ -3,7 +3,6 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:updat/updat.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -23,13 +22,12 @@ Widget hebrewFlatChip({
       UpdatStatus.availableWithChangelog == status) {
     // בדוק אם הדיאלוג כבר הוצג לגרסה זו
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final prefs = await SharedPreferences.getInstance();
       final shownKey = 'update_dialog_shown_$latestVersion';
-      final alreadyShown = prefs.getBool(shownKey) ?? false;
+      final alreadyShown = Settings.getValue<bool>(shownKey) ?? false;
 
       if (!alreadyShown && context.mounted) {
         // סמן שהדיאלוג הוצג לגרסה זו
-        await prefs.setBool(shownKey, true);
+        await Settings.setValue<bool>(shownKey, true);
         openDialog();
       }
     });
