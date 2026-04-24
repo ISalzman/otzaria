@@ -507,6 +507,7 @@ Future<void> initialize() async {
   // Initialize SQLite FFI for desktop platforms
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
+    await windowManager.setMinimumSize(WindowPersistence.minSize);
 
     // Configure window manager for proper close handling
     windowOptions = const WindowOptions(
