@@ -167,8 +167,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (_showCommentatorsFilter &&
         _filterWasAutoOpened &&
         !_userInteractedWithFilter &&
-        (oldWidget.selectedCommentatorsOverride ?? []).isEmpty &&
-        (widget.selectedCommentatorsOverride ?? []).isNotEmpty) {
+        (oldWidget.selectedCommentatorsOverride?.isEmpty ?? true) &&
+        (widget.selectedCommentatorsOverride?.isNotEmpty ?? false)) {
       setState(() {
         _showCommentatorsFilter = false;
         _filterWasAutoOpened = false;
