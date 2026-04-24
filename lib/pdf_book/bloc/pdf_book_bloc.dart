@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -101,7 +102,20 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     final initial = state;
     if (initial is! PdfBookInitial) return;
 
-    emit(PdfBookLoading(book: initial.book));
+    if (!File(initial.book.path).existsSync()) {
+      emit(PdfBookError(book: initial.book, message: 'הספר איננו קיים'));
+      return;
+    }
+
+    emit(PdfBookLoading(
+      book: initial.book,
+      searchText: initial.searchText,
+      searchOptions: initial.searchOptions,
+      alternativeWords: initial.alternativeWords,
+      spacingValues: initial.spacingValues,
+      searchMode: initial.searchMode,
+      layoutMode: initial.layoutMode,
+    ));
 
     // Load headings and links in background
     _loadHeadingsAndLinks(initial.book);
@@ -163,12 +177,12 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       layoutMode = current.layoutMode;
     } else if (current is PdfBookLoading) {
       book = current.book;
-      searchText = '';
-      searchOptions = const {};
-      alternativeWords = const {};
-      spacingValues = const {};
-      searchMode = SearchMode.exact;
-      layoutMode = tab.savedLayoutMode ?? PdfLayoutMode.regularView;
+      searchText = current.searchText;
+      searchOptions = current.searchOptions;
+      alternativeWords = current.alternativeWords;
+      spacingValues = current.spacingValues;
+      searchMode = current.searchMode;
+      layoutMode = current.layoutMode;
     } else if (current is PdfBookLoaded) {
       // Already loaded, just update
       emit(current.copyWith(
