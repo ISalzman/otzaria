@@ -981,9 +981,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         final displayLimit = min(books.length, 100);
         return SingleChildScrollView(
           key: PageStorageKey(state.currentCategory),
-          child: Column(
-            children: [_buildSearchResultsGrid(books, displayLimit)],
-          ),
+          child: _buildSearchResultsGrid(books, displayLimit),
         );
       }
       return FutureBuilder<List<Widget>>(
