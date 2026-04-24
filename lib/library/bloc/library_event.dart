@@ -31,6 +31,10 @@ class UpdateHebrewBooksPath extends LibraryEvent {
   List<Object?> get props => [path];
 }
 
+class RemoveHebrewBooksPath extends LibraryEvent {
+  const RemoveHebrewBooksPath();
+}
+
 class NavigateToCategory extends LibraryEvent {
   final Category category;
 
