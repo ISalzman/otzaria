@@ -106,14 +106,14 @@ class PluginToolDescriptor extends ToolDescriptor {
       );
 }
 
-class MoreScreen extends StatefulWidget {
-  const MoreScreen({super.key});
+class ToolsScreen extends StatefulWidget {
+  const ToolsScreen({super.key});
 
   @override
-  MoreScreenState createState() => MoreScreenState();
+  ToolsScreenState createState() => ToolsScreenState();
 }
 
-class MoreScreenState extends State<MoreScreen>
+class ToolsScreenState extends State<ToolsScreen>
     with AutomaticKeepAliveClientMixin {
   static const int _calendarFocusRetryCount = 6;
 

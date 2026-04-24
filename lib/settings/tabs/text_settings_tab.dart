@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/settings_card.dart';
-import 'package:otzaria/theme/layout_tokens.dart';
+import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/app_menu.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
@@ -362,226 +362,162 @@ class TextSettingsTab extends StatelessWidget {
   }
 
   Widget _buildCopySection(BuildContext context, SettingsState state) {
-    return SettingsCard(
-      title: 'הגדרות העתקה',
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < LayoutBreakpoints.compact;
-            final colorScheme = Theme.of(context).colorScheme;
-            final divider = Divider(
-              height: 1,
-              thickness: 1.5,
-              color: colorScheme.surfaceContainerHighest,
-            );
+    // קביעת ה-subtitle בהתאם למצב העתקת הכותרת
+    String copySubtitle;
+    switch (state.copyWithHeaders) {
+      case 'none':
+        copySubtitle = 'הטקסט יועתק ללא כותרות';
+        break;
+      case 'book_name':
+        copySubtitle = 'הטקסט יועתק עם שם הספר בלבד';
+        break;
+      case 'book_and_path':
+        copySubtitle = 'הטקסט יועתק עם שם הספר ונתיב הטקסט';
+        break;
+      default:
+        copySubtitle = '';
+    }
 
-            if (isNarrow) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // העתקה עם כותרות
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(FluentIcons.copy_24_regular),
-                            const SizedBox(width: 8),
-                            Text('העתקה עם כותרות', style: kSettingsTitleStyle),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          initialValue: state.copyWithHeaders,
-                          decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(value: 'none', child: Text('ללא')),
-                            DropdownMenuItem(
-                                value: 'book_name',
-                                child: Text('שם הספר בלבד')),
-                            DropdownMenuItem(
-                                value: 'book_and_path',
-                                child: Text('שם הספר+נתיב')),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              context
-                                  .read<SettingsBloc>()
-                                  .add(UpdateCopyWithHeaders(value));
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  divider,
-                  // עיצוב העתקה
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(FluentIcons.text_align_right_24_regular),
-                            const SizedBox(width: 8),
-                            Text('עיצוב העתקה', style: kSettingsTitleStyle),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          initialValue: state.copyHeaderFormat,
-                          decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(
-                                value: 'same_line_after_brackets',
-                                child: Text('אותה שורה אחרי (עם סוגריים)')),
-                            DropdownMenuItem(
-                                value: 'same_line_after_no_brackets',
-                                child: Text('אותה שורה אחרי (בלי סוגריים)')),
-                            DropdownMenuItem(
-                                value: 'same_line_before_brackets',
-                                child: Text('אותה שורה לפני (עם סוגריים)')),
-                            DropdownMenuItem(
-                                value: 'same_line_before_no_brackets',
-                                child: Text('אותה שורה לפני (בלי סוגריים)')),
-                            DropdownMenuItem(
-                                value: 'separate_line_after',
-                                child: Text('פסקה נפרדת אחרי')),
-                            DropdownMenuItem(
-                                value: 'separate_line_before',
-                                child: Text('פסקה נפרדת לפני')),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              context
-                                  .read<SettingsBloc>()
-                                  .add(UpdateCopyHeaderFormat(value));
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            } else {
-              return Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          const Icon(FluentIcons.copy_24_regular),
-                          const SizedBox(width: 8),
-                          Text('העתקה עם כותרות', style: kSettingsTitleStyle),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: state.copyWithHeaders,
-                              decoration: InputDecoration(
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8)),
-                              ),
-                              isExpanded: true,
-                              items: const [
-                                DropdownMenuItem(
-                                    value: 'none', child: Text('ללא')),
-                                DropdownMenuItem(
-                                    value: 'book_name',
-                                    child: Text('שם הספר בלבד')),
-                                DropdownMenuItem(
-                                    value: 'book_and_path',
-                                    child: Text('שם הספר+נתיב')),
-                              ],
-                              onChanged: (value) {
-                                if (value != null) {
-                                  context
-                                      .read<SettingsBloc>()
-                                      .add(UpdateCopyWithHeaders(value));
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          const Icon(FluentIcons.text_align_right_24_regular),
-                          const SizedBox(width: 8),
-                          Text('עיצוב העתקה', style: kSettingsTitleStyle),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: state.copyHeaderFormat,
-                              decoration: InputDecoration(
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8)),
-                              ),
-                              isExpanded: true,
-                              items: const [
-                                DropdownMenuItem(
-                                    value: 'same_line_after_brackets',
-                                    child: Text('אותה שורה אחרי (עם סוגריים)')),
-                                DropdownMenuItem(
-                                    value: 'same_line_after_no_brackets',
-                                    child:
-                                        Text('אותה שורה אחרי (בלי סוגריים)')),
-                                DropdownMenuItem(
-                                    value: 'same_line_before_brackets',
-                                    child: Text('אותה שורה לפני (עם סוגריים)')),
-                                DropdownMenuItem(
-                                    value: 'same_line_before_no_brackets',
-                                    child:
-                                        Text('אותה שורה לפני (בלי סוגריים)')),
-                                DropdownMenuItem(
-                                    value: 'separate_line_after',
-                                    child: Text('פסקה נפרדת אחרי')),
-                                DropdownMenuItem(
-                                    value: 'separate_line_before',
-                                    child: Text('פסקה נפרדת לפני')),
-                              ],
-                              onChanged: (value) {
-                                if (value != null) {
-                                  context
-                                      .read<SettingsBloc>()
-                                      .add(UpdateCopyHeaderFormat(value));
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
+    // קביעת ה-subtitle בהתאם לעיצוב ההעתקה
+    String formatSubtitle;
+    switch (state.copyHeaderFormat) {
+      case 'same_line_after_brackets':
+        formatSubtitle = 'הכותרת תופיע באותה שורה אחרי הטקסט (עם סוגריים)';
+        break;
+      case 'same_line_after_no_brackets':
+        formatSubtitle = 'הכותרת תופיע באותה שורה אחרי הטקסט (בלי סוגריים)';
+        break;
+      case 'same_line_before_brackets':
+        formatSubtitle = 'הכותרת תופיע באותה שורה לפני הטקסט (עם סוגריים)';
+        break;
+      case 'same_line_before_no_brackets':
+        formatSubtitle = 'הכותרת תופיע באותה שורה לפני הטקסט (בלי סוגריים)';
+        break;
+      case 'separate_line_after':
+        formatSubtitle = 'הכותרת תופיע בפסקה נפרדת אחרי הטקסט';
+        break;
+      case 'separate_line_before':
+        formatSubtitle = 'הכותרת תופיע בפסקה נפרדת לפני הטקסט';
+        break;
+      default:
+        formatSubtitle = '';
+    }
+
+    return SettingsCard(
+      title: 'העתקת כותרות ופרקים',
+      children: [
+        SegmentedSettingsTile<String>(
+          icon: FluentIcons.copy_24_regular,
+          title: 'העתקת הכותרת',
+          subtitle: copySubtitle,
+          options: const [
+            SegmentOption(value: 'none', label: 'ללא'),
+            SegmentOption(value: 'book_name', label: 'שם הספר'),
+            SegmentOption(value: 'book_and_path', label: 'שם וכותרת'),
+          ],
+          currentValue: state.copyWithHeaders,
+          onChanged: (value) {
+            context.read<SettingsBloc>().add(UpdateCopyWithHeaders(value));
           },
         ),
+        if (state.copyWithHeaders != 'none')
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow =
+                  constraints.maxWidth < LayoutBreakpoints.compact;
+
+              const formatEntries = [
+                AppMenuEntry(
+                  value: 'same_line_after_brackets',
+                  label: 'אותה שורה אחרי (עם סוגריים)',
+                ),
+                AppMenuEntry(
+                  value: 'same_line_after_no_brackets',
+                  label: 'אותה שורה אחרי (בלי סוגריים)',
+                ),
+                AppMenuEntry(
+                  value: 'same_line_before_brackets',
+                  label: 'אותה שורה לפני (עם סוגריים)',
+                ),
+                AppMenuEntry(
+                  value: 'same_line_before_no_brackets',
+                  label: 'אותה שורה לפני (בלי סוגריים)',
+                ),
+                AppMenuEntry(
+                  value: 'separate_line_after',
+                  label: 'פסקה נפרדת אחרי',
+                ),
+                AppMenuEntry(
+                  value: 'separate_line_before',
+                  label: 'פסקה נפרדת לפני',
+                ),
+              ];
+
+              void onFormatSelected(String? value) {
+                if (value != null) {
+                  context
+                      .read<SettingsBloc>()
+                      .add(UpdateCopyHeaderFormat(value));
+                }
+              }
+
+              if (isNarrow) {
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(FluentIcons.text_align_right_24_regular),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('עיצוב כותרות',
+                                    style: kSettingsTitleStyle),
+                                Text(formatSubtitle,
+                                    style: kSettingsSubtitleStyle),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      AppDropdownField<String>(
+                        value: state.copyHeaderFormat,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        entries: formatEntries,
+                        onSelected: onFormatSelected,
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return ListTile(
+                leading: const Icon(FluentIcons.text_align_right_24_regular),
+                title: const Text('עיצוב כותרות', style: kSettingsTitleStyle),
+                subtitle: Text(formatSubtitle, style: kSettingsSubtitleStyle),
+                trailing: SizedBox(
+                  width: 220,
+                  child: AppDropdownField<String>(
+                    value: state.copyHeaderFormat,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    entries: formatEntries,
+                    onSelected: onFormatSelected,
+                  ),
+                ),
+              );
+            },
+          ),
       ],
     );
   }
@@ -609,14 +545,10 @@ class TextSettingsTab extends StatelessWidget {
           Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: ElevatedButton.icon(
+            child: NeutralActionButton(
               onPressed: () => _resetPerBookSettings(context),
-              icon: const Icon(FluentIcons.delete_24_regular),
-              label: const Text('אפס את כל הגדרות אלו, בכל הספרים'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
-              ),
+              icon: FluentIcons.delete_24_regular,
+              text: 'אפס את כל הגדרות אלו, בכל הספרים',
             ),
           ),
       ],
@@ -624,23 +556,13 @@ class TextSettingsTab extends StatelessWidget {
   }
 
   Future<void> _resetPerBookSettings(BuildContext context) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await showWarningDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('אישור מחיקה'),
-        content: const Text(
-            'האם אתה בטוח שברצונך למחוק את כל ההגדרות לפי ספר?\nפעולה זו אינה ניתנת לביטול.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ביטול'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('מחק הכל'),
-          ),
-        ],
-      ),
+      title: 'אישור מחיקה',
+      content: 'האם אתה בטוח שברצונך למחוק את כל ההגדרות לפי ספר?',
+      subtitle: 'פעולה זו אינה ניתנת לביטול.',
+      cancelText: 'ביטול',
+      confirmText: 'מחק הכל',
     );
 
     if (confirm == true && context.mounted) {
@@ -749,6 +671,18 @@ class _FontDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fontEntries = AppFonts.availableFonts
+        .map((font) => AppMenuEntry(value: font.value, label: font.label))
+        .toList();
+    final hasSelectedFont =
+        value.isEmpty || fontEntries.any((entry) => entry.value == value);
+    if (!hasSelectedFont) {
+      fontEntries.insert(
+        0,
+        AppMenuEntry(value: value, label: '$value (לא זמין במחשב זה)'),
+      );
+    }
+
     return Row(
       children: [
         Icon(icon),
@@ -759,18 +693,33 @@ class _FontDropdown extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: DropdownButtonFormField<String>(
-            initialValue: value,
-            decoration: InputDecoration(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          child: AppDropdownField<String>(
+            value: value,
+            enableSearch: true,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
             ),
-            dropdownColor: Theme.of(context).colorScheme.surface,
-            isExpanded: true,
-            items: AppFonts.buildDropdownItems(selectedValue: value),
-            onChanged: onChanged,
+            entries: fontEntries,
+            selectedBuilder: (context, selectedValue) {
+              final matchingFont = AppFonts.availableFonts.firstWhere(
+                (font) => font.value == selectedValue,
+                orElse: () => FontInfo(
+                  value: selectedValue ?? '',
+                  label: selectedValue ?? '',
+                ),
+              );
+              return Text(
+                matchingFont.label,
+                style: TextStyle(
+                  fontFamily: AppFonts.fontPaths.containsKey(matchingFont.value)
+                      ? matchingFont.value
+                      : null,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              );
+            },
+            onSelected: onChanged,
           ),
         ),
       ],
