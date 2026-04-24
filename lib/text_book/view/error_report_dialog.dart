@@ -1154,16 +1154,11 @@ class _RegularReportTabState extends State<RegularReportTab> {
         Container(
           padding: const EdgeInsets.all(16.0),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
             border: Border(
               top: BorderSide(
                 color: Theme.of(context).dividerColor,
                 width: 1,
               ),
-            ),
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(12),
-              bottomRight: Radius.circular(12),
             ),
           ),
           child: _buildActionButtons(),
