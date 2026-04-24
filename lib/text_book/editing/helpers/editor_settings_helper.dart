@@ -1,7 +1,7 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import '../models/editor_settings.dart';
 
-/// Helper class to get editor settings from SharedPreferences
+/// Helper class to get editor settings from local settings storage.
 class EditorSettingsHelper {
   static EditorSettings getSettings() {
     return EditorSettings(

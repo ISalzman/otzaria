@@ -502,12 +502,14 @@ Future<void> _runAppBootstrap() async {
 /// 5. Required directory structure creation
 /// 6. Shamor Zachor dynamic data loader initialization
 Future<void> initialize() async {
+  WindowOptions? windowOptions;
+
   // Initialize SQLite FFI for desktop platforms
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
 
     // Configure window manager for proper close handling
-    WindowOptions windowOptions = const WindowOptions(
+    windowOptions = const WindowOptions(
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.hidden,
       windowButtonVisibility: false,
@@ -518,7 +520,12 @@ Future<void> initialize() async {
     windowManager.addListener(_appWindowListener!);
 
     await windowManager.setPreventClose(true);
+  }
 
+  await RustLib.init();
+  await Settings.init(cacheProvider: HiveCache());
+
+  if (windowOptions != null) {
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await WindowPersistence.restoreIfAny();
       await windowManager.show();
@@ -526,8 +533,6 @@ Future<void> initialize() async {
     });
   }
 
-  await RustLib.init();
-  await Settings.init(cacheProvider: HiveCache());
   await initHive();
   await createDirs();
   await loadCerts();

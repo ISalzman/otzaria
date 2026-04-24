@@ -77,7 +77,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
 
       final repository = _sqliteDataProvider!.repository!;
 
-      // Load tracked books list from SharedPreferences
+      // Load tracked books list from Hive-backed settings
       await _loadTrackedBooksList();
 
       // OPTIMIZATION 1 & 2: Use existing getAllBooks() query with in-memory filter
@@ -445,7 +445,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
   }
 
   /// Add a book to Shamor Zachor tracking
-  /// This saves the book ID to a tracked books list in SharedPreferences
+  /// This saves the book ID to a tracked books list in Hive-backed settings
   /// WITHOUT modifying the books database
   Future<void> addCustomBook({
     required String bookName,
@@ -468,7 +468,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
             'הספר "$bookName" לא נמצא במסד הנתונים. יש להוסיף אותו תחילה לספרייה.');
       }
 
-      // 2. Add book ID to tracked books list (in SharedPreferences)
+      // 2. Add book ID to tracked books list
       await _addToTrackedBooksList(existing.id);
       _logger.info(
           "Book '$bookName' (ID: ${existing.id}) added to Shamor Zachor tracking");
@@ -482,7 +482,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
   }
 
   /// Remove a book from Shamor Zachor tracking
-  /// This removes the book ID from the tracked books list in SharedPreferences
+  /// This removes the book ID from the tracked books list
   /// WITHOUT modifying the books database
   Future<void> removeCustomBook({
     required String categoryName,
