@@ -38,6 +38,17 @@ class _ScrollablePositionedListScrollbarState
   }
 
   @override
+  void didUpdateWidget(covariant ScrollablePositionedListScrollbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.itemPositionsListener != widget.itemPositionsListener) {
+      oldWidget.itemPositionsListener.itemPositions
+          .removeListener(_updateScrollPosition);
+      widget.itemPositionsListener.itemPositions
+          .addListener(_updateScrollPosition);
+    }
+  }
+
+  @override
   void dispose() {
     widget.itemPositionsListener.itemPositions
         .removeListener(_updateScrollPosition);
@@ -45,7 +56,7 @@ class _ScrollablePositionedListScrollbarState
   }
 
   void _updateScrollPosition() {
-    if (_isDragging) return;
+    if (!mounted || _isDragging) return;
 
     final positions = widget.itemPositionsListener.itemPositions.value;
     if (positions.isEmpty || widget.itemCount == 0) return;
