@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -38,6 +39,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
   TextBookTab? _currentTextTab;
   PdfViewerController? _pdfController;
   bool _isPdfViewerReady = false;
+  bool _pdfFileExists = true;
   double _fontSize = 18.0; // ברירת מחדל לגודל פונט
   DateTime? _lastPdfPrimaryClickAt;
   Offset? _lastPdfPrimaryClickPosition;
@@ -96,8 +98,10 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
         );
       });
     } else if (widget.book is PdfBook) {
+      final fileExists = File((widget.book! as PdfBook).path).existsSync();
       setState(() {
         _isPdfViewerReady = false;
+        _pdfFileExists = fileExists;
         _pdfController = PdfViewerController();
       });
     }
@@ -376,6 +380,14 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
 
   /// בניית PDF viewer דרך נתיב הקובץ
   Widget _buildPdfViewer(String filePath) {
+    if (!_pdfFileExists) {
+      return const Center(
+        child: Text(
+          'הספר איננו קיים',
+          textDirection: TextDirection.rtl,
+        ),
+      );
+    }
     return Stack(
       children: [
         PdfViewer.file(

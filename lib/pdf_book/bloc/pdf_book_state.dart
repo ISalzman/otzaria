@@ -50,8 +50,22 @@ class PdfBookInitial extends PdfBookState {
 /// Document is loading
 class PdfBookLoading extends PdfBookState {
   final PdfBook book;
+  final String searchText;
+  final Map<String, Map<String, bool>> searchOptions;
+  final Map<int, List<String>> alternativeWords;
+  final Map<String, String> spacingValues;
+  final SearchMode searchMode;
+  final PdfLayoutMode layoutMode;
 
-  const PdfBookLoading({required this.book});
+  const PdfBookLoading({
+    required this.book,
+    this.searchText = '',
+    this.searchOptions = const {},
+    this.alternativeWords = const {},
+    this.spacingValues = const {},
+    this.searchMode = SearchMode.exact,
+    this.layoutMode = PdfLayoutMode.regularView,
+  });
 
   @override
   List<Object?> get props => [book.title];
