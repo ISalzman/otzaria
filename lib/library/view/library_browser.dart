@@ -51,6 +51,30 @@ const double _kDafYomiInlineMinWidth = 820.0;
 /// דיבאונס לגלילה (ms) — מונע rebuild חוזר
 const int _kScrollDebounceMs = 100;
 
+/// מחשב רוחב תקין לחלונית התצוגה המקדימה לפי הרוחב הפנוי בספרייה.
+@visibleForTesting
+({double paneWidth, double minPaneWidth, double maxPaneWidth})
+    calculateLibraryPreviewPaneWidths({
+  required double availableWidth,
+  required String viewMode,
+  double? paneWidthOverride,
+}) {
+  const preferredMinPaneWidth = 280.0;
+  final minPaneWidth = min(preferredMinPaneWidth, max(0.0, availableWidth));
+  final previewWidth =
+      viewMode == 'list' ? availableWidth * 0.55 : availableWidth * 0.36;
+  final maxPaneWidth = max(minPaneWidth, availableWidth - 350);
+  final paneWidth = (paneWidthOverride ?? previewWidth)
+      .clamp(minPaneWidth, maxPaneWidth)
+      .toDouble();
+
+  return (
+    paneWidth: paneWidth,
+    minPaneWidth: minPaneWidth,
+    maxPaneWidth: maxPaneWidth,
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LibraryBrowser extends StatefulWidget {
@@ -138,7 +162,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       togglePreviewPanel: _togglePreviewPanel,
     );
   }
-
 
   @override
   void initState() {
@@ -648,23 +671,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   ) {
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        final screenWidth = constraints.maxWidth;
-        const minPreviewWidth = 280.0;
-        final previewWidth = settingsState.libraryViewMode == 'list'
-            ? screenWidth * 0.55
-            : screenWidth * 0.36;
-        final maxPreviewWidth = (screenWidth - 350).clamp(
-          minPreviewWidth,
-          screenWidth,
-        );
-        final previewPaneWidth = previewWidth.clamp(
-          minPreviewWidth,
-          maxPreviewWidth,
-        );
-        final effectivePreviewPaneWidth =
-            (_previewPaneWidthOverride ?? previewPaneWidth.toDouble()).clamp(
-          minPreviewWidth,
-          maxPreviewWidth,
+        final previewPaneWidths = calculateLibraryPreviewPaneWidths(
+          availableWidth: constraints.maxWidth,
+          viewMode: settingsState.libraryViewMode,
+          paneWidthOverride: _previewPaneWidthOverride,
         );
         final mainContent = _buildContent(state);
 
@@ -673,14 +683,14 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           alignment: AlignmentDirectional.centerStart, // שמאל בעברית (RTL)
           mainContent: RepaintBoundary(child: mainContent),
           paneContent: _buildPreviewPane(settingsState),
-          paneWidth: effectivePreviewPaneWidth.toDouble(),
+          paneWidth: previewPaneWidths.paneWidth,
           minMainContentWidth: 420,
           onClose: () => _hidePreviewPanel(settingsState),
           onOpen: () => _showPreviewPanel(settingsState),
           paneColor: Theme.of(ctx).colorScheme.surface,
           isResizable: true,
-          minPaneWidth: minPreviewWidth,
-          maxPaneWidth: maxPreviewWidth,
+          minPaneWidth: previewPaneWidths.minPaneWidth,
+          maxPaneWidth: previewPaneWidths.maxPaneWidth,
           onPaneWidthChanged: (nextWidth) {
             setState(() {
               _previewPaneWidthOverride = nextWidth;
@@ -736,44 +746,44 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   ActionButtonData _buildSyncActionButton({required bool compact}) {
     return ActionButtonData(
       widget: BlocConsumer<FileSyncBloc, FileSyncState>(
-          listener: (ctx, s) {
-            if ((s.status == FileSyncStatus.completed ||
-                    s.status == FileSyncStatus.error) &&
-                s.hasNewSync) {
-              ctx.read<LibraryBloc>().add(RefreshLibrary());
-            }
-          },
-          builder: (ctx, syncState) {
-            final isSyncing = syncState.status == FileSyncStatus.syncing;
-            final icon = syncState.status == FileSyncStatus.completed
-                ? FluentIcons.checkmark_circle_24_regular
-                : FluentIcons.arrow_sync_24_regular;
-            final tooltip = switch (syncState.status) {
-              FileSyncStatus.syncing => 'עצור סינכרון',
-              FileSyncStatus.completed =>
-                syncState.hasNewSync ? 'סנכרון הושלם' : 'אין עדכונים חדשים',
-              FileSyncStatus.error => 'שגיאה בסינכרון - לחץ לנסות שוב',
-              FileSyncStatus.initial => 'סינכרון',
-            };
-            return ToolbarActionButton(
-              compact: compact,
-              tooltip: tooltip,
-              icon: icon,
-              selected: isSyncing,
-              onPressed: () {
-                final b = ctx.read<FileSyncBloc>();
-                switch (syncState.status) {
-                  case FileSyncStatus.syncing:
-                    b.add(const StopSync());
-                  case FileSyncStatus.completed:
-                  case FileSyncStatus.error:
-                    b.add(const ResetState());
-                  case FileSyncStatus.initial:
-                    b.add(const StartSync());
-                }
-              },
-            );
-          },
+        listener: (ctx, s) {
+          if ((s.status == FileSyncStatus.completed ||
+                  s.status == FileSyncStatus.error) &&
+              s.hasNewSync) {
+            ctx.read<LibraryBloc>().add(RefreshLibrary());
+          }
+        },
+        builder: (ctx, syncState) {
+          final isSyncing = syncState.status == FileSyncStatus.syncing;
+          final icon = syncState.status == FileSyncStatus.completed
+              ? FluentIcons.checkmark_circle_24_regular
+              : FluentIcons.arrow_sync_24_regular;
+          final tooltip = switch (syncState.status) {
+            FileSyncStatus.syncing => 'עצור סינכרון',
+            FileSyncStatus.completed =>
+              syncState.hasNewSync ? 'סנכרון הושלם' : 'אין עדכונים חדשים',
+            FileSyncStatus.error => 'שגיאה בסינכרון - לחץ לנסות שוב',
+            FileSyncStatus.initial => 'סינכרון',
+          };
+          return ToolbarActionButton(
+            compact: compact,
+            tooltip: tooltip,
+            icon: icon,
+            selected: isSyncing,
+            onPressed: () {
+              final b = ctx.read<FileSyncBloc>();
+              switch (syncState.status) {
+                case FileSyncStatus.syncing:
+                  b.add(const StopSync());
+                case FileSyncStatus.completed:
+                case FileSyncStatus.error:
+                  b.add(const ResetState());
+                case FileSyncStatus.initial:
+                  b.add(const StartSync());
+              }
+            },
+          );
+        },
       ),
       icon: FluentIcons.arrow_sync_24_regular,
       tooltip: 'סינכרון',

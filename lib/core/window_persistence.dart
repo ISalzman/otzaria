@@ -11,8 +11,9 @@ class WindowPersistence {
   static const _kHeight = 'window_bounds_height';
   static const _kIsMaximized = 'window_is_maximized';
 
-  static const double _minWidth = 400;
-  static const double _minHeight = 300;
+  static const double _minWidth = 420;
+  static const double _minHeight = 400;
+  static const Size minSize = Size(_minWidth, _minHeight);
   static const Duration _debounceDuration = Duration(milliseconds: 400);
 
   static Timer? _debounce;
@@ -41,8 +42,8 @@ class WindowPersistence {
         return;
       }
 
-      final clampedWidth = width < _minWidth ? _minWidth : width;
-      final clampedHeight = height < _minHeight ? _minHeight : height;
+      final clampedWidth = width < minSize.width ? minSize.width : width;
+      final clampedHeight = height < minSize.height ? minSize.height : height;
 
       // Set bounds before maximizing so Windows records this as the "restore size".
       // Without this, unmaximize would revert to the runner's default dimensions
