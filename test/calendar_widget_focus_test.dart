@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:otzaria/settings/engine/settings_bloc.dart';
@@ -12,15 +11,15 @@ import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/tools/calendar/calendar_screen.dart';
+import 'test_helpers/memory_cache_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
-    SharedPreferences.setMockInitialValues({});
     tz.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Asia/Jerusalem'));
-    await Settings.init();
+    await Settings.init(cacheProvider: MemoryCacheProvider());
   });
 
   group('CalendarWidget focus refresh', () {
@@ -92,7 +91,8 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
       await tester.pump();
 
-      final dateWithoutCalendarFocus = calendarCubit.state.selectedGregorianDate;
+      final dateWithoutCalendarFocus =
+          calendarCubit.state.selectedGregorianDate;
       expect(dateWithoutCalendarFocus, dateAfterFirstArrow);
 
       calendarKey.currentState!.requestKeyboardFocus();
@@ -124,8 +124,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final shiftedDate =
-          calendarCubit.state.selectedGregorianDate.add(const Duration(days: 5));
+      final shiftedDate = calendarCubit.state.selectedGregorianDate
+          .add(const Duration(days: 5));
       calendarCubit.jumpToDate(shiftedDate);
       await tester.pumpAndSettle();
 
@@ -198,5 +198,6 @@ class _FakeGoogleCalendarService extends GoogleCalendarService {
   @override
   Future<GoogleCalendarApiClient?> getApiClient({
     bool interactive = false,
-  }) async => null;
+  }) async =>
+      null;
 }

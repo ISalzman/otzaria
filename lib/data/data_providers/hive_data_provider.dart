@@ -6,7 +6,7 @@ import 'package:otzaria/core/app_paths.dart';
 /// A cache access provider class for shared preferences using Hive library
 class HiveCache extends CacheProvider {
   Box? _preferences;
-  final String keyName = 'app_preferences';
+  static const String keyName = 'app_preferences';
 
   @override
   Future<void> init() async {

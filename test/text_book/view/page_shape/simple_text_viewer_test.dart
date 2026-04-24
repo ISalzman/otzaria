@@ -18,16 +18,13 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../test_helpers/memory_cache_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
-    SharedPreferences.setMockInitialValues({});
-    if (!Settings.isInitialized) {
-      await Settings.init();
-    }
+    await Settings.init(cacheProvider: MemoryCacheProvider());
   });
 
   testWidgets('לחיצה על אינדיקטור הערה פותחת את טאב ההערות הפנימי',

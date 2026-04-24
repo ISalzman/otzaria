@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 
 /// שירות לניהול הצגת פופאפ פרסומת
 class AdPopupService {
@@ -7,16 +7,14 @@ class AdPopupService {
 
   /// בדיקה האם להציג את הפופאפ
   static Future<bool> shouldShowAd() async {
-    final prefs = await SharedPreferences.getInstance();
-
     // אם המשתמש בחר "אל תציג שוב"
-    final dontShowAgain = prefs.getBool(_keyDontShowAgain) ?? false;
+    final dontShowAgain = Settings.getValue<bool>(_keyDontShowAgain) ?? false;
     if (dontShowAgain) {
       return false;
     }
 
     // בדיקה אם המשתמש בחר "תזכיר לי מאוחר יותר"
-    final remindLaterTimestamp = prefs.getInt(_keyRemindLater);
+    final remindLaterTimestamp = Settings.getValue<int>(_keyRemindLater);
     if (remindLaterTimestamp != null) {
       final remindLaterDate =
           DateTime.fromMillisecondsSinceEpoch(remindLaterTimestamp);
@@ -33,21 +31,19 @@ class AdPopupService {
 
   /// סימון "אל תציג שוב"
   static Future<void> setDontShowAgain() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyDontShowAgain, true);
+    await Settings.setValue<bool>(_keyDontShowAgain, true);
   }
 
   /// סימון "תזכיר לי מאוחר יותר" (ברירת מחדל: 7 ימים)
   static Future<void> setRemindLater({int days = 7}) async {
-    final prefs = await SharedPreferences.getInstance();
     final remindDate = DateTime.now().add(Duration(days: days));
-    await prefs.setInt(_keyRemindLater, remindDate.millisecondsSinceEpoch);
+    await Settings.setValue<int>(
+        _keyRemindLater, remindDate.millisecondsSinceEpoch);
   }
 
   /// איפוס ההגדרות (לצורך בדיקה)
   static Future<void> reset() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyDontShowAgain);
-    await prefs.remove(_keyRemindLater);
+    await Settings.setValue<bool?>(_keyDontShowAgain, null);
+    await Settings.setValue<int?>(_keyRemindLater, null);
   }
 }
