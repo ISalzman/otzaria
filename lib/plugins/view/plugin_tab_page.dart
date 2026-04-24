@@ -24,6 +24,7 @@ import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/utils/book_open_coordinator.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/plugins/view/plugin_dev_error_view.dart';
+import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 
 // ---------------------------------------------------------------------------
 // Stub SDK — injected at AT_DOCUMENT_START before any page JS runs.
@@ -264,6 +265,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     }
 
     return InAppWebView(
+      webViewEnvironment: WebViewEnvironmentHolder.environment,
       initialUrlRequest: URLRequest(url: WebUri.uri(Uri.file(localHtmlPath))),
       initialSettings: InAppWebViewSettings(
         allowFileAccessFromFileURLs: false,

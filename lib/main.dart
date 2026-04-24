@@ -69,6 +69,7 @@ import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/plugins/database/plugin_database_bootstrap.dart';
+import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:logging/logging.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/widgets/restart_widget.dart';
@@ -575,6 +576,15 @@ Future<void> initialize() async {
 
   // Register SQLite sources for plugin database API
   await initPluginDatabaseSources();
+
+  // On Windows system-wide installs (Program Files), WebView2 defaults to writing
+  // its data folder next to the EXE — a read-only location. Pre-create the
+  // environment with an explicit writable path to avoid the crash.
+  try {
+    await WebViewEnvironmentHolder.initialize();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('WebViewEnvironment', error, stackTrace);
+  }
 
   // Initialize Notification Service
   try {
