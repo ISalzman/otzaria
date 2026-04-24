@@ -6,7 +6,7 @@ enum ShamorZachorErrorType {
   /// JSON parsing error
   parseError,
 
-  /// SharedPreferences not available
+  /// Local storage not available
   storageUnavailable,
 
   /// Network error (future use)
