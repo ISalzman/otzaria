@@ -23,6 +23,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     on<RefreshLibrary>(_onRefreshLibrary);
     on<UpdateLibraryPath>(_onUpdateLibraryPath);
     on<UpdateHebrewBooksPath>(_onUpdateHebrewBooksPath);
+    on<RemoveHebrewBooksPath>(_onRemoveHebrewBooksPath);
     on<NavigateToCategory>(_onNavigateToCategory);
     on<NavigateUp>(_onNavigateUp);
     on<SearchBooks>(_onSearchBooks);
@@ -299,6 +300,42 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         searchQuery: null,
         selectedTopics: null,
       ));
+    } catch (e) {
+      emit(state.copyWith(
+        error: e.toString(),
+        isLoading: false,
+      ));
+    }
+  }
+
+  /// הסרת מיקום ספרי היברובוקס
+  Future<void> _onRemoveHebrewBooksPath(
+    RemoveHebrewBooksPath event,
+    Emitter<LibraryState> emit,
+  ) async {
+    emit(state.copyWith(isLoading: true));
+    try {
+      // מחיקת הנתיב מההגדרות
+      await Settings.setValue<String>(
+          SettingsRepository.keyHebrewBooksPath, '');
+
+      // רענון הספרייה כדי להסיר את ספרי היברובוקס
+      DataRepository.instance.library = FileSystemData.instance.getLibrary();
+      DataRepository.instance.invalidateExternalBooksCache();
+
+      final library = await _repository.library;
+
+      emit(state.copyWith(
+        library: library,
+        currentCategory: library,
+        isLoading: false,
+        searchResults: null,
+        searchQuery: null,
+        selectedTopics: null,
+      ));
+
+      developer.log('Hebrew books path removed successfully',
+          name: 'LibraryBloc');
     } catch (e) {
       emit(state.copyWith(
         error: e.toString(),

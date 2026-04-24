@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
+import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/settings/panels/library_settings_panel.dart';
@@ -30,6 +31,8 @@ class LibrarySettingsTab extends StatefulWidget {
 }
 
 class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
+  bool _isRemovingHebrewPath = false;
+
   Future<void> _showExtractionDialog(BuildContext context, String path,
       {required bool isLibraryPath}) async {
     await ZipExtractionProgressDialog.showAndExtract(
@@ -61,6 +64,12 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
         UiSnack.showError(errorMessage);
       },
     );
+  }
+
+  /// הסרת מיקום ספרי היברובוקס
+  void _removeHebrewBooksPath(BuildContext context) {
+    setState(() => _isRemovingHebrewPath = true);
+    context.read<LibraryBloc>().add(const RemoveHebrewBooksPath());
   }
 
   /// פונקציית בניית ווידג'ט מיקום ספריית אוצריא
@@ -118,7 +127,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
   Widget _buildHebrewBooksLocationWidget(BuildContext context) {
     final pathStr =
         Settings.getValue<String>(SettingsRepository.keyHebrewBooksPath);
-    final hasPath = pathStr != null;
+    final hasPath = pathStr != null && pathStr.isNotEmpty;
 
     return ListTile(
       hoverColor: Colors.transparent,
@@ -131,6 +140,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
       ),
       trailing: Wrap(
         spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           if (hasPath)
             NeutralActionButton(
@@ -161,6 +171,12 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
               }
             },
           ),
+          if (hasPath)
+            IconButton(
+              icon: const Icon(FluentIcons.delete_24_regular),
+              onPressed: () => _removeHebrewBooksPath(context),
+              tooltip: 'הסר מיקום',
+            ),
         ],
       ),
     );
@@ -168,49 +184,63 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<SettingsBloc, SettingsState>(
-      builder: (context, state) {
-        // בניית כפתור בחירת תיקייה רק בדסקטופ והעברה לפאנל
-        final hebrewPathWidget = !(Platform.isAndroid || Platform.isIOS)
-            ? _buildHebrewBooksLocationWidget(context)
-            : null;
+    return BlocConsumer<LibraryBloc, LibraryState>(
+      listener: (context, libraryState) {
+        if (_isRemovingHebrewPath && !libraryState.isLoading) {
+          setState(() => _isRemovingHebrewPath = false);
+          if (libraryState.error == null) {
+            UiSnack.show('מיקום ספרי היברובוקס הוסר בהצלחה');
+          } else {
+            UiSnack.showError('שגיאה בהסרת המיקום: ${libraryState.error}');
+          }
+        }
+      },
+      builder: (context, _) {
+        return BlocBuilder<SettingsBloc, SettingsState>(
+          builder: (context, state) {
+            // בניית כפתור בחירת תיקייה רק בדסקטופ והעברה לפאנל
+            final hebrewPathWidget = !(Platform.isAndroid || Platform.isIOS)
+                ? _buildHebrewBooksLocationWidget(context)
+                : null;
 
-        return SingleChildScrollView(
-          primary: true,
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // מאגר הספרים (רק בדסקטופ)
-              if (!(Platform.isAndroid || Platform.isIOS)) ...[
-                SettingsCard(
-                  title: 'מאגר הספרים',
-                  children: [
-                    _buildLibraryLocationWidget(context),
+            return SingleChildScrollView(
+              primary: true,
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // מאגר הספרים (רק בדסקטופ)
+                  if (!(Platform.isAndroid || Platform.isIOS)) ...[
+                    SettingsCard(
+                      title: 'מאגר הספרים',
+                      children: [
+                        _buildLibraryLocationWidget(context),
+                      ],
+                    ),
+                    kSettingsCardSpacing,
                   ],
-                ),
-                kSettingsCardSpacing,
-              ],
 
-              // הפאנל המשותף (תצוגה + ספרים נוספים) - כעת כולל את תיקיית היברובוקס בתוכו!
-              LibrarySettingsPanel(hebrewBooksPathWidget: hebrewPathWidget),
+                  // הפאנל המשותף (תצוגה + ספרים נוספים) - כעת כולל את תיקיית היברובוקס בתוכו!
+                  LibrarySettingsPanel(hebrewBooksPathWidget: hebrewPathWidget),
 
-              // תיקיות מותאמות אישית (רק בדסקטופ)
-              if (!(Platform.isAndroid || Platform.isIOS)) ...[
-                kSettingsCardSpacing,
-                SettingsCard(
-                  title: 'תיקיות מותאמות אישית',
-                  children: const [
-                    CustomFoldersTile(),
+                  // תיקיות מותאמות אישית (רק בדסקטופ)
+                  if (!(Platform.isAndroid || Platform.isIOS)) ...[
+                    kSettingsCardSpacing,
+                    SettingsCard(
+                      title: 'תיקיות מותאמות אישית',
+                      children: const [
+                        CustomFoldersTile(),
+                      ],
+                    ),
                   ],
-                ),
-              ],
 
-              // חיפוש ואינדקס
-              kSettingsCardSpacing,
-              _buildSearchSection(context, state),
-            ],
-          ),
+                  // חיפוש ואינדקס
+                  kSettingsCardSpacing,
+                  _buildSearchSection(context, state),
+                ],
+              ),
+            );
+          },
         );
       },
     );
