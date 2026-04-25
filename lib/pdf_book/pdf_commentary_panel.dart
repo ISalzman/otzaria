@@ -640,6 +640,32 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           }
         }
 
+        // ניקוי ספירות חיפוש מקישורים שאינם בקטע הנוכחי
+        final staleSearchKeys = _searchResultsPerLink.keys
+            .where((key) => !currentLinkKeys.contains(key))
+            .toList();
+        if (staleSearchKeys.isNotEmpty) {
+          for (final key in staleSearchKeys) {
+            _searchResultsPerLink.remove(key);
+          }
+          _pendingCounts
+              .removeWhere((key, _) => !currentLinkKeys.contains(key));
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final newTotal = _searchResultsPerLink.values
+                .fold(0, (sum, c) => sum + c);
+            if (_totalSearchResults != newTotal ||
+                _currentSearchIndex >= newTotal) {
+              setState(() {
+                _totalSearchResults = newTotal;
+                if (_currentSearchIndex >= newTotal) {
+                  _currentSearchIndex = 0;
+                }
+              });
+            }
+          });
+        }
+
         return ScrollablePositionedList.builder(
           key: PageStorageKey(
               'commentary_${widget.tab.currentTextLineNumber}_${widget.tab.activeCommentators.hashCode}_$_allExpanded'),
@@ -716,50 +742,16 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         if (!mounted) return;
       }
 
-      // Check if group is already visible
-      bool groupVisible = false;
-      if (_itemPositionsListener.itemPositions.value.isNotEmpty) {
-        final positions = _itemPositionsListener.itemPositions.value;
-        if (positions.any((p) => p.index == targetGroupIndex)) {
-          groupVisible = true;
-        }
-      }
-
-      if (_itemScrollController.isAttached && !groupVisible) {
-        _itemScrollController.scrollTo(
-          index: targetGroupIndex,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-          alignment: 0.05,
-        );
-        // Wait for group scroll
-        await Future.delayed(const Duration(milliseconds: 350));
-        if (!mounted) return;
-      }
-
-      // Micro-scrolling to specific link
       final linkKey = _getLinkKey(targetLink!);
       final itemKey = _itemKeys[linkKey];
       final BuildContext? itemContext = itemKey?.currentContext;
 
-      if (itemContext != null && itemContext.mounted) {
-        try {
-          final scrollable = Scrollable.of(itemContext);
-          scrollable.position.ensureVisible(
-            itemContext.findRenderObject()!,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            alignment: 0.1,
-          );
-        } catch (e) {
-          debugPrint('Error scrolling to item: $e');
-        }
-      } else if (groupVisible) {
-        // Group is visible but item context is not found (perhaps off screen in the large column?)
-        // In this case, maybe we SHOULD scroll the group to top to be safe, or just scroll to group?
-        // If we are here, it means we thought group is visible so we didn't scroll the group.
-        // But we can't find the item context.
-        // Let's force scroll the group if item context is missing even if group is technically visible.
+      // בודק אם הפריט כבר בעץ הרינדור (לא נדרשת גלילה גסה)
+      final bool itemInRenderTree = itemContext != null &&
+          itemContext.mounted &&
+          itemContext.findRenderObject() is RenderBox;
+
+      if (!itemInRenderTree) {
         if (_itemScrollController.isAttached) {
           _itemScrollController.scrollTo(
             index: targetGroupIndex,
@@ -767,20 +759,23 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             curve: Curves.easeOut,
             alignment: 0.05,
           );
-          await Future.delayed(const Duration(milliseconds: 350));
-          if (!mounted) return;
+        }
+        await Future.delayed(const Duration(milliseconds: 350));
+        if (!mounted) return;
+      }
 
-          // Retry finding context
-          final retryContext = itemKey?.currentContext;
-          if (retryContext != null && retryContext.mounted) {
-            final scrollable = Scrollable.of(retryContext);
-            scrollable.position.ensureVisible(
-              retryContext.findRenderObject()!,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              alignment: 0.1,
-            );
-          }
+      final BuildContext? ctx = itemKey?.currentContext;
+      if (ctx != null && ctx.mounted) {
+        try {
+          final scrollable = Scrollable.of(ctx);
+          scrollable.position.ensureVisible(
+            ctx.findRenderObject()!,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            alignment: 0.1,
+          );
+        } catch (e) {
+          debugPrint('Error scrolling to item: $e');
         }
       }
     });

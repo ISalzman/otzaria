@@ -252,12 +252,14 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
 
           final children = paneOnRight
               ? <Widget>[
-                  paneSlot,
+                  // רק אם החלונית פתוחה, מציגים את ה-paneSlot
+                  if (widget.isOpen) paneSlot,
                   Expanded(child: widget.mainContent),
                 ]
               : <Widget>[
                   Expanded(child: widget.mainContent),
-                  paneSlot,
+                  // רק אם החלונית פתוחה, מציגים את ה-paneSlot
+                  if (widget.isOpen) paneSlot,
                 ];
 
           return Row(
@@ -293,26 +295,16 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                   ),
                 ),
               ),
-            Positioned(
-              top: _kNarrowTopGap,
-              bottom: _kNarrowBottomGap,
-              right: paneOnRight ? 0 : null,
-              left: paneOnRight ? null : 0,
-              width: widget.paneWidth,
-              child: IgnorePointer(
-                ignoring: !widget.isOpen,
-                child: AnimatedSlide(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeOut,
-                  offset: widget.isOpen
-                      ? Offset.zero
-                      : (paneOnRight
-                          ? const Offset(1, 0)
-                          : const Offset(-1, 0)),
-                  child: narrowPane,
-                ),
+            // רק אם החלונית פתוחה, מציגים אותה
+            if (widget.isOpen)
+              Positioned(
+                top: _kNarrowTopGap,
+                bottom: _kNarrowBottomGap,
+                right: paneOnRight ? 0 : null,
+                left: paneOnRight ? null : 0,
+                width: widget.paneWidth,
+                child: narrowPane,
               ),
-            ),
           ],
         );
       },

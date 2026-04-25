@@ -3,6 +3,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/resizable_drag_handle.dart';
 
+class _CounterPane extends StatefulWidget {
+  const _CounterPane();
+
+  @override
+  State<_CounterPane> createState() => _CounterPaneState();
+}
+
+class _CounterPaneState extends State<_CounterPane> {
+  int _count = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text('count: $_count'),
+        TextButton(
+          onPressed: () {
+            setState(() {
+              _count++;
+            });
+          },
+          child: const Text('increment'),
+        ),
+      ],
+    );
+  }
+}
+
 void main() {
   testWidgets('AdaptiveSidePane calls onPaneResizeEnd after dragging',
       (tester) async {
@@ -51,5 +79,60 @@ void main() {
 
     expect(resizeEnded, isTrue);
     expect(paneWidth, isNot(300));
+  });
+
+  testWidgets('AdaptiveSidePane preserves wide pane state across close/open',
+      (tester) async {
+    late StateSetter setRootState;
+    var isOpen = true;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              setRootState = setState;
+              return Scaffold(
+                body: SizedBox(
+                  width: 1200,
+                  height: 700,
+                  child: AdaptiveSidePane(
+                    isOpen: isOpen,
+                    alignment: AlignmentDirectional.centerEnd,
+                    paneWidth: 300,
+                    minMainContentWidth: 420,
+                    onClose: () {},
+                    mainContent: const SizedBox.expand(),
+                    paneContent: const _CounterPane(),
+                    autoHandleResponsiveVisibility: false,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('increment'));
+    await tester.pumpAndSettle();
+    expect(find.text('count: 1'), findsOneWidget);
+
+    setRootState(() {
+      isOpen = false;
+    });
+    await tester.pumpAndSettle();
+
+    setRootState(() {
+      isOpen = true;
+    });
+    await tester.pumpAndSettle();
+
+    expect(find.text('count: 1'), findsOneWidget);
+
+    await tester.tap(find.text('increment'));
+    await tester.pumpAndSettle();
+    expect(find.text('count: 2'), findsOneWidget);
   });
 }
