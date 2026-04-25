@@ -372,7 +372,7 @@ class _CombinedViewState extends State<CombinedView> {
       ..._buildGroup(ungroupedGroup.title, ungroupedGroup.commentators, state),
     ];
 
-    final linkChildren = state.visibleLinks
+    List<AppContextMenuEntry> buildLinkChildren() => state.visibleLinks
         .map((link) => AppContextMenuEntry(
               label: link.fallbackDisplayReference,
               labelWidget: FutureBuilder<String>(
@@ -413,7 +413,7 @@ class _CombinedViewState extends State<CombinedView> {
         label: 'קישורים',
         icon: FluentIcons.link_24_regular,
         enabled: state.visibleLinks.isNotEmpty,
-        children: linkChildren,
+        childrenBuilder: buildLinkChildren,
       ),
       ...(() {
         final dictionaryEntries = buildDictionaryContextMenuEntries(

@@ -13,6 +13,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_se
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -593,9 +594,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       commentatorItems = _buildCommentatorSwitchMenu(state);
     }
 
-    final linksItems = state.links
+    final lineLinks = state.linksByLine[index + 1] ?? const <Link>[];
+    List<AppContextMenuEntry> buildLinksItems() => lineLinks
         .where((link) =>
-            link.index1 == index + 1 &&
             !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
             link.start == null &&
             link.end == null)
@@ -623,6 +624,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             ))
         .toList();
 
+    final hasLinkItems = lineLinks.any((link) =>
+        !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+        link.start == null &&
+        link.end == null);
+
     final entries = <AppContextMenuEntry>[];
 
     if (widget.isMainText) {
@@ -644,12 +650,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       entries.addAll(commentatorItems);
     }
 
-    if (linksItems.isNotEmpty) {
+    if (hasLinkItems) {
       entries.add(const AppContextMenuEntry.divider());
       entries.add(AppContextMenuEntry(
         label: 'קישורים',
         icon: FluentIcons.link_24_regular,
-        children: linksItems,
+        childrenBuilder: buildLinksItems,
       ));
     }
 
