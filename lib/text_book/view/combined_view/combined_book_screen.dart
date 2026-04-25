@@ -17,6 +17,8 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
@@ -67,6 +69,31 @@ class CombinedView extends StatefulWidget {
 
   @override
   State<CombinedView> createState() => _CombinedViewState();
+}
+
+@visibleForTesting
+List<Link> buildCombinedViewContextMenuLinksForParagraph({
+  required Map<int, List<Link>> linksByLine,
+  required int paragraphIndex,
+}) {
+  final lineLinks = linksByLine[paragraphIndex + 1] ?? const <Link>[];
+  final visibleLinks = lineLinks.where((link) {
+    return !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+        link.start == null &&
+        link.end == null;
+  }).toList();
+
+  final titles = <Link, String>{};
+  final pathCache = <String, String>{};
+  for (final link in visibleLinks) {
+    titles[link] = pathCache.putIfAbsent(
+      link.path2,
+      () => utils.getTitleFromPath(link.path2),
+    );
+  }
+  visibleLinks.sort((a, b) => titles[a]!.compareTo(titles[b]!));
+
+  return visibleLinks;
 }
 
 class _CombinedViewState extends State<CombinedView> {
@@ -261,6 +288,7 @@ class _CombinedViewState extends State<CombinedView> {
     String groupName,
     List<String>? group,
     TextBookLoaded st,
+    int paragraphIndex,
   ) {
     if (group == null || group.isEmpty) return const [];
     final bool groupActive =
@@ -270,6 +298,7 @@ class _CombinedViewState extends State<CombinedView> {
         label: 'הצג את כל $groupName',
         icon: groupActive ? FluentIcons.checkmark_24_regular : null,
         onTap: () {
+          _selectParagraphForContextMenu(paragraphIndex);
           final current = List<String>.from(st.activeCommentators);
           final isAdding = !groupActive;
           if (groupActive) {
@@ -289,6 +318,7 @@ class _CombinedViewState extends State<CombinedView> {
           label: title,
           icon: isActive ? FluentIcons.checkmark_24_regular : null,
           onTap: () {
+            _selectParagraphForContextMenu(paragraphIndex);
             final current = List<String>.from(st.activeCommentators);
             final isAdding = !current.contains(title);
             current.contains(title)
@@ -328,12 +358,17 @@ class _CombinedViewState extends State<CombinedView> {
     final allActive = state.activeCommentators
         .toSet()
         .containsAll(state.availableCommentators);
+    final paragraphLinks = buildCombinedViewContextMenuLinksForParagraph(
+      linksByLine: state.linksByLine,
+      paragraphIndex: paragraphIndex,
+    );
 
     final commentatorChildren = <AppContextMenuEntry>[
       AppContextMenuEntry(
         label: 'הצג את כל המפרשים',
         icon: allActive ? FluentIcons.checkmark_24_regular : null,
         onTap: () {
+          _selectParagraphForContextMenu(paragraphIndex);
           context.read<TextBookBloc>().add(
                 UpdateCommentators(
                   allActive
@@ -345,23 +380,28 @@ class _CombinedViewState extends State<CombinedView> {
         },
       ),
       const AppContextMenuEntry.divider(),
-      ..._buildGroup(tanachGroup.title, tanachGroup.commentators, state),
+      ..._buildGroup(
+          tanachGroup.title, tanachGroup.commentators, state, paragraphIndex),
       if (tanachGroup.commentators.isNotEmpty &&
           chazalGroup.commentators.isNotEmpty)
         const AppContextMenuEntry.divider(),
-      ..._buildGroup(chazalGroup.title, chazalGroup.commentators, state),
+      ..._buildGroup(
+          chazalGroup.title, chazalGroup.commentators, state, paragraphIndex),
       if (chazalGroup.commentators.isNotEmpty &&
           rishonimGroup.commentators.isNotEmpty)
         const AppContextMenuEntry.divider(),
-      ..._buildGroup(rishonimGroup.title, rishonimGroup.commentators, state),
+      ..._buildGroup(rishonimGroup.title, rishonimGroup.commentators, state,
+          paragraphIndex),
       if (rishonimGroup.commentators.isNotEmpty &&
           acharonimGroup.commentators.isNotEmpty)
         const AppContextMenuEntry.divider(),
-      ..._buildGroup(acharonimGroup.title, acharonimGroup.commentators, state),
+      ..._buildGroup(acharonimGroup.title, acharonimGroup.commentators, state,
+          paragraphIndex),
       if (acharonimGroup.commentators.isNotEmpty &&
           modernGroup.commentators.isNotEmpty)
         const AppContextMenuEntry.divider(),
-      ..._buildGroup(modernGroup.title, modernGroup.commentators, state),
+      ..._buildGroup(
+          modernGroup.title, modernGroup.commentators, state, paragraphIndex),
       if ((tanachGroup.commentators.isNotEmpty ||
               chazalGroup.commentators.isNotEmpty ||
               rishonimGroup.commentators.isNotEmpty ||
@@ -369,10 +409,11 @@ class _CombinedViewState extends State<CombinedView> {
               modernGroup.commentators.isNotEmpty) &&
           ungroupedGroup.commentators.isNotEmpty)
         const AppContextMenuEntry.divider(),
-      ..._buildGroup(ungroupedGroup.title, ungroupedGroup.commentators, state),
+      ..._buildGroup(ungroupedGroup.title, ungroupedGroup.commentators, state,
+          paragraphIndex),
     ];
 
-    List<AppContextMenuEntry> buildLinkChildren() => state.visibleLinks
+    List<AppContextMenuEntry> buildLinkChildren() => paragraphLinks
         .map((link) => AppContextMenuEntry(
               label: link.fallbackDisplayReference,
               labelWidget: FutureBuilder<String>(
@@ -412,7 +453,7 @@ class _CombinedViewState extends State<CombinedView> {
       AppContextMenuEntry(
         label: 'קישורים',
         icon: FluentIcons.link_24_regular,
-        enabled: state.visibleLinks.isNotEmpty,
+        enabled: paragraphLinks.isNotEmpty,
         childrenBuilder: buildLinkChildren,
       ),
       ...(() {
@@ -492,6 +533,15 @@ class _CombinedViewState extends State<CombinedView> {
         ];
       }(),
     ];
+  }
+
+  void _selectParagraphForContextMenu(int paragraphIndex) {
+    _currentSelectedIndex.value = paragraphIndex;
+
+    final state = _textBookBloc.state;
+    if (state is TextBookLoaded && state.selectedIndex != paragraphIndex) {
+      _textBookBloc.add(UpdateSelectedIndex(paragraphIndex));
+    }
   }
 
   /// פתיחת דיאלוג דיווח על טעות בספר
