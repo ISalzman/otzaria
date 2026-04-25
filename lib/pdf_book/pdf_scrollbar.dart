@@ -79,6 +79,11 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
         ),
         builder: (context, child) {
           if (!widget.controller.isReady) return const SizedBox.shrink();
+          try {
+            widget.controller.visibleRect;
+          } catch (_) {
+            return const SizedBox.shrink();
+          }
           return child!;
         },
       );
@@ -271,6 +276,11 @@ class PdfHorizontalScrollbar extends StatelessWidget {
       animation: controller,
       builder: (context, child) {
         if (!controller.isReady) {
+          return const SizedBox.shrink();
+        }
+        try {
+          controller.visibleRect;
+        } catch (_) {
           return const SizedBox.shrink();
         }
 
