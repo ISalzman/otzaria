@@ -1056,14 +1056,22 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return const <String>[];
   }
 
+  bool _isCommentariesBelowMode(TextBookLoaded state) {
+    return !state.showSplitView && !state.showPageShapeView;
+  }
+
   bool _shouldLoadLinksForState(TextBookLoaded state) {
-    return state.showSplitView ||
+    return _isCommentariesBelowMode(state) ||
+        state.showSplitView ||
         state.showPageShapeView ||
         state.activeCommentators.isNotEmpty;
   }
 
   bool _shouldLoadLinksForVisibleIndicesChange(TextBookLoaded state) {
-    return state.showSplitView || state.showPageShapeView || state.showLeftPane;
+    return _isCommentariesBelowMode(state) ||
+        state.showSplitView ||
+        state.showPageShapeView ||
+        state.showLeftPane;
   }
 
   List<int> _targetIndicesForCommentaryRefresh(TextBookLoaded state) {
@@ -1102,9 +1110,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         clearSelectedIndex: event.index == null,
         visibleLinks: visibleLinks,
       ));
-      // במצב מפרשים מתחת, קישורים לא נטענים ברקע באופן שוטף —
-      // נטען עבור הקטע הנבחר כדי להציג expansion tiles
-      if (!currentState.showSplitView &&
+      // בחירה בקטע עדיין מרעננת נקודתית את חלון הקישורים
+      // כדי לוודא שתוכן ה-expansion tiles זמין מיידית.
+      if (_isCommentariesBelowMode(currentState) &&
           !currentState.showPageShapeView &&
           event.index != null) {
         _loadLinksInBackground(currentState.book, [event.index!]);

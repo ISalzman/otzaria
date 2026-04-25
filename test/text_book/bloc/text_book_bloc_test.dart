@@ -19,7 +19,7 @@ void main() {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
     });
 
-    test('בתצוגה רגילה ללא חלונית פעילה לא טוען קישורים מיד', () async {
+    test('במפרשים למטה טוען קישורים מיד עבור הטווח הגלוי', () async {
       final repository = _FakeTextBookRepository();
       final bloc =
           _createBloc(repository: repository, showPageShapeView: false);
@@ -35,12 +35,15 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(repository.getBookLinksInRangeCalls, 0);
+      expect(repository.getBookLinksInRangeCalls, 1);
+      expect(repository.lastStartIndex, 0);
+      expect(repository.lastEndIndex, 60);
+      expect(repository.lastTargetBookTitles, isEmpty);
 
       await bloc.close();
     });
 
-    test('באתחול ספר ללא חלונית פעילה לא מבקש חלון קישורים', () async {
+    test('באתחול מפרשים למטה מבקש חלון קישורים עבור הטווח הנוכחי', () async {
       final repository = _FakeTextBookRepository();
       final bloc =
           _createBloc(repository: repository, showPageShapeView: false);
@@ -56,15 +59,15 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(repository.getBookLinksInRangeCalls, 0);
-      expect(repository.lastStartIndex, isNull);
-      expect(repository.lastEndIndex, isNull);
-      expect(repository.lastTargetBookTitles, isNull);
+      expect(repository.getBookLinksInRangeCalls, 1);
+      expect(repository.lastStartIndex, 0);
+      expect(repository.lastEndIndex, 60);
+      expect(repository.lastTargetBookTitles, isEmpty);
 
       await bloc.close();
     });
 
-    test('בתצוגה רגילה ללא חלונית מפרשים לא מתבצעת כלל טעינת קישורים',
+    test('במפרשים למטה טעינת הקישורים הראשונית אינה מסננת קישורים רגילים',
         () async {
       final repository = _FakeTextBookRepository();
       final bloc =
@@ -81,8 +84,8 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(repository.getBookLinksInRangeCalls, 0);
-      expect(repository.lastTargetBookTitles, isNull);
+  expect(repository.getBookLinksInRangeCalls, 1);
+  expect(repository.lastTargetBookTitles, isEmpty);
 
       await bloc.close();
     });
@@ -327,7 +330,7 @@ void main() {
       await bloc.close();
     });
 
-    test('במפרשים למטה גלילה לא טוענת מחדש קישורים כשהחלונית סגורה', () async {
+    test('במפרשים למטה גלילה טוענת מחדש קישורים גם כשהחלונית סגורה', () async {
       final repository = _FakeTextBookRepository();
       final bloc = _createBloc(
         repository: repository,
@@ -347,10 +350,10 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(repository.getBookLinksInRangeCalls, 1);
 
-      bloc.add(const UpdateVisibleIndecies([20, 21, 22]));
+      bloc.add(const UpdateVisibleIndecies([80, 81, 82]));
       await Future<void>.delayed(const Duration(milliseconds: 30));
 
-      expect(repository.getBookLinksInRangeCalls, 1);
+      expect(repository.getBookLinksInRangeCalls, 2);
 
       await bloc.close();
     });
@@ -414,12 +417,12 @@ void main() {
 
         bloc.add(const UpdateVisibleIndecies([40, 41, 42]));
         await Future<void>.delayed(const Duration(milliseconds: 80));
-        expect(repository.getBookLinksInRangeCalls, 1);
+        expect(repository.getBookLinksInRangeCalls, 2);
 
         bloc.add(const UpdateCommentators(['אבן עזרא על בראשית']));
         await Future<void>.delayed(const Duration(milliseconds: 80));
 
-        expect(repository.getBookLinksInRangeCalls, 2);
+        expect(repository.getBookLinksInRangeCalls, 3);
         expect(repository.lastStartIndex, 15);
         expect(repository.lastEndIndex, 92);
         expect(repository.lastTargetBookTitles, ['אבן עזרא על בראשית']);
