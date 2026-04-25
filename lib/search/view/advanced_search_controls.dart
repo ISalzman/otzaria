@@ -367,87 +367,97 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
 
     return Column(
       children: [
-        Opacity(
-          opacity: isEnabled ? 1.0 : 0.5,
-          child: RtlTextField(
-            enabled: isEnabled,
-            controller: spacingController,
-            focusNode: isEnabled && _wordIndex != null
-                ? _getSpacingFocusNode(_wordIndex!, _wordIndex! + 1)
-                : null,
-            decoration: InputDecoration(
-              labelText: 'מרווח למילה הבאה',
-              hintText: '0-30',
-              border: const OutlineInputBorder(),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              suffixIcon: IconButton(
-                icon: const Icon(FluentIcons.dismiss_24_regular, size: 20),
-                onPressed: isEnabled && _wordIndex != null
-                    ? () {
-                        final key = '${_wordIndex!}-${_wordIndex! + 1}';
-                        widget.tab.spacingValues.remove(key);
-                        widget.tab.spacingValuesChanged.value++;
-                        _getSpacingController(_wordIndex!, _wordIndex! + 1)
-                            .clear();
-                      }
-                    : null,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Opacity(
+                opacity: isEnabled ? 1.0 : 0.5,
+                child: RtlTextField(
+                  enabled: isEnabled,
+                  controller: spacingController,
+                  focusNode: isEnabled && _wordIndex != null
+                      ? _getSpacingFocusNode(_wordIndex!, _wordIndex! + 1)
+                      : null,
+                  decoration: InputDecoration(
+                    labelText: 'מרווח למילה הבאה',
+                    hintText: '0-30',
+                    border: const OutlineInputBorder(),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    suffixIcon: IconButton(
+                      icon: const Icon(FluentIcons.dismiss_24_regular, size: 20),
+                      onPressed: isEnabled && _wordIndex != null
+                          ? () {
+                              final key = '${_wordIndex!}-${_wordIndex! + 1}';
+                              widget.tab.spacingValues.remove(key);
+                              widget.tab.spacingValuesChanged.value++;
+                              _getSpacingController(_wordIndex!, _wordIndex! + 1)
+                                  .clear();
+                            }
+                          : null,
+                    ),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^([0-9]|[12][0-9]|30)$'),
+                    ),
+                  ],
+                  style: const TextStyle(fontSize: 14),
+                  textAlign: TextAlign.right,
+                  onChanged: (text) {
+                    if (isEnabled &&
+                        _wordIndex != null &&
+                        text.trim().isNotEmpty) {
+                      final key = '${_wordIndex!}-${_wordIndex! + 1}';
+                      widget.tab.spacingValues[key] = text.trim();
+                      widget.tab.spacingValuesChanged.value++;
+                    }
+                  },
+                  onSubmitted: (text) {
+                    if (text.trim().isNotEmpty && _wordIndex != null) {
+                      final key = '${_wordIndex!}-${_wordIndex! + 1}';
+                      widget.tab.spacingValues[key] = text.trim();
+                      widget.tab.spacingValuesChanged.value++;
+                      widget.onEmptySubmit?.call();
+                    } else {
+                      widget.onEmptySubmit?.call();
+                    }
+                  },
+                ),
               ),
             ),
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              FilteringTextInputFormatter.allow(
-                RegExp(r'^([0-9]|[12][0-9]|30)$'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: RtlTextField(
+                controller: _alternativeWordController,
+                focusNode: _alternativeWordFocusNode,
+                enabled: isEnabled,
+                decoration: InputDecoration(
+                  labelText: 'מילה חילופית',
+                  hintText: 'הקלד מילה...',
+                  border: const OutlineInputBorder(),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  prefixIcon: IconButton(
+                    icon: const Icon(FluentIcons.add_24_regular, size: 20),
+                    onPressed: isEnabled ? _addAlternative : null,
+                  ),
+                ),
+                style: const TextStyle(fontSize: 14),
+                textAlign: TextAlign.right,
+                onSubmitted: (text) {
+                  if (text.trim().isNotEmpty) {
+                    _addAlternative();
+                  } else {
+                    widget.onEmptySubmit?.call();
+                  }
+                },
               ),
-            ],
-            style: const TextStyle(fontSize: 14),
-            textAlign: TextAlign.right,
-            onChanged: (text) {
-              if (isEnabled && _wordIndex != null && text.trim().isNotEmpty) {
-                final key = '${_wordIndex!}-${_wordIndex! + 1}';
-                widget.tab.spacingValues[key] = text.trim();
-                widget.tab.spacingValuesChanged.value++;
-              }
-            },
-            onSubmitted: (text) {
-              if (text.trim().isNotEmpty && _wordIndex != null) {
-                final key = '${_wordIndex!}-${_wordIndex! + 1}';
-                widget.tab.spacingValues[key] = text.trim();
-                widget.tab.spacingValuesChanged.value++;
-                // הפעלת חיפוש גם כאשר יש ערך
-                widget.onEmptySubmit?.call();
-              } else {
-                widget.onEmptySubmit?.call();
-              }
-            },
-          ),
-        ),
-        const SizedBox(height: 16),
-        RtlTextField(
-          controller: _alternativeWordController,
-          focusNode: _alternativeWordFocusNode,
-          enabled: isEnabled,
-          decoration: InputDecoration(
-            labelText: 'מילה חילופית',
-            hintText: 'הקלד מילה...',
-            border: const OutlineInputBorder(),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            prefixIcon: IconButton(
-              icon: const Icon(FluentIcons.add_24_regular, size: 20),
-              onPressed: isEnabled ? _addAlternative : null,
             ),
-          ),
-          style: const TextStyle(fontSize: 14),
-          textAlign: TextAlign.right,
-          onSubmitted: (text) {
-            if (text.trim().isNotEmpty) {
-              _addAlternative();
-            } else {
-              widget.onEmptySubmit?.call();
-            }
-          },
+          ],
         ),
         if (_currentAlternatives.isNotEmpty) ...[
           const SizedBox(height: 8),
