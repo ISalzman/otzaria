@@ -299,8 +299,6 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
       builder: (context, constraints) {
         final totalWidth = constraints.maxWidth;
         final rightWidth = totalWidth * _splitRatio;
-        final leftWidth = totalWidth * (1.0 - _splitRatio);
-        const dividerWidth = 8.0;
 
         return Stack(
           children: [
@@ -309,7 +307,7 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
                 // ספר ימני (בגלל RTL, זה יופיע בצד ימין)
                 SizedBox(
                   width: rightWidth,
-                  child: widget.buildTabView(widget.rightTab),
+                  child: ClipRect(child: widget.buildTabView(widget.rightTab)),
                 ),
                 // מפריד ניתן לגרירה
                 ResizableDragHandle(
@@ -323,10 +321,9 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
                   },
                   onDragEnd: () => widget.onSplitRatioChanged(_splitRatio),
                 ),
-                // ספר שמאלי (בגלל RTL, זה יופיע בצד שמאל)
-                SizedBox(
-                  width: leftWidth - dividerWidth,
-                  child: widget.buildTabView(widget.leftTab),
+                // ספר שמאלי - Expanded כדי למלא את שאר המקום ללא גלישה
+                Expanded(
+                  child: ClipRect(child: widget.buildTabView(widget.leftTab)),
                 ),
               ],
             ),
