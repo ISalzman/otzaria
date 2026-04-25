@@ -31,7 +31,7 @@ RenderSettings buildSelectedLinkRenderSettings({
     fontSize: settingsState.commentatorsFontSize,
     fontFamily: settingsState.commentatorsFontFamily,
     lineHeight: settingsState.lineHeight,
-    justifyText: true,
+    justifyText: false,
   );
 }
 
@@ -41,6 +41,26 @@ String normalizeSelectedLinkText(String text) {
       .replaceAll('&nbsp;', ' ')
       .replaceAll(RegExp(r'[^\S\r\n]+'), ' ')
       .trim();
+}
+
+@visibleForTesting
+String buildSelectedLinkContentKey(Link link) {
+  return '${link.path2}_${link.index2}';
+}
+
+@visibleForTesting
+String buildSelectedLinkInstanceKey(Link link) {
+  return '${link.path2}_${link.index1}_${link.index2}_${link.heRef}_${link.start}_${link.end}_${link.connectionType}';
+}
+
+@visibleForTesting
+String buildSelectedLinksSearchKey({
+  required String searchQuery,
+  required bool searchInContent,
+  required List<Link> links,
+}) {
+  final linksSignature = links.map(buildSelectedLinkInstanceKey).join('|');
+  return '${searchQuery}_$searchInContent|$linksSignature';
 }
 
 /// Widget שמציג את הקישורים של השורה הנבחרת בלבד
@@ -176,7 +196,11 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
     }
 
     // יצירת מפתח ייחודי לחיפוש
-    final searchKey = '${_searchQuery}_${_searchInContent}_${links.length}';
+    final searchKey = buildSelectedLinksSearchKey(
+      searchQuery: _searchQuery,
+      searchInContent: _searchInContent,
+      links: links,
+    );
 
     // יצירת Future חדש רק אם החיפוש השתנה
     if (_lastSearchKey != searchKey) {
@@ -215,7 +239,8 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
     final filteredLinks = <Link>[];
 
     for (final link in links) {
-      final keyStr = '${link.path2}_${link.index2}';
+      final instanceKey = buildSelectedLinkInstanceKey(link);
+      final contentKey = buildSelectedLinkContentKey(link);
       final title = link.heRef.toLowerCase();
       final bookTitle = utils.getTitleFromPath(link.path2).toLowerCase();
 
@@ -234,15 +259,15 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           ).toLowerCase();
           if (cleanContent.contains(query)) {
             filteredLinks.add(link);
-            _linksWithSearchResults.add(keyStr); // מסמן שיש תוצאות בתוכן
-            _contentCache[keyStr] = link.content; // טוען את התוכן למטמון
+            _linksWithSearchResults.add(instanceKey); // מסמן שיש תוצאות בתוכן
+            _contentCache[contentKey] = link.content; // טוען את התוכן למטמון
 
             // פותח אוטומטית את הקישור הראשון עם תוצאות
             if (_linksWithSearchResults.length == 1) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   setState(() {
-                    _expanded[keyStr] = true;
+                    _expanded[instanceKey] = true;
                   });
                 }
               });
@@ -275,14 +300,15 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   }
 
   Widget _buildExpansionTile(Link link) {
-    final keyStr = '${link.path2}_${link.index2}';
+    final instanceKey = buildSelectedLinkInstanceKey(link);
+    final contentKey = buildSelectedLinkContentKey(link);
     final restoredExpanded = PageStorage.maybeOf(context)?.readState(
       context,
-      identifier: keyStr,
+      identifier: instanceKey,
     ) as bool?;
-    final isExpanded = _expanded[keyStr] ?? restoredExpanded ?? false;
+    final isExpanded = _expanded[instanceKey] ?? restoredExpanded ?? false;
     return ExpansionTile(
-      key: PageStorageKey(keyStr),
+      key: PageStorageKey(instanceKey),
       initiallyExpanded: isExpanded,
       maintainState: true,
       showTrailingIcon: false,
@@ -316,11 +342,28 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
       ),
       subtitle: BlocBuilder<SettingsBloc, SettingsState>(
         builder: (context, settingsState) {
+          final fallbackSubtitle = settingsState.replaceHolyNames
+              ? utils.replaceHolyNames(link.fallbackDisplayReference)
+              : link.fallbackDisplayReference;
+
+          if (!isExpanded) {
+            return Text(
+              fallbackSubtitle,
+              style: TextStyle(
+                fontSize: settingsState.commentatorsFontSize - 4,
+                fontWeight: FontWeight.normal,
+                fontFamily: settingsState.commentatorsFontFamily,
+                color: Theme.of(context).colorScheme.onSurface.withAlpha(128),
+              ),
+              textDirection: TextDirection.rtl,
+            );
+          }
+
           return FutureBuilder<String>(
             future: link.displayReference,
+            initialData: fallbackSubtitle,
             builder: (context, snapshot) {
-              String displaySubtitle =
-                  snapshot.data ?? link.fallbackDisplayReference;
+              String displaySubtitle = snapshot.data ?? fallbackSubtitle;
               if (settingsState.replaceHolyNames) {
                 displaySubtitle = utils.replaceHolyNames(displaySubtitle);
               }
@@ -340,16 +383,16 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
       ),
       onExpansionChanged: (isExpanded) {
         // טוען תוכן רק אם נפתח ועדיין לא נטען
-        if (isExpanded && !_contentCache.containsKey(keyStr)) {
-          _contentCache[keyStr] = link.content;
+        if (isExpanded && !_contentCache.containsKey(contentKey)) {
+          _contentCache[contentKey] = link.content;
         }
 
         // עדכון מצב ההרחבה עם setState בטוח - דוחה עד אחרי הבנייה
-        if (_expanded[keyStr] != isExpanded) {
+        if (_expanded[instanceKey] != isExpanded) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               setState(() {
-                _expanded[keyStr] = isExpanded;
+                _expanded[instanceKey] = isExpanded;
               });
             }
           });
@@ -361,7 +404,7 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: AppFutureBuilder<String>(
-              future: _contentCache[keyStr],
+              future: _contentCache[contentKey],
               builder: (context, content) => _buildLinkContent(content, link),
               errorBuilder: (context, error) =>
                   BlocBuilder<SettingsBloc, SettingsState>(
@@ -458,8 +501,8 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
         // חיפוש בתוכן - בדיקה אם הקישור הזה מכיל תוצאות
         String searchText = '';
         if (_searchQuery.isNotEmpty && _searchInContent) {
-          final keyStr = '${link.path2}_${link.index2}';
-          if (_linksWithSearchResults.contains(keyStr)) {
+          final instanceKey = buildSelectedLinkInstanceKey(link);
+          if (_linksWithSearchResults.contains(instanceKey)) {
             searchText = _searchQuery;
           }
         }

@@ -78,6 +78,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   late final PdfViewerController pdfController;
   late final PdfBookBloc _bloc;
+  late final bool _pdfFileExists;
   PdfTextSearcher? textSearcher;
   TabController? _leftPaneTabController;
   int _currentLeftPaneTabIndex = 0;
@@ -267,6 +268,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     // טעינת המפרשים הפעילים
     _loadActiveCommentators();
+
+    // בדיקת קיום הקובץ — פעם אחת ב-initState, לפני הבנייה הראשונה
+    _pdfFileExists = File(widget.tab.book.path).existsSync();
+
+    // הגדרת Bloc לטיפול בקיום הקובץ ושאר מצבים
+    _bloc.add(const pdf_events.LoadPdfDocument());
 
     // אם ה-PDF כבר טעון, קפוץ לעמוד הנכון
     if (widget.tab.pdfViewerController.isReady && widget.tab.pageNumber > 1) {
@@ -857,6 +864,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       buildWhen: (prev, curr) {
         PdfLayoutMode? layoutModeFor(PdfBookState state) {
           if (state is PdfBookInitial) return state.layoutMode;
+          if (state is PdfBookLoading) return state.layoutMode;
           if (state is PdfBookLoaded) return state.layoutMode;
           return null;
         }
@@ -864,8 +872,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         return layoutModeFor(prev) != layoutModeFor(curr);
       },
       builder: (context, state) {
+        if (state is PdfBookError || !_pdfFileExists) return const SizedBox.shrink();
+
         final layoutMode = switch (state) {
           PdfBookInitial initial => initial.layoutMode,
+          PdfBookLoading loading => loading.layoutMode,
           PdfBookLoaded loaded => loaded.layoutMode,
           _ => PdfLayoutMode.regularView,
         };
@@ -975,15 +986,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       return _currentSpreadRect(controller);
     }
     // תצוגה רגילה - החזר את גבולות המסמך המלא
-    final layout = controller.layout;
-    final pageLayouts = layout.pageLayouts;
-    if (pageLayouts.isEmpty) return null;
-    return Rect.fromLTRB(
-      0,
-      pageLayouts.first.top,
-      layout.documentSize.width,
-      pageLayouts.last.bottom,
-    );
+    // controller.layout זורק אם ה-PdfViewer state לא חובר עדיין (race condition ב-pdfrx)
+    try {
+      final layout = controller.layout;
+      final pageLayouts = layout.pageLayouts;
+      if (pageLayouts.isEmpty) return null;
+      return Rect.fromLTRB(
+        0,
+        pageLayouts.first.top,
+        layout.documentSize.width,
+        pageLayouts.last.bottom,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Rect? _currentSpreadViewportRect(
@@ -1956,6 +1972,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               }
             },
             child: Stack(
+              fit: StackFit.expand,
               children: [
                 RepaintBoundary(
                   key: _pdfViewportBoundaryKey,
@@ -1981,6 +1998,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                             return true;
                           },
                           builder: (context, state) {
+                            if (state is PdfBookError) {
+                              return const SizedBox.shrink();
+                            }
                             if (state is! PdfBookLoaded || state.isLoading) {
                               return const Positioned.fill(
                                 child: ColoredBox(
@@ -2003,6 +2023,28 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       ],
                     ),
                   ),
+                ),
+                // שגיאת טעינה - מחוץ ל-ColorFiltered כדי שהצבעים יהיו נכונים
+                BlocBuilder<PdfBookBloc, PdfBookState>(
+                  buildWhen: (prev, curr) =>
+                      (prev is PdfBookError) != (curr is PdfBookError),
+                  builder: (context, state) {
+                    if (state is! PdfBookError) return const SizedBox.shrink();
+                    return Positioned.fill(
+                      child: ColoredBox(
+                        color: Theme.of(context).colorScheme.surface,
+                        child: Center(
+                          child: Text(
+                            state.message,
+                            textDirection: TextDirection.rtl,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 _buildPageTurnOverlay(context),
                 PdfScrollbar(
