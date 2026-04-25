@@ -45,6 +45,9 @@ class AppContextMenuEntry {
   /// תת-פריטים לתפריט משנה
   final List<AppContextMenuEntry>? children;
 
+  /// בנייה עצלה של תת-פריטים לתפריט משנה.
+  final List<AppContextMenuEntry> Function()? childrenBuilder;
+
   const AppContextMenuEntry({
     required this.label,
     this.labelWidget,
@@ -54,6 +57,7 @@ class AppContextMenuEntry {
     this.onTap,
     this.trailing,
     this.children,
+    this.childrenBuilder,
   }) : isDivider = false;
 
   const AppContextMenuEntry.divider()
@@ -65,7 +69,12 @@ class AppContextMenuEntry {
         isDestructive = false,
         onTap = null,
         trailing = null,
-        children = null;
+        children = null,
+        childrenBuilder = null;
+}
+
+bool _hasEnabledAppContextMenuEntries(List<AppContextMenuEntry> entries) {
+  return entries.any((entry) => !entry.isDivider);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -747,8 +756,8 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
     // Create controllers once per menu open — stable across overlay rebuilds
     final submenuControllers = <AppContextMenuEntry, MenuController>{
       for (final entry in entries)
-        if (entry.children != null &&
-            entry.children!.isNotEmpty &&
+        if (((entry.children != null && entry.children!.isNotEmpty) ||
+                entry.childrenBuilder != null) &&
             entry.enabled)
           entry: MenuController(),
     };
@@ -860,10 +869,53 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
         );
       }
 
-      if (entry.children != null && entry.children!.isNotEmpty) {
-        final normalizedChildren = _normalizeEntries(entry.children!);
+      if (entry.childrenBuilder != null) {
+        if (!entry.enabled) {
+          return MenuItemButton(
+            style: buildAppSubmenuItemStyle(context, metrics),
+            onPressed: null,
+            child: _buildAppMenuRowContent(
+              context,
+              metrics,
+              maxWidth: maxWidth,
+              label: entry.label ?? '',
+              labelWidget: entry.labelWidget,
+              icon: entry.icon,
+              trailing: entry.trailing,
+              isDestructive: entry.isDestructive,
+              enabled: false,
+            ),
+          );
+        }
+
+        final controller = submenuControllers[entry];
+        return _LazyAppSubmenuButton(
+          entry: entry,
+          entriesBuilder: () => _normalizeEntries(entry.childrenBuilder!()),
+          metrics: metrics,
+          maxWidth: maxWidth,
+          menuStyle: _menuStyle(context, metrics),
+          controller: controller,
+          onOpen: () {
+            for (final ctrl in submenuControllers.values) {
+              if (ctrl != controller && ctrl.isOpen) ctrl.close();
+            }
+          },
+          buildChildren: (submenuEntries, submenuMaxWidth) =>
+              _buildSubmenuChildren(
+            context,
+            submenuEntries,
+            metrics,
+            submenuMaxWidth,
+          ),
+        );
+      }
+
+      final rawChildren = entry.children;
+      if (rawChildren != null && rawChildren.isNotEmpty) {
+        final normalizedChildren = _normalizeEntries(rawChildren);
         final hasEnabledChildren =
-            normalizedChildren.any((child) => !child.isDivider);
+          _hasEnabledAppContextMenuEntries(normalizedChildren);
         if (!entry.enabled || !hasEnabledChildren) {
           return MenuItemButton(
             style: buildAppSubmenuItemStyle(context, metrics),
@@ -883,39 +935,24 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
         }
 
         final controller = submenuControllers[entry];
-        final isRtl = Directionality.of(context) == TextDirection.rtl;
-        return SubmenuButton(
+        return _LazyAppSubmenuButton(
+          entry: entry,
+          entriesBuilder: () => normalizedChildren,
+          metrics: metrics,
+          maxWidth: maxWidth,
+          menuStyle: _menuStyle(context, metrics),
           controller: controller,
           onOpen: () {
             for (final ctrl in submenuControllers.values) {
               if (ctrl != controller && ctrl.isOpen) ctrl.close();
             }
           },
-          trailingIcon: entry.trailing ??
-              Icon(
-                isRtl
-                    ? FluentIcons.chevron_right_16_regular
-                    : FluentIcons.chevron_left_16_regular,
-                size: metrics.iconSize,
-              ),
-          style: buildAppSubmenuItemStyle(context, metrics),
-          menuStyle: _menuStyle(context, metrics),
-          menuChildren: _buildSubmenuChildren(
+          buildChildren: (submenuEntries, submenuMaxWidth) =>
+              _buildSubmenuChildren(
             context,
-            normalizedChildren,
+            submenuEntries,
             metrics,
-            maxWidth,
-          ),
-          child: _buildAppMenuRowContent(
-            context,
-            metrics,
-            maxWidth: maxWidth,
-            label: entry.label ?? '',
-            labelWidget: entry.labelWidget,
-            icon: entry.icon,
-            trailing: null,
-            isDestructive: entry.isDestructive,
-            enabled: entry.enabled,
+            submenuMaxWidth,
           ),
         );
       }
@@ -976,10 +1013,46 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
         );
       }
 
-      if (entry.children != null && entry.children!.isNotEmpty) {
-        final normalizedChildren = _normalizeEntries(entry.children!);
+      if (entry.childrenBuilder != null) {
+        if (!entry.enabled) {
+          return MenuItemButton(
+            style: buildAppSubmenuItemStyle(context, metrics),
+            onPressed: null,
+            child: _buildAppMenuRowContent(
+              context,
+              metrics,
+              maxWidth: submenuContentMaxWidth,
+              label: entry.label ?? '',
+              labelWidget: entry.labelWidget,
+              icon: entry.icon,
+              trailing: entry.trailing,
+              isDestructive: entry.isDestructive,
+              enabled: false,
+            ),
+          );
+        }
+
+        return _LazyAppSubmenuButton(
+          entry: entry,
+          entriesBuilder: () => _normalizeEntries(entry.childrenBuilder!()),
+          metrics: metrics,
+          maxWidth: submenuContentMaxWidth,
+          menuStyle: _menuStyle(context, metrics),
+          buildChildren: (submenuEntries, submenuMaxWidth) =>
+              _buildSubmenuChildren(
+            context,
+            submenuEntries,
+            metrics,
+            submenuMaxWidth,
+          ),
+        );
+      }
+
+      final rawChildren = entry.children;
+      if (rawChildren != null && rawChildren.isNotEmpty) {
+        final normalizedChildren = _normalizeEntries(rawChildren);
         final hasEnabledChildren =
-            normalizedChildren.any((child) => !child.isDivider);
+          _hasEnabledAppContextMenuEntries(normalizedChildren);
         if (!entry.enabled || !hasEnabledChildren) {
           return MenuItemButton(
             style: buildAppSubmenuItemStyle(context, metrics),
@@ -998,29 +1071,18 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
           );
         }
 
-        final isRtl = Directionality.of(context) == TextDirection.rtl;
-        return SubmenuButton(
-          trailingIcon: entry.trailing ??
-              Icon(
-                isRtl
-                    ? FluentIcons.chevron_right_16_regular
-                    : FluentIcons.chevron_left_16_regular,
-                size: metrics.iconSize,
-              ),
-          style: buildAppSubmenuItemStyle(context, metrics),
+        return _LazyAppSubmenuButton(
+          entry: entry,
+          entriesBuilder: () => normalizedChildren,
+          metrics: metrics,
+          maxWidth: submenuContentMaxWidth,
           menuStyle: _menuStyle(context, metrics),
-          menuChildren: _buildSubmenuChildren(
-              context, normalizedChildren, metrics, maxWidth),
-          child: _buildAppMenuRowContent(
+          buildChildren: (submenuEntries, submenuMaxWidth) =>
+              _buildSubmenuChildren(
             context,
+            submenuEntries,
             metrics,
-            maxWidth: submenuContentMaxWidth,
-            label: entry.label ?? '',
-            labelWidget: entry.labelWidget,
-            icon: entry.icon,
-            trailing: null,
-            isDestructive: entry.isDestructive,
-            enabled: entry.enabled,
+            submenuMaxWidth,
           ),
         );
       }
@@ -1046,6 +1108,111 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
         ),
       );
     }).toList();
+  }
+}
+
+class _LazyAppSubmenuButton extends StatefulWidget {
+  final AppContextMenuEntry entry;
+  final List<AppContextMenuEntry> Function() entriesBuilder;
+  final AppMenuMetrics metrics;
+  final double maxWidth;
+  final MenuStyle menuStyle;
+  final MenuController? controller;
+  final VoidCallback? onOpen;
+  final List<Widget> Function(List<AppContextMenuEntry>, double) buildChildren;
+
+  const _LazyAppSubmenuButton({
+    required this.entry,
+    required this.entriesBuilder,
+    required this.metrics,
+    required this.maxWidth,
+    required this.menuStyle,
+    required this.buildChildren,
+    this.controller,
+    this.onOpen,
+  });
+
+  @override
+  State<_LazyAppSubmenuButton> createState() => _LazyAppSubmenuButtonState();
+}
+
+class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton> {
+  List<AppContextMenuEntry>? _entries;
+  List<Widget>? _menuChildren;
+  bool? _hasEnabledChildren;
+
+  void _ensureMenuChildrenLoaded() {
+    if (_menuChildren != null) {
+      return;
+    }
+
+    final entries = _entries ??= widget.entriesBuilder();
+    final hasEnabledChildren = _hasEnabledAppContextMenuEntries(entries);
+    setState(() {
+      _hasEnabledChildren = hasEnabledChildren;
+      _menuChildren = hasEnabledChildren
+          ? widget.buildChildren(entries, widget.maxWidth)
+          : const <Widget>[];
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+
+    if (_hasEnabledChildren == false) {
+      return MenuItemButton(
+        style: buildAppSubmenuItemStyle(context, widget.metrics),
+        onPressed: null,
+        child: _buildAppMenuRowContent(
+          context,
+          widget.metrics,
+          maxWidth: widget.maxWidth,
+          label: widget.entry.label ?? '',
+          labelWidget: widget.entry.labelWidget,
+          icon: widget.entry.icon,
+          trailing: widget.entry.trailing,
+          isDestructive: widget.entry.isDestructive,
+          enabled: false,
+        ),
+      );
+    }
+
+    return MouseRegion(
+      onEnter: (_) => _ensureMenuChildrenLoaded(),
+      child: Listener(
+        behavior: HitTestBehavior.deferToChild,
+        onPointerDown: (_) => _ensureMenuChildrenLoaded(),
+        child: SubmenuButton(
+          controller: widget.controller,
+          onOpen: () {
+            _ensureMenuChildrenLoaded();
+            widget.onOpen?.call();
+          },
+          trailingIcon: widget.entry.trailing ??
+              Icon(
+                isRtl
+                    ? FluentIcons.chevron_right_16_regular
+                    : FluentIcons.chevron_left_16_regular,
+                size: widget.metrics.iconSize,
+              ),
+          style: buildAppSubmenuItemStyle(context, widget.metrics),
+          menuStyle: widget.menuStyle,
+          menuChildren: _menuChildren ?? const <Widget>[],
+          child: _buildAppMenuRowContent(
+            context,
+            widget.metrics,
+            maxWidth: widget.maxWidth,
+            label: widget.entry.label ?? '',
+            labelWidget: widget.entry.labelWidget,
+            icon: widget.entry.icon,
+            trailing: null,
+            isDestructive: widget.entry.isDestructive,
+            enabled: widget.entry.enabled,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1733,10 +1900,11 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
                   _restoreSelectedText();
                   return;
                 }
-                final selectedEntry = widget.entries
-                    .where((entry) => entry.value == value)
-                    .firstOrNull;
-                _menuVisibleText = selectedEntry?.label ?? _selectedLabel;
+                final selectedEntry = widget.entries.firstWhere(
+                  (entry) => entry.value == value,
+                  orElse: () => widget.entries.first,
+                );
+                _menuVisibleText = selectedEntry.label;
                 widget.onSelected?.call(value);
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
