@@ -27,6 +27,12 @@ class SettingsScreenController extends ChangeNotifier {
     _requestedTab = tab;
     notifyListeners();
   }
+
+  SettingsTab? takeRequestedTab() {
+    final tab = _requestedTab;
+    _requestedTab = null;
+    return tab;
+  }
 }
 
 class MySettingsScreen extends StatefulWidget {
@@ -50,7 +56,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
   void initState() {
     super.initState();
     widget.controller?.addListener(_handleRequestedTab);
-    _applyRequestedTab(widget.controller?.requestedTab);
+    _applyRequestedTab(widget.controller?.takeRequestedTab());
     FocusRepository().registerSettingsFocusRequester(_requestSettingsFocus);
   }
 
@@ -69,7 +75,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_handleRequestedTab);
       widget.controller?.addListener(_handleRequestedTab);
-      _applyRequestedTab(widget.controller?.requestedTab);
+      _applyRequestedTab(widget.controller?.takeRequestedTab());
     }
   }
 
@@ -99,7 +105,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
   }
 
   void _handleRequestedTab() {
-    _applyRequestedTab(widget.controller?.requestedTab);
+    _applyRequestedTab(widget.controller?.takeRequestedTab());
   }
 
   void _applyRequestedTab(SettingsTab? tab) {
