@@ -219,9 +219,10 @@ const { data } = await Otzaria.call('reader.getCurrentState');
 //   currentBook: "בראשית",
 //   currentBookId: "בראשית",
 //   currentIndex: 42,
+//   currentRef: "בראשית פרק ג",   // כותרת נוכחית, או null אם לא ידועה
 //   openTabs: [
-//     { bookId: "בראשית", book: "בראשית", index: 42 },
-//     { bookId: "שמות", book: "שמות", index: 0 }
+//     { bookId: "בראשית", book: "בראשית", index: 42, currentRef: "בראשית פרק ג" },
+//     { bookId: "שמות",   book: "שמות",   index: 0,  currentRef: null }
 //   ]
 // }
 ```
