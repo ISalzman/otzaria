@@ -581,6 +581,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     return PdfViewerParams(
+      calculateInitialZoom: layoutMode == PdfLayoutMode.bookView
+          ? null
+          : (document, controller, fitZoom, coverZoom) {
+              final savedZoom = widget.tab.savedZoom;
+              if (savedZoom != null && savedZoom != 1.0) {
+                return savedZoom;
+              }
+              return fitZoom;
+            },
       layoutPages: layoutMode == PdfLayoutMode.bookView
           ? (pages, params) {
               final pageLayouts = <Rect>[];
@@ -749,19 +758,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         textSearcher = PdfTextSearcher(pdfController)
           ..addListener(_onTextSearcherUpdated);
 
-        // קפיצה לעמוד הנכון מיד עם מוכנות הviewer, לפני כל עיבוד async
-        if (widget.tab.pageNumber > 1) {
-          _isJumping = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            if (mounted && controller.isReady) {
-              await controller.goToPage(pageNumber: widget.tab.pageNumber);
-              await Future.delayed(const Duration(milliseconds: 200));
-            }
-            _isJumping = false;
-            _initialPageNumber = null;
-          });
-        }
-
         widget.tab.documentRef.value = controller.documentRef;
         widget.tab.outline.value = await document.loadOutline();
 
@@ -787,19 +783,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         setState(() {});
 
         if (!mounted) return;
-        final settingsBloc = context.read<SettingsBloc>();
-        final enablePerBookSettings = settingsBloc.state.enablePerBookSettings;
+        final enablePerBookSettings =
+            context.read<SettingsBloc>().state.enablePerBookSettings;
 
-        // קבע את currentPage לשימוש בקוד שלאחר
-        final currentPage = widget.tab.pdfViewerController.isReady
-            ? (widget.tab.pdfViewerController.pageNumber ?? 1)
-            : widget.tab.pageNumber;
-
-        bool shouldFitToWidth = true;
         if (enablePerBookSettings) {
           final settings =
               await PdfBookPerBookSettings.load(widget.tab.book.title);
-          shouldFitToWidth = settings?.zoom == null;
 
           // טעינת המפרשים הפעילים
           if (settings?.activeCommentators != null) {
@@ -808,26 +797,26 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           }
         }
 
-        if (shouldFitToWidth) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
+        final initialTargetPage = widget.tab.pageNumber;
+        final currentReadyPage = controller.pageNumber ?? initialTargetPage;
+        final needsInitialPageNavigation = currentReadyPage != initialTargetPage;
+        if (needsInitialPageNavigation) {
+          _isJumping = true;
+          try {
+            await WidgetsBinding.instance.endOfFrame;
             if (mounted && controller.isReady) {
-              final matrix = controller.calcMatrixFitWidthForPage(
-                pageNumber: currentPage,
+              await controller.goToPage(
+                pageNumber: initialTargetPage,
+                duration: Duration.zero,
               );
-              if (matrix != null) {
-                controller.goTo(matrix);
-                Future.delayed(const Duration(milliseconds: 50), () {
-                  if (mounted && controller.isReady) {
-                    final currentZoom = controller.value.zoom;
-                    controller.setZoom(
-                      controller.centerPosition,
-                      currentZoom * 0.98,
-                    );
-                  }
-                });
-              }
+              await Future.delayed(const Duration(milliseconds: 200));
             }
-          });
+          } finally {
+            _isJumping = false;
+            _initialPageNumber = null;
+          }
+        } else {
+          _initialPageNumber = null;
         }
 
         _runInitialSearchIfNeeded();
@@ -924,12 +913,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   onTap: () {
                     _pdfViewFocusNode.requestFocus();
                   },
-                  child: PdfViewer.file(
-                    filePath,
-                    controller: widget.tab.pdfViewerController,
-                    passwordProvider: () => passwordDialog(context),
-                    params: _buildPdfViewerParams(layoutMode),
-                  ),
+                   child: PdfViewer.file(
+                     filePath,
+                     controller: widget.tab.pdfViewerController,
+                     initialPageNumber: widget.tab.pageNumber,
+                     useProgressiveLoading: false,
+                     passwordProvider: () => passwordDialog(context),
+                     params: _buildPdfViewerParams(layoutMode),
+                   ),
                 ),
         );
       },
@@ -1799,7 +1790,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     widget.tab.savedZoom = widget.tab.pdfViewerController.value.zoom;
 
     final newPage = widget.tab.pdfViewerController.pageNumber ?? 1;
-
     // אם אנחנו בתהליך קפיצה, לא נעדכן את pageNumber
     if (_isJumping) {
       return;
