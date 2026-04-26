@@ -610,6 +610,89 @@ popover.addEventListener('click', function(e) {
 
 ---
 
+## אייקון לתוסף
+
+אוצריא מאפשרת לתוסף להציג אייקון בשני מקומות:
+
+1. **שורת הטאבים במסך "כלים"** — ליד שם הכרטיסייה.
+2. **תפריט לחצן ימין במסכי עיון** — ליד שם הפריט בתפריט ההקשר.
+
+שני המקומות משתמשים באייקונים מספריית **FluentUI System Icons** בלבד (אותה ספריה שאוצריא עצמה משתמשת בה).
+
+---
+
+### 1. אייקון בשורת הטאבים (מסך כלים)
+
+מוגדר ב-`manifest.json`, בתוך `contributes.toolTab`:
+
+```json
+"contributes": {
+  "toolTab": {
+    "title": "לוח שנה",
+    "order": 100,
+    "defaultPinned": true,
+    "iconCodepoint": 983685,
+    "iconVariant": "regular"
+  }
+}
+```
+
+| שדה | סוג | ברירת מחדל | תיאור |
+|-----|-----|------------|-------|
+| `iconCodepoint` | `integer` | ללא (ללא אייקון) | ה-Unicode codepoint של האייקון מ-FluentUI System Icons |
+| `iconVariant` | `"regular"` / `"filled"` | `"regular"` | גרסת האייקון |
+
+#### כיצד מוצאים את ה-codepoint?
+
+**שיטה 1 — מקוד Dart:**
+כל שם של `FluentIcons.xxx` בקוד Dart של אוצריא הוא שם אייקון. פתח את קובץ ה-Dart של הספריה:
+
+```
+~/.pub-cache/hosted/pub.dev/fluentui_system_icons-<version>/lib/src/fluent_icons.dart
+```
+
+חפש שם אייקון וקרא את ה-codepoint:
+```
+static const IconData calendar_24_regular = IconData(983685, ...);
+//                                                    ^^^^^^
+//                                                    זהו ה-codepoint
+```
+
+**שיטה 2 — גלריית האייקונים:**
+גלוש ל-[FluentUI System Icons](https://github.com/microsoft/fluentui-system-icons) ובחר אייקון. שים לב לכלל שמות:
+- `calendar_24_regular` — `24` הוא הגודל (השתמש תמיד ב-24)
+- `regular` — גרסה רגילה (תואמת ל-`"iconVariant": "regular"`)
+- `filled` — גרסה מלאה (תואמת ל-`"iconVariant": "filled"`)
+
+**דוגמאות:**
+
+| אייקון | iconCodepoint | iconVariant |
+|--------|---------------|-------------|
+| `calendar_24_regular` | `983685` | `"regular"` |
+| `book_24_regular` | `63742` | `"regular"` |
+| `search_24_regular` | `63120` | `"regular"` |
+| `star_24_filled` | `63257` | `"filled"` |
+
+> **טיפ:** בחר אייקון בגודל `_24_` — אלה הגדלים שאוצריא מציגה בטאבים.
+
+---
+
+### 2. אייקון בתפריט הקשר (לחצן ימין במסך עיון)
+
+כאשר מוסיפים פריט לתפריט ההקשר עם `reader.addContextMenuItem`, ניתן לציין שדה `icon`:
+
+```javascript
+await Otzaria.call('reader.addContextMenuItem', {
+  id: 'my-bookmark-item',
+  label: 'הוסף לסימניות שלי',
+  icon: 'bookmark_24_regular'   // שם האייקון מ-FluentUI System Icons (אופציונלי)
+});
+```
+
+> **הערה:** השדה `icon` הוא אופציונלי. ללא אייקון הפריט עדיין יופיע — רק ללא אייקון לצידו.
+
+---
+
 ## דוגמה חיה
 
 הקובץ `index.html` בתיקיית ה-SDK הוא דוגמת לוח שנה עובדת. הוא מדגים שימוש ב-API (אירועי boot, theme, calendar) אך אינו מיישם את כל דפוסי המדריך הזה (למשל, חסרים בו צבעי container ועדכון theme). השתמש בו כנקודת מוצא ל-API, ובמדריך זה כסמכות לעיצוב.
