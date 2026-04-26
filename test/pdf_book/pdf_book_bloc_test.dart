@@ -1,0 +1,670 @@
+import 'package:bloc/bloc.dart';
+import 'package:bloc_test/bloc_test.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:flutter_test/flutter_test.dart';
+import '../helpers/memory_settings_cache.dart';
+import 'package:otzaria/models/books.dart';
+import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
+import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart';
+import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:pdfrx/pdfrx.dart';
+
+// ─── fakes ───────────────────────────────────────────────────────────────────
+class _FakeDocumentRef extends Fake implements PdfDocumentRef {}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+PdfBook _book({String path = '/nonexistent/test.pdf'}) =>
+    PdfBook(title: 'ספר בדיקה', path: path);
+
+PdfBookTab _tab({String path = '/nonexistent/test.pdf', int page = 1}) =>
+    PdfBookTab(book: _book(path: path), pageNumber: page);
+
+PdfBookBloc _makeBloc(PdfBookTab tab) => PdfBookBloc(
+      tab: tab,
+      initialState: PdfBookInitial(
+        book: tab.book,
+        initialPageNumber: tab.pageNumber,
+      ),
+    );
+
+PdfBookLoaded _loaded({
+  PdfBook? book,
+  int currentPageNumber = 1,
+  int totalPages = 100,
+  bool showLeftPane = false,
+  bool showRightPane = false,
+  bool pinLeftPane = false,
+  bool isRightPaneHovering = false,
+  double zoom = 1.0,
+  bool showZoomBar = false,
+  PdfLayoutMode layoutMode = PdfLayoutMode.regularView,
+  String searchText = '',
+  String currentTitle = '',
+  List<PdfPageTextRange>? searchMatches,
+  int? currentSearchMatchIndex,
+}) =>
+    PdfBookLoaded(
+      book: book ?? _book(),
+      currentPageNumber: currentPageNumber,
+      totalPages: totalPages,
+      showLeftPane: showLeftPane,
+      showRightPane: showRightPane,
+      pinLeftPane: pinLeftPane,
+      isRightPaneHovering: isRightPaneHovering,
+      zoom: zoom,
+      showZoomBar: showZoomBar,
+      layoutMode: layoutMode,
+      searchText: searchText,
+      currentTitle: currentTitle,
+      searchMatches: searchMatches,
+      currentSearchMatchIndex: currentSearchMatchIndex,
+      isLoading: false,
+    );
+
+void main() {
+  setUpAll(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await Settings.init(cacheProvider: MemorySettingsCache());
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('מצב ראשוני', () {
+    test('מצב ראשוני הוא PdfBookInitial', () {
+      final tab = _tab();
+      final bloc = _makeBloc(tab);
+      expect(bloc.state, isA<PdfBookInitial>());
+      bloc.close();
+    });
+
+    test('המצב הראשוני מכיל את הספר הנכון', () {
+      final tab = _tab();
+      final bloc = _makeBloc(tab);
+      expect((bloc.state as PdfBookInitial).book.title, 'ספר בדיקה');
+      expect((bloc.state as PdfBookInitial).initialPageNumber, 1);
+      bloc.close();
+    });
+
+    test('המצב הראשוני שומר את מספר העמוד ההתחלתי', () {
+      final tab = _tab(page: 42);
+      final bloc = _makeBloc(tab);
+      expect((bloc.state as PdfBookInitial).initialPageNumber, 42);
+      bloc.close();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('טעינת מסמך - LoadPdfDocument', () {
+    blocTest<PdfBookBloc, PdfBookState>(
+      'קובץ שלא קיים → PdfBookError',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const LoadPdfDocument()),
+      expect: () => [isA<PdfBookError>()],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'שגיאת "ספר איננו קיים" כשהקובץ לא נמצא',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const LoadPdfDocument()),
+      verify: (b) {
+        final s = b.state as PdfBookError;
+        expect(s.message, 'הספר איננו קיים');
+        expect(s.book.title, 'ספר בדיקה');
+      },
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'LoadPdfDocument מוזנח כשהמצב הוא כבר Loaded',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const LoadPdfDocument()),
+      expect: () => [],
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('מסמך מוכן - DocumentReady', () {
+    blocTest<PdfBookBloc, PdfBookState>(
+      'DocumentReady מ-Loading → PdfBookLoaded',
+      build: () => _makeBloc(_tab()),
+      seed: () => PdfBookLoading(book: _book()),
+      act: (b) => b.add(
+          DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 50)),
+      expect: () => [isA<PdfBookLoaded>()],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'DocumentReady מ-Initial → PdfBookLoaded',
+      build: () => _makeBloc(_tab()),
+      act: (b) =>
+          b.add(DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 10)),
+      expect: () => [isA<PdfBookLoaded>()],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'DocumentReady מגדיר totalPages נכון',
+      build: () => _makeBloc(_tab()),
+      seed: () => PdfBookLoading(book: _book()),
+      act: (b) => b.add(
+          DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 42)),
+      verify: (b) {
+        final s = b.state as PdfBookLoaded;
+        expect(s.totalPages, 42);
+        expect(s.isLoading, isFalse);
+      },
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'DocumentReady מ-Loaded → מעדכן totalPages בלבד',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(totalPages: 10),
+      act: (b) => b.add(
+          DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 20)),
+      expect: () => [
+        isA<PdfBookLoaded>().having((s) => s.totalPages, 'totalPages', 20),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'DocumentReady עם outline שומר outline במצב',
+      build: () => _makeBloc(_tab()),
+      seed: () => PdfBookLoading(book: _book()),
+      act: (b) => b.add(DocumentReady(
+        documentRef: _FakeDocumentRef(),
+        totalPages: 5,
+        outline: const [],
+      )),
+      verify: (b) {
+        final s = b.state as PdfBookLoaded;
+        expect(s.outline, isNotNull);
+      },
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('כישלון טעינה - DocumentLoadFailed', () {
+    blocTest<PdfBookBloc, PdfBookState>(
+      'כישלון מ-Loading → PdfBookError',
+      build: () => _makeBloc(_tab()),
+      seed: () => PdfBookLoading(book: _book()),
+      act: (b) => b.add(const DocumentLoadFailed('שגיאה בטעינה')),
+      expect: () => [isA<PdfBookError>()],
+      verify: (b) {
+        expect((b.state as PdfBookError).message, 'שגיאה בטעינה');
+      },
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'כישלון מ-Initial → PdfBookError',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const DocumentLoadFailed('שגיאה כלשהי')),
+      expect: () => [isA<PdfBookError>()],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'כישלון מ-Loaded → מוזנח',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const DocumentLoadFailed('שגיאה')),
+      expect: () => [],
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('ניווט בדפים', () {
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdatePageNumber מעדכן דף נוכחי',
+      build: () => _makeBloc(_tab(page: 1)),
+      seed: () => _loaded(currentPageNumber: 1, totalPages: 10),
+      act: (b) => b.add(const UpdatePageNumber(pageNumber: 5)),
+      expect: () => [
+        isA<PdfBookLoaded>().having((s) => s.currentPageNumber, 'page', 5),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdatePageNumber עם title מפורש שומר אותו',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) =>
+          b.add(const UpdatePageNumber(pageNumber: 3, title: 'פרק ג')),
+      verify: (b) {
+        final s = b.state as PdfBookLoaded;
+        expect(s.currentTitle, 'פרק ג');
+        expect(s.currentPageNumber, 3);
+      },
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdatePageNumber בלי outline משתמש בפורמט ברירת מחדל',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const UpdatePageNumber(pageNumber: 7)),
+      verify: (b) {
+        expect((b.state as PdfBookLoaded).currentTitle, 'עמוד 7');
+      },
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdatePageNumber מחוץ למצב Loaded → מוזנח',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const UpdatePageNumber(pageNumber: 5)),
+      expect: () => [],
+    );
+
+    // שמירה שאין קריסה כשה-controller לא מוכן
+    for (final event in <PdfBookEvent>[
+      const GoToPage(5),
+      const GoToNextPage(),
+      const GoToPreviousPage(),
+      const GoToFirstPage(),
+      const GoToLastPage(),
+    ]) {
+      blocTest<PdfBookBloc, PdfBookState>(
+        '$event לא קורס כשה-controller לא מוכן',
+        build: () => _makeBloc(_tab()),
+        seed: () => _loaded(currentPageNumber: 3, totalPages: 10),
+        act: (b) => b.add(event),
+        expect: () => [], // אין שינוי מצב, רק side effect ב-controller
+      );
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('זום', () {
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateZoom מעדכן זום',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(zoom: 1.0),
+      act: (b) => b.add(const UpdateZoom(2.5)),
+      expect: () => [
+        isA<PdfBookLoaded>().having((s) => s.zoom, 'zoom', 2.5),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateZoom מחוץ למצב Loaded → מוזנח',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const UpdateZoom(2.0)),
+      expect: () => [],
+    );
+
+    // ZoomIn/Out/Reset כשה-controller לא מוכן → לא קורסים, לא מעדכנים
+    for (final event in <PdfBookEvent>[
+      const ZoomIn(),
+      const ZoomOut(),
+      const ResetZoom(),
+    ]) {
+      blocTest<PdfBookBloc, PdfBookState>(
+        '$event לא קורס כשה-controller לא מוכן',
+        build: () => _makeBloc(_tab()),
+        seed: () => _loaded(zoom: 1.5),
+        act: (b) => b.add(event),
+        expect: () => [],
+      );
+    }
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'SetShowZoomBar(true) מציג את פס הזום',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(showZoomBar: false),
+      act: (b) => b.add(const SetShowZoomBar(true)),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.showZoomBar, 'showZoomBar', true),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'SetShowZoomBar(false) מסתיר את פס הזום',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(showZoomBar: true),
+      act: (b) => b.add(const SetShowZoomBar(false)),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.showZoomBar, 'showZoomBar', false),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'SetShowZoomBar מחוץ ל-Loaded → מוזנח',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const SetShowZoomBar(true)),
+      expect: () => [],
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('מצב תצוגה - SetLayoutMode', () {
+    blocTest<PdfBookBloc, PdfBookState>(
+      'SetLayoutMode מ-Initial משנה layoutMode',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const SetLayoutMode(PdfLayoutMode.bookView)),
+      expect: () => [
+        isA<PdfBookInitial>().having(
+            (s) => s.layoutMode, 'layoutMode', PdfLayoutMode.bookView),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'SetLayoutMode מ-Loaded משנה layoutMode',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(layoutMode: PdfLayoutMode.regularView),
+      act: (b) => b.add(const SetLayoutMode(PdfLayoutMode.bookView)),
+      expect: () => [
+        isA<PdfBookLoaded>().having(
+            (s) => s.layoutMode, 'layoutMode', PdfLayoutMode.bookView),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'SetLayoutMode עם אותו מצב מ-Loaded → לא מפעיל emit',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(layoutMode: PdfLayoutMode.regularView),
+      act: (b) => b.add(const SetLayoutMode(PdfLayoutMode.regularView)),
+      expect: () => [],
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('חלונית שמאל', () {
+    blocTest<PdfBookBloc, PdfBookState>(
+      'ToggleLeftPane מחליף מ-false ל-true',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(showLeftPane: false),
+      act: (b) => b.add(const ToggleLeftPane()),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.showLeftPane, 'showLeftPane', true),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'ToggleLeftPane מחליף מ-true ל-false',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(showLeftPane: true),
+      act: (b) => b.add(const ToggleLeftPane()),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.showLeftPane, 'showLeftPane', false),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'ToggleLeftPane עם ערך מפורש',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(showLeftPane: false),
+      act: (b) => b.add(const ToggleLeftPane(true)),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.showLeftPane, 'showLeftPane', true),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'ToggleLeftPane מחוץ ל-Loaded → מוזנח',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const ToggleLeftPane()),
+      expect: () => [],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'TogglePinLeftPane מחליף pin',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(pinLeftPane: false),
+      act: (b) => b.add(const TogglePinLeftPane()),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.pinLeftPane, 'pinLeftPane', true),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateLeftPaneTab מעדכן אינדקס טאב',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const UpdateLeftPaneTab(2)),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.leftPaneTabIndex, 'leftPaneTabIndex', 2),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateSidebarWidth מעדכן רוחב',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const UpdateSidebarWidth(450.0)),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.sidebarWidth, 'sidebarWidth', 450.0),
+      ],
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('חלונית ימין (מפרשים)', () {
+    blocTest<PdfBookBloc, PdfBookState>(
+      'ToggleRightPane פותח חלונית',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(showRightPane: false),
+      act: (b) => b.add(const ToggleRightPane()),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.showRightPane, 'showRightPane', true),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'ToggleRightPane סגירה מאפסת isRightPaneHovering',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(showRightPane: true, isRightPaneHovering: true),
+      act: (b) => b.add(const ToggleRightPane(show: false)),
+      verify: (b) {
+        final s = b.state as PdfBookLoaded;
+        expect(s.showRightPane, isFalse);
+        expect(s.isRightPaneHovering, isFalse);
+      },
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'ToggleRightPane עם initialTabIndex מגדיר טאב',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(showRightPane: false),
+      act: (b) =>
+          b.add(const ToggleRightPane(show: true, initialTabIndex: 2)),
+      expect: () => [
+        isA<PdfBookLoaded>().having(
+            (s) => s.rightPaneInitialTabIndex, 'rightPaneInitialTabIndex', 2),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateRightPaneWidth מעדכן רוחב',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const UpdateRightPaneWidth(500.0)),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.rightPaneWidth, 'rightPaneWidth', 500.0),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'SetRightPaneHovering מעדכן hover',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(isRightPaneHovering: false),
+      act: (b) => b.add(const SetRightPaneHovering(true)),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.isRightPaneHovering, 'hovering', true),
+      ],
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('חיפוש', () {
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateSearchText מעדכן טקסט חיפוש',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(searchText: ''),
+      act: (b) => b.add(const UpdateSearchText('תורה')),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.searchText, 'searchText', 'תורה'),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      // searchMode אינו בprops → אין emit, אבל לא קורס
+      'UpdateSearchOptions עם searchMode לא קורס',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) =>
+          b.add(const UpdateSearchOptions(searchMode: SearchMode.fuzzy)),
+      expect: () => [],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      // alternativeWords אינו בprops → אין emit, אבל לא קורס
+      'UpdateSearchOptions עם alternativeWords לא קורס',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const UpdateSearchOptions(
+          alternativeWords: {1: ['תורה', 'Torah']})),
+      expect: () => [],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'StartSearch מעדכן טקסט חיפוש',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(searchText: ''),
+      act: (b) => b.add(const StartSearch('בראשית')),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.searchText, 'searchText', 'בראשית'),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'ClearSearch מנקה טקסט ותוצאות',
+      build: () =>
+          _makeBloc(_tab()),
+      seed: () => _loaded(
+          searchText: 'תורה',
+          searchMatches: const [],
+          currentSearchMatchIndex: 0),
+      act: (b) => b.add(const ClearSearch()),
+      verify: (b) {
+        final s = b.state as PdfBookLoaded;
+        expect(s.searchText, '');
+        expect(s.searchMatches, isNull);
+        expect(s.currentSearchMatchIndex, isNull);
+      },
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'ClearSearch מחוץ ל-Loaded → מוזנח',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const ClearSearch()),
+      expect: () => [],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateSearchText מחוץ ל-Loaded → מוזנח',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const UpdateSearchText('תורה')),
+      expect: () => [],
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('LoadHeadingsAndLinks', () {
+    test('כשהמצב אינו Loaded → שומר ב-tab ולא מפעיל emit', () async {
+      final tab = _tab();
+      final bloc = _makeBloc(tab);
+
+      bloc.add(const LoadHeadingsAndLinks(links: []));
+      await Future.delayed(Duration.zero);
+
+      expect(bloc.state, isA<PdfBookInitial>());
+      bloc.close();
+    });
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'כשהמצב הוא Loaded → שומר ב-tab',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const LoadHeadingsAndLinks(links: [])),
+      verify: (b) {
+        // links נשמר ב-tab (לא בprops של state, אז אין emit חדש)
+        expect(b.tab.links, isEmpty);
+      },
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('מצב טעינה - SetLoadingState', () {
+    blocTest<PdfBookBloc, PdfBookState>(
+      'SetLoadingState(isLoading: true) מעדכן',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const SetLoadingState(isLoading: true)),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.isLoading, 'isLoading', true),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'SetLoadingState(succeeded: false) מעדכן loadSucceeded',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) =>
+          b.add(const SetLoadingState(isLoading: false, succeeded: false)),
+      verify: (b) {
+        final s = b.state as PdfBookLoaded;
+        expect(s.isLoading, isFalse);
+        expect(s.loadSucceeded, isFalse);
+      },
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'SetLoadingState מחוץ ל-Loaded → מוזנח',
+      build: () => _makeBloc(_tab()),
+      act: (b) => b.add(const SetLoadingState(isLoading: true)),
+      expect: () => [],
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  group('סגירת bloc', () {
+    test('close() לא קורס', () async {
+      final bloc = _makeBloc(_tab());
+      await bloc.close();
+      expect(bloc.isClosed, isTrue);
+    });
+
+    test('close() בזמן שפס הזום פעיל לא קורס', () async {
+      final tab = _tab();
+      final bloc = _makeBloc(tab);
+      bloc
+        ..seed(_loaded(showZoomBar: false))
+        ..add(const SetShowZoomBar(true));
+      await Future.delayed(Duration.zero);
+      await bloc.close();
+      expect(bloc.isClosed, isTrue);
+    });
+  });
+}
+
+// helper: seed outside blocTest
+extension _BlocSeed<S> on BlocBase<S> {
+  void seed(S state) {
+    // ignore: invalid_use_of_visible_for_testing_member
+    emit(state);
+  }
+}

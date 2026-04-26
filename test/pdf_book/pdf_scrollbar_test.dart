@@ -3,29 +3,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-void main() {
-  group('Pdf scrollbars', () {
-    testWidgets('horizontal scrollbar does not crash before viewer attachment',
-        (tester) async {
-      final controller = PdfViewerController();
+// ─── fake controller ──────────────────────────────────────────────────────────
+// מדמה את מצב הריבוע שגרם לקריסה: isReady=true אבל visibleRect זורק
+class _UnreadyController extends PdfViewerController {
+  @override
+  bool get isReady => true;
 
+  @override
+  Rect get visibleRect => throw StateError('_visibleRect is null');
+}
+
+void main() {
+  group('PdfScrollbar - לפני חיבור ל-viewer', () {
+    testWidgets('גלילה אופקית לא קורסת לפני חיבור', (tester) async {
+      final controller = PdfViewerController();
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: PdfHorizontalScrollbar(controller: controller),
-          ),
+          home: Scaffold(body: PdfHorizontalScrollbar(controller: controller)),
         ),
       );
-
       expect(tester.takeException(), isNull);
       expect(find.byType(PdfHorizontalScrollbar), findsOneWidget);
     });
 
-    testWidgets(
-        'vertical default scrollbar does not crash before viewer attachment',
-        (tester) async {
+    testWidgets('גלילה אנכית (ברירת מחדל) לא קורסת לפני חיבור', (tester) async {
       final controller = PdfViewerController();
-
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -36,16 +38,27 @@ void main() {
           ),
         ),
       );
-
       expect(tester.takeException(), isNull);
-      expect(find.byType(PdfScrollbar), findsOneWidget);
     });
 
-    testWidgets(
-        'vertical custom scrollbar does not crash before viewer attachment',
+    testWidgets('גלילה אנכית שמאל לא קורסת לפני חיבור', (tester) async {
+      final controller = PdfViewerController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PdfScrollbar(
+              controller: controller,
+              orientation: ScrollbarOrientation.left,
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('גלילה אנכית עם scrollBoundsBuilder לא קורסת לפני חיבור',
         (tester) async {
       final controller = PdfViewerController();
-
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -57,66 +70,243 @@ void main() {
           ),
         ),
       );
-
       expect(tester.takeException(), isNull);
-      expect(find.byType(PdfScrollbar), findsOneWidget);
+    });
+  });
+
+  // ─── תרחיש הקריסה המדויק מה-LOG ──────────────────────────────────────────
+  group('PdfScrollbar - תרחיש race condition (isReady=true + visibleRect זורק)',
+      () {
+    testWidgets(
+        'PdfHorizontalScrollbar לא קורס כאשר isReady=true אבל visibleRect זורק',
+        (tester) async {
+      final controller = _UnreadyController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PdfHorizontalScrollbar(controller: controller)),
+        ),
+      );
+      // פריים שני - מדמה את ה-drawFrame שגרם לקריסה
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(PdfHorizontalScrollbar), findsOneWidget);
     });
 
     testWidgets(
-        'vertical scrollbars stay stable on rebuild before viewer attachment',
+        'PdfScrollbar (אנכי, ברירת מחדל) לא קורס כאשר isReady=true אבל visibleRect זורק',
         (tester) async {
+      final controller = _UnreadyController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PdfScrollbar(
+              controller: controller,
+              orientation: ScrollbarOrientation.right,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'PdfScrollbar (תחתון) לא קורס כאשר isReady=true אבל visibleRect זורק',
+        (tester) async {
+      final controller = _UnreadyController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PdfScrollbar(
+              controller: controller,
+              orientation: ScrollbarOrientation.bottom,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'PdfScrollbar עם scrollBoundsBuilder לא קורס כאשר isReady=true אבל visibleRect זורק',
+        (tester) async {
+      final controller = _UnreadyController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PdfScrollbar(
+              controller: controller,
+              orientation: ScrollbarOrientation.right,
+              scrollBoundsBuilder: (_) => const Rect.fromLTWH(0, 0, 100, 1000),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('קריסות חוזרות בפריימים רצופים לא גורמות לקריסה', (tester) async {
+      final controller = _UnreadyController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PdfHorizontalScrollbar(controller: controller)),
+        ),
+      );
+      // שישה פריימים - כמו בLOG שהראה קריסות כל ~4 שניות
+      for (int i = 0; i < 6; i++) {
+        await tester.pump(const Duration(seconds: 4));
+      }
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  // ─── יציבות rebuild ───────────────────────────────────────────────────────
+  group('PdfScrollbar - יציבות rebuild', () {
+    testWidgets('rebuild מרובים עם controller לא מחובר', (tester) async {
       final controller = PdfViewerController();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: [
-                Expanded(
-                  child: PdfScrollbar(
-                    controller: controller,
-                    orientation: ScrollbarOrientation.right,
-                  ),
-                ),
-                Expanded(
-                  child: PdfScrollbar(
-                    controller: controller,
-                    orientation: ScrollbarOrientation.right,
-                    scrollBoundsBuilder: (_) => Rect.zero,
-                  ),
-                ),
-              ],
+      Widget buildScrollbars() => MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  Expanded(
+                      child: PdfScrollbar(
+                          controller: controller,
+                          orientation: ScrollbarOrientation.right)),
+                  Expanded(
+                      child: PdfScrollbar(
+                          controller: controller,
+                          orientation: ScrollbarOrientation.right,
+                          scrollBoundsBuilder: (_) => Rect.zero)),
+                ],
+              ),
             ),
-          ),
-        ),
-      );
+          );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: [
-                Expanded(
-                  child: PdfScrollbar(
-                    controller: controller,
-                    orientation: ScrollbarOrientation.right,
-                  ),
-                ),
-                Expanded(
-                  child: PdfScrollbar(
-                    controller: controller,
-                    orientation: ScrollbarOrientation.right,
-                    scrollBoundsBuilder: (_) => Rect.zero,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+      await tester.pumpWidget(buildScrollbars());
+      await tester.pumpWidget(buildScrollbars());
+      await tester.pumpWidget(buildScrollbars());
 
       expect(tester.takeException(), isNull);
       expect(find.byType(PdfScrollbar), findsNWidgets(2));
     });
+
+    testWidgets('החלפת controller לא גורמת לקריסה', (tester) async {
+      final controller1 = PdfViewerController();
+      final controller2 = PdfViewerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PdfHorizontalScrollbar(controller: controller1),
+          ),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PdfHorizontalScrollbar(controller: controller2),
+          ),
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('dispose של widget לא גורם לקריסה', (tester) async {
+      final controller = PdfViewerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PdfHorizontalScrollbar(controller: controller)),
+        ),
+      );
+      // הסרת ה-widget מה-tree
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
+      );
+
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  // ─── עיצוב וצבעים ─────────────────────────────────────────────────────────
+  group('PdfScrollbar - עיצוב', () {
+    testWidgets('PdfScrollbar עם trackColor ו-thumbColor מותאמים', (tester) async {
+      final controller = PdfViewerController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PdfScrollbar(
+              controller: controller,
+              orientation: ScrollbarOrientation.right,
+              trackColor: Colors.grey,
+              thumbColor: Colors.blue,
+              trackThickness: 16,
+              thumbMinSize: 50,
+              scrollBoundsBuilder: (_) => Rect.zero,
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('PdfHorizontalScrollbar עם trackThickness מותאם', (tester) async {
+      final controller = PdfViewerController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PdfHorizontalScrollbar(
+              controller: controller,
+              trackThickness: 12,
+              thumbColor: Colors.red,
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  // ─── ארבע כיוונים ─────────────────────────────────────────────────────────
+  group('PdfScrollbar - כל הכיוונים', () {
+    for (final orientation in ScrollbarOrientation.values) {
+      testWidgets('כיוון $orientation לא קורס', (tester) async {
+        final controller = PdfViewerController();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: PdfScrollbar(
+                controller: controller,
+                orientation: orientation,
+              ),
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('כיוון $orientation עם _UnreadyController לא קורס',
+          (tester) async {
+        final controller = _UnreadyController();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: PdfScrollbar(
+                controller: controller,
+                orientation: orientation,
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 }
