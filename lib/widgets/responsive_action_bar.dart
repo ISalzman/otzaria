@@ -79,7 +79,10 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
 
     // אם צריך להסתיר רק כפתור אחד, אין טעם להציג תפריט שתופס מקום בעצמו.
     // עדיף פשוט להציג את כל הכפתורים.
-    if (totalButtons - widget.maxVisibleButtons == 1) {
+    // החרגה: כשיש alwaysInMenu, כפתור ה-overflow קיים ממילא, ולכן הצגת
+    // כל הכפתורים תוסיף רוחב ותגרום לגלישה קלה ב-AppBar במסכים צרים.
+    if (totalButtons - widget.maxVisibleButtons == 1 &&
+        widget.alwaysInMenu!.isEmpty) {
       effectiveMaxVisible = totalButtons;
     }
 

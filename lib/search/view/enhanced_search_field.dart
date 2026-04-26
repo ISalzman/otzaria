@@ -51,6 +51,8 @@ final GlobalKey enhancedSearchFieldKey = GlobalKey();
 class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   final GlobalKey _textFieldKey = GlobalKey();
   OverlayEntry? _searchOptionsOverlay;
+  late final FocusNode _keyboardListenerFocusNode;
+  late final FocusNode _textFieldKeyboardListenerFocusNode;
 
   static const double _kSearchFieldMinWidth = 300;
   static const double _kControlHeight = 48;
@@ -58,8 +60,36 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   @override
   void initState() {
     super.initState();
-    widget.tab.queryController.addListener(_onTextChanged);
-    widget.tab.searchFieldFocusNode.addListener(_onCursorPositionChanged);
+    _keyboardListenerFocusNode = FocusNode(
+      debugLabel: 'enhanced_search_field_keyboard_listener',
+      skipTraversal: true,
+      canRequestFocus: false,
+    );
+    _textFieldKeyboardListenerFocusNode = FocusNode(
+      debugLabel: 'enhanced_search_field_textfield_listener',
+      skipTraversal: true,
+      canRequestFocus: false,
+    );
+    _attachTabListeners(widget.tab);
+  }
+
+  void _attachTabListeners(SearchingTab tab) {
+    tab.queryController.addListener(_onTextChanged);
+    tab.searchFieldFocusNode.addListener(_onCursorPositionChanged);
+  }
+
+  void _detachTabListeners(SearchingTab tab) {
+    tab.queryController.removeListener(_onTextChanged);
+    tab.searchFieldFocusNode.removeListener(_onCursorPositionChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant EnhancedSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.tab, widget.tab)) {
+      _detachTabListeners(oldWidget.tab);
+      _attachTabListeners(widget.tab);
+    }
   }
 
   @override
@@ -73,8 +103,9 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   void dispose() {
     debugPrint('🗑️ EnhancedSearchField disposing');
     _hideSearchOptionsOverlay();
-    widget.tab.queryController.removeListener(_onTextChanged);
-    widget.tab.searchFieldFocusNode.removeListener(_onCursorPositionChanged);
+    _detachTabListeners(widget.tab);
+    _keyboardListenerFocusNode.dispose();
+    _textFieldKeyboardListenerFocusNode.dispose();
     widget.tab.searchOptions.clear();
     super.dispose();
   }
@@ -358,7 +389,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
         ),
       ],
       child: KeyboardListener(
-        focusNode: FocusNode(),
+        focusNode: _keyboardListenerFocusNode,
         onKeyEvent: (KeyEvent event) {
           // טיפול ב-Enter גם כשהפוקוס לא בתיבת החיפוש
           if (event is KeyDownEvent &&
@@ -380,7 +411,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                     minHeight: _kControlHeight,
                   ),
                   child: KeyboardListener(
-                    focusNode: FocusNode(),
+                    focusNode: _textFieldKeyboardListenerFocusNode,
                     onKeyEvent: (KeyEvent event) {
                       // עדכון המגירה כשמשתמשים בחצים במקלדת
                       if (event is KeyDownEvent) {

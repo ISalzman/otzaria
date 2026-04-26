@@ -29,6 +29,23 @@ class KeyboardShortcuts extends StatefulWidget {
 }
 
 class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
+  late final FocusScopeNode _shortcutFocusScopeNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _shortcutFocusScopeNode = FocusScopeNode(
+      debugLabel: 'global_keyboard_shortcuts',
+      skipTraversal: true,
+    );
+  }
+
+  @override
+  void dispose() {
+    _shortcutFocusScopeNode.dispose();
+    super.dispose();
+  }
+
   /// בודק אם הפוקוס הנוכחי נמצא על שדה טקסט
   bool _isEditing() {
     final focusNode = FocusManager.instance.primaryFocus;
@@ -222,8 +239,10 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     return BlocBuilder<SettingsBloc, SettingsState>(
       buildWhen: (previous, current) => previous.shortcuts != current.shortcuts,
       builder: (context, state) {
-        // משתמשים ב-FocusScope עם onKeyEvent כדי לתפוס קיצורים גם כשיש TextField עם focus
+        // Scope יציב שומר על קיצורים גלובליים גם כשאין child ממוקד, בלי
+        // ליצור FocusScopeNode חדש בכל rebuild.
         return FocusScope(
+          node: _shortcutFocusScopeNode,
           autofocus: true,
           onKeyEvent: (node, event) =>
               _handleKeyEvent(node, event, state.shortcuts),
