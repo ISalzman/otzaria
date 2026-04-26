@@ -503,12 +503,20 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
         ),
         const Spacer(),
         if (hasSelection)
-          SizedBox(
-            height: 30,
-            child: NeutralActionButton(
-              text: 'איפוס',
-              icon: FluentIcons.arrow_reset_24_regular,
+          Tooltip(
+            message: 'איפוס בחירה',
+            child: IconButton(
+              icon: const Icon(FluentIcons.arrow_reset_24_regular, size: 16),
               onPressed: () => _toggleAll(false),
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+              padding: const EdgeInsets.all(6),
+              style: IconButton.styleFrom(
+                backgroundColor:
+                    Theme.of(context).colorScheme.secondaryContainer,
+                foregroundColor:
+                    Theme.of(context).colorScheme.onSecondaryContainer,
+                shape: const CircleBorder(),
+              ),
             ),
           ),
         Checkbox(
