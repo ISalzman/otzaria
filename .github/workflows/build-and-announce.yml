@@ -11,6 +11,28 @@ on:
     types: [published, prereleased]
 
 jobs:
+  check_version:
+    if: github.event_name != 'release' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      is_version: ${{ steps.check.outputs.is_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check if commit message is a version tag
+        id: check
+        run: |
+          COMMIT_MESSAGE='${{ github.event.head_commit.message }}'
+          if [ -z "$COMMIT_MESSAGE" ]; then
+            COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          fi
+          COMMIT_MESSAGE=$(printf '%s' "$COMMIT_MESSAGE" | head -n 1 | xargs)
+          echo "Commit message: $COMMIT_MESSAGE"
+          if printf '%s' "$COMMIT_MESSAGE" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "is_version=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_version=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build_windows:
     if: github.event_name != 'release' && github.event_name != 'pull_request'
     runs-on: windows-2022
@@ -407,7 +429,9 @@ jobs:
           sudo apt-get install -y \
             build-essential ninja-build libgtk-3-dev libblkid1 liblzma5 \
             clang cmake git pkg-config liblzma-dev rpm patchelf curl xz-utils zstd \
-            libcurl4-openssl-dev
+            libcurl4-openssl-dev \
+            libwpewebkit-1.0-dev \
+            libwebkit2gtk-4.1-dev
           # Fallback אם מסיבה כלשהי cargo לא קיים (למשל כשל זמני ב-rustup)
           if ! command -v cargo >/dev/null 2>&1; then
             sudo apt-get install -y rustc cargo
@@ -1373,6 +1397,12 @@ jobs:
           body_path: release-body.md
         env:
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+
+  trigger_google_play_deploy:
+    if: "!cancelled() && needs.check_version.outputs.is_version == 'true' && github.event_name != 'release' && github.event_name != 'pull_request'"
+    needs: [check_version, create_release]
+    uses: ./.github/workflows/deploy-google-play.yml
+    secrets: inherit
 
   # --- הכרזה על גרסה שפורסמה ---
   announce_release:

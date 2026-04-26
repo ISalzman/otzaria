@@ -2,10 +2,7 @@ name: Deploy Android to Google Play
 
 on:
   workflow_dispatch:
-
-  release:
-    types:
-      - published
+  workflow_call:
 
 permissions:
   contents: read
@@ -135,6 +132,7 @@ jobs:
             echo "::error::Google Calendar secrets are missing. Please set GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET."
             exit 1
           fi
+          mkdir -p lib/tools/calendar/services
           cat > lib/tools/calendar/services/google_calendar_credentials.dart << EOF
           class GoogleCalendarCredentials {
             static const String clientId = '$CLIENT_ID';
