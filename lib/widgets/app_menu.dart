@@ -590,9 +590,11 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
   static const double _contextMenuMaxWidth = 320;
 
   bool _isMenuOpen = false;
+  bool _isMenuVisible = false;
   OverlayEntry? _menuOverlayEntry;
   final GlobalKey _menuPanelKey = GlobalKey();
   Offset? _currentMenuOffset;
+  double? _menuAnchorX;
 
   bool get _supportsLongPressContextMenu {
     return switch (defaultTargetPlatform) {
@@ -611,6 +613,8 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
     _menuOverlayEntry?.remove();
     _menuOverlayEntry = null;
     _currentMenuOffset = null;
+    _menuAnchorX = null;
+    _isMenuVisible = false;
   }
 
   void _closeContextMenu() {
@@ -660,24 +664,10 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
     final spaceBelow = overlayRenderBox.size.height - overlayPosition.dy;
     final shouldOpenAbove =
         spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
-    final spaceLeft = overlayPosition.dx;
-    final spaceRight = overlayRenderBox.size.width - overlayPosition.dx;
-    final shouldOpenLeft =
-        spaceRight < metrics.menuMinWidth && spaceLeft > spaceRight;
-
-    final estimatedWidth = _resolveContextMenuMaxWidth(
-      overlayRenderBox.size.width,
-      metrics,
-    );
-    final rawDx = shouldOpenLeft
-        ? overlayPosition.dx - estimatedWidth
-        : overlayPosition.dx;
-    final maxDx = (overlayRenderBox.size.width -
-            estimatedWidth -
-            _contextMenuScreenPadding)
-        .clamp(_contextMenuScreenPadding, double.infinity)
+    final dx = overlayPosition.dx
+        .clamp(_contextMenuScreenPadding,
+            overlayRenderBox.size.width - _contextMenuScreenPadding)
         .toDouble();
-    final dx = rawDx.clamp(_contextMenuScreenPadding, maxDx).toDouble();
     final rawDy = shouldOpenAbove
         ? overlayPosition.dy - estimatedHeight
         : overlayPosition.dy;
@@ -711,14 +701,18 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
             .clamp(_contextMenuScreenPadding, double.infinity)
             .toDouble();
 
+    // RTL: right-align menu with anchor X; fall back to left-align if no space
+    final anchorX = _menuAnchorX ?? currentOffset.dx;
+    final rtlDx = anchorX - panelSize.width;
+    final targetDx = rtlDx >= _contextMenuScreenPadding ? rtlDx : anchorX;
+
     final adjustedOffset = Offset(
-      currentOffset.dx.clamp(_contextMenuScreenPadding, maxDx).toDouble(),
+      targetDx.clamp(_contextMenuScreenPadding, maxDx).toDouble(),
       currentOffset.dy.clamp(_contextMenuScreenPadding, maxDy).toDouble(),
     );
 
-    if (adjustedOffset == currentOffset) return;
-
     _currentMenuOffset = adjustedOffset;
+    _isMenuVisible = true;
     _menuOverlayEntry?.markNeedsBuild();
   }
 
@@ -734,6 +728,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
 
     final overlayPosition = overlayRenderObject.globalToLocal(globalPosition);
     if (!overlayPosition.dx.isFinite || !overlayPosition.dy.isFinite) return;
+    _menuAnchorX = overlayPosition.dx;
     final metrics = Theme.of(context).extension<AppMenuMetrics>() ??
         AppMenuMetrics.create(compactMenus: false);
     final menuOffset = _calculateMenuOffset(
@@ -792,7 +787,12 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
               Positioned(
                 left: currentMenuOffset.dx,
                 top: currentMenuOffset.dy,
-                child: _AppContextMenuPanel(
+                child: Visibility(
+                  visible: _isMenuVisible,
+                  maintainSize: false,
+                  maintainAnimation: false,
+                  maintainState: true,
+                  child: _AppContextMenuPanel(
                   key: _menuPanelKey,
                   entries: entries,
                   metrics: metrics,
@@ -807,6 +807,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
                     maxMenuWidth,
                     submenuControllers,
                   ),
+                ),
                 ),
               ),
             ],
@@ -1900,11 +1901,10 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
                   _restoreSelectedText();
                   return;
                 }
-                final selectedEntry = widget.entries.firstWhere(
-                  (entry) => entry.value == value,
-                  orElse: () => widget.entries.first,
-                );
-                _menuVisibleText = selectedEntry.label;
+                final selectedEntry = widget.entries
+                    .where((entry) => entry.value == value)
+                    .firstOrNull;
+                _menuVisibleText = selectedEntry?.label ?? _selectedLabel;
                 widget.onSelected?.call(value);
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
