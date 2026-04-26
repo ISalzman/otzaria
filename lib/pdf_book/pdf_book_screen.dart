@@ -36,7 +36,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'pdf_outlines_screen.dart';
 import 'package:otzaria/widgets/password_dialog.dart';
 import 'pdf_thumbnails_screen.dart';
-import 'package:printing/printing.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/reading_left_pane_policy.dart';
@@ -50,6 +49,7 @@ import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/printing/printing_screen.dart';
 
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
@@ -102,6 +102,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   ui.Image? _pageTurnTargetSnapshot;
   _BookPageTurnTransition? _pageTurnTransition;
   bool _isPageTurnInProgress = false;
+  bool _pdfViewerSuspended = false;
   _PendingBookPageTurn? _pendingPageTurn;
 
   // Local UI state that syncs with Bloc
@@ -917,18 +918,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             }
             return KeyEventResult.ignored;
           },
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              _pdfViewFocusNode.requestFocus();
-            },
-            child: PdfViewer.file(
-              filePath,
-              controller: widget.tab.pdfViewerController,
-              passwordProvider: () => passwordDialog(context),
-              params: _buildPdfViewerParams(layoutMode),
-            ),
-          ),
+          child: _pdfViewerSuspended
+              ? const SizedBox.expand()
+              : GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    _pdfViewFocusNode.requestFocus();
+                  },
+                  child: PdfViewer.file(
+                    filePath,
+                    controller: widget.tab.pdfViewerController,
+                    passwordProvider: () => passwordDialog(context),
+                    params: _buildPdfViewerParams(layoutMode),
+                  ),
+                ),
         );
       },
     );
@@ -3144,18 +3147,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Future<void> _handlePrintPress(BuildContext context) async {
+    if (!context.mounted) return;
     final file = File(widget.tab.book.path);
-    final fileName = file.uri.pathSegments.last;
-    await Printing.sharePdf(
-      bytes: await file.readAsBytes(),
-      filename: fileName,
-    );
-
+    setState(() => _pdfViewerSuspended = true);
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PrintingScreen(
+        data: Future.value(''),
+        bookId: widget.tab.book.title,
+        createPdfOverride: (_) => file.readAsBytes(),
+      ),
+    ));
     if (mounted) {
+      setState(() => _pdfViewerSuspended = false);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _pdfViewFocusNode.requestFocus();
-        }
+        if (mounted) _pdfViewFocusNode.requestFocus();
       });
     }
   }
