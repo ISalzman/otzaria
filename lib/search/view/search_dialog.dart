@@ -209,6 +209,7 @@ class _SearchDialogState extends State<SearchDialog> {
                 final query = bookmark.book.title; // הטקסט הפשוט של החיפוש
                 final displayText =
                     bookmark.ref; // הטקסט המעוצב (עם קידומות וסיומות)
+                final originalIndex = state.history.indexOf(bookmark);
 
                 return ListTile(
                   dense: true,
@@ -217,6 +218,15 @@ class _SearchDialogState extends State<SearchDialog> {
                     displayText,
                     textAlign: TextAlign.right,
                     style: const TextStyle(fontSize: 14),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(FluentIcons.delete_24_regular, size: 18),
+                    tooltip: 'מחק מההיסטוריה',
+                    onPressed: () {
+                      context
+                          .read<HistoryBloc>()
+                          .add(RemoveHistory(originalIndex));
+                    },
                   ),
                   onTap: () {
                     // שחזור הטקסט הפשוט (ללא קידומות וסיומות)
