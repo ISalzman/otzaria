@@ -786,6 +786,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               : widget.tab.pageNumber;
           final title = await refFromPageNumber(
               currentPage, widget.tab.outline.value, widget.tab.book.title);
+          if (!mounted) return;
           widget.tab.currentTitle.value = title;
           widget.tab.currentTextLineNumber =
               await _resolveTextLineNumberForPage(

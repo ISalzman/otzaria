@@ -147,7 +147,9 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
         debugPrint('✅ Loaded ${links.length} links');
       }
 
-      add(LoadHeadingsAndLinks(headings: headings, links: links));
+      if (!isClosed) {
+        add(LoadHeadingsAndLinks(headings: headings, links: links));
+      }
     } catch (e, stackTrace) {
       debugPrint('❌ Error loading PDF headings and links: $e');
       debugPrint('Stack trace: $stackTrace');
