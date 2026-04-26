@@ -294,24 +294,26 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           child: SingleChildScrollView(
             primary: true,
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // 1. גרסאות + נתיב ספרייה
-                _buildVersionAndPathSection(context, state),
+            child: ToolPanelWrapper(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 1. גרסאות + נתיב ספרייה
+                  _buildVersionAndPathSection(context, state),
 
-                // 2. עדכוני מערכת (רשת + עדכון מפתחים)
-                _buildSystemUpdatesSection(context, state),
+                  // 2. עדכוני מערכת (רשת + עדכון מפתחים)
+                  _buildSystemUpdatesSection(context, state),
 
-                // 3. דיווחי טעויות
-                _buildErrorReportsSection(context, state),
+                  // 3. דיווחי טעויות
+                  _buildErrorReportsSection(context, state),
 
-                // 4. מתקדם (גיבוי + מצב סייפר)
-                _buildAdvancedSection(context, state),
+                  // 4. מתקדם (גיבוי + מצב סייפר)
+                  _buildAdvancedSection(context, state),
 
-                // 6. איפוס
-                _buildResetSection(context),
-              ],
+                  // 6. איפוס
+                  _buildResetSection(context),
+                ],
+              ),
             ),
           ),
         );

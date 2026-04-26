@@ -33,9 +33,11 @@ class PdfScrollbar extends StatefulWidget {
 }
 
 class _PdfScrollbarState extends State<PdfScrollbar> {
+  final GlobalKey _trackKey = GlobalKey();
   double? _lastThumbTop;
   double? _lastThumbHeight;
   int? _lastPageNumber;
+  double? _dragPointerOffsetWithinThumb;
 
   @override
   Widget build(BuildContext context) {
@@ -190,14 +192,41 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                   );
                 }
 
+                void startThumbDrag(DragStartDetails details) {
+                  _dragPointerOffsetWithinThumb = details.localPosition.dy;
+                }
+
+                void updateThumbDrag(DragUpdateDetails details) {
+                  final trackContext = _trackKey.currentContext;
+                  if (trackContext == null) return;
+                  final trackBox =
+                      trackContext.findRenderObject() as RenderBox?;
+                  if (trackBox == null) return;
+                  final localPosition =
+                      trackBox.globalToLocal(details.globalPosition);
+                  jumpToThumbTop(
+                    localPosition.dy -
+                        (_dragPointerOffsetWithinThumb ?? thumbHeight / 2),
+                  );
+                }
+
+                void endThumbDrag() {
+                  _dragPointerOffsetWithinThumb = null;
+                }
+
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapDown: (details) {
+                    final tapY = details.localPosition.dy;
+                    final isTapOnThumb =
+                        tapY >= thumbTop && tapY <= thumbTop + thumbHeight;
+                    if (isTapOnThumb) return;
                     jumpToThumbTop(details.localPosition.dy - thumbHeight / 2);
                   },
                   child: Stack(
                     children: [
                       Container(
+                        key: _trackKey,
                         width: widget.trackThickness,
                         decoration: BoxDecoration(
                           color: resolvedTrackColor,
@@ -211,9 +240,10 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                         right: 0,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onVerticalDragUpdate: (details) {
-                            jumpToThumbTop(thumbTop + details.delta.dy);
-                          },
+                          onVerticalDragStart: startThumbDrag,
+                          onVerticalDragUpdate: updateThumbDrag,
+                          onVerticalDragEnd: (_) => endThumbDrag(),
+                          onVerticalDragCancel: endThumbDrag,
                           child: Container(
                             width: widget.trackThickness,
                             height: thumbHeight,

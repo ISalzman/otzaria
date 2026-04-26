@@ -206,38 +206,41 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             return SingleChildScrollView(
               primary: true,
               padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // מאגר הספרים (רק בדסקטופ)
-                  if (!(Platform.isAndroid || Platform.isIOS)) ...[
-                    SettingsCard(
-                      title: 'מאגר הספרים',
-                      children: [
-                        _buildLibraryLocationWidget(context),
-                      ],
-                    ),
+              child: ToolPanelWrapper(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // מאגר הספרים (רק בדסקטופ)
+                    if (!(Platform.isAndroid || Platform.isIOS)) ...[
+                      SettingsCard(
+                        title: 'מאגר הספרים',
+                        children: [
+                          _buildLibraryLocationWidget(context),
+                        ],
+                      ),
+                      kSettingsCardSpacing,
+                    ],
+
+                    // הפאנל המשותף (תצוגה + ספרים נוספים) - כעת כולל את תיקיית היברובוקס בתוכו!
+                    LibrarySettingsPanel(
+                        hebrewBooksPathWidget: hebrewPathWidget),
+
+                    // תיקיות מותאמות אישית (רק בדסקטופ)
+                    if (!(Platform.isAndroid || Platform.isIOS)) ...[
+                      kSettingsCardSpacing,
+                      SettingsCard(
+                        title: 'תיקיות מותאמות אישית',
+                        children: const [
+                          CustomFoldersTile(),
+                        ],
+                      ),
+                    ],
+
+                    // חיפוש ואינדקס
                     kSettingsCardSpacing,
+                    _buildSearchSection(context, state),
                   ],
-
-                  // הפאנל המשותף (תצוגה + ספרים נוספים) - כעת כולל את תיקיית היברובוקס בתוכו!
-                  LibrarySettingsPanel(hebrewBooksPathWidget: hebrewPathWidget),
-
-                  // תיקיות מותאמות אישית (רק בדסקטופ)
-                  if (!(Platform.isAndroid || Platform.isIOS)) ...[
-                    kSettingsCardSpacing,
-                    SettingsCard(
-                      title: 'תיקיות מותאמות אישית',
-                      children: const [
-                        CustomFoldersTile(),
-                      ],
-                    ),
-                  ],
-
-                  // חיפוש ואינדקס
-                  kSettingsCardSpacing,
-                  _buildSearchSection(context, state),
-                ],
+                ),
               ),
             );
           },
