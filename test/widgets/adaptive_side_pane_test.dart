@@ -135,4 +135,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('count: 2'), findsOneWidget);
   });
+
+  testWidgets('AdaptiveSidePane places overlay drag handle on window edge',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: SizedBox(
+              width: 500,
+              height: 700,
+              child: AdaptiveSidePane(
+                isOpen: true,
+                alignment: AlignmentDirectional.centerEnd,
+                paneWidth: 300,
+                minMainContentWidth: 420,
+                onClose: () {},
+                mainContent: const SizedBox.expand(),
+                paneContent: const Text('pane'),
+                isResizable: true,
+                onPaneWidthChanged: (_) {},
+                autoHandleResponsiveVisibility: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.getTopRight(find.byType(ResizableDragHandle)).dx, 500);
+  });
 }

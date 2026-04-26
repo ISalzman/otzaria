@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tools/calendar/ulits/calendar_cubit.dart';
 import 'package:otzaria/settings/panels/settings_panels_exports.dart';
+import 'package:otzaria/widgets/tool_ui_helpers.dart';
 
 /// טאב כלים — לוח שנה, גימטריות, עורך.
 ///
@@ -19,14 +20,16 @@ class ToolsSettingsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = SingleChildScrollView(
       primary: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: const [
-          CalendarSettingsTab(),
-          GematriaSettingsTab(),
-          // [EDITING DISABLED] EditorSettingsTab(),
-          SizedBox(height: 16),
-        ],
+      child: ToolPanelWrapper(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: const [
+            CalendarSettingsTab(),
+            GematriaSettingsTab(),
+            // [EDITING DISABLED] EditorSettingsTab(),
+            SizedBox(height: 16),
+          ],
+        ),
       ),
     );
 

@@ -4,6 +4,27 @@ import 'package:otzaria/widgets/scrollable_positioned_list_scrollbar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 void main() {
+  testWidgets('פס הגלילה שומר רצועה נפרדת מהתוכן', (tester) async {
+    final listener = ItemPositionsListener.create();
+    final controller = ItemScrollController();
+    const contentKey = Key('scroll-content');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 10,
+            child: Container(key: contentKey),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.getTopLeft(find.byKey(contentKey)).dx, 12.0);
+  });
+
   testWidgets('listener ישן לא מעדכן State אחרי החלפת widget ו-dispose',
       (tester) async {
     final firstListener = ItemPositionsListener.create();
