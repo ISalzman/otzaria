@@ -70,6 +70,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   static const int _defaultPdfLineRange = 50;
   static const double _bookViewGap = 3.0;
   static const double _bookViewScale = 0.5;
+  static const double _verticalScrollbarGutter = 16.0;
+  static const double _horizontalScrollbarGutter = 10.0;
+  static const double _scrollbarGutterGap = 4.0;
   static const String _connectionTypeCommentary = 'COMMENTARY';
   static const String _connectionTypeTargum = 'TARGUM';
 
@@ -358,47 +361,55 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   ({int startLine, int endLine})? _getCurrentPdfLinesRange() {
     final currentLine = widget.tab.currentTextLineNumber;
-    if (currentLine == null) return null;
-
-    final int startLine = currentLine;
-    int endLine = startLine + _defaultPdfLineRange;
-
-    if (widget.tab.pdfHeadings != null) {
-      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
-      final currentIndex =
-          sortedHeadings.indexWhere((e) => e.value == currentLine);
-
-      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
-        endLine = sortedHeadings[currentIndex + 1].value - 1;
-      }
+    if (currentLine == null) {
+      debugPrint('🔍 [PDF-DEBUG] _getCurrentPdfLinesRange: currentTextLineNumber=null → returning null');
+      return null;
     }
 
+    final int startLine = currentLine;
+    final int endLine = widget.tab.currentTextLineNumberEnd ?? startLine + _defaultPdfLineRange;
+
+    final linksInRange = widget.tab.links.where((l) => l.index1 >= startLine && l.index1 <= endLine).length;
+    debugPrint('🔍 [PDF-DEBUG] _getCurrentPdfLinesRange: currentLine=$currentLine → range $startLine–$endLine, linksInRange=$linksInRange (total links=${widget.tab.links.length})');
     return (startLine: startLine, endLine: endLine);
   }
 
-  Future<int> _resolveTextLineNumberForPage(
+  Future<({int start, int? end})> _resolveTextLineNumberForPage(
     int pageNumber, {
     String? resolvedTitle,
   }) async {
+    debugPrint('📖 [PDF-DEBUG] _resolveTextLineNumberForPage: page=$pageNumber resolvedTitle="$resolvedTitle"');
     final outline = widget.tab.outline.value ?? const <PdfOutlineNode>[];
     if (outline.isNotEmpty) {
       final textIndex =
           await pdfToTextPage(widget.tab.book, outline, pageNumber, context);
       if (textIndex != null) {
-        return textIndex + 1;
+        if (!mounted) return (start: textIndex + 1, end: null);
+        final nextIndex = await pdfToTextPage(
+            widget.tab.book, outline, pageNumber + 1, context);
+        debugPrint('📖 [PDF-DEBUG] pdfToTextPage → raw=$textIndex → start=${textIndex + 1}, end=${nextIndex ?? "null (last page)"}');
+        return (start: textIndex + 1, end: nextIndex);
       }
+      debugPrint('📖 [PDF-DEBUG] pdfToTextPage → null (no match)');
+    } else {
+      debugPrint('📖 [PDF-DEBUG] outline empty, skipping pdfToTextPage');
     }
 
     final title = resolvedTitle ??
         await refFromPageNumber(pageNumber, outline, widget.tab.book.title);
+    debugPrint('📖 [PDF-DEBUG] title for page $pageNumber = "$title"');
     if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
       final lineNumber = widget.tab.pdfHeadings!.getLineNumberForHeading(title);
+      debugPrint('📖 [PDF-DEBUG] getLineNumberForHeading("$title") → $lineNumber');
       if (lineNumber != null) {
-        return lineNumber;
+        return (start: lineNumber, end: null);
       }
+    } else {
+      debugPrint('📖 [PDF-DEBUG] pdfHeadings=${widget.tab.pdfHeadings == null ? "null" : "loaded"}, title empty=${title.isEmpty}');
     }
 
-    return pageNumber;
+    debugPrint('📖 [PDF-DEBUG] fallback: returning pageNumber=$pageNumber as lineNumber');
+    return (start: pageNumber, end: null);
   }
 
   ({List<String> commentators, List<otz_links.Link> links})
@@ -745,54 +756,34 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           totalPages: document.pages.length,
         ));
 
-        // טעינת headings וlinks
-        await _loadPdfHeadingsAndLinks();
+        // חישוב currentTextLineNumber מיד אחרי טעינת ה-outline
+        // כך הפאנל יכול להציג קישורים ומפרשים מוקדם ככל האפשר
+        final targetPage = widget.tab.pageNumber;
+        final targetTitle = await refFromPageNumber(
+            targetPage, widget.tab.outline.value ?? [], widget.tab.book.title);
+        if (!mounted) return;
+        widget.tab.currentTitle.value = targetTitle;
+        final initialResolved = await _resolveTextLineNumberForPage(
+          targetPage,
+          resolvedTitle: targetTitle,
+        );
+        if (!mounted) return;
+        widget.tab.currentTextLineNumber = initialResolved.start;
+        widget.tab.currentTextLineNumberEnd = initialResolved.end;
+        setState(() {});
 
-        // קפיצה לעמוד הנכון - עם המתנה קצרה כדי לוודא שה-controller מוכן
+        // קפיצה לעמוד הנכון - לצרכים ויזואליים בלבד
         if (widget.tab.pageNumber > 1) {
-          _isJumping = true; // מסמן שאנחנו בתהליך קפיצה
+          _isJumping = true;
           WidgetsBinding.instance.addPostFrameCallback((_) async {
-            // המתנה קצרה נוספת לוודא שהכל מוכן
             await Future.delayed(const Duration(milliseconds: 100));
             if (mounted && controller.isReady) {
               await controller.goToPage(pageNumber: widget.tab.pageNumber);
-              // המתנה נוספת לוודא שהקפיצה הסתיימה
               await Future.delayed(const Duration(milliseconds: 200));
-
-              // עדכון currentTextLineNumber אחרי הקפיצה
-              if (mounted) {
-                final jumpedPage = widget.tab.pdfViewerController.pageNumber ??
-                    widget.tab.pageNumber;
-                final jumpedTitle = await refFromPageNumber(jumpedPage,
-                    widget.tab.outline.value ?? [], widget.tab.book.title);
-                widget.tab.currentTextLineNumber =
-                    await _resolveTextLineNumberForPage(
-                  jumpedPage,
-                  resolvedTitle: jumpedTitle,
-                );
-                setState(() {});
-              }
-
-              _isJumping = false; // מאפס את ה-flag
-              _initialPageNumber = null; // מאפס גם את זה
-            } else {
-              _isJumping = false;
             }
+            _isJumping = false;
+            _initialPageNumber = null;
           });
-        } else {
-          // אם לא קופצים, עדכן את currentTextLineNumber מיד
-          final currentPage = widget.tab.pdfViewerController.isReady
-              ? (widget.tab.pdfViewerController.pageNumber ?? 1)
-              : widget.tab.pageNumber;
-          final title = await refFromPageNumber(
-              currentPage, widget.tab.outline.value, widget.tab.book.title);
-          if (!mounted) return;
-          widget.tab.currentTitle.value = title;
-          widget.tab.currentTextLineNumber =
-              await _resolveTextLineNumberForPage(
-            currentPage,
-            resolvedTitle: title,
-          );
         }
 
         if (!mounted) return;
@@ -874,7 +865,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         return layoutModeFor(prev) != layoutModeFor(curr);
       },
       builder: (context, state) {
-        if (state is PdfBookError || !_pdfFileExists) return const SizedBox.shrink();
+        if (state is PdfBookError || !_pdfFileExists) {
+          return const SizedBox.shrink();
+        }
 
         final layoutMode = switch (state) {
           PdfBookInitial initial => initial.layoutMode,
@@ -1696,36 +1689,70 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Future<void> _loadPdfHeadingsAndLinks() async {
+    final bookTitle = widget.tab.book.title;
+    final categoryId = widget.tab.book.categoryId;
+    final filePath = widget.tab.book.filePath;
+    debugPrint('📚 [PDF-DEBUG] _loadPdfHeadingsAndLinks START: title="$bookTitle" categoryId=$categoryId filePath="$filePath"');
+
     try {
       // טעינת headings מה-DB
       final headings = await PdfHeadings.loadFromDatabase(
-        widget.tab.book.title,
-        categoryId: widget.tab.book.categoryId,
-        filePath: widget.tab.book.filePath,
+        bookTitle,
+        categoryId: categoryId,
+        filePath: filePath,
       );
       if (headings != null) {
         widget.tab.pdfHeadings = headings;
+        debugPrint('📚 [PDF-DEBUG] pdfHeadings loaded: ${headings.headingsMap.length} entries. First 3: ${headings.headingsMap.entries.take(3).map((e) => "${e.key}→${e.value}").join(", ")}');
+      } else {
+        debugPrint('📚 [PDF-DEBUG] pdfHeadings NOT FOUND for "$bookTitle"');
       }
 
       // טעינת links
       final library = await DataRepository.instance.library;
+      final allBooks = library.getAllBooks();
+      debugPrint('📚 [PDF-DEBUG] Library loaded: ${allBooks.length} total books');
 
-      final textBook = library.findBookByTitle(widget.tab.book.title, TextBook);
+      final textBook = library.findBookByTitle(bookTitle, TextBook);
+      debugPrint('📚 [PDF-DEBUG] findBookByTitle("$bookTitle", TextBook) → ${textBook == null ? "NOT FOUND" : "FOUND: ${textBook.runtimeType}, categoryId=${textBook.categoryId}"}');
+
+      if (textBook == null) {
+        // ניסיון חיפוש גמיש
+        final flexible = library.findBookByTitleFlexible(bookTitle, TextBook);
+        debugPrint('📚 [PDF-DEBUG] findBookByTitleFlexible → ${flexible == null ? "NOT FOUND" : "FOUND: ${flexible.title}"}');
+        // הצג ספרים בשם דומה לעזרת דיבוג
+        final similar = allBooks
+            .where((b) => b.runtimeType == TextBook && b.title.contains(bookTitle.substring(0, bookTitle.length > 5 ? 5 : bookTitle.length)))
+            .take(5)
+            .map((b) => '"${b.title}" (cat=${b.categoryId})')
+            .toList();
+        debugPrint('📚 [PDF-DEBUG] Similar TextBooks: $similar');
+      }
 
       if (textBook != null) {
         if (textBook is TextBook) {
           final loadedLinks = await textBook.links
             ..sort((a, b) => a.index1.compareTo(b.index1));
           widget.tab.links = loadedLinks;
+          final commentaryCount = loadedLinks.where((l) => l.connectionType.toUpperCase() == 'COMMENTARY' || l.connectionType.toUpperCase() == 'TARGUM').length;
+          debugPrint('📚 [PDF-DEBUG] Links loaded: ${loadedLinks.length} total, $commentaryCount commentary/targum');
+          if (loadedLinks.isNotEmpty) {
+            debugPrint('📚 [PDF-DEBUG] Links index1 range: ${loadedLinks.first.index1}–${loadedLinks.last.index1}');
+          }
           await _loadCommentatorGroups();
         }
       }
 
       if (mounted) {
+        _linksLoading = false;
         setState(() {});
       }
     } catch (e, stackTrace) {
-      debugPrint('Error loading PDF headings and links: $e\n$stackTrace');
+      debugPrint('📚 [PDF-DEBUG] ERROR in _loadPdfHeadingsAndLinks: $e\n$stackTrace');
+      if (mounted) {
+        _linksLoading = false;
+        setState(() {});
+      }
     }
   }
 
@@ -1762,6 +1789,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   int _lastComputedForPage = -1;
   int? _initialPageNumber; // שמירת מספר העמוד ההתחלתי
   bool _isJumping = false; // flag לציון שאנחנו בתהליך קפיצה
+  bool _linksLoading = true; // true עד שטעינת הקישורים מסתיימת
 
   void _onPdfViewerControllerUpdate() async {
     if (!widget.tab.pdfViewerController.isReady) return;
@@ -1792,10 +1820,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (token == _lastComputedForPage) {
       widget.tab.currentTitle.value = title;
 
-      widget.tab.currentTextLineNumber = await _resolveTextLineNumberForPage(
+      final resolved = await _resolveTextLineNumberForPage(
         newPage,
         resolvedTitle: title,
       );
+      widget.tab.currentTextLineNumber = resolved.start;
+      widget.tab.currentTextLineNumberEnd = resolved.end;
       if (mounted) {
         setState(() {});
       }
@@ -1941,6 +1971,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Widget _buildReaderMainContent() {
+    const readerContentPadding = EdgeInsets.only(
+      right: _verticalScrollbarGutter + _scrollbarGutterGap,
+      bottom: _horizontalScrollbarGutter + _scrollbarGutterGap,
+    );
+
     return Stack(
       children: [
         NotificationListener<UserScrollNotification>(
@@ -2001,53 +2036,56 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                RepaintBoundary(
-                  key: _pdfViewportBoundaryKey,
-                  child: ColorFiltered(
-                    colorFilter: ColorFilter.mode(
-                      Colors.white,
-                      Provider.of<SettingsBloc>(context, listen: true)
-                              .state
-                              .isDarkMode
-                          ? BlendMode.difference
-                          : BlendMode.dst,
-                    ),
-                    child: Stack(
-                      children: [
-                        _buildPdfViewerFromFile(widget.tab.book.path),
-                        BlocBuilder<PdfBookBloc, PdfBookState>(
-                          buildWhen: (prev, curr) {
-                            if (prev is PdfBookLoaded &&
-                                curr is PdfBookLoaded) {
-                              return prev.isLoading != curr.isLoading ||
-                                  prev.loadSucceeded != curr.loadSucceeded;
-                            }
-                            return true;
-                          },
-                          builder: (context, state) {
-                            if (state is PdfBookError) {
-                              return const SizedBox.shrink();
-                            }
-                            if (state is! PdfBookLoaded || state.isLoading) {
-                              return const Positioned.fill(
-                                child: ColoredBox(
-                                  color: Color(0xFFFFFFFF),
-                                  child: Center(
-                                    child: CircularProgressIndicator(),
+                Padding(
+                  padding: readerContentPadding,
+                  child: RepaintBoundary(
+                    key: _pdfViewportBoundaryKey,
+                    child: ColorFiltered(
+                      colorFilter: ColorFilter.mode(
+                        Colors.white,
+                        Provider.of<SettingsBloc>(context, listen: true)
+                                .state
+                                .isDarkMode
+                            ? BlendMode.difference
+                            : BlendMode.dst,
+                      ),
+                      child: Stack(
+                        children: [
+                          _buildPdfViewerFromFile(widget.tab.book.path),
+                          BlocBuilder<PdfBookBloc, PdfBookState>(
+                            buildWhen: (prev, curr) {
+                              if (prev is PdfBookLoaded &&
+                                  curr is PdfBookLoaded) {
+                                return prev.isLoading != curr.isLoading ||
+                                    prev.loadSucceeded != curr.loadSucceeded;
+                              }
+                              return true;
+                            },
+                            builder: (context, state) {
+                              if (state is PdfBookError) {
+                                return const SizedBox.shrink();
+                              }
+                              if (state is! PdfBookLoaded || state.isLoading) {
+                                return const Positioned.fill(
+                                  child: ColoredBox(
+                                    color: Color(0xFFFFFFFF),
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
                                   ),
-                                ),
-                              );
-                            }
-                            if (!state.loadSucceeded) {
-                              return const Positioned.fill(
-                                child:
-                                    Center(child: Text('Failed to load PDF')),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ],
+                                );
+                              }
+                              if (!state.loadSucceeded) {
+                                return const Positioned.fill(
+                                  child:
+                                      Center(child: Text('Failed to load PDF')),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -2058,14 +2096,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   builder: (context, state) {
                     if (state is! PdfBookError) return const SizedBox.shrink();
                     return Positioned.fill(
-                      child: ColoredBox(
-                        color: Theme.of(context).colorScheme.surface,
-                        child: Center(
-                          child: Text(
-                            state.message,
-                            textDirection: TextDirection.rtl,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurface,
+                      child: Padding(
+                        padding: readerContentPadding,
+                        child: ColoredBox(
+                          color: Theme.of(context).colorScheme.surface,
+                          child: Center(
+                            child: Text(
+                              state.message,
+                              textDirection: TextDirection.rtl,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
                             ),
                           ),
                         ),
@@ -2073,18 +2114,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     );
                   },
                 ),
-                _buildPageTurnOverlay(context),
+                Padding(
+                  padding: readerContentPadding,
+                  child: _buildPageTurnOverlay(context),
+                ),
                 PdfScrollbar(
                   controller: widget.tab.pdfViewerController,
                   orientation: ScrollbarOrientation.right,
-                  trackThickness: 16.0,
+                  trackThickness: _verticalScrollbarGutter,
                   thumbMinSize: 50.0,
                   scrollBoundsBuilder: _currentVerticalScrollbarBounds,
                   freezeThumb: _pageTurnTransition != null,
                 ),
                 PdfHorizontalScrollbar(
                   controller: widget.tab.pdfViewerController,
-                  trackThickness: 10.0,
+                  trackThickness: _horizontalScrollbarGutter,
                 ),
               ],
             ),
@@ -2323,6 +2367,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Widget _buildRightPaneContent() {
     return PdfCommentaryPanel(
       tab: widget.tab,
+      linksCount: widget.tab.links.length,
+      linksLoading: _linksLoading,
       openBookCallback: (tab) {
         if (tab is TextBookTab) {
           openBook(context, tab.book, tab.index, '', ignoreHistory: false);

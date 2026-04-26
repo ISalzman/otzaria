@@ -33,6 +33,22 @@ void main() {
       expect(tab.savedLayoutMode, isNull);
       expect(tab.showLeftPane.value, isFalse);
       expect(tab.activeCommentators, isEmpty);
+      expect(tab.currentTextLineNumber, isNull);
+      expect(tab.currentTextLineNumberEnd, isNull);
+    });
+
+    test('currentTextLineNumber ו-currentTextLineNumberEnd ניתנים לכתיבה', () {
+      final tab = _tab();
+      tab.currentTextLineNumber = 42;
+      tab.currentTextLineNumberEnd = 67;
+      expect(tab.currentTextLineNumber, 42);
+      expect(tab.currentTextLineNumberEnd, 67);
+    });
+
+    test('currentTextLineNumberEnd אינו נדרש — נשאר null כברירת מחדל', () {
+      final tab = _tab();
+      tab.currentTextLineNumber = 10;
+      expect(tab.currentTextLineNumberEnd, isNull);
     });
 
     test('openLeftPane=true → showLeftPane מתחיל true', () {

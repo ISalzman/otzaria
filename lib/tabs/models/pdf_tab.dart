@@ -61,6 +61,9 @@ class PdfBookTab extends OpenedTab {
   /// Current line number in text (based on PDF heading)
   int? currentTextLineNumber;
 
+  /// End line number in text for the current page (start of next page - 1)
+  int? currentTextLineNumberEnd;
+
   /// Saved zoom level for restoration after rebuild
   double? savedZoom;
 
