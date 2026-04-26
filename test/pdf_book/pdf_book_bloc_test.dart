@@ -519,22 +519,71 @@ void main() {
     );
 
     blocTest<PdfBookBloc, PdfBookState>(
-      // searchMode אינו בprops → אין emit, אבל לא קורס
-      'UpdateSearchOptions עם searchMode לא קורס',
+      'UpdateSearchOptions עם searchMode מעדכן',
       build: () => _makeBloc(_tab()),
       seed: () => _loaded(),
       act: (b) =>
           b.add(const UpdateSearchOptions(searchMode: SearchMode.fuzzy)),
-      expect: () => [],
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.searchMode, 'searchMode', SearchMode.fuzzy),
+      ],
     );
 
     blocTest<PdfBookBloc, PdfBookState>(
-      // alternativeWords אינו בprops → אין emit, אבל לא קורס
-      'UpdateSearchOptions עם alternativeWords לא קורס',
+      'UpdateSearchOptions עם alternativeWords מעדכן',
       build: () => _makeBloc(_tab()),
       seed: () => _loaded(),
       act: (b) => b.add(const UpdateSearchOptions(
           alternativeWords: {1: ['תורה', 'Torah']})),
+      expect: () => [
+        isA<PdfBookLoaded>().having((s) => s.alternativeWords,
+            'alternativeWords', {
+          1: ['תורה', 'Torah']
+        }),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateSearchOptions עם spacingValues מעדכן',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) =>
+          b.add(const UpdateSearchOptions(spacingValues: {'0-1': '2'})),
+      expect: () => [
+        isA<PdfBookLoaded>()
+            .having((s) => s.spacingValues, 'spacingValues', {'0-1': '2'}),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateSearchOptions עם searchOptions מעדכן',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const UpdateSearchOptions(searchOptions: {
+        'תורה_0': {'סיומות': true}
+      })),
+      expect: () => [
+        isA<PdfBookLoaded>().having((s) => s.searchOptions, 'searchOptions', {
+          'תורה_0': {'סיומות': true}
+        }),
+      ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateSearchOptions ללא שינוי → אין emit',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(const UpdateSearchOptions()),
+      expect: () => [],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateSearchOptions עם אותו searchMode → אין emit',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) =>
+          b.add(const UpdateSearchOptions(searchMode: SearchMode.exact)),
       expect: () => [],
     );
 
