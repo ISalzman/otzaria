@@ -37,6 +37,8 @@ List<CommentaryGroup> _groupConsecutiveLinks(List<Link> links) {
 /// Widget שמציג מפרשים וקישורים עבור PDF
 class PdfCommentaryPanel extends StatefulWidget {
   final PdfBookTab tab;
+  final int linksCount;
+  final bool linksLoading;
   final Function(OpenedTab) openBookCallback;
   final double fontSize;
   final VoidCallback? onClose;
@@ -45,6 +47,8 @@ class PdfCommentaryPanel extends StatefulWidget {
   const PdfCommentaryPanel({
     super.key,
     required this.tab,
+    required this.linksCount,
+    this.linksLoading = false,
     required this.openBookCallback,
     required this.fontSize,
     this.onClose,
@@ -201,6 +205,10 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       _orderedLinks = [];
       _orderedGroups = [];
       _itemKeys.clear();
+      _commentatorGroups = [];
+      _loadCommentatorGroups();
+    } else if (oldWidget.linksCount != widget.linksCount) {
+      _visibleContentCache = null;
       _commentatorGroups = [];
       _loadCommentatorGroups();
     }
@@ -556,6 +564,21 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     }
 
     if (visibleContent.commentaryLinks.isEmpty) {
+      if (widget.linksLoading) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'טוען מפרשים...',
+              style: TextStyle(
+                fontSize: widget.fontSize * 0.9,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+        );
+      }
+
       final hasCommentaryLinks = visibleContent.hasAnyCommentaryLinks;
 
       if (hasCommentaryLinks && widget.tab.activeCommentators.isEmpty) {
@@ -652,8 +675,8 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
               .removeWhere((key, _) => !currentLinkKeys.contains(key));
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            final newTotal = _searchResultsPerLink.values
-                .fold(0, (sum, c) => sum + c);
+            final newTotal =
+                _searchResultsPerLink.values.fold(0, (sum, c) => sum + c);
             if (_totalSearchResults != newTotal ||
                 _currentSearchIndex >= newTotal) {
               setState(() {
@@ -826,7 +849,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Text(
-            'לא נמצאו קישורים לדף זה',
+            'טוען קישורים...',
             style: TextStyle(
               fontSize: widget.fontSize * 0.9,
               color: Colors.grey,
@@ -843,7 +866,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Text(
-            'לא נמצאו קישורים לדף זה',
+            widget.linksLoading ? 'טוען קישורים...' : 'לא נמצאו קישורים לדף זה',
             style: TextStyle(
               fontSize: widget.fontSize * 0.9,
               color: Colors.grey,
@@ -1107,17 +1130,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   ({int startLine, int endLine}) _getCurrentRange(int currentLine) {
-    var endLine = currentLine + 50;
-    if (widget.tab.pdfHeadings != null) {
-      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
-      final currentIndex =
-          sortedHeadings.indexWhere((e) => e.value == currentLine);
-
-      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
-        endLine = sortedHeadings[currentIndex + 1].value - 1;
-      }
-    }
-
+    final endLine = widget.tab.currentTextLineNumberEnd ?? currentLine + 50;
     return (startLine: currentLine, endLine: endLine);
   }
 
@@ -1125,17 +1138,7 @@ class _PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     final currentLine = widget.tab.currentTextLineNumber;
     if (currentLine == null) return null;
 
-    int endLine = currentLine + 50;
-    if (widget.tab.pdfHeadings != null) {
-      final sortedHeadings = widget.tab.pdfHeadings!.getSortedHeadings();
-      final currentIndex = sortedHeadings.indexWhere(
-        (heading) => heading.value == currentLine,
-      );
-
-      if (currentIndex != -1 && currentIndex < sortedHeadings.length - 1) {
-        endLine = sortedHeadings[currentIndex + 1].value - 1;
-      }
-    }
+    final endLine = widget.tab.currentTextLineNumberEnd ?? currentLine + 50;
 
     return List<int>.generate(
       endLine - currentLine + 1,

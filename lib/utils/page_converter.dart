@@ -153,6 +153,15 @@ Future<_PageMap> _buildPageMap(
   final sortedPdfPages = zipped.map((e) => e.item1).toList();
   final sortedTextIndices = zipped.map((e) => e.item2).toList();
 
+  debugPrint('🗺️ [PDF-DEBUG] _buildPageMap "${pdf.title}": pdfAnchors=${anchorsPdf.length}, textAnchors=${anchorsText.length}, matched=${sortedPdfPages.length}');
+  if (sortedPdfPages.isNotEmpty) {
+    debugPrint('🗺️ [PDF-DEBUG] First 5 matches: ${List.generate(sortedPdfPages.length > 5 ? 5 : sortedPdfPages.length, (i) => "pdf${sortedPdfPages[i]}→txt${sortedTextIndices[i]}").join(", ")}');
+  }
+  if (anchorsPdf.isNotEmpty && anchorsText.isNotEmpty && sortedPdfPages.length < 3) {
+    debugPrint('🗺️ [PDF-DEBUG] ⚠️ POOR MATCH! PDF sample refs: ${anchorsPdf.take(3).map((a) => '"${a.ref}"').join(", ")}');
+    debugPrint('🗺️ [PDF-DEBUG] ⚠️ Text sample refs: ${anchorsText.take(3).map((a) => '"${a.ref}"').join(", ")}');
+  }
+
   // Fallback: if there are too few matches, add start/end points.
   if (sortedPdfPages.length < 2) {
     if (sortedPdfPages.isEmpty) {
