@@ -748,6 +748,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         }
         textSearcher = PdfTextSearcher(pdfController)
           ..addListener(_onTextSearcherUpdated);
+
+        // קפיצה לעמוד הנכון מיד עם מוכנות הviewer, לפני כל עיבוד async
+        if (widget.tab.pageNumber > 1) {
+          _isJumping = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (mounted && controller.isReady) {
+              await controller.goToPage(pageNumber: widget.tab.pageNumber);
+              await Future.delayed(const Duration(milliseconds: 200));
+            }
+            _isJumping = false;
+            _initialPageNumber = null;
+          });
+        }
+
         widget.tab.documentRef.value = controller.documentRef;
         widget.tab.outline.value = await document.loadOutline();
 
@@ -757,8 +771,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           totalPages: document.pages.length,
         ));
 
-        // חישוב currentTextLineNumber מיד אחרי טעינת ה-outline
-        // כך הפאנל יכול להציג קישורים ומפרשים מוקדם ככל האפשר
+        // חישוב currentTextLineNumber אחרי טעינת ה-outline
         final targetPage = widget.tab.pageNumber;
         final targetTitle = await refFromPageNumber(
             targetPage, widget.tab.outline.value ?? [], widget.tab.book.title);
@@ -772,20 +785,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         widget.tab.currentTextLineNumber = initialResolved.start;
         widget.tab.currentTextLineNumberEnd = initialResolved.end;
         setState(() {});
-
-        // קפיצה לעמוד הנכון - לצרכים ויזואליים בלבד
-        if (widget.tab.pageNumber > 1) {
-          _isJumping = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            await Future.delayed(const Duration(milliseconds: 100));
-            if (mounted && controller.isReady) {
-              await controller.goToPage(pageNumber: widget.tab.pageNumber);
-              await Future.delayed(const Duration(milliseconds: 200));
-            }
-            _isJumping = false;
-            _initialPageNumber = null;
-          });
-        }
 
         if (!mounted) return;
         final settingsBloc = context.read<SettingsBloc>();
