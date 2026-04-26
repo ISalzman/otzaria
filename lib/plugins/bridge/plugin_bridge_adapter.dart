@@ -404,6 +404,12 @@ class PluginBridgeAdapter {
       case 'getCurrentState':
         final tabsState = _dependencies.tabsBloc.state;
         final currentTab = tabsState.currentTab;
+        String? tabCurrentRef(OpenedTab t) {
+          final title = t is TextBookTab
+              ? t.currentTitle.value.trim()
+              : (t is PdfBookTab ? t.currentTitle.value.trim() : '');
+          return title.isEmpty ? null : title;
+        }
         final openTabs = tabsState.tabs
             .map((t) => {
                   'bookId': t.title,
@@ -411,10 +417,11 @@ class PluginBridgeAdapter {
                   'index': t is TextBookTab
                       ? t.index
                       : (t is PdfBookTab ? t.pageNumber : 0),
+                  'currentRef': tabCurrentRef(t),
                 })
             .toList();
         if (currentTab == null) {
-          return {'currentBook': null, 'currentIndex': 0, 'openTabs': openTabs};
+          return {'currentBook': null, 'currentIndex': 0, 'currentRef': null, 'openTabs': openTabs};
         }
         return {
           'currentBook': currentTab.title,
@@ -422,6 +429,7 @@ class PluginBridgeAdapter {
           'currentIndex': currentTab is TextBookTab
               ? currentTab.index
               : (currentTab is PdfBookTab ? currentTab.pageNumber : 0),
+          'currentRef': tabCurrentRef(currentTab),
           'openTabs': openTabs,
         };
       case 'getCurrentRef':
