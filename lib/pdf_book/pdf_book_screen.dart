@@ -2128,9 +2128,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   scrollBoundsBuilder: _currentVerticalScrollbarBounds,
                   freezeThumb: _pageTurnTransition != null,
                 ),
-                PdfHorizontalScrollbar(
-                  controller: widget.tab.pdfViewerController,
-                  trackThickness: _horizontalScrollbarGutter,
+                Positioned(
+                  left: 0,
+                  right: readerContentPadding.right,
+                  bottom: 0,
+                  child: PdfHorizontalScrollbar(
+                    controller: widget.tab.pdfViewerController,
+                    trackThickness: _horizontalScrollbarGutter,
+                  ),
                 ),
               ],
             ),
