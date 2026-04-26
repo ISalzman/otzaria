@@ -56,6 +56,7 @@ class TextBookRepository {
             final bytes = await file.readAsBytes();
             return await Isolate.run(() => docxToText(bytes, title));
           }
+          if (ext == 'pdf') return '';
           return await file.readAsString();
         }
       }
@@ -184,6 +185,8 @@ class TextBookRepository {
           if (ext == 'docx') {
             final bytes = await file.readAsBytes();
             content = await Isolate.run(() => docxToText(bytes, title));
+          } else if (ext == 'pdf') {
+            content = '';
           } else {
             content = await file.readAsString();
           }
