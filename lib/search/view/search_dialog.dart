@@ -60,12 +60,14 @@ class _SearchDialogState extends State<SearchDialog> {
   final ValueNotifier<bool> _advancedControlsHasFocus = ValueNotifier(false);
   late final VoidCallback _queryListener;
   Set<String> _selectedCategoryFacets = {'/'}; // ברירת מחדל: הכל
+  late final bool _ownsSearchTab;
 
   @override
   void initState() {
     super.initState();
 
     // יצירת טאב עם ההקלדה האחרונה
+    _ownsSearchTab = widget.existingTab == null;
     if (widget.existingTab != null) {
       _searchTab = widget.existingTab!;
     } else {
@@ -269,6 +271,9 @@ class _SearchDialogState extends State<SearchDialog> {
     if (restorer != null) FocusRepository().unregisterActiveRestorer(restorer);
     _searchTab.queryController.removeListener(_queryListener);
     _advancedControlsHasFocus.dispose();
+    if (_ownsSearchTab) {
+      _searchTab.dispose();
+    }
     super.dispose();
   }
 
@@ -365,10 +370,9 @@ class _SearchDialogState extends State<SearchDialog> {
   void _setSearchAllCategories(bool value) {
     setState(() {
       _searchAllCategories = value;
-      _selectedCategoryFacets =
-          _searchAllCategories || _manualFacets.isEmpty
-              ? {'/'}
-              : Set<String>.from(_manualFacets);
+      _selectedCategoryFacets = _searchAllCategories || _manualFacets.isEmpty
+          ? {'/'}
+          : Set<String>.from(_manualFacets);
     });
     SearchScopePreferences.save(
       searchAllCategories: _searchAllCategories,
@@ -380,9 +384,8 @@ class _SearchDialogState extends State<SearchDialog> {
     setState(() {
       _manualFacets = Set<String>.from(selection);
       if (!_searchAllCategories) {
-        _selectedCategoryFacets = _manualFacets.isEmpty
-            ? {'/'}
-            : Set<String>.from(_manualFacets);
+        _selectedCategoryFacets =
+            _manualFacets.isEmpty ? {'/'} : Set<String>.from(_manualFacets);
       }
     });
     SearchScopePreferences.save(
@@ -678,15 +681,15 @@ class _SearchDialogState extends State<SearchDialog> {
                                       )
                                     : null;
 
-                                final categoriesToggleWidget =
-                                    widget.bookTitle == null
-                                        ? Padding(
-                                            padding: const EdgeInsets.only(
-                                                right: 8.0),
-                                            child:
-                                                _buildCategoriesToggle(context),
-                                          )
-                                        : null;
+                                final categoriesToggleWidget = widget
+                                            .bookTitle ==
+                                        null
+                                    ? Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 8.0),
+                                        child: _buildCategoriesToggle(context),
+                                      )
+                                    : null;
 
                                 // ב-LayoutBuilder: אם הרוחב צר — accessories לשורה שנייה
                                 return LayoutBuilder(
@@ -754,7 +757,8 @@ class _SearchDialogState extends State<SearchDialog> {
                                     }
                                     return CategoryTreeSelector(
                                       selectedFacets: _manualFacets,
-                                      onSelectionChanged: _onManualFacetsChanged,
+                                      onSelectionChanged:
+                                          _onManualFacetsChanged,
                                     );
                                   }
 
@@ -767,21 +771,22 @@ class _SearchDialogState extends State<SearchDialog> {
                                     inputFocusNotifier:
                                         _advancedControlsHasFocus,
                                   );
-                                  final categoryPanel = showCategory &&
-                                          widget.bookTitle == null
-                                      ? CategoryTreeSelector(
-                                          selectedFacets: _manualFacets,
-                                          onSelectionChanged:
-                                              _onManualFacetsChanged,
-                                        )
-                                      : null;
+                                  final categoryPanel =
+                                      showCategory && widget.bookTitle == null
+                                          ? CategoryTreeSelector(
+                                              selectedFacets: _manualFacets,
+                                              onSelectionChanged:
+                                                  _onManualFacetsChanged,
+                                            )
+                                          : null;
 
                                   return LayoutBuilder(
                                     builder: (context, constraints) {
                                       // כשיש פאנל קטגוריות (260px) + controls,
                                       // דורש לפחות ~480px — אחרת ערמה אנכית
-                                      final useColumns = categoryPanel != null &&
-                                          constraints.maxWidth < 480;
+                                      final useColumns =
+                                          categoryPanel != null &&
+                                              constraints.maxWidth < 480;
 
                                       if (useColumns) {
                                         return SingleChildScrollView(

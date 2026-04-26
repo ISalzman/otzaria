@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show FlutterError;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
@@ -6,6 +7,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/tabs_repository.dart';
@@ -298,6 +300,102 @@ void main() {
       expect(bloc.state.currentTabIndex, 0);
 
       await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+  });
+
+  group('TabsBloc deferred dispose', () {
+    setUp(() async {
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+    });
+
+    test('סגירת טאב דוחה את dispose עד אחרי עדכון ה-state', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final searchTab = SearchingTab('חיפוש', 'בדיקה');
+
+      bloc.add(AddTab(searchTab));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      bloc.add(RemoveTab(searchTab));
+      await bloc.stream.firstWhere((s) => s.tabs.isEmpty);
+
+      void titleListener() {}
+      expect(
+        () => searchTab.titleNotifier.addListener(titleListener),
+        returnsNormally,
+      );
+      searchTab.titleNotifier.removeListener(titleListener);
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      expect(
+        () => searchTab.titleNotifier.addListener(() {}),
+        throwsA(isA<FlutterError>()),
+      );
+
+      await bloc.close();
+    });
+
+    test('ReplaceAllTabs לא משחרר את הטאבים הישנים לפני שה-UI מספיק להתנתק',
+        () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final oldTab = SearchingTab('חיפוש ישן', 'ישן');
+      final newTab = SearchingTab('חיפוש חדש', 'חדש');
+
+      bloc.add(AddTab(oldTab));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      bloc.add(ReplaceAllTabs([newTab], 0));
+      await bloc.stream.firstWhere(
+        (s) => s.tabs.length == 1 && identical(s.tabs.first, newTab),
+      );
+
+      void titleListener() {}
+      expect(
+        () => oldTab.titleNotifier.addListener(titleListener),
+        returnsNormally,
+      );
+      oldTab.titleNotifier.removeListener(titleListener);
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      expect(
+        () => oldTab.titleNotifier.addListener(() {}),
+        throwsA(isA<FlutterError>()),
+      );
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+  });
+
+  group('OpenedTab.from for search tabs', () {
+    test('משכפל SearchingTab למופע חדש עם controllers חדשים', () {
+      final original = SearchingTab('חיפוש: שבת', 'שבת');
+      original.searchOptions['שבת_0'] = {'קידומות': true};
+      original.alternativeWords[0] = ['שבתות'];
+      original.spacingValues['0-1'] = '2';
+
+      final cloned = OpenedTab.from(original) as SearchingTab;
+
+      expect(cloned, isNot(same(original)));
+      expect(cloned.queryController, isNot(same(original.queryController)));
+      expect(
+        cloned.searchFieldFocusNode,
+        isNot(same(original.searchFieldFocusNode)),
+      );
+      expect(cloned.queryController.text, original.queryController.text);
+      expect(cloned.searchOptions, isNot(same(original.searchOptions)));
+      expect(cloned.searchOptions['שבת_0']?['קידומות'], isTrue);
+      expect(cloned.alternativeWords[0], ['שבתות']);
+      expect(cloned.spacingValues['0-1'], '2');
+
+      original.dispose();
+
+      expect(
+        () => cloned.queryController.addListener(() {}),
+        returnsNormally,
+      );
+
+      cloned.dispose();
     });
   });
 }

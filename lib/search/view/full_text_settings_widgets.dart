@@ -219,17 +219,28 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    // מאזין לשינויים בקונטרולר
-    widget.tab.queryController.addListener(_onTextChanged);
-    // מאזין לשינויים באפשרויות החיפוש
-    _listenToSearchOptions();
+    _attachTabListeners(widget.tab);
   }
 
-  void _listenToSearchOptions() {
-    // מאזין לשינויים באפשרויות החיפוש
-    widget.tab.searchOptionsChanged.addListener(_onSearchOptionsChanged);
-    // מאזין לשינויים במילים החילופיות
-    widget.tab.alternativeWordsChanged.addListener(_onAlternativeWordsChanged);
+  void _attachTabListeners(SearchingTab tab) {
+    tab.queryController.addListener(_onTextChanged);
+    tab.searchOptionsChanged.addListener(_onSearchOptionsChanged);
+    tab.alternativeWordsChanged.addListener(_onAlternativeWordsChanged);
+  }
+
+  void _detachTabListeners(SearchingTab tab) {
+    tab.queryController.removeListener(_onTextChanged);
+    tab.searchOptionsChanged.removeListener(_onSearchOptionsChanged);
+    tab.alternativeWordsChanged.removeListener(_onAlternativeWordsChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant SearchTermsDisplay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.tab, widget.tab)) {
+      _detachTabListeners(oldWidget.tab);
+      _attachTabListeners(widget.tab);
+    }
   }
 
   void _onSearchOptionsChanged() {
@@ -456,11 +467,7 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
   @override
   void dispose() {
     _scrollController.dispose();
-    widget.tab.queryController.removeListener(_onTextChanged);
-    widget.tab.searchOptionsChanged.removeListener(_onSearchOptionsChanged);
-    widget.tab.alternativeWordsChanged.removeListener(
-      _onAlternativeWordsChanged,
-    );
+    _detachTabListeners(widget.tab);
     super.dispose();
   }
 
