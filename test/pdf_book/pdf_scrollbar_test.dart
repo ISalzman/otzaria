@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-// ─── fake controller ──────────────────────────────────────────────────────────
+// ─── fake controllers ─────────────────────────────────────────────────────────
 // מדמה את מצב הריבוע שגרם לקריסה: isReady=true אבל visibleRect זורק
 class _UnreadyController extends PdfViewerController {
   @override
@@ -11,6 +11,18 @@ class _UnreadyController extends PdfViewerController {
 
   @override
   Rect get visibleRect => throw StateError('_visibleRect is null');
+}
+
+// visibleRect תקין אבל layout זורק — תרחיש race condition שני
+class _ControllerWithThrowingLayout extends PdfViewerController {
+  @override
+  bool get isReady => true;
+
+  @override
+  Rect get visibleRect => const Rect.fromLTWH(0, 0, 400, 600);
+
+  @override
+  PdfPageLayout get layout => throw StateError('layout not available');
 }
 
 void main() {
@@ -70,6 +82,35 @@ void main() {
           ),
         ),
       );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  // ─── תרחיש race condition שני: visibleRect עובד אבל layout זורק ────────────
+  group('PdfHorizontalScrollbar - layout זורק', () {
+    testWidgets('לא קורס כאשר layout זורק (visibleRect תקין)', (tester) async {
+      final controller = _ControllerWithThrowingLayout();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PdfHorizontalScrollbar(controller: controller)),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(PdfHorizontalScrollbar), findsOneWidget);
+    });
+
+    testWidgets('קריסות חוזרות של layout לא גורמות לקריסה', (tester) async {
+      final controller = _ControllerWithThrowingLayout();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PdfHorizontalScrollbar(controller: controller)),
+        ),
+      );
+      for (int i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       expect(tester.takeException(), isNull);
     });
   });
