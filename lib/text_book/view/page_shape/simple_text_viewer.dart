@@ -43,6 +43,49 @@ bool shouldHandlePageShapeNavigationKeyEvent(KeyEvent event) {
   return event is KeyDownEvent || event is KeyRepeatEvent;
 }
 
+/// בודקת האם הפוקוס הנוכחי נמצא בתוך שדה קלט טקסטואלי.
+///
+/// נדרש עבור "צורת הדף", כי העורך של הערות אישיות מבוסס `flutter_quill`
+/// ואינו מזוהה תמיד כ-`EditableText` רגיל.
+bool isTextInputFocusNode(FocusNode? focusNode) {
+  final focusContext = focusNode?.context;
+  if (focusContext == null) {
+    return false;
+  }
+
+  if (_isTextInputWidget(focusContext.widget)) {
+    return true;
+  }
+
+  return focusContext.findAncestorWidgetOfExactType<EditableText>() != null ||
+      _hasQuillEditorAncestor(focusContext);
+}
+
+bool _hasQuillEditorAncestor(BuildContext context) {
+  var hasQuillAncestor = false;
+  context.visitAncestorElements((element) {
+    if (_isTextInputWidget(element.widget)) {
+      hasQuillAncestor = true;
+      return false;
+    }
+    return true;
+  });
+  return hasQuillAncestor;
+}
+
+bool _isTextInputWidget(Widget widget) {
+  if (widget is EditableText) {
+    return true;
+  }
+
+  final runtimeTypeName = widget.runtimeType.toString();
+  return runtimeTypeName.contains('TextField') ||
+      runtimeTypeName.contains('EditableText') ||
+      runtimeTypeName.contains('QuillRawEditor') ||
+      runtimeTypeName.contains('RawEditor') ||
+      runtimeTypeName.contains('QuillEditor');
+}
+
 /// קובעת מאיזה אינדקס יתחיל ניווט המקלדת בצורת הדף.
 int resolvePageShapeNavigationBaseIndex({
   required int? selectedIndex,
@@ -135,10 +178,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       DictionaryLookupRepository.instance;
 
   bool _isTextInputFocused() {
-    final primaryFocus = FocusManager.instance.primaryFocus;
-    final focusContext = primaryFocus?.context;
-    return focusContext?.widget is EditableText ||
-        focusContext?.findAncestorWidgetOfExactType<EditableText>() != null;
+    return isTextInputFocusNode(FocusManager.instance.primaryFocus);
   }
 
   void _ensureKeyboardFocusAfterLoss(String reason) {
