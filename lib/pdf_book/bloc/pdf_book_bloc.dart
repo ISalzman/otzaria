@@ -709,6 +709,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
           pdfController.setZoom(
             pdfController.centerPosition,
             zoomToApply,
+            duration: Duration.zero,
           );
           tab.savedZoom = zoomToApply;
           emit(current.copyWith(zoom: zoomToApply));
