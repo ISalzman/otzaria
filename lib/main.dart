@@ -525,7 +525,14 @@ Future<void> initialize() async {
   }
 
   await RustLib.init();
-  await Settings.init(cacheProvider: HiveCache());
+  // HiveCache may fail if a second instance holds the .lock file.
+  // SharePreferenceCache is a safe fallback: settings won't persist for
+  // this session, but the app won't crash.
+  try {
+    await Settings.init(cacheProvider: HiveCache());
+  } catch (_) {
+    await Settings.init(cacheProvider: SharePreferenceCache());
+  }
 
   if (windowOptions != null) {
     windowManager.waitUntilReadyToShow(windowOptions, () async {

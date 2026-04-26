@@ -565,6 +565,8 @@ class TantivyDataProvider {
     final int effectiveSlop = params['effectiveSlop'] as int;
     final int maxExpansions = params['maxExpansions'] as int;
 
+    if (regexTerms.isEmpty) return {};
+
     final results = await index.countByBook(
       regexTerms: regexTerms,
       facets: facets,

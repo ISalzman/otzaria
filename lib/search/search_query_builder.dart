@@ -87,9 +87,13 @@ class SearchQueryBuilder {
         }
 
         // הגבלה על מספר הוריאציות הכולל למילה אחת
-        final limitedVariations = allVariations.length > 20
-            ? allVariations.take(20).toList()
-            : allVariations.toList();
+        final limitedVariations = (allVariations.length > 20
+                ? allVariations.take(20)
+                : allVariations)
+            .where((v) => v.trim().isNotEmpty)
+            .toList();
+
+        if (limitedVariations.isEmpty) continue;
 
         // במקום רגקס מורכב, נוסיף כל וריאציה בנפרד
         final finalPattern = limitedVariations.length == 1

@@ -164,7 +164,12 @@ class MyDatabase {
     final db = sqlite3.sqlite3.open(path);
 
     // Enable WAL for concurrent read/write access (uniform across all platforms).
-    db.execute('PRAGMA journal_mode=WAL');
+    // May fail if another process holds the DB lock (e.g. second instance or stale lock).
+    // WAL is an optimisation only — safe to skip on failure.
+    try {
+      db.execute('PRAGMA journal_mode=WAL');
+    } catch (_) {}
+
 
     // Ensure schema exists (all scripts use CREATE TABLE/INDEX IF NOT EXISTS).
     for (final script in _getCreateScripts()) {
