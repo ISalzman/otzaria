@@ -114,3 +114,4 @@ log.txt
 temp/
 .codex-appdata/
 .agent/
+.codex_review_index/
