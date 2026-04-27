@@ -2279,6 +2279,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                         .withValues(alpha: 0.6),
                     indicatorColor: Theme.of(context).colorScheme.primary,
                     dividerColor: Colors.transparent,
+                    splashBorderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 if (MediaQuery.of(context).size.width >= 600)
