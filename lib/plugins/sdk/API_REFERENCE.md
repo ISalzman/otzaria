@@ -1272,7 +1272,7 @@ async function scheduleReminder(title, body, dateTime) {
 await Otzaria.call('reader.addContextMenuItem', {
   id: 'my-save-item',       // מזהה ייחודי (חובה)
   label: 'הוסף למראי המקומות שלי',  // טקסט לתצוגה (חובה)
-  icon: 'bookmark'          // שם אייקון (אופציונלי)
+  icon: 'bookmark_24_regular'   // שם אייקון FluentUI System Icons (אופציונלי)
 });
 // true
 ```

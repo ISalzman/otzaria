@@ -124,7 +124,8 @@ export interface ReaderState {
   currentBook: string | null;
   currentBookId: string | null;
   currentIndex: number;
-  openTabs: Array<{ bookId: string; book: string; index: number }>;
+  currentRef: string | null;
+  openTabs: Array<{ bookId: string; book: string; index: number; currentRef: string | null }>;
 }
 
 export interface ReaderRefState {

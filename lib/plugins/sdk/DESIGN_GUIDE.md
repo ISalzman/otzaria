@@ -679,17 +679,21 @@ static const IconData calendar_24_regular = IconData(983685, ...);
 
 ### 2. אייקון בתפריט הקשר (לחצן ימין במסך עיון)
 
+תפריט ההקשר מוצג **במסכי טקסט בלבד** (CombinedView ו-PageShape). מסך PDF אינו תומך בפריטי תוסף בתפריט ההקשר כרגע.
+
 כאשר מוסיפים פריט לתפריט ההקשר עם `reader.addContextMenuItem`, ניתן לציין שדה `icon`:
 
 ```javascript
 await Otzaria.call('reader.addContextMenuItem', {
   id: 'my-bookmark-item',
   label: 'הוסף לסימניות שלי',
-  icon: 'bookmark_24_regular'   // שם האייקון מ-FluentUI System Icons (אופציונלי)
+  icon: 'bookmark_24_regular'   // שם אייקון מ-FluentUI System Icons בגודל 24 (אופציונלי)
 });
 ```
 
 > **הערה:** השדה `icon` הוא אופציונלי. ללא אייקון הפריט עדיין יופיע — רק ללא אייקון לצידו.
+>
+> נתמכים כל אייקוני FluentUI System Icons בגודל 24 (למשל `bookmark_24_regular`, `star_24_filled`). שם לא מוכר לא ישגיא — הפריט יוצג ללא אייקון.
 
 ---
 
