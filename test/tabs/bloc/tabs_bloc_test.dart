@@ -70,7 +70,7 @@ void main() {
       final combinedRightTab = combinedTab.rightTab;
       final combinedLeftTab = combinedTab.leftTab;
 
-      bloc.add(const DisableSideBySideMode());
+      bloc.add(const DisableSideBySideMode(0));
       await bloc.stream.firstWhere((s) => s.tabs.length == 2);
 
       final restoredState = bloc.state;

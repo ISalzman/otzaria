@@ -634,11 +634,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   Future<void> _onDisableSideBySideMode(
       DisableSideBySideMode event, Emitter<TabsState> emit) async {
-    // אם הטאב הנוכחי הוא CombinedTab, נפרק אותו לשני טאבים נפרדים
-    if (state.currentTab is CombinedTab) {
-      final combinedTab = state.currentTab as CombinedTab;
+    // אם הטאב המבוקש הוא CombinedTab, נפרק אותו לשני טאבים נפרדים
+    if (event.tabIndex >= 0 &&
+        event.tabIndex < state.tabs.length &&
+        state.tabs[event.tabIndex] is CombinedTab) {
+      final combinedTab = state.tabs[event.tabIndex] as CombinedTab;
       final newTabs = List<OpenedTab>.from(state.tabs);
-      final combinedIndex = state.currentTabIndex;
+      final combinedIndex = event.tabIndex;
 
       // מסירים את הטאב המשולב
       newTabs.removeAt(combinedIndex);

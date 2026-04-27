@@ -128,7 +128,11 @@ class EnableSideBySideMode extends TabsEvent {
 }
 
 class DisableSideBySideMode extends TabsEvent {
-  const DisableSideBySideMode();
+  final int tabIndex;
+  const DisableSideBySideMode(this.tabIndex);
+
+  @override
+  List<Object?> get props => [tabIndex];
 }
 
 class UpdateSplitRatio extends TabsEvent {
