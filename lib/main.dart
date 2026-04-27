@@ -73,6 +73,7 @@ import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:logging/logging.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/widgets/restart_widget.dart';
+import 'package:otzaria/core/splash_screen.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 // Updated automatically by version update scripts - do not edit manually
@@ -80,6 +81,10 @@ const int _latestReleasedBuildNumber = 9900;
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
+
+// מסנכרן בין _heavyInitialize לבין waitUntilReadyToShow:
+// החלון יוצג רק אחרי Settings.init + WindowPersistence.restoreIfAny
+final _windowReadyCompleter = Completer<void>();
 
 /// Getter for accessing the window listener from other parts of the app
 AppWindowListener? get appWindowListener => _appWindowListener;
@@ -345,18 +350,14 @@ Future<void> _runAppBootstrap() async {
     FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
     bool isFirstInstance = await flutterSingleInstance.isFirstInstance();
     if (!isFirstInstance) {
-      // If not the first instance, exit the app
       exit(0);
     }
   }
 
-  // Initialize bloc observer for debugging
   Bloc.observer = AppBlocObserver();
 
-  // Configure logging level for debug mode
   if (kDebugMode) {
     Logger.root.level = Level.ALL;
-    // Silence verbose logs from flutter_widget_from_html
     Logger('fwfh').level = Level.INFO;
     Logger.root.onRecord.listen((record) {
       debugPrint(
@@ -364,253 +365,271 @@ Future<void> _runAppBootstrap() async {
     });
   }
 
-  // Remove legacy debug log setup
-
-  await initialize();
-
-  // No-op: removed verbose debug printing
-
-  final historyRepository = HistoryRepository();
-  final settingsRepository = SettingsRepository();
-
-  runApp(
-    SentryWidget(
-      child: RestartWidget(
-        child: MultiRepositoryProvider(
-          providers: [
-            RepositoryProvider<FocusRepository>(
-              create: (context) => FocusRepository(),
-            ),
-            RepositoryProvider<SettingsRepository>(
-              create: (context) => settingsRepository,
-            ),
-          ],
-          child: MultiBlocProvider(
-            providers: [
-              BlocProvider<SettingsBloc>(
-                create: (context) => SettingsBloc(
-                  repository: settingsRepository,
-                )..add(LoadSettings()),
-              ),
-              BlocProvider<LibraryBloc>(
-                create: (context) => LibraryBloc()..add(LoadLibrary()),
-              ),
-              BlocProvider<IndexingBloc>(
-                create: (context) => IndexingBloc.create(),
-              ),
-              BlocProvider<HistoryBloc>(
-                  create: (context) => HistoryBloc(historyRepository)),
-              BlocProvider<TabsBloc>(
-                create: (context) => TabsBloc(
-                  repository: TabsRepository(),
-                )..add(LoadTabs()),
-              ),
-              BlocProvider<NavigationBloc>(
-                create: (context) => NavigationBloc(
-                  repository: NavigationRepository(),
-                  tabsRepository: TabsRepository(),
-                )..add(const CheckLibrary()),
-              ),
-              BlocProvider<FindRefBloc>(
-                  create: (context) => FindRefBloc(
-                      findRefRepository: FindRefRepository(
-                          dataRepository: DataRepository.instance))),
-              BlocProvider<PersonalNotesBloc>(
-                create: (context) => PersonalNotesBloc(),
-              ),
-              BlocProvider<BookmarkBloc>(
-                create: (context) => BookmarkBloc(BookmarkRepository()),
-              ),
-              BlocProvider<WorkspaceBloc>(
-                create: (context) {
-                  final tabsBloc = context.read<TabsBloc>();
-                  return WorkspaceBloc(
-                    repository: WorkspaceRepository(),
-                    onWorkspaceTabsChanged:
-                        (List<OpenedTab> tabs, int activeIndex) {
-                      // This callback coordinates workspace switching with TabsBloc
-                      tabsBloc.add(ReplaceAllTabs(
-                        tabs,
-                        activeIndex,
-                      ));
-                    },
-                  )..add(LoadWorkspaces());
-                },
-              ),
-              ChangeNotifierProvider<ShamorZachorDataProvider>(
-                lazy: true, // Create only when needed
-                create: (context) => ShamorZachorDataProvider(),
-              ),
-              ChangeNotifierProvider<ShamorZachorProgressProvider>(
-                lazy: true, // Create only when needed
-                create: (context) {
-                  final dataProvider = context.read<ShamorZachorDataProvider>();
-                  return ShamorZachorProgressProvider(
-                      dataProvider: dataProvider);
-                },
-              ),
-              BlocProvider<WorkStatusCubit>(
-                create: (_) => WorkStatusCubit(),
-              ),
-              BlocProvider<FileSyncBloc>(
-                lazy: true,
-                create: (context) => FileSyncBloc(
-                  repository: FileSyncRepository(
-                    githubOwner: 'Otzaria',
-                    repositoryName: 'SeforimLibrary',
-                  ),
-                  workStatusCubit: context.read<WorkStatusCubit>(),
-                ),
-              ),
-              BlocProvider<PluginSystemBloc>(
-                create: (context) => PluginSystemBloc(
-                  repository: PluginRegistryRepository(),
-                )..add(LoadPlugins()),
-              ),
-            ],
-            child: const App(),
-          ),
-        ),
-      ),
-    ),
-  );
-
-  // טעינת מילוני ארמי, ראשי תיבות וספרים ברקע – אחרי הפריים הראשון, כדי לא להתחרות עם ה-paint.
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(
-      DictionaryLookupRepository.instance.ensureLoaded().catchError((e) {
-        if (kDebugMode) {
-          debugPrint('Failed to warm up dictionary: $e');
-        }
-      }),
-    );
-    unawaited(BooksCache.instance.warmUp().catchError((e) {
-      if (kDebugMode) debugPrint('Failed to warm up BooksCache: $e');
-    }));
-    unawaited(AcronymsCache.instance.warmUp().catchError((e) {
-      if (kDebugMode) debugPrint('Failed to warm up AcronymsCache: $e');
-    }));
-  });
-}
-
-/// Initializes all required services and configurations for the application.
-///
-/// This function handles the following initialization steps:
-/// 1. Settings initialization with Hive cache
-/// 2. Library path configuration
-/// 3. Rust library initialization
-/// 4. Hive storage boxes setup
-/// 5. Required directory structure creation
-/// 6. Shamor Zachor dynamic data loader initialization
-Future<void> initialize() async {
-  WindowOptions? windowOptions;
-
-  // Initialize SQLite FFI for desktop platforms
+  // הגדרת window_manager (מהיר) לפני runApp – כך החלון יופיע עם ה-splash ברגע הראשון
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
     await windowManager.setMinimumSize(WindowPersistence.minSize);
 
-    // Configure window manager for proper close handling
-    windowOptions = const WindowOptions(
-      skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.hidden,
-      windowButtonVisibility: false,
-    );
-
-    // Add window listener for proper close handling
     _appWindowListener = AppWindowListener();
     windowManager.addListener(_appWindowListener!);
-
     await windowManager.setPreventClose(true);
+
+    // החלון יוצג כאשר Flutter מרנדר את הפריים הראשון (ה-splash),
+    // אך רק אחרי ש-Settings אותחל ו-restoreIfAny הסתיים
+    windowManager.waitUntilReadyToShow(
+      const WindowOptions(
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: false,
+      ),
+      () async {
+        await _windowReadyCompleter.future;
+        await windowManager.show();
+        await windowManager.focus();
+      },
+    );
   }
 
-  await RustLib.init();
-  // HiveCache may fail if a second instance holds the .lock file.
-  // SharePreferenceCache is a safe fallback: settings won't persist for
-  // this session, but the app won't crash.
+  runApp(
+    SentryWidget(
+      child: RestartWidget(
+        child: const AppBootstrap(),
+      ),
+    ),
+  );
+}
+
+/// אתחול כבד – רץ ברקע בזמן שה-splash מוצג
+Future<void> _heavyInitialize() async {
+  // הצגת החלון תלויה ב-completer זה – חייב להיות מושלם תמיד, גם בכשל
   try {
-    await Settings.init(cacheProvider: HiveCache());
-  } catch (_) {
-    await Settings.init(cacheProvider: SharePreferenceCache());
-  }
+    await RustLib.init();
+    // HiveCache may fail if a second instance holds the .lock file.
+    // SharePreferenceCache is a safe fallback: settings won't persist for
+    // this session, but the app won't crash.
+    try {
+      await Settings.init(cacheProvider: HiveCache());
+    } catch (_) {
+      await Settings.init(cacheProvider: SharePreferenceCache());
+    }
 
-  if (windowOptions != null) {
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
+    // Settings מוכן — שחזר מיקום/גודל חלון לפני הצגת החלון
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       await WindowPersistence.restoreIfAny();
-      await windowManager.show();
-      await windowManager.focus();
-    });
+    }
+  } finally {
+    // בכל מקרה (הצלחה או כשל) — מאפשר ל-waitUntilReadyToShow להציג את החלון
+    if (!_windowReadyCompleter.isCompleted) {
+      _windowReadyCompleter.complete();
+    }
   }
 
   await initHive();
   await createDirs();
   await loadCerts();
 
-  // Initialize SQLite Database Provider
   await SqliteDataProvider.instance.initialize();
-
-  // Migrate personal notes from file storage to SQLite database
   await FileToDbMigrator.runMigration();
-
-  // If the migration created the DB file on a first run, initialize again.
   await SqliteDataProvider.instance.initialize();
 
-  // נדרש לטעינת PDF דרך pdfrx: הגדרת תקיית cache
   try {
     final cacheDir = await getTemporaryDirectory();
     Pdfrx.getCacheDirectory = () => cacheDir.path;
     debugPrint('Pdfrx cache directory set to: ${cacheDir.path}');
   } catch (error, stackTrace) {
-    _logNonFatalInitializationError(
-      'Pdfrx cache directory',
-      error,
-      stackTrace,
-    );
+    _logNonFatalInitializationError('Pdfrx cache directory', error, stackTrace);
   }
 
-  // Check and perform automatic backup if needed
   try {
     if (await BackupService.shouldPerformAutoBackup()) {
       await BackupService.performAutoBackup();
     }
   } catch (error, stackTrace) {
-    _logNonFatalInitializationError(
-      'Automatic backup',
-      error,
-      stackTrace,
-    );
+    _logNonFatalInitializationError('Automatic backup', error, stackTrace);
   }
 
-  // Register SQLite sources for plugin database API
   await initPluginDatabaseSources();
 
-  // On Windows system-wide installs (Program Files), WebView2 defaults to writing
-  // its data folder next to the EXE — a read-only location. Pre-create the
-  // environment with an explicit writable path to avoid the crash.
   try {
     await WebViewEnvironmentHolder.initialize();
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('WebViewEnvironment', error, stackTrace);
   }
 
-  // Initialize Notification Service
   try {
     await NotificationService().init();
   } catch (error, stackTrace) {
-    _logNonFatalInitializationError(
-      'Notification service',
-      error,
-      stackTrace,
-    );
+    _logNonFatalInitializationError('Notification service', error, stackTrace);
   }
 
   try {
     await DirectErrorReportService().startAutomaticFlush();
   } catch (error, stackTrace) {
     _logNonFatalInitializationError(
-      'Direct error report queue',
-      error,
-      stackTrace,
+        'Direct error report queue', error, stackTrace);
+  }
+}
+
+class AppBootstrap extends StatefulWidget {
+  const AppBootstrap({super.key});
+
+  @override
+  State<AppBootstrap> createState() => _AppBootstrapState();
+}
+
+class _AppBootstrapState extends State<AppBootstrap> {
+  bool _ready = false;
+  Object? _error;
+  HistoryRepository? _historyRepository;
+  SettingsRepository? _settingsRepository;
+
+  @override
+  void initState() {
+    super.initState();
+    _heavyInitialize().then((_) {
+      if (!mounted) return;
+      setState(() {
+        _historyRepository = HistoryRepository();
+        _settingsRepository = SettingsRepository();
+        _ready = true;
+      });
+      // טעינת מילוני ארמי, ראשי תיבות וספרים ברקע אחרי הפריים הראשון של ה-App
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(
+          DictionaryLookupRepository.instance.ensureLoaded().catchError((e) {
+            if (kDebugMode) debugPrint('Failed to warm up dictionary: $e');
+          }),
+        );
+        unawaited(BooksCache.instance.warmUp().catchError((e) {
+          if (kDebugMode) debugPrint('Failed to warm up BooksCache: $e');
+        }));
+        unawaited(AcronymsCache.instance.warmUp().catchError((e) {
+          if (kDebugMode) debugPrint('Failed to warm up AcronymsCache: $e');
+        }));
+      });
+    }).catchError((Object e, StackTrace st) {
+      _appendUnhandledErrorToLocalLog(
+          title: 'Bootstrap Error', error: e, stackTrace: st);
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _ready = true;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_ready) return const SplashApp();
+
+    if (_error != null) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: Text(
+              'שגיאה בטעינה: $_error',
+              textDirection: TextDirection.rtl,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final historyRepository = _historyRepository!;
+    final settingsRepository = _settingsRepository!;
+
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<FocusRepository>(
+          create: (_) => FocusRepository(),
+        ),
+        RepositoryProvider<SettingsRepository>(
+          create: (_) => settingsRepository,
+        ),
+      ],
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<SettingsBloc>(
+            create: (_) => SettingsBloc(
+              repository: settingsRepository,
+            )..add(LoadSettings()),
+          ),
+          BlocProvider<LibraryBloc>(
+            create: (_) => LibraryBloc()..add(LoadLibrary()),
+          ),
+          BlocProvider<IndexingBloc>(
+            create: (_) => IndexingBloc.create(),
+          ),
+          BlocProvider<HistoryBloc>(
+            create: (_) => HistoryBloc(historyRepository),
+          ),
+          BlocProvider<TabsBloc>(
+            create: (_) => TabsBloc(
+              repository: TabsRepository(),
+            )..add(LoadTabs()),
+          ),
+          BlocProvider<NavigationBloc>(
+            create: (_) => NavigationBloc(
+              repository: NavigationRepository(),
+              tabsRepository: TabsRepository(),
+            )..add(const CheckLibrary()),
+          ),
+          BlocProvider<FindRefBloc>(
+            create: (_) => FindRefBloc(
+                findRefRepository: FindRefRepository(
+                    dataRepository: DataRepository.instance)),
+          ),
+          BlocProvider<PersonalNotesBloc>(
+            create: (_) => PersonalNotesBloc(),
+          ),
+          BlocProvider<BookmarkBloc>(
+            create: (_) => BookmarkBloc(BookmarkRepository()),
+          ),
+          BlocProvider<WorkspaceBloc>(
+            create: (context) {
+              final tabsBloc = context.read<TabsBloc>();
+              return WorkspaceBloc(
+                repository: WorkspaceRepository(),
+                onWorkspaceTabsChanged:
+                    (List<OpenedTab> tabs, int activeIndex) {
+                  tabsBloc.add(ReplaceAllTabs(tabs, activeIndex));
+                },
+              )..add(LoadWorkspaces());
+            },
+          ),
+          ChangeNotifierProvider<ShamorZachorDataProvider>(
+            lazy: true,
+            create: (_) => ShamorZachorDataProvider(),
+          ),
+          ChangeNotifierProvider<ShamorZachorProgressProvider>(
+            lazy: true,
+            create: (context) {
+              final dataProvider = context.read<ShamorZachorDataProvider>();
+              return ShamorZachorProgressProvider(dataProvider: dataProvider);
+            },
+          ),
+          BlocProvider<WorkStatusCubit>(
+            create: (_) => WorkStatusCubit(),
+          ),
+          BlocProvider<FileSyncBloc>(
+            lazy: true,
+            create: (context) => FileSyncBloc(
+              repository: FileSyncRepository(
+                githubOwner: 'Otzaria',
+                repositoryName: 'SeforimLibrary',
+              ),
+              workStatusCubit: context.read<WorkStatusCubit>(),
+            ),
+          ),
+          BlocProvider<PluginSystemBloc>(
+            create: (_) => PluginSystemBloc(
+              repository: PluginRegistryRepository(),
+            )..add(LoadPlugins()),
+          ),
+        ],
+        child: const App(),
+      ),
     );
   }
 }
