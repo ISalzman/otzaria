@@ -21,7 +21,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/sivan22/otzaria">
+  <a href="https://github.com/otzaria/otzaria">
     <img src="images/logo.svg" alt="Logo" width="80" height="80">
   </a>
 
@@ -33,11 +33,11 @@
     <a href="https://sivan22.github.io/otzaria-download/"><strong>See our site »</strong></a>
     <br />
     <br/>  
-    <a href="https://github.com/sivan22/otzaria/issues/new?labels=bug&template=bug-report---.md">Report a Bug</a>
+    <a href="https://github.com/otzaria/otzaria/issues/new?labels=bug&template=bug-report---.md">Report a Bug</a>
     ·
-    <a href="https://github.com/sivan22/otzaria/issues/new?labels=enhancement&template=feature-request---.md">Request A Feature</a>
+    <a href="https://github.com/otzaria/otzaria/issues/new?labels=enhancement&template=feature-request---.md">Request A Feature</a>
     ·
-    <a href="https://github.com/sivan22/otzaria/wiki">User manual</a>
+    <a href="https://github.com/otzaria/otzaria/wiki">User manual</a>
   </p>
 </div>
 
@@ -132,7 +132,7 @@ Also, it is a multiplatform framework.
    - Requires Visual C++ Redistributable to be pre-installed
    - For users who know they already have the required dependencies
 
-Download the latest build for Windows from [releases](https://github.com/Sivan22/otzaria/releases). 
+Download the latest build for Windows from [releases](https://github.com/otzaria/otzaria/releases). 
 
 **Note:** The library is included in the .exe file.
 In case you need only the app itself for upgrading, download the Windows ZIP build from releases.
@@ -193,7 +193,7 @@ See the Wiki section for documentation.
     - [ ] English
     - [X] Hebrew
 
-See the [open issues](https://github.com/sivan22/otzaria/issues) for a full list of proposed features (and known issues).
+See the [open issues](https://github.com/otzaria/otzaria/issues) for a full list of proposed features (and known issues).
 
 <p align="right">(<a href="#readme-top">&#8679;</a>)</p>
 
@@ -249,9 +249,9 @@ The texts have different open licenses. You may check Sefaria's site for more in
 <!-- CONTACT -->
 ## Contact
 
-Sivan Ratson-  - sivan.ratson@gmail.com
+Support: otzaria.1@gmail.com
 
-Project Link: [https://github.com/sivan22/otzaria](https://github.com/sivan22/otzaria)
+Project Link: [https://github.com/otzaria/otzaria](https://github.com/otzaria/otzaria)
 
 <p align="right">(<a href="#readme-top">&#8679;</a>)</p>
 
@@ -289,17 +289,17 @@ For automatic updates, I used [updat](https://pub.dev/packages/updat).
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contributors-shield]: https://img.shields.io/github/contributors/sivan22/otzaria.svg?style=for-the-badge
-[contributors-url]: https://github.com/sivan22/otzaria/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/sivan22/otzaria.svg?style=for-the-badge
-[forks-url]: https://github.com/sivan22/otzaria/network/members
-[stars-shield]: https://img.shields.io/github/stars/sivan22/otzaria.svg?style=for-the-badge
-[stars-url]: https://github.com/sivan22/otzaria/stargazers
-[issues-shield]: https://img.shields.io/github/issues/sivan22/otzaria.svg?style=for-the-badge
-[issues-url]: https://github.com/sivan22/otzaria/issues
-[Github-downloads]: https://img.shields.io/github/downloads/sivan22/otzaria/total.svg?style=for-the-badge
-[license-shield]: https://img.shields.io/github/license/sivan22/otzaria.svg?style=for-the-badge
-[license-url]: https://github.com/sivan22/otzaria/blob/master/LICENSE.txt
+[contributors-shield]: https://img.shields.io/github/contributors/otzaria/otzaria.svg?style=for-the-badge
+[contributors-url]: https://github.com/otzaria/otzaria/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/otzaria/otzaria.svg?style=for-the-badge
+[forks-url]: https://github.com/otzaria/otzaria/network/members
+[stars-shield]: https://img.shields.io/github/stars/otzaria/otzaria.svg?style=for-the-badge
+[stars-url]: https://github.com/otzaria/otzaria/stargazers
+[issues-shield]: https://img.shields.io/github/issues/otzaria/otzaria.svg?style=for-the-badge
+[issues-url]: https://github.com/otzaria/otzaria/issues
+[Github-downloads]: https://img.shields.io/github/downloads/otzaria/otzaria/total.svg?style=for-the-badge
+[license-shield]: https://img.shields.io/github/license/otzaria/otzaria.svg?style=for-the-badge
+[license-url]: https://github.com/otzaria/otzaria/blob/master/LICENSE.txt
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://linkedin.com/in/othneildrew
 [dart]: https://img.shields.io/badge/dart-000000?style=for-the-badge&logo=dart&logoColor=61DAFB
