@@ -128,6 +128,7 @@ class PersonalNoteDraftService {
     int? categoryId,
   }) async {
     final prefix = _bookPrefix(bookId, categoryId: categoryId);
+    if (!Hive.isBoxOpen(HiveCache.keyName)) return null;
     final box = Hive.box<dynamic>(HiveCache.keyName);
     final matchingKeys = box.keys
         .map((k) => k.toString())

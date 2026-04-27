@@ -36,7 +36,7 @@ void main() {
     await box.put('sz:progress_data', '{"tracked":true}');
     await box.put('other:key', 'ignored');
 
-    final backupPath = await BackupService.createBackup(
+    final result = await BackupService.createBackup(
       includeSettings: false,
       includeBookmarks: false,
       includeHistory: false,
@@ -46,8 +46,10 @@ void main() {
       includeUserOverrides: false,
     );
 
+    expect(result.skippedSections, isEmpty);
+
     final backupJson = jsonDecode(
-      await File(backupPath).readAsString(),
+      await File(result.path).readAsString(),
     ) as Map<String, dynamic>;
     final shamorZachor = backupJson['shamorZachor'] as Map<String, dynamic>;
 
@@ -85,5 +87,73 @@ void main() {
 
     expect(box.get('sz:future_key'), ['a', 'b']);
     expect(box.get('sz:migration_completed'), isTrue);
+  });
+
+  // ─── shouldPerformAutoBackup ───────────────────────────────────────────────
+  group('shouldPerformAutoBackup', () {
+    setUp(() async {
+      await Settings.setValue<String>('key-auto-backup-frequency', 'weekly');
+      await Settings.setValue<String?>('key-last-auto-backup', null);
+      await Settings.setValue<String?>('key-last-partial-auto-backup', null);
+    });
+
+    test('מחזיר false כש-frequency הוא none', () async {
+      await Settings.setValue<String>('key-auto-backup-frequency', 'none');
+      expect(await BackupService.shouldPerformAutoBackup(), isFalse);
+    });
+
+    test('מחזיר true כשאין גיבוי קודם (weekly)', () async {
+      expect(await BackupService.shouldPerformAutoBackup(), isTrue);
+    });
+
+    test('מחזיר false כשגיבוי מלא לפני פחות מ-7 ימים (weekly)', () async {
+      await Settings.setValue<String>(
+        'key-last-auto-backup',
+        DateTime.now().subtract(const Duration(days: 3)).toIso8601String(),
+      );
+      expect(await BackupService.shouldPerformAutoBackup(), isFalse);
+    });
+
+    test('מחזיר true כשגיבוי מלא לפני יותר מ-7 ימים (weekly)', () async {
+      await Settings.setValue<String>(
+        'key-last-auto-backup',
+        DateTime.now().subtract(const Duration(days: 8)).toIso8601String(),
+      );
+      expect(await BackupService.shouldPerformAutoBackup(), isTrue);
+    });
+
+    test('מחזיר false כשגיבוי מלא לפני פחות מ-30 ימים (monthly)', () async {
+      await Settings.setValue<String>('key-auto-backup-frequency', 'monthly');
+      await Settings.setValue<String>(
+        'key-last-auto-backup',
+        DateTime.now().subtract(const Duration(days: 20)).toIso8601String(),
+      );
+      expect(await BackupService.shouldPerformAutoBackup(), isFalse);
+    });
+
+    test('מחזיר true כשגיבוי מלא לפני יותר מ-30 ימים (monthly)', () async {
+      await Settings.setValue<String>('key-auto-backup-frequency', 'monthly');
+      await Settings.setValue<String>(
+        'key-last-auto-backup',
+        DateTime.now().subtract(const Duration(days: 31)).toIso8601String(),
+      );
+      expect(await BackupService.shouldPerformAutoBackup(), isTrue);
+    });
+
+    test('מחזיר false אם partial cooldown פעיל (פחות משעה)', () async {
+      await Settings.setValue<String>(
+        'key-last-partial-auto-backup',
+        DateTime.now().subtract(const Duration(minutes: 30)).toIso8601String(),
+      );
+      expect(await BackupService.shouldPerformAutoBackup(), isFalse);
+    });
+
+    test('מחזיר true אם partial cooldown פג (יותר משעה)', () async {
+      await Settings.setValue<String>(
+        'key-last-partial-auto-backup',
+        DateTime.now().subtract(const Duration(minutes: 90)).toIso8601String(),
+      );
+      expect(await BackupService.shouldPerformAutoBackup(), isTrue);
+    });
   });
 }

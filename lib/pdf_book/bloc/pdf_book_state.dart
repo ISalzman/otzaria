@@ -6,6 +6,9 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 
+String _outlineNodeSignature(PdfOutlineNode n) =>
+    '${n.title}|${n.dest?.pageNumber ?? -1}|[${n.children.map(_outlineNodeSignature).join(',')}]';
+
 /// Base class for PDF book states
 sealed class PdfBookState extends Equatable {
   const PdfBookState();
@@ -264,5 +267,9 @@ class PdfBookLoaded extends PdfBookState {
         isRightPaneHovering,
         isLoading,
         loadSucceeded,
+        pdfHeadings,
+        links.map((l) => '${l.index1}|${l.path2}|${l.index2}|${l.connectionType}|${l.heRef}|${l.start}|${l.end}|${l.targetCategoryId}|${l.targetFileType}').toList(growable: false),
+        outline?.map(_outlineNodeSignature).toList(growable: false),
+        documentRef,
       ];
 }
