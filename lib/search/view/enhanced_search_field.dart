@@ -24,11 +24,16 @@ class EnhancedSearchField extends StatefulWidget {
   /// משמש בדיאלוג החיפוש המתקדם כך ש-Enter מוליך לחיפוש הנכון.
   final VoidCallback? onSubmit;
 
+  /// ווידג'ט נוסף שיוצג בתוך ה-suffixIcon (לפני כפתור המחיקה).
+  /// משמש להוספת כפתורים כגון היסטוריה, בלי לגרום לחפיפה עם תוכן הטקסט.
+  final Widget? trailingAction;
+
   const EnhancedSearchField({
     super.key,
     required this.widget,
     this.showInlineSearchButton = true,
     this.onSubmit,
+    this.trailingAction,
   });
 
   SearchingTab get tab {
@@ -464,21 +469,40 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                                 icon: const Icon(FluentIcons.search_24_regular),
                               )
                             : null,
-                        suffixIcon: IconButton(
-                          icon: const Icon(FluentIcons.dismiss_24_regular),
-                          onPressed: () {
-                            // ניקוי מלא של כל הנתונים
-                            widget.tab.queryController.clear();
-                            widget.tab.searchOptions.clear();
-                            context
-                                .read<SearchBloc>()
-                                .add(UpdateSearchQuery(''));
-                            // ניקוי ספירות הפאסטים
-                            context
-                                .read<SearchBloc>()
-                                .add(UpdateFacetCounts({}));
-                          },
-                        ),
+                        suffixIcon: widget.trailingAction != null
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  widget.trailingAction!,
+                                  IconButton(
+                                    icon: const Icon(
+                                        FluentIcons.dismiss_24_regular),
+                                    onPressed: () {
+                                      widget.tab.queryController.clear();
+                                      widget.tab.searchOptions.clear();
+                                      context
+                                          .read<SearchBloc>()
+                                          .add(UpdateSearchQuery(''));
+                                      context
+                                          .read<SearchBloc>()
+                                          .add(UpdateFacetCounts({}));
+                                    },
+                                  ),
+                                ],
+                              )
+                            : IconButton(
+                                icon: const Icon(FluentIcons.dismiss_24_regular),
+                                onPressed: () {
+                                  widget.tab.queryController.clear();
+                                  widget.tab.searchOptions.clear();
+                                  context
+                                      .read<SearchBloc>()
+                                      .add(UpdateSearchQuery(''));
+                                  context
+                                      .read<SearchBloc>()
+                                      .add(UpdateFacetCounts({}));
+                                },
+                              ),
                       ),
                     ),
                   ),
