@@ -150,7 +150,7 @@ void _addSpecialTimes(
     }
   }
 
-  if (jewishCalendar.getDayOfWeek() == 7 || jewishCalendar.isYomTov()) {
+  if (jewishCalendar.isAssurBemelacha()) {
     final shabbosExitTime1 = _calculateShabbosExitTime1(zmanimCalendar);
     final shabbosExitTime2 = _calculateShabbosExitTime2(zmanimCalendar);
     if (shabbosExitTime1 != null) {

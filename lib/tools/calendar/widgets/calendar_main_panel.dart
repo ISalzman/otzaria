@@ -90,6 +90,12 @@ class CalendarMainPanel extends StatelessWidget {
       return ValueKey(
           'week-${weekStart.year}-${weekStart.month}-${weekStart.day}');
     }
+    if (state.calendarType == CalendarType.hebrew ||
+        state.calendarType == CalendarType.combined) {
+      final jd = state.currentJewishDate;
+      return ValueKey(
+          '${state.calendarView}-${jd.getJewishYear()}-${jd.getJewishMonth()}');
+    }
     return ValueKey(
         '${state.calendarView}-${state.currentGregorianDate.month}-${state.currentGregorianDate.year}');
   }
