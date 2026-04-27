@@ -78,7 +78,9 @@ class TextBookViewerBloc extends StatefulWidget {
 }
 
 class _TextBookViewerBlocState extends State<TextBookViewerBloc>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   final FocusNode textSearchFocusNode = FocusNode();
   final FocusNode navigationSearchFocusNode = FocusNode();
   final FocusNode _bookContentFocusNode = FocusNode(); // FocusNode לתוכן הספר
@@ -746,6 +748,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         return BlocConsumer<TabsBloc, TabsState>(
