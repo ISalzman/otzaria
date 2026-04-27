@@ -93,6 +93,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Timer? _scrollTimer;
   LogicalKeyboardKey? _currentScrollKey;
   int? _scrollAnchorPage;
+  Matrix4? _panZoomBaseMatrix;
   int? _lockedSpreadStartPage;
   ui.Image? _pageTurnSnapshot;
   ui.Image? _pageTurnTargetSnapshot;
@@ -1971,6 +1972,31 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 }
               }
             },
+            onPointerPanZoomStart: (_) {
+              _captureScrollAnchor();
+              if (widget.tab.pdfViewerController.isReady) {
+                _panZoomBaseMatrix =
+                    widget.tab.pdfViewerController.value.clone();
+              }
+            },
+            onPointerPanZoomUpdate: (event) {
+              if (HardwareKeyboard.instance.isControlPressed) {
+                return;
+              }
+
+              _applyPanZoomScroll(event);
+
+              if (!(widget.tab.pinLeftPane.value ||
+                  (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
+                _setLeftPaneVisibility(false);
+                Future.microtask(() {
+                  _pdfViewFocusNode.requestFocus();
+                });
+              }
+            },
+            onPointerPanZoomEnd: (_) {
+              _panZoomBaseMatrix = null;
+            },
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -2431,6 +2457,45 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ..translateByDouble(
         -event.scrollDelta.dx / zoom,
         -event.scrollDelta.dy / zoom,
+        0,
+        1,
+      );
+
+    if (!_isBookViewModeActive()) {
+      widget.tab.pdfViewerController.goTo(candidateMatrix);
+      return;
+    }
+
+    final anchorPage =
+        _scrollAnchorPage ?? (widget.tab.pdfViewerController.pageNumber ?? 1);
+    final clampedMatrix = _clampMatrixToSpread(
+      matrix: candidateMatrix,
+      viewSize: widget.tab.pdfViewerController.viewSize,
+      layout: widget.tab.pdfViewerController.layout,
+      controller: widget.tab.pdfViewerController,
+      spreadStartPage: _spreadStartPageFor(anchorPage),
+    );
+
+    widget.tab.pdfViewerController.goTo(clampedMatrix);
+
+    if (_wasMatrixClamped(
+      original: candidateMatrix,
+      clamped: clampedMatrix,
+      viewSize: widget.tab.pdfViewerController.viewSize,
+    )) {
+      _stopContinuousScroll();
+    }
+  }
+
+  void _applyPanZoomScroll(PointerPanZoomUpdateEvent event) {
+    if (!widget.tab.pdfViewerController.isReady) return;
+    final baseMatrix = _panZoomBaseMatrix;
+    if (baseMatrix == null) return;
+
+    final candidateMatrix = baseMatrix.clone()
+      ..translateByDouble(
+        event.pan.dx,
+        event.pan.dy,
         0,
         1,
       );
