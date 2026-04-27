@@ -73,6 +73,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   static const double _verticalScrollbarGutter = 16.0;
   static const double _horizontalScrollbarGutter = 10.0;
   static const double _scrollbarGutterGap = 4.0;
+  static const Duration _pointerScrollFlushDelay = Duration(milliseconds: 12);
+  static const double _maxPointerScrollBurstDelta = 160.0;
   static const String _connectionTypeCommentary = 'COMMENTARY';
   static const String _connectionTypeTargum = 'TARGUM';
 
@@ -94,15 +96,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   // גלילה רציפה
   Timer? _scrollTimer;
+  Timer? _pointerScrollFlushTimer;
   LogicalKeyboardKey? _currentScrollKey;
   int? _scrollAnchorPage;
   Matrix4? _panZoomBaseMatrix;
+  double _pendingPointerScrollDx = 0.0;
+  double _pendingPointerScrollDy = 0.0;
   int? _lockedSpreadStartPage;
   ui.Image? _pageTurnSnapshot;
   ui.Image? _pageTurnTargetSnapshot;
   _BookPageTurnTransition? _pageTurnTransition;
   bool _isPageTurnInProgress = false;
   bool _pdfViewerSuspended = false;
+  bool _readerFocusAndHideQueued = false;
   _PendingBookPageTurn? _pendingPageTurn;
 
   // Local UI state that syncs with Bloc
@@ -150,6 +156,25 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       return;
     }
     _bloc.add(pdf_events.ToggleLeftPane(show));
+  }
+
+  void _scheduleReaderFocusAndHidePaneIfNeeded() {
+    if (widget.tab.pinLeftPane.value ||
+        (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+        _readerFocusAndHideQueued) {
+      return;
+    }
+
+    _readerFocusAndHideQueued = true;
+    Future.microtask(() {
+      _readerFocusAndHideQueued = false;
+      if (!mounted) {
+        return;
+      }
+
+      _setLeftPaneVisibility(false);
+      _pdfViewFocusNode.requestFocus();
+    });
   }
 
   int? _lastProcessedSearchSessionId;
@@ -363,15 +388,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   ({int startLine, int endLine})? _getCurrentPdfLinesRange() {
     final currentLine = widget.tab.currentTextLineNumber;
     if (currentLine == null) {
-      debugPrint('🔍 [PDF-DEBUG] _getCurrentPdfLinesRange: currentTextLineNumber=null → returning null');
+      debugPrint(
+          '🔍 [PDF-DEBUG] _getCurrentPdfLinesRange: currentTextLineNumber=null → returning null');
       return null;
     }
 
     final int startLine = currentLine;
-    final int endLine = widget.tab.currentTextLineNumberEnd ?? startLine + _defaultPdfLineRange;
+    final int endLine =
+        widget.tab.currentTextLineNumberEnd ?? startLine + _defaultPdfLineRange;
 
-    final linksInRange = widget.tab.links.where((l) => l.index1 >= startLine && l.index1 <= endLine).length;
-    debugPrint('🔍 [PDF-DEBUG] _getCurrentPdfLinesRange: currentLine=$currentLine → range $startLine–$endLine, linksInRange=$linksInRange (total links=${widget.tab.links.length})');
+    final linksInRange = widget.tab.links
+        .where((l) => l.index1 >= startLine && l.index1 <= endLine)
+        .length;
+    debugPrint(
+        '🔍 [PDF-DEBUG] _getCurrentPdfLinesRange: currentLine=$currentLine → range $startLine–$endLine, linksInRange=$linksInRange (total links=${widget.tab.links.length})');
     return (startLine: startLine, endLine: endLine);
   }
 
@@ -379,7 +409,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     int pageNumber, {
     String? resolvedTitle,
   }) async {
-    debugPrint('📖 [PDF-DEBUG] _resolveTextLineNumberForPage: page=$pageNumber resolvedTitle="$resolvedTitle"');
+    debugPrint(
+        '📖 [PDF-DEBUG] _resolveTextLineNumberForPage: page=$pageNumber resolvedTitle="$resolvedTitle"');
     final outline = widget.tab.outline.value ?? const <PdfOutlineNode>[];
     if (outline.isNotEmpty) {
       final textIndex =
@@ -388,7 +419,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         if (!mounted) return (start: textIndex + 1, end: null);
         final nextIndex = await pdfToTextPage(
             widget.tab.book, outline, pageNumber + 1, context);
-        debugPrint('📖 [PDF-DEBUG] pdfToTextPage → raw=$textIndex → start=${textIndex + 1}, end=${nextIndex ?? "null (last page)"}');
+        debugPrint(
+            '📖 [PDF-DEBUG] pdfToTextPage → raw=$textIndex → start=${textIndex + 1}, end=${nextIndex ?? "null (last page)"}');
         return (start: textIndex + 1, end: nextIndex);
       }
       debugPrint('📖 [PDF-DEBUG] pdfToTextPage → null (no match)');
@@ -401,15 +433,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     debugPrint('📖 [PDF-DEBUG] title for page $pageNumber = "$title"');
     if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
       final lineNumber = widget.tab.pdfHeadings!.getLineNumberForHeading(title);
-      debugPrint('📖 [PDF-DEBUG] getLineNumberForHeading("$title") → $lineNumber');
+      debugPrint(
+          '📖 [PDF-DEBUG] getLineNumberForHeading("$title") → $lineNumber');
       if (lineNumber != null) {
         return (start: lineNumber, end: null);
       }
     } else {
-      debugPrint('📖 [PDF-DEBUG] pdfHeadings=${widget.tab.pdfHeadings == null ? "null" : "loaded"}, title empty=${title.isEmpty}');
+      debugPrint(
+          '📖 [PDF-DEBUG] pdfHeadings=${widget.tab.pdfHeadings == null ? "null" : "loaded"}, title empty=${title.isEmpty}');
     }
 
-    debugPrint('📖 [PDF-DEBUG] fallback: returning pageNumber=$pageNumber as lineNumber');
+    debugPrint(
+        '📖 [PDF-DEBUG] fallback: returning pageNumber=$pageNumber as lineNumber');
     return (start: pageNumber, end: null);
   }
 
@@ -799,7 +834,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
         final initialTargetPage = widget.tab.pageNumber;
         final currentReadyPage = controller.pageNumber ?? initialTargetPage;
-        final needsInitialPageNavigation = currentReadyPage != initialTargetPage;
+        final needsInitialPageNavigation =
+            currentReadyPage != initialTargetPage;
         if (needsInitialPageNavigation) {
           _isJumping = true;
           try {
@@ -913,14 +949,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   onTap: () {
                     _pdfViewFocusNode.requestFocus();
                   },
-                   child: PdfViewer.file(
-                     filePath,
-                     controller: widget.tab.pdfViewerController,
-                     initialPageNumber: widget.tab.pageNumber,
-                     useProgressiveLoading: false,
-                     passwordProvider: () => passwordDialog(context),
-                     params: _buildPdfViewerParams(layoutMode),
-                   ),
+                  child: PdfViewer.file(
+                    filePath,
+                    controller: widget.tab.pdfViewerController,
+                    initialPageNumber: widget.tab.pageNumber,
+                    useProgressiveLoading: false,
+                    passwordProvider: () => passwordDialog(context),
+                    params: _buildPdfViewerParams(layoutMode),
+                  ),
                 ),
         );
       },
@@ -1685,7 +1721,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final bookTitle = widget.tab.book.title;
     final categoryId = widget.tab.book.categoryId;
     final filePath = widget.tab.book.filePath;
-    debugPrint('📚 [PDF-DEBUG] _loadPdfHeadingsAndLinks START: title="$bookTitle" categoryId=$categoryId filePath="$filePath"');
+    debugPrint(
+        '📚 [PDF-DEBUG] _loadPdfHeadingsAndLinks START: title="$bookTitle" categoryId=$categoryId filePath="$filePath"');
 
     try {
       // טעינת headings מה-DB
@@ -1696,7 +1733,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       );
       if (headings != null) {
         widget.tab.pdfHeadings = headings;
-        debugPrint('📚 [PDF-DEBUG] pdfHeadings loaded: ${headings.headingsMap.length} entries. First 3: ${headings.headingsMap.entries.take(3).map((e) => "${e.key}→${e.value}").join(", ")}');
+        debugPrint(
+            '📚 [PDF-DEBUG] pdfHeadings loaded: ${headings.headingsMap.length} entries. First 3: ${headings.headingsMap.entries.take(3).map((e) => "${e.key}→${e.value}").join(", ")}');
       } else {
         debugPrint('📚 [PDF-DEBUG] pdfHeadings NOT FOUND for "$bookTitle"');
       }
@@ -1704,18 +1742,24 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       // טעינת links
       final library = await DataRepository.instance.library;
       final allBooks = library.getAllBooks();
-      debugPrint('📚 [PDF-DEBUG] Library loaded: ${allBooks.length} total books');
+      debugPrint(
+          '📚 [PDF-DEBUG] Library loaded: ${allBooks.length} total books');
 
       final textBook = library.findBookByTitle(bookTitle, TextBook);
-      debugPrint('📚 [PDF-DEBUG] findBookByTitle("$bookTitle", TextBook) → ${textBook == null ? "NOT FOUND" : "FOUND: ${textBook.runtimeType}, categoryId=${textBook.categoryId}"}');
+      debugPrint(
+          '📚 [PDF-DEBUG] findBookByTitle("$bookTitle", TextBook) → ${textBook == null ? "NOT FOUND" : "FOUND: ${textBook.runtimeType}, categoryId=${textBook.categoryId}"}');
 
       if (textBook == null) {
         // ניסיון חיפוש גמיש
         final flexible = library.findBookByTitleFlexible(bookTitle, TextBook);
-        debugPrint('📚 [PDF-DEBUG] findBookByTitleFlexible → ${flexible == null ? "NOT FOUND" : "FOUND: ${flexible.title}"}');
+        debugPrint(
+            '📚 [PDF-DEBUG] findBookByTitleFlexible → ${flexible == null ? "NOT FOUND" : "FOUND: ${flexible.title}"}');
         // הצג ספרים בשם דומה לעזרת דיבוג
         final similar = allBooks
-            .where((b) => b.runtimeType == TextBook && b.title.contains(bookTitle.substring(0, bookTitle.length > 5 ? 5 : bookTitle.length)))
+            .where((b) =>
+                b.runtimeType == TextBook &&
+                b.title.contains(bookTitle.substring(
+                    0, bookTitle.length > 5 ? 5 : bookTitle.length)))
             .take(5)
             .map((b) => '"${b.title}" (cat=${b.categoryId})')
             .toList();
@@ -1727,10 +1771,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           final loadedLinks = await textBook.links
             ..sort((a, b) => a.index1.compareTo(b.index1));
           widget.tab.links = loadedLinks;
-          final commentaryCount = loadedLinks.where((l) => l.connectionType.toUpperCase() == 'COMMENTARY' || l.connectionType.toUpperCase() == 'TARGUM').length;
-          debugPrint('📚 [PDF-DEBUG] Links loaded: ${loadedLinks.length} total, $commentaryCount commentary/targum');
+          final commentaryCount = loadedLinks
+              .where((l) =>
+                  l.connectionType.toUpperCase() == 'COMMENTARY' ||
+                  l.connectionType.toUpperCase() == 'TARGUM')
+              .length;
+          debugPrint(
+              '📚 [PDF-DEBUG] Links loaded: ${loadedLinks.length} total, $commentaryCount commentary/targum');
           if (loadedLinks.isNotEmpty) {
-            debugPrint('📚 [PDF-DEBUG] Links index1 range: ${loadedLinks.first.index1}–${loadedLinks.last.index1}');
+            debugPrint(
+                '📚 [PDF-DEBUG] Links index1 range: ${loadedLinks.first.index1}–${loadedLinks.last.index1}');
           }
           await _loadCommentatorGroups();
         }
@@ -1741,7 +1791,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         setState(() {});
       }
     } catch (e, stackTrace) {
-      debugPrint('📚 [PDF-DEBUG] ERROR in _loadPdfHeadingsAndLinks: $e\n$stackTrace');
+      debugPrint(
+          '📚 [PDF-DEBUG] ERROR in _loadPdfHeadingsAndLinks: $e\n$stackTrace');
       if (mounted) {
         _linksLoading = false;
         setState(() {});
@@ -1752,6 +1803,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   @override
   void dispose() {
     _stopContinuousScroll();
+    _pointerScrollFlushTimer?.cancel();
     _disposePageTurnSnapshot();
     _pageTurnController.dispose();
     textSearcher?.removeListener(_onTextSearcherUpdated);
@@ -1972,13 +2024,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       children: [
         NotificationListener<UserScrollNotification>(
           onNotification: (notification) {
-            if (!(widget.tab.pinLeftPane.value ||
-                (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
-              Future.microtask(() {
-                _setLeftPaneVisibility(false);
-                _pdfViewFocusNode.requestFocus();
-              });
-            }
+            _scheduleReaderFocusAndHidePaneIfNeeded();
             return false;
           },
           child: Listener(
@@ -1988,16 +2034,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   return;
                 }
 
-                _captureScrollAnchor();
-                _applyPointerScroll(event);
-
-                if (!(widget.tab.pinLeftPane.value ||
-                    (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
-                  _setLeftPaneVisibility(false);
-                  Future.microtask(() {
-                    _pdfViewFocusNode.requestFocus();
-                  });
-                }
+                _queuePointerScroll(event);
+                _scheduleReaderFocusAndHidePaneIfNeeded();
               }
             },
             onPointerPanZoomStart: (_) {
@@ -2492,15 +2530,65 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _scrollAnchorPage = widget.tab.pdfViewerController.pageNumber ?? 1;
   }
 
-  void _applyPointerScroll(PointerScrollEvent event) {
+  void _queuePointerScroll(PointerScrollEvent event) {
+    if (!widget.tab.pdfViewerController.isReady) {
+      return;
+    }
+
+    if (_pointerScrollFlushTimer == null) {
+      _captureScrollAnchor();
+    }
+
+    _pendingPointerScrollDx += event.scrollDelta.dx;
+    _pendingPointerScrollDy += event.scrollDelta.dy;
+    _pointerScrollFlushTimer ??=
+        Timer(_pointerScrollFlushDelay, _flushQueuedPointerScroll);
+  }
+
+  void _flushQueuedPointerScroll() {
+    _pointerScrollFlushTimer = null;
+
+    var remainingDeltaX = _pendingPointerScrollDx;
+    var remainingDeltaY = _pendingPointerScrollDy;
+    _pendingPointerScrollDx = 0.0;
+    _pendingPointerScrollDy = 0.0;
+
+    if (remainingDeltaX == 0.0 && remainingDeltaY == 0.0) {
+      return;
+    }
+
+    while (remainingDeltaX != 0.0 || remainingDeltaY != 0.0) {
+      final stepDeltaX = remainingDeltaX.clamp(
+        -_maxPointerScrollBurstDelta,
+        _maxPointerScrollBurstDelta,
+      );
+      final stepDeltaY = remainingDeltaY.clamp(
+        -_maxPointerScrollBurstDelta,
+        _maxPointerScrollBurstDelta,
+      );
+
+      _applyPointerScrollDelta(
+        deltaX: stepDeltaX,
+        deltaY: stepDeltaY,
+      );
+
+      remainingDeltaX -= stepDeltaX;
+      remainingDeltaY -= stepDeltaY;
+    }
+  }
+
+  void _applyPointerScrollDelta({
+    required double deltaX,
+    required double deltaY,
+  }) {
     if (!widget.tab.pdfViewerController.isReady) return;
 
     final currentMatrix = widget.tab.pdfViewerController.value;
     final zoom = currentMatrix.zoom;
     final candidateMatrix = currentMatrix.clone()
       ..translateByDouble(
-        -event.scrollDelta.dx / zoom,
-        -event.scrollDelta.dy / zoom,
+        -deltaX / zoom,
+        -deltaY / zoom,
         0,
         1,
       );

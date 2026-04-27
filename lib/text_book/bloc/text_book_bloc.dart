@@ -185,6 +185,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   static const int _linkLookBehindLines = 25;
   static const int _linkLookAheadLines = 50;
   static const int _linksReloadThresholdLines = 20;
+  static const Duration _visibleIndicesDebounceDuration =
+      Duration(milliseconds: 160);
   static const String _allTargetBookTitlesSignature =
       '__all_target_book_titles__';
 
@@ -497,9 +499,19 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         final rawPositions = positionsListener.itemPositions.value.toList()
           ..sort((a, b) => a.index.compareTo(b.index));
         final visibleIndicesNow =
-            rawPositions.map((position) => position.index).toList();
+            rawPositions.map((position) => position.index).toSet().toList();
+        if (visibleIndicesNow.isEmpty) {
+          return;
+        }
         final currentState = state;
         if (currentState is TextBookLoaded) {
+          if (!_hasMeaningfulVisibleIndicesChange(
+            currentState.visibleIndices,
+            visibleIndicesNow,
+          )) {
+            return;
+          }
+
           final initialSyncClassification =
               classifyRawPositionsDuringInitialPageShapeVisibleSyncForTesting(
             awaitingInitialPageShapeVisibleSync:
@@ -522,7 +534,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         }
 
         _debounceTimer?.cancel();
-        _debounceTimer = Timer(const Duration(milliseconds: 100), () {
+        _debounceTimer = Timer(_visibleIndicesDebounceDuration, () {
           if (isClosed) {
             return;
           }
@@ -531,8 +543,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
               .toList()
             ..sort((a, b) => a.index.compareTo(b.index));
           final visibleIndicesNow =
-              debouncedRawPositions.map((e) => e.index).toList();
-          if (visibleIndicesNow.isNotEmpty) {
+              debouncedRawPositions.map((e) => e.index).toSet().toList();
+          final latestState = state;
+          if (visibleIndicesNow.isNotEmpty &&
+              latestState is TextBookLoaded &&
+              _hasMeaningfulVisibleIndicesChange(
+                latestState.visibleIndices,
+                visibleIndicesNow,
+              )) {
             add(UpdateVisibleIndecies(visibleIndicesNow));
           }
         });
@@ -1091,6 +1109,22 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (list1[i] != list2[i]) return false;
     }
     return true;
+  }
+
+  bool _hasMeaningfulVisibleIndicesChange(
+    List<int> currentIndices,
+    List<int> nextIndices,
+  ) {
+    if (_listsEqual(currentIndices, nextIndices)) {
+      return false;
+    }
+
+    if (currentIndices.isEmpty || nextIndices.isEmpty) {
+      return true;
+    }
+
+    return currentIndices.first != nextIndices.first ||
+        currentIndices.last != nextIndices.last;
   }
 
   void _onUpdateSelectedIndex(
