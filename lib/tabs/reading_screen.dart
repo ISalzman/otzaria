@@ -17,7 +17,6 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/search/view/full_text_search_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
-import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 class ReadingScreen extends StatefulWidget {
@@ -274,6 +273,7 @@ class _SideBySideViewWidget extends StatefulWidget {
 }
 
 class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
+  static const double _combinedDividerWidth = 12;
   late double _splitRatio;
 
   @override
@@ -299,10 +299,12 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
       builder: (context, constraints) {
         final totalWidth = constraints.maxWidth;
         final rightWidth = totalWidth * _splitRatio;
+        final colorScheme = Theme.of(context).colorScheme;
 
         return Stack(
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // ספר ימני (בגלל RTL, זה יופיע בצד ימין)
                 SizedBox(
@@ -310,16 +312,31 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
                   child: ClipRect(child: widget.buildTabView(widget.rightTab)),
                 ),
                 // מפריד ניתן לגרירה
-                ResizableDragHandle(
-                  isVertical: true,
-                  onDragDelta: (delta) {
-                    setState(() {
-                      // תיקון: הפיכת הכיוון כי אנחנו ב-RTL
-                      final ratioDelta = -delta / totalWidth;
-                      _splitRatio = (_splitRatio + ratioDelta).clamp(0.2, 0.8);
-                    });
-                  },
-                  onDragEnd: () => widget.onSplitRatioChanged(_splitRatio),
+                SizedBox(
+                  width: _combinedDividerWidth,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    alignment: Alignment.center,
+                    children: [
+                      ColoredBox(color: colorScheme.surfaceContainer),
+                      MouseRegion(
+                        cursor: SystemMouseCursors.resizeColumn,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onPanUpdate: (details) {
+                            setState(() {
+                              // תיקון: הפיכת הכיוון כי אנחנו ב-RTL
+                              final ratioDelta = -details.delta.dx / totalWidth;
+                              _splitRatio =
+                                  (_splitRatio + ratioDelta).clamp(0.2, 0.8);
+                            });
+                          },
+                          onPanEnd: (_) =>
+                              widget.onSplitRatioChanged(_splitRatio),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 // ספר שמאלי - Expanded כדי למלא את שאר המקום ללא גלישה
                 Expanded(

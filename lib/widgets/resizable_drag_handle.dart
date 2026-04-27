@@ -104,37 +104,72 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
           builder: (context, blend, _) {
             final highlightColor = cs.primary.withValues(alpha: 0.10 * blend);
             final thickness = lerpDouble(2.0, 4.0, blend) ?? 2.0;
-            final gripLength =
-                lerpDouble(widget.hitSize * 0.55, widget.hitSize * 0.8, blend) ??
-                    widget.hitSize * 0.55;
+            final gripLength = lerpDouble(
+                    widget.hitSize * 0.55, widget.hitSize * 0.8, blend) ??
+                widget.hitSize * 0.55;
             final showGrip = widget.showDivider || blend > 0;
             final lineColor = showGrip
                 ? (Color.lerp(dividerColor, activeColor, blend) ?? dividerColor)
                 : Colors.transparent;
+            final dividerThickness = lerpDouble(1.0, 2.0, blend) ?? 1.0;
 
-            return Container(
-              color: Colors.transparent,
-              alignment: Alignment.center,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOut,
-                width: widget.isVertical ? thickness + 10 : gripLength,
-                height: widget.isVertical ? gripLength : thickness + 10,
-                decoration: BoxDecoration(
-                  color: highlightColor,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                alignment: Alignment.center,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: lineColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: SizedBox(
-                    width: widget.isVertical ? thickness : gripLength,
-                    height: widget.isVertical ? gripLength : thickness,
-                  ),
-                ),
+            return SizedBox(
+              width: widget.isVertical ? widget.hitSize : null,
+              height: widget.isVertical ? null : widget.hitSize,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final dividerExtent = widget.isVertical
+                      ? (constraints.hasBoundedHeight
+                          ? constraints.maxHeight
+                          : gripLength)
+                      : (constraints.hasBoundedWidth
+                          ? constraints.maxWidth
+                          : gripLength);
+
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (widget.showDivider)
+                        Center(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: lineColor,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: SizedBox(
+                              width: widget.isVertical
+                                  ? dividerThickness
+                                  : dividerExtent,
+                              height: widget.isVertical
+                                  ? dividerExtent
+                                  : dividerThickness,
+                            ),
+                          ),
+                        ),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        curve: Curves.easeOut,
+                        width: widget.isVertical ? thickness + 10 : gripLength,
+                        height: widget.isVertical ? gripLength : thickness + 10,
+                        decoration: BoxDecoration(
+                          color: highlightColor,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        alignment: Alignment.center,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: lineColor,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: SizedBox(
+                            width: widget.isVertical ? thickness : gripLength,
+                            height: widget.isVertical ? gripLength : thickness,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             );
           },
