@@ -2300,7 +2300,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       .withValues(alpha: 0.6),
                   indicatorColor: Theme.of(context).colorScheme.primary,
                   dividerColor: Colors.transparent,
-                  overlayColor: WidgetStateProperty.all(Colors.transparent),
+                  splashBorderRadius: BorderRadius.circular(12),
                 ),
               ),
               if (MediaQuery.of(context).size.width >= 600)
