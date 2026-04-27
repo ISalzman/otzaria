@@ -42,8 +42,9 @@ class BackupService {
     }
   }
 
-  /// Create a backup with specified options
-  static Future<String> createBackup({
+  /// Create a backup with specified options.
+  /// Returns the backup path and a list of sections that were skipped (e.g. when Hive box is not open).
+  static Future<({String path, List<String> skippedSections})> createBackup({
     required bool includeSettings,
     required bool includeBookmarks,
     required bool includeHistory,
@@ -52,6 +53,7 @@ class BackupService {
     required bool includeShamorZachor,
     required bool includeUserOverrides,
   }) async {
+    final skippedSections = <String>[];
     try {
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final backupDir = await getBackupDirectory();
@@ -109,7 +111,14 @@ class BackupService {
 
       // Backup Shamor Zachor
       if (includeShamorZachor) {
+        if (!Hive.isBoxOpen(HiveCache.keyName)) {
+          skippedSections.add('shamorZachor');
+        }
         backupData['shamorZachor'] = await _backupShamorZachor();
+      }
+
+      if (skippedSections.isNotEmpty) {
+        backupData['partial_sections'] = skippedSections;
       }
 
       // Write backup file
@@ -127,7 +136,7 @@ class BackupService {
       final size = exists ? await file.length() : 0;
       _logger.info('File exists: $exists, Size: $size bytes');
 
-      return backupPath;
+      return (path: backupPath, skippedSections: skippedSections);
     } catch (e, stackTrace) {
       _logger.severe('Error creating backup: $e');
       _logger.severe('Stack trace: $stackTrace');
@@ -273,6 +282,10 @@ class BackupService {
 
   /// Backup Shamor Zachor data - backs up all sz: keys found in Hive
   static Future<Map<String, dynamic>> _backupShamorZachor() async {
+    if (!Hive.isBoxOpen(HiveCache.keyName)) {
+      _logger.warning('_backupShamorZachor: Hive box not open — skipping (partial backup)');
+      return {};
+    }
     final box = Hive.box<dynamic>(HiveCache.keyName);
     final shamorZachorData = <String, dynamic>{};
 
@@ -286,8 +299,9 @@ class BackupService {
     return shamorZachorData;
   }
 
-  /// Restore from backup file
-  static Future<void> restoreFromBackup(String backupPath) async {
+  /// Restore from backup file.
+  /// Returns a list of sections that were missing in the backup file (partial backup).
+  static Future<List<String>> restoreFromBackup(String backupPath) async {
     final file = File(backupPath);
     if (!await file.exists()) {
       throw Exception('קובץ הגיבוי לא נמצא');
@@ -300,6 +314,13 @@ class BackupService {
     final version = backupData['version'] as String?;
     if (version != '1.0') {
       throw Exception('גרסת גיבוי לא נתמכת');
+    }
+
+    final partialSections = (backupData['partial_sections'] as List?)
+            ?.cast<String>() ??
+        [];
+    if (partialSections.isNotEmpty) {
+      _logger.warning('Restoring a partial backup — sections missing: ${partialSections.join(", ")}');
     }
 
     final includes = backupData['includes'] as Map<String, dynamic>;
@@ -353,12 +374,21 @@ class BackupService {
     }
 
     // Restore Shamor Zachor
+    final runtimeSkipped = <String>[];
     if (includes['shamorZachor'] == true &&
         backupData.containsKey('shamorZachor')) {
-      await _restoreShamorZachor(
+      final skipped = await _restoreShamorZachor(
         backupData['shamorZachor'] as Map<String, dynamic>,
       );
+      if (skipped) runtimeSkipped.add('shamorZachor');
     }
+
+    // Merge: sections missing in the backup file + sections skipped at runtime
+    final allSkipped = [
+      ...partialSections,
+      ...runtimeSkipped.where((s) => !partialSections.contains(s)),
+    ];
+    return allSkipped;
   }
 
   /// Restore settings
@@ -574,10 +604,15 @@ class BackupService {
     await repo.saveWorkspaces(workspaces, currentId);
   }
 
-  /// Restore Shamor Zachor data - restores ALL backed up keys
-  static Future<void> _restoreShamorZachor(
+  /// Restore Shamor Zachor data - restores ALL backed up keys.
+  /// Returns true if the section was skipped (Hive box not open).
+  static Future<bool> _restoreShamorZachor(
     Map<String, dynamic> shamorZachorData,
   ) async {
+    if (!Hive.isBoxOpen(HiveCache.keyName)) {
+      _logger.warning('_restoreShamorZachor: Hive box not open — skipping (partial restore)');
+      return true;
+    }
     final box = Hive.box<dynamic>(HiveCache.keyName);
 
     for (final entry in shamorZachorData.entries) {
@@ -588,7 +623,11 @@ class BackupService {
 
       await box.put(key, value);
     }
+    return false;
   }
+
+  static const _kLastPartialAutoBackupKey = 'key-last-partial-auto-backup';
+  static const _kPartialRetryMinutes = 60;
 
   /// Check if automatic backup is needed
   static Future<bool> shouldPerformAutoBackup() async {
@@ -597,19 +636,29 @@ class BackupService {
     if (frequency == 'none') return false;
 
     final lastBackup = Settings.getValue<String>('key-last-auto-backup');
-    if (lastBackup == null) return true;
-
-    final lastBackupDate = DateTime.parse(lastBackup);
     final now = DateTime.now();
 
-    switch (frequency) {
-      case 'weekly':
-        return now.difference(lastBackupDate).inDays >= 7;
-      case 'monthly':
-        return now.difference(lastBackupDate).inDays >= 30;
-      default:
-        return false;
+    // Check normal schedule against the last successful full backup
+    if (lastBackup != null) {
+      final daysSince = now.difference(DateTime.parse(lastBackup)).inDays;
+      final dueAfterDays = switch (frequency) {
+        'weekly' => 7,
+        'monthly' => 30,
+        _ => null,
+      };
+      if (dueAfterDays == null) return false;
+      if (daysSince < dueAfterDays) return false;
     }
+
+    // Cooldown: if a partial attempt happened recently, don't flood the folder
+    final lastPartial = Settings.getValue<String>(_kLastPartialAutoBackupKey);
+    if (lastPartial != null) {
+      final minutesSince =
+          now.difference(DateTime.parse(lastPartial)).inMinutes;
+      if (minutesSince < _kPartialRetryMinutes) return false;
+    }
+
+    return true;
   }
 
   /// Perform automatic backup
@@ -628,7 +677,7 @@ class BackupService {
     final includeUserOverrides =
         Settings.getValue<bool>('key-backup-user-overrides') ?? true;
 
-    await createBackup(
+    final result = await createBackup(
       includeSettings: includeSettings,
       includeBookmarks: includeBookmarks,
       includeHistory: includeHistory,
@@ -637,6 +686,13 @@ class BackupService {
       includeShamorZachor: includeShamorZachor,
       includeUserOverrides: includeUserOverrides,
     );
+
+    if (result.skippedSections.isNotEmpty) {
+      _logger.warning('Auto-backup partial — skipped: ${result.skippedSections.join(", ")} — will retry after ${_kPartialRetryMinutes}min cooldown');
+      await Settings.setValue(
+          _kLastPartialAutoBackupKey, DateTime.now().toIso8601String());
+      return;
+    }
 
     await Settings.setValue(
         'key-last-auto-backup', DateTime.now().toIso8601String());

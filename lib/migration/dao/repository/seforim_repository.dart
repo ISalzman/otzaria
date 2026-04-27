@@ -73,7 +73,7 @@ class SeforimRepository {
 
     // Database schema creation is handled by MyDatabase
     // SQLite optimizations for normal operations
-    await _executeRawQuery('PRAGMA journal_mode=WAL');
+    await _trySetWal();
     await _executeRawQuery('PRAGMA synchronous=NORMAL');
     await _executeRawQuery('PRAGMA cache_size=100000');
     await _executeRawQuery('PRAGMA temp_store=MEMORY');
@@ -225,7 +225,15 @@ class SeforimRepository {
   }
 
   Future<void> setJournalModeOff() => setJournalMode('OFF');
-  Future<void> setJournalModeWal() => setJournalMode('WAL');
+
+  /// WAL may fail when another process holds the DB lock — safe to skip.
+  Future<void> _trySetWal() async {
+    try {
+      await _executeRawQuery('PRAGMA journal_mode=WAL');
+    } catch (_) {}
+  }
+
+  Future<void> setJournalModeWal() => _trySetWal();
 
   /// Sets maximum performance mode for bulk operations
   Future<void> setMaxPerformanceMode() async {
@@ -243,7 +251,7 @@ class SeforimRepository {
   Future<void> restoreNormalMode() async {
     _logger.info('Restoring normal performance mode');
     await executeRawQuery('PRAGMA synchronous=NORMAL');
-    await executeRawQuery('PRAGMA journal_mode=WAL');
+    await _trySetWal();
     await executeRawQuery('PRAGMA locking_mode=NORMAL');
     await executeRawQuery('PRAGMA cache_size=100000');
     _logger.info('Normal performance mode restored');

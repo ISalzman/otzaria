@@ -96,6 +96,20 @@ void main() {
     expect(loaded.contentFormat, PersonalNoteContentFormat.quillDelta);
   });
 
+  test('loadLatestNewNoteDraft מחזיר null כשה-Hive box סגור', () async {
+    // סוגר את ה-box מבלי לפתוח מחדש
+    await Hive.close();
+
+    final service = PersonalNoteDraftService();
+    final result = await service.loadLatestNewNoteDraft(bookId: 'ספר כלשהו');
+
+    expect(result, isNull);
+
+    // פותח מחדש לתקינות tearDown
+    await Hive.openBox<dynamic>(HiveCache.keyName);
+    await Settings.init(cacheProvider: HiveCache());
+  });
+
   test('clearDraft מוחק את המפתח מה-Box', () async {
     final service = PersonalNoteDraftService();
 

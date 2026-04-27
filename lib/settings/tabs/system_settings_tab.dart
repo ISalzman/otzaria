@@ -649,7 +649,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Future<void> _createBackup() async {
     try {
-      final backupPath = await BackupService.createBackup(
+      final result = await BackupService.createBackup(
         includeSettings: _shouldInclude(_keyBackupSettings),
         includeBookmarks: _shouldInclude(_keyBackupBookmarks),
         includeHistory: _shouldInclude(_keyBackupHistory),
@@ -659,13 +659,19 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         includeUserOverrides: _shouldInclude(_keyBackupUserOverrides),
       );
       if (!mounted) return;
+      final backupPath = result.path;
       final file = File(backupPath);
       final exists = await file.exists();
       final size = exists ? await file.length() : 0;
       if (!mounted) return;
       if (exists) {
+        final partial = result.skippedSections.isNotEmpty;
+        final sizeStr = '${(size / 1024).toStringAsFixed(1)} KB';
+        final message = partial
+            ? 'גיבוי חלקי נשמר ($sizeStr) — חסרים: ${result.skippedSections.join(", ")}'
+            : 'הגיבוי נשמר! גודל: $sizeStr';
         UiSnack.showWithAction(
-          message: 'הגיבוי נשמר! גודל: ${(size / 1024).toStringAsFixed(1)} KB',
+          message: message,
           actionLabel: 'פתח מיקום קובץ',
           onAction: () async {
             final dir = file.parent;
@@ -704,12 +710,15 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     if (confirmed != true) return;
 
     try {
-      await BackupService.restoreFromBackup(filePath);
+      final skipped = await BackupService.restoreFromBackup(filePath);
       if (!mounted) return;
+      final content = skipped.isEmpty
+          ? 'הנתונים שוחזרו בהצלחה. יש להפעיל מחדש את התוכנה.'
+          : 'שחזור חלקי — חסרים בקובץ הגיבוי: ${skipped.join(", ")}.\nיש להפעיל מחדש את התוכנה.';
       await showSingleActionDialog(
         context: context,
-        title: 'השחזור הושלם',
-        content: 'הנתונים שוחזרו בהצלחה. יש להפעיל מחדש את התוכנה.',
+        title: skipped.isEmpty ? 'השחזור הושלם' : 'שחזור חלקי',
+        content: content,
         confirmText: 'סגור את התוכנה',
       );
       if (Platform.isAndroid || Platform.isIOS) {

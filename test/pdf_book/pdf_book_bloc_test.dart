@@ -5,6 +5,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/memory_settings_cache.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
@@ -649,9 +650,31 @@ void main() {
       seed: () => _loaded(),
       act: (b) => b.add(const LoadHeadingsAndLinks(links: [])),
       verify: (b) {
-        // links נשמר ב-tab (לא בprops של state, אז אין emit חדש)
+        // links שווה לstate הקודם (ריק=ריק) → אין emit
         expect(b.tab.links, isEmpty);
       },
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'כשlinks חדשים עם אותו אורך אך תוכן שונה → emit state חדש',
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded().copyWith(
+        links: [
+          Link(heRef: 'א', index1: 10, path2: 'x.txt', index2: 1, connectionType: 'commentary'),
+        ],
+      ),
+      act: (b) => b.add(LoadHeadingsAndLinks(
+        links: [
+          Link(heRef: 'ב', index1: 20, path2: 'y.txt', index2: 2, connectionType: 'commentary'),
+        ],
+      )),
+      expect: () => [
+        isA<PdfBookLoaded>().having(
+          (s) => s.links.first.index1,
+          'index1',
+          20,
+        ),
+      ],
     );
   });
 
