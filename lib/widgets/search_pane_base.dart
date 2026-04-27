@@ -146,6 +146,7 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
       children: [
         if (widget.progressWidget != null) widget.progressWidget!,
         AnimatedAlign(
+          key: const ValueKey('searchFieldAlign'),
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeInOut,
           alignment: _isCompact
