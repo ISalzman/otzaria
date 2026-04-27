@@ -37,6 +37,7 @@ import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
+import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 
 class CombinedView extends StatefulWidget {
   const CombinedView({
@@ -471,6 +472,7 @@ class _CombinedViewState extends State<CombinedView> {
             final item = record.$2;
             return AppContextMenuEntry(
               label: item.label,
+              icon: fluentIconFromName(item.icon),
               onTap: () {
                 unawaited(PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
                   pluginId,

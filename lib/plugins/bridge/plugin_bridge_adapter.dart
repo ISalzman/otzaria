@@ -403,33 +403,33 @@ class PluginBridgeAdapter {
         return true;
       case 'getCurrentState':
         final tabsState = _dependencies.tabsBloc.state;
+        final tabs = tabsState.tabs;
         final currentTab = tabsState.currentTab;
-        String? tabCurrentRef(OpenedTab t) {
-          final title = t is TextBookTab
-              ? t.currentTitle.value.trim()
-              : (t is PdfBookTab ? t.currentTitle.value.trim() : '');
-          return title.isEmpty ? null : title;
-        }
-        final openTabs = tabsState.tabs
-            .map((t) => {
-                  'bookId': t.title,
-                  'book': t.title,
-                  'index': t is TextBookTab
-                      ? t.index
-                      : (t is PdfBookTab ? t.pageNumber : 0),
-                  'currentRef': tabCurrentRef(t),
-                })
-            .toList();
+        // Use the same resolver as getCurrentRef for consistent currentRef values
+        final snapshots = await Future.wait(tabs.map(resolveReaderLocation));
+        final openTabs = List.generate(tabs.length, (i) {
+          final t = tabs[i];
+          return {
+            'bookId': t.title,
+            'book': t.title,
+            'index': t is TextBookTab
+                ? t.index
+                : (t is PdfBookTab ? t.pageNumber : 0),
+            'currentRef': snapshots[i]?.currentRef,
+          };
+        });
         if (currentTab == null) {
           return {'currentBook': null, 'currentIndex': 0, 'currentRef': null, 'openTabs': openTabs};
         }
+        final currentTabIndex = tabs.indexOf(currentTab);
+        final currentSnapshot = currentTabIndex >= 0 ? snapshots[currentTabIndex] : null;
         return {
           'currentBook': currentTab.title,
           'currentBookId': currentTab.title,
           'currentIndex': currentTab is TextBookTab
               ? currentTab.index
               : (currentTab is PdfBookTab ? currentTab.pageNumber : 0),
-          'currentRef': tabCurrentRef(currentTab),
+          'currentRef': currentSnapshot?.currentRef,
           'openTabs': openTabs,
         };
       case 'getCurrentRef':

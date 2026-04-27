@@ -33,6 +33,9 @@ import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
+import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
+import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 
 /// מחזירה האם אירוע המקלדת צריך להניע גלילה רציפה בצורת הדף.
 bool shouldHandlePageShapeNavigationKeyEvent(KeyEvent event) {
@@ -687,6 +690,35 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         onTap: () => _copyParagraphByIndex(index),
       ),
     ]);
+
+    if (widget.isMainText) {
+      final pluginItems = ContextMenuRegistry.instance.getAll();
+      if (pluginItems.isNotEmpty) {
+        entries.add(const AppContextMenuEntry.divider());
+        for (final record in pluginItems) {
+          final pluginId = record.$1;
+          final item = record.$2;
+          entries.add(AppContextMenuEntry(
+            label: item.label,
+            icon: fluentIconFromName(item.icon),
+            onTap: () {
+              unawaited(PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+                pluginId,
+                'reader.context_menu_item_clicked',
+                {
+                  'itemId': item.id,
+                  'selectedText': _savedSelectedText ?? '',
+                  'currentRef': state.currentTitle ?? '',
+                  'currentBook': state.book.title,
+                  'currentBookId': state.book.title,
+                  'currentIndex': index,
+                },
+              ));
+            },
+          ));
+        }
+      }
+    }
 
     return _normalizeEntries(entries);
   }
