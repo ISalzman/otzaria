@@ -28,6 +28,7 @@ import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/widgets/indexing_warning.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/tour/tour_target_keys.dart';
 
 /// דיאלוג חיפוש מתקדם - מכיל את כל פקדי החיפוש וההגדרות
 /// כשמבצעים חיפוש, הדיאלוג נסגר ונפתחת לשונית תוצאות
@@ -498,6 +499,7 @@ class _SearchDialogState extends State<SearchDialog> {
     return BlocProvider.value(
       value: _searchTab.searchBloc,
       child: Dialog(
+        key: tourSearchDialogTargetKey,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: FocusScope(
           onKeyEvent: (node, event) {
@@ -613,6 +615,25 @@ class _SearchDialogState extends State<SearchDialog> {
                                         ),
                                         showInlineSearchButton: false,
                                         onSubmit: _performSearch,
+                                        trailingAction: IconButton(
+                                          icon: Icon(
+                                            _showHistoryDropdown
+                                                ? FluentIcons
+                                                    .chevron_up_24_regular
+                                                : FluentIcons
+                                                    .history_24_regular,
+                                            size: 24,
+                                          ),
+                                          tooltip: 'היסטוריית חיפושים',
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () {
+                                            setState(() {
+                                              _showHistoryDropdown =
+                                                  !_showHistoryDropdown;
+                                            });
+                                          },
+                                        ),
                                       ),
                                     ),
                                     // כפתור חיפוש
@@ -640,33 +661,6 @@ class _SearchDialogState extends State<SearchDialog> {
                                             tapTargetSize: MaterialTapTargetSize
                                                 .shrinkWrap,
                                           ),
-                                        ),
-                                      ),
-                                    ),
-                                    // כפתור היסטוריה
-                                    Positioned(
-                                      left: 48,
-                                      top: 0,
-                                      bottom: 0,
-                                      child: Center(
-                                        child: IconButton(
-                                          icon: Icon(
-                                            _showHistoryDropdown
-                                                ? FluentIcons
-                                                    .chevron_up_24_regular
-                                                : FluentIcons
-                                                    .history_24_regular,
-                                            size: 24,
-                                          ),
-                                          tooltip: 'היסטוריית חיפושים',
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          onPressed: () {
-                                            setState(() {
-                                              _showHistoryDropdown =
-                                                  !_showHistoryDropdown;
-                                            });
-                                          },
                                         ),
                                       ),
                                     ),

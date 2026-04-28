@@ -51,14 +51,41 @@ import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/printing/printing_screen.dart';
 
+final GlobalKey pdfBookNavigationTourTargetKey = GlobalKey(
+  debugLabel: 'pdf_book_navigation_tour_target',
+);
+final GlobalKey pdfBookBookmarkTourTargetKey = GlobalKey(
+  debugLabel: 'pdf_book_bookmark_tour_target',
+);
+final GlobalKey pdfBookSearchTourTargetKey = GlobalKey(
+  debugLabel: 'pdf_book_search_tour_target',
+);
+final GlobalKey pdfBookPrintTourTargetKey = GlobalKey(
+  debugLabel: 'pdf_book_print_tour_target',
+);
+final GlobalKey pdfBookOverflowTourTargetKey = GlobalKey(
+  debugLabel: 'pdf_book_overflow_tour_target',
+);
+final GlobalKey pdfBookOverflowBookmarkTourTargetKey = GlobalKey(
+  debugLabel: 'pdf_book_overflow_bookmark_tour_target',
+);
+final GlobalKey pdfBookOverflowSearchTourTargetKey = GlobalKey(
+  debugLabel: 'pdf_book_overflow_search_tour_target',
+);
+final GlobalKey pdfBookOverflowPrintTourTargetKey = GlobalKey(
+  debugLabel: 'pdf_book_overflow_print_tour_target',
+);
+
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
   final bool isInCombinedView;
+  final bool enableTourTargets;
 
   const PdfBookScreen({
     super.key,
     required this.tab,
     this.isInCombinedView = false,
+    this.enableTourTargets = false,
   });
 
   @override
@@ -1892,126 +1919,126 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _onBlocStateChanged(BuildContext context, PdfBookState state) {}
 
   Widget _buildContent(BuildContext context) {
-    return LayoutBuilder(builder: (context, constrains) {
-      final wideScreen = (MediaQuery.of(context).size.width >= 600);
-      return CallbackShortcuts(
-        bindings: <ShortcutActivator, VoidCallback>{
-          LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyF):
-              _ensureSearchTabIsActive,
-          LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.equal):
-              _zoomIn,
-          LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.add):
-              _zoomIn,
-          LogicalKeySet(
-                  LogicalKeyboardKey.control, LogicalKeyboardKey.numpadAdd):
-              _zoomIn,
-          LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.minus):
-              _zoomOut,
-          LogicalKeySet(LogicalKeyboardKey.control,
-              LogicalKeyboardKey.numpadSubtract): _zoomOut,
-        },
-        child: Scaffold(
-          appBar: AppBar(
-            centerTitle: false,
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-            shape: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).colorScheme.outlineVariant,
-                width: 0.3,
-              ),
+    final wideScreen = MediaQuery.of(context).size.width >= 600;
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyF):
+            _ensureSearchTabIsActive,
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.equal):
+            _zoomIn,
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.add):
+            _zoomIn,
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.numpadAdd):
+            _zoomIn,
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.minus):
+            _zoomOut,
+        LogicalKeySet(
+                LogicalKeyboardKey.control, LogicalKeyboardKey.numpadSubtract):
+            _zoomOut,
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          centerTitle: false,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+          shape: Border(
+            bottom: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+              width: 0.3,
             ),
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            title: ValueListenableBuilder(
-              valueListenable: widget.tab.currentTitle,
-              builder: (context, value, child) {
-                String displayTitle = value;
-                if (value.isNotEmpty &&
-                    !value.contains(widget.tab.book.title)) {
-                  displayTitle = "${widget.tab.book.title}, $value";
-                }
-                return SelectionArea(
-                  child: Text(
-                    displayTitle,
-                    style: const TextStyle(fontSize: 17),
-                    textAlign: TextAlign.end,
-                  ),
-                );
-              },
-            ),
-            leading: IconButton(
-              icon: const Icon(FluentIcons.navigation_24_regular),
-              tooltip: 'חיפוש וניווט',
-              onPressed: () {
-                _setLeftPaneVisibility(!widget.tab.showLeftPane.value);
-              },
-            ),
-            actions: _buildPdfActions(context, wideScreen),
           ),
-          body: BlocBuilder<PdfBookBloc, PdfBookState>(
-            buildWhen: (prev, curr) {
-              if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
-                return prev.showLeftPane != curr.showLeftPane ||
-                    prev.sidebarWidth != curr.sidebarWidth ||
-                    prev.showRightPane != curr.showRightPane ||
-                    prev.rightPaneWidth != curr.rightPaneWidth;
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          title: ValueListenableBuilder(
+            valueListenable: widget.tab.currentTitle,
+            builder: (context, value, child) {
+              String displayTitle = value;
+              if (value.isNotEmpty && !value.contains(widget.tab.book.title)) {
+                displayTitle = "${widget.tab.book.title}, $value";
               }
-              return true;
-            },
-            builder: (context, state) {
-              final leftPaneWidth =
-                  state is PdfBookLoaded ? state.sidebarWidth : 300.0;
-              final rightPaneWidth =
-                  state is PdfBookLoaded ? state.rightPaneWidth : 300.0;
-              final showLeftPane =
-                  state is PdfBookLoaded ? state.showLeftPane : false;
-              final showRightPane =
-                  state is PdfBookLoaded ? state.showRightPane : false;
-              return DualAdaptiveReaderPane(
-                mainContent: _buildReaderMainContent(),
-                showLeftPane: showLeftPane,
-                leftPaneContent: _buildLeftPaneContent(),
-                leftPaneWidth: leftPaneWidth,
-                leftMinPaneWidth: 200,
-                leftMaxPaneWidth: 600,
-                onLeftPaneWidthChanged: (nextWidth) {
-                  _bloc.add(pdf_events.UpdateSidebarWidth(nextWidth));
-                },
-                onCloseLeftPane: () => _setLeftPaneVisibility(false),
-                onLeftPaneResizeEnd: () {
-                  final current = _bloc.state;
-                  if (current is PdfBookLoaded) {
-                    context
-                        .read<SettingsBloc>()
-                        .add(UpdateSidebarWidth(current.sidebarWidth));
-                  }
-                },
-                showRightPane: showRightPane,
-                rightPaneContent: _buildRightPaneContent(),
-                rightPaneWidth: rightPaneWidth,
-                rightMinPaneWidth: 250,
-                rightMaxPaneWidth: 600,
-                onRightPaneWidthChanged: (nextWidth) {
-                  _bloc.add(pdf_events.UpdateRightPaneWidth(nextWidth));
-                },
-                onCloseRightPane: () {
-                  _bloc.add(const pdf_events.ToggleRightPane(show: false));
-                },
-                onRightPaneResizeEnd: () {
-                  final current = _bloc.state;
-                  if (current is PdfBookLoaded) {
-                    context
-                        .read<SettingsBloc>()
-                        .add(UpdateCommentaryPaneWidth(current.rightPaneWidth));
-                  }
-                },
-                minMainContentWidth: 640,
+              return SelectionArea(
+                child: Text(
+                  displayTitle,
+                  style: const TextStyle(fontSize: 17),
+                  textAlign: TextAlign.end,
+                ),
               );
             },
           ),
+          leading: IconButton(
+            key: widget.enableTourTargets
+                ? pdfBookNavigationTourTargetKey
+                : null,
+            icon: const Icon(FluentIcons.navigation_24_regular),
+            tooltip: 'חיפוש וניווט',
+            onPressed: () {
+              _setLeftPaneVisibility(!widget.tab.showLeftPane.value);
+            },
+          ),
+          actions: _buildPdfActions(context, wideScreen),
         ),
-      );
-    });
+        body: BlocBuilder<PdfBookBloc, PdfBookState>(
+          buildWhen: (prev, curr) {
+            if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
+              return prev.showLeftPane != curr.showLeftPane ||
+                  prev.sidebarWidth != curr.sidebarWidth ||
+                  prev.showRightPane != curr.showRightPane ||
+                  prev.rightPaneWidth != curr.rightPaneWidth;
+            }
+            return true;
+          },
+          builder: (context, state) {
+            final leftPaneWidth =
+                state is PdfBookLoaded ? state.sidebarWidth : 300.0;
+            final rightPaneWidth =
+                state is PdfBookLoaded ? state.rightPaneWidth : 300.0;
+            final showLeftPane =
+                state is PdfBookLoaded ? state.showLeftPane : false;
+            final showRightPane =
+                state is PdfBookLoaded ? state.showRightPane : false;
+            return DualAdaptiveReaderPane(
+              mainContent: _buildReaderMainContent(),
+              showLeftPane: showLeftPane,
+              leftPaneContent: _buildLeftPaneContent(),
+              leftPaneWidth: leftPaneWidth,
+              leftMinPaneWidth: 200,
+              leftMaxPaneWidth: 600,
+              onLeftPaneWidthChanged: (nextWidth) {
+                _bloc.add(pdf_events.UpdateSidebarWidth(nextWidth));
+              },
+              onCloseLeftPane: () => _setLeftPaneVisibility(false),
+              onLeftPaneResizeEnd: () {
+                final current = _bloc.state;
+                if (current is PdfBookLoaded) {
+                  context
+                      .read<SettingsBloc>()
+                      .add(UpdateSidebarWidth(current.sidebarWidth));
+                }
+              },
+              showRightPane: showRightPane,
+              rightPaneContent: _buildRightPaneContent(),
+              rightPaneWidth: rightPaneWidth,
+              rightMinPaneWidth: 250,
+              rightMaxPaneWidth: 600,
+              onRightPaneWidthChanged: (nextWidth) {
+                _bloc.add(pdf_events.UpdateRightPaneWidth(nextWidth));
+              },
+              onCloseRightPane: () {
+                _bloc.add(const pdf_events.ToggleRightPane(show: false));
+              },
+              onRightPaneResizeEnd: () {
+                final current = _bloc.state;
+                if (current is PdfBookLoaded) {
+                  context
+                      .read<SettingsBloc>()
+                      .add(UpdateCommentaryPaneWidth(current.rightPaneWidth));
+                }
+              },
+              minMainContentWidth: 640,
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Widget _buildReaderMainContent() {
@@ -2778,8 +2805,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     return [
       ResponsiveActionBar(
-        key: ValueKey('pdf_actions_$screenWidth'),
+        key: const ValueKey('pdf_actions'),
         overflowMenuOffset: const Offset(0, 8),
+        overflowButtonKey:
+            widget.enableTourTargets ? pdfBookOverflowTourTargetKey : null,
+        menuItemKeysByTooltip: widget.enableTourTargets
+            ? {
+                'הוסף סימניה': pdfBookOverflowBookmarkTourTargetKey,
+                'חיפוש': pdfBookOverflowSearchTourTargetKey,
+                'הדפס': pdfBookOverflowPrintTourTargetKey,
+              }
+            : null,
         actions: _buildDisplayOrderPdfActions(context),
         alwaysInMenu: _buildAlwaysInMenuPdfActions(context),
         maxVisibleButtons: maxButtons,
@@ -2830,6 +2866,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
       ActionButtonData(
         widget: IconButton(
+          key: widget.enableTourTargets ? pdfBookSearchTourTargetKey : null,
           icon: const Icon(FluentIcons.search_24_regular),
           tooltip: 'חיפוש',
           onPressed: _ensureSearchTabIsActive,
@@ -2969,6 +3006,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
       ActionButtonData(
         widget: IconButton(
+          key: widget.enableTourTargets ? pdfBookBookmarkTourTargetKey : null,
           icon: const Icon(FluentIcons.bookmark_add_24_regular),
           tooltip: 'הוסף סימניה',
           onPressed: () => _handleBookmarkPress(context),
@@ -2992,6 +3030,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       if (!widget.isInCombinedView)
         ActionButtonData(
           widget: IconButton(
+            key: widget.enableTourTargets ? pdfBookPrintTourTargetKey : null,
             icon: const Icon(FluentIcons.print_24_regular),
             tooltip: 'הדפס',
             onPressed: () => _handlePrintPress(context),

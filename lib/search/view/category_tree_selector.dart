@@ -43,7 +43,12 @@ class _SearchScopeSelectorState extends State<SearchScopeSelector> {
   void didUpdateWidget(covariant SearchScopeSelector oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_sameFacets(oldWidget.selectedFacets, widget.selectedFacets)) {
-      _applyExternalSelection(widget.selectedFacets);
+      // Skip if the new selection matches what we already emit — prevents the
+      // "echo" loop where we send {'/'} as a no-selection fallback, the parent
+      // reflects it back, and _applyExternalSelection flips _searchAllCategories.
+      if (!_sameFacets(widget.selectedFacets, _activeSelection)) {
+        _applyExternalSelection(widget.selectedFacets);
+      }
     }
   }
 

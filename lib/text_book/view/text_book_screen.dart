@@ -61,16 +61,49 @@ const String _viewModeSplit = 'split';
 const String _viewModeBelow = 'below';
 const String _viewModePage = 'page';
 
+final GlobalKey textBookNavigationTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_navigation_tour_target',
+);
+final GlobalKey textBookCommentatorsTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_commentators_tour_target',
+);
+final GlobalKey textBookBookmarkTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_bookmark_tour_target',
+);
+final GlobalKey textBookSearchTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_search_tour_target',
+);
+final GlobalKey textBookPrintTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_print_tour_target',
+);
+final GlobalKey textBookOverflowTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_overflow_tour_target',
+);
+final GlobalKey textBookOverflowCommentatorsTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_overflow_commentators_tour_target',
+);
+final GlobalKey textBookOverflowBookmarkTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_overflow_bookmark_tour_target',
+);
+final GlobalKey textBookOverflowSearchTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_overflow_search_tour_target',
+);
+final GlobalKey textBookOverflowPrintTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_overflow_print_tour_target',
+);
+
 class TextBookViewerBloc extends StatefulWidget {
   final void Function(OpenedTab) openBookCallback;
   final TextBookTab tab;
   final bool isInCombinedView;
+  final bool enableTourTargets;
 
   const TextBookViewerBloc({
     super.key,
     required this.openBookCallback,
     required this.tab,
     this.isInCombinedView = false,
+    this.enableTourTargets = false,
   });
 
   @override
@@ -884,7 +917,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                       ),
                       actions: [
                         ResponsiveActionBar(
-                          key: ValueKey('loading_actions_$screenWidth'),
+                          key: const ValueKey('loading_actions'),
                           overflowMenuOffset: const Offset(0, 8),
                           actions: [
                             // NOTE: PDF button intentionally omitted during loading
@@ -1063,21 +1096,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     }
                   });
 
-                  return LayoutBuilder(
-                    builder: (context, constrains) {
-                      final wideScreen =
-                          (MediaQuery.of(context).size.width >= 600);
-                      return KeyboardListener(
-                        focusNode: _bookContentFocusNode,
-                        autofocus: false,
-                        onKeyEvent: (event) => _handleGlobalKeyEvent(
-                            event, context, state, widget.tab),
-                        child: Scaffold(
-                          appBar: _buildAppBar(context, state, wideScreen),
-                          body: _buildBody(context, state),
-                        ),
-                      );
-                    },
+                  final wideScreen = MediaQuery.of(context).size.width >= 600;
+                  return KeyboardListener(
+                    focusNode: _bookContentFocusNode,
+                    autofocus: false,
+                    onKeyEvent: (event) => _handleGlobalKeyEvent(
+                        event, context, state, widget.tab),
+                    child: Scaffold(
+                      appBar: _buildAppBar(context, state, wideScreen),
+                      body: _buildBody(context, state),
+                    ),
                   );
                 }
 
@@ -1232,6 +1260,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   Widget _buildMenuButton(BuildContext context, TextBookLoaded state) {
     return IconButton(
+      key: widget.enableTourTargets ? textBookNavigationTourTargetKey : null,
       icon: const Icon(FluentIcons.navigation_24_regular),
       tooltip: "ניווט וחיפוש",
       onPressed: () =>
@@ -1272,8 +1301,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return [
       Consumer<ShamorZachorDataProvider>(
         builder: (context, _, __) => ResponsiveActionBar(
-          key: ValueKey('responsive_actions_$screenWidth'),
+          key: const ValueKey('responsive_actions'),
           overflowMenuOffset: const Offset(0, 8),
+          overflowButtonKey:
+              widget.enableTourTargets ? textBookOverflowTourTargetKey : null,
+          menuItemKeysByTooltip: widget.enableTourTargets
+              ? {
+                  _getViewModeTooltip(state):
+                      textBookOverflowCommentatorsTourTargetKey,
+                  'הוסף סימניה': textBookOverflowBookmarkTourTargetKey,
+                  'חיפוש': textBookOverflowSearchTourTargetKey,
+                  'הדפסה': textBookOverflowPrintTourTargetKey,
+                }
+              : null,
           actions: _buildDisplayOrderActions(context, state),
           alwaysInMenu: _buildAlwaysInMenuActions(context, state),
           maxVisibleButtons: maxButtons,
@@ -1304,7 +1344,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       // 2) View Mode Dropdown (מאחד את Split View ו-Page Shape View)
       ActionButtonData(
-        widget: _buildViewModeDropdown(context, state, key: _viewModeMenuKey),
+        widget: KeyedSubtree(
+          key: widget.enableTourTargets
+              ? textBookCommentatorsTourTargetKey
+              : null,
+          child: _buildViewModeDropdown(context, state, key: _viewModeMenuKey),
+        ),
         icon: _getViewModeIcon(state),
         tooltip: _getViewModeTooltip(state),
         onPressed: () {
@@ -1342,7 +1387,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       // 4) Search Button
       ActionButtonData(
-        widget: _buildSearchButton(context, state),
+        widget: _buildSearchButton(
+          context,
+          state,
+          key: widget.enableTourTargets ? textBookSearchTourTargetKey : null,
+        ),
         icon: FluentIcons.search_24_regular,
         tooltip: 'חיפוש',
         onPressed: _openSearchFromToolbar,
@@ -1470,7 +1519,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       // 1) הוספת סימניה
       ActionButtonData(
-        widget: _buildBookmarkButton(context, state),
+        widget: KeyedSubtree(
+          key: widget.enableTourTargets ? textBookBookmarkTourTargetKey : null,
+          child: _buildBookmarkButton(context, state),
+        ),
         icon: FluentIcons.bookmark_add_24_regular,
         tooltip: 'הוסף סימניה',
         onPressed: () => _handleBookmarkPress(context, state),
@@ -1533,7 +1585,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // 6) הדפסה - לא בתצוגה משולבת
       if (!widget.isInCombinedView)
         ActionButtonData(
-          widget: _buildPrintButton(context, state),
+          widget: _buildPrintButton(
+            context,
+            state,
+            key: widget.enableTourTargets ? textBookPrintTourTargetKey : null,
+          ),
           icon: FluentIcons.print_24_regular,
           tooltip: 'הדפסה',
           onPressed: () => _handlePrintPress(state),
@@ -1740,12 +1796,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  Widget _buildSearchButton(BuildContext context, TextBookLoaded state) {
+  Widget _buildSearchButton(
+    BuildContext context,
+    TextBookLoaded state, {
+    Key? key,
+  }) {
     final shortcut = ShortcutValidator.getShortcutValue(
           ShortcutValidator.currentWindowSearchKey,
         ) ??
         'ctrl+f';
     return IconButton(
+      key: key,
       onPressed: _openSearchFromToolbar,
       icon: const Icon(FluentIcons.search_24_regular),
       tooltip: 'חיפוש (${shortcut.toUpperCase()})',
@@ -1928,10 +1989,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  Widget _buildPrintButton(BuildContext context, TextBookLoaded state) {
+  Widget _buildPrintButton(
+    BuildContext context,
+    TextBookLoaded state, {
+    Key? key,
+  }) {
     final shortcut =
         Settings.getValue<String>('key-shortcut-print') ?? 'ctrl+p';
     return IconButton(
+      key: key,
       icon: const Icon(FluentIcons.print_24_regular),
       tooltip: 'הדפסה (${shortcut.toUpperCase()})',
       onPressed: () {

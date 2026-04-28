@@ -21,6 +21,7 @@ import 'package:otzaria/plugins/view/plugin_tab_page.dart';
 import 'package:otzaria/widgets/context_overlay_panel.dart';
 import 'package:otzaria/plugins/view/plugin_install_screen.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 
 abstract class ToolDescriptor {
   final String toolId;
@@ -441,6 +442,14 @@ class ToolsScreenState extends State<ToolsScreen>
     _requestCalendarFocus();
   }
 
+  void openToolForTour(String toolId) {
+    final index = _descriptors.indexWhere((d) => d.toolId == toolId);
+    if (index == -1) {
+      return;
+    }
+    _changeTab(index);
+  }
+
   @override
   void dispose() {
     FocusRepository().unregisterMoreScreenFocusRequester(requestActiveTabFocus);
@@ -493,6 +502,7 @@ class ToolsScreenState extends State<ToolsScreen>
               children: [
                 for (final descriptor in group.tools)
                   ListTile(
+                    key: tourToolTabTargetKeys[descriptor.toolId],
                     leading: descriptor is BuiltInToolDescriptor
                         ? (descriptor.imageIcon != null
                             ? ImageIcon(
@@ -650,6 +660,8 @@ class ToolsScreenState extends State<ToolsScreen>
                                               index < _descriptors.length;
                                               index++) ...[
                                             _DesktopTopNavItem(
+                                              key: tourToolTabTargetKeys[
+                                                  _descriptors[index].toolId],
                                               icon: _descriptors[index]
                                                       is BuiltInToolDescriptor
                                                   ? (_descriptors[index]
@@ -849,6 +861,7 @@ class _DesktopTopNavItem extends StatelessWidget {
   final VoidCallback onTap;
 
   const _DesktopTopNavItem({
+    super.key,
     required this.icon,
     required this.iconFilled,
     required this.imageAsset,

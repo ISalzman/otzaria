@@ -8,6 +8,7 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_card.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 
 /// טאב קיצורי מקלדת — מוצג רק בדסקטופ.
 class ShortcutsSettingsTab extends StatelessWidget {
@@ -65,6 +66,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
       primary: true,
       padding: const EdgeInsets.all(16.0),
       child: ToolPanelWrapper(
+        key: tourShortcutsSettingsTargetKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

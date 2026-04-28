@@ -30,10 +30,8 @@ class NavigationBloc extends Bloc<NavigationEvent, NavigationState> {
     Emitter<NavigationState> emit,
   ) {
     final isEmpty = _repository.checkLibraryIsEmpty();
-    emit(state.copyWith(isLibraryEmpty: isEmpty));
+    emit(state.copyWith(isLibraryEmpty: isEmpty, hasCheckedLibrary: true));
   }
-
-
 
   Future<void> refreshLibrary() async {
     await _repository.refreshLibrary();

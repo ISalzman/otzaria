@@ -172,6 +172,8 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
     }
   }
 
+  Future<void> showMenu() => _showAdaptiveMenu();
+
   @override
   Widget build(BuildContext context) {
     assert(widget.entries != null || widget.itemBuilder != null);
@@ -404,15 +406,13 @@ double? _calculateAppMenuLabelMaxWidth(
 // buildAppPopupMenuItem
 // ═══════════════════════════════════════════════════════════════════════════
 
-PopupMenuEntry<T> buildAppPopupMenuItem<T>(
-  BuildContext context,
-  AppMenuEntry<T> entry,
-  AppMenuMetrics metrics,
-  T? selectedValue,
-) {
+PopupMenuEntry<T> buildAppPopupMenuItem<T>(BuildContext context,
+    AppMenuEntry<T> entry, AppMenuMetrics metrics, T? selectedValue,
+    {Key? key}) {
   final isSelected = selectedValue != null && entry.value == selectedValue;
 
   return PopupMenuItem<T>(
+    key: key,
     value: entry.value,
     enabled: entry.enabled,
     height: metrics.itemHeight,
@@ -574,11 +574,13 @@ Future<T?> showAppMenu<T>({
 class AppContextMenuRegion extends StatefulWidget {
   final Widget child;
   final List<AppContextMenuEntry> Function(BuildContext) menuBuilder;
+  final Map<String, GlobalKey>? menuItemKeysByLabel;
 
   const AppContextMenuRegion({
     super.key,
     required this.child,
     required this.menuBuilder,
+    this.menuItemKeysByLabel,
   });
 
   @override
@@ -622,6 +624,20 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
     if (_isMenuOpen && mounted) {
       setState(() => _isMenuOpen = false);
     }
+  }
+
+  void closeMenu() {
+    _closeContextMenu();
+  }
+
+  Future<void> showMenu() async {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return;
+    }
+    await _openContextMenu(renderObject.localToGlobal(renderObject.size.center(
+      Offset.zero,
+    )));
   }
 
   double _resolveContextMenuMaxWidth(
@@ -793,21 +809,21 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
                   maintainAnimation: false,
                   maintainState: true,
                   child: _AppContextMenuPanel(
-                  key: _menuPanelKey,
-                  entries: entries,
-                  metrics: metrics,
-                  menuStyle: menuStyle,
-                  maxWidth: maxMenuWidth,
-                  maxHeight: maxMenuHeight,
-                  buildChildren: (panelContext, panelEntries) =>
-                      _buildMenuPanelChildren(
-                    panelContext,
-                    panelEntries,
-                    metrics,
-                    maxMenuWidth,
-                    submenuControllers,
+                    key: _menuPanelKey,
+                    entries: entries,
+                    metrics: metrics,
+                    menuStyle: menuStyle,
+                    maxWidth: maxMenuWidth,
+                    maxHeight: maxMenuHeight,
+                    buildChildren: (panelContext, panelEntries) =>
+                        _buildMenuPanelChildren(
+                      panelContext,
+                      panelEntries,
+                      metrics,
+                      maxMenuWidth,
+                      submenuControllers,
+                    ),
                   ),
-                ),
                 ),
               ),
             ],
@@ -873,6 +889,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
       if (entry.childrenBuilder != null) {
         if (!entry.enabled) {
           return MenuItemButton(
+            key: widget.menuItemKeysByLabel?[entry.label ?? ''],
             style: buildAppSubmenuItemStyle(context, metrics),
             onPressed: null,
             child: _buildAppMenuRowContent(
@@ -891,6 +908,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
 
         final controller = submenuControllers[entry];
         return _LazyAppSubmenuButton(
+          key: widget.menuItemKeysByLabel?[entry.label ?? ''],
           entry: entry,
           entriesBuilder: () => _normalizeEntries(entry.childrenBuilder!()),
           metrics: metrics,
@@ -916,9 +934,10 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
       if (rawChildren != null && rawChildren.isNotEmpty) {
         final normalizedChildren = _normalizeEntries(rawChildren);
         final hasEnabledChildren =
-          _hasEnabledAppContextMenuEntries(normalizedChildren);
+            _hasEnabledAppContextMenuEntries(normalizedChildren);
         if (!entry.enabled || !hasEnabledChildren) {
           return MenuItemButton(
+            key: widget.menuItemKeysByLabel?[entry.label ?? ''],
             style: buildAppSubmenuItemStyle(context, metrics),
             onPressed: null,
             child: _buildAppMenuRowContent(
@@ -937,6 +956,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
 
         final controller = submenuControllers[entry];
         return _LazyAppSubmenuButton(
+          key: widget.menuItemKeysByLabel?[entry.label ?? ''],
           entry: entry,
           entriesBuilder: () => normalizedChildren,
           metrics: metrics,
@@ -959,6 +979,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
       }
 
       return MenuItemButton(
+        key: widget.menuItemKeysByLabel?[entry.label ?? ''],
         style: buildAppSubmenuItemStyle(context, metrics),
         onPressed: entry.enabled
             ? () {
@@ -1053,7 +1074,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
       if (rawChildren != null && rawChildren.isNotEmpty) {
         final normalizedChildren = _normalizeEntries(rawChildren);
         final hasEnabledChildren =
-          _hasEnabledAppContextMenuEntries(normalizedChildren);
+            _hasEnabledAppContextMenuEntries(normalizedChildren);
         if (!entry.enabled || !hasEnabledChildren) {
           return MenuItemButton(
             style: buildAppSubmenuItemStyle(context, metrics),
@@ -1123,6 +1144,7 @@ class _LazyAppSubmenuButton extends StatefulWidget {
   final List<Widget> Function(List<AppContextMenuEntry>, double) buildChildren;
 
   const _LazyAppSubmenuButton({
+    super.key,
     required this.entry,
     required this.entriesBuilder,
     required this.metrics,

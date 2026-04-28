@@ -10,6 +10,7 @@ import 'package:otzaria/widgets/keyboard_navigator.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/layout_tokens.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 
 /// רוחב מקסימלי לתוכן ההגדרות — מרכוז על מסכים רחבים
 // kSettingsContentMaxWidth הוסר — משתמשים ב-LayoutConstraints.panelContentMaxWidth מ-layout_tokens.dart
@@ -225,6 +226,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                             children: [
                               for (final idx in group.indices)
                                 ListTile(
+                                  key: tourSettingsTabTargetKeys[idx],
                                   leading: Icon(_tabsData[idx].icon,
                                       color: colorScheme.primary),
                                   title: Text(_tabsData[idx].label),
@@ -328,6 +330,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 2),
                                       child: Material(
+                                        key: tourSettingsTabTargetKeys[index],
                                         color: isSelected
                                             ? colorScheme.primary
                                                 .withValues(alpha: 0.14)

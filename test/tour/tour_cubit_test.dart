@@ -1,0 +1,286 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/models/tour_step.dart';
+import 'package:otzaria/tour/models/tour_steps.dart';
+import 'package:otzaria/tour/view/tour_overlay_screen.dart';
+
+import '../helpers/memory_settings_cache.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() async {
+    await Settings.init(cacheProvider: MemorySettingsCache());
+  });
+
+  test('בונה סיור מלא עם 26 שלבים כאשר הספרייה טעונה', () {
+    final steps = TourSteps.build(libraryLoaded: true);
+
+    expect(steps, hasLength(26));
+    expect(steps.first.id, 'welcome');
+    expect(steps.last.id, 'finish');
+    expect(steps.any((step) => step.id == 'empty_library'), isFalse);
+  });
+
+  test('בונה סיור מקוצר עם שלב ספרייה ריקה כאשר הספרייה אינה טעונה', () {
+    final steps = TourSteps.build(libraryLoaded: false);
+
+    expect(steps.first.id, 'welcome');
+    expect(steps[1].id, 'empty_library');
+    expect(steps.any((step) => step.id == 'library'), isFalse);
+    expect(steps.last.title, 'הסיור המקוצר הסתיים');
+  });
+
+  test('מציג קיצורי מקלדת לפי Settings ולא לפי ברירת מחדל קבועה', () async {
+    await Settings.setValue<String>(
+      'key-shortcut-open-settings',
+      'ctrl+comma',
+    );
+    await Settings.setValue<String>('key-shortcut-open-more', 'alt+m');
+
+    final navigationStep = TourSteps.build(libraryLoaded: true)
+        .firstWhere((step) => step.id == 'navigation');
+
+    expect(navigationStep.body, contains('הגדרות Ctrl+,'));
+    expect(navigationStep.body, contains('כלים Alt+M'));
+  });
+
+  test('TourCubit לא מתחיל אם tour_status כבר נשמר', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    final cubit = TourCubit();
+
+    cubit.startIfNeeded(libraryLoaded: true);
+
+    expect(cubit.state.isActive, isFalse);
+    await cubit.close();
+  });
+
+  test('TourCubit שומר skipped כאשר מדלגים על הסיור', () async {
+    final cubit = TourCubit()..start(libraryLoaded: true);
+
+    await cubit.skip();
+
+    expect(cubit.state.isActive, isFalse);
+    expect(Settings.getValue<String>(TourSteps.statusKey), TourSteps.skipped);
+    await cubit.close();
+  });
+
+  test('TourCubit שומר skipped_without_library כאשר מדלגים בלי ספרייה',
+      () async {
+    final cubit = TourCubit()..start(libraryLoaded: false);
+
+    await cubit.skip();
+
+    expect(cubit.state.isActive, isFalse);
+    expect(
+      Settings.getValue<String>(TourSteps.statusKey),
+      TourSteps.skippedWithoutLibrary,
+    );
+    await cubit.close();
+  });
+
+  test('TourCubit שומר completed_without_library כאשר מסיימים בלי ספרייה',
+      () async {
+    final cubit = TourCubit()..start(libraryLoaded: false);
+
+    await cubit.complete();
+
+    expect(cubit.state.isActive, isFalse);
+    expect(
+      Settings.getValue<String>(TourSteps.statusKey),
+      TourSteps.completedWithoutLibrary,
+    );
+    await cubit.close();
+  });
+
+  test('TourCubit מציג סיור מלא פעם אחת אחרי סיור מקוצר בלי ספרייה', () async {
+    await Settings.setValue<String>(
+      TourSteps.statusKey,
+      TourSteps.skippedWithoutLibrary,
+    );
+    final cubit = TourCubit();
+
+    cubit.startIfNeeded(libraryLoaded: false);
+    expect(cubit.state.isActive, isFalse);
+
+    cubit.startIfNeeded(libraryLoaded: true);
+    expect(cubit.state.isActive, isTrue);
+    expect(cubit.state.libraryLoaded, isTrue);
+
+    await cubit.skip();
+    expect(Settings.getValue<String>(TourSteps.statusKey), TourSteps.skipped);
+
+    cubit.startIfNeeded(libraryLoaded: true);
+    expect(cubit.state.isActive, isFalse);
+    await cubit.close();
+  });
+
+  test('TourCubit מציג סיור מלא אחרי סיום סיור מקוצר בלי ספרייה', () async {
+    await Settings.setValue<String>(
+      TourSteps.statusKey,
+      TourSteps.completedWithoutLibrary,
+    );
+    final cubit = TourCubit();
+
+    cubit.startIfNeeded(libraryLoaded: true);
+
+    expect(cubit.state.isActive, isTrue);
+    expect(cubit.state.libraryLoaded, isTrue);
+    await cubit.complete();
+    expect(
+      Settings.getValue<String>(TourSteps.statusKey),
+      TourSteps.completed,
+    );
+    await cubit.close();
+  });
+
+  test('TourCubit לא מוחק סטטוס קודם בהפעלה ידנית מההגדרות', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    final cubit = TourCubit();
+
+    await cubit.restart(libraryLoaded: true);
+
+    expect(cubit.state.isActive, isTrue);
+    expect(cubit.state.currentStep?.id, 'restart_welcome');
+    expect(Settings.getValue<String>(TourSteps.statusKey), TourSteps.completed);
+
+    await cubit.close();
+
+    final nextSessionCubit = TourCubit();
+    nextSessionCubit.startIfNeeded(libraryLoaded: true);
+
+    expect(nextSessionCubit.state.isActive, isFalse);
+    expect(Settings.getValue<String>(TourSteps.statusKey), TourSteps.completed);
+    await nextSessionCubit.close();
+  });
+
+  test('TourCubit מכבה autoplay כאשר קופצים ידנית לשלב אחר', () async {
+    final cubit = TourCubit()..start(libraryLoaded: true);
+
+    cubit.toggleAutoPlay();
+    expect(cubit.state.isAutoPlaying, isTrue);
+
+    cubit.goToStep(1);
+
+    expect(cubit.state.currentIndex, 1);
+    expect(cubit.state.isAutoPlaying, isFalse);
+    await cubit.close();
+  });
+
+  test('TourCubit מאפס autoplay כאשר מתחילים סיור מחדש', () async {
+    final cubit = TourCubit()..start(libraryLoaded: true);
+
+    cubit.toggleAutoPlay();
+    expect(cubit.state.isAutoPlaying, isTrue);
+
+    cubit.start(libraryLoaded: true);
+
+    expect(cubit.state.currentIndex, 0);
+    expect(cubit.state.isAutoPlaying, isFalse);
+    await cubit.close();
+  });
+
+  test('Spotlight של הניווט מוצג בצד ימין בממשק RTL', () {
+    final rect = tourTargetRectFor(
+      TourSpotlightArea.navigation,
+      const Size(1200, 800),
+      TextDirection.rtl,
+    );
+
+    expect(rect.left, 1122);
+    expect(rect.right, 1200);
+    expect(rect.bottom, 798);
+  });
+
+  test('Spotlight של הניווט מוצג בצד שמאל בממשק LTR', () {
+    final rect = tourTargetRectFor(
+      TourSpotlightArea.navigation,
+      const Size(1200, 800),
+      TextDirection.ltr,
+    );
+
+    expect(rect.left, 0);
+    expect(rect.right, 78);
+    expect(rect.bottom, 798);
+  });
+
+  test('Spotlight של מסך מלא ב-RTL כולל את אזור התוכן עד סרגל הניווט', () {
+    final rect = tourTargetRectFor(
+      TourSpotlightArea.fullScreen,
+      const Size(1200, 800),
+      TextDirection.rtl,
+    );
+
+    expect(rect.left, 8);
+    expect(rect.top, 38);
+    expect(rect.right, 1126);
+    expect(rect.bottom, 792);
+  });
+
+  test('Spotlight של מסך מלא ב-LTR מתחיל אחרי סרגל הניווט', () {
+    final rect = tourTargetRectFor(
+      TourSpotlightArea.fullScreen,
+      const Size(1200, 800),
+      TextDirection.ltr,
+    );
+
+    expect(rect.left, 74);
+    expect(rect.top, 38);
+    expect(rect.right, 1192);
+    expect(rect.bottom, 792);
+  });
+
+  test('Spotlight של חיפוש הספרייה יושב על שורת החיפוש ולא נמוך מדי', () {
+    final rect = tourTargetRectFor(
+      TourSpotlightArea.librarySearch,
+      const Size(1200, 800),
+      TextDirection.rtl,
+    );
+
+    expect(rect.top, 40);
+    expect(rect.bottom, 92);
+    expect(rect.left, 112);
+    expect(rect.right, 1090);
+  });
+
+  test('Spotlight של קטגוריות הספרייה מכסה את גריד הכרטיסים ב-RTL', () {
+    final rect = tourTargetRectFor(
+      TourSpotlightArea.libraryCategories,
+      const Size(1200, 800),
+      TextDirection.rtl,
+    );
+
+    expect(rect.left, 444);
+    expect(rect.top, 96);
+    expect(rect.right, 1126);
+    expect(rect.bottom, 758);
+  });
+
+  test('Spotlight של פתיחת ספר מוצג על כרטיס ספר בגריד הימני', () {
+    final rect = tourTargetRectFor(
+      TourSpotlightArea.bookCard,
+      const Size(1200, 800),
+      TextDirection.rtl,
+    );
+
+    expect(rect.left, 744);
+    expect(rect.top, 116);
+    expect(rect.right, 1080);
+    expect(rect.bottom, 250);
+  });
+
+  test('Spotlight של טאבים יושב על שורת הטאבים ולא על סרגל הספר', () {
+    final rect = tourTargetRectFor(
+      TourSpotlightArea.tabs,
+      const Size(1200, 800),
+      TextDirection.rtl,
+    );
+
+    expect(rect.left, 468);
+    expect(rect.top, 8);
+    expect(rect.right, 732);
+    expect(rect.bottom, 44);
+  });
+}
