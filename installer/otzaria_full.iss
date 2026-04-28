@@ -36,7 +36,7 @@ DisableDirPage=no
 
 [InstallDelete]
 ; מחיקת ספריית נתונים ישנה לפני פריסת מסד הנתונים החדש
-Type: filesandordirs; Name: "{code:GetDataDir}\books"
+Type: filesandordirs; Name: "{code:GetSelectedBooksPath}"
 
 [Dirs]
 Name: "{code:GetDataDir}"; Permissions: users-modify
@@ -124,6 +124,14 @@ begin
     Result := ExpandConstant('{commonappdata}\otzaria')
   else
     Result := ExpandConstant('{userappdata}\otzaria');
+end;
+
+function GetSelectedBooksPath(Param: String): String;
+begin
+  if SelectedBooksPath <> '' then
+    Result := SelectedBooksPath
+  else
+    Result := GetDataDir('') + '\books';
 end;
 
 // ─── בדיקות רכיבי מערכת ───────────────────────────────────────────────────
@@ -385,102 +393,134 @@ begin
     WarnLabel.Caption := '';
 end;
 
+function EscapeJsonString(const Value: String): String;
+var
+  i: Integer;
+begin
+  Result := '';
+  for i := 1 to Length(Value) do
+  begin
+    if Value[i] = '\' then
+      Result := Result + '\\'
+    else if Value[i] = '"' then
+      Result := Result + '\"'
+    else
+      Result := Result + Value[i];
+  end;
+end;
+
+function LoadTextFile(const FileName: String): String;
+var
+  Lines: TArrayOfString;
+  i: Integer;
+begin
+  Result := '';
+  if not LoadStringsFromFile(FileName, Lines) then
+    exit;
+
+  for i := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    if i > 0 then
+      Result := Result + #13#10;
+    Result := Result + Lines[i];
+  end;
+end;
+
+function FindJsonStringEnd(const Text: String; StartPos: Integer): Integer;
+begin
+  Result := StartPos;
+  while Result <= Length(Text) do
+  begin
+    if (Text[Result] = '"') and ((Result = StartPos) or (Text[Result - 1] <> '\')) then
+      exit;
+    Result := Result + 1;
+  end;
+
+  Result := 0;
+end;
+
 // כתיבת נתיב הספרים ל-shared_preferences.json של האפליקציה
 procedure WriteLibraryPathToPrefs(const LibraryPath: String);
+const
+  SharedPrefsKey = '"flutter.key-library-path":';
+  LegacyPrefsKey = '"key-library-path":';
 var
-  PrefsDir, PrefsFile, JsonContent, JsonPath, NewLine: String;
-  Lines: TArrayOfString;
-  i, LastBrace: Integer;
-  Found, HasOtherKeys: Boolean;
+  PrefsDir, PrefsFile, JsonContent, NewEntry: String;
+  KeyPos, ValueStart, ValueEnd, PairEnd, LastBrace, ExistingLength: Integer;
 begin
-  PrefsDir  := ExpandConstant('{userappdata}\otzaria');
+  PrefsDir := ExpandConstant('{userappdata}\otzaria');
   PrefsFile := PrefsDir + '\shared_preferences.json';
 
   ForceDirectories(PrefsDir);
 
-  // החלפת \ ב-\\ ידנית — StringReplace ו-StringChange אינן אמינות ב-Inno Setup
-  JsonPath := '';
-  for i := 1 to Length(LibraryPath) do
-  begin
-    if LibraryPath[i] = '\' then
-      JsonPath := JsonPath + '\\'
-    else
-      JsonPath := JsonPath + LibraryPath[i];
-  end;
-  NewLine := '"key-library-path":"' + JsonPath + '"';
+  NewEntry := SharedPrefsKey + '"' + EscapeJsonString(LibraryPath) + '"';
 
   if FileExists(PrefsFile) then
-  begin
-    LoadStringsFromFile(PrefsFile, Lines);
-    Found := False;
-
-    // עדכון שורה קיימת — ללא פסיק (JSON לא יודע מה מגיע אחרי)
-    for i := 0 to GetArrayLength(Lines) - 1 do
-    begin
-      if Pos('"key-library-path":', Lines[i]) > 0 then
-      begin
-        if (Lines[i] <> '') and (Lines[i][Length(Lines[i])] = ',') then
-          Lines[i] := '  ' + NewLine + ','
-        else
-          Lines[i] := '  ' + NewLine;
-        Found := True;
-      end;
-    end;
-
-    if Found then
-    begin
-      // בנה JSON מחדש נקי — הסר פסיקים עודפים ואחד את המבנה
-      JsonContent := '';
-      for i := 0 to GetArrayLength(Lines) - 1 do
-        JsonContent := JsonContent + Lines[i] + #13#10;
-      SaveStringToFile(PrefsFile, JsonContent, False);
-      exit;
-    end;
-
-    // מפתח לא קיים — מוסיף. בדיקה אם הקובץ ריק ({})
-    HasOtherKeys := False;
-    for i := 0 to GetArrayLength(Lines) - 1 do
-    begin
-      if (Pos('"', Lines[i]) > 0) and (Pos('{', Lines[i]) = 0) and (Pos('}', Lines[i]) = 0) then
-      begin
-        HasOtherKeys := True;
-        break;
-      end;
-    end;
-
+    JsonContent := Trim(LoadTextFile(PrefsFile))
+  else
     JsonContent := '';
-    for i := 0 to GetArrayLength(Lines) - 1 do
-      JsonContent := JsonContent + Lines[i] + #13#10;
 
-    // מחפש } אחרון
-    LastBrace := 0;
-    for i := Length(JsonContent) downto 1 do
+  if JsonContent = '' then
+  begin
+    SaveStringToFile(PrefsFile, '{' + NewEntry + '}', False);
+    exit;
+  end;
+
+  KeyPos := Pos(SharedPrefsKey, JsonContent);
+  ExistingLength := Length(SharedPrefsKey);
+  if KeyPos = 0 then
+  begin
+    KeyPos := Pos(LegacyPrefsKey, JsonContent);
+    ExistingLength := Length(LegacyPrefsKey);
+  end;
+
+  if KeyPos > 0 then
+  begin
+    ValueStart := KeyPos + ExistingLength;
+    while (ValueStart <= Length(JsonContent)) and (JsonContent[ValueStart] = ' ') do
+      ValueStart := ValueStart + 1;
+
+    if (ValueStart <= Length(JsonContent)) and (JsonContent[ValueStart] = '"') then
     begin
-      if JsonContent[i] = '}' then
+      ValueEnd := FindJsonStringEnd(JsonContent, ValueStart + 1);
+      if ValueEnd > 0 then
       begin
-        LastBrace := i;
-        break;
+        PairEnd := ValueEnd + 1;
+        while (PairEnd <= Length(JsonContent)) and (JsonContent[PairEnd] = ' ') do
+          PairEnd := PairEnd + 1;
+        JsonContent :=
+          Copy(JsonContent, 1, KeyPos - 1) +
+          NewEntry +
+          Copy(JsonContent, PairEnd, Length(JsonContent) - PairEnd + 1);
+        SaveStringToFile(PrefsFile, JsonContent, False);
+        exit;
       end;
     end;
+  end;
 
-    if LastBrace > 0 then
-    begin
-      if HasOtherKeys then
-        // יש מפתחות אחרים — מוסיף פסיק אחרי האחרון שלהם ואחר כך את השורה החדשה
-        JsonContent := Copy(JsonContent, 1, LastBrace - 1) +
-                       ',' + #13#10 + '  ' + NewLine + #13#10 + '}'
-      else
-        // קובץ ריק {} — מוסיף בלי פסיק
-        JsonContent := '{' + #13#10 + '  ' + NewLine + #13#10 + '}';
-      SaveStringToFile(PrefsFile, JsonContent, False);
-    end;
-  end
+  LastBrace := Length(JsonContent);
+  while (LastBrace > 0) and (JsonContent[LastBrace] <> '}') do
+    LastBrace := LastBrace - 1;
+
+  if (LastBrace = 0) or (Trim(JsonContent) = '{}') then
+    JsonContent := '{' + NewEntry + '}'
   else
   begin
-    // קובץ לא קיים — יוצר חדש תקין
-    JsonContent := '{' + #13#10 + '  ' + NewLine + #13#10 + '}';
-    SaveStringToFile(PrefsFile, JsonContent, False);
+    PairEnd := LastBrace - 1;
+    while (PairEnd > 0) and (JsonContent[PairEnd] <= ' ') do
+      PairEnd := PairEnd - 1;
+
+    if (PairEnd > 0) and (JsonContent[PairEnd] <> '{') and (JsonContent[PairEnd] <> ',') then
+      JsonContent :=
+        Copy(JsonContent, 1, LastBrace - 1) + ',' + NewEntry +
+        Copy(JsonContent, LastBrace, Length(JsonContent) - LastBrace + 1)
+    else
+      JsonContent :=
+        Copy(JsonContent, 1, LastBrace - 1) + NewEntry +
+        Copy(JsonContent, LastBrace, Length(JsonContent) - LastBrace + 1);
   end;
+
+  SaveStringToFile(PrefsFile, JsonContent, False);
 end;
 
 function ShouldInstallVC: Boolean;
