@@ -26,6 +26,7 @@ class DialogKeyboardNavigator extends StatelessWidget {
   final int focusedIndex;
   final ValueChanged<int> onFocusChange;
   final FocusNode? textFieldFocusNode;
+  final bool handleEnterKey;
 
   const DialogKeyboardNavigator({
     super.key,
@@ -35,6 +36,7 @@ class DialogKeyboardNavigator extends StatelessWidget {
     required this.focusedIndex,
     required this.onFocusChange,
     this.textFieldFocusNode,
+    this.handleEnterKey = true,
   });
 
   @override
@@ -49,6 +51,9 @@ class DialogKeyboardNavigator extends StatelessWidget {
         // אם הפוקוס בשדה הטקסט, Enter שולח את הטופס
         if (textFieldFocusNode?.hasFocus ?? false) {
           if (event.logicalKey == LogicalKeyboardKey.enter) {
+            if (!handleEnterKey) {
+              return KeyEventResult.ignored;
+            }
             onConfirm?.call();
             return KeyEventResult.handled;
           }
@@ -64,6 +69,9 @@ class DialogKeyboardNavigator extends StatelessWidget {
 
         // Enter — לחיצה על הכפתור הממוקד
         if (event.logicalKey == LogicalKeyboardKey.enter) {
+          if (!handleEnterKey) {
+            return KeyEventResult.ignored;
+          }
           if (focusedIndex == 1) {
             onConfirm?.call();
           } else {
@@ -115,6 +123,7 @@ mixin DialogNavigationMixin<T extends StatefulWidget> on State<T> {
     required VoidCallback onConfirm,
     required VoidCallback onCancel,
     FocusNode? textFieldFocusNode,
+    bool handleEnterKey = true,
   }) {
     return DialogKeyboardNavigator(
       focusedIndex: focusedButtonIndex,
@@ -122,6 +131,7 @@ mixin DialogNavigationMixin<T extends StatefulWidget> on State<T> {
       onConfirm: onConfirm,
       onCancel: onCancel,
       textFieldFocusNode: textFieldFocusNode,
+      handleEnterKey: handleEnterKey,
       child: child,
     );
   }

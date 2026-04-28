@@ -54,6 +54,8 @@ class DirectErrorReportService {
   static const String _endpoint = 'https://otzaria.org/api/reportingerrors';
   static const String _queueBoxName = 'error_reports_queue';
   static const String _queueKey = 'pending_reports';
+  static const String _sentKey = 'sent_reports';
+  static const int _maxSentReportsToKeep = 100;
   static const Duration _timeout = Duration(seconds: 10);
   static const Duration _flushInterval = Duration(minutes: 5);
   static const int _maxQueuedFlushPerRun = 20;
@@ -65,15 +67,24 @@ class DirectErrorReportService {
 
   final http.Client _client;
   final HiveListRepository<DirectErrorReport> _queueRepository;
+  final HiveListRepository<DirectErrorReport> _sentRepository;
 
   DirectErrorReportService({
     http.Client? client,
     HiveListRepository<DirectErrorReport>? queueRepository,
+    HiveListRepository<DirectErrorReport>? sentRepository,
   })  : _client = client ?? http.Client(),
         _queueRepository = queueRepository ??
             HiveListRepository<DirectErrorReport>(
               boxName: _queueBoxName,
               key: _queueKey,
+              fromJson: DirectErrorReport.fromJson,
+              toJson: (report) => report.toJson(),
+            ),
+        _sentRepository = sentRepository ??
+            HiveListRepository<DirectErrorReport>(
+              boxName: _queueBoxName,
+              key: _sentKey,
               fromJson: DirectErrorReport.fromJson,
               toJson: (report) => report.toJson(),
             );
@@ -119,6 +130,37 @@ class DirectErrorReportService {
     return _queueRepository.load();
   }
 
+  Future<List<DirectErrorReport>> getSentReports() async {
+    return _sentRepository.load();
+  }
+
+  Future<void> deleteSentReport(String reportId) async {
+    final reports = await _sentRepository.load();
+    reports.removeWhere((report) => report.id == reportId);
+    await _sentRepository.save(reports);
+  }
+
+  Future<void> clearSentReports() async {
+    await _sentRepository.clear();
+  }
+
+  Future<void> updatePendingReport(DirectErrorReport report) async {
+    final reports = await _queueRepository.load();
+    final index = reports.indexWhere((item) => item.id == report.id);
+    if (index == -1) {
+      return;
+    }
+
+    reports[index] = report;
+    await _queueRepository.save(reports);
+  }
+
+  Future<void> deletePendingReport(String reportId) async {
+    final reports = await _queueRepository.load();
+    reports.removeWhere((report) => report.id == reportId);
+    await _queueRepository.save(reports);
+  }
+
   Future<void> queueReport(
     DirectErrorReport report, {
     DirectErrorReportQueueType queueType = DirectErrorReportQueueType.manual,
@@ -128,6 +170,16 @@ class DirectErrorReportService {
 
   Future<void> clearPendingReports() async {
     await _queueRepository.clear();
+  }
+
+  Future<DirectReportDeliveryResult> submitPendingReport(
+    DirectErrorReport report,
+  ) async {
+    final result = await submitReport(report);
+    if (result.isSent) {
+      await deletePendingReport(report.id);
+    }
+    return result;
   }
 
   String buildOfflineSendBatchScript(List<DirectErrorReport> reports) {
@@ -186,6 +238,7 @@ exit /b %OTZARIA_EXIT_CODE%
 
     final attemptResult = await _trySend(report);
     if (attemptResult.isSuccess) {
+      await _saveSentReport(report);
       unawaited(flushPendingReports(onlyAutomaticRetry: true));
       if (_isSefariaReport(report)) {
         return DirectReportDeliveryResult.sent(
@@ -262,6 +315,7 @@ exit /b %OTZARIA_EXIT_CODE%
 
         if (attemptResult.isSuccess) {
           remainingReports.removeWhere((item) => item.id == report.id);
+          await _saveSentReport(report);
           sentCount++;
           continue;
         }
@@ -316,6 +370,16 @@ exit /b %OTZARIA_EXIT_CODE%
 
     pendingReports.add(report.copyWith(queueType: queueType));
     await _queueRepository.save(pendingReports);
+  }
+
+  Future<void> _saveSentReport(DirectErrorReport report) async {
+    final sentReports = await _sentRepository.load();
+    sentReports.removeWhere((item) => item.id == report.id);
+    sentReports.insert(0, report);
+    if (sentReports.length > _maxSentReportsToKeep) {
+      sentReports.removeRange(_maxSentReportsToKeep, sentReports.length);
+    }
+    await _sentRepository.save(sentReports);
   }
 
   Future<_SendAttemptResult> _trySend(DirectErrorReport report) async {
