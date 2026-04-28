@@ -20,6 +20,9 @@ Future<int?> textToPdfPage(TextBook textBook, int textIndex) async {
   final key = '${pdfBook.path}::${textBook.title}';
   final cached = _pageMapCache[key];
   if (cached != null) {
+    if (!cached.hasReliableAnchors) {
+      return null;
+    }
     return cached.textToPdf(textIndex);
   }
 
@@ -30,6 +33,9 @@ Future<int?> textToPdfPage(TextBook textBook, int textIndex) async {
         .then((doc) => doc.loadOutline());
     final map =
         _pageMapCache[key] ??= await _buildPageMap(pdfBook, outline, textBook);
+    if (!map.hasReliableAnchors) {
+      return null;
+    }
 
     return map.textToPdf(textIndex);
   } catch (e) {
@@ -52,6 +58,9 @@ Future<int?> pdfToTextPage(PdfBook pdfBook, List<PdfOutlineNode> outline,
   final key = '${pdfBook.path}::${textBook.title}';
   final map =
       _pageMapCache[key] ??= await _buildPageMap(pdfBook, outline, textBook);
+  if (!map.hasReliableAnchors) {
+    return null;
+  }
 
   return map.pdfToText(pdfPage);
 }
@@ -71,7 +80,9 @@ Future<PageMap> _buildPageMap(
     debugPrint(
         '🗺️ [PDF-DEBUG] First 5 matches: ${List.generate(map.pdfPages.length > 5 ? 5 : map.pdfPages.length, (i) => "pdf${map.pdfPages[i]}→txt${map.textIndices[i]}").join(", ")}');
   }
-  if (anchorsPdf.isNotEmpty && anchorsText.isNotEmpty && map.pdfPages.length < 3) {
+  if (anchorsPdf.isNotEmpty &&
+      anchorsText.isNotEmpty &&
+      map.pdfPages.length < 3) {
     debugPrint(
         '🗺️ [PDF-DEBUG] ⚠️ POOR MATCH! PDF sample refs: ${anchorsPdf.take(3).map((a) => '"${a.ref}"').join(", ")}');
     debugPrint(
