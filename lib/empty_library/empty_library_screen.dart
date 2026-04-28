@@ -342,16 +342,16 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
               ),
             ),
           ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          textDirection: TextDirection.rtl,
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 16,
+          runSpacing: 12,
           children: [
             FilledButton.icon(
               onPressed: state.isLoading ? null : () => _pickDirectory(context),
               icon: const Icon(FluentIcons.folder_open_24_regular),
               label: const Text('בחר תיקיית ספרייה'),
             ),
-            const SizedBox(width: 16),
             ElevatedButton.icon(
               onPressed:
                   state.isLoading ? null : () => _pickArchiveFile(context),
