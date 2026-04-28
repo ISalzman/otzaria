@@ -17,7 +17,7 @@ jobs:
     outputs:
       is_version: ${{ steps.check.outputs.is_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - name: Check if commit message is a version tag
         id: check
         run: |
@@ -41,7 +41,7 @@ jobs:
     #   CARGO_HOME:  ${{ github.workspace }}\.cargo
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -70,7 +70,7 @@ jobs:
       #   uses: dtolnay/rust-toolchain@stable
 
       # - name: Cache cargo registry and git
-      #   uses: actions/cache@v4
+      #   uses: actions/cache@v4.2.3
       #   with:
       #     path: |
       #       ${{ env.CARGO_HOME }}\registry
@@ -275,21 +275,19 @@ jobs:
             exit 1
           }
 
-      - name: Download Visual C++ Redistributable for full installer
+      - name: Download dependencies for full installer
         if: true
         shell: pwsh
         run: |
-          Write-Host "Downloading Visual C++ Redistributable for full installer..."
-          $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/abbodi1406/vcredist/releases/latest"
-          $asset = $latestRelease.assets | Where-Object { $_.name -eq "VisualCppRedist_AIO_x86_x64.exe" }
-          if (-not $asset) {
-            Write-Host "::error::Could not find VisualCppRedist_AIO_x86_x64.exe in latest release"
-            exit 1
-          }
-          Write-Host "Downloading from: $($asset.browser_download_url)"
-          Write-Host "Size: $([math]::Round($asset.size / 1MB, 2)) MB"
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "installer\VisualCppRedist_AIO_x86_x64.exe"
-          Write-Host "Visual C++ Redistributable downloaded successfully"
+          Write-Host "Downloading Visual C++ Redistributable (official Microsoft)..."
+          Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "installer\vc_redist.x64.exe"
+          $size = [math]::Round((Get-Item "installer\vc_redist.x64.exe").Length / 1MB, 2)
+          Write-Host "vc_redist.x64.exe downloaded successfully ($size MB)"
+
+          Write-Host "Downloading WebView2 Bootstrapper (Microsoft)..."
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "installer\MicrosoftEdgeWebview2Setup.exe"
+          $size = [math]::Round((Get-Item "installer\MicrosoftEdgeWebview2Setup.exe").Length / 1MB, 2)
+          Write-Host "MicrosoftEdgeWebview2Setup.exe downloaded successfully ($size MB)"
 
       - name: Build Inno Setup installer
         shell: pwsh
@@ -335,19 +333,19 @@ jobs:
           }
 
       - name: Upload Windows installer (regular)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-windows-installer
           path: installer/otzaria-*-windows.exe
 
       - name: Upload Windows installer (full)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-windows-installer-full
           path: installer/otzaria-*-windows-full.exe
 
       - name: Upload Windows ZIP
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-windows-zip
           path: otzaria-windows.zip
@@ -360,7 +358,7 @@ jobs:
       CARGO_HOME:  ${{ github.workspace }}/.cargo
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -414,7 +412,7 @@ jobs:
           rustup show
 
       - name: Cache cargo registry and git
-        uses: actions/cache@v4
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ${{ env.CARGO_HOME }}/registry
@@ -571,20 +569,20 @@ jobs:
       
       - name: Upload Linux DEB package
         if: steps.find_packages.outputs.deb_file != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-linux-deb
           path: ${{ steps.find_packages.outputs.deb_file }}
           
       - name: Upload Linux RPM package
         if: steps.find_packages.outputs.rpm_file != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-linux-rpm
           path: ${{ steps.find_packages.outputs.rpm_file }}
        
       - name: Upload linux build (raw)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-linux-raw
           path: linux-build/*
@@ -622,7 +620,7 @@ jobs:
 
       - name: Upload Linux FULL bundle
         if: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-linux-full
           path: otzaria-linux-full.tar.gz
@@ -635,7 +633,7 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}/.cargo
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -684,7 +682,7 @@ jobs:
           rustup show
 
       - name: Cache Rust
-        uses: actions/cache@v4
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ${{ env.CARGO_HOME }}/registry
@@ -735,7 +733,7 @@ jobs:
           echo "All Android Rust targets installed successfully"
 
       - name: Cache Gradle
-        uses: actions/cache@v4
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ~/.gradle/caches
@@ -745,7 +743,7 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Cache Pub
-        uses: actions/cache@v4
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ~/.pub-cache
@@ -846,7 +844,7 @@ jobs:
           df -h
       
       - name: Upload apk
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-android.apk
           path: build/app/outputs/flutter-apk/app-release.apk
@@ -873,7 +871,7 @@ jobs:
 
       - name: Upload Android FULL bundle
         if: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-android-full
           path: otzaria-android-full.zip
@@ -895,7 +893,7 @@ jobs:
       CARGO_HOME:  ${{ github.workspace }}/.cargo
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -952,7 +950,7 @@ jobs:
 
       # (רשות אבל מומלץ) קאשינג לספריות cargo כדי לזרז בניות
       - name: Cache cargo registry and git
-        uses: actions/cache@v4
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ${{ env.CARGO_HOME }}/registry
@@ -1076,14 +1074,14 @@ jobs:
 
       - name: Upload macOS DMG
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-macos.dmg
           path: otzaria-macos.dmg
 
       - name: Upload macOS FULL bundle
         if: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-macos-full
           path: otzaria-macos-full.zip
@@ -1095,10 +1093,10 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
       
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           path: artifacts
       
@@ -1411,7 +1409,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history + tags)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0   # חובה כדי לאפשר גישה לכל ההיסטוריה והתגים
           fetch-tags: true

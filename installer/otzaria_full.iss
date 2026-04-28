@@ -48,6 +48,17 @@ Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Code]
 
+var
+  CompPage: TWizardPage;
+  VCCheck, WV2Check: TCheckBox;
+  VCLabel, WV2Label: TLabel;
+  InstallVC, InstallWV2: Boolean;
+
+  BooksPage: TWizardPage;
+  BooksPathEdit: TEdit;
+  BooksPathBrowseBtn: TButton;
+  SelectedBooksPath: String;
+
 function TryGetInstallDirFromRegistry(RootKey: Integer; const SubKey: String; var InstallDir: String): Boolean;
 begin
   Result := RegQueryStringValue(RootKey, SubKey, 'Inno Setup: App Path', InstallDir);
@@ -115,6 +126,49 @@ begin
     Result := ExpandConstant('{userappdata}\otzaria');
 end;
 
+// ─── בדיקות רכיבי מערכת ───────────────────────────────────────────────────
+
+function GetVCVersion: String;
+var
+  Version: String;
+begin
+  if RegQueryStringValue(HKLM64,
+      'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64',
+      'Version', Version) then
+    Result := Version
+  else
+    Result := '';
+end;
+
+function GetWebView2Version: String;
+var
+  Version: String;
+begin
+  if RegQueryStringValue(HKLM64,
+      'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv', Version) then
+  begin
+    Result := Version;
+    exit;
+  end;
+  if RegQueryStringValue(HKCU,
+      'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv', Version) then
+    Result := Version
+  else
+    Result := '';
+end;
+
+function VCRedistNeedsInstall: Boolean;
+begin
+  Result := GetVCVersion = '';
+end;
+
+function WebView2NeedsInstall: Boolean;
+begin
+  Result := GetWebView2Version = '';
+end;
+
 function InitializeSetup(): Boolean;
 var
   DataPath, OldPath: String;
@@ -122,7 +176,7 @@ begin
   Result := True;
   DataPath := GetDataDir('');
   OldPath := 'C:\אוצריא';
-  
+
   // בדיקה אם יש התקנה ישנה בנתיב העברי
   if DirExists(OldPath) then
   begin
@@ -135,33 +189,335 @@ begin
       MsgBox('לאחר ההתקנה, תוכל להעביר את הנתונים מ-' + OldPath + ' ל-' + DataPath, mbInformation, MB_OK);
     end;
   end;
-  
-  // בדיקה אם התיקיות קיימות והצגת אזהרה
-  if DirExists(DataPath + '\books') then
+
+  // האזהרה על מחיקת ספרים קיימים מוצגת בדף בחירת תיקיית הספרים
+
+  // אתחול ברירות מחדל — גם להתקנה שקטה (/SILENT, /VERYSILENT)
+  InstallVC  := VCRedistNeedsInstall;
+  InstallWV2 := WebView2NeedsInstall;
+  SelectedBooksPath := GetDataDir('') + '\books';
+end;
+
+// ─── בניית עמוד בחירת רכיבים ───────────────────────────────────────────────
+
+procedure CreateComponentsPage;
+var
+  VCVersion, WV2Version: String;
+  VCStatus, WV2Status: String;
+  VCColor, WV2Color: TColor;
+  TopY: Integer;
+  HeaderLabel: TLabel;
+begin
+  CompPage := CreateCustomPage(wpSelectDir,
+    'בחירת רכיבי מערכת להתקנה',
+    'בדיקת הרכיבים הנדרשים לאפליקציה');
+
+  VCVersion  := GetVCVersion;
+  WV2Version := GetWebView2Version;
+
+  // כותרת הסבר
+  HeaderLabel := TLabel.Create(CompPage);
+  HeaderLabel.Parent := CompPage.Surface;
+  HeaderLabel.Left   := 0;
+  HeaderLabel.Top    := 0;
+  HeaderLabel.Width  := CompPage.SurfaceWidth;
+  HeaderLabel.AutoSize := False;
+  HeaderLabel.WordWrap := True;
+  HeaderLabel.Caption :=
+    'להלן רכיבי המערכת הנדרשים לפעולת אוצריא.' + #13#10 +
+    'רכיבים באדום חסרים — נדרשת התקנה.' + #13#10 +
+    'רכיבים ירוקים קיימים — אין צורך בפעולה.';
+  HeaderLabel.Height := ScaleY(60);  // 3 שורות קצרות, בלי עודף ריפוד
+
+  TopY := HeaderLabel.Height + ScaleY(6);
+
+  // ─── Visual C++ Runtime ───────────────────────────────────────────────────
+  VCCheck := TCheckBox.Create(CompPage);
+  VCCheck.Parent  := CompPage.Surface;
+  VCCheck.Left    := 0;
+  VCCheck.Top     := TopY + ScaleY(2);
+  VCCheck.Width   := CompPage.SurfaceWidth;
+  VCCheck.Height  := ScaleY(20);
+  VCCheck.Caption := 'Visual C++ Redistributable 2022 (x64)';
+
+  if VCVersion = '' then
   begin
-    if MsgBox('שים לב: קיימים נתונים מספרייה ישנה בתיקייה ' + DataPath + '\books' + #13#10 +
-              'הקודמים יימחקו ויוחלפו בנתוני ההתקנה החדשה.' + #13#10#13#10 +
-              'האם להמשיך בהתקנה?',
-              mbConfirmation, MB_YESNO) = IDNO then
+    VCStatus := '⚠ חסר — נדרשת התקנה! ללא רכיב זה האפליקציה לא תפעל.';
+    VCColor  := clRed;
+    VCCheck.Checked := True;
+    VCCheck.Enabled := False;  // חובה — לא ניתן לבטל
+  end
+  else
+  begin
+    VCStatus := '✓ קיים (גרסה: ' + VCVersion + ') — לא נדרשת פעולה.';
+    VCColor  := $006400;  // ירוק כהה
+    VCCheck.Checked := False;
+    VCCheck.Enabled := False;  // קיים — נעול כדי למנוע התקנה מיותרת
+  end;
+
+  VCLabel := TLabel.Create(CompPage);
+  VCLabel.Parent   := CompPage.Surface;
+  VCLabel.Left     := ScaleX(20);
+  VCLabel.Top      := TopY + ScaleY(18);
+  VCLabel.Width    := CompPage.SurfaceWidth - ScaleX(20);
+  VCLabel.AutoSize := False;
+  VCLabel.WordWrap := True;
+  VCLabel.Caption  := VCStatus;
+  VCLabel.Font.Color := VCColor;
+  VCLabel.Height   := ScaleY(36);
+
+  TopY := TopY + ScaleY(58);
+
+  // ─── WebView2 Runtime ─────────────────────────────────────────────────────
+  WV2Check := TCheckBox.Create(CompPage);
+  WV2Check.Parent  := CompPage.Surface;
+  WV2Check.Left    := 0;
+  WV2Check.Top     := TopY;
+  WV2Check.Width   := CompPage.SurfaceWidth;
+  WV2Check.Height  := ScaleY(20);
+  WV2Check.Caption := 'Microsoft WebView2 Runtime';
+
+  // WebView2 אינו חובה — משמש רק למערכת הפלאגינים (לא לקריאה/חיפוש/סימניות)
+  if WV2Version = '' then
+  begin
+    WV2Status := '⚠ חסר — מומלץ להתקין. ללא רכיב זה מערכת הפלאגינים לא תפעל,' +
+                 ' אך שאר האפליקציה תעבוד כרגיל.';
+    WV2Color  := $007FFF;  // כתום — אזהרה, לא שגיאה ($BBGGRR: B=00, G=7F, R=FF)
+    WV2Check.Checked := True;
+    WV2Check.Enabled := True;  // אופציונלי — ניתן לבטל
+  end
+  else
+  begin
+    WV2Status := '✓ קיים (גרסה: ' + WV2Version + ') — לא נדרשת פעולה.';
+    WV2Color  := $006400;
+    WV2Check.Checked := False;
+    WV2Check.Enabled := False;  // קיים — נעול כדי למנוע התקנה מיותרת
+  end;
+
+  WV2Label := TLabel.Create(CompPage);
+  WV2Label.Parent   := CompPage.Surface;
+  WV2Label.Left     := ScaleX(20);
+  WV2Label.Top      := TopY + ScaleY(18);
+  WV2Label.Width    := CompPage.SurfaceWidth - ScaleX(20);
+  WV2Label.AutoSize := False;
+  WV2Label.WordWrap := True;
+  WV2Label.Caption  := WV2Status;
+  WV2Label.Font.Color := WV2Color;
+  WV2Label.Height   := ScaleY(34);
+end;
+
+// ─── דף בחירת תיקיית הספרים ─────────────────────────────────────────────────
+
+procedure BrowseBooksFolder(Sender: TObject);
+var
+  Dir: String;
+begin
+  Dir := BooksPathEdit.Text;
+  if BrowseForFolder('בחר תיקיית ספרים:', Dir, False) then
+    BooksPathEdit.Text := Dir;
+end;
+
+procedure CreateBooksPage;
+var
+  DefaultPath: String;
+  DescLabel, WarnLabel, PathLabel: TLabel;
+begin
+  BooksPage := CreateCustomPage(CompPage.ID,
+    'תיקיית הספרים',
+    'בחר היכן יישמרו ספרי הספרייה');
+
+  DefaultPath := GetDataDir('') + '\books';
+  SelectedBooksPath := DefaultPath;
+
+  DescLabel := TLabel.Create(BooksPage);
+  DescLabel.Parent   := BooksPage.Surface;
+  DescLabel.Left     := 0;
+  DescLabel.Top      := 0;
+  DescLabel.Width    := BooksPage.SurfaceWidth;
+  DescLabel.AutoSize := False;
+  DescLabel.WordWrap := True;
+  DescLabel.Caption  :=
+    'כאן יישמרו קבצי הספרים שמגיעים עם ההתקנה וכל ספר שתוסיף בעתיד.' + #13#10 +
+    'הנתיב שתבחר יוגדר אוטומטית בהגדרות התוכנה.';
+  DescLabel.Height := ScaleY(42);  // 2 שורות צמודות יותר
+
+  PathLabel := TLabel.Create(BooksPage);
+  PathLabel.Parent   := BooksPage.Surface;
+  PathLabel.Left     := 0;
+  PathLabel.Top      := DescLabel.Height + ScaleY(2);
+  PathLabel.Width    := BooksPage.SurfaceWidth;
+  PathLabel.AutoSize := False;
+  PathLabel.Caption  := 'נתיב תיקיית הספרים:';
+  PathLabel.Height   := ScaleY(20);
+
+  BooksPathEdit := TEdit.Create(BooksPage);
+  BooksPathEdit.Parent := BooksPage.Surface;
+  BooksPathEdit.Left   := 0;
+  BooksPathEdit.Top    := PathLabel.Top + ScaleY(26);
+  BooksPathEdit.Width  := BooksPage.SurfaceWidth - ScaleX(84);
+  BooksPathEdit.Height := ScaleY(22);
+  BooksPathEdit.Text   := DefaultPath;
+
+  BooksPathBrowseBtn := TButton.Create(BooksPage);
+  BooksPathBrowseBtn.Parent  := BooksPage.Surface;
+  BooksPathBrowseBtn.Left    := BooksPage.SurfaceWidth - ScaleX(78);
+  BooksPathBrowseBtn.Top     := BooksPathEdit.Top - ScaleY(1);
+  BooksPathBrowseBtn.Width   := ScaleX(78);
+  BooksPathBrowseBtn.Height  := ScaleY(23);
+  BooksPathBrowseBtn.Caption := 'עיון...';
+  BooksPathBrowseBtn.OnClick := @BrowseBooksFolder;
+
+  WarnLabel := TLabel.Create(BooksPage);
+  WarnLabel.Parent     := BooksPage.Surface;
+  WarnLabel.Left       := 0;
+  WarnLabel.Top        := BooksPathEdit.Top + BooksPathEdit.Height + ScaleY(8);
+  WarnLabel.Width      := BooksPage.SurfaceWidth;
+  WarnLabel.AutoSize   := False;
+  WarnLabel.WordWrap   := True;
+  WarnLabel.Height     := ScaleY(42);
+  WarnLabel.Font.Color := clRed;
+
+  if DirExists(DefaultPath) then
+    WarnLabel.Caption :=
+      '⚠ שים לב: תיקיית ספרים קיימת כבר בנתיב זה.' + #13#10 +
+      'התקנה זו תמחק את תוכנה ותחליף בספרים החדשים שבחבילה.'
+  else
+    WarnLabel.Caption := '';
+end;
+
+// כתיבת נתיב הספרים ל-shared_preferences.json של האפליקציה
+procedure WriteLibraryPathToPrefs(const LibraryPath: String);
+var
+  PrefsDir, PrefsFile, JsonContent, JsonPath, NewLine: String;
+  Lines: TArrayOfString;
+  i, LastBrace: Integer;
+  Found, HasOtherKeys: Boolean;
+begin
+  PrefsDir  := ExpandConstant('{userappdata}\otzaria');
+  PrefsFile := PrefsDir + '\shared_preferences.json';
+
+  ForceDirectories(PrefsDir);
+
+  // החלפת \ ב-\\ ידנית — StringReplace ו-StringChange אינן אמינות ב-Inno Setup
+  JsonPath := '';
+  for i := 1 to Length(LibraryPath) do
+  begin
+    if LibraryPath[i] = '\' then
+      JsonPath := JsonPath + '\\'
+    else
+      JsonPath := JsonPath + LibraryPath[i];
+  end;
+  NewLine := '"key-library-path":"' + JsonPath + '"';
+
+  if FileExists(PrefsFile) then
+  begin
+    LoadStringsFromFile(PrefsFile, Lines);
+    Found := False;
+
+    // עדכון שורה קיימת — ללא פסיק (JSON לא יודע מה מגיע אחרי)
+    for i := 0 to GetArrayLength(Lines) - 1 do
     begin
-      Result := False;
+      if Pos('"key-library-path":', Lines[i]) > 0 then
+      begin
+        if (Lines[i] <> '') and (Lines[i][Length(Lines[i])] = ',') then
+          Lines[i] := '  ' + NewLine + ','
+        else
+          Lines[i] := '  ' + NewLine;
+        Found := True;
+      end;
     end;
+
+    if Found then
+    begin
+      // בנה JSON מחדש נקי — הסר פסיקים עודפים ואחד את המבנה
+      JsonContent := '';
+      for i := 0 to GetArrayLength(Lines) - 1 do
+        JsonContent := JsonContent + Lines[i] + #13#10;
+      SaveStringToFile(PrefsFile, JsonContent, False);
+      exit;
+    end;
+
+    // מפתח לא קיים — מוסיף. בדיקה אם הקובץ ריק ({})
+    HasOtherKeys := False;
+    for i := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      if (Pos('"', Lines[i]) > 0) and (Pos('{', Lines[i]) = 0) and (Pos('}', Lines[i]) = 0) then
+      begin
+        HasOtherKeys := True;
+        break;
+      end;
+    end;
+
+    JsonContent := '';
+    for i := 0 to GetArrayLength(Lines) - 1 do
+      JsonContent := JsonContent + Lines[i] + #13#10;
+
+    // מחפש } אחרון
+    LastBrace := 0;
+    for i := Length(JsonContent) downto 1 do
+    begin
+      if JsonContent[i] = '}' then
+      begin
+        LastBrace := i;
+        break;
+      end;
+    end;
+
+    if LastBrace > 0 then
+    begin
+      if HasOtherKeys then
+        // יש מפתחות אחרים — מוסיף פסיק אחרי האחרון שלהם ואחר כך את השורה החדשה
+        JsonContent := Copy(JsonContent, 1, LastBrace - 1) +
+                       ',' + #13#10 + '  ' + NewLine + #13#10 + '}'
+      else
+        // קובץ ריק {} — מוסיף בלי פסיק
+        JsonContent := '{' + #13#10 + '  ' + NewLine + #13#10 + '}';
+      SaveStringToFile(PrefsFile, JsonContent, False);
+    end;
+  end
+  else
+  begin
+    // קובץ לא קיים — יוצר חדש תקין
+    JsonContent := '{' + #13#10 + '  ' + NewLine + #13#10 + '}';
+    SaveStringToFile(PrefsFile, JsonContent, False);
   end;
 end;
 
-function VCRedistNeedsInstall: Boolean;
-var
-  Version: String;
+function ShouldInstallVC: Boolean;
 begin
-  // Check if Visual C++ 2015-2022 Redistributable is installed
-  // This checks for x64 version
-  Result := not RegQueryStringValue(HKLM64, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 
-    'Version', Version);
-  if not Result then
+  Result := InstallVC;
+end;
+
+function ShouldInstallWV2: Boolean;
+begin
+  Result := InstallWV2;
+end;
+
+procedure InitializeWizard;
+begin
+  InstallVC  := VCRedistNeedsInstall;
+  InstallWV2 := WebView2NeedsInstall;
+  CreateComponentsPage;
+  CreateBooksPage;
+end;
+
+// שמירת בחירות בלחיצת "הבא"
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (CompPage <> nil) and (CurPageID = CompPage.ID) then
   begin
-    // Also check x86 version
-    Result := not RegQueryStringValue(HKLM64, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x86', 
-      'Version', Version);
+    InstallVC  := VCCheck.Checked;
+    InstallWV2 := WV2Check.Checked;
+  end;
+  if (BooksPage <> nil) and (CurPageID = BooksPage.ID) then
+  begin
+    SelectedBooksPath := BooksPathEdit.Text;
+    if SelectedBooksPath = '' then
+    begin
+      MsgBox('יש לבחור נתיב לתיקיית הספרים.', mbError, MB_OK);
+      Result := False;
+    end;
   end;
 end;
 
@@ -177,7 +533,7 @@ begin
     exit;
   end;
 
-  DatabasePath := ExpandConstant('{code:GetDataDir}\books\' + DatabaseName);
+  DatabasePath := SelectedBooksPath + '\' + DatabaseName;
   ZstdPath := ExpandConstant('{app}\zstd.exe');
 
   ForceDirectories(ExtractFileDir(DatabasePath));
@@ -206,9 +562,9 @@ begin
     exit;
   end;
 
-  ParentDir := ExpandConstant('{code:GetDataDir}\books');
+  ParentDir := SelectedBooksPath;
   TarPath := ParentDir + '\' + ChangeFileExt(ArchiveName, '');
-  TargetDir := ExpandConstant('{code:GetDataDir}\books\' + TargetDirName);
+  TargetDir := SelectedBooksPath + '\' + TargetDirName;
   ZstdPath := ExpandConstant('{app}\zstd.exe');
   SevenZipPath := ExpandConstant('{app}\7za.exe');
 
@@ -295,14 +651,22 @@ begin
   ExtractBundledTarArchive('talmud_bavli_latest.tar.zst', 'תלמוד בבלי');
   DeleteFile(ZstdPath);
   DeleteFile(SevenZipPath);
-  
+
   // Cleanup the temporary extraction directory
   DelTree(ExpandConstant('{app}\_staging'), True, True, True);
+
+  // יצירת תיקיית הספרים בנתיב שבחר המשתמש (אם שונה מברירת המחדל)
+  if SelectedBooksPath <> '' then
+  begin
+    ForceDirectories(SelectedBooksPath);
+    WriteLibraryPathToPrefs(SelectedBooksPath);
+  end;
 end;
 
 [Run]
-Filename: "{tmp}\VisualCppRedist_AIO_x86_x64.exe"; Parameters: "/ai /gm2"; StatusMsg: "מתקין Visual C++ Redistributable..."; Flags: waituntilterminated; Check: VCRedistNeedsInstall
-Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent 
+Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "מתקין Visual C++ Redistributable 2022..."; Flags: waituntilterminated; Check: ShouldInstallVC
+Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "מתקין Microsoft WebView2 Runtime..."; Flags: waituntilterminated; Check: ShouldInstallWV2
+Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -327,7 +691,12 @@ Source: "library_db\talmud_bavli_latest.tar.zst"; DestDir: "{app}\_staging"; Fla
 Source: "zstd.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "7za.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-Source: "VisualCppRedist_AIO_x86_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+; vc_redist.x64.exe — הגרסה הרשמית של Microsoft, כ-25MB במקום AIO (~50MB)
+; כוללת את 2015/2017/2019/2022 תחת אותו מספר גרסה (14.x)
+Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallVC
+; MicrosoftEdgeWebview2Setup.exe — bootstrapper קטן (~2MB) שמוריד ומתקין WebView2
+; נדרש על ידי flutter_inappwebview_windows; ב-Win10/11 עם Edge עדכני — כבר קיים
+Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallWV2
 
 [INI]
 Filename: "{app}\system_install.marker"; Section: "Install"; Key: "Mode"; String: "Admin"; Check: IsAdminInstallMode
