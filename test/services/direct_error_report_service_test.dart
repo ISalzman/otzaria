@@ -152,7 +152,18 @@ void main() {
 
       expect(decodedPowerShell,
           contains('https://otzaria.org/api/reportingerrors'));
+      expect(
+        decodedPowerShell,
+        contains(
+          r'[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12',
+        ),
+      );
       expect(decodedPowerShell, contains('Invoke-WebRequest'));
+      expect(
+        decodedPowerShell,
+        contains(r'$bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)'),
+      );
+      expect(decodedPowerShell, contains(r'-Body $bodyBytes'));
       expect(payloadBase64Match, isNotNull);
       expect(decodedPowerShell, contains(r'$payloadsJsonBase64 ='));
       expect(decodedPowerShell,

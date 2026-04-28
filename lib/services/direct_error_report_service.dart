@@ -442,6 +442,7 @@ exit /b %OTZARIA_EXIT_CODE%
     const scriptPrefix = r'''
 $ErrorActionPreference = 'Continue'
 $endpoint = 'https://otzaria.org/api/reportingerrors'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
   $payloadsJsonBase64 =
     ''';
     const scriptSuffix = r'''
@@ -454,7 +455,8 @@ $failed = 0
 foreach ($payload in @($payloads)) {
   try {
     $body = $payload | ConvertTo-Json -Depth 10 -Compress
-    $response = Invoke-WebRequest -Uri $endpoint -Method Post -ContentType 'application/json; charset=utf-8' -Body $body
+    $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+    $response = Invoke-WebRequest -Uri $endpoint -Method Post -ContentType 'application/json; charset=utf-8' -Body $bodyBytes
     if ($response.StatusCode -eq 200) {
       $sent++
       Write-Host ('נשלח: ' + $payload.report_id) -ForegroundColor Green
