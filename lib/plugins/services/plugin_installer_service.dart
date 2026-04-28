@@ -8,11 +8,25 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
+import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
+import 'dart:isolate';
 
 class PluginOverwriteException implements Exception {
   final String pluginName;
   final String version;
   PluginOverwriteException(this.pluginName, this.version);
+}
+
+class PluginNewerVersionInstalledException implements Exception {
+  final String pluginName;
+  final String requestedVersion;
+  final String installedVersion;
+
+  PluginNewerVersionInstalledException(
+    this.pluginName,
+    this.requestedVersion,
+    this.installedVersion,
+  );
 }
 
 class PreparedInstall {
@@ -33,30 +47,13 @@ class PluginInstallerService {
       {bool forceOverwrite = false}) async {
     final tempDir = await Directory.systemTemp.createTemp('otz_plugin_');
     try {
-      // 1. Extract zip to temp
-      final bytes = File(archivePath).readAsBytesSync();
-      final archive = ZipDecoder().decodeBytes(bytes);
-
-      for (final file in archive) {
-        final filename = file.name;
-        final targetPath = p.normalize(p.join(tempDir.path, filename));
-        if (!p.isWithin(tempDir.path, targetPath)) {
-          throw Exception('נתיב חולץ מקובץ ZIP באופן לא חוקי: $filename');
-        }
-
-        if (file.isFile) {
-          final data = file.content as List<int>;
-          File(targetPath)
-            ..createSync(recursive: true)
-            ..writeAsBytesSync(data);
-        } else {
-          Directory(targetPath).createSync(recursive: true);
-        }
-      }
+      // 1. Extract zip to temp on a worker isolate to avoid blocking the UI.
+      await Isolate.run(
+          () => _extractPluginArchiveSync(archivePath, tempDir.path));
 
       // 2. Read manifest
       final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
-      if (!manifestFile.existsSync()) {
+      if (!await manifestFile.exists()) {
         throw Exception('manifest.json לא נמצא בחבילת התוסף');
       }
 
@@ -66,11 +63,16 @@ class PluginInstallerService {
       bool isOverwrite = false;
       final existingPlugin = await _repository.getPlugin(manifest.id);
       if (existingPlugin != null) {
-        final diff =
-            _compareVersionsStrict(manifest.version, existingPlugin.version);
+        final diff = PluginVersionUtils.compareCoreVersions(
+          manifest.version,
+          existingPlugin.version,
+        );
         if (diff < 0) {
-          throw Exception(
-              'לא ניתן להתקין גרסה ${manifest.version} על פני גרסה חדישה יותר ${existingPlugin.version}. מחיקה נדרשת קודם.');
+          throw PluginNewerVersionInstalledException(
+            manifest.name,
+            manifest.version,
+            existingPlugin.version,
+          );
         } else if (diff == 0 && !forceOverwrite) {
           throw PluginOverwriteException(manifest.name, manifest.version);
         }
@@ -192,16 +194,26 @@ class PluginInstallerService {
       if (cacheDir.existsSync()) cacheDir.deleteSync(recursive: true);
     }
   }
+}
 
-  int _compareVersionsStrict(String v1, String v2) {
-    final parts1 = v1.split('+')[0].split('.').map(int.parse).toList();
-    final parts2 = v2.split('+')[0].split('.').map(int.parse).toList();
-    for (var i = 0; i < 3; i++) {
-      final p1 = i < parts1.length ? parts1[i] : 0;
-      final p2 = i < parts2.length ? parts2[i] : 0;
-      if (p1 > p2) return 1;
-      if (p1 < p2) return -1;
+void _extractPluginArchiveSync(String archivePath, String tempDirPath) {
+  final bytes = File(archivePath).readAsBytesSync();
+  final archive = ZipDecoder().decodeBytes(bytes);
+
+  for (final file in archive) {
+    final filename = file.name;
+    final targetPath = p.normalize(p.join(tempDirPath, filename));
+    if (!p.isWithin(tempDirPath, targetPath)) {
+      throw Exception('נתיב חולץ מקובץ ZIP באופן לא חוקי: $filename');
     }
-    return 0;
+
+    if (file.isFile) {
+      final data = file.content as List<int>;
+      File(targetPath)
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(data);
+    } else {
+      Directory(targetPath).createSync(recursive: true);
+    }
   }
 }
