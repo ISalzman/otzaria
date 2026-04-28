@@ -12,6 +12,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
+import 'package:otzaria/text_book/utils/notes_commentary_utils.dart';
 import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -515,7 +516,8 @@ class _CombinedViewState extends State<CombinedView> {
               label: item.label,
               icon: fluentIconFromName(item.icon),
               onTap: () {
-                unawaited(PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+                unawaited(
+                    PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
                   pluginId,
                   'reader.context_menu_item_clicked',
                   {
@@ -1302,6 +1304,16 @@ class _CombinedViewState extends State<CombinedView> {
 
   /// בדיקה אם יש מפרשים לאינדקס מסוים
   bool _hasCommentaries(TextBookLoaded state, int index) {
+    // בדיקה לנוכחות הערות על הספר (virtual commentator)
+    if (state.activeCommentators.contains(kNotesCommentatorTitle) &&
+        state.notesContent != null) {
+      final lineContent =
+          index < state.content.length ? state.content[index] : '';
+      if (hasNoteMarkers(lineContent)) {
+        return true;
+      }
+    }
+
     // בדיקה אם יש קישורים רלוונטיים לאינדקס הזה
     final lineLinks = state.linksByLine[index + 1];
     if (lineLinks == null || lineLinks.isEmpty) return false;
@@ -1318,7 +1330,6 @@ class _CombinedViewState extends State<CombinedView> {
         lastTitle = utils.getTitleFromPath(link.path2);
       }
       return lastTitle != null && activeCommentatorsSet.contains(lastTitle!);
-
     });
   }
 

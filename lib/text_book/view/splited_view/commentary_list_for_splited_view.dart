@@ -5,8 +5,12 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/notes_commentary_utils.dart';
 import 'package:otzaria/text_book/view/combined_view/commentary_content.dart';
 import 'package:otzaria/widgets/progressive_scrolling.dart';
+import 'package:otzaria/widgets/smart_text/render_settings.dart';
+import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
@@ -42,6 +46,16 @@ class _CommentaryListState extends State<CommentaryList> {
   final ValueNotifier<int> _totalSearchResultsNotifier = ValueNotifier<int>(0);
   final Map<int, int> _searchResultsPerItem = {};
   String _lastIndexesKey = '';
+  String? _cachedNotesContent;
+  Map<String, String> _cachedNotesByMarker = const {};
+
+  Map<String, String> _notesByMarker(String notesContent) {
+    if (_cachedNotesContent != notesContent) {
+      _cachedNotesContent = notesContent;
+      _cachedNotesByMarker = parseNotesContent(notesContent);
+    }
+    return _cachedNotesByMarker;
+  }
 
   int _getItemSearchIndex(int itemIndex) {
     int cumulativeIndex = 0;
@@ -122,7 +136,8 @@ class _CommentaryListState extends State<CommentaryList> {
           previous.selectedIndex != current.selectedIndex ||
           previous.fontSize != current.fontSize ||
           previous.removeNikud != current.removeNikud ||
-          previous.removePunctuation != current.removePunctuation;
+          previous.removePunctuation != current.removePunctuation ||
+          previous.notesContent != current.notesContent;
     }, builder: (context, state) {
       if (state is! TextBookLoaded) return const Center();
       final currentIndexes = state.selectedIndex != null
@@ -270,103 +285,192 @@ class _CommentaryListState extends State<CommentaryList> {
               ],
             ),
           ),
-          Expanded(
-            child: FutureBuilder(
-              future: getLinksforIndexs(
-                  indexes: currentIndexes,
-                  links: state.links,
-                  commentatorsToShow: state.activeCommentators),
-              builder: (context, thisLinksSnapshot) {
-                if (!thisLinksSnapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (thisLinksSnapshot.data!.isEmpty) {
-                  return const Center(child: Text("לא נמצאו מפרשים להצגה"));
-                }
-
-                // יצירת מפתח ייחודי לאינדקסים הנוכחיים
-                final indexesKey = currentIndexes.join(',');
-
-                // signature שכולל גם מפרשים פעילים וזהות state.links —
-                // שינוי בכל אחד מהם משנה את ה-items
-                final listSignature =
-                    '$indexesKey|${state.activeCommentators.join(",")}|${identityHashCode(state.links)}';
-
-                // ניקוי ספירות חיפוש כשהקטע או המפרשים משתנים
-                if (_lastIndexesKey != listSignature) {
-                  _lastIndexesKey = listSignature;
-                  _searchResultsPerItem.clear();
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!mounted) return;
-                    _totalSearchResultsNotifier.value = 0;
-                    _currentSearchIndexNotifier.value = 0;
-                  });
-                }
-
-                return ProgressiveScroll(
-                  scrollController: scrollController,
-                  maxSpeed: 10000.0,
-                  curve: 10.0,
-                  accelerationFactor: 5,
-                  child: ScrollablePositionedList.builder(
-                    key: PageStorageKey(
-                        '${thisLinksSnapshot.data![0].heRef}_$indexesKey'),
-                    physics: const ClampingScrollPhysics(),
-                    scrollOffsetController: scrollController,
-                    shrinkWrap: true,
-                    itemCount: thisLinksSnapshot.data!.length,
-                    itemBuilder: (context, index1) => ListTile(
-                      title: BlocBuilder<SettingsBloc, SettingsState>(
-                        builder: (context, settingsState) {
-                          return FutureBuilder<String>(
-                            future:
-                                thisLinksSnapshot.data![index1].displayReference,
-                            builder: (context, snapshot) {
-                              String displayTitle = snapshot.data ??
-                                  thisLinksSnapshot
-                                      .data![index1].fallbackDisplayReference;
-                              if (settingsState.replaceHolyNames) {
-                                displayTitle =
-                                    utils.replaceHolyNames(displayTitle);
-                              }
-                              return Text(
-                                displayTitle,
-                                textDirection: TextDirection.rtl,
-                              );
-                            },
-                          );
-                        },
-                      ),
-                      subtitle: AnimatedBuilder(
-                        animation: Listenable.merge([
-                          _searchQueryNotifier,
-                          _currentSearchIndexNotifier,
-                          _totalSearchResultsNotifier,
-                        ]),
-                        builder: (context, _) {
-                          return CommentaryContent(
-                            key: ValueKey(
-                                '${thisLinksSnapshot.data![index1].path2}_${thisLinksSnapshot.data![index1].index2}_$indexesKey'),
-                            link: thisLinksSnapshot.data![index1],
-                            fontSize: widget.fontSize,
-                            openBookCallback: widget.openBookCallback,
-                            removeNikud: state.removeNikud,
-                            removePunctuation: state.removePunctuation,
-                            searchQuery: _searchQueryNotifier.value,
-                            currentSearchIndex: _getItemSearchIndex(index1),
-                            onSearchResultsCountChanged: (count) =>
-                                _updateSearchResultsCount(index1, count),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+          ..._buildContentArea(context, state, currentIndexes),
         ],
       );
     });
+  }
+
+  List<Widget> _buildContentArea(
+    BuildContext context,
+    TextBookLoaded state,
+    List<int> currentIndexes,
+  ) {
+    final notesActive = state.notesContent != null &&
+        state.activeCommentators.contains(kNotesCommentatorTitle);
+    final realCommentators = state.activeCommentators
+        .where((c) => c != kNotesCommentatorTitle)
+        .toList();
+
+    final activeNotes = notesActive
+        ? notesForIndexes(
+            content: state.content,
+            indexes: currentIndexes,
+            notesByMarker: _notesByMarker(state.notesContent!),
+          )
+        : const <String>[];
+    final hasNotes = activeNotes.isNotEmpty;
+
+    return [
+      if (hasNotes) ...[
+        _NotesSection(
+          notes: activeNotes,
+          fontSize: widget.fontSize,
+          removeNikud: state.removeNikud,
+        ),
+        if (realCommentators.isNotEmpty) const Divider(height: 1, thickness: 1),
+      ],
+      if (realCommentators.isNotEmpty)
+        Expanded(
+          child: FutureBuilder(
+            future: getLinksforIndexs(
+                indexes: currentIndexes,
+                links: state.links,
+                commentatorsToShow: realCommentators),
+            builder: (context, thisLinksSnapshot) {
+              if (!thisLinksSnapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (thisLinksSnapshot.data!.isEmpty) {
+                return const Center(child: Text("לא נמצאו מפרשים להצגה"));
+              }
+
+              // יצירת מפתח ייחודי לאינדקסים הנוכחיים
+              final indexesKey = currentIndexes.join(',');
+
+              // signature שכולל גם מפרשים פעילים וזהות state.links —
+              // שינוי בכל אחד מהם משנה את ה-items
+              final listSignature =
+                  '$indexesKey|${state.activeCommentators.join(",")}|${identityHashCode(state.links)}';
+
+              // ניקוי ספירות חיפוש כשהקטע או המפרשים משתנים
+              if (_lastIndexesKey != listSignature) {
+                _lastIndexesKey = listSignature;
+                _searchResultsPerItem.clear();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  _totalSearchResultsNotifier.value = 0;
+                  _currentSearchIndexNotifier.value = 0;
+                });
+              }
+
+              return ProgressiveScroll(
+                scrollController: scrollController,
+                maxSpeed: 10000.0,
+                curve: 10.0,
+                accelerationFactor: 5,
+                child: ScrollablePositionedList.builder(
+                  key: PageStorageKey(
+                      '${thisLinksSnapshot.data![0].heRef}_$indexesKey'),
+                  physics: const ClampingScrollPhysics(),
+                  scrollOffsetController: scrollController,
+                  shrinkWrap: true,
+                  itemCount: thisLinksSnapshot.data!.length,
+                  itemBuilder: (context, index1) => ListTile(
+                    title: BlocBuilder<SettingsBloc, SettingsState>(
+                      builder: (context, settingsState) {
+                        return FutureBuilder<String>(
+                          future:
+                              thisLinksSnapshot.data![index1].displayReference,
+                          builder: (context, snapshot) {
+                            String displayTitle = snapshot.data ??
+                                thisLinksSnapshot
+                                    .data![index1].fallbackDisplayReference;
+                            if (settingsState.replaceHolyNames) {
+                              displayTitle =
+                                  utils.replaceHolyNames(displayTitle);
+                            }
+                            return Text(
+                              displayTitle,
+                              textDirection: TextDirection.rtl,
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    subtitle: AnimatedBuilder(
+                      animation: Listenable.merge([
+                        _searchQueryNotifier,
+                        _currentSearchIndexNotifier,
+                        _totalSearchResultsNotifier,
+                      ]),
+                      builder: (context, _) {
+                        return CommentaryContent(
+                          key: ValueKey(
+                              '${thisLinksSnapshot.data![index1].path2}_${thisLinksSnapshot.data![index1].index2}_$indexesKey'),
+                          link: thisLinksSnapshot.data![index1],
+                          fontSize: widget.fontSize,
+                          openBookCallback: widget.openBookCallback,
+                          removeNikud: state.removeNikud,
+                          removePunctuation: state.removePunctuation,
+                          searchQuery: _searchQueryNotifier.value,
+                          currentSearchIndex: _getItemSearchIndex(index1),
+                          onSearchResultsCountChanged: (count) =>
+                              _updateSearchResultsCount(index1, count),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      if (!hasNotes && realCommentators.isEmpty)
+        const Expanded(
+          child: Center(child: Text('לא נמצאו מפרשים להצגה')),
+        ),
+    ];
+  }
+}
+
+class _NotesSection extends StatelessWidget {
+  final List<String> notes;
+  final double fontSize;
+  final bool removeNikud;
+
+  const _NotesSection({
+    required this.notes,
+    required this.fontSize,
+    required this.removeNikud,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      builder: (context, settingsState) {
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.4,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: notes.map((note) {
+                final text = removeNikud ? utils.removeVolwels(note) : note;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: SmartTextWidget(
+                    text: text,
+                    settings: RenderSettings(
+                      removeNikud: removeNikud,
+                      removePunctuation: false,
+                      removeTeamim: false,
+                      replaceHolyNames: settingsState.replaceHolyNames,
+                      searchText: '',
+                      currentSearchIndex: -1,
+                      fontSize: fontSize * 0.85,
+                      fontFamily: settingsState.commentatorsFontFamily,
+                      lineHeight: settingsState.lineHeight,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
