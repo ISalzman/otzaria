@@ -195,6 +195,7 @@ begin
   // אתחול ברירות מחדל — גם להתקנה שקטה (/SILENT, /VERYSILENT)
   InstallVC  := VCRedistNeedsInstall;
   InstallWV2 := WebView2NeedsInstall;
+  SelectedBooksPath := GetDataDir('') + '\books';
 end;
 
 // ─── בניית עמוד בחירת רכיבים ───────────────────────────────────────────────
@@ -416,9 +417,12 @@ begin
     // עדכון שורה קיימת — ללא פסיק (JSON לא יודע מה מגיע אחרי)
     for i := 0 to GetArrayLength(Lines) - 1 do
     begin
-      if Pos('"key-library-path"', Lines[i]) > 0 then
+      if Pos('"key-library-path":', Lines[i]) > 0 then
       begin
-        Lines[i] := '  ' + NewLine;
+        if (Lines[i] <> '') and (Lines[i][Length(Lines[i])] = ',') then
+          Lines[i] := '  ' + NewLine + ','
+        else
+          Lines[i] := '  ' + NewLine;
         Found := True;
       end;
     end;
@@ -689,7 +693,7 @@ Source: "7za.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; vc_redist.x64.exe — הגרסה הרשמית של Microsoft, כ-25MB במקום AIO (~50MB)
 ; כוללת את 2015/2017/2019/2022 תחת אותו מספר גרסה (14.x)
-Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: VCRedistNeedsInstall
+Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallVC
 ; MicrosoftEdgeWebview2Setup.exe — bootstrapper קטן (~2MB) שמוריד ומתקין WebView2
 ; נדרש על ידי flutter_inappwebview_windows; ב-Win10/11 עם Edge עדכני — כבר קיים
 Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallWV2
