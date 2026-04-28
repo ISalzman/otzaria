@@ -28,6 +28,7 @@ import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/widgets/indexing_warning.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/tour/tour_target_keys.dart';
 
 /// דיאלוג חיפוש מתקדם - מכיל את כל פקדי החיפוש וההגדרות
 /// כשמבצעים חיפוש, הדיאלוג נסגר ונפתחת לשונית תוצאות
@@ -60,12 +61,14 @@ class _SearchDialogState extends State<SearchDialog> {
   final ValueNotifier<bool> _advancedControlsHasFocus = ValueNotifier(false);
   late final VoidCallback _queryListener;
   Set<String> _selectedCategoryFacets = {'/'}; // ברירת מחדל: הכל
+  late final bool _ownsSearchTab;
 
   @override
   void initState() {
     super.initState();
 
     // יצירת טאב עם ההקלדה האחרונה
+    _ownsSearchTab = widget.existingTab == null;
     if (widget.existingTab != null) {
       _searchTab = widget.existingTab!;
     } else {
@@ -209,6 +212,7 @@ class _SearchDialogState extends State<SearchDialog> {
                 final query = bookmark.book.title; // הטקסט הפשוט של החיפוש
                 final displayText =
                     bookmark.ref; // הטקסט המעוצב (עם קידומות וסיומות)
+                final originalIndex = state.history.indexOf(bookmark);
 
                 return ListTile(
                   dense: true,
@@ -217,6 +221,15 @@ class _SearchDialogState extends State<SearchDialog> {
                     displayText,
                     textAlign: TextAlign.right,
                     style: const TextStyle(fontSize: 14),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(FluentIcons.delete_24_regular, size: 18),
+                    tooltip: 'מחק מההיסטוריה',
+                    onPressed: () {
+                      context
+                          .read<HistoryBloc>()
+                          .add(RemoveHistory(originalIndex));
+                    },
                   ),
                   onTap: () {
                     // שחזור הטקסט הפשוט (ללא קידומות וסיומות)
@@ -259,6 +272,9 @@ class _SearchDialogState extends State<SearchDialog> {
     if (restorer != null) FocusRepository().unregisterActiveRestorer(restorer);
     _searchTab.queryController.removeListener(_queryListener);
     _advancedControlsHasFocus.dispose();
+    if (_ownsSearchTab) {
+      _searchTab.dispose();
+    }
     super.dispose();
   }
 
@@ -355,10 +371,9 @@ class _SearchDialogState extends State<SearchDialog> {
   void _setSearchAllCategories(bool value) {
     setState(() {
       _searchAllCategories = value;
-      _selectedCategoryFacets =
-          _searchAllCategories || _manualFacets.isEmpty
-              ? {'/'}
-              : Set<String>.from(_manualFacets);
+      _selectedCategoryFacets = _searchAllCategories || _manualFacets.isEmpty
+          ? {'/'}
+          : Set<String>.from(_manualFacets);
     });
     SearchScopePreferences.save(
       searchAllCategories: _searchAllCategories,
@@ -370,9 +385,8 @@ class _SearchDialogState extends State<SearchDialog> {
     setState(() {
       _manualFacets = Set<String>.from(selection);
       if (!_searchAllCategories) {
-        _selectedCategoryFacets = _manualFacets.isEmpty
-            ? {'/'}
-            : Set<String>.from(_manualFacets);
+        _selectedCategoryFacets =
+            _manualFacets.isEmpty ? {'/'} : Set<String>.from(_manualFacets);
       }
     });
     SearchScopePreferences.save(
@@ -485,6 +499,7 @@ class _SearchDialogState extends State<SearchDialog> {
     return BlocProvider.value(
       value: _searchTab.searchBloc,
       child: Dialog(
+        key: tourSearchDialogTargetKey,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: FocusScope(
           onKeyEvent: (node, event) {
@@ -600,6 +615,25 @@ class _SearchDialogState extends State<SearchDialog> {
                                         ),
                                         showInlineSearchButton: false,
                                         onSubmit: _performSearch,
+                                        trailingAction: IconButton(
+                                          icon: Icon(
+                                            _showHistoryDropdown
+                                                ? FluentIcons
+                                                    .chevron_up_24_regular
+                                                : FluentIcons
+                                                    .history_24_regular,
+                                            size: 24,
+                                          ),
+                                          tooltip: 'היסטוריית חיפושים',
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () {
+                                            setState(() {
+                                              _showHistoryDropdown =
+                                                  !_showHistoryDropdown;
+                                            });
+                                          },
+                                        ),
                                       ),
                                     ),
                                     // כפתור חיפוש
@@ -630,33 +664,6 @@ class _SearchDialogState extends State<SearchDialog> {
                                         ),
                                       ),
                                     ),
-                                    // כפתור היסטוריה
-                                    Positioned(
-                                      left: 48,
-                                      top: 0,
-                                      bottom: 0,
-                                      child: Center(
-                                        child: IconButton(
-                                          icon: Icon(
-                                            _showHistoryDropdown
-                                                ? FluentIcons
-                                                    .chevron_up_24_regular
-                                                : FluentIcons
-                                                    .history_24_regular,
-                                            size: 24,
-                                          ),
-                                          tooltip: 'היסטוריית חיפושים',
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          onPressed: () {
-                                            setState(() {
-                                              _showHistoryDropdown =
-                                                  !_showHistoryDropdown;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                    ),
                                   ],
                                 );
 
@@ -668,15 +675,15 @@ class _SearchDialogState extends State<SearchDialog> {
                                       )
                                     : null;
 
-                                final categoriesToggleWidget =
-                                    widget.bookTitle == null
-                                        ? Padding(
-                                            padding: const EdgeInsets.only(
-                                                right: 8.0),
-                                            child:
-                                                _buildCategoriesToggle(context),
-                                          )
-                                        : null;
+                                final categoriesToggleWidget = widget
+                                            .bookTitle ==
+                                        null
+                                    ? Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 8.0),
+                                        child: _buildCategoriesToggle(context),
+                                      )
+                                    : null;
 
                                 // ב-LayoutBuilder: אם הרוחב צר — accessories לשורה שנייה
                                 return LayoutBuilder(
@@ -744,7 +751,8 @@ class _SearchDialogState extends State<SearchDialog> {
                                     }
                                     return CategoryTreeSelector(
                                       selectedFacets: _manualFacets,
-                                      onSelectionChanged: _onManualFacetsChanged,
+                                      onSelectionChanged:
+                                          _onManualFacetsChanged,
                                     );
                                   }
 
@@ -757,21 +765,22 @@ class _SearchDialogState extends State<SearchDialog> {
                                     inputFocusNotifier:
                                         _advancedControlsHasFocus,
                                   );
-                                  final categoryPanel = showCategory &&
-                                          widget.bookTitle == null
-                                      ? CategoryTreeSelector(
-                                          selectedFacets: _manualFacets,
-                                          onSelectionChanged:
-                                              _onManualFacetsChanged,
-                                        )
-                                      : null;
+                                  final categoryPanel =
+                                      showCategory && widget.bookTitle == null
+                                          ? CategoryTreeSelector(
+                                              selectedFacets: _manualFacets,
+                                              onSelectionChanged:
+                                                  _onManualFacetsChanged,
+                                            )
+                                          : null;
 
                                   return LayoutBuilder(
                                     builder: (context, constraints) {
                                       // כשיש פאנל קטגוריות (260px) + controls,
                                       // דורש לפחות ~480px — אחרת ערמה אנכית
-                                      final useColumns = categoryPanel != null &&
-                                          constraints.maxWidth < 480;
+                                      final useColumns =
+                                          categoryPanel != null &&
+                                              constraints.maxWidth < 480;
 
                                       if (useColumns) {
                                         return SingleChildScrollView(

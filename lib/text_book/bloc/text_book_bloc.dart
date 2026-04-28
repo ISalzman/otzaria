@@ -185,6 +185,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   static const int _linkLookBehindLines = 25;
   static const int _linkLookAheadLines = 50;
   static const int _linksReloadThresholdLines = 20;
+  static const Duration _visibleIndicesDebounceDuration =
+      Duration(milliseconds: 160);
   static const String _allTargetBookTitlesSignature =
       '__all_target_book_titles__';
 
@@ -497,9 +499,19 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         final rawPositions = positionsListener.itemPositions.value.toList()
           ..sort((a, b) => a.index.compareTo(b.index));
         final visibleIndicesNow =
-            rawPositions.map((position) => position.index).toList();
+            rawPositions.map((position) => position.index).toSet().toList();
+        if (visibleIndicesNow.isEmpty) {
+          return;
+        }
         final currentState = state;
         if (currentState is TextBookLoaded) {
+          if (!_hasMeaningfulVisibleIndicesChange(
+            currentState.visibleIndices,
+            visibleIndicesNow,
+          )) {
+            return;
+          }
+
           final initialSyncClassification =
               classifyRawPositionsDuringInitialPageShapeVisibleSyncForTesting(
             awaitingInitialPageShapeVisibleSync:
@@ -522,7 +534,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         }
 
         _debounceTimer?.cancel();
-        _debounceTimer = Timer(const Duration(milliseconds: 100), () {
+        _debounceTimer = Timer(_visibleIndicesDebounceDuration, () {
           if (isClosed) {
             return;
           }
@@ -531,8 +543,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
               .toList()
             ..sort((a, b) => a.index.compareTo(b.index));
           final visibleIndicesNow =
-              debouncedRawPositions.map((e) => e.index).toList();
-          if (visibleIndicesNow.isNotEmpty) {
+              debouncedRawPositions.map((e) => e.index).toSet().toList();
+          final latestState = state;
+          if (visibleIndicesNow.isNotEmpty &&
+              latestState is TextBookLoaded &&
+              _hasMeaningfulVisibleIndicesChange(
+                latestState.visibleIndices,
+                visibleIndicesNow,
+              )) {
             add(UpdateVisibleIndecies(visibleIndicesNow));
           }
         });
@@ -1034,7 +1052,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   List<String> _normalizeCommentaryTargets(Iterable<String> titles) {
     return titles
         .map((title) => title.trim())
-        .where((title) => title.isNotEmpty)
+        .where((title) => title.isNotEmpty && title != kNotesCommentatorTitle)
         .toSet()
         .toList()
       ..sort();
@@ -1056,14 +1074,22 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return const <String>[];
   }
 
+  bool _isCommentariesBelowMode(TextBookLoaded state) {
+    return !state.showSplitView && !state.showPageShapeView;
+  }
+
   bool _shouldLoadLinksForState(TextBookLoaded state) {
-    return state.showSplitView ||
+    return _isCommentariesBelowMode(state) ||
+        state.showSplitView ||
         state.showPageShapeView ||
         state.activeCommentators.isNotEmpty;
   }
 
   bool _shouldLoadLinksForVisibleIndicesChange(TextBookLoaded state) {
-    return state.showSplitView || state.showPageShapeView || state.showLeftPane;
+    return _isCommentariesBelowMode(state) ||
+        state.showSplitView ||
+        state.showPageShapeView ||
+        state.showLeftPane;
   }
 
   List<int> _targetIndicesForCommentaryRefresh(TextBookLoaded state) {
@@ -1085,6 +1111,22 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return true;
   }
 
+  bool _hasMeaningfulVisibleIndicesChange(
+    List<int> currentIndices,
+    List<int> nextIndices,
+  ) {
+    if (_listsEqual(currentIndices, nextIndices)) {
+      return false;
+    }
+
+    if (currentIndices.isEmpty || nextIndices.isEmpty) {
+      return true;
+    }
+
+    return currentIndices.first != nextIndices.first ||
+        currentIndices.last != nextIndices.last;
+  }
+
   void _onUpdateSelectedIndex(
     UpdateSelectedIndex event,
     Emitter<TextBookState> emit,
@@ -1102,9 +1144,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         clearSelectedIndex: event.index == null,
         visibleLinks: visibleLinks,
       ));
-      // במצב מפרשים מתחת, קישורים לא נטענים ברקע באופן שוטף —
-      // נטען עבור הקטע הנבחר כדי להציג expansion tiles
-      if (!currentState.showSplitView &&
+      // בחירה בקטע עדיין מרעננת נקודתית את חלון הקישורים
+      // כדי לוודא שתוכן ה-expansion tiles זמין מיידית.
+      if (_isCommentariesBelowMode(currentState) &&
           !currentState.showPageShapeView &&
           event.index != null) {
         _loadLinksInBackground(currentState.book, [event.index!]);
@@ -1668,9 +1710,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
+      // בחירה אוטומטית של הערות כאשר אין מפרשים פעילים
+      final autoSelectNotes = currentState.activeCommentators.isEmpty &&
+          event.notesContent != null;
+      final activeCommentators = autoSelectNotes
+          ? [kNotesCommentatorTitle]
+          : currentState.activeCommentators;
+
       final updatedState = currentState.copyWith(
         availableCommentators: event.availableCommentators,
         commentatorGroups: event.commentatorGroups.cast<CommentatorGroup>(),
+        notesContent: event.notesContent,
+        activeCommentators: activeCommentators,
       );
       emit(updatedState);
 
@@ -1701,8 +1752,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     try {
       final availableCommentators =
           await repository.getAvailableCommentators(book);
-      final eras = await utils.splitByEra(availableCommentators);
-      final groups = _buildCommentatorGroups(eras, availableCommentators);
+      final notesContent = await repository.getNotesContent(book);
+
+      final allCommentators = [...availableCommentators];
+      if (notesContent != null) {
+        allCommentators.add(kNotesCommentatorTitle);
+      }
+
+      final eras = await utils.splitByEra(allCommentators);
+      final groups = _buildCommentatorGroups(eras, allCommentators);
 
       if (isClosed || state is! TextBookLoaded) {
         return;
@@ -1713,7 +1771,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         return;
       }
 
-      add(UpdateAvailableCommentators(availableCommentators, groups));
+      add(UpdateAvailableCommentators(allCommentators, groups,
+          notesContent: notesContent));
     } catch (e) {
       debugPrint('⚠️ Failed to load commentators in background: $e');
       // Silent fail - user already has the book displayed

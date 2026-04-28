@@ -10,6 +10,36 @@
  *
  * The `Otzaria` global is injected automatically by the host.
  * You do NOT need to import or load any script.
+ *
+ * ---------------------------------------------------------------------------
+ * HTML Layout Requirements
+ * ---------------------------------------------------------------------------
+ *
+ * SCROLLING
+ *   The plugin runs inside a WebView2 (Windows) / WKWebView (iOS/macOS) /
+ *   WebView (Android/Linux). Scrolling is NOT automatic — you must explicitly
+ *   allow overflow on the root elements, otherwise the page will be clipped
+ *   with no scrollbar and no mouse-wheel response:
+ *
+ *     html, body {
+ *       height: 100%;
+ *       overflow-y: auto;   ← required for vertical scroll
+ *       overflow-x: hidden; ← or auto, depending on your layout
+ *     }
+ *
+ *   If you use a custom scroll container (e.g. a div that fills the viewport),
+ *   apply overflow-y: auto / scroll to that container instead of body.
+ *   Avoid `overflow: hidden` on any ancestor of scrollable content.
+ *
+ * TAB VISIBILITY (manifest: contributes.toolTab.defaultPinned)
+ *   Set `defaultPinned: true` in your manifest if you want the plugin tab to
+ *   appear automatically in the toolbar after installation.
+ *   If `defaultPinned: false`, the user must manually pin the plugin from the
+ *   plugin side panel (🧩 button) before it appears as a tab.
+ *
+ * RTL SUPPORT
+ *   Add `dir="rtl"` to the <html> element for Hebrew / Arabic content:
+ *     <html dir="rtl" lang="he">
  */
 
 // ---------------------------------------------------------------------------

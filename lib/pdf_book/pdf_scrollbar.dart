@@ -33,9 +33,11 @@ class PdfScrollbar extends StatefulWidget {
 }
 
 class _PdfScrollbarState extends State<PdfScrollbar> {
+  final GlobalKey _trackKey = GlobalKey();
   double? _lastThumbTop;
   double? _lastThumbHeight;
   int? _lastPageNumber;
+  double? _dragPointerOffsetWithinThumb;
 
   @override
   Widget build(BuildContext context) {
@@ -190,14 +192,41 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                   );
                 }
 
+                void startThumbDrag(DragStartDetails details) {
+                  _dragPointerOffsetWithinThumb = details.localPosition.dy;
+                }
+
+                void updateThumbDrag(DragUpdateDetails details) {
+                  final trackContext = _trackKey.currentContext;
+                  if (trackContext == null) return;
+                  final trackBox =
+                      trackContext.findRenderObject() as RenderBox?;
+                  if (trackBox == null) return;
+                  final localPosition =
+                      trackBox.globalToLocal(details.globalPosition);
+                  jumpToThumbTop(
+                    localPosition.dy -
+                        (_dragPointerOffsetWithinThumb ?? thumbHeight / 2),
+                  );
+                }
+
+                void endThumbDrag() {
+                  _dragPointerOffsetWithinThumb = null;
+                }
+
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapDown: (details) {
+                    final tapY = details.localPosition.dy;
+                    final isTapOnThumb =
+                        tapY >= thumbTop && tapY <= thumbTop + thumbHeight;
+                    if (isTapOnThumb) return;
                     jumpToThumbTop(details.localPosition.dy - thumbHeight / 2);
                   },
                   child: Stack(
                     children: [
                       Container(
+                        key: _trackKey,
                         width: widget.trackThickness,
                         decoration: BoxDecoration(
                           color: resolvedTrackColor,
@@ -211,9 +240,10 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                         right: 0,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onVerticalDragUpdate: (details) {
-                            jumpToThumbTop(thumbTop + details.delta.dy);
-                          },
+                          onVerticalDragStart: startThumbDrag,
+                          onVerticalDragUpdate: updateThumbDrag,
+                          onVerticalDragEnd: (_) => endThumbDrag(),
+                          onVerticalDragCancel: endThumbDrag,
                           child: Container(
                             width: widget.trackThickness,
                             height: thumbHeight,
@@ -247,19 +277,14 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
   }
 }
 
-/// פס גלילה אופקי דינמי שמתאים את גודלו לפי יחס התוכן הנראה.
-class PdfHorizontalScrollbar extends StatelessWidget {
-  static const double _minThumbRatio = 0.15;
-  static const double _maxThumbRatio = 0.85;
-  static const double _minZoomForNormalization = 0.5;
-  static const double _zoomRangeForNormalization = 4.5;
-  static const double _minThumbWidth = 60.0;
-  static const double _maxThumbWidthFactor = 0.95;
-
+/// פס גלילה אופקי מותאם — ללא שימוש ב-PdfViewerScrollThumb כדי למנוע
+/// את ה-race condition של visibleRect בתוך build() של pdfrx.
+class PdfHorizontalScrollbar extends StatefulWidget {
   final PdfViewerController controller;
   final double trackThickness;
   final Color? trackColor;
   final Color? thumbColor;
+  static const double _minThumbWidth = 60.0;
 
   const PdfHorizontalScrollbar({
     super.key,
@@ -270,46 +295,137 @@ class PdfHorizontalScrollbar extends StatelessWidget {
   });
 
   @override
+  State<PdfHorizontalScrollbar> createState() =>
+      _PdfHorizontalScrollbarState();
+}
+
+class _PdfHorizontalScrollbarState extends State<PdfHorizontalScrollbar> {
+  double? _dragPointerOffsetWithinThumb;
+  final GlobalKey _trackKey = GlobalKey();
+
+  @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
     final colorScheme = Theme.of(context).colorScheme;
+    final resolvedThumbColor =
+        widget.thumbColor ?? colorScheme.outline.withValues(alpha: 0.75);
 
     return AnimatedBuilder(
-      animation: controller,
-      builder: (context, child) {
-        if (!controller.isReady) {
-          return const SizedBox.shrink();
-        }
+      animation: widget.controller,
+      builder: (context, _) {
+        if (!widget.controller.isReady) return const SizedBox.shrink();
+
+        final Rect visibleRect;
+        final Size documentSize;
         try {
-          controller.visibleRect;
+          visibleRect = widget.controller.visibleRect;
+          documentSize = widget.controller.layout.documentSize;
         } catch (_) {
           return const SizedBox.shrink();
         }
 
-        final zoom = controller.value.zoom;
-        final normalizedZoom =
-            ((zoom - _minZoomForNormalization) / _zoomRangeForNormalization)
-                .clamp(0.0, 1.0);
-        final thumbRatio = _maxThumbRatio -
-            (normalizedZoom * (_maxThumbRatio - _minThumbRatio));
+        final totalWidth = documentSize.width;
+        if (totalWidth <= 0) return const SizedBox.shrink();
 
-        final thumbWidth = screenWidth * thumbRatio;
-        final maxThumbWidth = screenWidth * _maxThumbWidthFactor;
-        final clampedThumbWidth =
-            thumbWidth.clamp(_minThumbWidth, maxThumbWidth);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final trackWidth = constraints.maxWidth;
+            if (trackWidth <= 0) return const SizedBox.shrink();
 
-        return PdfViewerScrollThumb(
-          controller: controller,
-          orientation: ScrollbarOrientation.bottom,
-          thumbSize: Size(clampedThumbWidth, trackThickness),
-          thumbBuilder: (context, thumbSize, pageNumber, controller) {
-            return Container(
-              width: thumbSize.width,
-              height: trackThickness,
-              decoration: BoxDecoration(
-                color:
-                    thumbColor ?? colorScheme.outline.withValues(alpha: 0.75),
-                borderRadius: BorderRadius.circular(trackThickness / 2),
+            final visibleWidth = visibleRect.width.clamp(0.0, totalWidth);
+            final scrollableExtent =
+                math.max(totalWidth - visibleWidth, 0.0);
+            if (scrollableExtent == 0) return const SizedBox.shrink();
+
+            final thumbWidthRaw =
+                totalWidth <= 0 ? trackWidth : trackWidth * (visibleWidth / totalWidth);
+            final thumbWidth = thumbWidthRaw.clamp(
+                PdfHorizontalScrollbar._minThumbWidth, trackWidth);
+            final maxThumbLeft = math.max(trackWidth - thumbWidth, 0.0);
+            final currentLeft =
+                (visibleRect.left).clamp(0.0, scrollableExtent);
+            final thumbLeft = maxThumbLeft * (currentLeft / scrollableExtent);
+
+            void jumpToThumbLeft(double desiredThumbLeft) {
+              if (maxThumbLeft <= 0) return;
+              final normalized =
+                  (desiredThumbLeft.clamp(0.0, maxThumbLeft) / maxThumbLeft)
+                      .toDouble();
+              final targetLeft = normalized * scrollableExtent;
+              final zoom = widget.controller.value.zoom;
+              final targetCenter = Offset(
+                targetLeft + visibleWidth / 2,
+                visibleRect.center.dy,
+              );
+              widget.controller.goTo(
+                widget.controller.calcMatrixFor(
+                  targetCenter,
+                  zoom: zoom,
+                  viewSize: widget.controller.viewSize,
+                ),
+              );
+            }
+
+            void startDrag(DragStartDetails details) {
+              _dragPointerOffsetWithinThumb = details.localPosition.dx;
+            }
+
+            void updateDrag(DragUpdateDetails details) {
+              final trackCtx = _trackKey.currentContext;
+              if (trackCtx == null) return;
+              final trackBox =
+                  trackCtx.findRenderObject() as RenderBox?;
+              if (trackBox == null) return;
+              final local = trackBox.globalToLocal(details.globalPosition);
+              jumpToThumbLeft(
+                local.dx -
+                    (_dragPointerOffsetWithinThumb ?? thumbWidth / 2),
+              );
+            }
+
+            void endDrag() {
+              _dragPointerOffsetWithinThumb = null;
+            }
+
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (details) {
+                final tapX = details.localPosition.dx;
+                if (tapX >= thumbLeft && tapX <= thumbLeft + thumbWidth) {
+                  return;
+                }
+                jumpToThumbLeft(details.localPosition.dx - thumbWidth / 2);
+              },
+              child: SizedBox(
+                height: widget.trackThickness,
+                child: Stack(
+                  children: [
+                    Container(
+                      key: _trackKey,
+                      height: widget.trackThickness,
+                    ),
+                    Positioned(
+                      left: thumbLeft,
+                      top: 0,
+                      bottom: 0,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onHorizontalDragStart: startDrag,
+                        onHorizontalDragUpdate: updateDrag,
+                        onHorizontalDragEnd: (_) => endDrag(),
+                        onHorizontalDragCancel: endDrag,
+                        child: Container(
+                          width: thumbWidth,
+                          height: widget.trackThickness,
+                          decoration: BoxDecoration(
+                            color: resolvedThumbColor,
+                            borderRadius: BorderRadius.circular(
+                                widget.trackThickness / 2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },

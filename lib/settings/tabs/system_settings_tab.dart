@@ -25,14 +25,19 @@ import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
+import 'package:otzaria/models/direct_error_report.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/error_report_sender_email_dialog.dart';
+import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// טאב "אוצריא" — גרסאות, נתיב ספרייה, גיבוי, מצב סייפר, איפוס.
@@ -72,6 +77,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   bool _isFlushingPendingReports = false;
   bool _isClearingPendingReports = false;
   bool _isExportingPendingReports = false;
+  bool _isClearingSentReports = false;
+  bool _isPendingReportsExpanded = false;
+  bool _isSentReportsExpanded = false;
+  String? _sendingPendingReportId;
 
   @override
   void initState() {
@@ -164,6 +173,132 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         'לא ניתן לשלוח כרגע את הדיווחים השמורים. עדיין שמורים בתור $pendingAfter דיווחים, וניתן לנהל אותם בהגדרות.',
       );
     }
+  }
+
+  Future<void> _sendPendingReport(DirectErrorReport report) async {
+    setState(() {
+      _sendingPendingReportId = report.id;
+    });
+
+    DirectReportDeliveryResult? result;
+    try {
+      result = await DirectErrorReportService().submitPendingReport(report);
+    } catch (e) {
+      debugPrint('Failed to send pending direct report: $e');
+      if (mounted) {
+        UiSnack.showError('שגיאה בשליחת הדיווח: ${e.toString()}');
+      }
+      return;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingPendingReportId = null;
+        });
+      }
+    }
+
+    if (!mounted) return;
+    if (result.isSent) {
+      await ErrorReportHelper.showDirectReportDetailsDialog(
+        context,
+        title: 'הדיווח נשלח בהצלחה',
+        report: report,
+      );
+      if (!mounted) return;
+      setState(() {});
+    } else if (result.isQueued) {
+      UiSnack.show(result.message);
+    } else {
+      UiSnack.showError(result.message);
+    }
+  }
+
+  Future<void> _editPendingReport(DirectErrorReport report) async {
+    var editValues = _PendingReportEditValues(
+      selectedText: report.selectedText,
+      errorDetails: report.errorDetails,
+      contextText: report.contextText,
+    );
+
+    final confirmed = await showTwoActionsDialog(
+      context: context,
+      title: 'עריכת דיווח שמור',
+      content: '',
+      cancelText: 'ביטול',
+      confirmText: 'שמור',
+      handleEnterKey: false,
+      customContent: SizedBox(
+        width: 560,
+        child: _PendingReportEditFields(
+          initialValues: editValues,
+          onChanged: (values) => editValues = values,
+        ),
+      ),
+    );
+
+    if (confirmed == true) {
+      await DirectErrorReportService().updatePendingReport(
+        report.copyWith(
+          selectedText: editValues.selectedText.trim(),
+          errorDetails: editValues.errorDetails.trim(),
+          contextText: editValues.contextText.trim(),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {});
+      UiSnack.showSuccess('הדיווח עודכן.');
+    }
+  }
+
+  Future<void> _showReportDetails(
+    DirectErrorReport report, {
+    required bool sent,
+  }) async {
+    await ErrorReportHelper.showDirectReportDetailsDialog(
+      context,
+      title: sent ? 'פרטי דיווח שנשלח' : 'פרטי דיווח שמור',
+      report: report,
+    );
+  }
+
+  Future<void> _deleteSentReport(DirectErrorReport report) async {
+    await DirectErrorReportService().deleteSentReport(report.id);
+    if (!mounted) return;
+    setState(() {});
+    UiSnack.show('הדיווח נמחק מההיסטוריה.');
+  }
+
+  Future<void> _deletePendingReport(DirectErrorReport report) async {
+    await DirectErrorReportService().deletePendingReport(report.id);
+    if (!mounted) return;
+    setState(() {});
+    UiSnack.show('הדיווח השמור נמחק.');
+  }
+
+  Future<void> _clearSentReports() async {
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: 'לנקות את היסטוריית הדיווחים?',
+      content: 'כל הדיווחים שנשלחו יימחקו מההיסטוריה המקומית.',
+      subtitle: 'הפעולה לא מוחקת דיווחים שכבר נשלחו לצוות.',
+      cancelText: 'ביטול',
+      confirmText: 'נקה',
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isClearingSentReports = true;
+    });
+
+    await DirectErrorReportService().clearSentReports();
+
+    if (!mounted) return;
+    setState(() {
+      _isClearingSentReports = false;
+    });
+    UiSnack.show('היסטוריית הדיווחים נוקתה.');
   }
 
   Future<void> _clearPendingReports() async {
@@ -294,24 +429,28 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           child: SingleChildScrollView(
             primary: true,
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // 1. גרסאות + נתיב ספרייה
-                _buildVersionAndPathSection(context, state),
+            child: ToolPanelWrapper(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 1. גרסאות + נתיב ספרייה
+                  _buildVersionAndPathSection(context, state),
 
-                // 2. עדכוני מערכת (רשת + עדכון מפתחים)
-                _buildSystemUpdatesSection(context, state),
+                  // 2. עדכוני מערכת (רשת + עדכון מפתחים)
+                  _buildSystemUpdatesSection(context, state),
 
-                // 3. דיווחי טעויות
-                _buildErrorReportsSection(context, state),
+                  // 3. דיווחי טעויות
+                  _buildErrorReportsSection(context, state),
 
-                // 4. מתקדם (גיבוי + מצב סייפר)
-                _buildAdvancedSection(context, state),
+                  // 4. מתקדם (גיבוי + מצב סייפר)
+                  _buildAdvancedSection(context, state),
 
-                // 6. איפוס
-                _buildResetSection(context),
-              ],
+                  _buildGuidedTourSection(context),
+
+                  // 6. איפוס
+                  _buildResetSection(context),
+                ],
+              ),
             ),
           ),
         );
@@ -486,10 +625,17 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             setState(() {});
           },
         ),
-        FutureBuilder<int>(
-          future: reportService.getPendingReportsCount(),
+        FutureBuilder<List<List<DirectErrorReport>>>(
+          future: Future.wait([
+            reportService.getPendingReports(),
+            reportService.getSentReports(),
+          ]),
           builder: (context, snapshot) {
-            final pendingCount = snapshot.data ?? 0;
+            final pendingReports =
+                snapshot.data?.first ?? const <DirectErrorReport>[];
+            final sentReports =
+                snapshot.data?.last ?? const <DirectErrorReport>[];
+            final pendingCount = pendingReports.length;
             final hasReports = pendingCount > 0;
             final canSendNow = hasReports && !state.isOfflineMode;
 
@@ -507,65 +653,267 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                     style: kSettingsSubtitleStyle,
                     textDirection: TextDirection.rtl,
                   ),
-                ),
-                Padding(
-                  padding:
-                      const EdgeInsets.only(right: 16, left: 16, bottom: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildManagedActionButton(
-                          enabled: canSendNow,
-                          child: RecommendedActionButton(
-                            text: 'שלח עכשיו',
-                            icon: FluentIcons.arrow_sync_24_regular,
-                            onPressed: _flushPendingReports,
-                            isLoading: _isFlushingPendingReports,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildManagedActionButton(
-                          enabled: hasReports,
-                          child: NeutralActionButton(
-                            text: 'נקה דיווחים',
-                            icon: FluentIcons.delete_24_regular,
-                            onPressed: _clearPendingReports,
-                            isLoading: _isClearingPendingReports,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildManagedActionButton(
-                          enabled: hasReports,
-                          child: NeutralActionButton(
-                            text: 'הורד לשליחה במחשב מחובר',
-                            icon: FluentIcons.arrow_download_24_regular,
-                            onPressed: _exportPendingReportsScript,
-                            isLoading: _isExportingPendingReports,
-                          ),
-                        ),
-                      ),
-                    ],
+                  trailing: Icon(
+                    _isPendingReportsExpanded
+                        ? FluentIcons.chevron_up_24_regular
+                        : FluentIcons.chevron_down_24_regular,
+                  ),
+                  onTap: () => setState(
+                    () =>
+                        _isPendingReportsExpanded = !_isPendingReportsExpanded,
                   ),
                 ),
-                if (state.isOfflineMode)
-                  Padding(
-                    padding:
-                        const EdgeInsets.only(right: 16, left: 16, bottom: 16),
-                    child: Text(
-                      'במצב מנותק אי אפשר לשלוח כעת, אך ניתן להוריד סקריפט לשליחה ממחשב מחובר.',
-                      style: kSettingsSubtitleStyle,
-                      textDirection: TextDirection.rtl,
-                    ),
+                AnimatedSize(
+                  duration: AppTokens.animNormal,
+                  curve: Curves.easeInOut,
+                  child: _isPendingReportsExpanded
+                      ? Column(
+                          children: [
+                            if (pendingReports.isNotEmpty)
+                              ...pendingReports.map(
+                                (report) => _buildPendingReportTile(
+                                  context,
+                                  report,
+                                  canSend: !state.isOfflineMode,
+                                ),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                right: 16,
+                                left: 16,
+                                bottom: 16,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildManagedActionButton(
+                                      enabled: canSendNow,
+                                      child: RecommendedActionButton(
+                                        text: 'שלח עכשיו',
+                                        icon: FluentIcons.arrow_sync_24_regular,
+                                        onPressed: _flushPendingReports,
+                                        isLoading: _isFlushingPendingReports,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildManagedActionButton(
+                                      enabled: hasReports,
+                                      child: NeutralActionButton(
+                                        text: 'נקה דיווחים',
+                                        icon: FluentIcons.delete_24_regular,
+                                        onPressed: _clearPendingReports,
+                                        isLoading: _isClearingPendingReports,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildManagedActionButton(
+                                      enabled: hasReports,
+                                      child: NeutralActionButton(
+                                        text: 'הורד לשליחה במחשב מחובר',
+                                        icon: FluentIcons
+                                            .arrow_download_24_regular,
+                                        onPressed: _exportPendingReportsScript,
+                                        isLoading: _isExportingPendingReports,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (state.isOfflineMode)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  right: 16,
+                                  left: 16,
+                                  bottom: 16,
+                                ),
+                                child: Text(
+                                  'במצב מנותק אי אפשר לשלוח כעת, אך ניתן להוריד סקריפט לשליחה ממחשב מחובר.',
+                                  style: kSettingsSubtitleStyle,
+                                  textDirection: TextDirection.rtl,
+                                ),
+                              ),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                ListTile(
+                  hoverColor: Colors.transparent,
+                  leading: const Icon(FluentIcons.checkmark_circle_24_regular),
+                  title:
+                      const Text('דיווחים שנשלחו', style: kSettingsTitleStyle),
+                  subtitle: Text(
+                    sentReports.isEmpty
+                        ? 'עדיין אין דיווחים שנשלחו דרך המערכת'
+                        : 'נשמרו ${sentReports.length} דיווחים שנשלחו',
+                    style: kSettingsSubtitleStyle,
+                    textDirection: TextDirection.rtl,
                   ),
+                  trailing: Icon(
+                    _isSentReportsExpanded
+                        ? FluentIcons.chevron_up_24_regular
+                        : FluentIcons.chevron_down_24_regular,
+                  ),
+                  onTap: () => setState(
+                    () => _isSentReportsExpanded = !_isSentReportsExpanded,
+                  ),
+                ),
+                AnimatedSize(
+                  duration: AppTokens.animNormal,
+                  curve: Curves.easeInOut,
+                  child: _isSentReportsExpanded
+                      ? Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                right: 16,
+                                left: 16,
+                                bottom: 16,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildManagedActionButton(
+                                      enabled: sentReports.isNotEmpty,
+                                      child: NeutralActionButton(
+                                        text: 'נקה את כל ההיסטוריה',
+                                        icon: FluentIcons.delete_24_regular,
+                                        onPressed: _clearSentReports,
+                                        isLoading: _isClearingSentReports,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (sentReports.isNotEmpty)
+                              ...sentReports.map(
+                                (report) =>
+                                    _buildSentReportTile(context, report),
+                              ),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ],
             );
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildPendingReportTile(
+    BuildContext context,
+    DirectErrorReport report, {
+    required bool canSend,
+  }) {
+    final isSending = _sendingPendingReportId == report.id;
+    return Column(
+      children: [
+        ListTile(
+          hoverColor: Colors.transparent,
+          leading: const Icon(FluentIcons.document_bullet_list_24_regular),
+          title: Text(
+            report.bookTitle,
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: Text(
+            '${report.currentRef} · ${report.errorDetails.isEmpty ? 'ללא פירוט' : report.errorDetails}',
+            style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        _buildReportActions(
+          children: [
+            NeutralActionButton(
+              text: 'צפה',
+              icon: FluentIcons.eye_24_regular,
+              onPressed: () => _showReportDetails(report, sent: false),
+            ),
+            NeutralActionButton(
+              text: 'ערוך',
+              icon: FluentIcons.edit_24_regular,
+              onPressed: () => _editPendingReport(report),
+            ),
+            NeutralActionButton(
+              text: 'מחק',
+              icon: FluentIcons.delete_24_regular,
+              onPressed: () => _deletePendingReport(report),
+            ),
+            _buildManagedActionButton(
+              enabled: canSend,
+              child: RecommendedActionButton(
+                text: 'שלח',
+                icon: FluentIcons.send_24_regular,
+                isLoading: isSending,
+                onPressed: () => _sendPendingReport(report),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSentReportTile(BuildContext context, DirectErrorReport report) {
+    return Column(
+      children: [
+        ListTile(
+          hoverColor: Colors.transparent,
+          leading: const Icon(FluentIcons.checkmark_24_regular),
+          title: Text(
+            report.bookTitle,
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: Text(
+            '${report.currentRef} · ${report.errorDetails.isEmpty ? 'ללא פירוט' : report.errorDetails}',
+            style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        _buildReportActions(
+          children: [
+            NeutralActionButton(
+              text: 'צפה',
+              icon: FluentIcons.eye_24_regular,
+              onPressed: () => _showReportDetails(report, sent: true),
+            ),
+            NeutralActionButton(
+              text: 'מחק',
+              icon: FluentIcons.delete_24_regular,
+              onPressed: () => _deleteSentReport(report),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReportActions({
+    required List<Widget> children,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 56, left: 16, bottom: 12),
+      child: Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.end,
+          children: children,
+        ),
+      ),
     );
   }
 
@@ -803,54 +1151,57 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       children: [
         // ── גיבוי אוטומטי ──
         // שורה ראשית — לחיצה פותחת/סוגרת
-        InkWell(
-          onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Icon(FluentIcons.calendar_clock_24_regular),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'גיבוי אוטומטי',
-                    style: Theme.of(context).textTheme.titleMedium,
+        KeyedSubtree(
+          key: tourBackupSettingsTargetKey,
+          child: InkWell(
+            onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  const Icon(FluentIcons.calendar_clock_24_regular),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'גיבוי אוטומטי',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
-                ),
-                // SegmentedButton לבחירת תדירות
-                SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  style: ButtonStyle(
-                    visualDensity: VisualDensity.compact,
+                  // SegmentedButton לבחירת תדירות
+                  SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    segments: const [
+                      ButtonSegment<String>(
+                        value: 'none',
+                        label: Text('ללא'),
+                      ),
+                      ButtonSegment<String>(
+                        value: 'weekly',
+                        label: Text('שבועי'),
+                      ),
+                      ButtonSegment<String>(
+                        value: 'monthly',
+                        label: Text('חודשי'),
+                      ),
+                    ],
+                    selected: {autoFrequency},
+                    onSelectionChanged: (Set<String> newSelection) {
+                      Settings.setValue<String>(
+                          _keyAutoBackupFrequency, newSelection.first);
+                      setState(() {});
+                    },
                   ),
-                  segments: const [
-                    ButtonSegment<String>(
-                      value: 'none',
-                      label: Text('ללא'),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'weekly',
-                      label: Text('שבועי'),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'monthly',
-                      label: Text('חודשי'),
-                    ),
-                  ],
-                  selected: {autoFrequency},
-                  onSelectionChanged: (Set<String> newSelection) {
-                    Settings.setValue<String>(
-                        _keyAutoBackupFrequency, newSelection.first);
-                    setState(() {});
-                  },
-                ),
-                const SizedBox(width: 12),
-                Icon(
-                  _isBackupExpanded
-                      ? FluentIcons.chevron_up_24_regular
-                      : FluentIcons.chevron_down_24_regular,
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Icon(
+                    _isBackupExpanded
+                        ? FluentIcons.chevron_up_24_regular
+                        : FluentIcons.chevron_down_24_regular,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1039,6 +1390,41 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
   }
 
+  Widget _buildGuidedTourSection(BuildContext context) {
+    return SettingsCard(
+      title: 'סיור מודרך',
+      subtitle: 'היכרות מהירה עם החלקים המרכזיים באוצריה.',
+      children: [
+        ListTile(
+          hoverColor: Colors.transparent,
+          leading: const Icon(FluentIcons.sparkle_24_regular),
+          title: const Text(
+            'הפעל סיור מחדש',
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: const Text(
+            'הסיור יוצג מההתחלה וידריך אותך במסכי האפליקציה.',
+            style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
+          trailing: RecommendedActionButton(
+            icon: FluentIcons.play_24_regular,
+            text: 'הפעל',
+            onPressed: () {
+              final libraryLoaded =
+                  !context.read<NavigationBloc>().state.isLibraryEmpty;
+              context.read<NavigationBloc>().add(
+                    const CheckLibrary(),
+                  );
+              context.read<TourCubit>().restart(libraryLoaded: libraryLoaded);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   // ════════════════════════════════════════════════════════════════════════════
   //  6. איפוס
   // ════════════════════════════════════════════════════════════════════════════
@@ -1164,6 +1550,144 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 // ══════════════════════════════════════════════════════════════════════════════
 //  כרטיסי זיכרון — עיצוב נקי ורספונסיבי למסכים, תואם M3
 // ══════════════════════════════════════════════════════════════════════════════
+
+class _PendingReportEditValues {
+  final String selectedText;
+  final String errorDetails;
+  final String contextText;
+
+  const _PendingReportEditValues({
+    required this.selectedText,
+    required this.errorDetails,
+    required this.contextText,
+  });
+
+  _PendingReportEditValues copyWith({
+    String? selectedText,
+    String? errorDetails,
+    String? contextText,
+  }) {
+    return _PendingReportEditValues(
+      selectedText: selectedText ?? this.selectedText,
+      errorDetails: errorDetails ?? this.errorDetails,
+      contextText: contextText ?? this.contextText,
+    );
+  }
+}
+
+class _PendingReportEditFields extends StatefulWidget {
+  final _PendingReportEditValues initialValues;
+  final ValueChanged<_PendingReportEditValues> onChanged;
+
+  const _PendingReportEditFields({
+    required this.initialValues,
+    required this.onChanged,
+  });
+
+  @override
+  State<_PendingReportEditFields> createState() =>
+      _PendingReportEditFieldsState();
+}
+
+class _PendingReportEditFieldsState extends State<_PendingReportEditFields> {
+  late final TextEditingController _selectedTextController;
+  late final TextEditingController _detailsController;
+  late final TextEditingController _contextController;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTextController = TextEditingController(
+      text: widget.initialValues.selectedText,
+    );
+    _detailsController = TextEditingController(
+      text: widget.initialValues.errorDetails,
+    );
+    _contextController = TextEditingController(
+      text: widget.initialValues.contextText,
+    );
+  }
+
+  @override
+  void dispose() {
+    _selectedTextController.dispose();
+    _detailsController.dispose();
+    _contextController.dispose();
+    super.dispose();
+  }
+
+  void _notifyChanged() {
+    widget.onChanged(
+      _PendingReportEditValues(
+        selectedText: _selectedTextController.text,
+        errorDetails: _detailsController.text,
+        contextText: _contextController.text,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          RtlTextField(
+            controller: _selectedTextController,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
+            minLines: 1,
+            maxLines: 5,
+            onChanged: (_) => _notifyChanged(),
+            decoration: const InputDecoration(
+              labelText: 'הטקסט שנבחר',
+              isDense: true,
+              contentPadding: EdgeInsets.only(
+                top: 12,
+                bottom: 12,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          RtlTextField(
+            controller: _detailsController,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
+            minLines: 1,
+            maxLines: 6,
+            onChanged: (_) => _notifyChanged(),
+            decoration: const InputDecoration(
+              labelText: 'פירוט הטעות',
+              isDense: true,
+              contentPadding: EdgeInsets.only(
+                top: 12,
+                bottom: 12,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          RtlTextField(
+            controller: _contextController,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
+            minLines: 1,
+            maxLines: 6,
+            onChanged: (_) => _notifyChanged(),
+            decoration: const InputDecoration(
+              labelText: 'הקשר',
+              isDense: true,
+              contentPadding: EdgeInsets.only(
+                top: 12,
+                bottom: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 // ── _BackupOptionTile ─────────────────────────────────────────────────────────
 

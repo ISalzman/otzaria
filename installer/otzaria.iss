@@ -134,9 +134,18 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   AppDataPath: string;
+  ErrorLogPath: string;
 begin
   if CurStep = ssInstall then
   begin
+    // מחק את לוג השגיאות הישן בכל התקנה/עדכון
+    ErrorLogPath := ExpandConstant('{userappdata}\otzaria\logs\errors.txt');
+    if FileExists(ErrorLogPath) then
+      DeleteFile(ErrorLogPath);
+    ErrorLogPath := ExpandConstant('{commonappdata}\otzaria\logs\errors.txt');
+    if FileExists(ErrorLogPath) then
+      DeleteFile(ErrorLogPath);
+
     if WizardIsTaskSelected('resetsettings') then
     begin
       AppDataPath := GetDataDir('');

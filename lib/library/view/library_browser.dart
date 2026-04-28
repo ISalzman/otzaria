@@ -88,6 +88,12 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   bool get wantKeepAlive => true;
 
   final FocusNode _firstSearchResultFocusNode = FocusNode();
+  final GlobalKey _tourLibraryKey = GlobalKey();
+  final GlobalKey _tourLibrarySearchKey = GlobalKey();
+  final GlobalKey _tourBookCardKey = GlobalKey();
+  final Map<String, GlobalKey> _tourCategoryKeys = {};
+  Book? _tourPreviewBook;
+  Rect? _lastTourBookCardRect;
   final Set<String> _expandedCategories = {};
   final _settingsPanelOpen = ValueNotifier<bool>(false);
   double? _previewPaneWidthOverride;
@@ -280,6 +286,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               }
 
               return Stack(
+                key: _tourLibraryKey,
                 children: [
                   Scaffold(
                     backgroundColor: AppSurfaces.panelBackground(context),
@@ -582,22 +589,26 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               }
             },
           },
-          child: OtzariaSearchField(
-            controller: focusRepository.librarySearchController,
-            focusNode: focusRepository.librarySearchFocusNode,
-            autofocus: true,
-            slim: isCompact,
-            hintText:
-                'איתור ספר או מחבר ב${state.currentCategory?.title ?? ""}',
-            maxWidth: isCompact ? 500 : 400,
-            onChanged: (value) {
-              context.read<LibraryBloc>().add(UpdateSearchQuery(value));
-              context.read<LibraryBloc>().add(const SelectTopics([]));
-              _update(context, state, settingsState);
-            },
-            onClear: () {
-              _update(context, state, settingsState, restoreSearchFocus: true);
-            },
+          child: KeyedSubtree(
+            key: _tourLibrarySearchKey,
+            child: OtzariaSearchField(
+              controller: focusRepository.librarySearchController,
+              focusNode: focusRepository.librarySearchFocusNode,
+              autofocus: true,
+              slim: isCompact,
+              hintText:
+                  'איתור ספר או מחבר ב${state.currentCategory?.title ?? ""}',
+              maxWidth: isCompact ? 500 : 400,
+              onChanged: (value) {
+                context.read<LibraryBloc>().add(UpdateSearchQuery(value));
+                context.read<LibraryBloc>().add(const SelectTopics([]));
+                _update(context, state, settingsState);
+              },
+              onClear: () {
+                _update(context, state, settingsState,
+                    restoreSearchFocus: true);
+              },
+            ),
           ),
         );
       },
@@ -1035,13 +1046,34 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
     final allItems = <Widget>[
       ...filteredSubCategories.map(
-        (c) => CategoryGridItem(
-          category: c,
-          onCategoryClickCallback: () => _openCategory(c),
+        (c) => KeyedSubtree(
+          key: _tourCategoryKeys.putIfAbsent(c.path, GlobalKey.new),
+          child: CategoryGridItem(
+            category: c,
+            onCategoryClickCallback: () => _openCategory(c),
+          ),
         ),
       ),
-      ...filteredBooks.map((b) => _buildBookItem(b)),
     ];
+
+    var attachedTourKey = false;
+    for (final book in filteredBooks) {
+      final item = _buildBookItem(book);
+      final isTourBook = _tourPreviewBook != null &&
+          !attachedTourKey &&
+          book.title == _tourPreviewBook!.title;
+      allItems.add(
+        isTourBook
+            ? KeyedSubtree(
+                key: _tourBookCardKey,
+                child: item,
+              )
+            : item,
+      );
+      if (isTourBook) {
+        attachedTourKey = true;
+      }
+    }
     items.add(MyGridView(items: allItems));
     return items;
   }
@@ -1415,6 +1447,108 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       if (book != null) return book;
     }
     return null;
+  }
+
+  Category? _findTourCategoryWithBooks(Category category) {
+    if (category.title == 'תורה' && category.books.isNotEmpty) {
+      return category;
+    }
+
+    final subs = category.subCategories.toList();
+    if (category is Library) {
+      subs.sort(
+          (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)));
+    } else {
+      subs.sort((a, b) =>
+          _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)));
+    }
+
+    for (final sub in subs) {
+      final match = _findTourCategoryWithBooks(sub);
+      if (match != null) {
+        return match;
+      }
+    }
+
+    return category.books.isNotEmpty ? category : null;
+  }
+
+  /// פותח קטגוריה יציבה עם ספרים ובוחר את הספר הראשון לתצוגה מקדימה עבור הסיור.
+  void prepareTourBookPreview() {
+    final libraryState = context.read<LibraryBloc>().state;
+    final library = libraryState.library;
+    if (library == null) {
+      return;
+    }
+
+    final category = _findTourCategoryWithBooks(library);
+    if (category == null) {
+      return;
+    }
+
+    context.read<FocusRepository>().librarySearchController.clear();
+    context.read<LibraryBloc>().add(const SearchBooks());
+    context.read<LibraryBloc>().add(NavigateToCategory(category));
+
+    final book = _getFirstDisplayedBook(category);
+    if (book != null) {
+      setState(() {
+        _tourPreviewBook = book;
+        _lastTourBookCardRect = null;
+      });
+      context.read<LibraryBloc>().add(SelectBookForPreview(book));
+    }
+    _refocusSearchBar();
+  }
+
+  void navigateHome() {
+    final libraryState = context.read<LibraryBloc>().state;
+    final settingsState = context.read<SettingsBloc>().state;
+    _handleNavigateHome(context, libraryState, settingsState);
+  }
+
+  Rect? tourBookCardRect() {
+    return _rectForTourKey(_tourBookCardKey);
+  }
+
+  Rect? tourLibraryRect() {
+    return _rectForTourKey(_tourLibraryKey);
+  }
+
+  Rect? tourLibrarySearchRect() {
+    return _rectForTourKey(_tourLibrarySearchKey);
+  }
+
+  Rect? tourLibraryCategoriesRect() {
+    Rect? combined;
+    for (final key in _tourCategoryKeys.values) {
+      final rect = _rectForTourKey(key);
+      if (rect == null) continue;
+      combined = combined == null ? rect : combined.expandToInclude(rect);
+    }
+    return combined;
+  }
+
+  Rect? _rectForTourKey(GlobalKey key) {
+    final keyContext = key.currentContext;
+    if (keyContext == null) {
+      return key == _tourBookCardKey ? _lastTourBookCardRect : null;
+    }
+    RenderObject? renderObject;
+    try {
+      renderObject = keyContext.findRenderObject();
+    } on FlutterError {
+      return key == _tourBookCardKey ? _lastTourBookCardRect : null;
+    }
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return key == _tourBookCardKey ? _lastTourBookCardRect : null;
+    }
+    final topLeft = renderObject.localToGlobal(Offset.zero);
+    final rect = topLeft & renderObject.size;
+    if (key == _tourBookCardKey) {
+      _lastTourBookCardRect = rect;
+    }
+    return rect;
   }
 
   void _openCategory(Category category) {

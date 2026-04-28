@@ -300,7 +300,17 @@ class DayExtras extends StatelessWidget {
         yomTovIndex == JewishCalendar.CHOL_HAMOED_PESACH) {
       l.removeWhere((e) => e.contains('חול המועד'));
       final dayOfCholHamoed = jc.getJewishDayOfMonth() - 15;
-      l.add('${_numberToHebrewLetter(dayOfCholHamoed)} דחוה"מ');
+      final cholHamoedName =
+          yomTovIndex == JewishCalendar.CHOL_HAMOED_PESACH ? 'פסח' : 'סוכות';
+      l.add('${_numberToHebrewLetter(dayOfCholHamoed)} דחוה"מ $cholHamoedName');
+    }
+
+    if (yomTovIndex == JewishCalendar.PESACH) {
+      final dayOfMonth = jc.getJewishDayOfMonth();
+      if (dayOfMonth == 21) {
+        l.removeWhere((e) => e == 'פסח');
+        l.add('שביעי של פסח');
+      }
     }
 
     if (yomTovIndex == JewishCalendar.CHANUKAH) {

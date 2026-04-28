@@ -10,7 +10,7 @@ import 'package:otzaria/widgets/keyboard_navigator.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/layout_tokens.dart';
-import 'package:otzaria/widgets/tool_ui_helpers.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 
 /// רוחב מקסימלי לתוכן ההגדרות — מרכוז על מסכים רחבים
 // kSettingsContentMaxWidth הוסר — משתמשים ב-LayoutConstraints.panelContentMaxWidth מ-layout_tokens.dart
@@ -27,6 +27,12 @@ class SettingsScreenController extends ChangeNotifier {
   void openTab(SettingsTab tab) {
     _requestedTab = tab;
     notifyListeners();
+  }
+
+  SettingsTab? takeRequestedTab() {
+    final tab = _requestedTab;
+    _requestedTab = null;
+    return tab;
   }
 }
 
@@ -51,7 +57,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
   void initState() {
     super.initState();
     widget.controller?.addListener(_handleRequestedTab);
-    _applyRequestedTab(widget.controller?.requestedTab);
+    _applyRequestedTab(widget.controller?.takeRequestedTab());
     FocusRepository().registerSettingsFocusRequester(_requestSettingsFocus);
   }
 
@@ -70,7 +76,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_handleRequestedTab);
       widget.controller?.addListener(_handleRequestedTab);
-      _applyRequestedTab(widget.controller?.requestedTab);
+      _applyRequestedTab(widget.controller?.takeRequestedTab());
     }
   }
 
@@ -100,7 +106,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
   }
 
   void _handleRequestedTab() {
-    _applyRequestedTab(widget.controller?.requestedTab);
+    _applyRequestedTab(widget.controller?.takeRequestedTab());
   }
 
   void _applyRequestedTab(SettingsTab? tab) {
@@ -220,6 +226,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                             children: [
                               for (final idx in group.indices)
                                 ListTile(
+                                  key: tourSettingsTabTargetKeys[idx],
                                   leading: Icon(_tabsData[idx].icon,
                                       color: colorScheme.primary),
                                   title: Text(_tabsData[idx].label),
@@ -323,6 +330,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 2),
                                       child: Material(
+                                        key: tourSettingsTabTargetKeys[index],
                                         color: isSelected
                                             ? colorScheme.primary
                                                 .withValues(alpha: 0.14)
@@ -377,15 +385,13 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
 
                       // ── אזור תוכן ────────────────────────────────────
                       Expanded(
-                        child: PrimaryScrollController(
-                          controller: _contentScrollController,
-                          child: _SettingsContentPane(
-                            key: ValueKey(_selectedIndex),
-                            label: _tabsData[_selectedIndex].label,
-                            bgColor: bgColor,
-                            focusNode: _contentFocusNode,
-                            child: _tabsData[_selectedIndex].pageBuilder(),
-                          ),
+                        child: _SettingsContentPane(
+                          key: ValueKey(_selectedIndex),
+                          label: _tabsData[_selectedIndex].label,
+                          bgColor: bgColor,
+                          focusNode: _contentFocusNode,
+                          scrollController: _contentScrollController,
+                          child: _tabsData[_selectedIndex].pageBuilder(),
                         ),
                       ),
                     ],
@@ -407,12 +413,14 @@ class _SettingsContentPane extends StatefulWidget {
   final Widget child;
   final Color bgColor;
   final FocusNode focusNode;
+  final ScrollController scrollController;
 
   const _SettingsContentPane({
     required this.label,
     required this.child,
     required this.bgColor,
     required this.focusNode,
+    required this.scrollController,
     super.key,
   });
 
@@ -436,24 +444,50 @@ class _SettingsContentPaneState extends State<_SettingsContentPane> {
       focusNode: widget.focusNode,
       child: ColoredBox(
         color: widget.bgColor,
-        child: ToolPanelWrapper(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(
-                    top: 28, right: 16, left: 16, bottom: 4),
-                child: Text(
-                  widget.label,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: LayoutConstraints.panelContentMaxWidth,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                      top: 28, right: 16, left: 16, bottom: 4),
+                  child: Text(
+                    widget.label,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
-              Expanded(child: widget.child),
-            ],
-          ),
+            ),
+            Expanded(
+              child: ScrollbarTheme(
+                data: ScrollbarTheme.of(context).copyWith(
+                  crossAxisMargin: 6,
+                  mainAxisMargin: 0,
+                ),
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context)
+                      .copyWith(scrollbars: false),
+                  child: Scrollbar(
+                    controller: widget.scrollController,
+                    thumbVisibility: true,
+                    interactive: true,
+                    child: PrimaryScrollController(
+                      controller: widget.scrollController,
+                      child: widget.child,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -56,6 +56,7 @@ class TextBookRepository {
             final bytes = await file.readAsBytes();
             return await Isolate.run(() => docxToText(bytes, title));
           }
+          if (ext == 'pdf') return '';
           return await file.readAsString();
         }
       }
@@ -184,6 +185,8 @@ class TextBookRepository {
           if (ext == 'docx') {
             final bytes = await file.readAsBytes();
             content = await Isolate.run(() => docxToText(bytes, title));
+          } else if (ext == 'pdf') {
+            content = '';
           } else {
             content = await file.readAsString();
           }
@@ -236,6 +239,17 @@ class TextBookRepository {
 
     commentatorTitles.sort((a, b) => a.compareTo(b));
     return commentatorTitles;
+  }
+
+  /// מחזיר את תוכן ההערות של ספר מה-DB, אם קיים
+  Future<String?> getNotesContent(TextBook book) async {
+    final dbBook = await BookLocator.getBookFromDatabase(
+      book.title,
+      category: book.category,
+      categoryId: book.categoryId,
+    );
+    final content = dbBook?.notesContent;
+    return (content != null && content.isNotEmpty) ? content : null;
   }
 
   Future<bool> bookExists(String title) async {

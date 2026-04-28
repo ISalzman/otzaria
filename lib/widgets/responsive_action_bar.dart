@@ -29,6 +29,9 @@ class ResponsiveActionBar extends StatefulWidget {
 
   /// היסט מיקום לתפריט ה-"..." ביחס לכפתור.
   final Offset overflowMenuOffset;
+  final GlobalKey? overflowButtonKey;
+  final bool openOverflowMenu;
+  final Map<String, GlobalKey>? menuItemKeysByTooltip;
 
   const ResponsiveActionBar({
     super.key,
@@ -38,6 +41,9 @@ class ResponsiveActionBar extends StatefulWidget {
     required this.maxVisibleButtons,
     this.overflowOnRight = false,
     this.overflowMenuOffset = const Offset(0, 4),
+    this.overflowButtonKey,
+    this.openOverflowMenu = false,
+    this.menuItemKeysByTooltip,
   }) : assert(
           alwaysInMenu != null || originalOrder != null,
           'Either alwaysInMenu or originalOrder must be provided',
@@ -48,6 +54,16 @@ class ResponsiveActionBar extends StatefulWidget {
 }
 
 class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
+  bool _menuOpenRequested = false;
+
+  @override
+  void didUpdateWidget(covariant ResponsiveActionBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.openOverflowMenu) {
+      _menuOpenRequested = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // בדיקה אם יש כפתורים בכלל
@@ -79,7 +95,10 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
 
     // אם צריך להסתיר רק כפתור אחד, אין טעם להציג תפריט שתופס מקום בעצמו.
     // עדיף פשוט להציג את כל הכפתורים.
-    if (totalButtons - widget.maxVisibleButtons == 1) {
+    // החרגה: כשיש alwaysInMenu, כפתור ה-overflow קיים ממילא, ולכן הצגת
+    // כל הכפתורים תוסיף רוחב ותגרום לגלישה קלה ב-AppBar במסכים צרים.
+    if (totalButtons - widget.maxVisibleButtons == 1 &&
+        widget.alwaysInMenu!.isEmpty) {
       effectiveMaxVisible = totalButtons;
     }
 
@@ -195,7 +214,8 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
       builder: (context) {
         final menuMetrics = Theme.of(context).extension<AppMenuMetrics>() ??
             AppMenuMetrics.create(compactMenus: false);
-        return AppPopupMenuButton<ActionButtonData>(
+        final menuButton = AppPopupMenuButton<ActionButtonData>(
+          key: widget.overflowButtonKey,
           icon: const Icon(FluentIcons.more_vertical_24_regular),
           tooltip: 'עוד פעולות',
           position: PopupMenuPosition.under,
@@ -223,9 +243,13 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
                         Navigator.of(context).pop(); // סוגר את התפריט הראשי
                         subAction.onPressed?.call();
                       },
-                      child: Text(
-                        subAction.tooltip ?? '',
-                        textDirection: TextDirection.rtl,
+                      child: KeyedSubtree(
+                        key: widget
+                            .menuItemKeysByTooltip?[subAction.tooltip ?? ''],
+                        child: Text(
+                          subAction.tooltip ?? '',
+                          textDirection: TextDirection.rtl,
+                        ),
                       ),
                     );
                   }).toList(),
@@ -243,10 +267,26 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
                 ),
                 menuMetrics,
                 null,
+                key: widget.menuItemKeysByTooltip?[action.tooltip ?? ''],
               );
             }).toList();
           },
         );
+
+        if (widget.openOverflowMenu &&
+            !_menuOpenRequested &&
+            hiddenActions.isNotEmpty) {
+          _menuOpenRequested = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || !widget.openOverflowMenu) {
+              return;
+            }
+            final state = widget.overflowButtonKey?.currentState as dynamic;
+            state?.showMenu();
+          });
+        }
+
+        return menuButton;
       },
     );
   }

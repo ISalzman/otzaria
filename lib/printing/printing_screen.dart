@@ -25,7 +25,7 @@ import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:printing/printing.dart';
-import 'package:pdf/pdf.dart';
+import 'package:pdf/pdf.dart' hide PdfDocument;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
@@ -67,7 +67,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
       AppFonts.fontPaths.keys.first; // ברירת מחדל - הגופן הראשון ברשימה
   late int startLine;
   late int endLine;
-  late Future<Uint8List> _previewPdf;
+  late Future<(Uint8List, String)> _previewPdf;
   late Future<String> _dataFuture;
   pw.PageOrientation orientation = pw.PageOrientation.portrait;
   PdfPageFormat format = PdfPageFormat.a4;
@@ -79,6 +79,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
   bool _showThumbnails = false;
   int _pagesPerSheet = 1;
+
+  // טווח עמודים ב-PDF
+  int _totalPdfPages = 0;
+  int _pdfStartPage = 1;
+  int _pdfEndPage = 0; // 0 = כל העמודים
 
   bool _includeCommentaries = false;
   bool _includePersonalNotes = false;
@@ -152,7 +157,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
   }
 
-  Future<Uint8List> _createInitialPreviewPdf() async {
+  Future<(Uint8List, String)> _createInitialPreviewPdf() async {
     await _applyCurrentRange();
     if (mounted) {
       setState(() {});
@@ -289,6 +294,25 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
   }
 
+  void _toggleThumbnails(bool value) {
+    final currentPage = _pdfViewerController.isReady
+        ? _pdfViewerController.pageNumber
+        : null;
+    setState(() {
+      _showThumbnails = value;
+    });
+    if (currentPage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pdfViewerController.isReady) {
+          _pdfViewerController.goToPage(
+            pageNumber: currentPage,
+            anchor: PdfPageAnchor.top,
+          );
+        }
+      });
+    }
+  }
+
   void _refreshPreviewPdf({bool immediate = false}) {
     _previewRefreshTimer?.cancel();
     if (immediate) {
@@ -303,28 +327,45 @@ class _PrintingScreenState extends State<PrintingScreen> {
     });
   }
 
-  Future<Uint8List> _createPreviewPdf(PdfPageFormat format) {
-    return _createOutputPdf(format);
+  Future<(Uint8List, String)> _createPreviewPdf(PdfPageFormat format) async {
+    final name = 'printing_${DateTime.now().millisecondsSinceEpoch}';
+    final bytes = await _createOutputPdf(format);
+    return (bytes, name);
   }
 
   Future<Uint8List> _createOutputPdf(PdfPageFormat format) async {
     final base = await _createBasePdf(format);
-    if (_pagesPerSheet <= 1) return base;
+
+    final isPdfMode = widget.createPdfOverride != null;
+    final startPage = isPdfMode ? _pdfStartPage : 1;
+    final endPage =
+        isPdfMode && _pdfEndPage > 0 && _pdfEndPage < _totalPdfPages
+            ? _pdfEndPage
+            : null;
+    final hasPageRange = startPage > 1 || endPage != null;
+
+    if (_pagesPerSheet <= 1 && !hasPageRange) return base;
 
     try {
       return await _createNUpPdfFromRaster(
         base,
         sheetFormat: _effectivePageFormat(format),
         pagesPerSheet: _pagesPerSheet,
+        startPage: startPage,
+        endPage: endPage,
       );
-    } catch (e) {
-      debugPrint('N-up PDF creation failed: $e');
-      // fallback: always return original PDF if raster/imposition fails
-      return base;
+    } catch (e, st) {
+      debugPrint('[PRINT] raster failed: $e\n$st');
+      if (mounted) {
+        UiSnack.showError(hasPageRange
+            ? 'עיבוד טווח העמודים שנבחר נכשל'
+            : 'עיבוד עמודים מרובים בגיליון נכשל');
+      }
+      rethrow;
     }
   }
 
-  PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
+PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
     return orientation == pw.PageOrientation.landscape
         ? format.landscape
         : format;
@@ -345,23 +386,63 @@ class _PrintingScreenState extends State<PrintingScreen> {
     Uint8List sourcePdf, {
     required PdfPageFormat sheetFormat,
     required int pagesPerSheet,
+    int startPage = 1,
+    int? endPage,
   }) async {
     final (rows, cols) = switch (pagesPerSheet) {
       2 => (1, 2),
       4 => (2, 2),
       _ => (1, 1),
     };
-    if (rows == 1 && cols == 1) return sourcePdf;
+    final hasRange = startPage > 1 || endPage != null;
+    if (rows == 1 && cols == 1 && !hasRange) return sourcePdf;
 
-    const dpi = 120.0;
+    final dpi = switch (pagesPerSheet) {
+      4 => 72.0,
+      2 => 96.0,
+      _ => 120.0,
+    };
     final rasterPages = <Uint8List>[];
 
-    await for (final raster in Printing.raster(sourcePdf, dpi: dpi)) {
-      final image = await raster.toImage();
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
-      if (data == null) continue;
-      rasterPages.add(data.buffer.asUint8List());
+    // Wait for Flutter to rebuild and unmount the previous PdfViewer before using pdfrx
+    await Future.delayed(const Duration(milliseconds: 150));
+
+    final doc = await PdfDocument.openData(sourcePdf,
+        sourceName: 'nup_${DateTime.now().millisecondsSinceEpoch}');
+
+    // Update total page count on first open
+    if (_totalPdfPages == 0 && widget.createPdfOverride != null && mounted) {
+      final count = doc.pages.length;
+      setState(() {
+        _totalPdfPages = count;
+        if (_pdfEndPage == 0) _pdfEndPage = count;
+      });
+    }
+
+    try {
+      final scale = dpi / 72.0;
+      final firstIdx =
+          max(0, min(startPage - 1, doc.pages.length - 1));
+      final lastIdx =
+          max(firstIdx, min((endPage ?? doc.pages.length) - 1, doc.pages.length - 1));
+      for (var i = firstIdx; i <= lastIdx; i++) {
+        final page = doc.pages[i];
+        final pdfImage = await page.render(
+          fullWidth: page.width * scale,
+          fullHeight: page.height * scale,
+          backgroundColor: 0xFFFFFFFF,
+        );
+        if (pdfImage == null) continue;
+        final uiImage = await pdfImage.createImage();
+        pdfImage.dispose();
+        final byteData =
+            await uiImage.toByteData(format: ui.ImageByteFormat.png);
+        uiImage.dispose();
+        if (byteData == null) continue;
+        rasterPages.add(byteData.buffer.asUint8List());
+      }
+    } finally {
+      doc.dispose();
     }
 
     if (rasterPages.isEmpty) return sourcePdf;
@@ -1196,15 +1277,82 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       dense: true,
                                       contentPadding: EdgeInsets.zero,
                                       value: _showThumbnails,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _showThumbnails = value;
-                                        });
-                                      },
+                                      onChanged: _toggleThumbnails,
                                     ),
                                   ],
                                 ),
                               ),
+                              if (_totalPdfPages > 0) ...[
+                                const SizedBox(height: 12),
+                                _buildSectionCard(
+                                  context: context,
+                                  title: 'טווח עמודים',
+                                  icon:
+                                      FluentIcons.document_page_number_24_regular,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'עמוד $_pdfStartPage',
+                                            style: TextStyle(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          Text(
+                                            'עמוד $_pdfEndPage',
+                                            style: TextStyle(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      RangeSlider(
+                                        min: 1,
+                                        max: _totalPdfPages.toDouble(),
+                                        divisions: _totalPdfPages > 1
+                                            ? _totalPdfPages - 1
+                                            : 1,
+                                        values: RangeValues(
+                                          _pdfStartPage.toDouble(),
+                                          _pdfEndPage.toDouble(),
+                                        ),
+                                        onChanged: (values) {
+                                          setState(() {
+                                            _pdfStartPage =
+                                                values.start.round();
+                                            _pdfEndPage = values.end.round();
+                                          });
+                                        },
+                                        onChangeEnd: (values) {
+                                          setState(() {
+                                            _pdfStartPage =
+                                                values.start.round();
+                                            _pdfEndPage = values.end.round();
+                                            _refreshPreviewPdf();
+                                          });
+                                        },
+                                      ),
+                                      Text(
+                                        '${_pdfEndPage - _pdfStartPage + 1} עמודים מתוך $_totalPdfPages',
+                                        style: TextStyle(
+                                          color: colorScheme.primary,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 12),
                               _buildSectionCard(
                                 context: context,
@@ -1317,9 +1465,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                     if (snapshot.connectionState ==
                                             ConnectionState.done &&
                                         snapshot.hasData) {
+                                      final (pdfBytes, pdfSourceName) =
+                                          snapshot.data!;
                                       return PdfViewer.data(
-                                        snapshot.data!,
-                                        sourceName: 'printing',
+                                        pdfBytes,
+                                        sourceName: pdfSourceName,
                                         controller: _pdfViewerController,
                                         params: PdfViewerParams(
                                           viewerOverlayBuilder:
@@ -1346,7 +1496,27 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                               (document, controller) {
                                             _documentRef.value =
                                                 controller.documentRef;
+                                            if (_totalPdfPages == 0 &&
+                                                mounted) {
+                                              setState(() {
+                                                _totalPdfPages =
+                                                    document.pages.length;
+                                                if (_pdfEndPage == 0) {
+                                                  _pdfEndPage =
+                                                      document.pages.length;
+                                                }
+                                              });
+                                            }
                                           },
+                                        ),
+                                      );
+                                    }
+                                    if (snapshot.hasError) {
+                                      return Center(
+                                        child: Icon(
+                                          FluentIcons.error_circle_24_regular,
+                                          color: colorScheme.error,
+                                          size: 48,
                                         ),
                                       );
                                     }
@@ -1443,11 +1613,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                       dense: true,
                                       contentPadding: EdgeInsets.zero,
                                       value: _showThumbnails,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _showThumbnails = value;
-                                        });
-                                      },
+                                      onChanged: _toggleThumbnails,
                                     ),
                                     const SizedBox(height: 8),
                                     if (!isCustomPdfMode) ...[
@@ -2067,9 +2233,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                     if (snapshot.connectionState ==
                                             ConnectionState.done &&
                                         snapshot.hasData) {
+                                      final (pdfBytes, pdfSourceName) =
+                                          snapshot.data!;
                                       return PdfViewer.data(
-                                        snapshot.data!,
-                                        sourceName: 'printing',
+                                        pdfBytes,
+                                        sourceName: pdfSourceName,
                                         controller: _pdfViewerController,
                                         params: PdfViewerParams(
                                           viewerOverlayBuilder:
@@ -2097,6 +2265,15 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                             _documentRef.value =
                                                 controller.documentRef;
                                           },
+                                        ),
+                                      );
+                                    }
+                                    if (snapshot.hasError) {
+                                      return Center(
+                                        child: Icon(
+                                          FluentIcons.error_circle_24_regular,
+                                          color: colorScheme.error,
+                                          size: 48,
                                         ),
                                       );
                                     }

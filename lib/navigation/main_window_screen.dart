@@ -15,10 +15,18 @@ import 'package:otzaria/navigation/startup_work_gate.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/empty_library/empty_library_screen.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
+import 'package:otzaria/find_ref/find_ref_bloc.dart';
 import 'package:otzaria/find_ref/find_ref_dialog.dart';
+import 'package:otzaria/find_ref/find_ref_event.dart';
+import 'package:otzaria/find_ref/find_ref_state.dart';
+import 'package:otzaria/library/models/library.dart' as library_model;
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/tabs/reading_screen.dart';
+import 'package:otzaria/text_book/view/text_book_screen.dart';
+import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/bloc/text_book_event.dart';
+import 'package:otzaria/pdf_book/pdf_book_screen.dart';
 import 'package:otzaria/tools/tools_screen.dart';
 import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
 import 'dart:async';
@@ -47,7 +55,9 @@ import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/widgets/nav_rail_item.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
@@ -58,6 +68,12 @@ import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart'
 import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/plugins/services/reader_location_tracker.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
+import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/models/tour_step.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
+import 'package:otzaria/tour/view/tour_overlay_screen.dart';
+import 'package:otzaria/models/books.dart';
+import 'package:otzaria/utils/open_book.dart';
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
@@ -78,6 +94,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   late final SettingsScreenController _settingsScreenController;
   final ExternalActivationQueue _externalActivationQueue =
       const ExternalActivationQueue();
+  late final TourCubit _tourCubit;
   ReaderLocationTracker? _readerLocationTracker;
   Orientation? _previousOrientation;
   int _currentPageIndex = 0;
@@ -107,6 +124,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
   bool _isSearchOpen = false;
   bool _isFindRefOpen = false;
   bool _isReadingSettingsPanelOpen = false;
+  bool _openGenesisForTour = false;
+  OverlayEntry? _tourOverlayEntry;
+  bool _tourOverlayInsertScheduled = false;
+  bool _tourOpenedOverflowMenu = false;
+  bool _tourOpenedTabContextMenu = false;
   late Screen _lastScreen;
   // עוקב אחר מצב ההגדרות הקודם לצורך dispatch ספציפי
   SettingsState? _prevSettingsState;
@@ -173,6 +195,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     super.initState();
     _calendarCubit = CalendarCubit();
     _settingsScreenController = SettingsScreenController();
+    _tourCubit = TourCubit();
     _lastScreen = context.read<NavigationBloc>().state.currentScreen;
 
     // הצגת פופאפ פרסומת אחרי 5 שניות
@@ -426,6 +449,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     appWindowListener?.onWindowResizeOccurred = null;
     _externalActivationWatchSub?.cancel();
     _calendarCubit.close();
+    _removeTourOverlay();
+    _tourCubit.close();
     _emptyLibraryBloc?.close();
     _readerLocationTracker?.dispose();
     pageController.dispose();
@@ -560,10 +585,637 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
   }
 
+  void _handleTourStepChanged(TourStep step) {
+    switch (step.action) {
+      case TourStepAction.openLibrary:
+        context.read<NavigationBloc>().add(
+              const NavigateToScreen(Screen.library),
+            );
+      case TourStepAction.openLibraryHome:
+        context.read<NavigationBloc>().add(
+              const NavigateToScreen(Screen.library),
+            );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          (libraryBrowserKey.currentState as dynamic).navigateHome();
+        });
+      case TourStepAction.openLibraryBookPreview:
+        context.read<NavigationBloc>().add(
+              const NavigateToScreen(Screen.library),
+            );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final libraryState = libraryBrowserKey.currentState;
+          if (libraryState != null) {
+            (libraryState as dynamic).prepareTourBookPreview();
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _tourOverlayEntry?.markNeedsBuild();
+            _scheduleTourTargetRebuilds(remainingFrames: 6);
+          });
+        });
+      case TourStepAction.openReading:
+        context.read<NavigationBloc>().add(
+              const NavigateToScreen(Screen.reading),
+            );
+        if (_openGenesisForTour) {
+          _openGenesisForTour = false;
+          _openTourGenesisInReader();
+        }
+        if (step.id == 'toc') {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final tocContext = textBookNavigationTourTargetKey.currentContext;
+            if (tocContext != null && tocContext.mounted) {
+              tocContext.read<TextBookBloc>().add(const ToggleLeftPane(true));
+            }
+          });
+        }
+      case TourStepAction.openTools:
+        context.read<NavigationBloc>().add(
+              const NavigateToScreen(Screen.more),
+            );
+        _scheduleTourToolTabForStep(step);
+      case TourStepAction.openSettings:
+        context.read<NavigationBloc>().add(
+              const NavigateToScreen(Screen.settings),
+            );
+      case TourStepAction.openDesignSettings:
+        _settingsScreenController.openTab(SettingsTab.design);
+        context.read<NavigationBloc>().add(
+              const NavigateToScreen(Screen.settings),
+            );
+      case TourStepAction.openSystemSettings:
+        _settingsScreenController.openTab(SettingsTab.system);
+        context.read<NavigationBloc>().add(
+              const NavigateToScreen(Screen.settings),
+            );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final ctx = tourBackupSettingsTargetKey.currentContext;
+          if (ctx != null) {
+            Scrollable.ensureVisible(
+              ctx,
+              duration: const Duration(milliseconds: 200),
+              alignment: 0.3,
+            );
+          }
+          _scheduleTourTargetRebuilds(remainingFrames: 15);
+        });
+      case TourStepAction.openShortcutsSettings:
+        _settingsScreenController.openTab(SettingsTab.shortcuts);
+        context.read<NavigationBloc>().add(
+              const NavigateToScreen(Screen.settings),
+            );
+        _scheduleTourTargetRebuilds(remainingFrames: 4);
+      case TourStepAction.openFindRef:
+        _openGenesisForTour = true;
+        _openTourFindRef();
+      case TourStepAction.openSearch:
+        _handleSearchTabOpen(context, closeIfOpen: false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _bringTourOverlayToFront();
+        });
+      case TourStepAction.none:
+        break;
+    }
+    _scheduleTourOverflowMenuForStep(step);
+    _scheduleTourTabContextMenuForStep(step);
+    _scheduleTourTargetRebuilds(remainingFrames: 4);
+  }
+
+  void _scheduleTourOverlayInsert() {
+    if (_tourOverlayInsertScheduled) {
+      return;
+    }
+    _tourOverlayInsertScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tourOverlayInsertScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _ensureTourOverlay();
+    });
+  }
+
+  void _ensureTourOverlay() {
+    if (_tourOverlayEntry != null) {
+      return;
+    }
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) {
+      return;
+    }
+    _tourOverlayEntry = OverlayEntry(
+      builder: (context) => BlocProvider.value(
+        value: _tourCubit,
+        child: TourOverlayScreen(
+          onStepChanged: _handleTourStepChanged,
+          onNext: _handleTourNext,
+          targetRectResolver: _resolveTourTargetRect,
+          targetRectsResolver: _resolveTourTargetRects,
+        ),
+      ),
+    );
+    overlay.insert(_tourOverlayEntry!);
+  }
+
+  void _bringTourOverlayToFront() {
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) {
+      return;
+    }
+    _removeTourOverlay();
+    _ensureTourOverlay();
+  }
+
+  void _removeTourOverlay() {
+    _tourOverlayEntry?.remove();
+    _tourOverlayEntry?.dispose();
+    _tourOverlayEntry = null;
+  }
+
+  void _handleTourNext(TourStep step) {
+    if (step.id == 'find_ref') {
+      _openFirstTourFindRefResult();
+      return;
+    }
+    if (step.id == 'advanced_search') {
+      if (_isSearchOpen) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      _closeTourOverflowMenuIfNeeded();
+      _closeTourTabContextMenuIfNeeded();
+      _tourCubit.next();
+      return;
+    }
+    _closeTourOverflowMenuIfNeeded();
+    _closeTourTabContextMenuIfNeeded();
+    _tourCubit.next();
+  }
+
+  void _scheduleTourToolTabForStep(TourStep step) {
+    final toolId = switch (step.id) {
+      'calendar' => 'builtin.calendar',
+      'gematria' => 'builtin.gematria',
+      'notes' => 'builtin.notes',
+      _ => null,
+    };
+    if (toolId == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      moreScreenKey.currentState?.openToolForTour(toolId);
+      _scheduleTourTargetRebuilds(remainingFrames: 4);
+    });
+  }
+
+  void _scheduleTourOverflowMenuForStep(TourStep step) {
+    if (!_usesReadingOverflowMenu(step.area)) {
+      _closeTourOverflowMenuIfNeeded();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _directReadingTourTargetRect(step.area) != null) {
+        _closeTourOverflowMenuIfNeeded();
+        return;
+      }
+      _openReadingOverflowMenuForTour();
+    });
+  }
+
+  bool _usesReadingOverflowMenu(TourSpotlightArea area) {
+    return area == TourSpotlightArea.commentators ||
+        area == TourSpotlightArea.bookmark ||
+        area == TourSpotlightArea.bookSearch ||
+        area == TourSpotlightArea.print;
+  }
+
+  void _openReadingOverflowMenuForTour() {
+    final state = (textBookOverflowTourTargetKey.currentState ??
+        pdfBookOverflowTourTargetKey.currentState) as dynamic;
+    if (state == null) {
+      return;
+    }
+    state?.showMenu();
+    _tourOpenedOverflowMenu = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _bringTourOverlayToFront();
+      _scheduleTourTargetRebuilds(remainingFrames: 3);
+    });
+  }
+
+  void _closeTourOverflowMenuIfNeeded() {
+    if (!_tourOpenedOverflowMenu) {
+      return;
+    }
+    _tourOpenedOverflowMenu = false;
+    Navigator.of(context, rootNavigator: true).maybePop();
+  }
+
+  void _scheduleTourTabContextMenuForStep(TourStep step) {
+    if (step.area != TourSpotlightArea.sideBySide) {
+      _closeTourTabContextMenuIfNeeded();
+      return;
+    }
+    _ensureTourSideBySideCandidates();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = tourTabContextMenuTargetKey.currentState as dynamic;
+      state?.showMenu();
+      _tourOpenedTabContextMenu = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _bringTourOverlayToFront();
+        _scheduleTourTargetRebuilds(remainingFrames: 4);
+      });
+    });
+  }
+
+  void _closeTourTabContextMenuIfNeeded() {
+    if (!_tourOpenedTabContextMenu) {
+      return;
+    }
+    _tourOpenedTabContextMenu = false;
+    final state = tourTabContextMenuTargetKey.currentState as dynamic;
+    state?.closeMenu();
+  }
+
+  void _ensureTourSideBySideCandidates() {
+    final tabsState = context.read<TabsBloc>().state;
+    final readableTabs = tabsState.tabs.where((tab) => tab is! CombinedTab);
+    if (readableTabs.length >= 2) {
+      return;
+    }
+    unawaited(_openTourBookByTitle('שמות'));
+  }
+
+  void _openTourFindRef() {
+    final focusRepository = context.read<FocusRepository>();
+    focusRepository.findRefSearchController.text = 'בראשית';
+    focusRepository.findRefSearchController.selection =
+        const TextSelection.collapsed(offset: 'בראשית'.length);
+    context.read<FindRefBloc>().add(const SearchRefRequested('בראשית'));
+    _handleFindRefOpen(context, closeIfOpen: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _bringTourOverlayToFront();
+    });
+  }
+
+  Future<void> _openFirstTourFindRefResult() async {
+    final findRefState = context.read<FindRefBloc>().state;
+    if (findRefState is! FindRefSuccess || findRefState.refs.isEmpty) {
+      return;
+    }
+
+    final ref = findRefState.refs.first;
+    Book? book;
+    try {
+      final library = await DataRepository.instance.library;
+      book = _findBookByTitle(library, ref.title);
+    } catch (e) {
+      debugPrint('Error searching library: $e');
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    book ??= ref.isPdf
+        ? PdfBook(title: ref.title, path: ref.filePath)
+        : TextBook(title: ref.title);
+
+    _openGenesisForTour = false;
+    if (_isFindRefOpen) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+    // סגירת טאבי TextBook קיימים כדי למנוע כפילות GlobalKeys
+    _closeExistingTextBookTabsForTour();
+    final frameCompleter = Completer<void>();
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => frameCompleter.complete());
+    await frameCompleter.future;
+    if (!mounted) return;
+    openBook(context, book, ref.segment.toInt(), '', ignoreHistory: true);
+    if (_tourCubit.state.currentStep?.id == 'find_ref') {
+      await _tourCubit.next();
+    }
+  }
+
+  Rect? _resolveTourTargetRect(TourStep step) {
+    final exactRect = _exactTourTargetRect(step);
+    if (exactRect != null) {
+      return exactRect;
+    }
+    if (_usesReadingOverflowMenu(step.area)) {
+      return _readingTourTargetRect(step.area);
+    }
+    if (step.area != TourSpotlightArea.bookCard) {
+      return null;
+    }
+    final libraryState = libraryBrowserKey.currentState;
+    if (libraryState == null) {
+      return null;
+    }
+    return (libraryState as dynamic).tourBookCardRect() as Rect?;
+  }
+
+  Rect? _exactTourTargetRect(TourStep step) {
+    switch (step.id) {
+      case 'navigation':
+        return _combinedRectForKeys(tourMainNavigationTargetKeys);
+      case 'library':
+        return _libraryTourRect('tourLibraryRect');
+      case 'library_search':
+        return _libraryTourRect('tourLibrarySearchRect');
+      case 'categories':
+        return _libraryTourRect('tourLibraryCategoriesRect');
+      case 'advanced_search':
+        return _rectForGlobalKey(tourSearchDialogTargetKey);
+      case 'find_ref':
+        return _rectForGlobalKey(tourFindRefDialogTargetKey);
+      case 'reading':
+        return _rectForGlobalKey(tourReadingScreenTargetKey);
+      case 'tabs':
+        return _tabsTourTargetRect();
+      case 'reading_settings':
+        return _rectForGlobalKey(tourReadingSettingsButtonTargetKey);
+      case 'tools':
+        return _rectForGlobalKey(tourMainNavigationTargetKeys[4]);
+      case 'calendar':
+        return _rectForGlobalKey(tourToolTabTargetKeys['builtin.calendar']!);
+      case 'gematria':
+        return _rectForGlobalKey(tourToolTabTargetKeys['builtin.gematria']!);
+      case 'notes':
+        return _rectForGlobalKey(tourToolTabTargetKeys['builtin.notes']!);
+      case 'settings':
+        return _rectForGlobalKey(tourMainNavigationTargetKeys[5]);
+      case 'appearance':
+        return _rectForGlobalKey(tourSettingsTabTargetKeys[0]!);
+      case 'backup':
+        return _rectForGlobalKey(tourBackupSettingsTargetKey) ??
+            _rectForGlobalKey(tourSettingsTabTargetKeys[5]!);
+      case 'shortcuts':
+        return _rectForGlobalKey(tourShortcutsSettingsTargetKey) ??
+            _rectForGlobalKey(tourSettingsTabTargetKeys[4]!);
+    }
+
+    return switch (step.area) {
+      TourSpotlightArea.tableOfContents =>
+        _rectForGlobalKey(textBookNavigationTourTargetKey) ??
+            _rectForGlobalKey(pdfBookNavigationTourTargetKey),
+      _ => null,
+    };
+  }
+
+  List<Rect> _resolveTourTargetRects(TourStep step) {
+    if (step.area == TourSpotlightArea.sideBySide) {
+      final tabRect = _rectForGlobalKey(tourTabContextMenuTargetKey);
+      final menuItemRect =
+          _rectForGlobalKey(tourTabSideBySideMenuItemTargetKey);
+      return [
+        if (tabRect != null) tabRect,
+        if (menuItemRect != null) menuItemRect,
+      ];
+    }
+
+    if (step.id == 'backup') {
+      final contentRect = _rectForGlobalKey(tourBackupSettingsTargetKey);
+      final tabRect = _rectForGlobalKey(tourSettingsTabTargetKeys[5]!);
+      return [
+        if (contentRect != null) contentRect,
+        if (tabRect != null) tabRect,
+      ];
+    }
+
+    if (step.id == 'shortcuts') {
+      final contentRect = _rectForGlobalKey(tourShortcutsSettingsTargetKey);
+      final tabRect = _rectForGlobalKey(tourSettingsTabTargetKeys[4]!);
+      return [
+        if (contentRect != null) contentRect,
+        if (tabRect != null) tabRect,
+      ];
+    }
+
+    if (!_usesReadingOverflowMenu(step.area)) {
+      final rect = _resolveTourTargetRect(step);
+      return rect == null ? const [] : [rect];
+    }
+
+    final directRect = _directReadingTourTargetRect(step.area);
+    if (directRect != null) {
+      return [directRect];
+    }
+
+    final overflowRect = _rectForGlobalKey(textBookOverflowTourTargetKey) ??
+        _rectForGlobalKey(pdfBookOverflowTourTargetKey);
+    final menuItemRect = _readingOverflowMenuItemRect(step.area);
+    return [
+      if (overflowRect != null) overflowRect,
+      if (menuItemRect != null) menuItemRect,
+    ];
+  }
+
+  Rect? _readingTourTargetRect(TourSpotlightArea area) {
+    final directRect = _directReadingTourTargetRect(area);
+    if (directRect != null) {
+      return directRect;
+    }
+
+    final overflowRect = _rectForGlobalKey(textBookOverflowTourTargetKey) ??
+        _rectForGlobalKey(pdfBookOverflowTourTargetKey);
+    final menuItemRect = _readingOverflowMenuItemRect(area);
+
+    if (overflowRect != null && menuItemRect != null) {
+      return overflowRect.expandToInclude(menuItemRect);
+    }
+    return menuItemRect ?? overflowRect;
+  }
+
+  Rect? _directReadingTourTargetRect(TourSpotlightArea area) {
+    return switch (area) {
+      TourSpotlightArea.commentators =>
+        _rectForGlobalKey(textBookCommentatorsTourTargetKey),
+      TourSpotlightArea.bookmark =>
+        _rectForGlobalKey(textBookBookmarkTourTargetKey) ??
+            _rectForGlobalKey(pdfBookBookmarkTourTargetKey),
+      TourSpotlightArea.bookSearch =>
+        _rectForGlobalKey(textBookSearchTourTargetKey) ??
+            _rectForGlobalKey(pdfBookSearchTourTargetKey),
+      TourSpotlightArea.print =>
+        _rectForGlobalKey(textBookPrintTourTargetKey) ??
+            _rectForGlobalKey(pdfBookPrintTourTargetKey),
+      _ => null,
+    };
+  }
+
+  Rect? _readingOverflowMenuItemRect(TourSpotlightArea area) {
+    return switch (area) {
+      TourSpotlightArea.commentators =>
+        _rectForGlobalKey(textBookOverflowCommentatorsTourTargetKey),
+      TourSpotlightArea.bookmark =>
+        _rectForGlobalKey(textBookOverflowBookmarkTourTargetKey) ??
+            _rectForGlobalKey(pdfBookOverflowBookmarkTourTargetKey),
+      TourSpotlightArea.bookSearch =>
+        _rectForGlobalKey(textBookOverflowSearchTourTargetKey) ??
+            _rectForGlobalKey(pdfBookOverflowSearchTourTargetKey),
+      TourSpotlightArea.print =>
+        _rectForGlobalKey(textBookOverflowPrintTourTargetKey) ??
+            _rectForGlobalKey(pdfBookOverflowPrintTourTargetKey),
+      _ => null,
+    };
+  }
+
+  Rect? _libraryTourRect(String methodName) {
+    final libraryState = libraryBrowserKey.currentState;
+    if (libraryState == null) {
+      return null;
+    }
+    final dynamic state = libraryState;
+    return switch (methodName) {
+      'tourLibraryRect' => state.tourLibraryRect() as Rect?,
+      'tourLibrarySearchRect' => state.tourLibrarySearchRect() as Rect?,
+      'tourLibraryCategoriesRect' => state.tourLibraryCategoriesRect() as Rect?,
+      _ => null,
+    };
+  }
+
+  Rect? _combinedRectForKeys(Iterable<GlobalKey> keys) {
+    Rect? combined;
+    for (final key in keys) {
+      final rect = _rectForGlobalKey(key);
+      if (rect == null) continue;
+      combined = combined == null ? rect : combined.expandToInclude(rect);
+    }
+    return combined;
+  }
+
+  Rect? _tabsTourTargetRect() {
+    final rect = _rectForGlobalKey(tourReadingTabsTargetKey, inflate: 0);
+    if (rect == null) {
+      return null;
+    }
+    final settingsState = context.read<SettingsBloc>().state;
+    if (settingsState.alignTabsToRight) {
+      return Rect.fromLTRB(
+          rect.left - 36, rect.top - 4, rect.right, rect.bottom + 4);
+    }
+    return Rect.fromLTRB(
+      rect.left - 28,
+      rect.top - 4,
+      rect.right + 28,
+      rect.bottom + 4,
+    );
+  }
+
+  Rect? _rectForGlobalKey(GlobalKey key, {double inflate = 4}) {
+    final context = key.currentContext;
+    if (context == null || !context.mounted) {
+      return null;
+    }
+    // findRenderObject() can throw in debug mode if the element deactivates
+    // between the mounted check and the layout callback — a Flutter-internal
+    // race that context.mounted alone cannot prevent.
+    RenderObject? renderObject;
+    try {
+      renderObject = context.findRenderObject();
+    } catch (_) {
+      return null;
+    }
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    final topLeft = renderObject.localToGlobal(Offset.zero);
+    return (topLeft & renderObject.size).inflate(inflate);
+  }
+
+  void _scheduleTourTargetRebuilds({required int remainingFrames}) {
+    if (remainingFrames <= 0) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _tourOverlayEntry?.markNeedsBuild();
+      _scheduleTourTargetRebuilds(remainingFrames: remainingFrames - 1);
+    });
+  }
+
+  Future<void> _openTourGenesisInReader() async {
+    _closeExistingTextBookTabsForTour();
+    // Wait for the old TextBookScreen to fully deactivate before mounting a new
+    // one with the same tour GlobalKeys — avoids "Duplicate GlobalKeys" assertion
+    // and the resulting layout mutations during _RenderLayoutBuilder.performLayout.
+    final frameCompleter = Completer<void>();
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => frameCompleter.complete());
+    await frameCompleter.future;
+    if (!mounted) return;
+    try {
+      final library = await DataRepository.instance.library;
+      final book = _findBookByTitle(library, 'בראשית') ??
+          TextBook(title: 'בראשית', fileType: 'txt');
+      if (!mounted) return;
+      openBook(context, book, 0, '', ignoreHistory: true);
+    } catch (_) {
+      if (!mounted) return;
+      openBook(
+        context,
+        TextBook(title: 'בראשית', fileType: 'txt'),
+        0,
+        '',
+        ignoreHistory: true,
+      );
+    }
+  }
+
+  void _closeExistingTextBookTabsForTour() {
+    final tabsBloc = context.read<TabsBloc>();
+    final tabsToClose = tabsBloc.state.tabs.whereType<TextBookTab>().toList();
+    for (final tab in tabsToClose) {
+      tabsBloc.add(RemoveTab(tab));
+    }
+  }
+
+  Book? _findBookByTitle(library_model.Category category, String title) {
+    for (final book in category.books) {
+      if (book.title == title) {
+        return book;
+      }
+    }
+    for (final subCategory in category.subCategories) {
+      final book = _findBookByTitle(subCategory, title);
+      if (book != null) {
+        return book;
+      }
+    }
+    return null;
+  }
+
+  void _scheduleTourStartIfNeeded({required bool libraryLoaded}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _tourCubit.startIfNeeded(libraryLoaded: libraryLoaded);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: _calendarCubit,
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: _calendarCubit),
+        BlocProvider.value(value: _tourCubit),
+      ],
       child: MultiBlocListener(
         listeners: [
           BlocListener<NavigationBloc, NavigationState>(
@@ -605,6 +1257,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
             listener: (context, state) {
               _startupWorkGate.markLibraryLoaded();
               _tryStartDeferredStartupWork();
+              final navigationState = context.read<NavigationBloc>().state;
+              if (navigationState.hasCheckedLibrary &&
+                  !navigationState.isLibraryEmpty) {
+                _tourCubit.startIfNeeded(libraryLoaded: true);
+              }
             },
           ),
           BlocListener<LibraryBloc, LibraryState>(
@@ -900,6 +1557,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
               _cachedSettingsPage!,
             ];
 
+            if (state.hasCheckedLibrary) {
+              _scheduleTourStartIfNeeded(libraryLoaded: !state.isLibraryEmpty);
+            }
+            _scheduleTourOverlayInsert();
+
             return SafeArea(
               child: KeyboardShortcuts(
                 child: MyUpdatWidget(
@@ -1124,9 +1786,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
   }
 
-  void _handleSearchTabOpen(BuildContext context) {
+  void _handleSearchTabOpen(BuildContext context, {bool closeIfOpen = true}) {
     if (_isSearchOpen) {
-      Navigator.of(context).pop();
+      if (closeIfOpen) {
+        Navigator.of(context).pop();
+      }
       return;
     }
 
@@ -1149,9 +1813,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
     });
   }
 
-  void _handleFindRefOpen(BuildContext context) {
+  void _handleFindRefOpen(
+    BuildContext context, {
+    bool closeIfOpen = true,
+  }) {
     if (_isFindRefOpen) {
-      Navigator.of(context).pop();
+      if (closeIfOpen) {
+        Navigator.of(context).pop();
+      }
       return;
     }
 
@@ -1160,6 +1829,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     showDialog(
       context: context,
+      barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.62),
       builder: (context) => FindRefDialog(),
     ).then((_) {
       if (!mounted) return;
@@ -1244,14 +1914,35 @@ class MainWindowScreenState extends State<MainWindowScreen>
         (Settings.getValue<String>(item.shortcutKey) ?? item.shortcutDefault)
             .toUpperCase();
 
-    return NavRailItem(
-      icon: item.icon,
-      iconFilled: item.iconFilled,
-      label: item.label,
-      isSelected: isSelected,
-      onTap: () => _onNavTap(context, index, currentScreen),
-      tooltip: tooltip,
+    return KeyedSubtree(
+      key: tourMainNavigationTargetKeys[index],
+      child: NavRailItem(
+        icon: item.icon,
+        iconFilled: item.iconFilled,
+        label: item.label,
+        isSelected: isSelected,
+        onTap: () => _onNavTap(context, index, currentScreen),
+        tooltip: tooltip,
+      ),
     );
+  }
+
+  Future<void> _openTourBookByTitle(String title) async {
+    try {
+      final library = await DataRepository.instance.library;
+      final book = _findBookByTitle(library, title) ?? TextBook(title: title);
+      if (!mounted) return;
+      openBook(context, book, 0, '', ignoreHistory: true);
+    } catch (_) {
+      if (!mounted) return;
+      openBook(
+        context,
+        TextBook(title: title),
+        0,
+        '',
+        ignoreHistory: true,
+      );
+    }
   }
 }
 

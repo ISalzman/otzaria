@@ -53,6 +53,8 @@ abstract class OpenedTab {
         splitRatio: tab.splitRatio,
         isPinned: tab.isPinned,
       );
+    } else if (tab is SearchingTab) {
+      return SearchingTab.clone(tab);
     }
     return tab;
   }

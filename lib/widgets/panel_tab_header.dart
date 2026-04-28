@@ -41,6 +41,7 @@ class PanelTabHeader extends StatelessWidget {
                     colorScheme.onSurface.withValues(alpha: 0.6),
                 indicatorColor: colorScheme.primary,
                 dividerColor: Colors.transparent,
+                splashBorderRadius: BorderRadius.circular(12),
                 onTap: onTap,
               ),
             ),

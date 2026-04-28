@@ -163,6 +163,22 @@ Future<void> _initializeDataRootForEarlyLogging() async {
   }
 }
 
+const String _kLastSeenVersion = 'last_seen_app_version';
+
+void _clearErrorLogOnVersionChange() {
+  final currentVersion = ErrorLogFile.appVersion;
+  final lastSeen = Settings.getValue<String>(_kLastSeenVersion);
+  if (lastSeen != null && lastSeen != currentVersion) {
+    try {
+      final logFile = ErrorLogFile.resolveFile();
+      if (logFile.existsSync()) {
+        logFile.deleteSync();
+      }
+    } catch (_) {}
+  }
+  Settings.setValue(_kLastSeenVersion, currentVersion);
+}
+
 Future<void> _initializeLogMetadata() async {
   try {
     final packageInfo = await PackageInfo.fromPlatform();
@@ -197,6 +213,17 @@ void _logNonFatalInitializationError(
     },
   );
 }
+
+/// האם השגיאה היא באג ידוע ב-pdfrx_engine שב-_notifyMissingFonts מנסה להוסיף
+/// לסטרים שכבר נסגר. נרשמת פעם אחת בלוג ואחר כך נבלעת כדי לא לייצר רעש.
+bool _isPdfrxMissingFontsStreamError(Object error, StackTrace stack) {
+  return error.toString().contains(
+        'Cannot add new events after calling close',
+      ) &&
+      stack.toString().contains('_notifyMissingFonts');
+}
+
+bool _pdfrxMissingFontsAlreadyLogged = false;
 
 bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
   return errorString.contains('!_pressedKeys.containsKey(event.physicalKey)') ||
@@ -267,6 +294,20 @@ void main(List<String> args) async {
     // Skip HardwareKeyboard assertion error - handled by clearState() on window focus
     if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
       return true; // Silently ignore
+    }
+
+    // pdfrx internal bug: stream closed before font-notification completes.
+    // נרשם פעם אחת בלוג כדי שיהיה עקבות, ולאחר מכן נבלע.
+    if (_isPdfrxMissingFontsStreamError(error, stack)) {
+      if (!_pdfrxMissingFontsAlreadyLogged) {
+        _pdfrxMissingFontsAlreadyLogged = true;
+        _appendUnhandledErrorToLocalLog(
+          title: 'pdfrx MissingFonts (once)',
+          error: error,
+          stackTrace: stack,
+        );
+      }
+      return true;
     }
 
     // Log all other errors normally
@@ -420,6 +461,9 @@ Future<void> _heavyInitialize() async {
     }
 
     await _migrateWindowsLibraryPathFromInstallerPrefs();
+
+    // Settings מוכן — מחק לוג שגיאות ישן אם הגרסה השתנתה
+    _clearErrorLogOnVersionChange();
 
     // Settings מוכן — שחזר מיקום/גודל חלון לפני הצגת החלון
     if (!kIsWeb &&
