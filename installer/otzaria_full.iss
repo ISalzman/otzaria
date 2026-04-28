@@ -48,6 +48,17 @@ Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Code]
 
+var
+  CompPage: TWizardPage;
+  VCCheck, WV2Check: TCheckBox;
+  VCLabel, WV2Label: TLabel;
+  InstallVC, InstallWV2: Boolean;
+
+  BooksPage: TWizardPage;
+  BooksPathEdit: TEdit;
+  BooksPathBrowseBtn: TButton;
+  SelectedBooksPath: String;
+
 function TryGetInstallDirFromRegistry(RootKey: Integer; const SubKey: String; var InstallDir: String): Boolean;
 begin
   Result := RegQueryStringValue(RootKey, SubKey, 'Inno Setup: App Path', InstallDir);
@@ -115,34 +126,6 @@ begin
     Result := ExpandConstant('{userappdata}\otzaria');
 end;
 
-function InitializeSetup(): Boolean;
-var
-  DataPath, OldPath: String;
-begin
-  Result := True;
-  DataPath := GetDataDir('');
-  OldPath := 'C:\אוצריא';
-  
-  // בדיקה אם יש התקנה ישנה בנתיב העברי
-  if DirExists(OldPath) then
-  begin
-    if MsgBox('נמצאה התקנה ישנה ב-' + OldPath + #13#10 +
-              'ספריית הספרים עוברת לנתיב חדש: ' + DataPath + #13#10#13#10 +
-              'האם להעביר את הנתונים למיקום החדש?',
-              mbConfirmation, MB_YESNO) = IDYES then
-    begin
-      // המשתמש יצטרך להעביר ידנית או שנוסיף קוד העברה
-      MsgBox('לאחר ההתקנה, תוכל להעביר את הנתונים מ-' + OldPath + ' ל-' + DataPath, mbInformation, MB_OK);
-    end;
-  end;
-  
-  // האזהרה על מחיקת ספרים קיימים מוצגת בדף בחירת תיקיית הספרים
-
-  // אתחול ברירות מחדל — גם להתקנה שקטה (/SILENT, /VERYSILENT)
-  InstallVC  := VCRedistNeedsInstall;
-  InstallWV2 := WebView2NeedsInstall;
-end;
-
 // ─── בדיקות רכיבי מערכת ───────────────────────────────────────────────────
 
 function GetVCVersion: String;
@@ -186,18 +169,33 @@ begin
   Result := GetWebView2Version = '';
 end;
 
-// ─── משתנים גלובליים ────────────────────────────────────────────────────────
-
+function InitializeSetup(): Boolean;
 var
-  CompPage: TWizardPage;
-  VCCheck, WV2Check: TCheckBox;
-  VCLabel, WV2Label: TLabel;
-  InstallVC, InstallWV2: Boolean;
+  DataPath, OldPath: String;
+begin
+  Result := True;
+  DataPath := GetDataDir('');
+  OldPath := 'C:\אוצריא';
 
-  BooksPage: TWizardPage;
-  BooksPathEdit: TEdit;
-  BooksPathBrowseBtn: TButton;
-  SelectedBooksPath: String;
+  // בדיקה אם יש התקנה ישנה בנתיב העברי
+  if DirExists(OldPath) then
+  begin
+    if MsgBox('נמצאה התקנה ישנה ב-' + OldPath + #13#10 +
+              'ספריית הספרים עוברת לנתיב חדש: ' + DataPath + #13#10#13#10 +
+              'האם להעביר את הנתונים למיקום החדש?',
+              mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      // המשתמש יצטרך להעביר ידנית או שנוסיף קוד העברה
+      MsgBox('לאחר ההתקנה, תוכל להעביר את הנתונים מ-' + OldPath + ' ל-' + DataPath, mbInformation, MB_OK);
+    end;
+  end;
+
+  // האזהרה על מחיקת ספרים קיימים מוצגת בדף בחירת תיקיית הספרים
+
+  // אתחול ברירות מחדל — גם להתקנה שקטה (/SILENT, /VERYSILENT)
+  InstallVC  := VCRedistNeedsInstall;
+  InstallWV2 := WebView2NeedsInstall;
+end;
 
 // ─── בניית עמוד בחירת רכיבים ───────────────────────────────────────────────
 
