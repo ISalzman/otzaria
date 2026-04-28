@@ -520,7 +520,7 @@ void main() {
     );
 
     blocTest<PdfBookBloc, PdfBookState>(
-      'UpdateSearchOptions עם searchMode מעדכן',
+      'UpdateSearchOptions עם searchMode מעדכן את ה-state',
       build: () => _makeBloc(_tab()),
       seed: () => _loaded(),
       act: (b) =>
@@ -532,16 +532,17 @@ void main() {
     );
 
     blocTest<PdfBookBloc, PdfBookState>(
-      'UpdateSearchOptions עם alternativeWords מעדכן',
+      'UpdateSearchOptions עם alternativeWords מעדכן את ה-state',
       build: () => _makeBloc(_tab()),
       seed: () => _loaded(),
       act: (b) => b.add(const UpdateSearchOptions(
           alternativeWords: {1: ['תורה', 'Torah']})),
       expect: () => [
-        isA<PdfBookLoaded>().having((s) => s.alternativeWords,
-            'alternativeWords', {
-          1: ['תורה', 'Torah']
-        }),
+        isA<PdfBookLoaded>().having(
+          (s) => s.alternativeWords,
+          'alternativeWords',
+          const {1: ['תורה', 'Torah']},
+        ),
       ],
     );
 

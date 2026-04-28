@@ -31,6 +31,7 @@ import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_event.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 
 class CustomTitleBar extends StatefulWidget {
   final VoidCallback? onReadingSettingsPressed;
@@ -423,22 +424,25 @@ class _CustomTitleBarState extends State<CustomTitleBar>
                 },
                 builder: (context, candidateData, rejectedData) {
                   return DragToMoveArea(
-                    child: ScrollableTabBarWithArrows(
-                      controller: _tabController!,
-                      tabAlignment: settingsState.alignTabsToRight
-                          ? TabAlignment.start
-                          : TabAlignment.center,
-                      hideArrowsWhenNotScrollable:
-                          settingsState.alignTabsToRight,
-                      onOverflowChanged: (overflow) {
-                        if (mounted && _tabsOverflow != overflow) {
-                          setState(() => _tabsOverflow = overflow);
-                        }
-                      },
-                      tabs: state.tabs
-                          .map((tab) =>
-                              _buildTab(context, tab, state, settingsState))
-                          .toList(),
+                    child: KeyedSubtree(
+                      key: tourReadingTabsTargetKey,
+                      child: ScrollableTabBarWithArrows(
+                        controller: _tabController!,
+                        tabAlignment: settingsState.alignTabsToRight
+                            ? TabAlignment.start
+                            : TabAlignment.center,
+                        hideArrowsWhenNotScrollable:
+                            settingsState.alignTabsToRight,
+                        onOverflowChanged: (overflow) {
+                          if (mounted && _tabsOverflow != overflow) {
+                            setState(() => _tabsOverflow = overflow);
+                          }
+                        },
+                        tabs: state.tabs
+                            .map((tab) =>
+                                _buildTab(context, tab, state, settingsState))
+                            .toList(),
+                      ),
                     ),
                   );
                 },
@@ -450,6 +454,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4.0),
                 child: IconButton(
+                  key: tourReadingSettingsButtonTargetKey,
                   icon: Icon(
                     widget.isReadingSettingsPanelOpen
                         ? FluentIcons.settings_24_filled
@@ -713,8 +718,11 @@ class _CustomTitleBarState extends State<CustomTitleBar>
         }
       },
       child: AppContextMenuRegion(
+        key: isSelected ? tourTabContextMenuTargetKey : null,
         menuBuilder: (menuCtx) =>
             _buildTabContextMenuEntries(menuCtx, tab, state),
+        menuItemKeysByLabel:
+            isSelected ? {'הצג לצד': tourTabSideBySideMenuItemTargetKey} : null,
         child: Draggable<OpenedTab>(
           axis: Axis.horizontal,
           data: tab,
@@ -911,8 +919,9 @@ class _CustomTitleBarState extends State<CustomTitleBar>
         ),
         AppContextMenuEntry(
           label: 'חזרה לתצוגה רגילה',
-          onTap: () =>
-              context.read<TabsBloc>().add(const DisableSideBySideMode()),
+          onTap: () => context
+              .read<TabsBloc>()
+              .add(DisableSideBySideMode(state.tabs.indexOf(tab))),
         ),
       ]);
     }

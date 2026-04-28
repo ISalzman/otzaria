@@ -28,7 +28,10 @@ class _ThumbnailsViewState extends State<ThumbnailsView>
   void initState() {
     super.initState();
     widget.controller?.addListener(_onControllerChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToActiveItem());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+      _scrollToActiveItem();
+    });
   }
 
   @override
@@ -39,8 +42,10 @@ class _ThumbnailsViewState extends State<ThumbnailsView>
       widget.controller?.addListener(_onControllerChanged);
     }
     if (oldWidget.documentRef != widget.documentRef) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _scrollToActiveItem());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+        _scrollToActiveItem();
+      });
     }
   }
 
@@ -53,6 +58,7 @@ class _ThumbnailsViewState extends State<ThumbnailsView>
 
   void _onControllerChanged() {
     if (mounted) {
+      setState(() {});
       _scrollToActiveItem();
     }
   }

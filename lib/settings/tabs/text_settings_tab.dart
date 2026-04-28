@@ -24,17 +24,19 @@ class TextSettingsTab extends StatelessWidget {
         final content = SingleChildScrollView(
           primary: true,
           padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildFontSection(context, settingsState),
-              kSettingsCardSpacing,
-              _buildNikudSection(context, settingsState),
-              kSettingsCardSpacing,
-              _buildCopySection(context, settingsState),
-              kSettingsCardSpacing,
-              _buildPerBookSection(context, settingsState),
-            ],
+          child: ToolPanelWrapper(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildFontSection(context, settingsState),
+                kSettingsCardSpacing,
+                _buildNikudSection(context, settingsState),
+                kSettingsCardSpacing,
+                _buildCopySection(context, settingsState),
+                kSettingsCardSpacing,
+                _buildPerBookSection(context, settingsState),
+              ],
+            ),
           ),
         );
 
@@ -423,8 +425,7 @@ class TextSettingsTab extends StatelessWidget {
         if (state.copyWithHeaders != 'none')
           LayoutBuilder(
             builder: (context, constraints) {
-              final isNarrow =
-                  constraints.maxWidth < LayoutBreakpoints.compact;
+              final isNarrow = constraints.maxWidth < LayoutBreakpoints.compact;
 
               const formatEntries = [
                 AppMenuEntry(

@@ -47,12 +47,65 @@ class SearchingTab extends OpenedTab {
     super.title,
     String? searchText, {
     super.isPinned = false,
+    super.dedupeKey,
   }) {
     titleNotifier = ValueNotifier(title);
     if (searchText != null) {
       queryController.text = searchText;
       // החיפוש מופעל לעצמאי כשהטאב מוצג לראשונה (ראה TantivyFullTextSearch.initState)
     }
+  }
+
+  factory SearchingTab.clone(SearchingTab other) {
+    final cloned = SearchingTab(
+      other.title,
+      other.queryController.text,
+      isPinned: other.isPinned,
+      dedupeKey: other.dedupeKey,
+    );
+
+    cloned.searchOptions.addAll(
+      other.searchOptions.map(
+        (key, value) => MapEntry(key, Map<String, bool>.from(value)),
+      ),
+    );
+    cloned.alternativeWords.addAll(
+      other.alternativeWords.map(
+        (key, value) => MapEntry(key, List<String>.from(value)),
+      ),
+    );
+    cloned.spacingValues.addAll(other.spacingValues);
+    cloned.isLeftPaneOpen.value = other.isLeftPaneOpen.value;
+
+    final state = other.searchBloc.state;
+    cloned.searchBloc.add(
+      SetSearchMode(
+        state.configuration.searchMode,
+        typoToleranceEnabled: state.configuration.isTypoToleranceEnabled,
+      ),
+    );
+    cloned.searchBloc.add(SetFacetsWithoutSearch(state.searchScopeFacets));
+
+    if (state.configuration.numResults !=
+        cloned.searchBloc.state.configuration.numResults) {
+      cloned.searchBloc.add(UpdateNumResults(state.configuration.numResults));
+    }
+
+    if (state.configuration.sortBy !=
+        cloned.searchBloc.state.configuration.sortBy) {
+      cloned.searchBloc.add(UpdateSortOrder(state.configuration.sortBy));
+    }
+
+    if (state.configuration.distance !=
+        cloned.searchBloc.state.configuration.distance) {
+      cloned.searchBloc.add(UpdateDistance(state.configuration.distance));
+    }
+
+    if (state.searchQuery.trim().isNotEmpty) {
+      cloned.updateTitleFromAppliedQuery(state.searchQuery);
+    }
+
+    return cloned;
   }
 
   void updateTitleFromAppliedQuery(String query) {

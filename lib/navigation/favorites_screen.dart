@@ -20,11 +20,12 @@ class _FavouritesScreenState extends State<FavouritesScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return const DefaultTabController(
+    return DefaultTabController(
       length: 2,
       child: Scaffold(
         appBar: TabBar(
-          tabs: [
+          splashBorderRadius: BorderRadius.circular(12),
+          tabs: const [
             Tab(
               text: 'סימניות',
               icon: Icon(

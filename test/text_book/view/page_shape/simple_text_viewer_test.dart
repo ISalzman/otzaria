@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -164,6 +165,37 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  testWidgets('פוקוס בתוך עורך Quill מזוהה כשדה קלט', (tester) async {
+    final focusNode = FocusNode();
+    final scrollController = ScrollController();
+    final controller = quill.QuillController(
+      document: quill.Document()..insert(0, 'שלום\n'),
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: quill.QuillEditor(
+            controller: controller,
+            focusNode: focusNode,
+            scrollController: scrollController,
+            config: const quill.QuillEditorConfig(
+              autoFocus: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(isTextInputFocusNode(focusNode), isTrue);
+
+    scrollController.dispose();
+    focusNode.dispose();
   });
 }
 

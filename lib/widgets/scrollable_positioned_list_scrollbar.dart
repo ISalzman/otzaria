@@ -23,6 +23,8 @@ class ScrollablePositionedListScrollbar extends StatefulWidget {
 
 class _ScrollablePositionedListScrollbarState
     extends State<ScrollablePositionedListScrollbar> {
+  static const double _trackWidth = 12.0;
+
   double _thumbPosition = 0.0;
   double _thumbHeight = 0.1; // יחס גובה ברירת מחדל
   bool _isDragging = false;
@@ -124,23 +126,17 @@ class _ScrollablePositionedListScrollbarState
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return Row(
       children: [
-        ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-          child: widget.child,
-        ),
         if (widget.itemCount > 0)
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 12,
+          SizedBox(
+            width: _trackWidth,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final trackHeight = constraints.maxHeight;
                 final thumbPixelHeight = trackHeight * _thumbHeight;
                 final thumbPixelTop = trackHeight * _thumbPosition;
+                final colorScheme = Theme.of(context).colorScheme;
 
                 return GestureDetector(
                   onVerticalDragStart: (details) {
@@ -168,7 +164,7 @@ class _ScrollablePositionedListScrollbarState
                     widget.scrollController.jumpTo(index: targetIndex);
                   },
                   child: Container(
-                    color: Colors.transparent, // כדי לתפוס מגע
+                    color: colorScheme.surface.withValues(alpha: 0.92),
                     child: Stack(
                       children: [
                         // ה"אגודל" (Thumb) עצמו
@@ -180,13 +176,8 @@ class _ScrollablePositionedListScrollbarState
                           child: Container(
                             decoration: BoxDecoration(
                               color: _isDragging
-                                  ? Theme.of(context)
-                                      .colorScheme
-                                      .primary
-                                      .withValues(alpha: 0.8)
-                                  : Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant
+                                  ? colorScheme.primary.withValues(alpha: 0.8)
+                                  : colorScheme.onSurfaceVariant
                                       .withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(4),
                             ),
@@ -199,6 +190,13 @@ class _ScrollablePositionedListScrollbarState
               },
             ),
           ),
+        Expanded(
+          child: ScrollConfiguration(
+            behavior:
+                ScrollConfiguration.of(context).copyWith(scrollbars: false),
+            child: widget.child,
+          ),
+        ),
       ],
     );
   }

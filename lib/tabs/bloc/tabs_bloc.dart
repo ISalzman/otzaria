@@ -39,12 +39,15 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<CloneTab>(_onCloneTab);
     on<MoveTab>(_onMoveTab, transformer: sequential());
     on<NavigateToNextTab>(_onNavigateToNextTab, transformer: sequential());
-    on<NavigateToPreviousTab>(_onNavigateToPreviousTab, transformer: sequential());
+    on<NavigateToPreviousTab>(_onNavigateToPreviousTab,
+        transformer: sequential());
     on<CloseCurrentTab>(_onCloseCurrentTab);
     on<SaveTabs>(_onSaveTabs, transformer: sequential());
     on<TogglePinTab>(_onTogglePinTab, transformer: sequential());
-    on<EnableSideBySideMode>(_onEnableSideBySideMode, transformer: sequential());
-    on<DisableSideBySideMode>(_onDisableSideBySideMode, transformer: sequential());
+    on<EnableSideBySideMode>(_onEnableSideBySideMode,
+        transformer: sequential());
+    on<DisableSideBySideMode>(_onDisableSideBySideMode,
+        transformer: sequential());
     on<UpdateSplitRatio>(_onUpdateSplitRatio, transformer: sequential());
     on<SwapSideBySideTabs>(_onSwapSideBySideTabs, transformer: sequential());
   }
@@ -79,10 +82,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       ReplaceAllTabs event, Emitter<TabsState> emit) async {
     debugPrint('DEBUG: החלפת כל הטאבים - ${event.tabs.length} טאבים חדשים');
 
-    // ניקוי משאבים של כל הטאבים הקיימים
-    for (final tab in state.tabs) {
-      tab.dispose();
-    }
+    final tabsToDispose = List<OpenedTab>.from(state.tabs);
 
     emit(state.copyWith(
       tabs: event.tabs,
@@ -90,6 +90,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       clearSideBySide: true,
     ));
     await _repository.saveTabs(event.tabs, event.currentTabIndex, null);
+
+    for (final tab in tabsToDispose) {
+      _disposeTabLater(tab);
+    }
   }
 
   Future<void> _onSaveTabs(SaveTabs event, Emitter<TabsState> emit) async {
@@ -367,9 +371,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   Future<void> _onRemoveTab(RemoveTab event, Emitter<TabsState> emit) async {
     final removedTabIndex = state.tabs.indexOf(event.tab);
 
-    // ניקוי משאבים של הטאב שנסגר
-    event.tab.dispose();
-
     final newTabs = List<OpenedTab>.from(state.tabs)..remove(event.tab);
 
     // בדיקה אם הטאב שנסגר היה חלק ממצב side-by-side
@@ -403,6 +404,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         clearSideBySide: true,
       ));
       await _repository.saveTabs(newTabs, 0, null);
+      _disposeTabLater(event.tab);
       return;
     }
 
@@ -421,6 +423,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       clearSideBySide: newSideBySideMode == null,
     ));
     await _repository.saveTabs(newTabs, newIndex, newSideBySideMode);
+    _disposeTabLater(event.tab);
   }
 
   Future<void> _onSetCurrentTab(
@@ -444,13 +447,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       CloseAllTabs event, Emitter<TabsState> emit) async {
     // שמירת טאבים מוצמדים בלבד
     final pinnedTabs = state.tabs.where((tab) => tab.isPinned).toList();
-
-    // ניקוי משאבים של כל הטאבים שאינם מוצמדים
-    for (final tab in state.tabs) {
-      if (!tab.isPinned) {
-        tab.dispose();
-      }
-    }
+    final tabsToDispose = state.tabs.where((tab) => !tab.isPinned).toList();
 
     // אם יש טאבים מוצמדים, נשאיר אותם
     final newIndex = pinnedTabs.isNotEmpty ? 0 : 0;
@@ -462,16 +459,16 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       clearSideBySide: true,
     ));
     await _repository.saveTabs(pinnedTabs, newIndex, null);
+
+    for (final tab in tabsToDispose) {
+      _disposeTabLater(tab);
+    }
   }
 
   Future<void> _onCloseOtherTabs(
       CloseOtherTabs event, Emitter<TabsState> emit) async {
-    // ניקוי משאבים של כל הטאבים מלבד זה שנשאר
-    for (final tab in state.tabs) {
-      if (tab != event.keepTab) {
-        tab.dispose();
-      }
-    }
+    final tabsToDispose =
+        state.tabs.where((tab) => tab != event.keepTab).toList();
 
     final newTabs = [event.keepTab];
 
@@ -482,6 +479,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       clearSideBySide: true,
     ));
     await _repository.saveTabs(newTabs, 0, null);
+
+    for (final tab in tabsToDispose) {
+      _disposeTabLater(tab);
+    }
   }
 
   void _onCloneTab(CloneTab event, Emitter<TabsState> emit) {
@@ -633,11 +634,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   Future<void> _onDisableSideBySideMode(
       DisableSideBySideMode event, Emitter<TabsState> emit) async {
-    // אם הטאב הנוכחי הוא CombinedTab, נפרק אותו לשני טאבים נפרדים
-    if (state.currentTab is CombinedTab) {
-      final combinedTab = state.currentTab as CombinedTab;
+    // אם הטאב המבוקש הוא CombinedTab, נפרק אותו לשני טאבים נפרדים
+    if (event.tabIndex >= 0 &&
+        event.tabIndex < state.tabs.length &&
+        state.tabs[event.tabIndex] is CombinedTab) {
+      final combinedTab = state.tabs[event.tabIndex] as CombinedTab;
       final newTabs = List<OpenedTab>.from(state.tabs);
-      final combinedIndex = state.currentTabIndex;
+      final combinedIndex = event.tabIndex;
 
       // מסירים את הטאב המשולב
       newTabs.removeAt(combinedIndex);
@@ -706,9 +709,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       // עדכון הרשימה
       final newTabs = List<OpenedTab>.from(state.tabs);
       newTabs[state.currentTabIndex] = newCombinedTab;
-
-      // ניקוי הטאב הישן
-      combinedTab.dispose();
 
       final indexToSave = state.currentTabIndex;
       emit(state.copyWith(

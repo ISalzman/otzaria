@@ -139,117 +139,119 @@ class AboutDevTab extends StatelessWidget {
     return SingleChildScrollView(
       primary: true,
       padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildHeader(context),
+      child: ToolPanelWrapper(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeader(context),
 
-          // ── תרומה ומידע ──
-          SettingsCard(
-            title: 'תרומה ומידע',
-            children: [
-              _ActionTile(
-                icon: FluentIcons.payment_24_regular,
-                title: 'תרום לפרויקט',
-                subtitle:
-                    'תרומתך תעזור לנו להמשיך לפתח ולשפר את אוצריא עבור כלל הציבור.',
-                buttonLabel: 'נדרים+',
-                buttonIcon: FluentIcons.payment_24_regular,
-                onTap: () => _openUrl('https://nedar.im/ezOd'),
-              ),
-              _ActionTile(
-                icon: FluentIcons.shield_task_24_filled,
-                title: 'אוצריא מתגייסת לעזרת לומדי התורה',
-                subtitle: 'מרכז המידע על ארגוני סיוע ללומדי התורה',
-                buttonLabel: 'למידע נוסף',
-                onTap: () => _openAdPopup(context),
-              ),
-            ],
-          ),
-
-          // ── הצטרף ──
-          SettingsCard(
-            title: 'הצטרף',
-            children: [
-              _ActionTile(
-                icon: FluentIcons.edit_24_regular,
-                title: 'הצטרף לצוות העריכה',
-                subtitle: 'עזור לנו להוסיף ספרים חדשים לספריית אוצריא',
-                buttonLabel: 'הצטרף לעריכה',
-                onTap: () => _openUrl('https://www.otzaria.org/library'),
-              ),
-              _ActionTile(
-                icon: FluentIcons.code_24_regular,
-                title: 'הצטרף לפיתוח',
-                subtitle: 'מפתחים מוזמנים לתרום לקהילה התורנית',
-                buttonLabel: 'הצטרף עכשיו',
-                onTap: () => _openUrl('https://github.com/otzaria/otzaria'),
-              ),
-            ],
-          ),
-
-          // ── תורמים ──
-          SettingsCard(
-            title: 'תורמים',
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: _MemorialCardsGrid(
-                  onDonationTap: () => _openUrl('https://nedar.im/ezOd'),
+            // ── תרומה ומידע ──
+            SettingsCard(
+              title: 'תרומה ומידע',
+              children: [
+                _ActionTile(
+                  icon: FluentIcons.payment_24_regular,
+                  title: 'תרום לפרויקט',
+                  subtitle:
+                      'תרומתך תעזור לנו להמשיך לפתח ולשפר את אוצריא עבור כלל הציבור.',
+                  buttonLabel: 'נדרים+',
+                  buttonIcon: FluentIcons.payment_24_regular,
+                  onTap: () => _openUrl('https://nedar.im/ezOd'),
                 ),
-              ),
-            ],
-          ),
-
-          // ── מפתחים ──
-          SettingsCard(
-            title: 'מפתחים',
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: _ContributorWrap(
-                  contributors: _developers,
-                  icon: FluentIcons.person_24_regular,
+                _ActionTile(
+                  icon: FluentIcons.shield_task_24_filled,
+                  title: 'אוצריא מתגייסת לעזרת לומדי התורה',
+                  subtitle: 'מרכז המידע על ארגוני סיוע ללומדי התורה',
+                  buttonLabel: 'למידע נוסף',
+                  onTap: () => _openAdPopup(context),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
 
-          // ── אנשים חיוניים ──
-          SettingsCard(
-            title: 'התוכנה נעזרה רבות ב:',
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: _ContributorWrap(
-                  contributors: _essentialPeople,
-                  icon: FluentIcons.people_24_regular,
+            // ── הצטרף ──
+            SettingsCard(
+              title: 'הצטרף',
+              children: [
+                _ActionTile(
+                  icon: FluentIcons.edit_24_regular,
+                  title: 'הצטרף לצוות העריכה',
+                  subtitle: 'עזור לנו להוסיף ספרים חדשים לספריית אוצריא',
+                  buttonLabel: 'הצטרף לעריכה',
+                  onTap: () => _openUrl('https://www.otzaria.org/library'),
                 ),
-              ),
-            ],
-          ),
+                _ActionTile(
+                  icon: FluentIcons.code_24_regular,
+                  title: 'הצטרף לפיתוח',
+                  subtitle: 'מפתחים מוזמנים לתרום לקהילה התורנית',
+                  buttonLabel: 'הצטרף עכשיו',
+                  onTap: () => _openUrl('https://github.com/otzaria/otzaria'),
+                ),
+              ],
+            ),
 
-          // ── מהדירי ספרים ──
-          SettingsCard(
-            title: 'מהדירי ספרים',
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _editorCategory(context, '10 ספרים ומעלה', _topEditors),
-                    const SizedBox(height: 20),
-                    _editorCategory(
-                        context, 'בין 5 ל-10 ספרים', _regularEditors),
-                    const SizedBox(height: 12),
-                    _editorsNote(context),
-                  ],
+            // ── תורמים ──
+            SettingsCard(
+              title: 'תורמים',
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _MemorialCardsGrid(
+                    onDonationTap: () => _openUrl('https://nedar.im/ezOd'),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+
+            // ── מפתחים ──
+            SettingsCard(
+              title: 'מפתחים',
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _ContributorWrap(
+                    contributors: _developers,
+                    icon: FluentIcons.person_24_regular,
+                  ),
+                ),
+              ],
+            ),
+
+            // ── אנשים חיוניים ──
+            SettingsCard(
+              title: 'התוכנה נעזרה רבות ב:',
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _ContributorWrap(
+                    contributors: _essentialPeople,
+                    icon: FluentIcons.people_24_regular,
+                  ),
+                ),
+              ],
+            ),
+
+            // ── מהדירי ספרים ──
+            SettingsCard(
+              title: 'מהדירי ספרים',
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _editorCategory(context, '10 ספרים ומעלה', _topEditors),
+                      const SizedBox(height: 20),
+                      _editorCategory(
+                          context, 'בין 5 ל-10 ספרים', _regularEditors),
+                      const SizedBox(height: 12),
+                      _editorsNote(context),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

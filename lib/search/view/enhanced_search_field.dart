@@ -24,11 +24,16 @@ class EnhancedSearchField extends StatefulWidget {
   /// משמש בדיאלוג החיפוש המתקדם כך ש-Enter מוליך לחיפוש הנכון.
   final VoidCallback? onSubmit;
 
+  /// ווידג'ט נוסף שיוצג בתוך ה-suffixIcon (לפני כפתור המחיקה).
+  /// משמש להוספת כפתורים כגון היסטוריה, בלי לגרום לחפיפה עם תוכן הטקסט.
+  final Widget? trailingAction;
+
   const EnhancedSearchField({
     super.key,
     required this.widget,
     this.showInlineSearchButton = true,
     this.onSubmit,
+    this.trailingAction,
   });
 
   SearchingTab get tab {
@@ -51,6 +56,8 @@ final GlobalKey enhancedSearchFieldKey = GlobalKey();
 class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   final GlobalKey _textFieldKey = GlobalKey();
   OverlayEntry? _searchOptionsOverlay;
+  late final FocusNode _keyboardListenerFocusNode;
+  late final FocusNode _textFieldKeyboardListenerFocusNode;
 
   static const double _kSearchFieldMinWidth = 300;
   static const double _kControlHeight = 48;
@@ -58,8 +65,36 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   @override
   void initState() {
     super.initState();
-    widget.tab.queryController.addListener(_onTextChanged);
-    widget.tab.searchFieldFocusNode.addListener(_onCursorPositionChanged);
+    _keyboardListenerFocusNode = FocusNode(
+      debugLabel: 'enhanced_search_field_keyboard_listener',
+      skipTraversal: true,
+      canRequestFocus: false,
+    );
+    _textFieldKeyboardListenerFocusNode = FocusNode(
+      debugLabel: 'enhanced_search_field_textfield_listener',
+      skipTraversal: true,
+      canRequestFocus: false,
+    );
+    _attachTabListeners(widget.tab);
+  }
+
+  void _attachTabListeners(SearchingTab tab) {
+    tab.queryController.addListener(_onTextChanged);
+    tab.searchFieldFocusNode.addListener(_onCursorPositionChanged);
+  }
+
+  void _detachTabListeners(SearchingTab tab) {
+    tab.queryController.removeListener(_onTextChanged);
+    tab.searchFieldFocusNode.removeListener(_onCursorPositionChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant EnhancedSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.tab, widget.tab)) {
+      _detachTabListeners(oldWidget.tab);
+      _attachTabListeners(widget.tab);
+    }
   }
 
   @override
@@ -73,8 +108,9 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   void dispose() {
     debugPrint('🗑️ EnhancedSearchField disposing');
     _hideSearchOptionsOverlay();
-    widget.tab.queryController.removeListener(_onTextChanged);
-    widget.tab.searchFieldFocusNode.removeListener(_onCursorPositionChanged);
+    _detachTabListeners(widget.tab);
+    _keyboardListenerFocusNode.dispose();
+    _textFieldKeyboardListenerFocusNode.dispose();
     widget.tab.searchOptions.clear();
     super.dispose();
   }
@@ -358,7 +394,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
         ),
       ],
       child: KeyboardListener(
-        focusNode: FocusNode(),
+        focusNode: _keyboardListenerFocusNode,
         onKeyEvent: (KeyEvent event) {
           // טיפול ב-Enter גם כשהפוקוס לא בתיבת החיפוש
           if (event is KeyDownEvent &&
@@ -380,7 +416,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                     minHeight: _kControlHeight,
                   ),
                   child: KeyboardListener(
-                    focusNode: FocusNode(),
+                    focusNode: _textFieldKeyboardListenerFocusNode,
                     onKeyEvent: (KeyEvent event) {
                       // עדכון המגירה כשמשתמשים בחצים במקלדת
                       if (event is KeyDownEvent) {
@@ -433,21 +469,40 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                                 icon: const Icon(FluentIcons.search_24_regular),
                               )
                             : null,
-                        suffixIcon: IconButton(
-                          icon: const Icon(FluentIcons.dismiss_24_regular),
-                          onPressed: () {
-                            // ניקוי מלא של כל הנתונים
-                            widget.tab.queryController.clear();
-                            widget.tab.searchOptions.clear();
-                            context
-                                .read<SearchBloc>()
-                                .add(UpdateSearchQuery(''));
-                            // ניקוי ספירות הפאסטים
-                            context
-                                .read<SearchBloc>()
-                                .add(UpdateFacetCounts({}));
-                          },
-                        ),
+                        suffixIcon: widget.trailingAction != null
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  widget.trailingAction!,
+                                  IconButton(
+                                    icon: const Icon(
+                                        FluentIcons.dismiss_24_regular),
+                                    onPressed: () {
+                                      widget.tab.queryController.clear();
+                                      widget.tab.searchOptions.clear();
+                                      context
+                                          .read<SearchBloc>()
+                                          .add(UpdateSearchQuery(''));
+                                      context
+                                          .read<SearchBloc>()
+                                          .add(UpdateFacetCounts({}));
+                                    },
+                                  ),
+                                ],
+                              )
+                            : IconButton(
+                                icon: const Icon(FluentIcons.dismiss_24_regular),
+                                onPressed: () {
+                                  widget.tab.queryController.clear();
+                                  widget.tab.searchOptions.clear();
+                                  context
+                                      .read<SearchBloc>()
+                                      .add(UpdateSearchQuery(''));
+                                  context
+                                      .read<SearchBloc>()
+                                      .add(UpdateFacetCounts({}));
+                                },
+                              ),
                       ),
                     ),
                   ),

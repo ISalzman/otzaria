@@ -82,6 +82,7 @@ class TwoActionsDialog extends StatefulWidget {
   final Widget? customContent;
   final String cancelText;
   final String confirmText;
+  final bool handleEnterKey;
 
   const TwoActionsDialog({
     super.key,
@@ -90,6 +91,7 @@ class TwoActionsDialog extends StatefulWidget {
     this.customContent,
     this.cancelText = 'ביטול',
     this.confirmText = 'אישור',
+    this.handleEnterKey = true,
   });
 
   @override
@@ -104,6 +106,7 @@ class _TwoActionsDialogState extends State<TwoActionsDialog>
     return buildKeyboardNavigator(
       onConfirm: () => Navigator.of(context).pop(true),
       onCancel: () => Navigator.of(context).pop(false),
+      handleEnterKey: widget.handleEnterKey,
       child: AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
         title: widget.title is String ? Text(widget.title) : widget.title,
@@ -220,6 +223,7 @@ Future<bool?> showTwoActionsDialog({
   String cancelText = 'ביטול',
   String confirmText = 'אישור',
   bool barrierDismissible = true,
+  bool handleEnterKey = true,
 }) =>
     showDialog<bool>(
       context: context,
@@ -229,7 +233,8 @@ Future<bool?> showTwoActionsDialog({
           content: content,
           customContent: customContent,
           cancelText: cancelText,
-          confirmText: confirmText),
+          confirmText: confirmText,
+          handleEnterKey: handleEnterKey),
     );
 
 Future<bool?> showWarningDialog({

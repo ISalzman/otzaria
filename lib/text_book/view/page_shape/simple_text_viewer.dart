@@ -13,6 +13,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_se
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -40,6 +41,49 @@ import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 /// מחזירה האם אירוע המקלדת צריך להניע גלילה רציפה בצורת הדף.
 bool shouldHandlePageShapeNavigationKeyEvent(KeyEvent event) {
   return event is KeyDownEvent || event is KeyRepeatEvent;
+}
+
+/// בודקת האם הפוקוס הנוכחי נמצא בתוך שדה קלט טקסטואלי.
+///
+/// נדרש עבור "צורת הדף", כי העורך של הערות אישיות מבוסס `flutter_quill`
+/// ואינו מזוהה תמיד כ-`EditableText` רגיל.
+bool isTextInputFocusNode(FocusNode? focusNode) {
+  final focusContext = focusNode?.context;
+  if (focusContext == null) {
+    return false;
+  }
+
+  if (_isTextInputWidget(focusContext.widget)) {
+    return true;
+  }
+
+  return focusContext.findAncestorWidgetOfExactType<EditableText>() != null ||
+      _hasQuillEditorAncestor(focusContext);
+}
+
+bool _hasQuillEditorAncestor(BuildContext context) {
+  var hasQuillAncestor = false;
+  context.visitAncestorElements((element) {
+    if (_isTextInputWidget(element.widget)) {
+      hasQuillAncestor = true;
+      return false;
+    }
+    return true;
+  });
+  return hasQuillAncestor;
+}
+
+bool _isTextInputWidget(Widget widget) {
+  if (widget is EditableText) {
+    return true;
+  }
+
+  final runtimeTypeName = widget.runtimeType.toString();
+  return runtimeTypeName.contains('TextField') ||
+      runtimeTypeName.contains('EditableText') ||
+      runtimeTypeName.contains('QuillRawEditor') ||
+      runtimeTypeName.contains('RawEditor') ||
+      runtimeTypeName.contains('QuillEditor');
 }
 
 /// קובעת מאיזה אינדקס יתחיל ניווט המקלדת בצורת הדף.
@@ -134,10 +178,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       DictionaryLookupRepository.instance;
 
   bool _isTextInputFocused() {
-    final primaryFocus = FocusManager.instance.primaryFocus;
-    final focusContext = primaryFocus?.context;
-    return focusContext?.widget is EditableText ||
-        focusContext?.findAncestorWidgetOfExactType<EditableText>() != null;
+    return isTextInputFocusNode(FocusManager.instance.primaryFocus);
   }
 
   void _ensureKeyboardFocusAfterLoss(String reason) {
@@ -593,9 +634,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       commentatorItems = _buildCommentatorSwitchMenu(state);
     }
 
-    final linksItems = state.links
+    final lineLinks = state.linksByLine[index + 1] ?? const <Link>[];
+    List<AppContextMenuEntry> buildLinksItems() => lineLinks
         .where((link) =>
-            link.index1 == index + 1 &&
             !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
             link.start == null &&
             link.end == null)
@@ -623,6 +664,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             ))
         .toList();
 
+    final hasLinkItems = lineLinks.any((link) =>
+        !LinkTypes.isCommentaryOrTargum(link.connectionType) &&
+        link.start == null &&
+        link.end == null);
+
     final entries = <AppContextMenuEntry>[];
 
     if (widget.isMainText) {
@@ -644,12 +690,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       entries.addAll(commentatorItems);
     }
 
-    if (linksItems.isNotEmpty) {
+    if (hasLinkItems) {
       entries.add(const AppContextMenuEntry.divider());
       entries.add(AppContextMenuEntry(
         label: 'קישורים',
         icon: FluentIcons.link_24_regular,
-        children: linksItems,
+        childrenBuilder: buildLinksItems,
       ));
     }
 

@@ -152,7 +152,18 @@ void main() {
 
       expect(decodedPowerShell,
           contains('https://otzaria.org/api/reportingerrors'));
+      expect(
+        decodedPowerShell,
+        contains(
+          r'[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12',
+        ),
+      );
       expect(decodedPowerShell, contains('Invoke-WebRequest'));
+      expect(
+        decodedPowerShell,
+        contains(r'$bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)'),
+      );
+      expect(decodedPowerShell, contains(r'-Body $bodyBytes'));
       expect(payloadBase64Match, isNotNull);
       expect(decodedPowerShell, contains(r'$payloadsJsonBase64 ='));
       expect(decodedPowerShell,
@@ -175,6 +186,7 @@ void main() {
   group('DirectErrorReportService.flushPendingReports', () {
     test('automatic flush sends only retryable queued reports', () async {
       final repository = InMemoryDirectErrorReportRepository();
+      final sentRepository = InMemoryDirectErrorReportRepository();
 
       await repository.save([
         _buildReport(
@@ -195,6 +207,7 @@ void main() {
           return http.Response('', 200);
         }),
         queueRepository: repository,
+        sentRepository: sentRepository,
       );
 
       final sentCount =
@@ -203,6 +216,7 @@ void main() {
 
       expect(sentCount, 1);
       expect(sentReportIds, ['retry-report']);
+      expect((await sentRepository.load()).single.id, 'retry-report');
       expect(
         remainingReports.map((report) => report.id).toList(),
         ['manual-report'],
@@ -212,6 +226,7 @@ void main() {
     test('permanent failure is removed and does not block later reports',
         () async {
       final repository = InMemoryDirectErrorReportRepository();
+      final sentRepository = InMemoryDirectErrorReportRepository();
 
       await repository.save([
         _buildReport(
@@ -242,6 +257,7 @@ void main() {
           return http.Response('', 200);
         }),
         queueRepository: repository,
+        sentRepository: sentRepository,
       );
 
       final sentCount =
@@ -250,6 +266,7 @@ void main() {
 
       expect(sentCount, 1);
       expect(attemptedReportIds, ['invalid-report', 'valid-report']);
+      expect((await sentRepository.load()).single.id, 'valid-report');
       expect(
         remainingReports.map((report) => report.id).toList(),
         ['manual-report'],
@@ -261,9 +278,11 @@ void main() {
     test('success message uses sefaria label for sefaria sourced books',
         () async {
       final repository = InMemoryDirectErrorReportRepository();
+      final sentRepository = InMemoryDirectErrorReportRepository();
       final service = DirectErrorReportService(
         client: MockClient((request) async => http.Response('', 200)),
         queueRepository: repository,
+        sentRepository: sentRepository,
       );
 
       final result = await service.submitReport(
@@ -275,6 +294,74 @@ void main() {
 
       expect(result.status, DirectReportDeliveryStatus.sent);
       expect(result.message, 'הדיווח נשלח בהצלחה לספריא.');
+      expect((await sentRepository.load()).single.id, 'sefaria-success-report');
+    });
+
+    test('submitPendingReport removes sent report from queue', () async {
+      final repository = InMemoryDirectErrorReportRepository();
+      final sentRepository = InMemoryDirectErrorReportRepository();
+      final report = _buildReport(id: 'pending-report');
+      await repository.save([report]);
+      final service = DirectErrorReportService(
+        client: MockClient((request) async => http.Response('', 200)),
+        queueRepository: repository,
+        sentRepository: sentRepository,
+      );
+
+      final result = await service.submitPendingReport(report);
+
+      expect(result.status, DirectReportDeliveryStatus.sent);
+      expect(await repository.load(), isEmpty);
+      expect((await sentRepository.load()).single.id, 'pending-report');
+    });
+
+    test('updatePendingReport edits a saved queued report', () async {
+      final repository = InMemoryDirectErrorReportRepository();
+      final report = _buildReport(id: 'editable-report');
+      await repository.save([report]);
+      final service = DirectErrorReportService(
+        queueRepository: repository,
+      );
+
+      await service.updatePendingReport(
+        report.copyWith(errorDetails: 'פרט מתוקן'),
+      );
+
+      final reports = await repository.load();
+      expect(reports.single.errorDetails, 'פרט מתוקן');
+    });
+
+    test('deleteSentReport removes a report from sent history', () async {
+      final sentRepository = InMemoryDirectErrorReportRepository();
+      await sentRepository.save([
+        _buildReport(id: 'sent-a'),
+        _buildReport(id: 'sent-b'),
+      ]);
+      final service = DirectErrorReportService(
+        sentRepository: sentRepository,
+      );
+
+      await service.deleteSentReport('sent-a');
+
+      expect(
+        (await sentRepository.load()).map((report) => report.id).toList(),
+        ['sent-b'],
+      );
+    });
+
+    test('clearSentReports clears sent history', () async {
+      final sentRepository = InMemoryDirectErrorReportRepository();
+      await sentRepository.save([
+        _buildReport(id: 'sent-a'),
+        _buildReport(id: 'sent-b'),
+      ]);
+      final service = DirectErrorReportService(
+        sentRepository: sentRepository,
+      );
+
+      await service.clearSentReports();
+
+      expect(await sentRepository.load(), isEmpty);
     });
 
     test('permanent failure does not queue the current report', () async {

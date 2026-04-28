@@ -506,15 +506,30 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
                           style: TextStyle(fontSize: 12),
                         ),
                         WidgetSpan(
-                          child: InkWell(
+                          alignment: PlaceholderAlignment.baseline,
+                          baseline: TextBaseline.alphabetic,
+                          child: GestureDetector(
                             onTap: () =>
                                 widget.onOpenCalendarCalculationPage(context),
-                            child: Text(
-                              'הזמנים שונים',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: theme.colorScheme.primary,
-                                decoration: TextDecoration.underline,
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: theme.colorScheme.primary,
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                                child: Text(
+                                  'הזמנים שונים',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.primary,
+                                    height: 1.0,
+                                  ),
+                                ),
                               ),
                             ),
                           ),

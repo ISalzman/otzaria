@@ -123,6 +123,8 @@ abstract class Book {
 ///a text book has a getter 'text' which returns a [Future] that resolvs to a [String].
 ///it has also a 'tableOfContents' field that returns a [Future] that resolvs to a list of [TocEntry]s
 class TextBook extends Book {
+  String? notesContent;
+
   TextBook(
       {super.id,
       required super.title,
@@ -146,7 +148,8 @@ class TextBook extends Book {
       super.categoryId,
       super.extraTitles,
       super.isUserBook,
-      super.externalLibraryId});
+      super.externalLibraryId,
+      this.notesContent});
 
   /// Retrieves the table of contents of the book.
   ///
