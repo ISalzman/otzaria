@@ -51,7 +51,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   void _onLoadTabs(LoadTabs event, Emitter<TabsState> emit) {
     final tabs = _repository.loadTabs();
-    final currentTabIndex = _repository.loadCurrentTabIndex();
+    final savedIndex = _repository.loadCurrentTabIndex();
+    final currentTabIndex =
+        tabs.isEmpty ? 0 : savedIndex.clamp(0, tabs.length - 1);
     final sideBySideMode = _repository.loadSideBySideMode();
 
     // וידוא שהאינדקסים של side-by-side תקינים
@@ -434,6 +436,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   void _onCloseCurrentTab(CloseCurrentTab event, Emitter<TabsState> emit) {
+    if (state.tabs.isEmpty || state.currentTabIndex >= state.tabs.length) return;
     add(RemoveTab(state.tabs[state.currentTabIndex]));
   }
 
