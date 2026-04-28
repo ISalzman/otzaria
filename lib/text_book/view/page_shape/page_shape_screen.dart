@@ -1291,6 +1291,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
   Future<void> _loadCommentary() async {
     if (!mounted) return;
+    if (widget.commentatorName == kNotesCommentatorTitle) return;
     setState(() => _isLoading = true);
     _lastLinks = null;
 
@@ -1533,6 +1534,17 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
   @override
   Widget build(BuildContext context) {
+    // הערות על הספר — virtual commentator, אין ספר לטעון
+    if (widget.commentatorName == kNotesCommentatorTitle) {
+      return CommentaryListBase(
+        openBookCallback: (tab) => widget.openBookCallback(tab),
+        fontSize: PageShapeSettingsManager.getCommentaryFontSize(),
+        showSearch: true,
+        shrinkWrap: false,
+        selectedCommentatorsOverride: const [kNotesCommentatorTitle],
+      );
+    }
+
     if (_isLoading) {
       return Container(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
