@@ -13,6 +13,7 @@ msix_config:
   msix_version: 0.9.90.0
   logo_path: assets/icon/iconnew.png
   publisher: CN=B3B520D1-500C-4859-986C-448583CC927B
+  capabilities: "internetClient"
   sign_msix: false
   install_certificate: false
   app_installer:
