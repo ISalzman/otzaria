@@ -2,7 +2,8 @@
 # Version update script for macOS/Linux - mirrors update_version.ps1
 set -euo pipefail
 
-VERSION_FILE="${1:-version.json}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION_FILE="${1:-$SCRIPT_DIR/version.json}"
 
 if [[ ! -f "$VERSION_FILE" ]]; then
     echo "Error: Version file '$VERSION_FILE' not found!" >&2

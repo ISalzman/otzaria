@@ -1,6 +1,6 @@
 # PowerShell script to update version across all files
 param(
-    [string]$VersionFile = "version.json"
+    [string]$VersionFile = $(Join-Path $PSScriptRoot "version.json")
 )
 
 # ---- Encoding helpers ----
