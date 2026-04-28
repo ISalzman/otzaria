@@ -163,6 +163,22 @@ Future<void> _initializeDataRootForEarlyLogging() async {
   }
 }
 
+const String _kLastSeenVersion = 'last_seen_app_version';
+
+void _clearErrorLogOnVersionChange() {
+  final currentVersion = ErrorLogFile.appVersion;
+  final lastSeen = Settings.getValue<String>(_kLastSeenVersion);
+  if (lastSeen != null && lastSeen != currentVersion) {
+    try {
+      final logFile = ErrorLogFile.resolveFile();
+      if (logFile.existsSync()) {
+        logFile.deleteSync();
+      }
+    } catch (_) {}
+  }
+  Settings.setValue(_kLastSeenVersion, currentVersion);
+}
+
 Future<void> _initializeLogMetadata() async {
   try {
     final packageInfo = await PackageInfo.fromPlatform();
@@ -445,6 +461,9 @@ Future<void> _heavyInitialize() async {
     }
 
     await _migrateWindowsLibraryPathFromInstallerPrefs();
+
+    // Settings מוכן — מחק לוג שגיאות ישן אם הגרסה השתנתה
+    _clearErrorLogOnVersionChange();
 
     // Settings מוכן — שחזר מיקום/גודל חלון לפני הצגת החלון
     if (!kIsWeb &&
