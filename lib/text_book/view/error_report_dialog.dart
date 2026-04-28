@@ -21,7 +21,6 @@ import 'package:otzaria/widgets/phone_report_tab.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/utils/ref_helper.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as text_utils;
 
 /// נתוני הדיווח שנאספו מתיבת סימון הטקסט + פירוט הטעות שהמשתמש הקליד.
 class ReportedErrorData {
@@ -63,6 +62,84 @@ class SelectionContextResolution {
     required this.selectionEnd,
     required this.usedLineFallback,
   });
+}
+
+class _DirectReportDetails extends StatelessWidget {
+  final DirectErrorReport report;
+
+  const _DirectReportDetails({required this.report});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 560,
+      child: SingleChildScrollView(
+        child: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ReportDetailRow(label: 'ספר', value: report.bookTitle),
+              _ReportDetailRow(label: 'מיקום', value: report.currentRef),
+              _ReportDetailRow(
+                label: 'שורה',
+                value: report.lineNumber.toString(),
+              ),
+              _ReportDetailRow(label: 'כתובת זיהוי', value: report.senderEmail),
+              _ReportDetailRow(label: 'טקסט שנבחר', value: report.selectedText),
+              _ReportDetailRow(
+                  label: 'פירוט הטעות', value: report.errorDetails),
+              _ReportDetailRow(label: 'הקשר', value: report.contextText),
+              _ReportDetailRow(label: 'נתיב קובץ', value: report.filePath),
+              _ReportDetailRow(
+                label: 'תיקיית מקור',
+                value: report.sourceFolder,
+              ),
+              _ReportDetailRow(
+                label: 'גרסת ספרייה',
+                value: report.libraryVersion,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportDetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ReportDetailRow({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final displayValue = value.trim().isEmpty ? 'לא נשלח ערך' : value.trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium,
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(height: 3),
+          SelectableText(
+            displayValue,
+            textDirection: TextDirection.rtl,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Helper class for managing error report dialogs and actions
@@ -122,8 +199,7 @@ class ErrorReportHelper {
       return '';
     }
 
-    final withoutTags = text_utils.stripHtmlIfNeeded(text);
-    final decoded = html_parser.parseFragment(withoutTags).text ?? '';
+    final decoded = html_parser.parseFragment(text).text ?? '';
     return decoded.replaceAll('\u00A0', ' ').trim();
   }
 
@@ -482,6 +558,19 @@ $detailsSection
     );
   }
 
+  static Future<void> showDirectReportDetailsDialog(
+    BuildContext context, {
+    required String title,
+    required DirectErrorReport report,
+  }) async {
+    await showSingleActionDialog(
+      context: context,
+      title: title,
+      confirmText: 'סגור',
+      customContent: _DirectReportDetails(report: report),
+    );
+  }
+
   /// Handle phone report submission
   static Future<void> handlePhoneReport(
     BuildContext context,
@@ -548,7 +637,11 @@ $detailsSection
       }
 
       if (result.isSent) {
-        UiSnack.showSuccess(result.message);
+        await showDirectReportDetailsDialog(
+          context,
+          title: 'הדיווח נשלח בהצלחה',
+          report: reportData,
+        );
       } else if (result.isQueued) {
         UiSnack.show(result.message);
       } else {
