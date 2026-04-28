@@ -18,6 +18,7 @@ import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/search/view/full_text_search_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 
 class ReadingScreen extends StatefulWidget {
   const ReadingScreen({super.key});
@@ -170,13 +171,21 @@ class _ReadingScreenState extends State<ReadingScreen>
               _ensureTabController(state);
 
               return Scaffold(
-                body: SizedBox.fromSize(
-                  size: MediaQuery.of(context).size,
-                  child: TabBarView(
-                    key: const ValueKey('normal_tab_view'),
-                    controller: _tabController,
-                    children:
-                        state.tabs.map((tab) => _buildTabView(tab)).toList(),
+                body: KeyedSubtree(
+                  key: tourReadingScreenTargetKey,
+                  child: SizedBox.fromSize(
+                    size: MediaQuery.of(context).size,
+                    child: TabBarView(
+                      key: const ValueKey('normal_tab_view'),
+                      controller: _tabController,
+                      children: [
+                        for (var i = 0; i < state.tabs.length; i++)
+                          _buildTabView(
+                            state.tabs[i],
+                            enableTourTargets: i == state.currentTabIndex,
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -187,7 +196,10 @@ class _ReadingScreenState extends State<ReadingScreen>
     );
   }
 
-  Widget _buildTabView(OpenedTab tab) {
+  Widget _buildTabView(
+    OpenedTab tab, {
+    required bool enableTourTargets,
+  }) {
     if (tab is CombinedTab) {
       // הצגת שני הספרים זה לצד זה
       return _buildCombinedTabView(tab);
@@ -195,6 +207,7 @@ class _ReadingScreenState extends State<ReadingScreen>
       return PdfBookScreen(
         key: PageStorageKey(tab),
         tab: tab,
+        enableTourTargets: enableTourTargets,
       );
     } else if (tab is TextBookTab) {
       return BlocProvider.value(
@@ -204,6 +217,7 @@ class _ReadingScreenState extends State<ReadingScreen>
               context.read<TabsBloc>().add(OpenOrFocusTab(tab));
             },
             tab: tab,
+            enableTourTargets: enableTourTargets,
           ));
     } else if (tab is SearchingTab) {
       return FullTextSearchScreen(tab: tab);
@@ -233,6 +247,7 @@ class _ReadingScreenState extends State<ReadingScreen>
         key: PageStorageKey(tab),
         tab: tab,
         isInCombinedView: isInCombinedView,
+        enableTourTargets: false,
       );
     } else if (tab is TextBookTab) {
       return BlocProvider.value(
@@ -243,6 +258,7 @@ class _ReadingScreenState extends State<ReadingScreen>
             },
             tab: tab,
             isInCombinedView: isInCombinedView,
+            enableTourTargets: false,
           ));
     } else if (tab is SearchingTab) {
       return FullTextSearchScreen(tab: tab);

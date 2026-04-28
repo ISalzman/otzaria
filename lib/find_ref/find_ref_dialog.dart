@@ -11,6 +11,7 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class FindRefDialog extends StatefulWidget {
@@ -115,6 +116,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
     final focusRepository = context.read<FocusRepository>();
 
     return AlertDialog(
+      key: tourFindRefDialogTargetKey,
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

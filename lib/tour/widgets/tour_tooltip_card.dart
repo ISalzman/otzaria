@@ -1,0 +1,211 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:otzaria/tour/widgets/tour_progress_dots.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
+
+class TourTooltipCard extends StatelessWidget {
+  final String title;
+  final String body;
+  final int currentIndex;
+  final int totalSteps;
+  final bool isLastStep;
+  final bool isWelcomeStep;
+  final bool isRestartEntry;
+  final bool isAutoPlaying;
+  final VoidCallback onNext;
+  final VoidCallback onSkip;
+  final VoidCallback onToggleAutoPlay;
+  final ValueChanged<int>? onDotTap;
+
+  const TourTooltipCard({
+    super.key,
+    required this.title,
+    required this.body,
+    required this.currentIndex,
+    required this.totalSteps,
+    required this.isLastStep,
+    required this.isWelcomeStep,
+    this.isRestartEntry = false,
+    this.isAutoPlaying = false,
+    required this.onNext,
+    required this.onSkip,
+    required this.onToggleAutoPlay,
+    this.onDotTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Material(
+        color: colorScheme.surface,
+        elevation: 10,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: colorScheme.scrim.withValues(alpha: 0.62),
+            width: 2,
+          ),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460, minWidth: 300),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        isLastStep
+                            ? FluentIcons.checkmark_circle_24_regular
+                            : FluentIcons.sparkle_24_regular,
+                        color: colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        textDirection: TextDirection.rtl,
+                        style: textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  body,
+                  textDirection: TextDirection.rtl,
+                  style: textTheme.bodyLarge?.copyWith(
+                    height: 1.45,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                if (currentIndex >= 0)
+                  TourProgressDots(
+                    currentIndex: currentIndex,
+                    total: totalSteps,
+                    onDotTap: onDotTap,
+                  ),
+                const SizedBox(height: 18),
+                Row(
+                  textDirection: TextDirection.rtl,
+                  children: [
+                    if (!isLastStep)
+                      NeutralActionButton(
+                        icon: FluentIcons.dismiss_24_regular,
+                        text: isRestartEntry
+                            ? 'ביטול'
+                            : isWelcomeStep
+                                ? 'דלג — אגלה לבד'
+                                : 'דלג על הסיור',
+                        onPressed: onSkip,
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    const Spacer(),
+                    if (!isLastStep && !isWelcomeStep && !isRestartEntry) ...[
+                      Tooltip(
+                        message: isAutoPlaying
+                            ? 'עצור הצגה אוטומטית'
+                            : 'הצגה אוטומטית — מעבר אוטומטי בין השלבים כל 4 שניות',
+                        child: FilledButton.tonal(
+                          onPressed: onToggleAutoPlay,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(44, 44),
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: Icon(
+                            isAutoPlaying
+                                ? FluentIcons.pause_circle_24_regular
+                                : FluentIcons.play_circle_24_regular,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    _TourNextButton(
+                      icon: isLastStep
+                          ? FluentIcons.checkmark_24_regular
+                          : FluentIcons.arrow_left_24_regular,
+                      mirrorIcon: !isLastStep,
+                      text: isLastStep
+                          ? 'סגור'
+                          : isRestartEntry
+                              ? 'אני מוכן'
+                              : isWelcomeStep
+                                  ? 'בוא נתחיל'
+                                  : 'הבא',
+                      onPressed: onNext,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TourNextButton extends StatelessWidget {
+  final IconData icon;
+  final bool mirrorIcon;
+  final String text;
+  final VoidCallback onPressed;
+
+  const _TourNextButton({
+    required this.icon,
+    this.mirrorIcon = false,
+    required this.text,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        textDirection: TextDirection.rtl,
+        children: [
+          Text(
+            text,
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(width: 8),
+          mirrorIcon
+              ? Transform.flip(
+                  flipX: true,
+                  child: Icon(icon),
+                )
+              : Icon(icon),
+        ],
+      ),
+    );
+  }
+}

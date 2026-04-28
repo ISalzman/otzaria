@@ -33,6 +33,8 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/error_report_sender_email_dialog.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// טאב "אוצריא" — גרסאות, נתיב ספרייה, גיבוי, מצב סייפר, איפוס.
@@ -309,6 +311,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
                   // 4. מתקדם (גיבוי + מצב סייפר)
                   _buildAdvancedSection(context, state),
+
+                  _buildGuidedTourSection(context),
 
                   // 6. איפוס
                   _buildResetSection(context),
@@ -805,54 +809,57 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       children: [
         // ── גיבוי אוטומטי ──
         // שורה ראשית — לחיצה פותחת/סוגרת
-        InkWell(
-          onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Icon(FluentIcons.calendar_clock_24_regular),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'גיבוי אוטומטי',
-                    style: Theme.of(context).textTheme.titleMedium,
+        KeyedSubtree(
+          key: tourBackupSettingsTargetKey,
+          child: InkWell(
+            onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  const Icon(FluentIcons.calendar_clock_24_regular),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'גיבוי אוטומטי',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
-                ),
-                // SegmentedButton לבחירת תדירות
-                SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  style: ButtonStyle(
-                    visualDensity: VisualDensity.compact,
+                  // SegmentedButton לבחירת תדירות
+                  SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    segments: const [
+                      ButtonSegment<String>(
+                        value: 'none',
+                        label: Text('ללא'),
+                      ),
+                      ButtonSegment<String>(
+                        value: 'weekly',
+                        label: Text('שבועי'),
+                      ),
+                      ButtonSegment<String>(
+                        value: 'monthly',
+                        label: Text('חודשי'),
+                      ),
+                    ],
+                    selected: {autoFrequency},
+                    onSelectionChanged: (Set<String> newSelection) {
+                      Settings.setValue<String>(
+                          _keyAutoBackupFrequency, newSelection.first);
+                      setState(() {});
+                    },
                   ),
-                  segments: const [
-                    ButtonSegment<String>(
-                      value: 'none',
-                      label: Text('ללא'),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'weekly',
-                      label: Text('שבועי'),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'monthly',
-                      label: Text('חודשי'),
-                    ),
-                  ],
-                  selected: {autoFrequency},
-                  onSelectionChanged: (Set<String> newSelection) {
-                    Settings.setValue<String>(
-                        _keyAutoBackupFrequency, newSelection.first);
-                    setState(() {});
-                  },
-                ),
-                const SizedBox(width: 12),
-                Icon(
-                  _isBackupExpanded
-                      ? FluentIcons.chevron_up_24_regular
-                      : FluentIcons.chevron_down_24_regular,
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Icon(
+                    _isBackupExpanded
+                        ? FluentIcons.chevron_up_24_regular
+                        : FluentIcons.chevron_down_24_regular,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1036,6 +1043,41 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   ],
                 )
               : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGuidedTourSection(BuildContext context) {
+    return SettingsCard(
+      title: 'סיור מודרך',
+      subtitle: 'היכרות מהירה עם החלקים המרכזיים באוצריה.',
+      children: [
+        ListTile(
+          hoverColor: Colors.transparent,
+          leading: const Icon(FluentIcons.sparkle_24_regular),
+          title: const Text(
+            'הפעל סיור מחדש',
+            style: kSettingsTitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
+          subtitle: const Text(
+            'הסיור יוצג מההתחלה וידריך אותך במסכי האפליקציה.',
+            style: kSettingsSubtitleStyle,
+            textDirection: TextDirection.rtl,
+          ),
+          trailing: RecommendedActionButton(
+            icon: FluentIcons.play_24_regular,
+            text: 'הפעל',
+            onPressed: () {
+              final libraryLoaded =
+                  !context.read<NavigationBloc>().state.isLibraryEmpty;
+              context.read<NavigationBloc>().add(
+                    const CheckLibrary(),
+                  );
+              context.read<TourCubit>().restart(libraryLoaded: libraryLoaded);
+            },
+          ),
         ),
       ],
     );
