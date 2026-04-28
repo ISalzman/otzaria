@@ -66,6 +66,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart'
     show buildThemePayload;
 import 'package:otzaria/core/external_activation_queue.dart';
+import 'package:otzaria/core/external_activation_channel.dart';
 import 'package:otzaria/plugins/services/reader_location_tracker.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
@@ -95,6 +96,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
   final ExternalActivationQueue _externalActivationQueue =
       const ExternalActivationQueue();
   late final TourCubit _tourCubit;
+  final ExternalActivationChannel _externalActivationChannel =
+      ExternalActivationChannel();
   ReaderLocationTracker? _readerLocationTracker;
   Orientation? _previousOrientation;
   int _currentPageIndex = 0;
@@ -138,6 +141,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   bool _hasInitializedPageController = false;
   bool _isProcessingExternalActivations = false;
   StreamSubscription<FileSystemEvent>? _externalActivationWatchSub;
+  StreamSubscription<String>? _externalActivationChannelSub;
 
   static const _navData = [
     (
@@ -378,35 +382,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     try {
       final pendingUris = await _externalActivationQueue.drainUriStrings();
       for (final uriString in pendingUris) {
-        if (!mounted) {
-          return;
-        }
-
-        try {
-          final uri = Uri.tryParse(uriString);
-          if (uri == null) {
-            continue;
-          }
-
-          final installRequest = PluginStoreLinkParser.parseUri(uri);
-          if (installRequest == null) {
-            continue;
-          }
-
-          context
-              .read<NavigationBloc>()
-              .add(const NavigateToScreen(Screen.more));
-          context.read<PluginSystemBloc>().add(
-                InstallRemotePluginRequested(
-                  installRequest.downloadUri.toString(),
-                  forceOverwrite: installRequest.forceOverwrite,
-                ),
-              );
-        } catch (e, stackTrace) {
-          debugPrint(
-            'Failed to process external activation "$uriString": $e\n$stackTrace',
-          );
-        }
+        await _handleExternalActivationUriString(uriString);
       }
     } catch (e, stackTrace) {
       debugPrint('External activation polling failed: $e\n$stackTrace');
@@ -416,6 +392,19 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   Future<void> _initializeExternalActivationMonitoring() async {
+    await _externalActivationChannel.initialize();
+    await _externalActivationChannelSub?.cancel();
+    _externalActivationChannelSub =
+        _externalActivationChannel.uriStrings.listen((uriString) {
+      unawaited(_handleExternalActivationUriString(uriString));
+    });
+
+    final pendingPlatformUris =
+        await _externalActivationChannel.takePendingUriStrings();
+    for (final uriString in pendingPlatformUris) {
+      await _handleExternalActivationUriString(uriString);
+    }
+
     final queuePath = await _externalActivationQueue.resolveQueueFilePath();
     final queueFile = File(queuePath);
     await queueFile.parent.create(recursive: true);
@@ -441,6 +430,36 @@ class MainWindowScreenState extends State<MainWindowScreen>
     await _processPendingExternalActivations();
   }
 
+  Future<void> _handleExternalActivationUriString(String uriString) async {
+    if (!mounted) {
+      return;
+    }
+
+    try {
+      final uri = Uri.tryParse(uriString);
+      if (uri == null) {
+        return;
+      }
+
+      final installRequest = PluginStoreLinkParser.parseUri(uri);
+      if (installRequest == null) {
+        return;
+      }
+
+      context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
+      context.read<PluginSystemBloc>().add(
+            InstallRemotePluginRequested(
+              installRequest.downloadUri.toString(),
+              forceOverwrite: installRequest.forceOverwrite,
+            ),
+          );
+    } catch (e, stackTrace) {
+      debugPrint(
+        'Failed to process external activation "$uriString": $e\n$stackTrace',
+      );
+    }
+  }
+
   @override
   void dispose() {
     // Clean up fullscreen callback
@@ -448,6 +467,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     appWindowListener?.onWindowStateChanged = null;
     appWindowListener?.onWindowResizeOccurred = null;
     _externalActivationWatchSub?.cancel();
+    _externalActivationChannelSub?.cancel();
+    _externalActivationChannel.dispose();
     _calendarCubit.close();
     _removeTourOverlay();
     _tourCubit.close();
