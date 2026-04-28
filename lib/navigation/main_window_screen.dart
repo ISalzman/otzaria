@@ -51,10 +51,13 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart'
     show buildThemePayload;
+import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/plugins/services/reader_location_tracker.dart';
+import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
@@ -73,6 +76,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
   late final PageController pageController;
   late final CalendarCubit _calendarCubit;
   late final SettingsScreenController _settingsScreenController;
+  final ExternalActivationQueue _externalActivationQueue =
+      const ExternalActivationQueue();
   ReaderLocationTracker? _readerLocationTracker;
   Orientation? _previousOrientation;
   int _currentPageIndex = 0;
@@ -109,6 +114,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
   CalendarState? _prevCalendarState;
 
   bool _hasInitializedPageController = false;
+  bool _isProcessingExternalActivations = false;
+  StreamSubscription<FileSystemEvent>? _externalActivationWatchSub;
 
   static const _navData = [
     (
@@ -176,6 +183,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
           tabsBloc: context.read<TabsBloc>(),
         );
       }
+
+      unawaited(_initializeExternalActivationMonitoring());
 
       AdPopupDialog.showIfNeeded(context);
 
@@ -337,12 +346,85 @@ class MainWindowScreenState extends State<MainWindowScreen>
     });
   }
 
+  Future<void> _processPendingExternalActivations() async {
+    if (!mounted || _isProcessingExternalActivations) {
+      return;
+    }
+
+    _isProcessingExternalActivations = true;
+    try {
+      final pendingUris = await _externalActivationQueue.drainUriStrings();
+      for (final uriString in pendingUris) {
+        if (!mounted) {
+          return;
+        }
+
+        try {
+          final uri = Uri.tryParse(uriString);
+          if (uri == null) {
+            continue;
+          }
+
+          final installRequest = PluginStoreLinkParser.parseUri(uri);
+          if (installRequest == null) {
+            continue;
+          }
+
+          context
+              .read<NavigationBloc>()
+              .add(const NavigateToScreen(Screen.more));
+          context.read<PluginSystemBloc>().add(
+                InstallRemotePluginRequested(
+                  installRequest.downloadUri.toString(),
+                  forceOverwrite: installRequest.forceOverwrite,
+                ),
+              );
+        } catch (e, stackTrace) {
+          debugPrint(
+            'Failed to process external activation "$uriString": $e\n$stackTrace',
+          );
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('External activation polling failed: $e\n$stackTrace');
+    } finally {
+      _isProcessingExternalActivations = false;
+    }
+  }
+
+  Future<void> _initializeExternalActivationMonitoring() async {
+    final queuePath = await _externalActivationQueue.resolveQueueFilePath();
+    final queueFile = File(queuePath);
+    await queueFile.parent.create(recursive: true);
+
+    await _externalActivationWatchSub?.cancel();
+    _externalActivationWatchSub = queueFile.parent.watch().listen(
+      (event) {
+        final normalizedPath = event.path.replaceAll('\\', '/');
+        final normalizedQueuePath = queuePath.replaceAll('\\', '/');
+        if (normalizedPath != normalizedQueuePath) {
+          return;
+        }
+
+        unawaited(_processPendingExternalActivations());
+      },
+      onError: (error, stackTrace) {
+        debugPrint(
+          'External activation watch failed: $error\n$stackTrace',
+        );
+      },
+    );
+
+    await _processPendingExternalActivations();
+  }
+
   @override
   void dispose() {
     // Clean up fullscreen callback
     appWindowListener?.onFullscreenChanged = null;
     appWindowListener?.onWindowStateChanged = null;
     appWindowListener?.onWindowResizeOccurred = null;
+    _externalActivationWatchSub?.cancel();
     _calendarCubit.close();
     _emptyLibraryBloc?.close();
     _readerLocationTracker?.dispose();
@@ -532,8 +614,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
             listener: (context, state) {
               if (context.read<SettingsBloc>().state.autoUpdateIndex) {
                 context.read<IndexingBloc>().add(
-                    IndexSpecificBooks(
-                        state.newBooksToIndex!, state.library!));
+                    IndexSpecificBooks(state.newBooksToIndex!, state.library!));
               }
             },
           ),
@@ -554,9 +635,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
               if (state is IndexingInProgress && state.isCreatingIndex) {
                 final total = state.totalBooks ?? 0;
                 final processed = state.booksProcessed ?? 0;
-                final progress = total > 0
-                    ? (processed / total).clamp(0.0, 1.0)
-                    : null;
+                final progress =
+                    total > 0 ? (processed / total).clamp(0.0, 1.0) : null;
                 cubit.upsert(WorkStatusItem(
                   id: 'indexing',
                   title: 'אינדוקס ספרים',

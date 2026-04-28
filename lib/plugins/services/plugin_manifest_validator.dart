@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
+import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
 
 class PluginManifestValidator {
   static Future<void> validateManifest({
@@ -25,15 +26,7 @@ class PluginManifestValidator {
     }
 
     int compareVersionsStrict(String v1, String v2) {
-      final parts1 = v1.split('+')[0].split('.').map(int.parse).toList();
-      final parts2 = v2.split('+')[0].split('.').map(int.parse).toList();
-      for (var i = 0; i < 3; i++) {
-        final p1 = i < parts1.length ? parts1[i] : 0;
-        final p2 = i < parts2.length ? parts2[i] : 0;
-        if (p1 > p2) return 1;
-        if (p1 < p2) return -1;
-      }
-      return 0;
+      return PluginVersionUtils.compareCoreVersions(v1, v2);
     }
 
     if (!skipAppVersionValidation) {

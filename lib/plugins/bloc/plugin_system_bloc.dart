@@ -7,6 +7,7 @@ import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_dev_loader_service.dart';
 import 'package:otzaria/plugins/services/plugin_dev_watch_service.dart';
+import 'package:otzaria/plugins/services/plugin_download_service.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -14,6 +15,7 @@ import 'package:otzaria/core/ui_snack.dart';
 class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   final PluginRegistryRepository repository;
   final PluginInstallerService _installerService;
+  final PluginDownloadService _downloadService;
   final PluginDevLoaderService devLoader;
   final PluginDevWatchService devWatchService;
   StreamSubscription<PluginDevFsChange>? _devWatchSub;
@@ -21,15 +23,18 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   PluginSystemBloc({
     required this.repository,
     PluginInstallerService? installerService,
+    PluginDownloadService? downloadService,
     PluginDevLoaderService? devLoader,
     PluginDevWatchService? devWatchService,
   })  : _installerService =
             installerService ?? PluginInstallerService(repository: repository),
+        _downloadService = downloadService ?? PluginDownloadService(),
         devLoader = devLoader ?? PluginDevLoaderService(repository: repository),
         devWatchService = devWatchService ?? PluginDevWatchService(),
         super(PluginSystemInitial()) {
     on<LoadPlugins>(_onLoadPlugins);
     on<InstallPluginRequested>(_onInstallPluginRequested);
+    on<InstallRemotePluginRequested>(_onInstallRemotePluginRequested);
     on<ConfirmPluginInstall>(_onConfirmPluginInstall);
     on<CancelPluginInstall>(_onCancelPluginInstall);
     on<UninstallPluginRequested>(_onUninstallPluginRequested);
@@ -117,6 +122,49 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     } catch (e) {
       UiSnack.showError('שגיאה בהתקנת התוסף: ${e.toString()}');
       add(LoadPlugins()); // Reset state
+    }
+  }
+
+  Future<void> _onInstallRemotePluginRequested(
+      InstallRemotePluginRequested event,
+      Emitter<PluginSystemState> emit) async {
+    String? archivePath;
+
+    try {
+      archivePath = await _downloadService.downloadPluginArchive(
+        Uri.parse(event.downloadUrl),
+      );
+
+      final prepareInfo = await _installerService.prepareInstall(
+        archivePath,
+        forceOverwrite: event.forceOverwrite,
+      );
+
+      emit(PluginSystemInstallRequiresPermissions(
+        manifest: prepareInfo.manifest,
+        tempDirPath: prepareInfo.tempDirPath,
+      ));
+    } on PluginOverwriteException catch (e) {
+      UiSnack.show(
+        'תוסף זה כבר מותקן אצלך, באותה הגרסה. '
+        'להתקנה מחדש השתמש בקישור עם overwrite=true.',
+      );
+      debugPrint(
+        'Plugin overwrite required for "${e.pluginName}" version ${e.version}',
+      );
+      add(LoadPlugins());
+    } on PluginNewerVersionInstalledException catch (e) {
+      UiSnack.show(
+        'כבר מותקנת אצלך גרסה חדשה יותר של "${e.pluginName}" (${e.installedVersion})',
+      );
+      add(LoadPlugins());
+    } catch (e) {
+      UiSnack.showError('שגיאה בהתקנת התוסף מהחנות: ${e.toString()}');
+      add(LoadPlugins());
+    } finally {
+      if (archivePath != null) {
+        await _downloadService.cleanupDownloadedArchive(archivePath);
+      }
     }
   }
 
@@ -212,20 +260,23 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   }
 
   Future<void> _onLoadDevelopmentPluginRequested(
-      LoadDevelopmentPluginRequested event, Emitter<PluginSystemState> emit) async {
+      LoadDevelopmentPluginRequested event,
+      Emitter<PluginSystemState> emit) async {
     try {
       await devLoader.loadDevelopmentPlugin(event.directoryPath);
       add(LoadPlugins());
       UiSnack.showSuccess('תוסף פיתוח נטען בהצלחה');
     } catch (e, stackTrace) {
-      debugPrint('[PluginDevLoader] Failed to load plugin from "${event.directoryPath}": $e');
+      debugPrint(
+          '[PluginDevLoader] Failed to load plugin from "${event.directoryPath}": $e');
       debugPrint('$stackTrace');
       UiSnack.showError('שגיאה בטעינת תוסף פתוח: ${e.toString()}');
     }
   }
 
   Future<void> _onDetachDevelopmentPluginRequested(
-      DetachDevelopmentPluginRequested event, Emitter<PluginSystemState> emit) async {
+      DetachDevelopmentPluginRequested event,
+      Emitter<PluginSystemState> emit) async {
     try {
       ContextMenuRegistry.instance.removeAll(event.pluginId);
       await repository.detachDevelopmentPlugin(event.pluginId);
@@ -237,15 +288,19 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   }
 
   Future<void> _onReloadDevelopmentPluginRequested(
-      ReloadDevelopmentPluginRequested event, Emitter<PluginSystemState> emit) async {
+      ReloadDevelopmentPluginRequested event,
+      Emitter<PluginSystemState> emit) async {
     PluginRuntimeDispatcher.instance.reloadPlugin(event.pluginId);
   }
 
   Future<void> _onDevelopmentPluginManifestChanged(
-      DevelopmentPluginManifestChanged event, Emitter<PluginSystemState> emit) async {
+      DevelopmentPluginManifestChanged event,
+      Emitter<PluginSystemState> emit) async {
     try {
       final plugin = await repository.getPlugin(event.pluginId);
-      if (plugin != null && plugin.isDevelopment && plugin.devRootPath != null) {
+      if (plugin != null &&
+          plugin.isDevelopment &&
+          plugin.devRootPath != null) {
         await devLoader.loadDevelopmentPlugin(plugin.devRootPath!);
         add(LoadPlugins());
         PluginRuntimeDispatcher.instance.reloadPlugin(event.pluginId);

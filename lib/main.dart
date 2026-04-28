@@ -58,6 +58,7 @@ import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/error_log_file.dart';
+import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
@@ -75,6 +76,7 @@ import 'package:logging/logging.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/widgets/restart_widget.dart';
 import 'package:otzaria/core/splash_screen.dart';
+import 'package:otzaria/plugins/services/plugin_protocol_registration_service.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 // Updated automatically by version update scripts - do not edit manually
@@ -82,6 +84,8 @@ const int _latestReleasedBuildNumber = 9900;
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
+const ExternalActivationQueue _externalActivationQueue =
+    ExternalActivationQueue();
 
 // מסנכרן בין _heavyInitialize לבין waitUntilReadyToShow:
 // החלון יוצג רק אחרי Settings.init + WindowPersistence.restoreIfAny
@@ -212,11 +216,12 @@ bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
 /// 3. Ensures Flutter bindings are initialized
 /// 4. Calls [initialize] to set up required services and configurations
 /// 5. Launches the main application widget
-void main() async {
+void main(List<String> args) async {
   SentryWidgetsFlutterBinding.ensureInitialized();
   await _initializeDataRootForEarlyLogging();
   await _initializeLogMetadata();
   hierarchicalLoggingEnabled = true;
+  await _enqueueExternalActivationArgs(args);
 
   // Set up custom error handlers before Sentry initialization
   // Sentry will automatically wrap these handlers
@@ -455,6 +460,16 @@ Future<void> _heavyInitialize() async {
   await initPluginDatabaseSources();
 
   try {
+    await PluginProtocolRegistrationService().ensureRegistered();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+      'Plugin protocol registration',
+      error,
+      stackTrace,
+    );
+  }
+
+  try {
     await WebViewEnvironmentHolder.initialize();
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('WebViewEnvironment', error, stackTrace);
@@ -471,6 +486,28 @@ Future<void> _heavyInitialize() async {
   } catch (error, stackTrace) {
     _logNonFatalInitializationError(
         'Direct error report queue', error, stackTrace);
+  }
+}
+
+Future<void> _enqueueExternalActivationArgs(List<String> args) async {
+  final activationArgs = args
+      .map((arg) => arg.trim())
+      .where((arg) => arg.toLowerCase().startsWith('otzaria:'))
+      .toList();
+
+  for (final uriString in activationArgs) {
+    try {
+      await _externalActivationQueue.enqueueUriString(uriString);
+    } catch (error, stackTrace) {
+      _appendUnhandledErrorToLocalLog(
+        title: 'External Activation Queue Error',
+        error: error,
+        stackTrace: stackTrace,
+        details: {
+          'Uri': uriString,
+        },
+      );
+    }
   }
 }
 

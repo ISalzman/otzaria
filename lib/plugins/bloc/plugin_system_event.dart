@@ -19,6 +19,19 @@ class InstallPluginRequested extends PluginSystemEvent {
   List<Object?> get props => [archivePath, forceOverwrite];
 }
 
+class InstallRemotePluginRequested extends PluginSystemEvent {
+  final String downloadUrl;
+  final bool forceOverwrite;
+
+  const InstallRemotePluginRequested(
+    this.downloadUrl, {
+    this.forceOverwrite = false,
+  });
+
+  @override
+  List<Object?> get props => [downloadUrl, forceOverwrite];
+}
+
 class ConfirmPluginInstall extends PluginSystemEvent {
   final String tempDirPath;
   final PluginManifest manifest;
