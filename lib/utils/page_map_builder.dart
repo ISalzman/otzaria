@@ -12,6 +12,10 @@ class PageMap {
 
   PageMap(this.pdfPages, this.textIndices);
 
+  /// A single anchor is not reliable enough for cross-navigation.
+  bool get hasReliableAnchors =>
+      pdfPages.length >= 2 && textIndices.length >= 2;
+
   /// Converts a PDF page to a text index via binary search + linear interpolation.
   int? pdfToText(int page) {
     if (pdfPages.isEmpty) return null;

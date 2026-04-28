@@ -665,11 +665,11 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
     // בדיקה אם הגדרות פר-ספר מופעלות
     final enablePerBookSettings =
-      Settings.getValue<bool>(SettingsRepository.keyEnablePerBookSettings) ??
-        false;
+        Settings.getValue<bool>(SettingsRepository.keyEnablePerBookSettings) ??
+            false;
     final pdfBookViewByDefault =
-      Settings.getValue<bool>(SettingsRepository.keyPdfBookViewByDefault) ??
-        false;
+        Settings.getValue<bool>(SettingsRepository.keyPdfBookViewByDefault) ??
+            false;
 
     double? zoomToApply;
     PdfLayoutMode? layoutModeToApply;
@@ -696,7 +696,11 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
     // החלת מצב תצוגה
     tab.savedLayoutMode = layoutModeToApply;
-    emit(current.copyWith(layoutMode: layoutModeToApply));
+    final currentForLayout = state;
+    if (currentForLayout is! PdfBookLoaded) return;
+    if (currentForLayout.layoutMode != layoutModeToApply) {
+      emit(currentForLayout.copyWith(layoutMode: layoutModeToApply));
+    }
 
     // אם יש זום להחיל, מחילים אותו
     if (zoomToApply != null) {
@@ -712,7 +716,9 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
             duration: Duration.zero,
           );
           tab.savedZoom = zoomToApply;
-          emit(current.copyWith(zoom: zoomToApply));
+          final currentForZoom = state;
+          if (currentForZoom is! PdfBookLoaded) return;
+          emit(currentForZoom.copyWith(zoom: zoomToApply));
           break;
         }
         // Wait before next attempt
@@ -735,8 +741,8 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     if (current is! PdfBookLoaded) return;
 
     final enablePerBookSettings =
-      Settings.getValue<bool>(SettingsRepository.keyEnablePerBookSettings) ??
-        false;
+        Settings.getValue<bool>(SettingsRepository.keyEnablePerBookSettings) ??
+            false;
     if (!enablePerBookSettings) return;
 
     if (!pdfController.isReady) return;

@@ -35,6 +35,7 @@ void main() {
       final m = PageMap([], []);
       expect(m.textToPdf(0), isNull);
       expect(m.pdfToText(1), isNull);
+      expect(m.hasReliableAnchors, isFalse);
     });
 
     test('single anchor – always returns that anchor', () {
@@ -45,6 +46,7 @@ void main() {
       expect(m.pdfToText(1), 20);
       expect(m.pdfToText(5), 20);
       expect(m.pdfToText(99), 20);
+      expect(m.hasReliableAnchors, isFalse);
     });
 
     test('exact anchor hits', () {
@@ -55,6 +57,7 @@ void main() {
       expect(m.pdfToText(1), 0);
       expect(m.pdfToText(10), 100);
       expect(m.pdfToText(20), 200);
+      expect(m.hasReliableAnchors, isTrue);
     });
 
     test('interpolates midpoint correctly', () {
@@ -139,7 +142,7 @@ void main() {
       // "ברכות/ב." is a unique suffix → should match.
       final pdf = [
         (page: 3, ref: 'תלמוד בבלי/ברכות/ב.'),
-        (page: 4, ref: 'תלמוד בבלי/ברכות/ב'),  // amud bet (colon stripped)
+        (page: 4, ref: 'תלמוד בבלי/ברכות/ב'), // amud bet (colon stripped)
         (page: 5, ref: 'תלמוד בבלי/ברכות/ג.'),
       ];
       final text = [
@@ -198,7 +201,7 @@ void main() {
       // The full-path match should win.
       final pdf = [(page: 3, ref: 'ברכות/ב.')];
       final text = [
-        (index: 0, ref: 'ברכות/ב.'),   // exact match
+        (index: 0, ref: 'ברכות/ב.'), // exact match
         (index: 999, ref: 'שבת/ברכות/ב.'), // same suffix but different book
       ];
       final m = buildPageMapFromAnchors(pdf, text);

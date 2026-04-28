@@ -245,6 +245,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       vsync: this,
       duration: const Duration(milliseconds: 520),
     );
+    if (widget.tab.pageNumber < 1) {
+      widget.tab.pageNumber = 1;
+    }
     _initialPageNumber = widget.tab.pageNumber;
     pdfController = PdfViewerController();
     widget.tab.pdfViewerController = pdfController;
@@ -822,15 +825,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
         widget.tab.documentRef.value = controller.documentRef;
         widget.tab.outline.value = await document.loadOutline();
+        final totalPages = document.pages.length;
+        final initialTargetPage = widget.tab.pageNumber.clamp(1, totalPages);
+        widget.tab.pageNumber = initialTargetPage;
 
         _bloc.add(pdf_events.DocumentReady(
           documentRef: controller.documentRef,
           outline: widget.tab.outline.value,
-          totalPages: document.pages.length,
+          totalPages: totalPages,
         ));
 
         // חישוב currentTextLineNumber אחרי טעינת ה-outline
-        final targetPage = widget.tab.pageNumber;
+        final targetPage = initialTargetPage;
         final targetTitle = await refFromPageNumber(
             targetPage, widget.tab.outline.value ?? [], widget.tab.book.title);
         if (!mounted) return;
@@ -859,10 +865,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           }
         }
 
-        final initialTargetPage = widget.tab.pageNumber;
-        final currentReadyPage = controller.pageNumber ?? initialTargetPage;
+        final currentReadyPage = controller.pageNumber;
         final needsInitialPageNavigation =
-            currentReadyPage != initialTargetPage;
+            currentReadyPage == null || currentReadyPage != initialTargetPage;
         if (needsInitialPageNavigation) {
           _isJumping = true;
           try {
@@ -979,7 +984,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   child: PdfViewer.file(
                     filePath,
                     controller: widget.tab.pdfViewerController,
-                    initialPageNumber: widget.tab.pageNumber,
+                    initialPageNumber:
+                        widget.tab.pageNumber < 1 ? 1 : widget.tab.pageNumber,
                     useProgressiveLoading: false,
                     passwordProvider: () => passwordDialog(context),
                     params: _buildPdfViewerParams(layoutMode),
@@ -1772,15 +1778,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       debugPrint(
           '📚 [PDF-DEBUG] Library loaded: ${allBooks.length} total books');
 
-      final textBook = library.findBookByTitle(bookTitle, TextBook);
+      TextBook? textBook =
+          library.findBookByTitle(bookTitle, TextBook) as TextBook?;
       debugPrint(
           '📚 [PDF-DEBUG] findBookByTitle("$bookTitle", TextBook) → ${textBook == null ? "NOT FOUND" : "FOUND: ${textBook.runtimeType}, categoryId=${textBook.categoryId}"}');
 
       if (textBook == null) {
         // ניסיון חיפוש גמיש
-        final flexible = library.findBookByTitleFlexible(bookTitle, TextBook);
+        textBook =
+            library.findBookByTitleFlexible(bookTitle, TextBook) as TextBook?;
         debugPrint(
-            '📚 [PDF-DEBUG] findBookByTitleFlexible → ${flexible == null ? "NOT FOUND" : "FOUND: ${flexible.title}"}');
+            '📚 [PDF-DEBUG] findBookByTitleFlexible → ${textBook == null ? "NOT FOUND" : "FOUND: ${textBook.title}"}');
         // הצג ספרים בשם דומה לעזרת דיבוג
         final similar = allBooks
             .where((b) =>
@@ -1794,24 +1802,40 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       }
 
       if (textBook != null) {
-        if (textBook is TextBook) {
-          final loadedLinks = await textBook.links
-            ..sort((a, b) => a.index1.compareTo(b.index1));
-          widget.tab.links = loadedLinks;
-          final commentaryCount = loadedLinks
-              .where((l) =>
-                  l.connectionType.toUpperCase() == 'COMMENTARY' ||
-                  l.connectionType.toUpperCase() == 'TARGUM')
-              .length;
+        final loadedLinks = await textBook.links
+          ..sort((a, b) => a.index1.compareTo(b.index1));
+        widget.tab.links = loadedLinks;
+        final commentaryCount = loadedLinks
+            .where((l) =>
+                l.connectionType.toUpperCase() == 'COMMENTARY' ||
+                l.connectionType.toUpperCase() == 'TARGUM')
+            .length;
+        debugPrint(
+            '📚 [PDF-DEBUG] Links loaded: ${loadedLinks.length} total, $commentaryCount commentary/targum');
+        if (loadedLinks.isNotEmpty) {
           debugPrint(
-              '📚 [PDF-DEBUG] Links loaded: ${loadedLinks.length} total, $commentaryCount commentary/targum');
-          if (loadedLinks.isNotEmpty) {
-            debugPrint(
-                '📚 [PDF-DEBUG] Links index1 range: ${loadedLinks.first.index1}–${loadedLinks.last.index1}');
-          }
-          await _loadCommentatorGroups();
+              '📚 [PDF-DEBUG] Links index1 range: ${loadedLinks.first.index1}–${loadedLinks.last.index1}');
         }
+        await _loadCommentatorGroups();
       }
+
+      final currentPage = widget.tab.pdfViewerController.isReady
+          ? (widget.tab.pdfViewerController.pageNumber ?? widget.tab.pageNumber)
+          : widget.tab.pageNumber;
+      final currentTitle = await refFromPageNumber(
+        currentPage,
+        widget.tab.outline.value ?? const <PdfOutlineNode>[],
+        widget.tab.book.title,
+      );
+      if (!mounted) return;
+      widget.tab.currentTitle.value = currentTitle;
+      final resolved = await _resolveTextLineNumberForPage(
+        currentPage,
+        resolvedTitle: currentTitle,
+      );
+      if (!mounted) return;
+      widget.tab.currentTextLineNumber = resolved.start;
+      widget.tab.currentTextLineNumberEnd = resolved.end;
 
       if (mounted) {
         _linksLoading = false;
