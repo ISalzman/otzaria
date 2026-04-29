@@ -646,15 +646,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     return PdfViewerParams(
-      calculateInitialZoom: layoutMode == PdfLayoutMode.bookView
-          ? null
-          : (document, controller, fitZoom, coverZoom) {
-              final savedZoom = widget.tab.savedZoom;
-              if (savedZoom != null && savedZoom != 1.0) {
-                return savedZoom;
-              }
-              return fitZoom;
-            },
       layoutPages: layoutMode == PdfLayoutMode.bookView
           ? (pages, params) {
               final pageLayouts = <Rect>[];
@@ -854,9 +845,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         final enablePerBookSettings =
             context.read<SettingsBloc>().state.enablePerBookSettings;
 
+        final savedZoom = widget.tab.savedZoom;
+        final hasSavedZoom = savedZoom != null && savedZoom != 1.0;
+        bool shouldFitToWidth =
+            layoutMode != PdfLayoutMode.bookView && !hasSavedZoom;
         if (enablePerBookSettings) {
           final settings =
               await PdfBookPerBookSettings.load(widget.tab.book.title);
+          shouldFitToWidth = shouldFitToWidth && settings?.zoom == null;
 
           // טעינת המפרשים הפעילים
           if (settings?.activeCommentators != null) {
@@ -885,6 +881,29 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           }
         } else {
           _initialPageNumber = null;
+        }
+
+        if (shouldFitToWidth) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && controller.isReady) {
+              final currentPage = controller.pageNumber ?? initialTargetPage;
+              final matrix = controller.calcMatrixFitWidthForPage(
+                pageNumber: currentPage,
+              );
+              if (matrix != null) {
+                controller.goTo(matrix);
+                Future.delayed(const Duration(milliseconds: 50), () {
+                  if (mounted && controller.isReady) {
+                    final currentZoom = controller.value.zoom;
+                    controller.setZoom(
+                      controller.centerPosition,
+                      currentZoom * 0.98,
+                    );
+                  }
+                });
+              }
+            }
+          });
         }
 
         _runInitialSearchIfNeeded();
