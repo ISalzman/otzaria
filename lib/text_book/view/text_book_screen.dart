@@ -8,6 +8,8 @@ import 'package:flutter/rendering.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
@@ -63,6 +65,9 @@ const String _viewModePage = 'page';
 
 final GlobalKey textBookNavigationTourTargetKey = GlobalKey(
   debugLabel: 'text_book_navigation_tour_target',
+);
+final GlobalKey textBookNavPanelTourTargetKey = GlobalKey(
+  debugLabel: 'text_book_nav_panel_tour_target',
 );
 final GlobalKey textBookCommentatorsTourTargetKey = GlobalKey(
   debugLabel: 'text_book_commentators_tour_target',
@@ -125,6 +130,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
   final GlobalKey _viewModeMenuKey = GlobalKey(); // מפתח לתפריט בחירת התצוגה
   String? _selectedTextForSearch;
+  String? _lastCommentaryTipBook;
   Book? _pdfBook; // Companion PDF
   bool _hasPdfBook = false;
   bool _leftPaneAutoCloseQueuedByScroll = false;
@@ -766,6 +772,29 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   void _onSelectedTextChanged(String? selectedText) {
     _selectedTextForSearch = selectedText;
+    if (selectedText == null || selectedText.trim().isEmpty) {
+      return;
+    }
+
+    final tourCubit = context.read<TourCubit>();
+    final currentState = context.read<TextBookBloc>().state;
+    if (currentState is TextBookLoaded &&
+        currentState.availableCommentators.isNotEmpty &&
+        _lastCommentaryTipBook != widget.tab.title) {
+      _lastCommentaryTipBook = widget.tab.title;
+      tourCubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.commentaryAvailable,
+          primaryValue: widget.tab.title,
+        ),
+      );
+    }
+    tourCubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.textSelected,
+        primaryValue: widget.tab.title,
+      ),
+    );
   }
 
   void _openSearchFromToolbar() {
@@ -1693,6 +1722,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           : (state.showSplitView ? _viewModeSplit : _viewModeBelow),
       onSelected: (value) async {
         final bloc = context.read<TextBookBloc>();
+        final tourCubit = context.read<TourCubit>();
 
         // קביעת מצב היעד לפי הבחירה
         final bool isPageSelected = value == _viewModePage;
@@ -1708,6 +1738,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           bloc.add(ToggleSplitView(isSplitSelected));
           await _savePerBookSettingsDirectly(context, state,
               showSplitView: isSplitSelected);
+        }
+
+        if (isPageSelected || isSplitSelected) {
+          tourCubit.recordInteraction(
+            TourInteraction(
+              type: TourInteractionType.commentaryUsed,
+              primaryValue: widget.tab.title,
+            ),
+          );
         }
       },
       entries: [
@@ -2196,7 +2235,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         minMainContentWidth: 520,
         onClose: () =>
             context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
-        paneContent: _buildLeftPaneContent(state),
+        paneContent: widget.enableTourTargets
+            ? KeyedSubtree(
+                key: textBookNavPanelTourTargetKey,
+                child: _buildLeftPaneContent(state),
+              )
+            : _buildLeftPaneContent(state),
         mainContent: _buildHTMLViewer(state),
         isResizable: true,
         minPaneWidth: 200,

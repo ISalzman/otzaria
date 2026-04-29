@@ -70,6 +70,7 @@ import 'package:otzaria/core/external_activation_channel.dart';
 import 'package:otzaria/plugins/services/reader_location_tracker.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/tour/models/tour_step.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/tour/view/tour_overlay_screen.dart';
@@ -845,16 +846,28 @@ class MainWindowScreenState extends State<MainWindowScreen>
       _closeTourTabContextMenuIfNeeded();
       return;
     }
-    _ensureTourSideBySideCandidates();
+    unawaited(_openTourSideBySideContextMenu());
+  }
+
+  Future<void> _openTourSideBySideContextMenu() async {
+    await _ensureTourSideBySideCandidates();
+    if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final state = tourTabContextMenuTargetKey.currentState as dynamic;
-      state?.showMenu();
+      (tourTabContextMenuTargetKey.currentState as dynamic)?.showMenu();
       _tourOpenedTabContextMenu = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _bringTourOverlayToFront();
         _scheduleTourTargetRebuilds(remainingFrames: 4);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          (tourTabSideBySideMenuItemTargetKey.currentState as dynamic)
+              ?.openSubmenu(() {
+            if (!mounted) return;
+            _scheduleTourTargetRebuilds(remainingFrames: 4);
+          });
+        });
       });
     });
   }
@@ -868,13 +881,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
     state?.closeMenu();
   }
 
-  void _ensureTourSideBySideCandidates() {
+  Future<void> _ensureTourSideBySideCandidates() async {
     final tabsState = context.read<TabsBloc>().state;
     final readableTabs = tabsState.tabs.where((tab) => tab is! CombinedTab);
     if (readableTabs.length >= 2) {
       return;
     }
-    unawaited(_openTourBookByTitle('שמות'));
+    await _openTourBookByTitle('שמות');
   }
 
   void _openTourFindRef() {
@@ -990,6 +1003,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
             _rectForGlobalKey(tourSettingsTabTargetKeys[4]!);
     }
 
+    if (step.id == 'toc') {
+      return _rectForGlobalKey(textBookNavigationTourTargetKey) ??
+          _rectForGlobalKey(pdfBookNavigationTourTargetKey);
+    }
+
     return switch (step.area) {
       TourSpotlightArea.tableOfContents =>
         _rectForGlobalKey(textBookNavigationTourTargetKey) ??
@@ -1003,9 +1021,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
       final tabRect = _rectForGlobalKey(tourTabContextMenuTargetKey);
       final menuItemRect =
           _rectForGlobalKey(tourTabSideBySideMenuItemTargetKey);
+      final firstSubitemRect =
+          _rectForGlobalKey(tourTabSideBySideFirstItemTargetKey);
       return [
         if (tabRect != null) tabRect,
         if (menuItemRect != null) menuItemRect,
+        if (firstSubitemRect != null) firstSubitemRect,
       ];
     }
 
@@ -1024,6 +1045,49 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return [
         if (contentRect != null) contentRect,
         if (tabRect != null) tabRect,
+      ];
+    }
+
+    if (step.id == 'advanced_search') {
+      final dialogRect = _rectForGlobalKey(tourSearchDialogTargetKey);
+      final navSearchRect = _rectForGlobalKey(tourMainNavigationTargetKeys[3]);
+      return [
+        if (dialogRect != null) dialogRect,
+        if (navSearchRect != null) navSearchRect,
+      ];
+    }
+
+    if (step.id == 'toc') {
+      final buttonRect = _rectForGlobalKey(textBookNavigationTourTargetKey) ??
+          _rectForGlobalKey(pdfBookNavigationTourTargetKey);
+      final panelRect = _rectForGlobalKey(textBookNavPanelTourTargetKey);
+      return [
+        if (buttonRect != null) buttonRect,
+        if (panelRect != null) panelRect,
+      ];
+    }
+
+    if (step.id == 'bookmark') {
+      final titleBarHistoryRect =
+          _rectForGlobalKey(tourTitleBarHistoryButtonTargetKey);
+      final titleBarBookmarkRect =
+          _rectForGlobalKey(tourTitleBarBookmarkButtonTargetKey);
+      final directRect = _directReadingTourTargetRect(step.area);
+      if (directRect != null) {
+        return [
+          directRect,
+          if (titleBarHistoryRect != null) titleBarHistoryRect,
+          if (titleBarBookmarkRect != null) titleBarBookmarkRect,
+        ];
+      }
+      final overflowRect = _rectForGlobalKey(textBookOverflowTourTargetKey) ??
+          _rectForGlobalKey(pdfBookOverflowTourTargetKey);
+      final menuItemRect = _readingOverflowMenuItemRect(step.area);
+      return [
+        if (overflowRect != null) overflowRect,
+        if (menuItemRect != null) menuItemRect,
+        if (titleBarHistoryRect != null) titleBarHistoryRect,
+        if (titleBarBookmarkRect != null) titleBarBookmarkRect,
       ];
     }
 
@@ -1471,6 +1535,28 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 int tabIndex = 0;
                 if (currentTab is TextBookTab) tabIndex = currentTab.index;
                 if (currentTab is PdfBookTab) tabIndex = currentTab.pageNumber;
+                _tourCubit.recordInteraction(
+                  TourInteraction(
+                    type: TourInteractionType.currentTabChanged,
+                    primaryValue: currentTab.title,
+                  ),
+                );
+                if (currentTab is TextBookTab) {
+                  _tourCubit.recordInteraction(
+                    TourInteraction(
+                      type: TourInteractionType.openedTextBook,
+                      primaryValue: currentTab.title,
+                    ),
+                  );
+                }
+                if (currentTab is CombinedTab) {
+                  _tourCubit.recordInteraction(
+                    TourInteraction(
+                      type: TourInteractionType.sideBySideEnabled,
+                      primaryValue: currentTab.title,
+                    ),
+                  );
+                }
                 PluginRuntimeDispatcher.instance
                     .dispatchEvent('reader.current_book_changed', {
                   'book': currentTab.title,

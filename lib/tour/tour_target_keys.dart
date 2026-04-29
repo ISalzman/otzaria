@@ -20,6 +20,9 @@ final GlobalKey tourTabContextMenuTargetKey = GlobalKey(
 final GlobalKey tourTabSideBySideMenuItemTargetKey = GlobalKey(
   debugLabel: 'tour_tab_side_by_side_menu_item_target',
 );
+final GlobalKey tourTabSideBySideFirstItemTargetKey = GlobalKey(
+  debugLabel: 'tour_tab_side_by_side_first_item_target',
+);
 
 final GlobalKey tourFindRefDialogTargetKey = GlobalKey(
   debugLabel: 'tour_find_ref_dialog_target',
@@ -40,6 +43,13 @@ final Map<int, GlobalKey> tourSettingsTabTargetKeys = {
   4: GlobalKey(debugLabel: 'tour_settings_shortcuts_tab_target'),
   5: GlobalKey(debugLabel: 'tour_settings_system_tab_target'),
 };
+
+final GlobalKey tourTitleBarHistoryButtonTargetKey = GlobalKey(
+  debugLabel: 'tour_title_bar_history_button_target',
+);
+final GlobalKey tourTitleBarBookmarkButtonTargetKey = GlobalKey(
+  debugLabel: 'tour_title_bar_bookmark_button_target',
+);
 
 final GlobalKey tourBackupSettingsTargetKey = GlobalKey(
   debugLabel: 'tour_backup_settings_target',

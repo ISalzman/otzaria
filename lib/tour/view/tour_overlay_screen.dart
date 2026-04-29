@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/bloc/tour_state.dart';
+import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/tour/models/tour_step.dart';
+import 'package:otzaria/tour/widgets/live_tip_card.dart';
 import 'package:otzaria/tour/widgets/spotlight_overlay.dart';
 import 'package:otzaria/tour/widgets/tour_tooltip_card.dart';
 
@@ -49,6 +51,16 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
       builder: (context, state) {
         final step = state.currentStep;
         if (!state.isActive || step == null) {
+          if (state.activeLiveTipId == null) {
+            return const SizedBox.shrink();
+          }
+          return _LiveTipOverlay(
+            tip: liveTipSpecById(state.activeLiveTipId!),
+            targetRectResolver: widget.targetRectResolver,
+          );
+        }
+
+        if (state.hasActiveLiveTip) {
           return const SizedBox.shrink();
         }
 
@@ -136,6 +148,7 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
                           isWelcomeStep: isWelcomeStep,
                           isRestartEntry: isRestartEntry,
                           isAutoPlaying: state.isAutoPlaying,
+                          isDialog: step.isDialog,
                           onNext: () {
                             final onNext = widget.onNext;
                             if (onNext != null) {
@@ -216,7 +229,61 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
     }
     return Alignment.bottomLeft;
   }
+}
 
+class _LiveTipOverlay extends StatelessWidget {
+  final LiveTipSpec tip;
+  final Rect? Function(TourStep step)? targetRectResolver;
+
+  const _LiveTipOverlay({
+    required this.tip,
+    required this.targetRectResolver,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = Size(constraints.maxWidth, constraints.maxHeight);
+          final targetRect = targetRectResolver?.call(
+                TourStep(
+                  id: 'live_tip_${tip.id.name}',
+                  title: tip.title,
+                  body: tip.description,
+                  area: tip.area,
+                ),
+              ) ??
+              tourTargetRectFor(
+                tip.area,
+                size,
+                Directionality.of(context),
+              );
+          final cardWidth = size.width < 392 ? size.width - 32 : 360.0;
+          final left = ((targetRect.right - cardWidth)
+                  .clamp(16.0, size.width - cardWidth - 16.0))
+              .toDouble();
+          final top = ((targetRect.bottom + 12).clamp(16.0, size.height - 190))
+              .toDouble();
+
+          return Stack(
+            children: [
+              Positioned(
+                left: left,
+                top: top,
+                width: cardWidth,
+                child: LiveTipCard(
+                  title: tip.title,
+                  description: tip.description,
+                  onDismiss: () => context.read<TourCubit>().dismissLiveTip(),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 Rect tourTargetRectFor(

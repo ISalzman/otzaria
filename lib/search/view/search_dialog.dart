@@ -499,7 +499,6 @@ class _SearchDialogState extends State<SearchDialog> {
     return BlocProvider.value(
       value: _searchTab.searchBloc,
       child: Dialog(
-        key: tourSearchDialogTargetKey,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: FocusScope(
           onKeyEvent: (node, event) {
@@ -516,6 +515,7 @@ class _SearchDialogState extends State<SearchDialog> {
             return KeyEventResult.ignored;
           },
           child: Container(
+            key: tourSearchDialogTargetKey,
             width: dialogWidth,
             height: dialogHeight,
             padding: const EdgeInsets.all(24.0),
