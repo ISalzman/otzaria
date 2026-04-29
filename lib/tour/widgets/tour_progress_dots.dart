@@ -1,3 +1,5 @@
+// לתחזוקת התקדמות הסיור המודרך ראו: docs/guided_tour_developer_guide.md
+
 import 'package:flutter/material.dart';
 
 class TourProgressDots extends StatelessWidget {

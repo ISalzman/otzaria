@@ -52,8 +52,9 @@ void main() {
     await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
     final cubit = TourCubit();
 
-    cubit.startIfNeeded(libraryLoaded: true);
+    final started = cubit.startIfNeeded(libraryLoaded: true);
 
+    expect(started, isFalse);
     expect(cubit.state.isActive, isFalse);
     await cubit.close();
   });
@@ -103,17 +104,20 @@ void main() {
     );
     final cubit = TourCubit();
 
-    cubit.startIfNeeded(libraryLoaded: false);
+    final startedWithoutLibrary = cubit.startIfNeeded(libraryLoaded: false);
+    expect(startedWithoutLibrary, isFalse);
     expect(cubit.state.isActive, isFalse);
 
-    cubit.startIfNeeded(libraryLoaded: true);
+    final startedWithLibrary = cubit.startIfNeeded(libraryLoaded: true);
+    expect(startedWithLibrary, isTrue);
     expect(cubit.state.isActive, isTrue);
     expect(cubit.state.libraryLoaded, isTrue);
 
     await cubit.skip();
     expect(Settings.getValue<String>(TourSteps.statusKey), TourSteps.skipped);
 
-    cubit.startIfNeeded(libraryLoaded: true);
+    final restartedAfterSkip = cubit.startIfNeeded(libraryLoaded: true);
+    expect(restartedAfterSkip, isFalse);
     expect(cubit.state.isActive, isFalse);
     await cubit.close();
   });
@@ -125,8 +129,9 @@ void main() {
     );
     final cubit = TourCubit();
 
-    cubit.startIfNeeded(libraryLoaded: true);
+    final started = cubit.startIfNeeded(libraryLoaded: true);
 
+    expect(started, isTrue);
     expect(cubit.state.isActive, isTrue);
     expect(cubit.state.libraryLoaded, isTrue);
     await cubit.complete();
@@ -150,8 +155,10 @@ void main() {
     await cubit.close();
 
     final nextSessionCubit = TourCubit();
-    nextSessionCubit.startIfNeeded(libraryLoaded: true);
+    final startedNextSession =
+        nextSessionCubit.startIfNeeded(libraryLoaded: true);
 
+    expect(startedNextSession, isFalse);
     expect(nextSessionCubit.state.isActive, isFalse);
     expect(Settings.getValue<String>(TourSteps.statusKey), TourSteps.completed);
     await nextSessionCubit.close();
@@ -362,5 +369,31 @@ void main() {
       ),
       tourCardSwitchDuration,
     );
+  });
+
+  test('TourOverlayScreen מעגן כרטיסים לתחתית בזמן אנימציית החלפה', () {
+    final layout = tourCardSwitcherLayoutBuilder(
+      const SizedBox(key: ValueKey('current')),
+      const [SizedBox(key: ValueKey('previous'))],
+    );
+
+    expect(layout, isA<Stack>());
+
+    final stack = layout as Stack;
+    expect(stack.alignment, AlignmentDirectional.bottomStart);
+    expect(stack.children, hasLength(2));
+    expect(stack.children.first.key, const ValueKey('previous'));
+    expect(stack.children.last.key, const ValueKey('current'));
+  });
+
+  test('טיפ חי מוצג מעל היעד כאשר אין מקום מתחתיו', () {
+    final offset = liveTipCardOffsetFor(
+      overlaySize: const Size(620, 500),
+      targetRect: const Rect.fromLTWH(500, 430, 64, 48),
+      cardSize: const Size(360, 210),
+    );
+
+    expect(offset.dy, 208);
+    expect(offset.dy + 210, lessThanOrEqualTo(484));
   });
 }

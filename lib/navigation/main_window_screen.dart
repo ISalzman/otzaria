@@ -1,3 +1,6 @@
+// לתחזוקת חיבור הסיור המודרך למסך הראשי ראו:
+// docs/guided_tour_developer_guide.md
+
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -129,6 +132,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   bool _isFindRefOpen = false;
   bool _isReadingSettingsPanelOpen = false;
   bool _openGenesisForTour = false;
+  bool _tourStartedAutomaticallyThisLaunch = false;
   OverlayEntry? _tourOverlayEntry;
   bool _tourOverlayInsertScheduled = false;
   bool _tourOpenedOverflowMenu = false;
@@ -214,7 +218,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
       unawaited(_initializeExternalActivationMonitoring());
 
-      AdPopupDialog.showIfNeeded(context);
+      AdPopupDialog.showIfNeeded(
+        context,
+        shouldSkip: () => _tourStartedAutomaticallyThisLaunch,
+      );
 
       // רענון plugin calendar events עם scope אמיתי לאחר שה-context מוכן.
       // הטעינה הראשונית ב-_initializeCalendar נקראה בלי workspace/book IDs —
@@ -608,6 +615,16 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   void _handleTourStepChanged(TourStep step) {
+    // סגירת חלוניות איתור/חיפוש בכל מעבר שלב, למעט כאשר השלב החדש דורש פתיחה
+    final shouldOpenFindRef = step.action == TourStepAction.openFindRef;
+    final shouldOpenSearch = step.action == TourStepAction.openSearch;
+    if (!shouldOpenFindRef && _isFindRefOpen) {
+      Navigator.of(context, rootNavigator: true).maybePop();
+    }
+    if (!shouldOpenSearch && _isSearchOpen) {
+      Navigator.of(context, rootNavigator: true).maybePop();
+    }
+
     switch (step.action) {
       case TourStepAction.openLibrary:
         context.read<NavigationBloc>().add(
@@ -726,7 +743,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (_tourOverlayEntry != null) {
       return;
     }
-    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    final overlay = Navigator.of(context, rootNavigator: true).overlay;
     if (overlay == null) {
       return;
     }
@@ -745,12 +762,29 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   void _bringTourOverlayToFront() {
-    final overlay = Overlay.maybeOf(context, rootOverlay: true);
-    if (overlay == null) {
+    final overlay = Navigator.of(context, rootNavigator: true).overlay;
+    final entry = _tourOverlayEntry;
+    if (overlay == null || entry == null) {
       return;
     }
-    _removeTourOverlay();
-    _ensureTourOverlay();
+    entry.remove();
+    overlay.insert(entry);
+  }
+
+  void _scheduleBringTourOverlayToFront({required int remainingFrames}) {
+    if (remainingFrames <= 0) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _bringTourOverlayToFront();
+      _tourOverlayEntry?.markNeedsBuild();
+      _scheduleBringTourOverlayToFront(
+        remainingFrames: remainingFrames - 1,
+      );
+    });
   }
 
   void _removeTourOverlay() {
@@ -896,13 +930,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
     focusRepository.findRefSearchController.selection =
         const TextSelection.collapsed(offset: 'בראשית'.length);
     context.read<FindRefBloc>().add(const SearchRefRequested('בראשית'));
-    _handleFindRefOpen(context, closeIfOpen: false);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _bringTourOverlayToFront();
-    });
+    _handleFindRefOpen(
+      context,
+      closeIfOpen: false,
+      transparentBarrier: true,
+    );
+    _scheduleBringTourOverlayToFront(remainingFrames: 6);
   }
 
   Future<void> _openFirstTourFindRefResult() async {
@@ -976,7 +1009,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case 'advanced_search':
         return _rectForGlobalKey(tourSearchDialogTargetKey);
       case 'find_ref':
-        return _rectForGlobalKey(tourFindRefDialogTargetKey);
+        return _findRefDialogTourRect();
       case 'reading':
         return _rectForGlobalKey(tourReadingScreenTargetKey);
       case 'tabs':
@@ -984,7 +1017,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case 'reading_settings':
         return _rectForGlobalKey(tourReadingSettingsButtonTargetKey);
       case 'tools':
-        return _rectForGlobalKey(tourMainNavigationTargetKeys[4]);
+        return _navItemTourRectForScreen(Screen.more);
       case 'calendar':
         return _rectForGlobalKey(tourToolTabTargetKeys['builtin.calendar']!);
       case 'gematria':
@@ -992,7 +1025,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case 'notes':
         return _rectForGlobalKey(tourToolTabTargetKeys['builtin.notes']!);
       case 'settings':
-        return _rectForGlobalKey(tourMainNavigationTargetKeys[5]);
+        return _navItemTourRectForScreen(Screen.settings);
       case 'appearance':
         return _rectForGlobalKey(tourSettingsTabTargetKeys[0]!);
       case 'backup':
@@ -1050,10 +1083,19 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     if (step.id == 'advanced_search') {
       final dialogRect = _rectForGlobalKey(tourSearchDialogTargetKey);
-      final navSearchRect = _rectForGlobalKey(tourMainNavigationTargetKeys[3]);
+      final navSearchRect = _navItemTourRectForScreen(Screen.search);
       return [
         if (dialogRect != null) dialogRect,
         if (navSearchRect != null) navSearchRect,
+      ];
+    }
+
+    if (step.id == 'find_ref') {
+      final dialogRect = _findRefDialogTourRect();
+      final navFindRefRect = _navItemTourRectForScreen(Screen.find);
+      return [
+        if (dialogRect != null) dialogRect,
+        if (navFindRefRect != null) navFindRefRect,
       ];
     }
 
@@ -1202,6 +1244,38 @@ class MainWindowScreenState extends State<MainWindowScreen>
     );
   }
 
+  Rect? _findRefDialogTourRect() {
+    final contentRect =
+        _rectForGlobalKey(tourFindRefDialogTargetKey, inflate: 0);
+    if (contentRect == null) {
+      return null;
+    }
+    return Rect.fromLTRB(
+      contentRect.left - 24,
+      contentRect.top - 80,
+      contentRect.right + 24,
+      contentRect.bottom + 88,
+    );
+  }
+
+  Rect? _navItemTourRect(int index) {
+    if (index < 0 || index >= tourMainNavigationItemTargetKeys.length) {
+      return null;
+    }
+    return _rectForGlobalKey(
+      tourMainNavigationItemTargetKeys[index],
+      inflate: 2,
+    );
+  }
+
+  Rect? _navItemTourRectForScreen(Screen screen) {
+    return _navItemTourRect(_navIndexForScreen(screen));
+  }
+
+  int _navIndexForScreen(Screen screen) {
+    return _navData.indexWhere((item) => item.screen == screen);
+  }
+
   Rect? _rectForGlobalKey(GlobalKey key, {double inflate = 4}) {
     final context = key.currentContext;
     if (context == null || !context.mounted) {
@@ -1290,7 +1364,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
   void _scheduleTourStartIfNeeded({required bool libraryLoaded}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _tourCubit.startIfNeeded(libraryLoaded: libraryLoaded);
+      if (_tourCubit.startIfNeeded(libraryLoaded: libraryLoaded)) {
+        _tourStartedAutomaticallyThisLaunch = true;
+      }
     });
   }
 
@@ -1345,7 +1421,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
               final navigationState = context.read<NavigationBloc>().state;
               if (navigationState.hasCheckedLibrary &&
                   !navigationState.isLibraryEmpty) {
-                _tourCubit.startIfNeeded(libraryLoaded: true);
+                if (_tourCubit.startIfNeeded(libraryLoaded: true)) {
+                  _tourStartedAutomaticallyThisLaunch = true;
+                }
               }
             },
           ),
@@ -1923,6 +2001,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   void _handleFindRefOpen(
     BuildContext context, {
     bool closeIfOpen = true,
+    bool transparentBarrier = false,
   }) {
     if (_isFindRefOpen) {
       if (closeIfOpen) {
@@ -1936,7 +2015,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     showDialog(
       context: context,
-      barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.62),
+      useRootNavigator: true,
+      barrierColor: transparentBarrier
+          ? Colors.transparent
+          : Theme.of(context).colorScheme.scrim.withValues(alpha: 0.62),
       builder: (context) => FindRefDialog(),
     ).then((_) {
       if (!mounted) return;
@@ -2021,17 +2103,51 @@ class MainWindowScreenState extends State<MainWindowScreen>
         (Settings.getValue<String>(item.shortcutKey) ?? item.shortcutDefault)
             .toUpperCase();
 
-    return KeyedSubtree(
-      key: tourMainNavigationTargetKeys[index],
-      child: NavRailItem(
-        icon: item.icon,
-        iconFilled: item.iconFilled,
-        label: item.label,
-        isSelected: isSelected,
-        onTap: () => _onNavTap(context, index, currentScreen),
-        tooltip: tooltip,
-      ),
+    final step = _tourCubit.state.currentStep;
+    final isTourHighlighted = _isTourNavigationItemHighlighted(
+      step,
+      index,
+      currentScreen,
     );
+    return NavRailItem(
+      icon: item.icon,
+      iconFilled: item.iconFilled,
+      label: item.label,
+      isSelected: isSelected,
+      onTap: () => _onNavTap(context, index, currentScreen),
+      tooltip: tooltip,
+      tourTargetKey: tourMainNavigationTargetKeys[index],
+      tourItemKey: tourMainNavigationItemTargetKeys[index],
+      isTourHighlighted: isTourHighlighted,
+    );
+  }
+
+  bool _isTourNavigationItemHighlighted(
+    TourStep? step,
+    int index,
+    Screen currentScreen,
+  ) {
+    if (step == null) {
+      return false;
+    }
+    if (step.area == TourSpotlightArea.navigation &&
+        index == _getActiveNavigationIndex(currentScreen)) {
+      return true;
+    }
+
+    final targetScreen = _tourNavigationScreenForStep(step);
+    return targetScreen != null && _navData[index].screen == targetScreen;
+  }
+
+  Screen? _tourNavigationScreenForStep(TourStep step) {
+    return switch (step.id) {
+      'find_ref' => Screen.find,
+      'tools' => Screen.more,
+      'advanced_search' => Screen.search,
+      'settings' => Screen.settings,
+      'library' => Screen.library,
+      _ => null,
+    };
   }
 
   Future<void> _openTourBookByTitle(String title) async {

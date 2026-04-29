@@ -1,58 +1,24 @@
 # מדריך מפתח: הוספת פריטים לסיור המודרך
 
-מסמך זה מיועד למי שרוצה להוסיף, לשנות או לחבר שלבים חדשים לסיור המודרך באוצריה.
+מסמך זה מיועד למפתחים שמוסיפים או משנים שלבים, יעדי spotlight, פעולות מקדימות או טיפים חיים בסיור המודרך של אוצריא.
 
 ## מבנה הקבצים
-
-הסיור בנוי מכמה שכבות:
 
 - `lib/tour/models/tour_step.dart` - הגדרת `TourStep`, אזורי spotlight ופעולות מעבר.
 - `lib/tour/models/tour_steps.dart` - רשימת השלבים, הטקסטים והסדר.
 - `lib/tour/bloc/tour_cubit.dart` - התחלה, מעבר שלבים, דילוג, סיום ו-autoplay.
-- `lib/tour/tour_target_keys.dart` - מזהי `GlobalKey` לאלמנטים שרוצים לסמן בחלון השקוף.
-- `lib/tour/view/tour_overlay_screen.dart` - ציור ה-overlay, מיקום הכרטיס ופתרון target rects.
-- `lib/navigation/main_window_screen.dart` - ביצוע פעולות לפני שלב: ניווט למסך, פתיחת דיאלוג, פתיחת תפריט וכו'.
+- `lib/tour/tour_target_keys.dart` - מזהי `GlobalKey` לאלמנטים שמסומנים בחלון השקוף.
+- `lib/tour/view/tour_overlay_screen.dart` - ציור ה-overlay, מיקום הכרטיס וחישוב rects.
+- `lib/navigation/main_window_screen.dart` - ביצוע פעולות לפני שלב: ניווט, פתיחת דיאלוג, פתיחת תפריט, בחירת טאב.
 
-## סוגי שלבים
+## הוספת שלב
 
-יש שני סוגים עיקריים:
-
-1. שלב הסבר כללי במרכז המסך:
-
-```dart
-const TourStep(
-  id: 'welcome',
-  title: 'כותרת',
-  body: 'טקסט הסבר קצר',
-  area: TourSpotlightArea.center,
-  isDialog: true,
-)
-```
-
-2. שלב שמסמן אזור במסך:
-
-```dart
-const TourStep(
-  id: 'library_search',
-  title: 'חיפוש מהיר בספרייה',
-  body: 'הקלד כאן שם ספר, מחבר או נושא.',
-  area: TourSpotlightArea.librarySearch,
-  action: TourStepAction.openLibrary,
-)
-```
-
-`id` חייב להיות יציב וייחודי. הוא משמש למעבר בין שלבים, בדיקות, resolver-ים, ונקודות טיפול מיוחדות.
-
-## הוספת שלב חדש
-
-1. הוסף ערך ל-`TourSpotlightArea` אם צריך אזור חדש ב-`tour_step.dart`.
+1. הוסף ערך ל-`TourSpotlightArea` אם צריך אזור חדש.
 2. הוסף ערך ל-`TourStepAction` אם צריך פעולה לפני הצגת השלב.
-3. הוסף את ה-`TourStep` במקום המתאים ב-`TourSteps.build`.
-4. אם יש פעולה חדשה, טפל בה ב-`_handleTourStepChanged` ב-`main_window_screen.dart`.
-5. אם צריך spotlight מדויק, הוסף `GlobalKey` או resolver.
+3. הוסף `TourStep` במקום המתאים ב-`TourSteps.build`.
+4. טפל בפעולה החדשה ב-`_handleTourStepChanged`.
+5. חבר `GlobalKey` או resolver אם צריך spotlight מדויק.
 6. עדכן או הוסף בדיקות ב-`test/tour/tour_cubit_test.dart`.
-
-דוגמה:
 
 ```dart
 const TourStep(
@@ -64,13 +30,41 @@ const TourStep(
 )
 ```
 
-## סימון לחצן או widget בחלון השקוף
+`id` חייב להיות יציב וייחודי. הוא משמש למעבר בין שלבים, בדיקות, resolver-ים ונקודות טיפול מיוחדות.
 
-כאשר רוצים שה-spotlight ייצמד ל-widget אמיתי, משתמשים ב-`GlobalKey`.
+## סוגי שלבים
 
-### 1. הוספת key
+שלב הסבר כללי במרכז המסך:
 
-בדרך כלל מוסיפים ל-`lib/tour/tour_target_keys.dart`:
+```dart
+const TourStep(
+  id: 'welcome',
+  title: 'כותרת',
+  body: 'טקסט הסבר קצר',
+  area: TourSpotlightArea.center,
+  isDialog: true,
+)
+```
+
+שלב שמסמן אזור במסך:
+
+```dart
+const TourStep(
+  id: 'library_search',
+  title: 'חיפוש מהיר בספרייה',
+  body: 'הקלד כאן שם ספר, מחבר או נושא.',
+  area: TourSpotlightArea.librarySearch,
+  action: TourStepAction.openLibrary,
+)
+```
+
+## סימון widget בחלון השקוף
+
+כאשר היעד קיים בעץ ה-widgets, העדף `GlobalKey` על חישוב ידני.
+
+### הוספת key
+
+הוסף key ב-`lib/tour/tour_target_keys.dart`:
 
 ```dart
 final GlobalKey tourMyButtonTargetKey = GlobalKey(
@@ -78,17 +72,17 @@ final GlobalKey tourMyButtonTargetKey = GlobalKey(
 );
 ```
 
-אם הwidget הוא singleton (מופיע פעם אחת בלבד בממשק, כמו כפתורי title bar), אפשר להצמיד את ה-key ישירות ללא תנאי:
+אם ה-widget מופיע פעם אחת בלבד בממשק, אפשר להצמיד את ה-key ישירות:
 
 ```dart
 IconButton(
-  key: tourTitleBarHistoryButtonTargetKey,
-  icon: const Icon(FluentIcons.history_24_regular),
-  ...
+  key: tourMyButtonTargetKey,
+  icon: const Icon(FluentIcons.search_24_regular),
+  onPressed: _handleSearch,
 )
 ```
 
-אם היעד נמצא במסך שיכולים להיות ממנו כמה מופעים במקביל, למשל קורא טקסט או PDF, לא מצמידים key גלובלי לכל המופעים. מוסיפים פרמטר כמו `enableTourTargets`, ומצמידים את ה-key רק למופע הפעיל:
+אם יכולים להיות כמה מופעים במקביל, למשל בכמה טאבים, הצמד את ה-key רק למופע הפעיל:
 
 ```dart
 IconButton(
@@ -98,11 +92,21 @@ IconButton(
 )
 ```
 
-זה מונע שגיאת `Duplicate GlobalKey` כשפתוחים כמה טאבים.
+כך נמנעת שגיאת `Duplicate GlobalKey`.
 
-### 2. הצמדת key ל-widget
+### הוספת key לפריט קיים שאין לו key
 
-אם ה-widget לא מקבל `key` ישירות, עטוף אותו ב-`KeyedSubtree`:
+רוב ה-widgets באפליקציה לא נבנו מראש עם key לסיור. כשמוסיפים שלב חדש, צריך להוסיף נקודת עיגון במקום שבו היעד מצויר בפועל.
+
+פעל לפי הסדר הזה:
+
+1. מצא את ה-widget שהמשתמש אמור לראות דרך ה-spotlight: כפתור, שורת חיפוש, פריט תפריט, טאב, כרטיס וכו'.
+2. אם ה-widget מקבל `key`, העבר אליו את ה-`GlobalKey` ישירות.
+3. אם ה-widget לא מקבל `key`, עטוף אותו ב-`KeyedSubtree`.
+4. אם זה widget משותף, הוסף לו פרמטר אופציונלי כמו `tourTargetKey`.
+5. אם יכולים להיות כמה מופעים במקביל, הוסף גם תנאי כמו `enableTourTargets` כדי שרק המופע הפעיל יקבל את ה-key.
+
+דוגמה לפריט מקומי שאפשר לעטוף:
 
 ```dart
 KeyedSubtree(
@@ -111,38 +115,107 @@ KeyedSubtree(
 )
 ```
 
-### 3. חיבור ה-key ל-resolver
+דוגמה ל-widget משותף:
 
-ב-`main_window_screen.dart` יש שני מנגנוני resolver:
+```dart
+class MySharedButton extends StatelessWidget {
+  const MySharedButton({
+    super.key,
+    this.tourTargetKey,
+  });
 
-**resolver לפי `step.area`** — מטפל ב-area שלם, עובד עם `switch`:
+  final Key? tourTargetKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      key: tourTargetKey,
+      icon: const Icon(FluentIcons.search_24_regular),
+      onPressed: _handleTap,
+    );
+  }
+}
+```
+
+שימוש:
+
+```dart
+MySharedButton(
+  tourTargetKey: enableTourTargets ? tourMyButtonTargetKey : null,
+)
+```
+
+אם צריך לסמן אזור רחב יותר מהכפתור עצמו, הוסף key למעטפת בגודל הנכון ולא לכפתור הפנימי.
+
+### חיבור key ל-resolver
+
+ב-`main_window_screen.dart` חבר את ה-key ל-rect:
 
 ```dart
 case 'my_new_button':
   return _rectForGlobalKey(tourMyButtonTargetKey);
 ```
 
-**resolver לפי `step.id`** — override ספציפי לשלב, בדיקת `if` לפני ה-`switch`. משמש כשצריך התנהגות מיוחדת שלא מתאימה לכל שלבי ה-area:
+אם רק שלב ספציפי דורש חישוב מיוחד, הוסף override לפי `step.id` לפני ה-`switch` הכללי:
 
 ```dart
 if (step.id == 'my_special_step') {
   return _rectForGlobalKey(tourSpecialTargetKey);
 }
-// ... ה-switch על step.area ממשיך אחריו
 ```
 
-אם יש כמה אזורים שצריך להאיר יחד, השתמש ב-`_resolveTourTargetRects`:
+אם שלב אחד צריך להאיר כמה אזורים יחד, החזר רשימת rects מ-`_resolveTourTargetRects`:
 
 ```dart
 if (step.id == 'my_complex_step') {
+  final firstRect = _rectForGlobalKey(tourFirstTargetKey);
+  final secondRect = _rectForGlobalKey(tourSecondTargetKey);
   return [
-    if (_rectForGlobalKey(tourFirstTargetKey) case final rect?) rect,
-    if (_rectForGlobalKey(tourSecondTargetKey) case final rect?) rect,
+    if (firstRect != null) firstRect,
+    if (secondRect != null) secondRect,
   ];
 }
 ```
 
-**כלל האצבע:** אם כל השלבים ב-area מאירים את אותם widgets — השתמש ב-resolver לפי `area`. אם רק שלב אחד דורש אזורים שונים — הוסף override לפי `step.id` לפני ה-`switch`.
+## דיוק spotlight
+
+הצמד את ה-key ל-widget שהמשתמש אמור לראות דרך החלון השקוף. key על מעטפת רחבה מדי ייצור rect גדול מדי וסימון לא מדויק.
+
+בדיאלוגים, בדרך כלל עדיף להצמיד key לתוכן היציב או לאזור הפנימי שמעניין את הסיור, ולא למעטפת העליונה של הדיאלוג. אם צריך לכלול כותרת או כפתורי פעולה, הרחב את ה-rect ב-helper ייעודי:
+
+```dart
+Rect? _myDialogTourRect() {
+  final contentRect = _rectForGlobalKey(tourMyDialogContentKey, inflate: 0);
+  if (contentRect == null) return null;
+
+  return Rect.fromLTRB(
+    contentRect.left - 24,
+    contentRect.top - 72,
+    contentRect.right + 24,
+    contentRect.bottom + 72,
+  );
+}
+```
+
+הרחב רק לפי צורך ממשי: כותרת, כפתורי פעולה או padding חיצוני.
+
+## פריטי ניווט
+
+בפריטי ניווט יש להחליט אם השלב מסמן רק את הכפתור או את כל הפריט כולל התווית.
+
+- לסימון הכפתור בלבד, השתמש ב-key שעל ה-`IconButton`.
+- לסימון הפריט כולו, השתמש ב-key שעל מעטפת הפריט.
+
+כאשר מוסיפים שלב שמסמן פריט ניווט מלא, השתמש ב-helper שמחזיר rect לפי מפתח הפריט:
+
+```dart
+Rect? _navItemTourRect(int index) {
+  return _rectForGlobalKey(
+    tourMainNavigationItemTargetKeys[index],
+    inflate: 2,
+  );
+}
+```
 
 ## אזור משוער ללא key
 
@@ -153,13 +226,11 @@ case TourSpotlightArea.myArea:
   rect = Rect.fromLTWH(110, 80, width - 220, 78);
 ```
 
-העדף `GlobalKey` כשהיעד קיים בעץ ה-widgets. אזור מחושב מתאים רק לאזורי layout יציבים.
+השתמש באזור מחושב רק עבור layout יציב. אם היעד קיים כ-widget, עדיף `GlobalKey`.
 
 ## פעולות לפני הצגת שלב
 
 `TourStepAction` מגדיר מה צריך לקרות לפני שהשלב מוצג: מעבר למסך, פתיחת דיאלוג, פתיחת תפריט, בחירת טאב וכו'.
-
-דוגמה ב-`_handleTourStepChanged`:
 
 ```dart
 case TourStepAction.openSettings:
@@ -177,7 +248,28 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
 });
 ```
 
-`_scheduleTourTargetRebuilds` חשוב אחרי פתיחת דיאלוגים, תפריטים, טאבים או scroll, כי ה-rect זמין רק אחרי שה-widget כבר בעץ.
+אם שלב פותח דיאלוג או חלונית זמנית, סגור אותה במעבר לשלב שלא צריך אותה. כך שלבים חדשים לא יוסתרו על ידי UI שנפתח בשלב קודם.
+
+## דיאלוגים ו-overlay
+
+כאשר שלב פותח דיאלוג, השתמש ב-root navigator אם ה-overlay של הסיור צריך להיות מעליו:
+
+```dart
+showDialog(
+  context: context,
+  useRootNavigator: true,
+  builder: (context) => const MyDialog(),
+);
+```
+
+אם הדיאלוג נפתח במיוחד עבור שלב בסיור, שקול להשתמש ב-barrier שקוף כדי שההכהיה תגיע רק מ-`SpotlightOverlay`.
+
+אחרי פתיחת דיאלוג, תפריט או טאב, הבא את overlay הסיור קדימה ובקש חישוב rect מחדש:
+
+```dart
+_bringTourOverlayToFront();
+_scheduleTourTargetRebuilds(remainingFrames: 4);
+```
 
 ## פתיחת תפריטים ופריטי תפריט
 
@@ -185,8 +277,6 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
 
 - `ResponsiveActionBar` מקבל `overflowButtonKey` ו-`menuItemKeysByTooltip`.
 - `AppContextMenuRegion` מקבל `menuItemKeysByLabel`.
-
-דוגמה:
 
 ```dart
 ResponsiveActionBar(
@@ -201,50 +291,34 @@ ResponsiveActionBar(
 )
 ```
 
-אם צריך לפתוח תפריט אוטומטית לפני השלב, עשה זאת ב-`main_window_screen.dart`, ואז הבא את overlay הסיור קדימה:
+אם השלב מצביע על פריט בתת-תפריט, פתח קודם את התפריט הראשי, ואז את תת-התפריט ב-post-frame נוסף. אחרי כל פתיחה בקש rebuild ליעדי הסיור.
+
+## כרטיסי הסבר ואנימציות
+
+מסך הסבר במרכז משתמש ב-`isDialog: true` וב-`TourSpotlightArea.center`. שלבים כאלה אינם נספרים בנקודות ההתקדמות אם הם מוגדרים כדיאלוג.
+
+כרטיסי הסבר רגילים בתחתית המסך יכולים להתחלף באנימציה, אבל המעברים בין כרטיס ממורכז לכרטיס תחתון צריכים להיות ללא אנימציה:
+
+- יציאה ממסך פתיחה ממורכז אל שלב ההסבר הראשון.
+- כניסה למסך הסיום הממורכז.
+
+כאשר משתמשים ב-`AnimatedSwitcher`, עגן את layout ההחלפה לתחתית כדי שכרטיס חדש לא יתחיל ממיקום זמני:
 
 ```dart
-state?.showMenu();
-_bringTourOverlayToFront();
-_scheduleTourTargetRebuilds(remainingFrames: 3);
-```
-
-### פתיחת תת-תפריט אוטומטית
-
-אם השלב מצביע על פריט בתת-תפריט (submenu), פתח גם אותו אחרי שהתפריט הראשי נפתח — בתוך post-frame נוסף:
-
-```dart
-WidgetsBinding.instance.addPostFrameCallback((_) {
-  if (!mounted) return;
-  (tourTabSideBySideMenuItemTargetKey.currentState as dynamic)
-      ?.openSubmenu(() {
-    if (!mounted) return;
-    _scheduleTourTargetRebuilds(remainingFrames: 4);
-  });
-});
-```
-
-הסדר חשוב: תפריט ראשי → `_bringTourOverlayToFront` → `_scheduleTourTargetRebuilds` → פתיחת תת-תפריט → `_scheduleTourTargetRebuilds` שוב. כל שלב בpost-frame נפרד, כי כל אחד דורש שה-widget הקודם כבר בעץ.
-
-## מסך הסבר ללא spotlight
-
-למסך הסבר במרכז השתמש ב-`isDialog: true` וב-`TourSpotlightArea.center`.
-שלבים כאלה אינם נספרים בנקודות ההתקדמות (`progressSteps`) אם הם מוגדרים כדיאלוג.
-
-```dart
-TourStep(
-  id: 'restart_welcome',
-  title: 'הסיור המודרך',
-  body: 'לחץ "אני מוכן" כשתהיה מוכן להתחיל.',
-  area: TourSpotlightArea.center,
-  isDialog: true,
-)
+layoutBuilder: (currentChild, previousChildren) {
+  return Stack(
+    alignment: AlignmentDirectional.bottomStart,
+    children: [
+      ...previousChildren,
+      if (currentChild != null) currentChild,
+    ],
+  );
+},
 ```
 
 ## סיור מלא מול סיור מקוצר
 
-`TourSteps.build` מקבל `libraryLoaded`.
-שלבים שדורשים ספרייה טעונה צריכים להופיע רק בתוך:
+`TourSteps.build` מקבל `libraryLoaded`. שלבים שדורשים ספרייה טעונה צריכים להופיע רק בתוך:
 
 ```dart
 if (libraryLoaded) {
@@ -254,155 +328,40 @@ if (libraryLoaded) {
 }
 ```
 
-אם מוסיפים שלב שמותר גם בלי ספרייה, הוסף אותו אחרי הבלוק הזה.
-אם מוסיפים שלב שקשור למסך הספרייה הריקה, הוסף אותו לענף `!libraryLoaded`.
+אם מוסיפים שלב שמותר גם בלי ספרייה, הוסף אותו אחרי הבלוק הזה. אם מוסיפים שלב שקשור למסך הספרייה הריקה, הוסף אותו לענף `!libraryLoaded`.
 
-## טיפים חיים (Live Tips)
+## טיפים חיים
 
-מערכת הטיפים החיים מציגה הצעות קצרות ומבוססות-הקשר **מחוץ לסיור המודרך הרגיל** — כלומר, גם לאחר שסיים המשתמש את הסיור, ואפילו כשהסיור אינו פעיל. הטיפים מופיעים ככרטיס צף (`LiveTipCard`) מעל הממשק, ומוסתרים עם לחיצה על "הבנתי" או X.
+טיפים חיים הם כרטיסי הדרכה קצרים שמופיעים לפי פעולות המשתמש גם כשהסיור הרגיל אינו פעיל. הוסף טיפ חי רק כאשר הוא מלמד פעולה נקודתית שהמשתמש כנראה צריך עכשיו.
 
-### קבצים רלוונטיים
+קבצים רלוונטיים:
 
-| קובץ | תפקיד |
-|------|--------|
-| `lib/tour/models/live_tip.dart` | הגדרת `LiveTipId`, `TourInteractionType`, `TourInteraction`, `LiveTipSpec` ורשימת `liveTipSpecs` |
-| `lib/tour/bloc/tour_cubit.dart` | לוגיקת הטיפות: `recordInteraction`, `_maybeShowLiveTip`, `_resolveNextLiveTip`, `dismissLiveTip` |
-| `lib/tour/bloc/tour_state.dart` | שדות הסטייט: `activeLiveTipId`, `shownTips`, `resolvedTips` |
-| `lib/tour/view/tour_overlay_screen.dart` | הצגת `_LiveTipOverlay` כשאין סיור פעיל אך יש טיפ פעיל |
-| `lib/tour/widgets/live_tip_card.dart` | ה-widget של כרטיס הטיפ |
+- `lib/tour/models/live_tip.dart` - הגדרת `LiveTipId`, `TourInteractionType`, `TourInteraction`, `LiveTipSpec` ו-`liveTipSpecs`.
+- `lib/tour/bloc/tour_cubit.dart` - לוגיקת הצגת הטיפים.
+- `lib/tour/widgets/live_tip_card.dart` - כרטיס הטיפ.
 
-### מחזור חיים של טיפ
+כדי להוסיף טיפ:
 
-```
-פעולת משתמש (tab change, text select, וכו')
-        │
-        ▼
-tourCubit.recordInteraction(TourInteraction(...))
-        │
-        ├─ _rememberInteraction   → שמור ב-_recentInteractions (30 שניות אחרונות)
-        ├─ _updateDerivedSignals  → עדכן מונים/דגלים פנימיים
-        └─ _maybeShowLiveTip      → בדוק אם להציג טיפ
-
-אם יש טיפ מתאים → emit(state.copyWith(activeLiveTipId: ...))
-                        │
-                        ▼
-               TourOverlayScreen מציג _LiveTipOverlay
-
-המשתמש לוחץ "הבנתי" → dismissLiveTip() → clearLiveTip: true
-```
-
-### הגדרת טיפ קיים — `LiveTipSpec`
-
-כל טיפ מוגדר ב-`liveTipSpecs` ב-`live_tip.dart`:
+1. הוסף ערך ל-`LiveTipId`.
+2. הוסף אירוע ל-`TourInteractionType` רק אם אין אירוע קיים שמתאר את הפעולה.
+3. הוסף `LiveTipSpec` לרשימת `liveTipSpecs`.
+4. עדכן את `_updateDerivedSignals` אם פעולה מסוימת צריכה לפתור את הטיפ.
+5. הוסף תנאי ב-`_resolveNextLiveTip`.
+6. שלח `TourInteraction` מהמקום שבו המשתמש ביצע את הפעולה.
+7. הוסף בדיקה ב-`test/tour/tour_cubit_test.dart`.
 
 ```dart
 LiveTipSpec(
-  id: LiveTipId.sideBySideSuggestion,
-  area: TourSpotlightArea.tabs,
-  title: 'השוואה בין שני ספרים',
-  description: 'נראה שאתה מדלג שוב ושוב בין אותם ספרים...',
-),
+  id: LiveTipId.myNewTip,
+  area: TourSpotlightArea.reading,
+  title: 'כותרת הטיפ',
+  description: 'הסבר קצר ומועיל למשתמש.',
+)
 ```
 
-- `id` — ערך מ-`LiveTipId`, ייחודי לכל טיפ.
-- `area` — `TourSpotlightArea` שמגדיר היכן ממוקם הכרטיס על המסך.
-- `title` / `description` — הטקסט שמוצג למשתמש.
+### כללי תצוגה של טיפ
 
-### הוספת טיפ חדש — שלב אחר שלב
-
-#### 1. הוסף ערך ל-`LiveTipId`
-
-```dart
-// lib/tour/models/live_tip.dart
-enum LiveTipId {
-  sideBySideSuggestion,
-  dictionaryContextMenuHint,
-  commentaryHint,
-  myNewTip,  // ← הוסף כאן
-}
-```
-
-#### 2. הוסף אירוע מתאים ל-`TourInteractionType` (אם נדרש)
-
-```dart
-enum TourInteractionType {
-  currentTabChanged,
-  openedTextBook,
-  sideBySideEnabled,
-  textSelected,
-  dictionaryUsed,
-  commentaryAvailable,
-  commentaryUsed,
-  myNewEvent,  // ← רק אם צריך אירוע חדש
-}
-```
-
-#### 3. הוסף `LiveTipSpec` לרשימה
-
-```dart
-const List<LiveTipSpec> liveTipSpecs = [
-  // ... טיפים קיימים ...
-  LiveTipSpec(
-    id: LiveTipId.myNewTip,
-    area: TourSpotlightArea.reading,  // בחר אזור מתאים
-    title: 'כותרת הטיפ',
-    description: 'הסבר קצר ומועיל למשתמש.',
-  ),
-];
-```
-
-#### 4. עדכן את `_updateDerivedSignals` ב-`tour_cubit.dart`
-
-```dart
-case TourInteractionType.myNewEvent:
-  // לדוגמה: סמן שמשתמשנו בפיצ'ר, ולכן הטיפ כבר לא רלוונטי
-  _markTipResolved(LiveTipId.myNewTip);
-  break;
-```
-
-#### 5. הוסף תנאי ב-`_resolveNextLiveTip`
-
-```dart
-LiveTipId? _resolveNextLiveTip() {
-  // ... תנאים קיימים ...
-
-  if (_canShowTip(LiveTipId.myNewTip) && _myNewCondition()) {
-    return LiveTipId.myNewTip;
-  }
-
-  return null;
-}
-```
-
-הסדר בפונקציה הוא סדר העדיפויות — טיפ שמופיע קודם ינצח.
-
-#### 6. שלח אירועים מהמקום הנכון בקוד
-
-מכל widget שרלוונטי:
-
-```dart
-context.read<TourCubit>().recordInteraction(
-  TourInteraction(
-    type: TourInteractionType.myNewEvent,
-    primaryValue: optionalStringContext,  // אם נדרש
-  ),
-);
-```
-
-#### 7. הוסף בדיקה ב-`test/tour/tour_cubit_test.dart`
-
-```dart
-test('shows myNewTip after condition is met', () async {
-  final cubit = TourCubit();
-  await cubit.recordInteraction(
-    TourInteraction(type: TourInteractionType.myNewEvent),
-  );
-  expect(cubit.state.activeLiveTipId, LiveTipId.myNewTip);
-  cubit.close();
-});
-```
-
-### כללי שליטה — מתי טיפ מוצג ומתי לא
+לפני שמוסיפים תנאי חדש ב-`_resolveNextLiveTip`, בדוק שהוא מכבד את כללי התצוגה הקיימים:
 
 | מצב | תוצאה |
 |-----|--------|
@@ -410,29 +369,28 @@ test('shows myNewTip after condition is met', () async {
 | יש כבר טיפ פעיל (`hasActiveLiveTip`) | לא מציגים טיפ נוסף |
 | הטיפ כבר הוצג (`shownTips`) | לא מציגים שוב |
 | הטיפ נפתר (`resolvedTips`) | לא מציגים בכלל |
-| הסיור הסתיים/דולג, ותנאי הטיפ מתקיים | מציגים |
+| הסיור הסתיים או דולג, ותנאי הטיפ מתקיים | מציגים |
 
-`shownTips` — טיפ שנראה פעם אחת לא יחזור (גם אם המשתמש לא ביצע את הפעולה המוצעת).  
-`resolvedTips` — טיפ שהמשתמש ביצע את הפעולה שלו (נפתר), לא יוצג לעולם.
+`shownTips` מיועד לטיפ שכבר הוצג למשתמש. הוא לא יחזור גם אם המשתמש לא ביצע את הפעולה המוצעת.  
+`resolvedTips` מיועד לטיפ שכבר אינו רלוונטי כי המשתמש ביצע את הפעולה או כי מצב אחר פתר אותו.
 
-### `primaryValue` — ערך הקשרי
+השתמש ב-`primaryValue` כאשר התנאי צריך לזהות קשר בין כמה אירועים, למשל כמה פעולות שנעשו על אותו ספר או אותו טאב.
 
-ב-`TourInteraction` אפשר להעביר `primaryValue: 'שם ספר'` כדי לצמד את האירוע לספר/לטאב מסוים. ה-cubit משתמש בזה לדוגמה כדי לוודא שהסיכוי למפרשים הגיע מאותו הספר:
+`_recentInteractions` שומר אינטראקציות אחרונות בחלון זמן קצר, ומשמש לזיהוי דפוסים כמו כמה פעולות קשורות ברצף. כשמוסיפים טיפ שמבוסס על רצף פעולות, העדף להשתמש במנגנון הזה במקום לשמור state מקומי ב-widget.
 
-```dart
-if (_commentaryOpportunityBook == null ||
-    _commentaryOpportunityBook == interaction.primaryValue) {
-  _commentaryOpportunityScore++;
-}
-```
-
-### `_recentInteractions` — חלון זמן
-
-האינטראקציות האחרונות נשמרות בחלון של **30 שניות**. כך ניתן לזהות דפוסים (כמו דילוג בין שני ספרים) מבלי שאירועים ישנים ישפיעו.
+דוגמת בדיקה בסיסית לטיפ חדש:
 
 ```dart
-final cutoff = interaction.timestamp.subtract(const Duration(seconds: 30));
-_recentInteractions.removeWhere((i) => i.timestamp.isBefore(cutoff));
+test('shows myNewTip after condition is met', () async {
+  final cubit = TourCubit();
+
+  cubit.recordInteraction(
+    TourInteraction(type: TourInteractionType.myNewEvent),
+  );
+
+  expect(cubit.state.activeLiveTipId, LiveTipId.myNewTip);
+  cubit.close();
+});
 ```
 
 ## בדיקות חובה
@@ -440,9 +398,9 @@ _recentInteractions.removeWhere((i) => i.timestamp.isBefore(cutoff));
 אחרי שינוי בסיור:
 
 ```bash
+dart format <files you changed>
 flutter analyze
 flutter test test\tour\tour_cubit_test.dart
-dart format <files you changed>
 ```
 
 הוסף בדיקה כאשר:
@@ -451,6 +409,8 @@ dart format <files you changed>
 - נוסף `TourSpotlightArea` עם חישוב `Rect`.
 - משתנה לוגיקת `tour_status`.
 - נוסף behavior כמו autoplay, דילוג, restart או מעבר ידני.
+- נוסף יעד spotlight לפריט ניווט או דיאלוג.
+- נוסף טיפ חי.
 
 ## רשימת בדיקה לפני קומיט
 
@@ -458,6 +418,12 @@ dart format <files you changed>
 - כל טקסט עברי ב-widget חדש כולל `textDirection: TextDirection.rtl`.
 - icons חדשים הם רק מ-`fluentui_system_icons`.
 - לא הוצמד `GlobalKey` גלובלי לכמה מופעים במקביל.
+- key של spotlight מוצמד ל-widget המדויק.
+- בפריטי ניווט נבחר key מתאים: כפתור בלבד או פריט מלא כולל טקסט.
+- דיאלוג שנפתח בזמן סיור משתמש ב-root navigator כאשר צריך להציג מעליו spotlight.
+- overlay הסיור מובא קדימה אחרי פתיחת דיאלוג/תפריט.
+- דיאלוגים וחלוניות זמניות נסגרים במעבר לשלב שלא צריך אותם.
+- אין לוגי debug זמניים בקוד.
 - אם היעד מופיע רק אחרי ניווט/תפריט/דיאלוג, יש post-frame ו-`_scheduleTourTargetRebuilds`.
 - שלבים שתלויים בספרייה נמצאים רק במסלול `libraryLoaded`.
 - `flutter analyze` ובדיקות הסיור עוברים.

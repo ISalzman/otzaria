@@ -1,3 +1,6 @@
+// לתחזוקת חלון ה-spotlight של הסיור ראו:
+// docs/guided_tour_developer_guide.md
+
 import 'package:flutter/material.dart';
 
 class SpotlightOverlay extends StatelessWidget {
