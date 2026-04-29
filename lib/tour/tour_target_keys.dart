@@ -1,3 +1,5 @@
+// לתחזוקת מטרות הסיור המודרך ראו: docs/guided_tour_developer_guide.md
+
 import 'package:flutter/widgets.dart';
 
 final List<GlobalKey> tourMainNavigationTargetKeys = List<GlobalKey>.generate(

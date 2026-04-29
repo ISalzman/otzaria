@@ -1,3 +1,5 @@
+// לתחזוקת הסיור המודרך ראו: docs/guided_tour_developer_guide.md
+
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/tour/models/tour_step.dart';
 

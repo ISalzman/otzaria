@@ -1,3 +1,6 @@
+// לתחזוקת הסיור המודרך והטיפים החיים ראו:
+// docs/guided_tour_developer_guide.md
+
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';

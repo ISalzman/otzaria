@@ -1,3 +1,6 @@
+// לתחזוקת הסיור המודרך והטיפים החיים ראו:
+// docs/guided_tour_developer_guide.md
+
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/tour/models/tour_step.dart';

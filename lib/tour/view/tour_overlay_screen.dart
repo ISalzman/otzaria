@@ -1,3 +1,6 @@
+// לתחזוקת תצוגת הסיור המודרך והטיפים החיים ראו:
+// docs/guided_tour_developer_guide.md
+
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
