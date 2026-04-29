@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -263,7 +264,8 @@ class _LiveTipOverlay extends StatelessWidget {
           final left = ((targetRect.right - cardWidth)
                   .clamp(16.0, size.width - cardWidth - 16.0))
               .toDouble();
-          final top = ((targetRect.bottom + 12).clamp(16.0, size.height - 190))
+          final top = ((targetRect.bottom + 12)
+                  .clamp(16.0, math.max(16.0, size.height - 190)))
               .toDouble();
 
           return Stack(
