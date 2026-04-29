@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/tour/models/tour_step.dart';
 import 'package:otzaria/tour/models/tour_steps.dart';
 import 'package:otzaria/tour/view/tour_overlay_screen.dart';
@@ -179,6 +180,54 @@ void main() {
 
     expect(cubit.state.currentIndex, 0);
     expect(cubit.state.isAutoPlaying, isFalse);
+    await cubit.close();
+  });
+
+  test('TourCubit מציג טיפ מילון אחרי שתי בחירות טקסט', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    final cubit = TourCubit();
+
+    await cubit.recordInteraction(
+      TourInteraction(type: TourInteractionType.textSelected),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(type: TourInteractionType.textSelected),
+    );
+
+    expect(
+      cubit.state.activeLiveTipId,
+      LiveTipId.dictionaryContextMenuHint,
+    );
+
+    cubit.dismissLiveTip();
+    await cubit.recordInteraction(
+      TourInteraction(type: TourInteractionType.dictionaryUsed),
+    );
+
+    expect(
+      cubit.state.resolvedTips,
+      contains(LiveTipId.dictionaryContextMenuHint),
+    );
+    await cubit.close();
+  });
+
+  test('TourCubit מציג טיפ הצג לצד אחרי דילוג חוזר בין שני ספרים', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    final cubit = TourCubit();
+
+    for (final title in ['בראשית', 'שמות', 'בראשית', 'שמות', 'בראשית']) {
+      await cubit.recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.currentTabChanged,
+          primaryValue: title,
+        ),
+      );
+    }
+
+    expect(
+      cubit.state.activeLiveTipId,
+      LiveTipId.sideBySideSuggestion,
+    );
     await cubit.close();
   });
 

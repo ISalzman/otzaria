@@ -254,12 +254,14 @@ class _CustomTitleBarState extends State<CustomTitleBar>
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
+                  key: tourTitleBarHistoryButtonTargetKey,
                   icon: const Icon(FluentIcons.history_24_regular, size: 18),
                   tooltip: 'הצג היסטוריה (${historyShortcut.toUpperCase()})',
                   onPressed: () => _showHistoryDialog(context),
                   style: _kIconButtonStyle,
                 ),
                 IconButton(
+                  key: tourTitleBarBookmarkButtonTargetKey,
                   icon: const Icon(FluentIcons.bookmark_24_regular, size: 18),
                   tooltip: 'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
                   onPressed: () => _showBookmarksDialog(context),
@@ -884,20 +886,25 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     // הצג לצד
     if (tab is! CombinedTab) {
       if (state.tabs.length > 1) {
-        final otherTabs = state.tabs
+        final otherTabsList = state.tabs
             .where((t) => t != tab && t is! CombinedTab)
-            .map((otherTab) => AppContextMenuEntry(
-                  label: otherTab.title,
-                  onTap: () {
-                    context.read<TabsBloc>().add(
-                          EnableSideBySideMode(
-                            rightTab: tab,
-                            leftTab: otherTab,
-                          ),
-                        );
-                  },
-                ))
             .toList();
+        final otherTabs = otherTabsList.asMap().entries.map((mapEntry) {
+          final isFirst = mapEntry.key == 0;
+          final otherTab = mapEntry.value;
+          return AppContextMenuEntry(
+            key: isFirst ? tourTabSideBySideFirstItemTargetKey : null,
+            label: otherTab.title,
+            onTap: () {
+              context.read<TabsBloc>().add(
+                    EnableSideBySideMode(
+                      rightTab: tab,
+                      leftTab: otherTab,
+                    ),
+                  );
+            },
+          );
+        }).toList();
         entries.add(AppContextMenuEntry(
           label: 'הצג לצד',
           children: otherTabs,

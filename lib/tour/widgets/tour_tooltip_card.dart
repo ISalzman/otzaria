@@ -12,6 +12,7 @@ class TourTooltipCard extends StatelessWidget {
   final bool isWelcomeStep;
   final bool isRestartEntry;
   final bool isAutoPlaying;
+  final bool isDialog;
   final VoidCallback onNext;
   final VoidCallback onSkip;
   final VoidCallback onToggleAutoPlay;
@@ -27,6 +28,7 @@ class TourTooltipCard extends StatelessWidget {
     required this.isWelcomeStep,
     this.isRestartEntry = false,
     this.isAutoPlaying = false,
+    this.isDialog = false,
     required this.onNext,
     required this.onSkip,
     required this.onToggleAutoPlay,
@@ -41,19 +43,25 @@ class TourTooltipCard extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Material(
-        color: colorScheme.surface,
-        elevation: 10,
+        color: colorScheme.secondaryContainer,
+        elevation: 18,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: isDialog
+              ? BorderRadius.circular(22)
+              : const BorderRadius.only(
+                  topLeft: Radius.circular(22),
+                  topRight: Radius.circular(22),
+                  bottomLeft: Radius.circular(8),
+                  bottomRight: Radius.circular(22),
+                ),
           side: BorderSide(
-            color: colorScheme.scrim.withValues(alpha: 0.62),
-            width: 2,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.85),
           ),
         ),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460, minWidth: 300),
+          constraints: const BoxConstraints(maxWidth: 430, minWidth: 300),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -65,14 +73,14 @@ class TourTooltipCard extends StatelessWidget {
                       width: 42,
                       height: 42,
                       decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer,
+                        color: colorScheme.surface.withValues(alpha: 0.28),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(
                         isLastStep
                             ? FluentIcons.checkmark_circle_24_regular
                             : FluentIcons.sparkle_24_regular,
-                        color: colorScheme.onPrimaryContainer,
+                        color: colorScheme.onSecondaryContainer,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -82,7 +90,7 @@ class TourTooltipCard extends StatelessWidget {
                         textDirection: TextDirection.rtl,
                         style: textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface,
+                          color: colorScheme.onSecondaryContainer,
                         ),
                       ),
                     ),
@@ -94,7 +102,7 @@ class TourTooltipCard extends StatelessWidget {
                   textDirection: TextDirection.rtl,
                   style: textTheme.bodyLarge?.copyWith(
                     height: 1.45,
-                    color: colorScheme.onSurfaceVariant,
+                    color: colorScheme.onSecondaryContainer,
                   ),
                 ),
                 const SizedBox(height: 18),
