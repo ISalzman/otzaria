@@ -42,6 +42,15 @@ class NavRailItem extends StatelessWidget {
   /// טקסט Tooltip (לרוב קיצור מקלדת) — אופציונלי
   final String? tooltip;
 
+  /// האם להדגיש את הפריט בגלל סיור מודרך
+  final bool isTourHighlighted;
+
+  /// מפתח לאזור המדויק שמסומן בסיור המודרך.
+  final Key? tourTargetKey;
+
+  /// מפתח לפריט הניווט כולו, כולל התווית.
+  final Key? tourItemKey;
+
   const NavRailItem({
     super.key,
     required this.icon,
@@ -50,6 +59,9 @@ class NavRailItem extends StatelessWidget {
     required this.isSelected,
     required this.onTap,
     this.tooltip,
+    this.tourTargetKey,
+    this.tourItemKey,
+    this.isTourHighlighted = false,
   });
 
   @override
@@ -82,6 +94,7 @@ class NavRailItem extends StatelessWidget {
     }
 
     return SizedBox(
+      key: tourItemKey,
       width: 74,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -99,10 +112,13 @@ class NavRailItem extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isSelected
                       ? cs.secondaryContainer
-                      : Colors.transparent,
+                      : isTourHighlighted
+                          ? cs.primary.withAlpha((0.08 * 255).round())
+                          : Colors.transparent,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: IconButton(
+                  key: tourTargetKey,
                   onPressed: onTap,
                   icon: iconWidget,
                   style: IconButton.styleFrom(
@@ -124,7 +140,11 @@ class NavRailItem extends StatelessWidget {
                 fontSize: 11,
                 color: isSelected
                     ? cs.onSecondaryContainer
-                    : cs.onSurfaceVariant,
+                    : isTourHighlighted
+                        ? cs.primary
+                        : cs.onSurfaceVariant,
+                fontWeight:
+                    isTourHighlighted ? FontWeight.bold : FontWeight.normal,
               ),
               child: Text(
                 label,

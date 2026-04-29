@@ -1,3 +1,6 @@
+// לתחזוקת תצוגת הסיור המודרך והטיפים החיים ראו:
+// docs/guided_tour_developer_guide.md
+
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -23,6 +26,19 @@ Duration tourCardSwitchDurationFor({
     return Duration.zero;
   }
   return tourCardSwitchDuration;
+}
+
+Widget tourCardSwitcherLayoutBuilder(
+  Widget? currentChild,
+  List<Widget> previousChildren,
+) {
+  return Stack(
+    alignment: AlignmentDirectional.bottomStart,
+    children: <Widget>[
+      ...previousChildren,
+      if (currentChild != null) currentChild,
+    ],
+  );
 }
 
 class TourOverlayScreen extends StatefulWidget {
@@ -171,6 +187,7 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
                           ? tooltipCard
                           : AnimatedSwitcher(
                               duration: tourCardSwitchDuration,
+                              layoutBuilder: tourCardSwitcherLayoutBuilder,
                               transitionBuilder: (child, animation) {
                                 final blur = Tween<double>(begin: 8.0, end: 0.0)
                                     .animate(CurvedAnimation(
@@ -298,19 +315,15 @@ class _LiveTipOverlay extends StatelessWidget {
                 Directionality.of(context),
               );
           final cardWidth = size.width < 392 ? size.width - 32 : 360.0;
-          final left = ((targetRect.right - cardWidth)
-                  .clamp(16.0, size.width - cardWidth - 16.0))
-              .toDouble();
-          final top = ((targetRect.bottom + 12)
-                  .clamp(16.0, math.max(16.0, size.height - 190)))
-              .toDouble();
 
           return Stack(
             children: [
-              Positioned(
-                left: left,
-                top: top,
-                width: cardWidth,
+              CustomSingleChildLayout(
+                delegate: _LiveTipPositionDelegate(
+                  overlaySize: size,
+                  targetRect: targetRect,
+                  width: cardWidth,
+                ),
                 child: LiveTipCard(
                   title: tip.title,
                   description: tip.description,
@@ -323,6 +336,65 @@ class _LiveTipOverlay extends StatelessWidget {
       ),
     );
   }
+}
+
+class _LiveTipPositionDelegate extends SingleChildLayoutDelegate {
+  final Size overlaySize;
+  final Rect targetRect;
+  final double width;
+
+  const _LiveTipPositionDelegate({
+    required this.overlaySize,
+    required this.targetRect,
+    required this.width,
+  });
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    return BoxConstraints.tightFor(width: width);
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    return liveTipCardOffsetFor(
+      overlaySize: overlaySize,
+      targetRect: targetRect,
+      cardSize: childSize,
+    );
+  }
+
+  @override
+  bool shouldRelayout(covariant _LiveTipPositionDelegate oldDelegate) {
+    return overlaySize != oldDelegate.overlaySize ||
+        targetRect != oldDelegate.targetRect ||
+        width != oldDelegate.width;
+  }
+}
+
+/// מחשבת מיקום לטיפ חי כך שיישאר בתוך גבולות שכבת הסיור.
+Offset liveTipCardOffsetFor({
+  required Size overlaySize,
+  required Rect targetRect,
+  required Size cardSize,
+}) {
+  const margin = 16.0;
+  const gap = 12.0;
+
+  final maxLeft = math.max(margin, overlaySize.width - cardSize.width - margin);
+  final left =
+      (targetRect.right - cardSize.width).clamp(margin, maxLeft).toDouble();
+  final belowTop = targetRect.bottom + gap;
+  final aboveTop = targetRect.top - cardSize.height - gap;
+  final maxTop =
+      math.max(margin, overlaySize.height - cardSize.height - margin);
+
+  final top = belowTop + cardSize.height + margin <= overlaySize.height
+      ? belowTop
+      : aboveTop >= margin
+          ? aboveTop
+          : belowTop.clamp(margin, maxTop).toDouble();
+
+  return Offset(left, top);
 }
 
 Rect tourTargetRectFor(

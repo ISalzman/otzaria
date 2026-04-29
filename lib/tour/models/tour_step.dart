@@ -1,3 +1,5 @@
+// לתחזוקת הסיור המודרך ראו: docs/guided_tour_developer_guide.md
+
 import 'package:equatable/equatable.dart';
 
 enum TourSpotlightArea {

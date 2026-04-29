@@ -1,3 +1,6 @@
+// לתחזוקת הסיור המודרך והטיפים החיים ראו:
+// docs/guided_tour_developer_guide.md
+
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -16,16 +19,17 @@ class TourCubit extends Cubit<TourState> {
   int _commentaryOpportunityScore = 0;
   String? _commentaryOpportunityBook;
 
-  void startIfNeeded({required bool libraryLoaded}) {
+  bool startIfNeeded({required bool libraryLoaded}) {
     final status = Settings.getValue<String>(TourSteps.statusKey);
     if (state.isActive) {
-      return;
+      return false;
     }
     if (status == null ||
         (libraryLoaded && _wasHandledWithoutLibrary(status))) {
       start(libraryLoaded: libraryLoaded);
-      return;
+      return true;
     }
+    return false;
   }
 
   Future<void> restart({required bool libraryLoaded}) async {
