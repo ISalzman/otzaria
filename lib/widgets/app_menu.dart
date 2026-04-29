@@ -321,6 +321,12 @@ Widget _buildAppMenuRowContent(
     hasLeadingIcon: icon != null,
     hasTrailingWidget: hasTrailingWidget,
   );
+  final labelTextStyle = TextStyle(
+    fontFamily: 'Roboto',
+    fontSize: metrics.fontSize,
+    fontWeight: isSelected ? FontWeight.w600 : metrics.itemFontWeight,
+    color: foregroundColor,
+  );
   final labelChild = labelWidget ??
       Text(
         label,
@@ -328,6 +334,49 @@ Widget _buildAppMenuRowContent(
         softWrap: false,
         textDirection: TextDirection.rtl,
       );
+
+  final row = Row(
+    mainAxisSize: trailing != null ? MainAxisSize.max : MainAxisSize.min,
+    children: [
+      if (icon != null) ...[
+        Icon(icon, size: metrics.iconSize, color: foregroundColor),
+        const SizedBox(width: 8),
+      ],
+      Directionality(
+        textDirection: TextDirection.rtl,
+        child: DefaultTextStyle.merge(
+          style: labelTextStyle,
+          child: labelMaxWidth == null
+              ? labelChild
+              : ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: labelMaxWidth),
+                  child: labelChild,
+                ),
+        ),
+      ),
+      // סימן ✓ לפריט נבחר (תמיד, בכל סוג תפריט)
+      if (isSelected) ...[
+        const SizedBox(width: 8),
+        Icon(
+          FluentIcons.checkmark_24_regular,
+          size: metrics.iconSize,
+          color: foregroundColor,
+        ),
+      ] else if (trailing != null) ...[
+        const Spacer(),
+        IconTheme.merge(
+          data: IconThemeData(
+            size: metrics.iconSize,
+            color: foregroundColor,
+          ),
+          child: DefaultTextStyle.merge(
+            style: TextStyle(color: foregroundColor),
+            child: trailing,
+          ),
+        ),
+      ],
+    ],
+  );
 
   return Container(
     constraints: BoxConstraints(
@@ -338,53 +387,7 @@ Widget _buildAppMenuRowContent(
     color: isSelected ? selectedBackground : null,
     padding: metrics.itemPadding,
     alignment: AlignmentDirectional.centerStart,
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: metrics.iconSize, color: foregroundColor),
-          const SizedBox(width: 8),
-        ],
-        Directionality(
-          textDirection: TextDirection.rtl,
-          child: DefaultTextStyle.merge(
-            style: TextStyle(
-              fontFamily: 'Roboto',
-              fontSize: metrics.fontSize,
-              fontWeight: isSelected ? FontWeight.w600 : metrics.itemFontWeight,
-              color: foregroundColor,
-            ),
-            child: labelMaxWidth == null
-                ? labelChild
-                : ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: labelMaxWidth),
-                    child: labelChild,
-                  ),
-          ),
-        ),
-        // סימן ✓ לפריט נבחר (תמיד, בכל סוג תפריט)
-        if (isSelected) ...[
-          const SizedBox(width: 8),
-          Icon(
-            FluentIcons.checkmark_24_regular,
-            size: metrics.iconSize,
-            color: foregroundColor,
-          ),
-        ] else if (trailing != null) ...[
-          const SizedBox(width: 8),
-          IconTheme.merge(
-            data: IconThemeData(
-              size: metrics.iconSize,
-              color: foregroundColor,
-            ),
-            child: DefaultTextStyle.merge(
-              style: TextStyle(color: foregroundColor),
-              child: trailing,
-            ),
-          ),
-        ],
-      ],
-    ),
+    child: row,
   );
 }
 
