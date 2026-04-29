@@ -45,9 +45,9 @@ class TourCubit extends Cubit<TourState> {
     );
   }
 
-  Future<void> recordInteraction(TourInteraction interaction) async {
+  void recordInteraction(TourInteraction interaction) {
     _rememberInteraction(interaction);
-    await _updateDerivedSignals(interaction);
+    _updateDerivedSignals(interaction);
     _maybeShowLiveTip();
   }
 
@@ -133,7 +133,7 @@ class TourCubit extends Cubit<TourState> {
     );
   }
 
-  Future<void> _updateDerivedSignals(TourInteraction interaction) async {
+  void _updateDerivedSignals(TourInteraction interaction) {
     switch (interaction.type) {
       case TourInteractionType.textSelected:
         if (!state.resolvedTips.contains(LiveTipId.dictionaryContextMenuHint)) {
