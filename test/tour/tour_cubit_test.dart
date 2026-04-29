@@ -385,4 +385,15 @@ void main() {
     expect(stack.children.first.key, const ValueKey('previous'));
     expect(stack.children.last.key, const ValueKey('current'));
   });
+
+  test('טיפ חי מוצג מעל היעד כאשר אין מקום מתחתיו', () {
+    final offset = liveTipCardOffsetFor(
+      overlaySize: const Size(620, 500),
+      targetRect: const Rect.fromLTWH(500, 430, 64, 48),
+      cardSize: const Size(360, 210),
+    );
+
+    expect(offset.dy, 208);
+    expect(offset.dy + 210, lessThanOrEqualTo(484));
+  });
 }
