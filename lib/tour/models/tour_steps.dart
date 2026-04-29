@@ -36,7 +36,7 @@ class TourSteps {
         id: 'navigation',
         title: 'הניווט הראשי',
         body:
-            'כאן תמצא את כל חלקי האפליקציה: ספרייה, איתור, עיון, חיפוש, כלים והגדרות.\n\nקיצורים: ${shortcuts.mainNavigation}',
+            'בחלק המואר תמצא את כל חלקי האפליקציה: ספרייה, איתור, עיון, חיפוש, כלים והגדרות.\n\nקיצורים: ${shortcuts.mainNavigation}',
         area: TourSpotlightArea.navigation,
       ),
     ];
@@ -62,7 +62,7 @@ class TourSteps {
           id: 'categories',
           title: 'קטגוריות',
           body:
-              'לחץ על קטגוריה כדי לסנן את הספרים: תנ״ך, משנה, תלמוד, הלכה, קבלה, מחשבה ועוד.',
+              'לחץ על קטגוריה כדי לעבור אליה: תנ״ך, משנה, תלמוד, הלכה, קבלה, מחשבה ועוד.',
           area: TourSpotlightArea.libraryCategories,
           action: TourStepAction.openLibraryHome,
         ),
@@ -109,15 +109,15 @@ class TourSteps {
         const TourStep(
           id: 'commentators',
           title: 'מפרשים וביאורים',
-          body: 'בחר אילו מפרשים יוצגו לצד הטקסט, מתחתיו, או בתצוגת צורת הדף.',
+          body: 'בחר אם המפרשים יוצגו לצד הטקסט, מתחתיו, או בתצוגת צורת הדף.',
           area: TourSpotlightArea.commentators,
           action: TourStepAction.openReading,
         ),
         const TourStep(
           id: 'bookmark',
-          title: 'סימניות',
+          title: 'סימניות והיסטוריה',
           body:
-              'לחץ כדי לסמן את המקום הנוכחי. כדי לחזור למקומות ששמרת, פתח איתור ושם תמצא סימניות והיסטוריה.',
+              'לחץ כדי לסמן את המקום הנוכחי. ההיסטוריה הכללית נשמרת אוטומטית. כדי לחזור למקומות השמורים, בקצה המסך העליון תמצא סימניות והיסטוריה.',
           area: TourSpotlightArea.bookmark,
           action: TourStepAction.openReading,
         ),
@@ -193,7 +193,7 @@ class TourSteps {
         id: 'notes',
         title: 'הערות אישיות',
         body:
-            'הוסף הערות אישיות לכל מקום בכל ספר. ההערות שמורות על המכשיר וניתנות לייצוא.',
+            'הוסף הערות אישיות לכל מקום בכל ספר. ההערות שמורות במכשיר וניתנות לייצוא.',
         area: TourSpotlightArea.toolsTabs,
         action: TourStepAction.openTools,
       ),
@@ -216,7 +216,7 @@ class TourSteps {
         id: 'backup',
         title: 'גיבוי',
         body:
-            'שמור גיבוי של הסימניות, ההיסטוריה וההערות שלך, ושחזר בכל עת גם לאחר התקנה מחדש.',
+            'שמור גיבוי של הסימניות, ההיסטוריה וההערות שלך, ושחזר בכל עת גם לאחר התקנה מחדש. הגיבוי ניתן לייצוא.',
         area: TourSpotlightArea.backupSettings,
         action: TourStepAction.openSystemSettings,
       ),

@@ -33,6 +33,7 @@ class AppMenuEntry<T> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 class AppContextMenuEntry {
+  final Key? key;
   final String? label;
   final Widget? labelWidget;
   final IconData? icon;
@@ -50,6 +51,7 @@ class AppContextMenuEntry {
 
   const AppContextMenuEntry({
     required this.label,
+    this.key,
     this.labelWidget,
     this.icon,
     this.enabled = true,
@@ -61,7 +63,8 @@ class AppContextMenuEntry {
   }) : isDivider = false;
 
   const AppContextMenuEntry.divider()
-      : label = null,
+      : key = null,
+        label = null,
         labelWidget = null,
         icon = null,
         enabled = false,
@@ -1110,6 +1113,7 @@ class _AppContextMenuRegionState extends State<AppContextMenuRegion> {
       }
 
       return MenuItemButton(
+        key: entry.key,
         style: buildAppSubmenuItemStyle(context, metrics),
         onPressed: entry.enabled
             ? () {
@@ -1163,6 +1167,20 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton> {
   List<AppContextMenuEntry>? _entries;
   List<Widget>? _menuChildren;
   bool? _hasEnabledChildren;
+
+  void openSubmenu([VoidCallback? afterOpen]) {
+    if (_menuChildren == null) {
+      _ensureMenuChildrenLoaded();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.controller?.open();
+        afterOpen?.call();
+      });
+    } else {
+      widget.controller?.open();
+      afterOpen?.call();
+    }
+  }
 
   void _ensureMenuChildrenLoaded() {
     if (_menuChildren != null) {
@@ -1264,7 +1282,6 @@ class _AppContextMenuPanel extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return FocusScope(
-        canRequestFocus: false,
         skipTraversal: true,
         child: Material(
           color: menuStyle?.backgroundColor?.resolve(const <WidgetState>{}) ??
