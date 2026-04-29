@@ -20,9 +20,14 @@ class AdPopupDialog extends StatefulWidget {
   State<AdPopupDialog> createState() => _AdPopupDialogState();
 
   /// הצגת הפופאפ אם צריך
-  static Future<void> showIfNeeded(BuildContext context) async {
+  static Future<void> showIfNeeded(
+    BuildContext context, {
+    bool Function()? shouldSkip,
+  }) async {
     // במצב debug לא להציג את הפופאפ אוטומטית
     if (kDebugMode) return;
+
+    if (shouldSkip?.call() ?? false) return;
 
     final shouldShow = await AdPopupService.shouldShowAd();
     if (!shouldShow) return;
@@ -31,6 +36,7 @@ class AdPopupDialog extends StatefulWidget {
     await Future.delayed(const Duration(seconds: 5));
 
     if (!context.mounted) return;
+    if (shouldSkip?.call() ?? false) return;
 
     showDialog(
       context: context,

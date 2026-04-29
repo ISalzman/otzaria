@@ -129,6 +129,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   bool _isFindRefOpen = false;
   bool _isReadingSettingsPanelOpen = false;
   bool _openGenesisForTour = false;
+  bool _tourStartedAutomaticallyThisLaunch = false;
   OverlayEntry? _tourOverlayEntry;
   bool _tourOverlayInsertScheduled = false;
   bool _tourOpenedOverflowMenu = false;
@@ -214,7 +215,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
       unawaited(_initializeExternalActivationMonitoring());
 
-      AdPopupDialog.showIfNeeded(context);
+      AdPopupDialog.showIfNeeded(
+        context,
+        shouldSkip: () => _tourStartedAutomaticallyThisLaunch,
+      );
 
       // רענון plugin calendar events עם scope אמיתי לאחר שה-context מוכן.
       // הטעינה הראשונית ב-_initializeCalendar נקראה בלי workspace/book IDs —
@@ -1290,7 +1294,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
   void _scheduleTourStartIfNeeded({required bool libraryLoaded}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _tourCubit.startIfNeeded(libraryLoaded: libraryLoaded);
+      if (_tourCubit.startIfNeeded(libraryLoaded: libraryLoaded)) {
+        _tourStartedAutomaticallyThisLaunch = true;
+      }
     });
   }
 
@@ -1345,7 +1351,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
               final navigationState = context.read<NavigationBloc>().state;
               if (navigationState.hasCheckedLibrary &&
                   !navigationState.isLibraryEmpty) {
-                _tourCubit.startIfNeeded(libraryLoaded: true);
+                if (_tourCubit.startIfNeeded(libraryLoaded: true)) {
+                  _tourStartedAutomaticallyThisLaunch = true;
+                }
               }
             },
           ),
