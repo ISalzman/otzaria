@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/tools/dictionary/widgets/aramaic_dictionary_entry_view.dart';
+import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/app_menu.dart';
 
@@ -188,6 +191,11 @@ void _showMeaningDialog({
   required String title,
   required Widget content,
 }) {
+  context.read<TourCubit>().recordInteraction(
+        TourInteraction(
+          type: TourInteractionType.dictionaryUsed,
+        ),
+      );
   showSingleActionDialog(
     context: context,
     title: title,
