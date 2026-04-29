@@ -447,13 +447,13 @@ end;
 
 // כתיבת נתיב הספרים ל-shared_preferences.json של האפליקציה
 procedure WriteLibraryPathToPrefs(const LibraryPath: String);
-const
-  SharedPrefsKey = '"flutter.key-library-path":';
-  LegacyPrefsKey = '"key-library-path":';
 var
   PrefsDir, PrefsFile, JsonContent, NewEntry: String;
+  SharedPrefsKey, LegacyPrefsKey: String;
   KeyPos, ValueStart, ValueEnd, PairEnd, LastBrace, ExistingLength: Integer;
 begin
+  SharedPrefsKey := '"flutter.key-library-path":';
+  LegacyPrefsKey := '"key-library-path":';
   PrefsDir := ExpandConstant('{userappdata}\otzaria');
   PrefsFile := PrefsDir + '\shared_preferences.json';
 
