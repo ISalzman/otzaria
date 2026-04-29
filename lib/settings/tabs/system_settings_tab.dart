@@ -342,7 +342,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     }
 
     final downloadsDirectory = await getDownloadsDirectory();
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
       dialogTitle: 'בחר מיקום לשמירת סקריפט השליחה',
       fileName: 'otzaria_send_saved_reports.bat',
       initialDirectory: downloadsDirectory?.path,
@@ -1041,7 +1041,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   }
 
   Future<void> _restoreBackup() async {
-    final result = await FilePicker.platform
+    final result = await FilePicker
         .pickFiles(type: FileType.custom, allowedExtensions: ['json']);
     final filePath = result?.files.single.path;
     if (filePath == null) return;

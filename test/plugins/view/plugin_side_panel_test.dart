@@ -13,30 +13,32 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:mockito/mockito.dart';
 // ignore: depend_on_referenced_packages
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-// Mock FilePicker instance to avoid MissingPluginException and LateInitializationError
-class FakeFilePicker extends Mock with MockPlatformInterfaceMixin implements FilePicker {
+// Mock FilePicker platform to avoid MissingPluginException and LateInitializationError.
+class FakeFilePickerPlatform extends FilePickerPlatform
+    with MockPlatformInterfaceMixin {
   final String fakeDirectoryPath;
-  FakeFilePicker(this.fakeDirectoryPath);
+  FakeFilePickerPlatform(this.fakeDirectoryPath);
 
   @override
   Future<FilePickerResult?> pickFiles({
-    bool allowCompression = true,
-    bool allowMultiple = false,
-    List<String>? allowedExtensions,
-    int compressionQuality = 30,
     String? dialogTitle,
     String? initialDirectory,
-    bool lockParentWindow = false,
-    dynamic Function(FilePickerStatus)? onFileLoading,
-    bool readSequential = false,
     FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    int compressionQuality = 0,
+    bool allowMultiple = false,
     bool withData = false,
     bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+    bool cancelUploadOnWindowBlur = true,
   }) async {
     return FilePickerResult([PlatformFile(path: fakeDirectoryPath, name: 'dir', size: 0)]);
   }
@@ -146,7 +148,7 @@ void main() {
     File(p.join(tempDir.path, 'index.html')).createSync();
 
     // Use our custom Fake FilePicker instead of method channels
-    FilePicker.platform = FakeFilePicker(tempDir.path);
+    FilePickerPlatform.instance = FakeFilePickerPlatform(tempDir.path);
 
     await tester.pumpWidget(
       MaterialApp(

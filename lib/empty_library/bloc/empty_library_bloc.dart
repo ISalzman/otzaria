@@ -51,7 +51,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   Future<void> _onPickDirectoryRequested(
       PickDirectoryRequested event, Emitter<EmptyLibraryState> emit) async {
-    final result = await FilePicker.platform.getDirectoryPath(
+    final result = await FilePicker.getDirectoryPath(
       dialogTitle: 'בחר את תיקיית הספרייה (התיקייה שמכילה את seforim.db)',
     );
 
@@ -63,7 +63,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   Future<void> _onPickArchiveFileRequested(
       PickArchiveFileRequested event, Emitter<EmptyLibraryState> emit) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['zip', 'zst'],
       dialogTitle: 'בחר קובץ דחוס (ZIP או ZST)',
@@ -329,7 +329,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   Future<void> _onPickDbFileRequested(
       PickDbFileRequested event, Emitter<EmptyLibraryState> emit) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         allowMultiple: false,
         type: FileType.any,
         dialogTitle: 'בחר את קובץ ${DatabaseConstants.databaseFileName}',

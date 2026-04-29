@@ -111,7 +111,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             text: hasPath ? 'שנה מיקום' : 'בחר מיקום',
             icon: FluentIcons.folder_24_regular,
             onPressed: () async {
-              String? path = await FilePicker.platform.getDirectoryPath();
+              String? path = await FilePicker.getDirectoryPath();
               if (path != null && context.mounted) {
                 await _showExtractionDialog(context, path, isLibraryPath: true);
                 if (mounted) setState(() {});
@@ -163,7 +163,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             text: hasPath ? 'שנה מיקום' : 'בחר מיקום',
             icon: FluentIcons.folder_24_regular,
             onPressed: () async {
-              String? path = await FilePicker.platform.getDirectoryPath();
+              String? path = await FilePicker.getDirectoryPath();
               if (path != null && context.mounted) {
                 await _showExtractionDialog(context, path,
                     isLibraryPath: false);

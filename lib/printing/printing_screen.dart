@@ -1055,7 +1055,7 @@ PdfPageFormat _effectivePageFormat(PdfPageFormat format) {
       if (selectedFormat == null) return;
 
       final selectedExtension = selectedFormat.extension;
-      final path = await FilePicker.platform.saveFile(
+      final path = await FilePicker.saveFile(
         dialogTitle: 'ייצוא קובץ',
         fileName: '${_sanitizeFileName(widget.bookId)}.$selectedExtension',
         type: FileType.custom,
