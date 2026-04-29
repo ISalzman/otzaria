@@ -332,4 +332,35 @@ void main() {
     expect(rect.right, 732);
     expect(rect.bottom, 44);
   });
+
+  test('TourOverlayScreen מכבה אנימציה ביציאה מהפתיחה ובכניסה לסיום', () {
+    expect(
+      tourCardSwitchDurationFor(
+        fromStepId: 'welcome',
+        toStepId: 'navigation',
+      ),
+      Duration.zero,
+    );
+    expect(
+      tourCardSwitchDurationFor(
+        fromStepId: 'restart_welcome',
+        toStepId: 'navigation',
+      ),
+      Duration.zero,
+    );
+    expect(
+      tourCardSwitchDurationFor(
+        fromStepId: 'shortcuts',
+        toStepId: 'finish',
+      ),
+      Duration.zero,
+    );
+    expect(
+      tourCardSwitchDurationFor(
+        fromStepId: 'navigation',
+        toStepId: 'library',
+      ),
+      tourCardSwitchDuration,
+    );
+  });
 }
