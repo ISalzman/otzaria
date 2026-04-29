@@ -75,7 +75,7 @@ const List<LiveTipSpec> liveTipSpecs = [
     area: TourSpotlightArea.commentators,
     title: 'כדאי לפתוח מפרשים',
     description:
-        'לספר הזה יש מפרשים זמינים. אפשר לעבור מכאן לתצוגה שמבליטה אותם ולעבוד מהר יותר.',
+        'לספר הזה יש מפרשים זמינים. אפשר לפתוח את סרגל הצד בלחצן הסמוך ולעבוד מהר יותר.',
   ),
 ];
 
