@@ -11,6 +11,20 @@ import 'package:otzaria/tour/widgets/live_tip_card.dart';
 import 'package:otzaria/tour/widgets/spotlight_overlay.dart';
 import 'package:otzaria/tour/widgets/tour_tooltip_card.dart';
 
+const Duration tourCardSwitchDuration = Duration(milliseconds: 260);
+
+Duration tourCardSwitchDurationFor({
+  required String? fromStepId,
+  required String toStepId,
+}) {
+  if (fromStepId == 'welcome' ||
+      fromStepId == 'restart_welcome' ||
+      toStepId == 'finish') {
+    return Duration.zero;
+  }
+  return tourCardSwitchDuration;
+}
+
 class TourOverlayScreen extends StatefulWidget {
   final ValueChanged<TourStep> onStepChanged;
   final ValueChanged<TourStep>? onNext;
@@ -31,7 +45,9 @@ class TourOverlayScreen extends StatefulWidget {
 
 class _TourOverlayScreenState extends State<TourOverlayScreen> {
   String? _lastStepId;
+  String? _renderedStepId;
   Rect? _lastResolvedRect;
+  bool _skipCardTransition = false;
   bool _retryScheduled = false;
 
   @override
@@ -93,6 +109,42 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
                   _cardAlignmentFor(step, combinedTargetRect, size);
               final isWelcomeStep = step.id == 'welcome';
               final isRestartEntry = step.id == 'restart_welcome';
+              if (_renderedStepId != step.id) {
+                _skipCardTransition = _shouldSkipCardTransition(
+                  fromStepId: _renderedStepId,
+                  toStepId: step.id,
+                );
+                _renderedStepId = step.id;
+              }
+              final tooltipCard = TourTooltipCard(
+                key: ValueKey(step.id),
+                title: step.title,
+                body: step.body,
+                currentIndex: state.progressIndex,
+                totalSteps: state.progressSteps.length,
+                isLastStep: state.isLastStep,
+                isWelcomeStep: isWelcomeStep,
+                isRestartEntry: isRestartEntry,
+                isAutoPlaying: state.isAutoPlaying,
+                isDialog: step.isDialog,
+                onNext: () {
+                  final onNext = widget.onNext;
+                  if (onNext != null) {
+                    onNext(step);
+                  } else {
+                    context.read<TourCubit>().next();
+                  }
+                },
+                onSkip: () => context.read<TourCubit>().skip(),
+                onToggleAutoPlay: () =>
+                    context.read<TourCubit>().toggleAutoPlay(),
+                onDotTap: (i) {
+                  final targetId = state.progressSteps[i].id;
+                  final actualIndex =
+                      state.steps.indexWhere((s) => s.id == targetId);
+                  context.read<TourCubit>().goToStep(actualIndex);
+                },
+              );
 
               return Stack(
                 children: [
@@ -115,60 +167,34 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
                     alignment: cardAlignment,
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        transitionBuilder: (child, animation) {
-                          final blur = Tween<double>(begin: 8.0, end: 0.0)
-                              .animate(CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOut,
-                          ));
-                          return AnimatedBuilder(
-                            animation: blur,
-                            builder: (context, inner) => ImageFiltered(
-                              imageFilter: ui.ImageFilter.blur(
-                                sigmaX: blur.value,
-                                sigmaY: blur.value,
-                                tileMode: TileMode.decal,
-                              ),
-                              child: FadeTransition(
-                                opacity: animation,
-                                child: inner,
-                              ),
+                      child: _skipCardTransition
+                          ? tooltipCard
+                          : AnimatedSwitcher(
+                              duration: tourCardSwitchDuration,
+                              transitionBuilder: (child, animation) {
+                                final blur = Tween<double>(begin: 8.0, end: 0.0)
+                                    .animate(CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeOut,
+                                ));
+                                return AnimatedBuilder(
+                                  animation: blur,
+                                  builder: (context, inner) => ImageFiltered(
+                                    imageFilter: ui.ImageFilter.blur(
+                                      sigmaX: blur.value,
+                                      sigmaY: blur.value,
+                                      tileMode: TileMode.decal,
+                                    ),
+                                    child: FadeTransition(
+                                      opacity: animation,
+                                      child: inner,
+                                    ),
+                                  ),
+                                  child: child,
+                                );
+                              },
+                              child: tooltipCard,
                             ),
-                            child: child,
-                          );
-                        },
-                        child: TourTooltipCard(
-                          key: ValueKey(step.id),
-                          title: step.title,
-                          body: step.body,
-                          currentIndex: state.progressIndex,
-                          totalSteps: state.progressSteps.length,
-                          isLastStep: state.isLastStep,
-                          isWelcomeStep: isWelcomeStep,
-                          isRestartEntry: isRestartEntry,
-                          isAutoPlaying: state.isAutoPlaying,
-                          isDialog: step.isDialog,
-                          onNext: () {
-                            final onNext = widget.onNext;
-                            if (onNext != null) {
-                              onNext(step);
-                            } else {
-                              context.read<TourCubit>().next();
-                            }
-                          },
-                          onSkip: () => context.read<TourCubit>().skip(),
-                          onToggleAutoPlay: () =>
-                              context.read<TourCubit>().toggleAutoPlay(),
-                          onDotTap: (i) {
-                            final targetId = state.progressSteps[i].id;
-                            final actualIndex =
-                                state.steps.indexWhere((s) => s.id == targetId);
-                            context.read<TourCubit>().goToStep(actualIndex);
-                          },
-                        ),
-                      ),
                     ),
                   ),
                 ],
@@ -229,6 +255,17 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
       return Alignment.center;
     }
     return Alignment.bottomLeft;
+  }
+
+  bool _shouldSkipCardTransition({
+    required String? fromStepId,
+    required String toStepId,
+  }) {
+    return tourCardSwitchDurationFor(
+          fromStepId: fromStepId,
+          toStepId: toStepId,
+        ) ==
+        Duration.zero;
   }
 }
 
