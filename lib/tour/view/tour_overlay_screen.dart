@@ -25,6 +25,19 @@ Duration tourCardSwitchDurationFor({
   return tourCardSwitchDuration;
 }
 
+Widget tourCardSwitcherLayoutBuilder(
+  Widget? currentChild,
+  List<Widget> previousChildren,
+) {
+  return Stack(
+    alignment: AlignmentDirectional.bottomStart,
+    children: <Widget>[
+      ...previousChildren,
+      if (currentChild != null) currentChild,
+    ],
+  );
+}
+
 class TourOverlayScreen extends StatefulWidget {
   final ValueChanged<TourStep> onStepChanged;
   final ValueChanged<TourStep>? onNext;
@@ -171,6 +184,7 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
                           ? tooltipCard
                           : AnimatedSwitcher(
                               duration: tourCardSwitchDuration,
+                              layoutBuilder: tourCardSwitcherLayoutBuilder,
                               transitionBuilder: (child, animation) {
                                 final blur = Tween<double>(begin: 8.0, end: 0.0)
                                     .animate(CurvedAnimation(

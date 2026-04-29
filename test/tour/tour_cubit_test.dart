@@ -363,4 +363,19 @@ void main() {
       tourCardSwitchDuration,
     );
   });
+
+  test('TourOverlayScreen מעגן כרטיסים לתחתית בזמן אנימציית החלפה', () {
+    final layout = tourCardSwitcherLayoutBuilder(
+      const SizedBox(key: ValueKey('current')),
+      const [SizedBox(key: ValueKey('previous'))],
+    );
+
+    expect(layout, isA<Stack>());
+
+    final stack = layout as Stack;
+    expect(stack.alignment, AlignmentDirectional.bottomStart);
+    expect(stack.children, hasLength(2));
+    expect(stack.children.first.key, const ValueKey('previous'));
+    expect(stack.children.last.key, const ValueKey('current'));
+  });
 }
