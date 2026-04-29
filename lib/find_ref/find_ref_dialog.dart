@@ -116,7 +116,6 @@ class _FindRefDialogState extends State<FindRefDialog> {
     final focusRepository = context.read<FocusRepository>();
 
     return AlertDialog(
-      key: tourFindRefDialogTargetKey,
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -136,6 +135,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
         ],
       ),
       content: SizedBox(
+        key: tourFindRefDialogTargetKey,
         width: 500,
         height: 600,
         child: Column(
