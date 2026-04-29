@@ -45,7 +45,7 @@ class TourCubit extends Cubit<TourState> {
     );
   }
 
-  void recordInteraction(TourInteraction interaction) {
+  Future<void> recordInteraction(TourInteraction interaction) async {
     _rememberInteraction(interaction);
     _updateDerivedSignals(interaction);
     _maybeShowLiveTip();
