@@ -1,3 +1,5 @@
+// לתחזוקת כרטיסי טיפים חיים ראו: docs/guided_tour_developer_guide.md
+
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
