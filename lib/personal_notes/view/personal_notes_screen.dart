@@ -388,7 +388,7 @@ class _PersonalNotesManagerScreenState
     if (!mounted) return;
     if (selection == null || selection.notes.isEmpty) return;
 
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
       dialogTitle: 'בחר מיקום לשמירת קובץ הייצוא',
       fileName: 'otzaria_notes_export.json',
       allowedExtensions: ['json'],
@@ -408,7 +408,7 @@ class _PersonalNotesManagerScreenState
   }
 
   Future<void> _importNotes() async {
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFiles(
       dialogTitle: 'בחר קובץ ייבוא',
       allowedExtensions: ['json'],
       type: FileType.custom,
