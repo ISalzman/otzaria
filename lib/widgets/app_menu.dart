@@ -1172,6 +1172,17 @@ class _LazyAppSubmenuButtonState extends State<_LazyAppSubmenuButton> {
   bool? _hasEnabledChildren;
   bool? _openToRight;
 
+  @override
+  void initState() {
+    super.initState();
+    // טעינה מוקדמת של הילדים כדי למנוע תפריט ריק
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _menuChildren == null) {
+        _ensureMenuChildrenLoaded();
+      }
+    });
+  }
+
   void openSubmenu([VoidCallback? afterOpen]) {
     if (_menuChildren == null) {
       _ensureMenuChildrenLoaded();
