@@ -92,6 +92,14 @@ class PdfBookScreen extends StatefulWidget {
   State<PdfBookScreen> createState() => _PdfBookScreenState();
 }
 
+@visibleForTesting
+bool shouldShowOpenPdfCommentaryPaneEntry({
+  required bool hasRelevantCommentators,
+  required bool isPaneOpen,
+}) {
+  return hasRelevantCommentators && !isPaneOpen;
+}
+
 class _PdfBookScreenState extends State<PdfBookScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   static const int _defaultPdfLineRange = 50;
@@ -587,7 +595,24 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final allActive = relevantCommentators.isNotEmpty &&
         widget.tab.activeCommentators.containsAll(relevantCommentators);
 
+    final isRightPaneClosed = switch (_bloc.state) {
+      PdfBookLoaded(showRightPane: final isShown) => !isShown,
+      _ => true,
+    };
+    final shouldShowOpenPaneEntry = shouldShowOpenPdfCommentaryPaneEntry(
+      hasRelevantCommentators: relevantCommentators.isNotEmpty,
+      isPaneOpen: !isRightPaneClosed,
+    );
+
     final commentatorChildren = <AppContextMenuEntry>[
+      if (shouldShowOpenPaneEntry) ...[
+        AppContextMenuEntry(
+          label: 'פתח את חלונית המפרשים',
+          icon: FluentIcons.panel_right_24_regular,
+          onTap: () => _openCommentaryPane(),
+        ),
+        const AppContextMenuEntry.divider(),
+      ],
       AppContextMenuEntry(
         label: 'הצג את כל המפרשים',
         icon: allActive ? FluentIcons.checkmark_24_regular : null,

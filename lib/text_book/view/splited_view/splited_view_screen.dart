@@ -360,6 +360,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen>
                       _setCurrentTab(0);
                     });
                   },
+                  isPaneOpen: () => _paneOpen,
                 ),
                 if (!_paneOpen)
                   Positioned(

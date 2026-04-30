@@ -55,6 +55,7 @@ class CombinedView extends StatefulWidget {
     this.isPreviewMode = false,
     this.onOpenPersonalNotes,
     this.onOpenCommentatorsPane,
+    this.isPaneOpen,
   });
 
   final List<String> data;
@@ -67,6 +68,7 @@ class CombinedView extends StatefulWidget {
   final bool isPreviewMode;
   final VoidCallback? onOpenPersonalNotes;
   final VoidCallback? onOpenCommentatorsPane;
+  final bool Function()? isPaneOpen;
 
   @override
   State<CombinedView> createState() => _CombinedViewState();
@@ -95,6 +97,17 @@ List<Link> buildCombinedViewContextMenuLinksForParagraph({
   visibleLinks.sort((a, b) => titles[a]!.compareTo(titles[b]!));
 
   return visibleLinks;
+}
+
+@visibleForTesting
+bool shouldShowOpenCommentatorsPaneEntry({
+  required bool hasAvailableCommentators,
+  required bool showCommentaryAsExpansionTiles,
+  required bool isPaneOpen,
+}) {
+  return hasAvailableCommentators &&
+      !showCommentaryAsExpansionTiles &&
+      !isPaneOpen;
 }
 
 class _CombinedViewState extends State<CombinedView> {
@@ -363,8 +376,24 @@ class _CombinedViewState extends State<CombinedView> {
       linksByLine: state.linksByLine,
       paragraphIndex: paragraphIndex,
     );
+    final shouldShowOpenPaneEntry = shouldShowOpenCommentatorsPaneEntry(
+      hasAvailableCommentators: state.availableCommentators.isNotEmpty,
+      showCommentaryAsExpansionTiles: widget.showCommentaryAsExpansionTiles,
+      isPaneOpen: widget.isPaneOpen?.call() ?? false,
+    );
 
     final commentatorChildren = <AppContextMenuEntry>[
+      if (shouldShowOpenPaneEntry) ...[
+        AppContextMenuEntry(
+          label: 'פתח את חלונית המפרשים',
+          icon: FluentIcons.panel_right_24_regular,
+          onTap: () {
+            _selectParagraphForContextMenu(paragraphIndex);
+            _openCommentatorsPane(isAdding: true);
+          },
+        ),
+        const AppContextMenuEntry.divider(),
+      ],
       AppContextMenuEntry(
         label: 'הצג את כל המפרשים',
         icon: allActive ? FluentIcons.checkmark_24_regular : null,
