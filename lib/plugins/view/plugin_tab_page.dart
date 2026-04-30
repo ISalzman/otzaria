@@ -77,7 +77,7 @@ class PluginTabPage extends StatefulWidget {
 }
 
 class _PluginTabPageState extends State<PluginTabPage> {
-  static Future<void>? _androidWebViewDebuggingFuture;
+  static Future<void>? _webViewPrerequisitesFuture;
 
   InAppWebViewController? webViewController;
   late String localHtmlPath;
@@ -267,6 +267,31 @@ class _PluginTabPageState extends State<PluginTabPage> {
       return const SizedBox.shrink(); // התוסף כבר הוסר — הטאב ייסגר בקרוב
     }
 
+    if (_needsWebViewPrerequisites) {
+      return FutureBuilder<void>(
+        future: _ensureWebViewPrerequisitesConfigured(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const SizedBox.shrink();
+          }
+          if (snapshot.hasError) {
+            debugPrint('WebView prerequisites init error: ${snapshot.error}');
+            return Center(
+              child: Text(
+                'שגיאה באתחול סביבת הדפדפן: ${snapshot.error}',
+                textDirection: TextDirection.rtl,
+              ),
+            );
+          }
+          return _buildWebView();
+        },
+      );
+    }
+
+    return _buildWebView();
+  }
+
+  Widget _buildWebView() {
     final webView = InAppWebView(
       webViewEnvironment: WebViewEnvironmentHolder.environment,
       initialUrlRequest: URLRequest(url: WebUri.uri(Uri.file(localHtmlPath))),
@@ -480,28 +505,23 @@ class _PluginTabPageState extends State<PluginTabPage> {
       },
     );
 
-    if (!kIsWeb && Platform.isAndroid) {
-      return FutureBuilder<void>(
-        future: _ensureAndroidWebViewDebuggingConfigured(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const SizedBox.shrink();
-          }
-          if (snapshot.hasError) {
-            debugPrint(
-              'Android WebView debugging init error: ${snapshot.error}',
-            );
-          }
-          return webView;
-        },
-      );
-    }
-
     return webView;
   }
 
-  static Future<void> _ensureAndroidWebViewDebuggingConfigured() {
-    return _androidWebViewDebuggingFuture ??=
-        InAppWebViewController.setWebContentsDebuggingEnabled(kDebugMode);
+  static bool get _needsWebViewPrerequisites {
+    return !kIsWeb && (Platform.isAndroid || Platform.isWindows);
+  }
+
+  static Future<void> _ensureWebViewPrerequisitesConfigured() {
+    return _webViewPrerequisitesFuture ??= _configureWebViewPrerequisites();
+  }
+
+  static Future<void> _configureWebViewPrerequisites() async {
+    if (Platform.isAndroid) {
+      await InAppWebViewController.setWebContentsDebuggingEnabled(kDebugMode);
+    }
+    if (Platform.isWindows) {
+      await WebViewEnvironmentHolder.initialize();
+    }
   }
 }
