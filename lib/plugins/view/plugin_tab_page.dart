@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
@@ -76,6 +77,8 @@ class PluginTabPage extends StatefulWidget {
 }
 
 class _PluginTabPageState extends State<PluginTabPage> {
+  static Future<void>? _androidWebViewDebuggingFuture;
+
   InAppWebViewController? webViewController;
   late String localHtmlPath;
   late final PluginBridgeHandler _bridge;
@@ -264,7 +267,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       return const SizedBox.shrink(); // התוסף כבר הוסר — הטאב ייסגר בקרוב
     }
 
-    return InAppWebView(
+    final webView = InAppWebView(
       webViewEnvironment: WebViewEnvironmentHolder.environment,
       initialUrlRequest: URLRequest(url: WebUri.uri(Uri.file(localHtmlPath))),
       initialSettings: InAppWebViewSettings(
@@ -273,6 +276,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
         useShouldOverrideUrlLoading: true,
         useShouldInterceptRequest: true,
         cacheEnabled: !widget.plugin.isDevelopment,
+        isInspectable: kDebugMode,
       ),
       // Stub SDK — injected BEFORE any page JS runs
       initialUserScripts: UnmodifiableListView<UserScript>([
@@ -475,5 +479,29 @@ class _PluginTabPageState extends State<PluginTabPage> {
         }
       },
     );
+
+    if (!kIsWeb && Platform.isAndroid) {
+      return FutureBuilder<void>(
+        future: _ensureAndroidWebViewDebuggingConfigured(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const SizedBox.shrink();
+          }
+          if (snapshot.hasError) {
+            debugPrint(
+              'Android WebView debugging init error: ${snapshot.error}',
+            );
+          }
+          return webView;
+        },
+      );
+    }
+
+    return webView;
+  }
+
+  static Future<void> _ensureAndroidWebViewDebuggingConfigured() {
+    return _androidWebViewDebuggingFuture ??=
+        InAppWebViewController.setWebContentsDebuggingEnabled(kDebugMode);
   }
 }
