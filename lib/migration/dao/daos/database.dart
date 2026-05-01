@@ -131,7 +131,7 @@ class MyDatabase {
   }
 
   /// Creates a new MyDatabase instance with a custom database path.
-  /// This is useful for migrations where you need to specify the exact database file.
+  /// This is useful when you need to specify the exact database file.
   factory MyDatabase.withPath(String path) {
     _customPath = path;
     // Create a new instance to avoid conflicts with the singleton

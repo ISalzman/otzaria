@@ -43,7 +43,7 @@ class BookCategory {
     bool isCustom = false,
     String? parentCategoryName,
   }) {
-    // Check schema version for future migrations
+    // Keep schema version for compatibility checks
     final schemaVersion = JsonUtils.asInt(json['schemaVersion'] ?? 1);
 
     Map<String, dynamic> rawData =

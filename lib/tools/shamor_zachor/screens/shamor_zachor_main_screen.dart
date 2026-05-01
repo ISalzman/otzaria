@@ -76,7 +76,7 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
 
       if (!mounted) return;
 
-      // Then load progress provider (depends on data provider for migration)
+      // Then load progress provider (depends on the data provider)
       await progressProvider.ensureLoaded();
 
       if (mounted) {

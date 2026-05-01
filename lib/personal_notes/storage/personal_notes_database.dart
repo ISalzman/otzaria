@@ -166,7 +166,7 @@ class PersonalNotesDatabase {
     });
   }
 
-  /// Batch insert multiple notes (for migration)
+  /// Batch insert multiple notes (for bulk restore/import)
   /// Skips notes that already exist (by ID)
   Future<int> batchInsertNotes(List<PersonalNote> notes) async {
     if (notes.isEmpty) return 0;
