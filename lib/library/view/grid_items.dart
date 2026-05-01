@@ -244,7 +244,7 @@ class CategoryGridItem extends StatelessWidget {
                           textAlign: TextAlign.right,
                           textDirection: TextDirection.rtl,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
+                            color: cs.onSecondaryContainer,
                           ),
                         ),
                       ],
@@ -260,7 +260,7 @@ class CategoryGridItem extends StatelessWidget {
                   child: Icon(
                     FluentIcons.info_24_regular,
                     size: 16,
-                    color: theme.colorScheme.onSurfaceVariant
+                    color: theme.colorScheme.onSecondaryContainer
                         .withValues(alpha: 0.6),
                   ),
                 ),
@@ -269,12 +269,12 @@ class CategoryGridItem extends StatelessWidget {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: cs.primaryContainer,
+                  color: cs.secondaryContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   FluentIcons.folder_24_filled,
-                  color: cs.onSurfaceVariant,
+                  color: cs.onSecondaryContainer,
                   size: 16,
                 ),
               ),
@@ -328,8 +328,9 @@ class BookGridItem extends StatelessWidget {
         ),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color:
-                isSelected ? cs.primaryContainer.withValues(alpha: 0.3) : null,
+            color: isSelected
+                ? cs.secondaryContainer.withValues(alpha: 0.3)
+                : null,
           ),
           child: InkWell(
             focusNode: focusNode,
@@ -396,14 +397,14 @@ class _BookGridMediaColumn extends StatelessWidget {
           width: iconBoxSize,
           height: iconBoxSize,
           decoration: BoxDecoration(
-            color: cs.primaryContainer,
+            color: cs.secondaryContainer,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Center(
             child: (book is PdfBook || book.fileType == 'pdf')
                 ? Icon(
                     FluentIcons.document_pdf_24_regular,
-                    color: cs.onSurfaceVariant,
+                    color: cs.onSecondaryContainer,
                     size: iconSize,
                   )
                 : book is ExternalLibraryBook
@@ -422,7 +423,7 @@ class _BookGridMediaColumn extends StatelessWidget {
                         book.fileType == 'docx'
                             ? FluentIcons.document_one_page_24_regular
                             : FluentIcons.document_text_24_regular,
-                        color: cs.onSurfaceVariant,
+                        color: cs.onSecondaryContainer,
                         size: iconSize,
                       ),
           ),
@@ -450,10 +451,10 @@ class _BookGridTextColumn extends StatelessWidget {
       color: theme.colorScheme.onSurface,
     );
     final authorStyle = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
+      color: theme.colorScheme.onSecondaryContainer,
     );
     final topicsStyle = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.primary.withValues(alpha: 0.85),
+      color: theme.colorScheme.secondary.withValues(alpha: 0.85),
     );
 
     return LayoutBuilder(
