@@ -308,6 +308,39 @@ void main() {
     await cubit.close();
   });
 
+  test('TourCubit מציג טיפ מפרשים גם אחרי ניווט בתוך PDF', () async {
+    await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
+    final cubit = TourCubit();
+
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.commentaryAvailable,
+        primaryValue: 'בראשית',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.readerPositionChanged,
+        primaryValue: 'בראשית',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.readerPositionChanged,
+        primaryValue: 'בראשית',
+      ),
+    );
+    await cubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.readerPositionChanged,
+        primaryValue: 'בראשית',
+      ),
+    );
+
+    expect(cubit.state.activeLiveTipId, LiveTipId.commentaryHint);
+    await cubit.close();
+  });
+
   test('TourCubit מציג טיפ הצג לצד אחרי דילוג חוזר בין שני ספרים', () async {
     await Settings.setValue<String>(TourSteps.statusKey, TourSteps.completed);
     final cubit = TourCubit();
