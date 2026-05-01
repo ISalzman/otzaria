@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/widgets/dialogs/reusable_items_dialog.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
@@ -17,6 +18,18 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/utils/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
+
+class HistoryDialog extends StatelessWidget {
+  const HistoryDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const ReusableItemsDialog(
+      title: 'היסטוריה',
+      child: HistoryView(),
+    );
+  }
+}
 
 class HistoryView extends StatelessWidget {
   const HistoryView({super.key});

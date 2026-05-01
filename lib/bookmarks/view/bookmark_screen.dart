@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/widgets/dialogs/reusable_items_dialog.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_state.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -13,6 +14,18 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
+
+class BookmarksDialog extends StatelessWidget {
+  const BookmarksDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const ReusableItemsDialog(
+      title: 'סימניות',
+      child: BookmarkView(),
+    );
+  }
+}
 
 class BookmarkView extends StatelessWidget {
   const BookmarkView({super.key});
