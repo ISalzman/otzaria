@@ -2029,7 +2029,7 @@ class SeforimRepository {
     _logger.info('Database finalized');
   }
 
-  /// Closes the databasction.
+  /// Closes the database connection.
   /// Should be called when the repository is no longer needed.
   Future<void> close() async {
     _database.close();
