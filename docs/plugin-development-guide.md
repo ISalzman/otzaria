@@ -583,20 +583,27 @@ if (typeof Otzaria === 'undefined') {
 
 ## דוגמה מלאה
 
-תוסף דמו מוכן לשימוש נמצא בתיקייה:
+תוסף דמו מוכן לשימוש נמצא ב-`docs/plugin-sdk/hebrew-calendar-demo.otzplugin`.
+
+קבצי התשתית נמצאים ב:
 
 ```
-lib/plugins/sdk/
-├── otzaria_plugin.js      — תיעוד SDK (JSDoc)
+assets/plugin-sdk/
+├── otzaria_plugin.js      — ספריית ה-JS שכל תוסף מייבא
 ├── otzaria_plugin.d.ts    — TypeScript definitions
-├── manifest.json          — manifest של תוסף הדמו
-└── index.html             — קוד תוסף הדמו
+├── manifest.json          — תבנית manifest לתוסף חדש
+└── index.html             — תבנית HTML לתוסף חדש
+
+docs/plugin-sdk/
+├── hebrew-calendar-demo.otzplugin  — תוסף דמו מוכן להתקנה
+├── API_REFERENCE.md
+└── DESIGN_GUIDE.md
 ```
 
 ### יצירת `.otzplugin` מהדמו
 
 ```bash
-cd /path/to/otzaria/lib/plugins/sdk
+cd /path/to/otzaria/assets/plugin-sdk
 
 zip -r hebrew-calendar-demo.otzplugin \
   manifest.json \
