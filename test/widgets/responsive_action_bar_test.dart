@@ -1,7 +1,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/widgets/responsive_action_bar.dart';
+import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 
 void main() {
   testWidgets(

@@ -55,7 +55,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/file_sync/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/file_sync_event.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
-import 'package:otzaria/widgets/nav_rail_item.dart';
+import 'package:otzaria/widgets/navigation/nav_rail_item.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';

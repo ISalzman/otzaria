@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/widgets/search_pane_base.dart';
+import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 
 void main() {
   testWidgets('מציג toolbar של תוצאות באותה שורה מול מונה התוצאות',

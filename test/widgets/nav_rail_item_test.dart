@@ -1,7 +1,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/widgets/nav_rail_item.dart';
+import 'package:otzaria/widgets/navigation/nav_rail_item.dart';
 
 void main() {
   testWidgets('NavRailItem מצמיד tourTargetKey לכפתור עצמו', (tester) async {

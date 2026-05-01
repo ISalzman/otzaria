@@ -12,7 +12,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
-import 'package:otzaria/widgets/search_pane_base.dart';
+import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/widgets/nikud_search_button.dart';

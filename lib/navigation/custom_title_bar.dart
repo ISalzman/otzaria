@@ -15,7 +15,7 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/widgets/scrollable_tab_bar.dart';
+import 'package:otzaria/widgets/navigation/scrollable_tab_bar.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/history/history_dialog.dart';
 import 'package:otzaria/widgets/app_menu.dart';

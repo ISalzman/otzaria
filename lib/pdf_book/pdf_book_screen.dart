@@ -41,7 +41,7 @@ import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/reading_left_pane_policy.dart';
 import 'package:flutter/gestures.dart';
 import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
-import 'package:otzaria/widgets/responsive_action_bar.dart';
+import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';

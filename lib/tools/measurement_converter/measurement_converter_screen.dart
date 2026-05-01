@@ -16,11 +16,11 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'measurement_data.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/app_menu.dart';
-import 'package:otzaria/widgets/app_top_bar.dart';
+import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
-import 'package:otzaria/widgets/sidebar_nav_item.dart';
+import 'package:otzaria/widgets/navigation/sidebar_nav_item.dart';
 import 'package:otzaria/widgets/inputs/app_input_tokens.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
