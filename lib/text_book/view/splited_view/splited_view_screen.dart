@@ -359,6 +359,12 @@ class _SplitedViewScreenState extends State<SplitedViewScreen>
                       _setCurrentTab(0);
                     });
                   },
+                  onOpenLinksPane: () {
+                    setState(() {
+                      _paneOpen = true;
+                      _setCurrentTab(_linksTabIndex);
+                    });
+                  },
                   isPaneOpen: () => _paneOpen,
                 ),
                 if (!_paneOpen)

@@ -113,4 +113,36 @@ void main() {
       );
     });
   });
+
+  group('shouldShowOpenLinksPaneEntry', () {
+    test('מחזירה true רק כשיש קישורים והחלונית סגורה', () {
+      expect(
+        shouldShowOpenLinksPaneEntry(
+          hasLinks: true,
+          isPaneOpen: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('מחזירה false כשאין קישורים', () {
+      expect(
+        shouldShowOpenLinksPaneEntry(
+          hasLinks: false,
+          isPaneOpen: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('מחזירה false כשהחלונית כבר פתוחה', () {
+      expect(
+        shouldShowOpenLinksPaneEntry(
+          hasLinks: true,
+          isPaneOpen: true,
+        ),
+        isFalse,
+      );
+    });
+  });
 }
