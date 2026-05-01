@@ -1309,8 +1309,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     const double iconSize = 14.0;
     const double horizontalPadding = 12.0;
     const double verticalPadding = 8.0;
-    final indent =
-        isInGroupedSection ? (level - 1).clamp(0, 100) * 18.0 : level * 24.0;
+    final indent = isInGroupedSection ? level * 18.0 : level * 24.0;
     final titleStyle = theme.textTheme.titleMedium?.merge(
       AppTextStyles.settingTitle.copyWith(
         fontWeight: isGrouped ? FontWeight.w600 : FontWeight.w700,
@@ -1449,7 +1448,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final isSearch = itemStyle == _LibraryListItemStyle.search;
     final horizontalPadding = isSearch ? 8.0 : 12.0;
     const double verticalPadding = 8.0;
-    final indent = isGrouped ? (level - 1).clamp(0, 100) * 18.0 : level * 24.0;
+    final indent = isGrouped ? level * 18.0 : level * 24.0;
     final titleStyle = _libraryListTitleStyle(
       theme.textTheme,
       cs,
@@ -1588,7 +1587,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     required VoidCallback onTap,
     FocusNode? focusNode,
   }) {
-    const double iconBoxSize = 26.0;
+    const double iconBoxSize = 32.0; // הגדלנו מ-26 ל-32 כדי להכיל שני אייקונים
     const double iconSize = 14.0;
     final cs = Theme.of(context).colorScheme;
 
@@ -1611,7 +1610,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               height: iconSize,
               fit: BoxFit.contain,
             ),
-            SizedBox(width: iconBoxSize - iconSize - 2),
+            const SizedBox(width: 4),
             Icon(
               FluentIcons.open_24_regular,
               color: cs.onSecondaryContainer,
