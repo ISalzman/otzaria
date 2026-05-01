@@ -1,4 +1,4 @@
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 
 /// שירות מרכזי לעיבוד טקסט

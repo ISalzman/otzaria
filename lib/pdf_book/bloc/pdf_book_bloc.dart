@@ -15,7 +15,7 @@ import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
-import 'package:otzaria/utils/ref_helper.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 /// Bloc for managing PDF book state

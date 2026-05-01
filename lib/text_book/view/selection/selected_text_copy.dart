@@ -1,7 +1,7 @@
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/utils/copy_utils.dart';
+import 'package:otzaria/utils/text/copy_utils.dart';
 
 /// בוחר את תוכן ה-HTML המתאים ביותר לטקסט שנבחר.
 String resolveHtmlTextForSelection({

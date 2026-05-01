@@ -11,7 +11,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/indexing/services/indexing_isolate_service.dart';
 import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
-import 'package:otzaria/utils/ref_helper.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:search_engine/search_engine.dart';
