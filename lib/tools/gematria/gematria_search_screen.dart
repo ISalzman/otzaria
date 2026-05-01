@@ -15,7 +15,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/otzaria_search_field.dart';
-import 'package:otzaria/widgets/tool_empty_state.dart';
+import 'package:otzaria/widgets/feedback/tool_empty_state.dart';
 import 'package:otzaria/widgets/tool_ui_helpers.dart';
 
 class GematriaSearchScreen extends StatefulWidget {

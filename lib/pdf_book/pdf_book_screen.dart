@@ -44,7 +44,7 @@ import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
-import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
+import 'package:otzaria/widgets/feedback/commentary_pane_tooltip.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/pdf_headings.dart';

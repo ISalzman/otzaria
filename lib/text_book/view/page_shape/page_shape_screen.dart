@@ -16,7 +16,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/commentary_sync_helper.d
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_dialog.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
-import 'package:otzaria/widgets/loading_indicator.dart';
+import 'package:otzaria/widgets/feedback/loading_indicator.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -36,7 +36,7 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
-import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
+import 'package:otzaria/widgets/feedback/commentary_pane_tooltip.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
 const double _kCommentaryPaneWidthFactor = 0.17;

@@ -8,7 +8,7 @@ import '../providers/shamor_zachor_data_provider.dart';
 import '../providers/shamor_zachor_progress_provider.dart';
 import '../models/book_model.dart';
 import 'book_card_widget.dart'; // Using the rich card
-import 'package:otzaria/widgets/tool_empty_state.dart';
+import 'package:otzaria/widgets/feedback/tool_empty_state.dart';
 
 class CategoryBooksGrid extends StatefulWidget {
   final String? categoryName;

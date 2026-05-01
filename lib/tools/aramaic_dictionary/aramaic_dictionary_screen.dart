@@ -11,7 +11,7 @@ import 'package:otzaria/tools/aramaic_dictionary/widgets/aramaic_result_card.dar
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/otzaria_search_field.dart';
-import 'package:otzaria/widgets/tool_empty_state.dart';
+import 'package:otzaria/widgets/feedback/tool_empty_state.dart';
 import 'package:otzaria/widgets/tool_ui_helpers.dart';
 
 class AramaicDictionaryScreen extends StatefulWidget {

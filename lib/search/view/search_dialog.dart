@@ -25,7 +25,7 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
-import 'package:otzaria/widgets/indexing_warning.dart';
+import 'package:otzaria/widgets/feedback/indexing_warning.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/tour/tour_target_keys.dart';
