@@ -4,7 +4,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/shortcuts/view/custom_shortcut_dialog.dart';
-import 'package:otzaria/widgets/misc/app_menu.dart';
+import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 /// שדה בחירת קיצור דרך שמסנן קיצורים שכבר נמצאים בשימוש.
