@@ -270,7 +270,7 @@ class CategoryGridItem extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  FluentIcons.folder_24_filled,
+                  FluentIcons.folder_24_regular,
                   color: cs.onSecondaryContainer,
                   size: 16,
                 ),
@@ -350,11 +350,22 @@ class BookGridItem extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 18),
-                    _BookGridMediaColumn(book: book, showTopics: showTopics),
-                    const SizedBox(width: 6),
-                    _BookGridActionColumn(
-                      book: book,
-                      onBookDeleted: onBookDeleted,
+                    SizedBox(
+                      width: 32,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        mainAxisSize: MainAxisSize.max,
+                        children: [
+                          _BookGridMediaColumn(
+                            book: book,
+                            showTopics: showTopics,
+                          ),
+                          _BookGridActionColumn(
+                            book: book,
+                            onBookDeleted: onBookDeleted,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
