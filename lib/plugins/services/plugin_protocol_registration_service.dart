@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 class PluginProtocolRegistrationService {
   static const String scheme = 'otzaria';
+  static const Duration _windowsRegistrationTimeout = Duration(seconds: 5);
 
   Future<void> ensureRegistered() async {
     if (Platform.isWindows) {
@@ -19,25 +20,24 @@ class PluginProtocolRegistrationService {
 
   Future<void> _ensureWindowsRegistration() async {
     final exePath = Platform.resolvedExecutable;
-    final command = '"$exePath" "%1"';
-    final protocolRoot = r'HKCU\Software\Classes\otzaria';
-
-    final commands = <List<String>>[
-      ['add', protocolRoot, '/ve', '/d', 'URL:Otzaria Protocol', '/f'],
-      ['add', protocolRoot, '/v', 'URL Protocol', '/d', '', '/f'],
-      ['add', '$protocolRoot\\DefaultIcon', '/ve', '/d', exePath, '/f'],
-      [
-        'add',
-        '$protocolRoot\\shell\\open\\command',
-        '/ve',
-        '/d',
-        command,
-        '/f',
-      ],
-    ];
+    final regExecutable = resolveWindowsRegistryExecutable(
+      Platform.environment,
+    );
+    final commands = buildWindowsRegistrationCommands(exePath);
 
     for (final arguments in commands) {
-      final result = await Process.run('reg', arguments, runInShell: true);
+      final result = await Process.run(
+        regExecutable,
+        arguments,
+      ).timeout(
+        _windowsRegistrationTimeout,
+        onTimeout: () => ProcessResult(
+          0,
+          -1,
+          '',
+          'Timed out after ${_windowsRegistrationTimeout.inSeconds} seconds',
+        ),
+      );
       if (result.exitCode != 0) {
         throw Exception(
           'רישום פרוטוקול התוספים נכשל: ${result.stderr}'.trim(),
@@ -121,5 +121,34 @@ class PluginProtocolRegistrationService {
     ];
 
     return '${lines.join('\n')}\n';
+  }
+
+  @visibleForTesting
+  static String resolveWindowsRegistryExecutable(
+    Map<String, String> environment,
+  ) {
+    final windowsDirectory =
+        environment['WINDIR'] ?? environment['SystemRoot'] ?? r'C:\Windows';
+    return p.windows.join(windowsDirectory, 'System32', 'reg.exe');
+  }
+
+  @visibleForTesting
+  static List<List<String>> buildWindowsRegistrationCommands(String exePath) {
+    final command = '"$exePath" "%1"';
+    final protocolRoot = r'HKCU\Software\Classes\otzaria';
+
+    return <List<String>>[
+      ['add', protocolRoot, '/ve', '/d', 'URL:Otzaria Protocol', '/f'],
+      ['add', protocolRoot, '/v', 'URL Protocol', '/d', '', '/f'],
+      ['add', '$protocolRoot\\DefaultIcon', '/ve', '/d', exePath, '/f'],
+      [
+        'add',
+        '$protocolRoot\\shell\\open\\command',
+        '/ve',
+        '/d',
+        command,
+        '/f',
+      ],
+    ];
   }
 }
