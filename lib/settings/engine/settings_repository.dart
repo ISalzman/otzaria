@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_fonts.dart';
-import 'package:otzaria/utils/color_utils.dart';
+import 'package:otzaria/utils/ui/color_utils.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/settings/engine/settings_wrapper.dart';
 import 'package:crypto/crypto.dart';
