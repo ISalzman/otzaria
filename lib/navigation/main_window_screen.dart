@@ -35,7 +35,7 @@ import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
 import 'dart:async';
 import 'package:otzaria/update/my_update_widget.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
-import 'package:otzaria/widgets/ad_popup_dialog.dart';
+import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/main.dart' show appWindowListener;
 import 'package:otzaria/navigation/custom_title_bar.dart';

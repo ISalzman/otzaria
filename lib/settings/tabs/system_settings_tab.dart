@@ -31,7 +31,7 @@ import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
-import 'package:otzaria/widgets/error_report_sender_email_dialog.dart';
+import 'package:otzaria/widgets/dialogs/error_report_sender_email_dialog.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';

@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/ad_popup_dialog.dart';
+import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 
 /// טאב "חכמי לב" — אודות, קהילה, תורמים ומפתחים.
 class AboutDevTab extends StatelessWidget {

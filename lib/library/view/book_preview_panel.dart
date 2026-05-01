@@ -13,7 +13,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/settings/settings_exports.dart' hide UpdateFontSize;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:otzaria/widgets/password_dialog.dart';
+import 'package:otzaria/widgets/dialogs/password_dialog.dart';
 import 'package:otzaria/pdf_book/pdf_scrollbar.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
