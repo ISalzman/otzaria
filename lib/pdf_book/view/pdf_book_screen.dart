@@ -27,7 +27,7 @@ import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/utils/ref_helper.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:provider/provider.dart';

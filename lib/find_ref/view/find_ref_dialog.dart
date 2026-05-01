@@ -10,7 +10,7 @@ import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 

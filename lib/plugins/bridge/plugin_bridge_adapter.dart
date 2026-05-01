@@ -14,7 +14,7 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/search_repository.dart';
-import 'package:otzaria/utils/book_open_coordinator.dart';
+import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';

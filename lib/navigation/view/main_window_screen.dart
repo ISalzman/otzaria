@@ -78,7 +78,7 @@ import 'package:otzaria/tour/models/tour_step.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/tour/view/tour_overlay_screen.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/utils/navigation/open_book.dart';
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
