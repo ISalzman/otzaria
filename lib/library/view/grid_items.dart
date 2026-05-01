@@ -226,30 +226,27 @@ class CategoryGridItem extends StatelessWidget {
             textDirection: TextDirection.rtl,
             children: [
               Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      LibraryItemTitle(
-                        text: category.title,
-                        isFolder: true,
-                      ),
-                      if (category.shortDescription.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        LibraryOverflowTooltipText(
-                          text: category.shortDescription,
-                          maxLines: 2,
-                          textAlign: TextAlign.right,
-                          textDirection: TextDirection.rtl,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSecondaryContainer,
-                          ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    LibraryItemTitle(
+                      text: category.title,
+                      isFolder: true,
+                    ),
+                    if (category.shortDescription.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      LibraryOverflowTooltipText(
+                        text: category.shortDescription,
+                        maxLines: 2,
+                        textAlign: TextAlign.right,
+                        textDirection: TextDirection.rtl,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSecondaryContainer,
                         ),
-                      ],
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
               const SizedBox(width: 18),
@@ -347,12 +344,9 @@ class BookGridItem extends StatelessWidget {
                   textDirection: TextDirection.rtl,
                   children: [
                     Expanded(
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: _BookGridTextColumn(
-                          book: book,
-                          showTopics: showTopics,
-                        ),
+                      child: _BookGridTextColumn(
+                        book: book,
+                        showTopics: showTopics,
                       ),
                     ),
                     const SizedBox(width: 18),
@@ -484,13 +478,13 @@ class _BookGridTextColumn extends StatelessWidget {
                     : 3;
 
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.max,
           children: [
             LibraryOverflowTooltipText(
               text: book.title,
               maxLines: 2,
-              textAlign: TextAlign.justify,
+              textAlign: TextAlign.right,
               textDirection: TextDirection.rtl,
               style: titleStyle,
             ),
@@ -499,7 +493,7 @@ class _BookGridTextColumn extends StatelessWidget {
               LibraryOverflowTooltipText(
                 text: book.author!,
                 maxLines: authorMaxLines,
-                textAlign: TextAlign.justify,
+                textAlign: TextAlign.right,
                 textDirection: TextDirection.rtl,
                 style: authorStyle,
               ),
@@ -509,7 +503,7 @@ class _BookGridTextColumn extends StatelessWidget {
               LibraryOverflowTooltipText(
                 text: book.topics,
                 maxLines: topicsMaxLines,
-                textAlign: TextAlign.justify,
+                textAlign: TextAlign.right,
                 textDirection: TextDirection.rtl,
                 style: topicsStyle,
               ),
