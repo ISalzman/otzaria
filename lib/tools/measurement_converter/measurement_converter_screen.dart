@@ -17,7 +17,7 @@ import 'measurement_data.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/app_menu.dart';
 import 'package:otzaria/widgets/app_top_bar.dart';
-import 'package:otzaria/widgets/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 import 'package:otzaria/widgets/sidebar_nav_item.dart';

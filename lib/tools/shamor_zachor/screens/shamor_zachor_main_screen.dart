@@ -17,7 +17,7 @@ import 'package:otzaria/shortcuts/key_map.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/app_top_bar.dart';
 import 'package:otzaria/widgets/inputs/segmented_button_tile.dart';
-import 'package:otzaria/widgets/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/otzaria_search_field.dart';
 

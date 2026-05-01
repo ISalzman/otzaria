@@ -18,7 +18,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/view/plugin_side_panel.dart';
 import 'package:otzaria/plugins/view/plugin_tab_page.dart';
-import 'package:otzaria/widgets/context_overlay_panel.dart';
+import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
 import 'package:otzaria/plugins/view/plugin_install_screen.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';

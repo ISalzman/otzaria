@@ -13,7 +13,7 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/text_book/utils/notes_commentary_utils.dart';
 import 'package:otzaria/widgets/commentators_filter_button.dart';
-import 'package:otzaria/widgets/commentators_filter_screen.dart';
+import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/widgets/commentators_selection_panel.dart';
 import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:otzaria/settings/settings_exports.dart';

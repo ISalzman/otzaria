@@ -40,7 +40,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/page_converter.dart';
 import 'package:otzaria/utils/reading_left_pane_policy.dart';
 import 'package:flutter/gestures.dart';
-import 'package:otzaria/widgets/dual_adaptive_reader_pane.dart';
+import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';

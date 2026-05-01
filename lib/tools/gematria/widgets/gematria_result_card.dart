@@ -9,7 +9,7 @@ import 'package:otzaria/tools/gematria/models/gematria_search_result.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
-import 'package:otzaria/widgets/tool_result_card_shell.dart';
+import 'package:otzaria/widgets/layout/tool_result_card_shell.dart';
 
 class GematriaResultCard extends StatelessWidget {
   final int number;

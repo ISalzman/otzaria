@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/widgets/floating_panel.dart';
-import 'package:otzaria/widgets/reader_side_panel_shell.dart';
+import 'package:otzaria/widgets/layout/floating_panel.dart';
+import 'package:otzaria/widgets/layout/reader_side_panel_shell.dart';
 
 void main() {
   Widget buildShell(AlignmentDirectional alignment) {
