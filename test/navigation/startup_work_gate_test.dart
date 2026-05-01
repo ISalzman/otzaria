@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/navigation/startup_work_gate.dart';
+import 'package:otzaria/navigation/view/startup_work_gate.dart';
 
 void main() {
   group('StartupWorkGate', () {
