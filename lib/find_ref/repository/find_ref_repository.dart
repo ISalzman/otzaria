@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
-import 'package:otzaria/find_ref/db_reference_result.dart';
-import 'package:otzaria/find_ref/reference_books_cache.dart';
+import 'package:otzaria/find_ref/repository/db_reference_result.dart';
+import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 

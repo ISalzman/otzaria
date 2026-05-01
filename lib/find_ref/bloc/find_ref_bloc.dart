@@ -1,8 +1,8 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/find_ref/find_ref_event.dart';
-import 'package:otzaria/find_ref/find_ref_repository.dart';
-import 'package:otzaria/find_ref/find_ref_state.dart';
-import 'package:otzaria/find_ref/db_reference_result.dart';
+import 'package:otzaria/find_ref/bloc/find_ref_event.dart';
+import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
+import 'package:otzaria/find_ref/bloc/find_ref_state.dart';
+import 'package:otzaria/find_ref/repository/db_reference_result.dart';
 import 'package:otzaria/models/books.dart';
 
 class FindRefBloc extends Bloc<FindRefEvent, FindRefState> {
