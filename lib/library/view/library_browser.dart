@@ -2006,6 +2006,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       isOpen: isOpen,
       onClose: _closeSettingsPanel,
       width: 400,
+      deferChildBuildOnOpen: true,
+      preserveChildStateOnClose: true,
       child: Column(
         children: [
           Padding(
