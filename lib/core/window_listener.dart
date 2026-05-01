@@ -26,7 +26,7 @@ class AppWindowListener extends WindowListener {
   @override
   void onWindowEnterFullScreen() {
     if (kDebugMode) {
-      print('Window entered fullscreen');
+      debugPrint('Window entered fullscreen');
     }
     onFullscreenChanged?.call(true);
     onWindowStateChanged?.call();
@@ -35,7 +35,7 @@ class AppWindowListener extends WindowListener {
   @override
   void onWindowLeaveFullScreen() {
     if (kDebugMode) {
-      print('Window left fullscreen');
+      debugPrint('Window left fullscreen');
     }
     onFullscreenChanged?.call(false);
     onWindowStateChanged?.call();
@@ -44,7 +44,7 @@ class AppWindowListener extends WindowListener {
   @override
   void onWindowClose() async {
     if (kDebugMode) {
-      print('Window close requested');
+      debugPrint('Window close requested');
     }
 
     // Step 1: Non-critical cleanup — errors here must not block Hive.close().
@@ -93,7 +93,7 @@ class AppWindowListener extends WindowListener {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error during window close: $e');
+        debugPrint('Error during window close: $e');
       }
       // נשמור על exit(0) רק למקרה חירום של קריסה בתהליך הסגירה
       exit(0);
@@ -122,14 +122,14 @@ class AppWindowListener extends WindowListener {
   @override
   void onWindowMinimize() {
     if (kDebugMode) {
-      print('Window minimized');
+      debugPrint('Window minimized');
     }
   }
 
   @override
   void onWindowRestore() {
     if (kDebugMode) {
-      print('Window restored');
+      debugPrint('Window restored');
     }
     onWindowStateChanged?.call();
   }
@@ -137,7 +137,7 @@ class AppWindowListener extends WindowListener {
   @override
   void onWindowResize() {
     if (kDebugMode) {
-      print('Window resized');
+      debugPrint('Window resized');
     }
 
     if (WindowPersistence.isRestoring) return;
@@ -148,7 +148,7 @@ class AppWindowListener extends WindowListener {
   @override
   void onWindowMove() {
     if (kDebugMode) {
-      print('Window moved');
+      debugPrint('Window moved');
     }
 
     if (WindowPersistence.isRestoring) return;
@@ -158,7 +158,7 @@ class AppWindowListener extends WindowListener {
   @override
   void onWindowMaximize() {
     if (kDebugMode) {
-      print('Window maximized');
+      debugPrint('Window maximized');
     }
     if (WindowPersistence.isRestoring) return;
     WindowPersistence.scheduleSave();
@@ -168,7 +168,7 @@ class AppWindowListener extends WindowListener {
   @override
   void onWindowUnmaximize() {
     if (kDebugMode) {
-      print('Window unmaximized');
+      debugPrint('Window unmaximized');
     }
     if (WindowPersistence.isRestoring) return;
     WindowPersistence.scheduleSave();
