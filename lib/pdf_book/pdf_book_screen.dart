@@ -16,7 +16,7 @@ import 'package:otzaria/models/links.dart' as otz_links;
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart' as pdf_events;
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
-import 'package:otzaria/pdf_book/pdf_page_number_dispaly.dart';
+import 'package:otzaria/pdf_book/pdf_page_number_display.dart';
 import 'package:otzaria/pdf_book/pdf_commentary_panel.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';

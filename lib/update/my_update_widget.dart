@@ -7,7 +7,7 @@ import 'package:updat/updat_window_manager.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'hebrew_updat_widgets.dart';
+import 'hebrew_update_widgets.dart';
 import 'linux_installer.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/update/my_updat_widget.dart';
+import 'package:otzaria/update/my_update_widget.dart';
 
 void main() {
   group('changelogBetweenVersionsForUpdateDialog', () {
