@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/migration/core/models/book.dart';
-import 'package:otzaria/migration/core/models/category.dart';
-import 'package:otzaria/migration/dao/daos/database.dart';
-import 'package:otzaria/migration/dao/repository/seforim_repository.dart';
+import 'package:otzaria/migration/models/book.dart';
+import 'package:otzaria/migration/models/category.dart';
+import 'package:otzaria/migration/database/daos/database.dart';
+import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';

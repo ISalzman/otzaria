@@ -1,7 +1,7 @@
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
-import '../../core/models/author.dart';
-import '../sqflite/sqlite3_utils.dart';
-import '../sqflite/query_loader.dart';
+import '../../models/author.dart';
+import '../sql/sqlite3_utils.dart';
+import '../sql/query_loader.dart';
 import 'database.dart';
 
 class AuthorDao {

@@ -16,7 +16,7 @@ import 'search_dao.dart';
 import 'toc_dao.dart';
 import 'toc_text_dao.dart';
 import 'topic_dao.dart';
-import '../sqflite/query_loader.dart';
+import '../sql/query_loader.dart';
 
 class MyDatabase {
   static sqlite3.Database? _database;

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/migration/core/models/toc_entry.dart';
+import 'package:otzaria/migration/models/toc_entry.dart';
 
 class SearchResult {
   final String file;

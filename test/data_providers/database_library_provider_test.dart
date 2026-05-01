@@ -5,12 +5,12 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
-import 'package:otzaria/migration/core/models/author.dart';
-import 'package:otzaria/migration/core/models/book.dart' as migration_models;
-import 'package:otzaria/migration/core/models/category.dart'
+import 'package:otzaria/migration/models/author.dart';
+import 'package:otzaria/migration/models/book.dart' as migration_models;
+import 'package:otzaria/migration/models/category.dart'
     as migration_models;
-import 'package:otzaria/migration/dao/daos/database.dart';
-import 'package:otzaria/migration/dao/repository/seforim_repository.dart';
+import 'package:otzaria/migration/database/daos/database.dart';
+import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';

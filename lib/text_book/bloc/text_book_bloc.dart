@@ -24,7 +24,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dar
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/reading_left_pane_policy.dart';
-import 'package:otzaria/migration/core/models/category.dart' as db;
+import 'package:otzaria/migration/models/category.dart' as db;
 
 List<Link> _mergeLinksByIdentity(
   List<Link> existing,

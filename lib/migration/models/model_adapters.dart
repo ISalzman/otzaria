@@ -2,9 +2,8 @@
 // This allows seamless integration between the existing codebase and the new database layer
 
 import 'package:otzaria/models/books.dart' as otzaria_models;
-import 'package:otzaria/migration/core/models/line.dart' as migration_models;
-import 'package:otzaria/migration/core/models/toc_entry.dart'
-    as migration_models;
+import 'line.dart' as migration_models;
+import 'toc_entry.dart' as migration_models;
 
 /// Converts a migration TocEntry to an otzaria TocEntry
 otzaria_models.TocEntry migrationTocToOtzariaToc(

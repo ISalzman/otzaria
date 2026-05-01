@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 
-import '../core/models/link.dart';
-import '../dao/repository/seforim_repository.dart';
+import '../models/link.dart';
+import '../database/repository/seforim_repository.dart';
 
 /// Data class for deserializing link data from JSON files
 class LinkData {

@@ -3,7 +3,7 @@ import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/models/plugin_published_record.dart';
-import 'package:otzaria/migration/dao/sqflite/sqlite3_utils.dart';
+import 'package:otzaria/migration/database/sql/sqlite3_utils.dart';
 
 class PluginSystemDatabase {
   PluginSystemDatabase._();

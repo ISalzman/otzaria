@@ -16,7 +16,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
-import 'package:otzaria/migration/core/models/category.dart';
+import 'package:otzaria/migration/models/category.dart';
 import 'package:otzaria/widgets/zip_extraction_progress_dialog.dart';
 
 /// Widget להוספה וניהול תיקיות מותאמות אישית

@@ -7,13 +7,13 @@ import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 import 'package:pdfrx/pdfrx.dart';
 
-import '../core/models/book.dart';
-import '../core/models/category.dart';
-import '../core/models/line.dart';
-import '../core/models/toc_entry.dart';
-import '../core/models/topic.dart';
-import '../dao/repository/seforim_repository.dart';
-import '../shared/link_processor.dart';
+import '../models/book.dart';
+import '../models/category.dart';
+import '../models/line.dart';
+import '../models/toc_entry.dart';
+import '../models/topic.dart';
+import '../database/repository/seforim_repository.dart';
+import 'link_processor.dart';
 import 'hebrew_text_utils.dart' as hebrew_text_utils;
 import 'package:otzaria/utils/docx_to_otzaria.dart';
 

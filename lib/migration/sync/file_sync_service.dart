@@ -6,12 +6,12 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 
-import '../dao/repository/seforim_repository.dart';
+import '../database/repository/seforim_repository.dart';
 import '../../settings/services/custom_folders/custom_folder.dart';
 import '../../settings/engine/settings_repository.dart';
 import '../generator/generator.dart';
-import '../shared/link_processor.dart';
-import '../core/models/category.dart';
+import '../generator/link_processor.dart';
+import '../models/category.dart';
 import '../../utils/file_hidden_utils.dart';
 
 /// Result of a file sync operation
