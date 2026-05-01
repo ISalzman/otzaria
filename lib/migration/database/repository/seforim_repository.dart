@@ -94,14 +94,6 @@ class SeforimRepository {
 
   // --- Line ⇄ TOC mapping ---
 
-  /// Maps a line to the TOC entry it belongs to. Upserts on conflict.
-  Future<void> upsertLineToc(int lineId, int tocEntryId) async {
-    final db = await _database.database;
-    db.execute(
-        'INSERT OR REPLACE INTO line_toc (lineId, tocEntryId) VALUES (?, ?)',
-        [lineId, tocEntryId]);
-  }
-
   /// Bulk upsert line→toc mappings
   Future<void> bulkUpsertLineToc(List<({int lineId, int tocId})> pairs) async {
     if (pairs.isEmpty) return;
@@ -115,27 +107,6 @@ class SeforimRepository {
     });
   }
 
-  /// Gets the tocEntryId associated with a line via the mapping table.
-  Future<int?> getTocEntryIdForLine(int lineId) async {
-    final db = await _database.database;
-    final result = db.select('SELECT tocEntryId FROM line_toc WHERE lineId = ?',
-        [lineId]).toMapList();
-    if (result.isEmpty) return null;
-    return result.first['tocEntryId'] as int;
-  }
-
-  /// Gets the TocEntry model associated with a line via the mapping table.
-  Future<TocEntry?> getTocEntryForLine(int lineId) async {
-    final tocId = await getTocEntryIdForLine(lineId);
-    if (tocId == null) return null;
-    return await getTocEntry(tocId);
-  }
-
-  /// Returns the TOC entry whose heading line is the given line id, or null if not a TOC heading.
-  Future<TocEntry?> getHeadingTocEntryByLineId(int lineId) async {
-    return await _database.tocDao.selectByLineId(lineId);
-  }
-
   /// Returns all line ids that belong to the given TOC entry (section), ordered by lineIndex.
   Future<List<int>> getLineIdsForTocEntry(int tocEntryId) async {
     final db = await _database.database;
@@ -143,24 +114,6 @@ class SeforimRepository {
         'SELECT lineId FROM line_toc WHERE tocEntryId = ? ORDER BY lineId',
         [tocEntryId]).toMapList();
     return result.map((row) => row['lineId'] as int).toList();
-  }
-
-  /// Returns mappings (lineId -> tocEntryId) for a book ordered by line index.
-  Future<List<LineTocMapping>> getLineTocMappingsForBook(int bookId) async {
-    final db = await _database.database;
-    final result = db.select('''
-      SELECT lt.lineId, lt.tocEntryId
-      FROM line_toc lt
-      JOIN line l ON lt.lineId = l.id
-      WHERE l.bookId = ?
-      ORDER BY l.lineIndex
-    ''', [bookId]).toMapList();
-    return result
-        .map((row) => LineTocMapping(
-              lineId: row['lineId'] as int,
-              tocEntryId: row['tocEntryId'] as int,
-            ))
-        .toList();
   }
 
   /// Builds all mappings for a given book by assigning to each line
@@ -217,14 +170,9 @@ class SeforimRepository {
     await executeRawQuery('PRAGMA synchronous=$mode');
   }
 
-  Future<void> setSynchronousOff() => setSynchronous('OFF');
-  Future<void> setSynchronousNormal() => setSynchronous('NORMAL');
-
   Future<void> setJournalMode(String mode) async {
     await executeRawQuery('PRAGMA journal_mode=$mode');
   }
-
-  Future<void> setJournalModeOff() => setJournalMode('OFF');
 
   /// WAL may fail when another process holds the DB lock — safe to skip.
   Future<void> _trySetWal() async {
@@ -232,8 +180,6 @@ class SeforimRepository {
       await _executeRawQuery('PRAGMA journal_mode=WAL');
     } catch (_) {}
   }
-
-  Future<void> setJournalModeWal() => _trySetWal();
 
   /// Sets maximum performance mode for bulk operations
   Future<void> setMaxPerformanceMode() async {
@@ -1185,10 +1131,6 @@ class SeforimRepository {
     });
   }
 
-  Future<void> updateLineTocEntry(int lineId, int tocEntryId) async {
-    await _database.lineDao.updateTocEntryId(lineId, tocEntryId);
-  }
-
   // --- Table of Contents ---
   Future<List<TocEntry>> getBookTocs(int bookId) async {
     return _database.tocDao.selectByBookId(bookId);
@@ -1202,21 +1144,11 @@ class SeforimRepository {
     return await _database.tocDao.selectByBookId(bookId);
   }
 
-  Future<List<TocEntry>> getBookRootToc(int bookId) async {
-    return await _database.tocDao.selectRootByBookId(bookId);
-  }
-
   Future<List<TocEntry>> getTocChildren(int parentId) async {
     return await _database.tocDao.selectChildren(parentId);
   }
 
   // --- TocText methods ---
-
-  // Returns all distinct tocText values using generated SQLDelight query
-  Future<List<String>> getAllTocTexts() async {
-    final tocTexts = await _database.tocTextDao.selectAll();
-    return tocTexts.map((t) => t.text).toList();
-  }
 
   // Get or create a tocText entry and return its ID
   Future<int> _getOrCreateTocText(String text) async {
@@ -1776,26 +1708,6 @@ class SeforimRepository {
     ''', [bookId, hasSourceLinks ? 1 : 0, hasTargetLinks ? 1 : 0]);
   }
 
-  /// Updates only the source links status for a book.
-  ///
-  /// @param bookId The ID of the book to update
-  /// @param hasSourceLinks Whether the book has source links (true) or not (false)
-  Future<void> updateBookSourceLinks(int bookId, bool hasSourceLinks) async {
-    final db = await _database.database;
-    db.execute('UPDATE book_has_links SET hasSourceLinks = ? WHERE bookId = ?',
-        [hasSourceLinks ? 1 : 0, bookId]);
-  }
-
-  /// Updates only the target links status for a book.
-  ///
-  /// @param bookId The ID of the book to update
-  /// @param hasTargetLinks Whether the book has target links (true) or not (false)
-  Future<void> updateBookTargetLinks(int bookId, bool hasTargetLinks) async {
-    final db = await _database.database;
-    db.execute('UPDATE book_has_links SET hasTargetLinks = ? WHERE bookId = ?',
-        [hasTargetLinks ? 1 : 0, bookId]);
-  }
-
   // --- Connection type specific helpers ---
 
   Future<int> countLinksBySourceBookAndType(int bookId, String typeName) async {
@@ -1925,64 +1837,6 @@ class SeforimRepository {
     }
 
     _logger.info('All book connection flags updated successfully');
-  }
-
-  /// Checks if a book has any links (source or target).
-  ///
-  /// @param bookId The ID of the book to check
-  /// @return True if the book has any links, false otherwise
-  Future<bool> bookHasAnyLinks(int bookId) async {
-    _logger.fine('Checking if book $bookId has any links');
-
-    // Check if the book has any links as source or target
-    final hasSourceLinks = await bookHasSourceLinks(bookId);
-    final hasTargetLinks = await bookHasTargetLinks(bookId);
-    final result = hasSourceLinks || hasTargetLinks;
-
-    _logger.fine('Book $bookId has any links: $result');
-    return result;
-  }
-
-  /// Checks if a book has source links.
-  ///
-  /// @param bookId The ID of the book to check
-  /// @return True if the book has source links, false otherwise
-  Future<bool> bookHasSourceLinks(int bookId) async {
-    final count = await countLinksBySourceBook(bookId);
-    return count > 0;
-  }
-
-  /// Checks if a book has target links.
-  ///
-  /// @param bookId The ID of the book to check
-  /// @return True if the book has target links, false otherwise
-  Future<bool> bookHasTargetLinks(int bookId) async {
-    final count = await countLinksByTargetBook(bookId);
-    return count > 0;
-  }
-
-  /// Checks if a book has OTHER type comments.
-  Future<bool> bookHasOtherComments(int bookId) async {
-    final book = await _database.bookDao.getBookById(bookId);
-    return book?.hasOtherConnection ?? false;
-  }
-
-  /// Checks if a book has COMMENTARY type comments.
-  Future<bool> bookHasCommentaryComments(int bookId) async {
-    final book = await _database.bookDao.getBookById(bookId);
-    return book?.hasCommentaryConnection ?? false;
-  }
-
-  /// Checks if a book has REFERENCE type comments.
-  Future<bool> bookHasReferenceComments(int bookId) async {
-    final book = await _database.bookDao.getBookById(bookId);
-    return book?.hasReferenceConnection ?? false;
-  }
-
-  /// Checks if a book has TARGUM type comments.
-  Future<bool> bookHasTargumComments(int bookId) async {
-    final book = await _database.bookDao.getBookById(bookId);
-    return book?.hasTargumConnection ?? false;
   }
 
   /// Gets all books that have any links (source or target).
@@ -2175,52 +2029,7 @@ class SeforimRepository {
     _logger.info('Database finalized');
   }
 
-  /// Creates optimization indexes for faster queries
-  Future<void> createOptimizationIndexes() async {
-    _logger.info('Creating optimization indexes...');
-
-    final db = await _database.database;
-
-    // Indexes for book searches
-    db.execute('CREATE INDEX IF NOT EXISTS idx_book_title ON book(title)');
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_book_category ON book(categoryId)');
-
-    // Indexes for lines
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_line_book_index ON line(bookId, lineIndex)');
-    db.execute('CREATE INDEX IF NOT EXISTS idx_line_toc ON line(tocEntryId)');
-
-    // Indexes for links - CRITICAL for performance
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_link_source ON link(sourceBookId, sourceLineId)');
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_link_target ON link(targetBookId, targetLineId)');
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_link_type ON link(connectionTypeId)');
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_link_source_type ON link(sourceBookId, connectionTypeId)');
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_link_target_type ON link(targetBookId, connectionTypeId)');
-
-    // Indexes for authors and topics
-    db.execute('CREATE INDEX IF NOT EXISTS idx_author_name ON author(name)');
-    db.execute('CREATE INDEX IF NOT EXISTS idx_topic_name ON topic(name)');
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_book_author ON book_author(bookId, authorId)');
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_book_topic ON book_topic(bookId, topicId)');
-
-    // Index for line_toc mapping table
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_line_toc_line ON line_toc(lineId)');
-    db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_line_toc_entry ON line_toc(tocEntryId)');
-
-    _logger.info('Optimization indexes created');
-  }
-
-  /// Closes the database connection.
+  /// Closes the databasction.
   /// Should be called when the repository is no longer needed.
   Future<void> close() async {
     _database.close();
@@ -2507,43 +2316,10 @@ extension FileSyncRepository on SeforimRepository {
 
 /// Extension methods for book acronyms
 extension BookAcronymRepository on SeforimRepository {
-  /// Bulk inserts acronym terms for a book.
-  ///
-  /// [bookId] The ID of the book
-  /// [terms] List of acronym terms to associate with the book
-  Future<void> bulkInsertBookAcronyms(int bookId, List<String> terms) async {
-    await _database.bookAcronymDao.bulkInsertAcronyms(bookId, terms);
-  }
-
-  /// Gets all acronym terms for a book.
-  Future<List<String>> getBookAcronyms(int bookId) async {
-    return await _database.bookAcronymDao.getTermsByBookId(bookId);
-  }
-
   /// Searches for books by acronym term.
   Future<List<int>> searchBooksByAcronym(String term, {int? limit}) async {
     return await _database.bookAcronymDao
         .searchBooksByAcronym(term, limit: limit);
-  }
-
-  /// Deletes all acronyms for a book.
-  Future<void> deleteBookAcronyms(int bookId) async {
-    await _database.bookAcronymDao.deleteByBookId(bookId);
-  }
-
-  /// Inserts a single acronym term for a book.
-  Future<void> insertBookAcronym(int bookId, String term) async {
-    await _database.bookAcronymDao.insertAcronym(bookId, term);
-  }
-
-  /// Gets all book IDs that have a specific acronym term (exact match).
-  Future<List<int>> getBookIdsByAcronym(String term) async {
-    return await _database.bookAcronymDao.getBookIdsByTerm(term);
-  }
-
-  /// Counts the number of acronym terms for a specific book.
-  Future<int> countBookAcronyms(int bookId) async {
-    return await _database.bookAcronymDao.countByBookId(bookId);
   }
 
   /// Searches for books by title or acronym for reference finding.
