@@ -9,7 +9,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/find_ref/find_ref_dialog.dart';
+import 'package:otzaria/find_ref/view/find_ref_dialog.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/bookmarks/view/bookmarks_dialog.dart';
 import 'package:otzaria/history/view/history_dialog.dart';

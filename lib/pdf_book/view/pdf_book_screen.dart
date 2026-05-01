@@ -49,7 +49,7 @@ import 'package:otzaria/pdf_book/view/pdf_scrollbar.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
-import 'package:otzaria/printing/printing_screen.dart';
+import 'package:otzaria/printing/view/printing_screen.dart';
 
 final GlobalKey pdfBookNavigationTourTargetKey = GlobalKey(
   debugLabel: 'pdf_book_navigation_tour_target',
