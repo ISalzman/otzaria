@@ -15,7 +15,7 @@ import '../models/topic.dart';
 import '../database/repository/seforim_repository.dart';
 import 'link_processor.dart';
 import 'hebrew_text_utils.dart' as hebrew_text_utils;
-import 'package:otzaria/utils/docx_to_otzaria.dart';
+import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 
 /// DatabaseGenerator is responsible for generating the Otzaria database from source files.
 /// It processes directories, books, and links to create a structured database.

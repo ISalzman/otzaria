@@ -1,5 +1,5 @@
 import 'package:otzaria/tabs/models/tab.dart';
-import 'package:otzaria/utils/hive_utils.dart';
+import 'package:otzaria/utils/file/hive_utils.dart';
 
 /// Represents a combined tab that displays two books side-by-side.
 ///

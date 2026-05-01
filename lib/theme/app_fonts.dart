@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:system_fonts/system_fonts.dart' show SystemFonts;
-import 'package:otzaria/utils/font_file_reader.dart';
+import 'package:otzaria/utils/file/font_file_reader.dart';
 
 /// רשימת הגופנים הזמינים באפליקציה
 class AppFonts {

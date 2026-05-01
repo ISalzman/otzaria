@@ -13,7 +13,7 @@ import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
-import 'package:otzaria/utils/zip_extractor_service.dart';
+import 'package:otzaria/utils/file/zip_extractor_service.dart';
 
 class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   final DataRepository _repository = DataRepository.instance;

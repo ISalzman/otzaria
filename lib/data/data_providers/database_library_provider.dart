@@ -15,12 +15,12 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/migration/models/category.dart' as db_models;
 import 'package:otzaria/migration/models/book.dart' as db_models;
 import 'package:otzaria/migration/models/toc_entry.dart' as db_models;
-import 'package:otzaria/utils/file_hidden_utils.dart';
+import 'package:otzaria/utils/file/file_hidden_utils.dart';
 import 'package:otzaria/migration/models/alt_toc_structure.dart';
 import 'package:otzaria/migration/models/alt_toc_entry.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
-import 'package:otzaria/utils/toc_parser.dart';
-import 'package:otzaria/utils/docx_to_otzaria.dart';
+import 'package:otzaria/utils/file/toc_parser.dart';
+import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 // ──────────────────────────────────────────────────────────────────────────

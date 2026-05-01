@@ -1,6 +1,6 @@
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
-import 'package:otzaria/utils/hive_utils.dart';
+import 'package:otzaria/utils/file/hive_utils.dart';
 
 /// Represents a bookmark in the application.
 class Bookmark {

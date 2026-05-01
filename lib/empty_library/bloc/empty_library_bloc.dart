@@ -14,7 +14,7 @@ import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/settings/settings_exports.dart';
-import 'package:otzaria/utils/zip_extractor_service.dart';
+import 'package:otzaria/utils/file/zip_extractor_service.dart';
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
