@@ -591,8 +591,9 @@ if (typeof Otzaria === 'undefined') {
 assets/plugin-sdk/
 ├── otzaria_plugin.js      — ספריית ה-JS שכל תוסף מייבא
 ├── otzaria_plugin.d.ts    — TypeScript definitions
-├── manifest.json          — תבנית manifest לתוסף חדש
-└── index.html             — תבנית HTML לתוסף חדש
+└── example/               — תוסף דמו (לוח שנה עברי)
+    ├── manifest.json      — manifest של תוסף הדמו
+    └── index.html         — קוד ה-HTML/JS המלא של תוסף הדמו
 
 docs/plugin-sdk/
 ├── hebrew-calendar-demo.otzplugin  — תוסף דמו מוכן להתקנה
@@ -603,7 +604,7 @@ docs/plugin-sdk/
 ### יצירת `.otzplugin` מהדמו
 
 ```bash
-cd /path/to/otzaria/assets/plugin-sdk
+cd /path/to/otzaria/assets/plugin-sdk/example
 
 zip -r hebrew-calendar-demo.otzplugin \
   manifest.json \

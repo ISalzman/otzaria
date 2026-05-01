@@ -59,5 +59,10 @@ dart tool/package_plugin.dart <path/to/your/plugin/folder>
 |------|------|
 | `otzaria_plugin.js` | ספריית ה-JS שכל תוסף מייבא |
 | `otzaria_plugin.d.ts` | הגדרות TypeScript לאותה ספרייה (לנוחות מפתחים) |
-| `index.html` | תבנית התחלה לתוסף חדש |
-| `manifest.json` | תבנית קובץ manifest לתוסף חדש |
+
+תוסף הדמו (לוח שנה עברי) נמצא ב-`assets/plugin-sdk/example/`:
+
+| קובץ | תוכן |
+|------|------|
+| `example/manifest.json` | manifest של תוסף הדמו |
+| `example/index.html` | קוד ה-HTML/JS המלא של תוסף הדמו |
