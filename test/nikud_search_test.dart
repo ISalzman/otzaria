@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/search/search_query_builder.dart';
-import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart';
 
 // ignore_for_file: dead_code
 

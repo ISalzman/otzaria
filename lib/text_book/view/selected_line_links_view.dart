@@ -12,7 +12,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/widgets/feedback/app_future_builder.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';

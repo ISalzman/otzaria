@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
 /// מייצג התאמה במילון ראשי התיבות.
 class AcronymDictionaryEntry {

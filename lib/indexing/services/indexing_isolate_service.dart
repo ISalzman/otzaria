@@ -4,7 +4,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/error_log_file.dart';
-import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart';
 
 class PreparedIndexDocument {
   final String reference;

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/utils/copy_utils.dart';
+import 'package:otzaria/utils/text/copy_utils.dart';
 
 void main() {
   group('CopyUtils.applyCopyPreferences', () {

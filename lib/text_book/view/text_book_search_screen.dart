@@ -9,7 +9,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/search_results.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/book_facet.dart';

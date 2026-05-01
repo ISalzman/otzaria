@@ -1,5 +1,5 @@
 import 'package:otzaria/text_book/models/search_results.dart';
-import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 

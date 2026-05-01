@@ -14,7 +14,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 
 class TantivySearchResults extends StatefulWidget {

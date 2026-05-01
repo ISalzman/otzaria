@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart';
 
 void main() {
   group('highLight', () {

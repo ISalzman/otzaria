@@ -7,7 +7,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/docx_to_otzaria.dart';
 import 'package:otzaria/utils/toc_parser.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'dart:io';
 import 'dart:isolate';
 

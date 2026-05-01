@@ -35,7 +35,7 @@ import 'package:otzaria/text_book/view/alt_toc_sidebar_view.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/page_converter.dart';
-import 'package:otzaria/utils/ref_helper.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/helpers/editor_settings_helper.dart';

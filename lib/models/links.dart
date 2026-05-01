@@ -2,8 +2,8 @@
 
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/utils/ref_helper.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/ref_helper.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
 /// Represents a link between two books in the library.
 class Link {

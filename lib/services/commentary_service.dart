@@ -1,5 +1,5 @@
 import 'package:otzaria/models/links.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'dart:isolate';
 

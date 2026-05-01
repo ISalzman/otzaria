@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
-import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart';
 
 /// In-memory cache for reference finding.
 ///

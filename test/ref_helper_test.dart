@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/utils/ref_helper.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
 
 void main() {
   group('formatDisplayReference', () {

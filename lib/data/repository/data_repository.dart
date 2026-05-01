@@ -6,7 +6,7 @@ import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
-import 'package:otzaria/utils/text_manipulation.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart';
 
 /// DataRepository acts as a centralized data access layer that coordinates between different
 /// data providers (file system, Hive storage, and Tantivy search engine).

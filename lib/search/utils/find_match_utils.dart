@@ -1,5 +1,5 @@
 import 'package:otzaria/search/search_query_builder.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
 /// מנרמל שאילתת איתור כך שתתנהג כמו האיתור הוותיק.
 String normalizeFindQuery(String rawQuery) {

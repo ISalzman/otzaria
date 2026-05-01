@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/text_book/models/search_results.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
 /// Maximum number of search results to return
 const int _maxSearchResults = 1000;
