@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/migration/core/models/toc_entry.dart';
+import 'package:otzaria/migration/models/toc_entry.dart';
 import 'package:otzaria/tools/gematria/gematria_search.dart';
 
 void main() {

@@ -1,7 +1,7 @@
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
-import '../../core/models/pub_place.dart';
-import '../sqflite/sqlite3_utils.dart';
-import '../sqflite/query_loader.dart';
+import '../../models/pub_place.dart';
+import '../sql/sqlite3_utils.dart';
+import '../sql/query_loader.dart';
 import 'database.dart';
 
 class PubPlaceDao {

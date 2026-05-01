@@ -7,8 +7,7 @@ class QueryLoader {
 
   /// Returns a snapshot of the loaded cache for transport to another isolate.
   /// Call [initialize] first on the source isolate.
-  static Map<String, Map<String, String>> get cacheSnapshot =>
-      Map.fromEntries(
+  static Map<String, Map<String, String>> get cacheSnapshot => Map.fromEntries(
         _queryCache.entries.map(
           (e) => MapEntry(e.key, Map<String, String>.from(e.value)),
         ),
@@ -56,7 +55,7 @@ class QueryLoader {
 
   /// Load a single query file from assets
   static Future<void> _loadQueryFile(String fileName) async {
-    final assetPath = 'lib/migration/dao/sqflite/$fileName';
+    final assetPath = 'lib/migration/database/sql/$fileName';
     try {
       final content = await rootBundle.loadString(assetPath);
       final queries = _parseQueries(content);

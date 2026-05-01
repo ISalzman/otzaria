@@ -6,18 +6,18 @@ import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/migration/dao/sqflite/sqlite3_utils.dart';
+import 'package:otzaria/migration/database/sql/sqlite3_utils.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/library/models/library.dart';
-import 'package:otzaria/migration/core/models/category.dart' as db_models;
-import 'package:otzaria/migration/core/models/book.dart' as db_models;
-import 'package:otzaria/migration/core/models/toc_entry.dart' as db_models;
+import 'package:otzaria/migration/models/category.dart' as db_models;
+import 'package:otzaria/migration/models/book.dart' as db_models;
+import 'package:otzaria/migration/models/toc_entry.dart' as db_models;
 import 'package:otzaria/utils/file_hidden_utils.dart';
-import 'package:otzaria/migration/core/models/alt_toc_structure.dart';
-import 'package:otzaria/migration/core/models/alt_toc_entry.dart';
+import 'package:otzaria/migration/models/alt_toc_structure.dart';
+import 'package:otzaria/migration/models/alt_toc_entry.dart';
 import 'package:otzaria/utils/text_manipulation.dart';
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/utils/docx_to_otzaria.dart';
@@ -1956,8 +1956,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         }
       }
 
-      debugPrint(
-          '📁 Finished scanning custom folder: $folderPath '
+      debugPrint('📁 Finished scanning custom folder: $folderPath '
           '(added=$added, updated=$updated, failed=$failed)');
       return ScanResult(
           addedBooks: added, updatedBooks: updated, failedBooks: failed);
@@ -2026,11 +2025,11 @@ class DatabaseLibraryProvider implements LibraryProvider {
       final r = raw[i];
       // In pre-order traversal a node has children iff its immediate successor
       // has this node's index as its parentIndex.
-      final hasChildren =
-          (i + 1 < raw.length) && (raw[i + 1].parentIndex == i);
+      final hasChildren = (i + 1 < raw.length) && (raw[i + 1].parentIndex == i);
       return db_models.TocEntry(
         id: i + 1, // 1-based local ID; resolved during insertion
-        bookId: 0, // placeholder; overridden in _insertTocEntriesForExternalBook
+        bookId:
+            0, // placeholder; overridden in _insertTocEntriesForExternalBook
         parentId: r.parentIndex != null ? r.parentIndex! + 1 : null,
         text: r.text,
         level: r.level,

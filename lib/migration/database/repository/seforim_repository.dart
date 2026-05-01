@@ -1,21 +1,21 @@
 import 'dart:async';
 import 'package:logging/logging.dart';
 
-import '../../core/models/author.dart';
-import '../../core/models/book.dart';
-import '../../core/models/category.dart';
-import '../../core/models/line.dart';
-import '../../core/models/link.dart';
-import '../../core/models/pub_date.dart';
-import '../../core/models/pub_place.dart';
-import '../../core/models/search_result.dart';
-import '../../core/models/source.dart';
-import '../../core/models/toc_entry.dart';
-import '../../core/models/toc_text.dart';
-import '../../core/models/topic.dart';
+import '../../models/author.dart';
+import '../../models/book.dart';
+import '../../models/category.dart';
+import '../../models/line.dart';
+import '../../models/link.dart';
+import '../../models/pub_date.dart';
+import '../../models/pub_place.dart';
+import '../../models/search_result.dart';
+import '../../models/source.dart';
+import '../../models/toc_entry.dart';
+import '../../models/toc_text.dart';
+import '../../models/topic.dart';
 import '../daos/connection_type_dao.dart';
 import '../daos/database.dart';
-import '../sqflite/sqlite3_utils.dart';
+import '../sql/sqlite3_utils.dart';
 
 /// Repository class for accessing and manipulating the Seforim database.
 /// Provides methods for CRUD operations on books, categories, lines, TOC entries, and links.

@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import 'package:otzaria/migration/core/extentions/types_helper.dart';
+import 'types_helper.dart';
 
 class AltTocEntry extends Equatable {
   final int id;

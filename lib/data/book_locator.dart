@@ -4,7 +4,7 @@ import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/file_system_library_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/migration/core/models/book.dart' as migration_book;
+import 'package:otzaria/migration/models/book.dart' as migration_book;
 
 /// מתווך מרכזי לאיתור ספרים במערכת
 ///

@@ -13,12 +13,14 @@ migration/
 │   └── model_adapters.dart
 ├── core/              # מודלים ו-extensions
 │   ├── models/        # מודלי נתונים (Book, Line, TocEntry, וכו')
-│   └── extentions/    # הרחבות עזר
+│   └── extensions/    # הרחבות עזר
 ├── dao/               # שכבת גישה לנתונים
-│   ├── drift/         # DAOs לטבלאות שונות
+│   ├── daos/          # DAOs לטבלאות שונות
 │   ├── repository/    # Repository pattern
 │   └── sqflite/       # שאילתות SQL
-└── generator/         # כלים ליצירת מסד נתונים מקבצים
+├── generator/         # כלים ליצירת מסד נתונים מקבצים
+├── shared/            # כלי עזר משותפים
+└── sync/              # סנכרון ברקע
 ```
 
 ## רכיבים עיקריים

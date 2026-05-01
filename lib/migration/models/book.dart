@@ -1,5 +1,5 @@
 import 'package:collection/collection.dart';
-import 'package:otzaria/migration/core/extentions/types_helper.dart';
+import 'types_helper.dart';
 
 import 'author.dart';
 import 'pub_date.dart';

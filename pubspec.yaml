@@ -177,7 +177,7 @@ flutter:
     - assets/icon/shamor_zachor_with_v.png
     - assets/icon/iconnew.png
     - assets/icon/mount_sinai_tablets.svg
-    - lib/migration/dao/sqflite/
+    - lib/migration/database/sql/
     - assets/dictionary.json
     - assets/Acronyms.json
     - assets/default_commentators.json
