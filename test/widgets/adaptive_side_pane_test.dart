@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/widgets/adaptive_side_pane.dart';
-import 'package:otzaria/widgets/resizable_drag_handle.dart';
+import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
 
 class _CounterPane extends StatefulWidget {
   const _CounterPane();

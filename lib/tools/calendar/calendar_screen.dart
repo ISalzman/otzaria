@@ -10,10 +10,10 @@ import 'package:otzaria/shortcuts/key_map.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
-import 'package:otzaria/widgets/floating_panel.dart'
+import 'package:otzaria/widgets/layout/floating_panel.dart'
     show kMainPanelMinWidth, kSideBySideMinWidth;
-import 'package:otzaria/widgets/context_overlay_panel.dart';
-import 'package:otzaria/widgets/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
+import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/tools/calendar/dialogs/calendar_event_dialog.dart';
 import 'package:otzaria/tools/calendar/dialogs/calendar_print_dialog.dart';

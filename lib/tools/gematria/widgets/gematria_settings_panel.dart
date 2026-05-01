@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/context_overlay_panel.dart';
+import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
 
 class GematriaSettingsPanel extends StatelessWidget {
   final bool isVisible;
