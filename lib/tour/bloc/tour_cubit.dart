@@ -15,9 +15,13 @@ class TourCubit extends Cubit<TourState> {
   Timer? _autoPlayTimer;
   final List<TourInteraction> _recentInteractions = <TourInteraction>[];
   int _textSelectionCount = 0;
+  bool _hasRegisteredCommentaryOpportunity = false;
   bool _commentaryOpportunityOpen = false;
   int _commentaryOpportunityScore = 0;
   String? _commentaryOpportunityBook;
+
+  bool get hasRegisteredCommentaryOpportunity =>
+      _hasRegisteredCommentaryOpportunity;
 
   bool startIfNeeded({required bool libraryLoaded}) {
     final status = Settings.getValue<String>(TourSteps.statusKey);
@@ -143,7 +147,9 @@ class TourCubit extends Cubit<TourState> {
         if (!state.resolvedTips.contains(LiveTipId.dictionaryContextMenuHint)) {
           _textSelectionCount++;
         }
-        if (_commentaryOpportunityOpen) {
+        if (_commentaryOpportunityOpen &&
+            (_commentaryOpportunityBook == null ||
+                _commentaryOpportunityBook == interaction.primaryValue)) {
           _commentaryOpportunityScore++;
         }
         break;
@@ -155,9 +161,11 @@ class TourCubit extends Cubit<TourState> {
         _markTipResolved(LiveTipId.sideBySideSuggestion);
         break;
       case TourInteractionType.commentaryAvailable:
-        if (state.resolvedTips.contains(LiveTipId.commentaryHint)) {
+        if (state.resolvedTips.contains(LiveTipId.commentaryHint) ||
+            _hasRegisteredCommentaryOpportunity) {
           break;
         }
+        _hasRegisteredCommentaryOpportunity = true;
         _commentaryOpportunityOpen = true;
         _commentaryOpportunityScore = 0;
         _commentaryOpportunityBook = interaction.primaryValue;
