@@ -7,7 +7,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
-import 'package:otzaria/widgets/app_future_builder.dart';
+import 'package:otzaria/widgets/feedback/app_future_builder.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 
 class CommentaryContent extends StatefulWidget {

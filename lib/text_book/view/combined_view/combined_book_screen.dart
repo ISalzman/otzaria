@@ -28,7 +28,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/utils/text_with_inline_links.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
-import 'package:otzaria/widgets/scrollable_positioned_list_scrollbar.dart';
+import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/selection/text_selection_manager.dart';
 import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';

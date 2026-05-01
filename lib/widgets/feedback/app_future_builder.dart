@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:otzaria/widgets/loading_indicator.dart';
+import 'package:otzaria/widgets/feedback/loading_indicator.dart';
 
 class AppFutureBuilder<T> extends StatelessWidget {
   final Future<T>? future;

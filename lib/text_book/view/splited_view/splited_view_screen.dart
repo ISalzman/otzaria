@@ -12,7 +12,7 @@ import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
-import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
+import 'package:otzaria/widgets/feedback/commentary_pane_tooltip.dart';
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({

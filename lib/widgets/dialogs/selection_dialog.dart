@@ -3,7 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/widgets/buttons/action_buttons.dart';
 import 'package:otzaria/widgets/keyboard_dialog_navigation.dart';
 import 'package:otzaria/widgets/otzaria_search_field.dart';
-import 'package:otzaria/widgets/tool_empty_state.dart';
+import 'package:otzaria/widgets/feedback/tool_empty_state.dart';
 
 /// דיאלוג בחירה עם חיפוש
 class SelectionDialog<T> extends StatefulWidget {
