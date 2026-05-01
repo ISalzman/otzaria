@@ -113,3 +113,6 @@ temp/
 .codex-appdata/
 .agent/
 .codex_review_index/
+seforim.db-shm
+.gitignore
+seforim.db-wal

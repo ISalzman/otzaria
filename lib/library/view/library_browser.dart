@@ -1353,7 +1353,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               child: Center(
                 child: Icon(
                   isExpanded
-                      ? FluentIcons.folder_open_24_filled
+                      ? FluentIcons.folder_open_24_regular
                       : FluentIcons.folder_24_regular,
                   color: cs.onSecondaryContainer,
                   size: iconSize,

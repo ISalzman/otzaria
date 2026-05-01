@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/models/books.dart';
 
@@ -195,5 +196,57 @@ void main() {
       find.byIcon(FluentIcons.more_vertical_24_regular),
       findsNothing,
     );
+  });
+
+  testWidgets('מציג את אייקון הקובץ ותפריט האפשרויות בטור אנכי',
+      (tester) async {
+    FileSystemData.instance = _FakeFileSystemData('DB');
+
+    final book = TextBook(title: 'ספר לבדיקה', categoryId: 11);
+
+    await tester.pumpWidget(buildTestWidget(book: book));
+    await tester.pumpAndSettle();
+
+    final fileIconCenter = tester.getCenter(
+      find.byIcon(FluentIcons.document_text_24_regular),
+    );
+    final menuIconCenter = tester.getCenter(
+      find.byIcon(FluentIcons.more_vertical_24_regular),
+    );
+
+    expect((fileIconCenter.dx - menuIconCenter.dx).abs(), lessThan(2));
+    expect(menuIconCenter.dy, greaterThan(fileIconCenter.dy));
+  });
+
+  testWidgets('מציג אייקון תיקייה בקו regular ולא filled', (tester) async {
+    final category = Category(
+      title: 'קטגוריה',
+      description: '',
+      shortDescription: '',
+      order: 0,
+      subCategories: [],
+      books: [],
+      parent: null,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Center(
+            child: SizedBox(
+              width: 260,
+              child: CategoryGridItem(
+                category: category,
+                onCategoryClickCallback: () {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(FluentIcons.folder_24_regular), findsOneWidget);
+    expect(find.byIcon(FluentIcons.folder_24_filled), findsNothing);
   });
 }
